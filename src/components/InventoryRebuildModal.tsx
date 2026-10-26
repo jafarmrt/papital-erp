@@ -224,7 +224,7 @@ export default function InventoryRebuildModal({
                     id={`${fieldId}-selected-item-id`}
                     options={itemsList.map(it => ({
                       value: it.id,
-                      label: `${it.name} (کد: ${it.code}) - موجودی دفتری: ${formatPersianNumber(it.current_stock || it.currentStock || 0)} ${it.unit}`
+                      label: `${it.name} (کد: ${formatPersianCode(it.code)}) - موجودی دفتری: ${formatPersianNumber(it.current_stock || it.currentStock || 0)} ${it.unit}`
                     }))}
                     value={selectedItemId || ''}
                     onChange={(val) => setSelectedItemId(Number(val) || null)}

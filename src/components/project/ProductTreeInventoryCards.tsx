@@ -11,6 +11,7 @@ import { MaterialNameCell, FreeStockCell, MaterialStatusCell, NotesCell, type Op
 import { rowIsShort, type MaterialAvailabilityView } from '../../lib/projects/materialAvailability';
 import { perItemRowRequiredQty, productOrderQuantity } from '../../lib/projects/materialQuantity';
 import { PerItemQtyCell } from './PerItemQtyCell';
+import { normalizeSearchText } from '../../lib/search/searchText';
 
 interface ProductTreeInventoryCardsProps {
   products: ProjectProductItem[];
@@ -129,9 +130,10 @@ export function ProductTreeInventoryCards({
         {products
           .filter(prod => {
             if (searchQuery.trim()) {
-              const q = searchQuery.toLowerCase();
-              const matchName = (prod.item_name || '').toLowerCase().includes(q);
-              const matchCode = (prod.item_code || '').toLowerCase().includes(q);
+              // review of #406 (U21): a code typed in Persian digits is found too
+              const q = normalizeSearchText(searchQuery);
+              const matchName = normalizeSearchText(prod.item_name).includes(q);
+              const matchCode = normalizeSearchText(prod.item_code).includes(q);
               if (!matchName && !matchCode) return false;
             }
             return true;

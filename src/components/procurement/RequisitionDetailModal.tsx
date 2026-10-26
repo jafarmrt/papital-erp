@@ -251,7 +251,7 @@ export function RequisitionDetailModal({
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
               <span className="text-slate-500 block mb-1">پروژه متناظر:</span>
               <span className="font-bold text-slate-900">
-                {requisition.projectName ? `${requisition.projectName} (${requisition.projectCode || ''})` : 'فاقد پروژه (عمومی)'}
+                {requisition.projectName ? `${requisition.projectName} (${formatPersianCode(requisition.projectCode) || ''})` : 'فاقد پروژه (عمومی)'}
               </span>
             </div>
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">

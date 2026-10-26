@@ -15,6 +15,7 @@ import { activityResultLabel } from '../../lib/crm/crmScreenText';
 import { CrmAttachmentsPanel } from './CrmAttachmentsPanel';
 import { useHasPermission } from '../../contexts/AuthContext';
 import type { CrmAttachmentView } from '../../lib/crm/crmAttachments';
+import { normalizeSearchText } from '../../lib/search/searchText';
 
 const NO_ITEMS: Item[] = [];
 const NO_WAREHOUSES: WarehouseItem[] = [];
@@ -82,11 +83,12 @@ export function CRMLeadDrawer({
   const safeItemsList = Array.isArray(items) ? items : [];
   const filteredItems = safeItemsList.filter((item) => {
     if (!stockSearchTerm.trim()) return true;
-    const term = stockSearchTerm.toLowerCase();
+    // review of #406 (U21): a code typed in Persian digits is found too
+    const term = normalizeSearchText(stockSearchTerm);
     return (
-      item.code.toLowerCase().includes(term) ||
-      item.name.toLowerCase().includes(term) ||
-      (item.category && item.category.toLowerCase().includes(term))
+      normalizeSearchText(item.code).includes(term) ||
+      normalizeSearchText(item.name).includes(term) ||
+      (item.category && normalizeSearchText(item.category).includes(term))
     );
   });
 
@@ -433,7 +435,7 @@ export function CRMLeadDrawer({
                         <button
                           onClick={() => {
                             void copyToClipboard(`${item.code} - ${item.name}`).then(ok => {
-                              if (ok) toast.success(`کد و نام کالا کپی شد: ${item.code}`);
+                              if (ok) toast.success(`کد و نام کالا کپی شد: ${formatPersianCode(item.code)}`);
                               else toast.error('کپی در کلیپ‌بورد ممکن نشد');
                             });
                           }}

@@ -4,7 +4,7 @@ import { isCancelledError } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { Item, User } from '../types';
 import { Package, Printer, ReceiptText, Sparkles } from 'lucide-react';
-import { formatPersianNumber, getTodayIsoDate, toStorageDate } from '../utils';
+import { formatPersianNumber, getTodayIsoDate, toStorageDate, formatPersianCode } from '../utils';
 import InvoicePrintView from '../components/InvoicePrintView';
 import { OpenProformasPanel } from '../components/invoices/create/OpenProformasPanel';
 import { InvoiceFormSection } from '../components/invoices/create/InvoiceFormSection';
@@ -160,7 +160,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       const form = invoiceFormFromDocument(doc, p.ref_number);
       // v9.0.299 (TD-789): این فرم فقط سند فروش را ویرایش می‌کند
       if (!isSalesFormDocType(form.docType)) {
-        toast.error(`سند شماره ${p.ref_number} سند فروش نیست و در این فرم ویرایش نمی‌شود.`);
+        toast.error(`سند شماره ${formatPersianCode(p.ref_number)} سند فروش نیست و در این فرم ویرایش نمی‌شود.`);
         return;
       }
       resetForm();
@@ -186,7 +186,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
         setMultiWarehouseEdit(located.multiWarehouse);
         setDocItems(located.lines);
       }
-      toast.success(`پیش‌فاکتور شماره ${p.ref_number} جهت ویرایش بارگذاری شد.`);
+      toast.success(`پیش‌فاکتور شماره ${formatPersianCode(p.ref_number)} جهت ویرایش بارگذاری شد.`);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
       if (isCancelledError(err)) return;
@@ -383,7 +383,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
         const { loc, reserved, sellable } = getSellableStock(it, lineLocationOf(d, location));
 
         if (sellable < d.quantity) {
-          toast.error(`موجودی قابل فروش کالا «${it.name}» (${it.code}) در «${whName}» کافی نیست! موجودی انبار: ${formatPersianNumber(loc)}، رزرو سایر مصارف: ${formatPersianNumber(reserved)}، قابل فروش: ${formatPersianNumber(sellable)} ${it.unit}، درخواستی: ${formatPersianNumber(d.quantity)} ${it.unit}`);
+          toast.error(`موجودی قابل فروش کالا «${it.name}» (${formatPersianCode(it.code)}) در «${whName}» کافی نیست! موجودی انبار: ${formatPersianNumber(loc)}، رزرو سایر مصارف: ${formatPersianNumber(reserved)}، قابل فروش: ${formatPersianNumber(sellable)} ${it.unit}، درخواستی: ${formatPersianNumber(d.quantity)} ${it.unit}`);
           return;
         }
       }

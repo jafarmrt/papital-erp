@@ -191,7 +191,7 @@ export function CreatePurchaseOrderModal({
       const prData = res?.data || res;
 
       if (mode === 'requisition') {
-        toast.success(`درخواست خرید ${prData.code || ''} در کارتابل مسئول خرید و تدارکات ثبت و وارد گردش کار شد.`);
+        toast.success(`درخواست خرید ${formatPersianCode(prData.code) || ''} در کارتابل مسئول خرید و تدارکات ثبت و وارد گردش کار شد.`);
         onOrderCreated(prData, orderedIds);
         onClose();
         return;
@@ -209,11 +209,11 @@ export function CreatePurchaseOrderModal({
         const order = converted?.data?.createdDocuments?.[0];
         const orderRef = order?.refNumber || order?.ref_number || '';
         toast.success(
-          `سفارش خرید پیش‌نویس ${orderRef} برای ${supplier!.name} از درخواست ${prData.code || ''} صادر شد؛ کالا با «تحویل به انبار» در تدارکات وارد انبار می‌شود.`,
+          `سفارش خرید پیش‌نویس ${orderRef} برای ${supplier!.name} از درخواست ${formatPersianCode(prData.code) || ''} صادر شد؛ کالا با «تحویل به انبار» در تدارکات وارد انبار می‌شود.`,
         );
       } catch (orderErr: unknown) {
         // درخواست ثبت شده است و در کارتابل تدارکات می‌ماند؛ فقط سفارش صادر نشد
-        toast.error(`درخواست خرید ${prData.code || ''} ثبت شد ولی سفارش صادر نشد: ${errorMessageOf(orderErr)} سفارش را از کارتابل تدارکات صادر کنید.`);
+        toast.error(`درخواست خرید ${formatPersianCode(prData.code) || ''} ثبت شد ولی سفارش صادر نشد: ${errorMessageOf(orderErr)} سفارش را از کارتابل تدارکات صادر کنید.`);
       }
       onOrderCreated(prData, orderedIds);
       onClose();
@@ -429,7 +429,7 @@ export function CreatePurchaseOrderModal({
                                 className="min-w-[180px]"
                                 value=""
                                 onChange={value => { if (value) handleAssignWarehouseItem(idx, Number(value)); }}
-                                options={warehouseItems.map(w => ({ value: w.id, label: `${w.name} (${w.code})` }))}
+                                options={warehouseItems.map(w => ({ value: w.id, label: `${w.name} (${formatPersianCode(w.code)})` }))}
                                 placeholder="انتخاب کالای انبار"
                               />
                             </div>

@@ -9,6 +9,7 @@ import { accountActiveConfirmText, accountDeleteConfirmText } from '../../lib/ac
 import { AccountActiveToggle, InactiveAccountBadge } from './AccountActiveToggle';
 import { useIsSystemAdmin } from '../../contexts/AuthContext';
 import { DialogLayer } from '../common/DialogLayer';
+import { normalizeSearchText } from '../../lib/search/searchText';
 
 interface ChartOfAccountsTabProps {
   accounts: Account[];
@@ -170,10 +171,10 @@ export function ChartOfAccountsTab({
 
   // Filtered accounts for table view & search
   const filteredAccounts = useMemo(() => {
+    // review of #406 (U21): codes are shown in Persian digits, so a code typed or pasted in Persian digits is found too
+    const q = normalizeSearchText(searchQuery);
     return safeAccounts.filter(acc => {
-      const matchSearch = !searchQuery.trim() || 
-        acc.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        acc.code.includes(searchQuery.trim());
+      const matchSearch = !q || normalizeSearchText(acc.name).includes(q) || normalizeSearchText(acc.code).includes(q);
       const matchLevel = selectedLevel === 'all' || acc.level === selectedLevel;
       const matchType = selectedType === 'all' || acc.accountType === selectedType;
       return matchSearch && matchLevel && matchType;

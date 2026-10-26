@@ -86,7 +86,7 @@ export function AllocateMaterialDialog({ list, onClose }: { list: BomAllocations
               id={`${fieldId}-selected-project-id`}
               value={selectedProjectId}
               onChange={(value) => setSelectedProjectId(value ? Number(value) : '')}
-              options={projectsList.map((p) => ({ value: p.id, label: `${p.projectCode} - ${p.title}` }))}
+              options={projectsList.map((p) => ({ value: p.id, label: `${formatPersianCode(p.projectCode)} - ${p.title}` }))}
               placeholder="انتخاب پروژه"
             />
           </div>
@@ -100,7 +100,7 @@ export function AllocateMaterialDialog({ list, onClose }: { list: BomAllocations
               onChange={(value) => setSelectedItemId(value ? Number(value) : '')}
               options={itemsList.map((item) => ({
                 value: item.id,
-                label: `${item.name} (${item.code}) - موجودی کل: ${formatPersianNumber(item.currentStock || item.current_stock || 0)} ${item.unit ?? ''}`,
+                label: `${item.name} (${formatPersianCode(item.code)}) - موجودی کل: ${formatPersianNumber(item.currentStock || item.current_stock || 0)} ${item.unit ?? ''}`,
               }))}
               placeholder="انتخاب ماده اولیه"
             />

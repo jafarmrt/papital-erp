@@ -52,7 +52,7 @@ export default function ProjectInventoryPage(_props: { user?: User }) {
   // v9.0.423 (TD-767): انتخاب پروژه با فهرست جست‌وجوپذیر؛ برچسب وضعیت از فهرست بسته وضعیت‌ها
   const projectOptions = projects.map(p => ({
     value: p.id,
-    label: `[${p.project_code}] ${p.title} - مشتری: ${p.customer_name || 'عمومی'} (${projectStatusLabel(p.status)})`,
+    label: `[${formatPersianCode(p.project_code)}] ${p.title} - مشتری: ${p.customer_name || 'عمومی'} (${projectStatusLabel(p.status)})`,
   }));
 
   return (

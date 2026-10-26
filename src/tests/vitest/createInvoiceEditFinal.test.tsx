@@ -63,7 +63,7 @@ async function editProforma() {
   );
   const row = (await screen.findByText('PF-۵')).closest('tr') as HTMLElement;
   fireEvent.click(within(row).getByText('ویرایش'));
-  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('پیش‌فاکتور شماره PF-5 جهت ویرایش بارگذاری شد.'));
+  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('پیش‌فاکتور شماره PF-۵ جهت ویرایش بارگذاری شد.'));
 }
 
 describe('CreateInvoicePage — editing a proforma does not finalize it (TD-801)', () => {

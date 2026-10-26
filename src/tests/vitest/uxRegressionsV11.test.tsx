@@ -144,6 +144,19 @@ describe('v11 phase 6.3a (U25): login and setup fields fill themselves and compl
     expect(input.checkValidity()).toBe(true);
   });
 
+  it('a value filled without an input event, or set by the page, never stays refused', () => {
+    render(<form><input aria-label={USERNAME} {...persianRequired(USERNAME)} /></form>);
+    const input = screen.getByLabelText(USERNAME) as HTMLInputElement;
+    expect(input.checkValidity()).toBe(false);
+    // a password manager that fires only `change`
+    fireEvent.change(input, { target: { value: 'admin' } });
+    expect(input.checkValidity()).toBe(true);
+    // a stale message on a filled field is dropped by the next check
+    input.setCustomValidity(`${USERNAME} را وارد کنید.`);
+    expect(input.checkValidity()).toBe(false);
+    expect(input.checkValidity()).toBe(true);
+  });
+
   it('the login and setup fields carry autocomplete hints and no bare required', () => {
     const read = (file: string) => fs.readFileSync(path.join(process.cwd(), file), 'utf8');
     const login = read('src/pages/LoginPage.tsx');

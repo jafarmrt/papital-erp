@@ -47,7 +47,7 @@ export const ProjectReportView: React.FC = () => {
             <option value="">-- انتخاب پروژه برای مشاهده ریز --</option>
             {summary.map(s => (
               <option key={s.projectId} value={s.projectId}>
-                {s.projectCode ? `${s.projectCode} - ` : ''}{s.projectTitle}
+                {s.projectCode ? `${formatPersianCode(s.projectCode)} - ` : ''}{s.projectTitle}
               </option>
             ))}
           </select>
@@ -110,7 +110,7 @@ export const ProjectReportView: React.FC = () => {
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 overflow-hidden">
           <div className="px-4 py-3 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
             <h5 className="text-xs font-black text-slate-700 dark:text-slate-200">
-              ریز گردش پروژه: {selectedSummary?.projectTitle || '-'} {selectedSummary?.projectCode ? `(${selectedSummary.projectCode})` : ''}
+              ریز گردش پروژه: {selectedSummary?.projectTitle || '-'} {selectedSummary?.projectCode ? `(${formatPersianCode(selectedSummary.projectCode)})` : ''}
             </h5>
           </div>
           <table className="w-full text-right border-collapse text-xs">

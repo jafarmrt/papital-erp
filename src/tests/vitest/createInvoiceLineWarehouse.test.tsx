@@ -72,7 +72,7 @@ const putBody = (url: string) => {
 async function editProforma(ref: string) {
   const row = (await screen.findByText(formatPersianCode(ref))).closest('tr') as HTMLElement;
   fireEvent.click(within(row).getByText('ویرایش'));
-  await waitFor(() => expect(toast.success).toHaveBeenCalledWith(`پیش‌فاکتور شماره ${ref} جهت ویرایش بارگذاری شد.`));
+  await waitFor(() => expect(toast.success).toHaveBeenCalledWith(`پیش‌فاکتور شماره ${formatPersianCode(ref)} جهت ویرایش بارگذاری شد.`));
 }
 
 const warehouseSelect = () => screen.getByRole('option', { name: CENTRAL_WAREHOUSE }).closest('select') as HTMLSelectElement;

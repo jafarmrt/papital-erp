@@ -136,7 +136,7 @@ export function ProcurementDesk() {
     setIsDeletingRequisition(true);
     try {
       await fetchJson(`/api/procurement/requisitions/${requisitionToDelete.id}`, { method: 'DELETE' });
-      toast.success(`درخواست خرید ${requisitionToDelete.code} با موفقیت حذف شد.`);
+      toast.success(`درخواست خرید ${formatPersianCode(requisitionToDelete.code)} با موفقیت حذف شد.`);
       setSelected(prev => prev.filter(r => r.id !== requisitionToDelete.id));
       setRequisitionToDelete(null);
       await loadData();

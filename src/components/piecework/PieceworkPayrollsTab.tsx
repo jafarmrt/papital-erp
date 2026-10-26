@@ -59,7 +59,7 @@ export function PieceworkPayrollsTab({
         acceptReplay: true,
       });
       if (res && res.voucher) {
-        toast.success(`سند حسابداری به شماره ${res.voucher.voucherNumber} با موفقیت ثبت/همگام شد.`);
+        toast.success(`سند حسابداری به شماره ${formatPersianCode(res.voucher.voucherNumber)} با موفقیت ثبت/همگام شد.`);
         (onVoucherSynced ?? onReload)?.();
       } else if (isIdempotentReplay(res)) {
         // v10.2.34 (#351 review L1): a repeat of a sync that already ran has no voucher; the list shows it
@@ -192,7 +192,7 @@ export function PieceworkPayrollsTab({
                         {payroll.voucherNumber ? (
                           <span
                             className="px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-[10px] inline-flex items-center gap-1 font-mono font-bold"
-                            title={`سند شماره ${payroll.voucherNumber}`}
+                            title={`سند شماره ${formatPersianCode(payroll.voucherNumber)}`}
                           >
                             <BookOpen size={12} />
                             سند #{formatPersianCode(payroll.voucherNumber)}

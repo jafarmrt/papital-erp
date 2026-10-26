@@ -12,6 +12,7 @@ import type { PieceworkTask } from '../../types';
 import { usePieceworkCategoriesQuery, usePieceworkTasksQuery, type PieceworkCategory as TaskCategory } from '../../hooks/queries/usePieceworkQueries';
 import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 import { invalidateDomain } from '../../lib/queryInvalidation';
+import { normalizeSearchText } from '../../lib/search/searchText';
 
 const NO_TASKS: PieceworkTask[] = [];
 const NO_CATEGORIES: TaskCategory[] = [];
@@ -159,8 +160,9 @@ export function TaskTitlesSettingsTab() {
   const filteredTasks = tasks.filter(t => {
     if (selectedCatFilter !== 'ALL' && t.category !== selectedCatFilter) return false;
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      return t.title.toLowerCase().includes(q) || t.code.toLowerCase().includes(q) || (t.category && t.category.toLowerCase().includes(q));
+      // review of #406 (U21): a code typed in Persian digits is found too
+      const q = normalizeSearchText(searchQuery);
+      return normalizeSearchText(t.title).includes(q) || normalizeSearchText(t.code).includes(q) || (t.category && normalizeSearchText(t.category).includes(q));
     }
     return true;
   });

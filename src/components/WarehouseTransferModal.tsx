@@ -27,7 +27,7 @@ type TransferPickItem = StockPickItem;
 export function transferItemOption(it: TransferPickItem) {
   return {
     value: it.id,
-    label: `${it.name} (کد: ${it.code}) - موجودی کل: ${formatPersianNumber(it.current_stock || it.currentStock || 0)} ${it.unit}`,
+    label: `${it.name} (کد: ${formatPersianCode(it.code)}) - موجودی کل: ${formatPersianNumber(it.current_stock || it.currentStock || 0)} ${it.unit}`,
   };
 }
 

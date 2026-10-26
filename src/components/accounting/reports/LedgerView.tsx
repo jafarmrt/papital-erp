@@ -68,7 +68,7 @@ export function LedgerView({
         <div className="p-4 border-b border-slate-200 dark:border-slate-700 text-center">
           <h4 className="text-base font-black text-slate-900 dark:text-white">
             {selectedAccount
-              ? `دفتر حساب ${LEVEL_LABELS[selectedAccount.level] ?? ''} ${selectedAccount.code} - ${selectedAccount.name}`
+              ? `دفتر حساب ${LEVEL_LABELS[selectedAccount.level] ?? ''} ${formatPersianCode(selectedAccount.code)} - ${selectedAccount.name}`
               : 'دفتر حساب'}
           </h4>
           {rollsUp && <p className="text-xs text-slate-500 mt-1">با گردش همه زیرحساب‌ها</p>}

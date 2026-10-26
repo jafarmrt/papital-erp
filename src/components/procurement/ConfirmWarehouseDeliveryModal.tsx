@@ -81,7 +81,7 @@ export const ConfirmWarehouseDeliveryModal: React.FC<ConfirmWarehouseDeliveryMod
               <p className="text-[11px] text-emerald-100 mt-0.5">
                 {isBulk 
                   ? `تحویل همزمان ${formatPersianNumber(bulkOrders.length)} فاکتور خرید تامین‌کننده`
-                  : `فاکتور شماره ${order?.refNumber || 'سفارش'} - صدور رسید قطعی انبار`}
+                  : `فاکتور شماره ${formatPersianCode(order?.refNumber) || 'سفارش'} - صدور رسید قطعی انبار`}
               </p>
             </div>
           </div>

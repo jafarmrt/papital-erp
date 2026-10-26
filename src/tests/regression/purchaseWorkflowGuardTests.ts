@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { orm, pool } from '../../db/drizzle.js';
 import { purchaseRequisitions, workflowDefinitions, workflowInstances, workflowStates, workflowTransitions } from '../../db/schema.js';
 import { WorkflowEngineService } from '../../services/workflow/workflowEngineService.js';
+import { requisitionFlow } from '../../services/procurement/requisitionApproval.js';
 import { upgradeLegacySeedGuards } from '../../services/workflow/seedGuardUpgrade.js';
 import { PURCHASE_REQUISITION_GUARD_UPGRADE } from '../../services/workflow/purchaseWorkflowGuards.js';
 import { buildUnguardedPurchaseActionHealthTest, findUnguardedPurchaseActions } from '../../services/accounting/unguardedPurchaseActionHealth.js';
@@ -163,6 +164,32 @@ export async function runPurchaseWorkflowGuardTests(shouldRun: ShouldRun): Promi
       expect(approved.status === 200, `another approver returned ${brief(approved)}`);
       expect(!(await markOf(maker)), 'the list still marks the requisition for its creator after another user approved it');
       return 'marked for the creator while open, not for another approver, not after approval';
+    }));
+  }
+
+  if (shouldRun('reg_lazy_requisition_instance_requester_v11_6_3a_u10', 'u10', 'workflow', 'procurement')) {
+    await runCase(results, 'reg_lazy_requisition_instance_requester_v11_6_3a_u10', 'v11 phase 6.3a (review of #406, U10): a requisition without a workflow instance gets one in its requester\'s name, so another approver can still approve it', () => inFiscalSandbox(async () => {
+      await WorkflowEngineService.seedDefaultWorkflows();
+      const keys = ['procurement.view', 'procurement.create', 'procurement.approve', 'procurement.order'];
+      const maker = await clientWith(keys);
+      const checker = await clientWith(keys);
+      const created = await maker.post('/api/procurement/requisitions', {
+        title: 'Lazy instance requester test', priority: 'normal',
+        items: [{ itemName: 'Lazy instance test service', unit: 'عدد', requestedQty: 1, unitPriceEstimate: 1000 }],
+      });
+      expect(created.status === 201, `requisition create returned ${brief(created)}`);
+      const id = Number(created.body?.data?.id);
+      // an older requisition, or one whose workflow failed to start at registration, has no instance
+      const [row] = await orm.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.id, id));
+      await orm.update(workflowInstances).set({ status: 'TERMINATED' }).where(eq(workflowInstances.id, Number(row.workflowInstanceId)));
+      await orm.update(purchaseRequisitions).set({ workflowInstanceId: null }).where(eq(purchaseRequisitions.id, id));
+
+      const flow = await orm.transaction(async tx => requisitionFlow(tx, { ...row, workflowInstanceId: null }, { id: checker.userId, username: 'checker', role: 'tester' }));
+      expect(flow.instance.startedBy === maker.userId, `the missing instance was started by user ${flow.instance.startedBy}, expected the requester ${maker.userId}`);
+      const approved = await checker.post(`/api/procurement/requisitions/${id}/workflow-action`, { actionKey: 'approve_request' });
+      expect(approved.status === 200, `another approver returned ${brief(approved)}`);
+      expect(await stepOf(id) === 'ordered', 'approval by another user did not reach the ordered step');
+      return 'missing instance started in the requester\'s name; another approver approved it';
     }));
   }
 

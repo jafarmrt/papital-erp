@@ -271,8 +271,8 @@ describe('requisition item picker (TD-700)', () => {
     render(<CreateRequisitionModal isOpen onClose={() => undefined} onSuccess={() => undefined} />);
     fireEvent.click(screen.getByText('جست‌وجو در فهرست کالا...'));
     fireEvent.change(screen.getByPlaceholderText('جست‌وجو...'), { target: { value: 'شصتم' } });
-    await waitFor(() => expect(screen.queryByText('مهره کریستالی شصتم (RM-60)')).not.toBeNull());
-    fireEvent.click(screen.getByText('مهره کریستالی شصتم (RM-60)'));
+    await waitFor(() => expect(screen.queryByText('مهره کریستالی شصتم (RM-۶۰)')).not.toBeNull());
+    fireEvent.click(screen.getByText('مهره کریستالی شصتم (RM-۶۰)'));
     expect((screen.getByPlaceholderText('نام کالا') as HTMLInputElement).value).toBe('مهره کریستالی شصتم');
     expect(fetchJson.mock.calls.some(call => String(call[0]).startsWith(`${PICK_LIST_URLS.items}?search=`))).toBe(true);
   });

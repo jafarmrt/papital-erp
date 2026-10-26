@@ -8,8 +8,12 @@ import { validate } from '../../middleware/validate';
 /**
  * v11 phase 6.3a (U21): a code or document number a screen shows goes through `formatPersianCode` (AGENTS §6.1), so the
  * same identifier never shows in Latin digits on one screen and in Persian on another («PR-1405-0001» in the list,
- * «PR-۱۴۰۵-۰۰۰۱» in the notice). This guard lists every JSX child that shows such a field raw.
+ * «PR-۱۴۰۵-۰۰۰۱» in the notice). This guard lists every such field shown raw: in a JSX child, a text attribute
+ * (`title`, `placeholder`, `aria-label`, `label`), a picker option's `label` or a toast, alone or inside a template
+ * literal (review of #406).
  */
+const TEXT_ATTRIBUTES = new Set(['title', 'placeholder', 'aria-label', 'label']);
+const TOAST_CALL = /^toast(\.\w+)?$/;
 const IDENTIFIER_FIELDS = new Set(['code', 'refNumber', 'ref_number', 'voucherNumber', 'documentNumber', 'docNumber', 'invoiceNumber', 'orderNumber',
   'accountCode', 'account_code', 'projectCode', 'project_code', 'itemCode', 'item_code', 'customerCode', 'supplierCode', 'requisitionCode', 'requisition_code', 'sku']);
 const SCREEN_ROOTS = ['src/pages', 'src/components'];
@@ -37,10 +41,17 @@ function rawIdentifierChildren(file: string): string[] {
     } else if (ts.isConditionalExpression(e)) {
       operands(e.whenTrue);
       operands(e.whenFalse);
+    } else if (ts.isTemplateExpression(e)) {
+      for (const span of e.templateSpans) operands(span.expression);
     }
   };
   const visit = (node: ts.Node): void => {
     if (ts.isJsxExpression(node) && node.expression && (ts.isJsxElement(node.parent) || ts.isJsxFragment(node.parent))) operands(node.expression);
+    if (ts.isJsxAttribute(node) && TEXT_ATTRIBUTES.has(node.name.getText()) && node.initializer && ts.isJsxExpression(node.initializer) && node.initializer.expression) {
+      operands(node.initializer.expression);
+    }
+    if (ts.isPropertyAssignment(node) && node.name.getText() === 'label') operands(node.initializer);
+    if (ts.isCallExpression(node) && TOAST_CALL.test(node.expression.getText()) && node.arguments[0]) operands(node.arguments[0]);
     ts.forEachChild(node, visit);
   };
   visit(source);
@@ -48,7 +59,7 @@ function rawIdentifierChildren(file: string): string[] {
 }
 
 describe('v11 phase 6.3a (U21): identifiers in Persian digits, no field key in a message', () => {
-  it('no screen shows a code or document number without formatPersianCode', () => {
+  it('no screen shows a code or document number without formatPersianCode, alone or inside a text', () => {
     const raw = SCREEN_ROOTS.flatMap(root => screenFiles(path.join(process.cwd(), root))).flatMap(rawIdentifierChildren);
     expect(raw).toEqual([]);
   });

@@ -257,7 +257,7 @@ export function ManualPurchaseList({
                           className="w-full px-2.5 py-1 bg-white border border-slate-200 rounded-md font-mono text-[10px] text-slate-600 focus:outline-none print:hidden"
                         />
                         <div className="hidden print:block font-bold">
-                          {item.itemName || 'کالای دستی بدون عنوان'} {item.itemCode ? `(${item.itemCode})` : ''}
+                          {item.itemName || 'کالای دستی بدون عنوان'} {item.itemCode ? `(${formatPersianCode(item.itemCode)})` : ''}
                         </div>
                       </div>
                     ) : (

@@ -1,6 +1,6 @@
 import { Trash2 } from 'lucide-react';
 import type { Item } from '../../types';
-import { formatPersianNumber, formatPersianPrice } from '../../utils';
+import { formatPersianCode, formatPersianNumber, formatPersianPrice } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 import { currencyScale } from '../../lib/currencyScale';
@@ -20,7 +20,7 @@ export interface NewRequisitionRow {
 }
 
 /** گزینه انتخابگر کالا: نام و کد کالای فهرست انتخاب (`GET /items/options`) */
-const itemOption = (item: Item) => ({ value: item.id, label: `${item.name}${item.code ? ` (${item.code})` : ''}` });
+const itemOption = (item: Item) => ({ value: item.id, label: `${item.name}${item.code ? ` (${formatPersianCode(item.code)})` : ''}` });
 
 /** v9.0.355 (TD-901، ت۵): پیام خطای هر فیلد زیر همان فیلد، نه فقط در اعلان */
 export function FieldError({ id, message }: { id: string; message?: string }) {

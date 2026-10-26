@@ -525,7 +525,7 @@ export default function ActivityLogsPage() {
                 </div>
                 <div>
                   <span className="text-slate-400 block mb-0.5">بخش / موجودیت:</span>
-                  <span className="font-bold text-slate-800">{selectedLog.entity} {selectedLog.entityId ? `(#${selectedLog.entityId})` : ''}</span>
+                  <span className="font-bold text-slate-800">{selectedLog.entity} {selectedLog.entityId ? `(#${formatPersianCode(selectedLog.entityId)})` : ''}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block mb-0.5">نشانی IP:</span>

@@ -63,7 +63,7 @@ export function RequisitionDetailsPreview({ requisition, isLoading }: Requisitio
         <div>
           <div className="text-slate-400 dark:text-gray-400 text-[10px]">پروژه یا کارگاه:</div>
           <div className="font-bold text-slate-800 dark:text-gray-200 mt-0.5 truncate" title={requisition.projectName || 'عمومی'}>
-            {requisition.projectName ? `${requisition.projectName} (${requisition.projectCode || ''})` : 'عمومی / کارگاهی'}
+            {requisition.projectName ? `${requisition.projectName} (${formatPersianCode(requisition.projectCode) || ''})` : 'عمومی / کارگاهی'}
           </div>
         </div>
         <div>

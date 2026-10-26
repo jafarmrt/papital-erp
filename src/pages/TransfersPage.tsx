@@ -376,7 +376,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                       کد ترنسفر: {formatPersianCode(item.code)}
                     </span>
                     <h3 className="font-bold text-slate-800 text-xs truncate max-w-[160px]" title={item.title}>
-                      {item.title || `ترنسفر کد ${item.code}`}
+                      {item.title || `ترنسفر کد ${formatPersianCode(item.code)}`}
                     </h3>
                   </div>
 
@@ -645,10 +645,10 @@ export default function TransfersPage({ user }: { user?: User }) {
             <div className="px-5 py-3.5 bg-slate-900 text-white flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2">
                 <span className="bg-amber-400 text-slate-950 font-mono text-xs font-black px-2.5 py-0.5 rounded-lg">
-                  {selectedTransfer ? `کد: ${selectedTransfer.code}` : 'طرح جدید'}
+                  {selectedTransfer ? `کد: ${formatPersianCode(selectedTransfer.code)}` : 'طرح جدید'}
                 </span>
                 <h2 className="font-bold text-sm">
-                  {selectedTransfer ? `مدیریت و تصویر ترنسفر کد ${selectedTransfer.code}` : 'ثبت طرح ترنسفر جدید'}
+                  {selectedTransfer ? `مدیریت و تصویر ترنسفر کد ${formatPersianCode(selectedTransfer.code)}` : 'ثبت طرح ترنسفر جدید'}
                 </h2>
               </div>
               <button aria-label="بستن"

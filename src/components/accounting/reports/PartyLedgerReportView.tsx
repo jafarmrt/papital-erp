@@ -710,7 +710,7 @@ export function PartyLedgerReportView({
                             {it.description}
                           </td>
                           <td className="py-2 px-3 border-l border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 truncate">
-                            {it.accountCode ? `${it.accountCode} - ${it.accountName}` : '—'}
+                            {it.accountCode ? `${formatPersianCode(it.accountCode)} - ${it.accountName}` : '—'}
                           </td>
                           <td className="py-2 px-3 text-left border-l border-slate-200 dark:border-slate-700 font-mono font-medium text-amber-700 dark:text-amber-400">
                             {it.debit > 0 ? formatPersianPrice(it.debit) : '—'}
