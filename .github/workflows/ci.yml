@@ -4,11 +4,13 @@
 # at once and none waits for another, so a PR result comes after the longest job instead of after the sum of the chain;
 # every job still has to pass. Only the image push (docker-publish) waits for all of them.
 # The database jobs start the runner's own PostgreSQL 16 (scripts/ci-start-postgres.sh), no image pull.
-# TD-471: actions on their Node 24 majors (v7) and runners pinned to ubuntu-24.04 (ubuntu-latest moves to Ubuntu 26 on 2026-10-19);
-# raise the pin deliberately in its own change after checking the PostgreSQL service, Playwright and Docker steps.
+# TD-471: actions on their Node 24 majors (v7) and runners pinned to a named release, never ubuntu-latest.
+# v11 (phase 5.4, TD-1355): every job runs on ubuntu-26.04, the release a new server gets; scripts/ci-start-postgres.sh
+# installs PostgreSQL 16 from the PostgreSQL apt repository there (the 26.04 image has none), and Playwright knows the
+# release from 1.61 on.
 #
 # Environment & Secrets:
-#   DATABASE_URL: Service container PostgreSQL 16
+#   DATABASE_URL: the runner's PostgreSQL 16 (scripts/ci-start-postgres.sh)
 #   JWT_SECRET, ERP_SETUP_TOKEN, METRICS_TOKEN, ERP_SECRETS_KEY: Test credentials
 #   REGISTRY_USER / REGISTRY_TOKEN: Optional container registry credentials
 
@@ -28,7 +30,7 @@ concurrency:
 jobs:
   lint-and-typecheck:
     name: Lint & Type Check
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
     timeout-minutes: 20
     steps:
@@ -78,7 +80,7 @@ jobs:
 
   test:
     name: Database & Domain Test Suites
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
     timeout-minutes: 40
     steps:
@@ -100,10 +102,14 @@ jobs:
 
       - name: PostgreSQL 16 client tools (v8.0.84, backup/restore tests run scripts/backup.sh and restore.sh)
         run: |
-          if ! pg_dump --version 2>/dev/null | grep -qE ' (1[6-9]|[2-9][0-9])\.'; then
+          if ! pg_dump --version 2>/dev/null | grep -qE ' 16\.'; then
             sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-16
           fi
           psql --version && pg_dump --version && pg_restore --version
+          # a newer pg_dump would write a dump the server's version 16 cannot read back
+          for tool in pg_dump pg_restore; do
+            "$tool" --version | grep -qE ' 16\.' || { echo "$tool is not version 16" >&2; exit 1; }
+          done
 
       - name: Execute Full 21-Suite Test Matrix
         env:
@@ -129,7 +135,7 @@ jobs:
 
   coverage-gate:
     name: Code Coverage Hard Gate (TD-129)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
     timeout-minutes: 45
     steps:
@@ -151,10 +157,14 @@ jobs:
 
       - name: PostgreSQL 16 client tools (v8.0.84, backup/restore tests run scripts/backup.sh and restore.sh)
         run: |
-          if ! pg_dump --version 2>/dev/null | grep -qE ' (1[6-9]|[2-9][0-9])\.'; then
+          if ! pg_dump --version 2>/dev/null | grep -qE ' 16\.'; then
             sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-16
           fi
           psql --version && pg_dump --version && pg_restore --version
+          # a newer pg_dump would write a dump the server's version 16 cannot read back
+          for tool in pg_dump pg_restore; do
+            "$tool" --version | grep -qE ' 16\.' || { echo "$tool is not version 16" >&2; exit 1; }
+          done
 
       - name: Execute Test Matrix Under c8 Coverage
         env:
@@ -199,7 +209,7 @@ jobs:
 
   build:
     name: Client & Server Production Build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
     timeout-minutes: 20
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
@@ -228,7 +238,7 @@ jobs:
 
   e2e:
     name: End-to-End Critical Path (Playwright, v7.0.77 / audit P3-7)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
     timeout-minutes: 20
     steps:
@@ -294,7 +304,7 @@ jobs:
 
   docker-gate:
     name: Docker Container Build Verification
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
     timeout-minutes: 20
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
@@ -327,7 +337,7 @@ jobs:
 
   # v10.2.24 (OBS-R1-16, OT-A-07): install.sh runs end to end on Ubuntu 26.04, the release a new server gets: fresh
   # install, a reinstall over the database role of the first one, then the app port bound to 127.0.0.1 as
-  # setup-domain.sh sets it. The other jobs stay on ubuntu-24.04 (their PostgreSQL 16 setup); moving them is TD-1355.
+  # setup-domain.sh sets it. Since v11 (TD-1355) the other jobs run on ubuntu-26.04 too.
   linux-install:
     name: Linux Install (Ubuntu 26.04)
     runs-on: ubuntu-26.04
@@ -373,7 +383,7 @@ jobs:
   docker-publish:
     name: Push Container Image
     needs: [lint-and-typecheck, test, coverage-gate, e2e, build, docker-gate, linux-install]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
     steps:

@@ -22,6 +22,7 @@ under «### Unreleased», then one section per released version.
 ## Version 11.x Series (Active — see `src/data/changelogs/11.ts`)
 
 ### Unreleased
+- CI on Ubuntu 26.04 (v11 phase 5.4, TD-1355, O19): every CI job runs on `ubuntu-26.04`, the release a new server gets; `scripts/ci-start-postgres.sh` installs PostgreSQL 16 from the PostgreSQL apt repository there and keeps only its cluster on port 5432, and the database jobs stop when `pg_dump` is not version 16; `@playwright/test` 1.64.1 (Ubuntu 26.04 is known from 1.61); `npm audit fix` raised fast-uri, ip-address and serialize-javascript to their fixed patches (no server step). Vitest `ciParallelJobs.test.ts`.
 - Input guards (v11 phase 6.1a, card ت۵۶): a manual voucher is dated neither after today nor before the books' first fiscal year (M9); a cheque is due on or after its issue day and each cheque step follows the previous one, and a payslip is paid on or after its voucher's day (M12); amounts and quantities above 14 whole digits or 4 decimals are refused, an overflowing line value is 422 instead of 500, a treasury amount a number cannot hold is refused, and the Kardex values the rounded quantity (M16, S10, S12); the year-close preview adds in decimals (M15); a work log is not dated after today and a reviewed log whose text changes goes back to «ارسال‌شده» (C10).
 
 ### v11.3.0 — پایان فاز ۴: پایهٔ پایگاه‌داده
