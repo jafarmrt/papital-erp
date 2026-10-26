@@ -483,9 +483,9 @@ router.put('/documents/:id/finalize', authorizePermission('documents.finalize', 
   const parsedVatPercent = vatPercent !== undefined && vatPercent !== null ? Number(vatPercent) : undefined;
 
   const allowBackdate = await userHasRoleOrPermission(req.user, BACKDATE_PERMISSION);
-  // v11 phase 6.1پ (C2, ت۵۲-۴): a document whose approval workflow is running is finalized only from the inbox (409
-  // DOCUMENT_WORKFLOW_OPEN). Before (v9.0.39, TD-446), finalizing here closed the running instance and skipped its steps.
-  const documentLabel = `${docTypeTitles[storedType] ?? 'سند'} «${beforeDoc.refNumber || docId}»`;
+  // v11 phase 6.1p (C2, ت۵۲-۴): a document in its approval workflow is finalized only from the inbox (409
+  // DOCUMENT_IN_WORKFLOW). Before (v9.0.39, TD-446), finalizing here closed the running instance and skipped its steps.
+  const documentLabel = `${docTypeTitles[beforeDoc.status === 'proforma' ? 'proforma' : storedType] ?? 'سند'} «${beforeDoc.refNumber || docId}»`;
   await idempotentTransaction(async (tx) => {
     await assertDocumentWorkflowClosed(tx, docId, documentLabel);
     const change = await DocumentService.finalizeDocument(docId, user, tx, {
@@ -495,8 +495,6 @@ router.put('/documents/:id/finalize', authorizePermission('documents.finalize', 
       // v8.0.4 (TD-257): نهایی‌سازی پیش‌نویسِ با تاریخ پیش از آخرین گردش کالا فقط با مجوز
       allowBackdate,
     });
-    // again under the document lock finalize took: a workflow started meanwhile (entity, then instance) is seen here
-    await assertDocumentWorkflowClosed(tx, docId, documentLabel);
     // V10-2.2 (TD-020): سند دوبل حسابداری به صورت اتمیک درون تراکنش DocumentService.finalizeDocument صادر/به‌روزرسانی می‌شود
     // v9.0.337 (TD-785): ردیف ممیزی درون همین تراکنش با سند پیش و پس از نهایی‌سازی؛ سندی که از پیش قطعی بود ردیفی نمی‌گیرد
     if (change) {

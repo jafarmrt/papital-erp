@@ -67,12 +67,14 @@ export async function runAccessPackageTwoDocumentTests(shouldRun: ShouldRun): Pr
       const finalInvoice = await h.post('/api/documents', body('invoice', 'final'), finalizer);
       if (finalInvoice.status !== 200 || (await stored(finalInvoice.body?.docId))?.status !== 'final') wrong.push(`documents.finalize recorded a final invoice with ${finalInvoice.status}: ${JSON.stringify(finalInvoice.body).slice(0, 160)}`);
       // v11 phase 6.1p (C2): while the proforma's approval workflow runs, the finalizer waits for its inbox step (409);
-      // this step checks the permission, so the workflow is closed by hand first
-      const openInstances = await h.q(`SELECT id FROM workflow_instances WHERE entity_type = 'document' AND entity_id = $1 AND status = 'IN_PROGRESS'`, [String(proformaId)]);
-      if (openInstances.length > 0) {
+      // this step checks the permission, so an admin closes the workflow first
+      const [openInstance] = await h.q(`SELECT id FROM workflow_instances WHERE entity_type = 'document' AND entity_id = $1 AND status = 'IN_PROGRESS'`, [String(proformaId)]);
+      if (!openInstance) wrong.push('the seller proforma has no running approval workflow');
+      else {
         const waiting = await h.put(`/api/documents/${proformaId}/finalize`, {}, finalizer);
-        if (waiting.status !== 409 || waiting.body?.code !== 'DOCUMENT_WORKFLOW_OPEN') wrong.push(`documents.finalize finalized a proforma under a running workflow with ${waiting.status}, not 409 DOCUMENT_WORKFLOW_OPEN`);
-        await h.q(`UPDATE workflow_instances SET status = 'TERMINATED' WHERE entity_type = 'document' AND entity_id = $1 AND status = 'IN_PROGRESS'`, [String(proformaId)]);
+        if (waiting.status !== 409 || waiting.body?.code !== 'DOCUMENT_IN_WORKFLOW') wrong.push(`documents.finalize finalized a proforma under a running workflow with ${waiting.status}, not 409 DOCUMENT_IN_WORKFLOW`);
+        const closed = await h.post(`/api/workflow/instances/${openInstance.id}/terminate`, { reason: 'TD-541 test: finalize the proforma directly' });
+        if (closed.status !== 200) wrong.push(`closing the proforma's workflow returned ${closed.status}: ${JSON.stringify(closed.body).slice(0, 160)}`);
       }
       const finalizeProforma = await h.put(`/api/documents/${proformaId}/finalize`, {}, finalizer);
       if (finalizeProforma.status !== 200) wrong.push(`documents.finalize finalized a proforma with ${finalizeProforma.status}: ${JSON.stringify(finalizeProforma.body).slice(0, 160)}`);
