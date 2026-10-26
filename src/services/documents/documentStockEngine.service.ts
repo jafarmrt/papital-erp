@@ -70,7 +70,11 @@ export class DocumentStockEngine {
     params: ApplyStockMovementParams
   ): Promise<{ transactionId: number }> {
     const { itemId, documentId, inOut, quantity, price, date, documentType, documentRef, user, targetLoc, notes, allowBackdate } = params;
-    const qty = Number(quantity);
+    // v11 phase 6.1a (S10): the quantity is rounded once to the column's 4 decimals and both the Kardex row and its value
+    // use that quantity; before, 1.23456 was stored as 1.2346 but valued unrounded, and 0.00001 became a row of 0.0000 worth
+    // 0.011 (now it is refused below, as zero)
+    const rawQty = Number(quantity);
+    const qty = Number.isFinite(rawQty) ? fin(rawQty).round(4).toNumber() : rawQty;
     const priceNum = Number(price);
 
     const whInfo = await ItemWarehouseStockService.resolveWarehouse(tx, targetLoc);

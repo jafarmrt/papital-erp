@@ -11129,6 +11129,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v11 phase 3.1: urgent money fixes (M1 correction draft, M2 sourced opening voucher, M4 separators, M5/S6/M23 fiscal lock)
   const { runMoneyUrgentFixesV11Tests } = await import('../regression/moneyUrgentFixesV11Tests.js');
   results.push(...await runMoneyUrgentFixesV11Tests(shouldRun));
+  // v11 phase 6.1a: input guards (M9 manual voucher dates, M12 cheque and payslip date order, M16/S10/S12 number bounds, M15 close preview decimals, C10 work logs)
+  const { runInputGuardsV11Tests } = await import('../regression/inputGuardsV11Tests.js');
+  results.push(...await runInputGuardsV11Tests(shouldRun));
 
   return results;
 }

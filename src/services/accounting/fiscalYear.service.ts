@@ -9,7 +9,7 @@ import { AccountMappingService } from './accountMapping.service.js';
 import { ConflictError, ValidationError } from '../../errors/customErrors.js';
 import { jalaliYearBounds, isoToJalaliDate, toStorageDate } from '../../utils/calendarDate.js';
 import { toEnglishDigits } from '../../utils/persianNumber.js';
-import { fin, FinancialMath } from '../../lib/financialDecimal.js';
+import { fin, FinancialMath, type DecimalValue } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { closingRowDetail } from './closingRowDetail.js';
 import { assertEarlierYearsClosed, assertFiscalYearEnded, findEarlierOpenYears, isFiscalYearEnded, lockFiscalYearSequence } from './fiscalYearOrder.js';
@@ -24,6 +24,15 @@ import { idempotentTransaction } from '../../middleware/idempotency.js';
 
 // V3.0.6 (BUG-03): کلید قفل Advisory برای سریال‌سازی همزمانی بستن سال مالی
 const FISCAL_CLOSING_LOCK_NAMESPACE = 918273;
+
+
+/**
+ * v11 phase 6.1a (M15): a trial balance row's net (left − right) in decimals, rounded to the money scale. Before, the preview
+ * subtracted with JS numbers and showed «0.19999999999999998» and a net profit of «3000000.200000001».
+ */
+function netOf(left: DecimalValue, right: DecimalValue): number {
+  return fin(left || 0).subtract(fin(right || 0)).round(4).toNumber();
+}
 
 /** v8.0.2 (TD-252): بیشترین تعداد سند پیش‌نویس که پیش‌نمایش بستن سال فهرست می‌کند */
 export const FISCAL_CLOSING_DRAFT_LIST_LIMIT = 50;
@@ -141,7 +150,7 @@ export class FiscalYearService {
       
       if (isTemporary) {
         if (r.accountType === 'revenue') {
-          const netCredit = Number(r.creditTurnover || 0) - Number(r.debitTurnover || 0);
+          const netCredit = netOf(r.creditTurnover, r.debitTurnover);
           if (netCredit !== 0) {
             totalRevenuesDec = totalRevenuesDec.add(netCredit);
             const action = netCredit > 0 ? 'debit' : 'credit';
@@ -159,7 +168,7 @@ export class FiscalYearService {
             else totalTemporaryCreditDec = totalTemporaryCreditDec.add(amount);
           }
         } else if (r.accountType === 'cost_of_sales') {
-          const netDebit = Number(r.debitTurnover || 0) - Number(r.creditTurnover || 0);
+          const netDebit = netOf(r.debitTurnover, r.creditTurnover);
           if (netDebit !== 0) {
             totalCostOfSalesDec = totalCostOfSalesDec.add(netDebit);
             const action = netDebit > 0 ? 'credit' : 'debit';
@@ -177,7 +186,7 @@ export class FiscalYearService {
             else totalTemporaryDebitDec = totalTemporaryDebitDec.add(amount);
           }
         } else if (r.accountType === 'expense') {
-          const netDebit = Number(r.debitTurnover || 0) - Number(r.creditTurnover || 0);
+          const netDebit = netOf(r.debitTurnover, r.creditTurnover);
           if (netDebit !== 0) {
             totalExpensesDec = totalExpensesDec.add(netDebit);
             const action = netDebit > 0 ? 'credit' : 'debit';
@@ -197,7 +206,7 @@ export class FiscalYearService {
         }
       } else {
         if (r.accountType === 'asset') {
-          const bal = Number(r.debitBalance || 0) - Number(r.creditBalance || 0);
+          const bal = netOf(r.debitBalance, r.creditBalance);
           if (bal !== 0) {
             permanentAccounts.push({
               accountId: r.accountId,
@@ -210,7 +219,7 @@ export class FiscalYearService {
             });
           }
         } else if (r.accountType === 'liability' || r.accountType === 'equity') {
-          const bal = Number(r.creditBalance || 0) - Number(r.debitBalance || 0);
+          const bal = netOf(r.creditBalance, r.debitBalance);
           if (bal !== 0) {
             permanentAccounts.push({
               accountId: r.accountId,
@@ -226,12 +235,12 @@ export class FiscalYearService {
       }
     }
 
-    const totalRevenues = totalRevenuesDec.toNumber();
-    const totalCostOfSales = totalCostOfSalesDec.toNumber();
-    const totalExpenses = totalExpensesDec.toNumber();
-    const totalTemporaryDebit = totalTemporaryDebitDec.toNumber();
-    const totalTemporaryCredit = totalTemporaryCreditDec.toNumber();
-    const netProfit = totalRevenuesDec.subtract(totalCostOfSalesDec).subtract(totalExpensesDec).toNumber();
+    const totalRevenues = totalRevenuesDec.round(4).toNumber();
+    const totalCostOfSales = totalCostOfSalesDec.round(4).toNumber();
+    const totalExpenses = totalExpensesDec.round(4).toNumber();
+    const totalTemporaryDebit = totalTemporaryDebitDec.round(4).toNumber();
+    const totalTemporaryCredit = totalTemporaryCreditDec.round(4).toNumber();
+    const netProfit = totalRevenuesDec.subtract(totalCostOfSalesDec).subtract(totalExpensesDec).round(4).toNumber();
     const isProfit = netProfit >= 0;
 
     const summaryVouchersPreview = [

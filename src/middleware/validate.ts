@@ -34,7 +34,13 @@ export const decimalInput = (label: string) => z.union([z.number(), z.string()])
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${label} باید عدد معتبر باشد` });
       return z.NEVER;
     }
-    return String(v);
+    const issue = numberScaleIssue(v);
+    if (issue) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: decimalBoundMessage(label, issue) });
+      return z.NEVER;
+    }
+    // float noise of a computed number («0.30000000000000004») is cut at the stored scale, as the column would store it
+    return trimDecimalZeros(v.toFixed(DECIMAL_INPUT_MAX_SCALE));
   }
   const clean = normalizeGroupedDecimalString(v);
   if (clean === '') return undefined;
@@ -47,8 +53,47 @@ export const decimalInput = (label: string) => z.union([z.number(), z.string()])
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${label} باید عدد معتبر باشد (مقدار دریافتی: ${v})` });
     return z.NEVER;
   }
+  const issue = decimalTextScaleIssue(clean);
+  if (issue) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: decimalBoundMessage(label, issue) });
+    return z.NEVER;
+  }
   return clean;
 });
+
+/**
+ * v11 phase 6.1a (M16, S10, S12, U7): every amount, rate and quantity column is `numeric(18,4)`, so a value read by
+ * `decimalInput` has at most 14 whole digits and 4 decimals. Before, a larger value reached the database and came back as a
+ * 500 `DATABASE_ERROR`, and a fifth decimal was rounded by the column while the service had already priced the unrounded
+ * quantity (a Kardex row of quantity 0.0000 worth 0.011, a transfer of zero).
+ */
+export const DECIMAL_INPUT_MAX_SCALE = 4;
+export const DECIMAL_INPUT_MAX_WHOLE_DIGITS = 14;
+type DecimalBoundIssue = 'scale' | 'size';
+
+function trimDecimalZeros(text: string): string {
+  return text.includes('.') ? text.replace(/\.?0+$/, '') : text;
+}
+
+/** the bound a decimal text (`DECIMAL_PATTERN`) breaks, or null */
+export function decimalTextScaleIssue(text: string): DecimalBoundIssue | null {
+  const [whole, fraction = ''] = text.replace(/^-/, '').split('.');
+  if (whole.replace(/^0+/, '').length > DECIMAL_INPUT_MAX_WHOLE_DIGITS) return 'size';
+  if (fraction.replace(/0+$/, '').length > DECIMAL_INPUT_MAX_SCALE) return 'scale';
+  return null;
+}
+
+function numberScaleIssue(value: number): DecimalBoundIssue | null {
+  if (Math.abs(value) >= 10 ** DECIMAL_INPUT_MAX_WHOLE_DIGITS) return 'size';
+  const scaled = value * 10 ** DECIMAL_INPUT_MAX_SCALE;
+  return Math.abs(scaled - Math.round(scaled)) > 1e-6 * Math.max(1, Math.abs(scaled)) ? 'scale' : null;
+}
+
+function decimalBoundMessage(label: string, issue: DecimalBoundIssue): string {
+  return issue === 'size'
+    ? `${label} بیش از اندازهٔ مجاز است (حداکثر ۱۴ رقم پیش از ممیز).`
+    : `${label} حداکثر ۴ رقم پس از ممیز می‌پذیرد.`;
+}
 
 /** v8.0.108 (TD-385): شماره‌ها و شناسه‌های متنی (شماره چک، شناسه صیادی) با ارقام لاتین ذخیره می‌شوند */
 export const latinDigitsString = z.string().transform(v => toLatinDigits(v).trim());

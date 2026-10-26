@@ -20,6 +20,7 @@ import { money } from '../../../lib/money.js';
 import type { TreasuryTransaction, Account } from '../../../types.js';
 import { NotFoundError, ValidationError, ConflictError, BusinessLogicError } from '../../../errors/customErrors.js';
 import { AttachmentStorageService } from '../../attachments/attachmentStorage.service.js';
+import { exactTreasuryAmount } from './treasuryAmount.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { normalizeTreasuryCurrency, sameTreasuryCurrency } from '../../../lib/treasury/treasuryCurrency.js';
 import { reconcileTreasuryRows, type ReconcileParams, type ReconcileResult } from './bankReconciliation.js';
@@ -244,7 +245,7 @@ export class TreasuryTransactionService {
     /** v10.0.262 (TD-934): ممیزی ثبت با `tx` همین ثبت */
     audit?: TreasuryAuditActor;
   }): Promise<TreasuryTransaction> {
-    const amount = Number(data.amount) || 0;
+    const amount = exactTreasuryAmount(data.amount, 'مبلغ تراکنش');
     if (amount <= 0) throw new ValidationError('مبلغ تراکنش باید بزرگتر از صفر باشد');
     // v8.0.26 (TD-278، تصمیم مالک محصول — گزینه الف): روش «چک» در فرم خزانه پذیرفته نمی‌شود؛ چک فقط از «دفتر چک» ثبت
     // می‌شود. پیش‌تر این روش اسناد دریافتنی/پرداختنی را بدهکار/بستانکار می‌کرد ولی رکورد چکی نمی‌ساخت که روزی وصول،
@@ -541,7 +542,7 @@ export class TreasuryTransactionService {
     /** v10.0.262 (TD-934): ممیزی انتقال با `tx` همین انتقال */
     audit?: TreasuryAuditActor;
   }): Promise<{ payment: TreasuryTransaction; receipt: TreasuryTransaction; voucherId: number | null }> {
-    const amount = Number(data.amount) || 0;
+    const amount = exactTreasuryAmount(data.amount, 'مبلغ انتقال');
     if (amount <= 0) throw new ValidationError('مبلغ انتقال باید بزرگتر از صفر باشد');
     if (data.fromBankAccountId === data.toBankAccountId) {
       throw new ValidationError('حساب مبدأ و مقصد باید متفاوت باشند');

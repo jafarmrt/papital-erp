@@ -9,6 +9,8 @@ import { DEFAULT_DAILY_LOG_VISIBILITY, idList, mentionNotifies } from '../../lib
 import { minutesOfDay, timeOfDayLabel, workHoursBetween, workTimeError } from '../../lib/dailyLogs/workHours.js';
 import { ROW_ADVISORY_LOCK_NAMESPACES } from '../../lib/advisoryLock.js';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { isoToJalaliDate } from '../../utils/calendarDate.js';
+import { toPersianDigits } from '../../utils/persianNumber.js';
 import type { AuthUserPayload } from '../../types.js';
 import type { DailyLogBody, DailyLogUpdateBody } from '../../routes/dailyLogs.schemas.js';
 import { canManageAllDailyLogs } from './dailyLogAccess.js';
@@ -127,6 +129,17 @@ function auditSnapshot(row: DailyLogRow): Record<string, unknown> {
   };
 }
 
+/** v11 phase 6.1a (C10): a work log reports a day that has come; before, a log dated months ahead was accepted */
+async function assertWorkDayNotAhead(date: string): Promise<void> {
+  const today = await businessTodayIsoDate();
+  if (date <= today) return;
+  throw new ValidationError(
+    `تاریخ کارکرد (${toPersianDigits(isoToJalaliDate(date))}) نمی‌تواند پس از امروز (${toPersianDigits(isoToJalaliDate(today))}) باشد.`,
+    { field: 'date', value: date },
+    'DAILY_LOG_DATE_IN_FUTURE',
+  );
+}
+
 async function assertAuthorOrManager(row: DailyLogRow, actor: AuthUserPayload, message: string): Promise<void> {
   if (row.userId === actor.id) return;
   if (await canManageAllDailyLogs(actor)) return;
@@ -140,6 +153,7 @@ export async function createDailyLog(actor: AuthUserPayload, body: DailyLogBody)
   // v7.0.134 (TD-232): ISO work date; Jalali input is converted and an invalid date is 422
   const date = requireStorageDate(body.date, 'تاریخ کارکرد') || await businessTodayIsoDate();
   const name = actorName(actor);
+  await assertWorkDayNotAhead(date);
 
   return orm.transaction(async (tx) => {
     await assertNoTimeOverlap(tx, actor.id, date, startTime, endTime);
@@ -182,6 +196,16 @@ export async function createDailyLog(actor: AuthUserPayload, body: DailyLogBody)
   });
 }
 
+/** whether an edit changes what the log reports (day, times, mode, title, text or project) */
+function reportChanged(existing: DailyLogRow, body: DailyLogUpdateBody, date: string, startTime: string, endTime: string): boolean {
+  return date !== existing.date
+    || startTime !== (existing.startTime ?? '') || endTime !== (existing.endTime ?? '')
+    || (!!body.work_mode && body.work_mode !== existing.workMode)
+    || (!!body.title && body.title !== existing.title)
+    || (!!body.content && body.content !== existing.content)
+    || (body.project_id !== undefined && (body.project_id || null) !== (existing.projectId ?? null));
+}
+
 export async function updateDailyLog(actor: AuthUserPayload, logId: number, body: DailyLogUpdateBody): Promise<DailyLogRow> {
   return orm.transaction(async (tx) => {
     const existing = await lockLog(tx, logId);
@@ -199,6 +223,7 @@ export async function updateDailyLog(actor: AuthUserPayload, logId: number, body
       ? await resolveProject(tx, body.project_id)
       : { projectId: existing.projectId, projectName: existing.projectName ?? '' };
     const date = (body.date ? requireStorageDate(body.date, 'تاریخ کارکرد') : '') || existing.date;
+    if (date !== existing.date) await assertWorkDayNotAhead(date);
     const timeChanged = body.start_time !== undefined || body.end_time !== undefined;
     const workHours = timeChanged ? requireWorkHours(startTime, endTime) : existing.workHours;
     // an edit that keeps the day and the times is not compared, so a legacy overlapping log stays editable
@@ -222,6 +247,9 @@ export async function updateDailyLog(actor: AuthUserPayload, logId: number, body
       mentions,
       visibility: body.visibility ?? existing.visibility,
       allowedUsers,
+      // v11 phase 6.1a (C10): a reviewed log whose report changes goes back to «ارسال‌شده», so the manager's review never
+      // stands for text the manager did not read; before, the author rewrote it and it stayed «بررسی‌شده»
+      status: existing.status === 'reviewed' && reportChanged(existing, body, date, startTime, endTime) ? 'submitted' : existing.status,
       version: existing.version + 1,
     }).where(and(eq(dailyWorkLogs.id, logId), eq(dailyWorkLogs.version, existing.version))).returning();
 
