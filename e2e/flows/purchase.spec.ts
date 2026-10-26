@@ -112,7 +112,8 @@ async function pickOption(page: Page, pickerName: string, search: string): Promi
   // v10.1.31 (TD-1278): a picker is named by its label; its placeholder is only the shown text
   await page.locator('button', { hasText: pickerName }).click();
   await page.getByPlaceholder(UI.search).fill(search);
-  await page.locator('li', { hasText: search }).first().click();
+  // v11 phase 6.3a (U21): a picker shows codes in Persian digits and finds them typed in Latin digits too
+  await page.locator('li', { hasText: toPersianDigits(search) }).first().click();
 }
 
 test('purchase receipt on the stock page moves stock, Kardex and the payables voucher', async ({ page }) => {

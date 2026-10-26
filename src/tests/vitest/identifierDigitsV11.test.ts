@@ -9,13 +9,16 @@ import { validate } from '../../middleware/validate';
  * v11 phase 6.3a (U21): a code or document number a screen shows goes through `formatPersianCode` (AGENTS §6.1), so the
  * same identifier never shows in Latin digits on one screen and in Persian on another («PR-1405-0001» in the list,
  * «PR-۱۴۰۵-۰۰۰۱» in the notice). This guard lists every such field shown raw: in a JSX child, a text attribute
- * (`title`, `placeholder`, `aria-label`, `label`), a picker option's `label` or a toast, alone or inside a template
- * literal (review of #406).
+ * (`title`, `placeholder`, `aria-label`, `label`, `alt`), a picker option's `label`, a lightbox's `title` or `subtitle`
+ * or a toast, alone or inside a template literal (reviews of #406).
  */
-const TEXT_ATTRIBUTES = new Set(['title', 'placeholder', 'aria-label', 'label']);
+const TEXT_ATTRIBUTES = new Set(['title', 'placeholder', 'aria-label', 'label', 'alt']);
+/** object properties that hold shown text: a picker option's `label`, a lightbox's `title` and `subtitle` */
+const TEXT_PROPERTIES = new Set(['label', 'title', 'subtitle']);
 const TOAST_CALL = /^toast(\.\w+)?$/;
 const IDENTIFIER_FIELDS = new Set(['code', 'refNumber', 'ref_number', 'voucherNumber', 'documentNumber', 'docNumber', 'invoiceNumber', 'orderNumber',
-  'accountCode', 'account_code', 'projectCode', 'project_code', 'itemCode', 'item_code', 'customerCode', 'supplierCode', 'requisitionCode', 'requisition_code', 'sku']);
+  'accountCode', 'account_code', 'projectCode', 'project_code', 'itemCode', 'item_code', 'customerCode', 'supplierCode', 'requisitionCode', 'requisition_code', 'sku',
+  'payrollNumber', 'payroll_number']);
 const SCREEN_ROOTS = ['src/pages', 'src/components'];
 
 function screenFiles(dir: string, out: string[] = []): string[] {
@@ -50,7 +53,7 @@ function rawIdentifierChildren(file: string): string[] {
     if (ts.isJsxAttribute(node) && TEXT_ATTRIBUTES.has(node.name.getText()) && node.initializer && ts.isJsxExpression(node.initializer) && node.initializer.expression) {
       operands(node.initializer.expression);
     }
-    if (ts.isPropertyAssignment(node) && node.name.getText() === 'label') operands(node.initializer);
+    if (ts.isPropertyAssignment(node) && TEXT_PROPERTIES.has(node.name.getText())) operands(node.initializer);
     if (ts.isCallExpression(node) && TOAST_CALL.test(node.expression.getText()) && node.arguments[0]) operands(node.arguments[0]);
     ts.forEachChild(node, visit);
   };

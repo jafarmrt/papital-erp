@@ -402,19 +402,19 @@ export default function TransfersPage({ user }: { user?: User }) {
                     <>
                       <SafeImage
                         src={item.image}
-                        alt={`ترنسفر کد ${item.code}`}
+                        alt={`ترنسفر کد ${formatPersianCode(item.code)}`}
                         className="max-h-36 max-w-full object-contain rounded-xl shadow-xs transition-transform duration-300 group-hover/img:scale-105 cursor-pointer"
                         onClick={() => setLightboxData({
                           url: item.image,
-                          title: item.title || `طرح ترنسفر کد ${item.code}`,
-                          subtitle: `کد ترنسفر: ${item.code} • ${formatPersianNumber(item.productCount)} کالای متصل`
+                          title: item.title || `طرح ترنسفر کد ${formatPersianCode(item.code)}`,
+                          subtitle: `کد ترنسفر: ${formatPersianCode(item.code)} • ${formatPersianNumber(item.productCount)} کالای متصل`
                         })}
                       />
                       <button
                         onClick={() => setLightboxData({
                           url: item.image,
-                          title: item.title || `طرح ترنسفر کد ${item.code}`,
-                          subtitle: `کد ترنسفر: ${item.code} • ${formatPersianNumber(item.productCount)} کالای متصل`
+                          title: item.title || `طرح ترنسفر کد ${formatPersianCode(item.code)}`,
+                          subtitle: `کد ترنسفر: ${formatPersianCode(item.code)} • ${formatPersianNumber(item.productCount)} کالای متصل`
                         })}
                         className="absolute top-3 left-3 bg-slate-900/80 hover:bg-slate-900 text-white p-1.5 rounded-xl text-xs opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center gap-1 shadow-sm cursor-pointer"
                         title="بزرگنمایی تصویر طرح ترنسفر"
@@ -462,7 +462,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                                     onClick={() => setLightboxData({
                                       url: prod.image || prod.thumbnail || '',
                                       title: prod.name,
-                                      subtitle: `کد محصول: ${prod.code} • دسته‌بندی: ${prod.category || '-'}`
+                                      subtitle: `کد محصول: ${formatPersianCode(prod.code)} • دسته‌بندی: ${prod.category || '-'}`
                                     })}
                                     className="relative group/prodimg shrink-0 cursor-pointer"
                                     title="کلیک برای بزرگنمایی تصویر محصول (لایت‌باکس)"
@@ -796,7 +796,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                                   onClick={() => setLightboxData({
                                     url: prod.image || prod.thumbnail || '',
                                     title: prod.name,
-                                    subtitle: `کد محصول: ${prod.code} • دسته‌بندی: ${prod.category || '-'}`
+                                    subtitle: `کد محصول: ${formatPersianCode(prod.code)} • دسته‌بندی: ${prod.category || '-'}`
                                   })}
                                   className="relative group/modalthumb shrink-0 cursor-pointer"
                                   title="کلیک برای مشاهده تصویر بزرگ محصول (لایت‌باکس)"
@@ -962,7 +962,7 @@ export default function TransfersPage({ user }: { user?: User }) {
           <div className="space-y-3">
             {printTarget.image && (
               <div className="flex justify-center py-2">
-                <img src={printTarget.image} alt={`ترنسفر ${printTarget.code}`} className="max-h-56 object-contain rounded-lg border border-slate-200" />
+                <img src={printTarget.image} alt={`ترنسفر ${formatPersianCode(printTarget.code)}`} className="max-h-56 object-contain rounded-lg border border-slate-200" />
               </div>
             )}
             <h4 className="text-xs font-bold text-slate-700">محصولات متصل به این ترنسفر:</h4>

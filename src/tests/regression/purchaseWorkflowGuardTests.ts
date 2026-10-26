@@ -3,7 +3,6 @@ import { and, eq } from 'drizzle-orm';
 import { orm, pool } from '../../db/drizzle.js';
 import { purchaseRequisitions, workflowDefinitions, workflowInstances, workflowStates, workflowTransitions } from '../../db/schema.js';
 import { WorkflowEngineService } from '../../services/workflow/workflowEngineService.js';
-import { requisitionFlow } from '../../services/procurement/requisitionApproval.js';
 import { upgradeLegacySeedGuards } from '../../services/workflow/seedGuardUpgrade.js';
 import { PURCHASE_REQUISITION_GUARD_UPGRADE } from '../../services/workflow/purchaseWorkflowGuards.js';
 import { buildUnguardedPurchaseActionHealthTest, findUnguardedPurchaseActions } from '../../services/accounting/unguardedPurchaseActionHealth.js';
@@ -168,7 +167,7 @@ export async function runPurchaseWorkflowGuardTests(shouldRun: ShouldRun): Promi
   }
 
   if (shouldRun('reg_lazy_requisition_instance_requester_v11_6_3a_u10', 'u10', 'workflow', 'procurement')) {
-    await runCase(results, 'reg_lazy_requisition_instance_requester_v11_6_3a_u10', 'v11 phase 6.3a (review of #406, U10): a requisition without a workflow instance gets one in its requester\'s name, so another approver can still approve it', () => inFiscalSandbox(async () => {
+    await runCase(results, 'reg_lazy_requisition_instance_requester_v11_6_3a_u10', 'v11 phase 6.3a (reviews of #406, U10): a requisition without a workflow instance is marked for its requester, and an approval by another user starts the instance in the requester\'s name and goes through', () => inFiscalSandbox(async () => {
       await WorkflowEngineService.seedDefaultWorkflows();
       const keys = ['procurement.view', 'procurement.create', 'procurement.approve', 'procurement.order'];
       const maker = await clientWith(keys);
@@ -184,12 +183,25 @@ export async function runPurchaseWorkflowGuardTests(shouldRun: ShouldRun): Promi
       await orm.update(workflowInstances).set({ status: 'TERMINATED' }).where(eq(workflowInstances.id, Number(row.workflowInstanceId)));
       await orm.update(purchaseRequisitions).set({ workflowInstanceId: null }).where(eq(purchaseRequisitions.id, id));
 
-      const flow = await orm.transaction(async tx => requisitionFlow(tx, { ...row, workflowInstanceId: null }, { id: checker.userId, username: 'checker', role: 'tester' }));
-      expect(flow.instance.startedBy === maker.userId, `the missing instance was started by user ${flow.instance.startedBy}, expected the requester ${maker.userId}`);
+      const markOf = async (client: typeof maker) => {
+        const res = await client.get('/api/procurement/requisitions?search=Lazy%20instance%20requester&limit=50');
+        expect(res.status === 200, `requisition list returned ${brief(res)}`);
+        const listed = (Array.isArray(res.body?.data) ? res.body.data : []).find((r: { id: number }) => Number(r.id) === id);
+        expect(Boolean(listed), `requisition ${id} missing from the list: ${brief(res)}`);
+        return listed.initiatorCannotApprove === true;
+      };
+      expect(await markOf(maker), 'the list does not mark the requisition without an instance for its requester');
+      expect(!(await markOf(checker)), 'the list marks the requisition without an instance for another approver');
+
+      // the approve button of the desk and the requisition window (workflow-action), with no instance started before it
       const approved = await checker.post(`/api/procurement/requisitions/${id}/workflow-action`, { actionKey: 'approve_request' });
       expect(approved.status === 200, `another approver returned ${brief(approved)}`);
+      const [started] = await orm.select({ startedBy: workflowInstances.startedBy }).from(purchaseRequisitions)
+        .innerJoin(workflowInstances, eq(workflowInstances.id, purchaseRequisitions.workflowInstanceId))
+        .where(eq(purchaseRequisitions.id, id));
+      expect(started?.startedBy === maker.userId, `the missing instance was started by user ${started?.startedBy}, expected the requester ${maker.userId}`);
       expect(await stepOf(id) === 'ordered', 'approval by another user did not reach the ordered step');
-      return 'missing instance started in the requester\'s name; another approver approved it';
+      return 'marked for the requester only; another approver approved it and the instance names the requester';
     }));
   }
 

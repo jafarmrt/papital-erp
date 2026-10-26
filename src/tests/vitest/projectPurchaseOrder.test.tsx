@@ -96,7 +96,7 @@ describe('direct purchase order from a project (TD-745)', () => {
       })],
     });
     expect(calls().some(c => c.url.includes('/documents') || 'refNumber' in c.body)).toBe(false);
-    expect(toastSuccess).toHaveBeenCalledWith(expect.stringContaining('RC-1405-0012'));
+    expect(toastSuccess).toHaveBeenCalledWith(expect.stringContaining('RC-۱۴۰۵-۰۰۱۲'));
     expect(onOrderCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 41 }), ['r1']);
   });
 

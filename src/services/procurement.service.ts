@@ -27,7 +27,7 @@ import { describeOverOrders, findOverOrders } from './procurement/requisitionOrd
 import { money } from '../lib/money.js';
 import { canEditRequisition, REQUISITION_PRIORITIES, requisitionActionLabel, type RequisitionPriority } from '../lib/procurement/requisitionFields.js';
 import {
-  ensureRequisitionApproved, RECEIVE_ACTION_KEYS, RECEIVED_STEP_KEY, requisitionFlow, requisitionsInitiatorCannotApprove, requisitionWorkflowGraph, transitionFromStep,
+  ensureRequisitionApproved, ensureRequisitionInstance, RECEIVE_ACTION_KEYS, RECEIVED_STEP_KEY, requisitionFlow, requisitionsInitiatorCannotApprove, requisitionWorkflowGraph, transitionFromStep,
   type RequisitionActor, type WorkflowStateRef, type WorkflowTransitionRef,
 } from './procurement/requisitionApproval.js';
 import { buildRequisitionRows, resolveRequisitionProject, type RequisitionRowFields } from './procurement/requisitionRows.js';
@@ -460,22 +460,10 @@ export class ProcurementService {
         throw new ConflictError(`درخواست خرید ${req.code} رد شده است و کالای آن وارد انبار نمی‌شود؛ ابتدا درخواست را بازگشایی کنید.`);
       }
 
-      if (!req.workflowInstanceId) {
-        // Lazy start workflow instance if not present
-        const instance = await WorkflowTransitionExecutor.startInstance({
-              entityType: 'purchase_requisition',
-          entityId: String(req.id),
-          userId: user.id,
-          userName: user.username,
-          tx
-        });
-        req.workflowInstanceId = instance.id;
-        await tx.update(purchaseRequisitions)
-          .set({ workflowInstanceId: instance.id })
-          .where(eq(purchaseRequisitions.id, req.id));
-      }
+      // v11 phase 6.3a (review of #406, U10): a missing instance starts in the requester's name, as on every other path
+      const instanceId = await ensureRequisitionInstance(tx, req);
 
-      const [wfInst] = await tx.select().from(workflowInstances).where(eq(workflowInstances.id, req.workflowInstanceId));
+      const [wfInst] = await tx.select().from(workflowInstances).where(eq(workflowInstances.id, instanceId));
       if (!wfInst) {
         throw new ValidationError('نمونه فرآیند گردش کار مرتبط یافت نشد');
       }
@@ -551,7 +539,7 @@ export class ProcurementService {
       }
       const transitionTitle = requisitionActionLabel(actionKey, matchedTransition.title);
       await WorkflowTransitionExecutor.executeTransition({
-        instanceId: req.workflowInstanceId,
+        instanceId,
         transitionId: matchedTransition.id,
         userId: user.id,
         userName: user.username,
@@ -938,7 +926,7 @@ export class ProcurementService {
         .filter(order => order.status !== 'final');
       if (!alreadyReceived && openOrders.length === 0 && updatedReqItems.every(isSettledRequisitionRow)) {
         // وضعیت «دریافت‌شده» را اقدام پس از انتقال (applyRequisitionTransition) در همین تراکنش می‌نویسد
-        const flow = await requisitionFlow(tx, lockedReq, user);
+        const flow = await requisitionFlow(tx, lockedReq);
         const receive = transitionFromStep(flow, RECEIVE_ACTION_KEYS, RECEIVED_STEP_KEY);
         if (!receive) {
           throw new ConflictError(

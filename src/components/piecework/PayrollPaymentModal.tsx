@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, useId } from 'react';
 import toast from 'react-hot-toast';
 import { Landmark, BanknoteArrowUp, CheckCircle2, AlertCircle } from 'lucide-react';
 import { fetchJson } from '../../api';
-import { getTodayIsoDate, formatPersianPrice } from '../../utils';
+import { getTodayIsoDate, formatPersianPrice, formatPersianCode } from '../../utils';
 import { confirmAction } from '../ConfirmDialogHost';
 import { PayrollPaymentHistory } from './PayrollPaymentHistory';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
@@ -144,7 +144,7 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
           notes
         })
       });
-      toast.success(res.message || `پرداخت فیش ${payroll.payrollNumber} ثبت شد`);
+      toast.success(res.message || `پرداخت فیش ${formatPersianCode(payroll.payrollNumber)} ثبت شد`);
       onPaid?.();
       onClose();
     } catch (err: any) {
@@ -161,7 +161,7 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
         <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 shrink-0">
           <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
             <BanknoteArrowUp size={16} className="text-emerald-600" />
-            پرداخت فیش حقوقی {payroll.payrollNumber}
+            پرداخت فیش حقوقی {formatPersianCode(payroll.payrollNumber)}
           </h3>
           <button
             type="button"

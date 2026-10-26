@@ -5,6 +5,7 @@ import type { PieceworkPayroll } from '../../types';
 import { rialDisplayOf } from '../../lib/rialDisplay';
 import { ownReads } from './helpers/ownReads';
 import { appQueryClient } from './helpers/queryWrapper';
+import { formatPersianCode } from '../../utils';
 
 /**
  * 10.3 (ARCH review finding 3, part 15): the payslip window shows its payslip's cache entry. A payment, approval or
@@ -99,7 +100,8 @@ const client = appQueryClient;
 async function openSlip(id: number, queryClient = client()) {
   render(<QueryClientProvider client={queryClient}><PayslipWindow /></QueryClientProvider>);
   await act(async () => { await hook.handleViewPayslip(id); });
-  expect(await screen.findByText(new RegExp(`PAY-${id}`))).toBeTruthy();
+  // v11 phase 6.3a (U21): the window shows the slip number in Persian digits, in its title and its header
+  expect((await screen.findAllByText(new RegExp(`PAY-${formatPersianCode(id)}`))).length).toBeGreaterThan(0);
   return queryClient;
 }
 
@@ -170,10 +172,10 @@ describe('opening the payslip window (10.3)', () => {
     let first: Promise<void> = Promise.resolve();
     act(() => { first = hook.handleViewPayslip(7); });
     await act(async () => { await hook.handleViewPayslip(8); });
-    expect(await screen.findByText(/PAY-8/)).toBeTruthy();
+    expect((await screen.findAllByText(/PAY-۸/)).length).toBeGreaterThan(0);
     await act(async () => { reads.held[0]?.(slips.get(7)); await first; });
-    expect(screen.queryByText(/PAY-7/)).toBeNull();
-    expect(screen.getByText(/PAY-8/)).toBeTruthy();
+    expect(screen.queryAllByText(/PAY-۷/)).toHaveLength(0);
+    expect(screen.getAllByText(/PAY-۸/).length).toBeGreaterThan(0);
   });
 
   it('a failed read opens no window and says why, as before', async () => {

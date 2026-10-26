@@ -2,7 +2,7 @@ import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { X, Gift } from 'lucide-react';
 import { fetchJson } from '../../api';
-import { errorMessageOf, getTodayJalaliDate } from '../../utils';
+import { errorMessageOf, getTodayJalaliDate, formatPersianCode } from '../../utils';
 import { toPersianDigits } from '../../utils/persianNumber';
 import { normalizeDecimalString, toLatinDigits } from '../../lib/numericInput';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
@@ -71,7 +71,7 @@ export function PayrollEidiModal({ personnelSelectOptions, onClose, onIssued }: 
       }) as unknown;
       // v10.2.34 (#351 review L1): a repeat of an issue that already ran has no payslip number; the list shows the payslip
       if (isIdempotentReplay(res)) toast(idempotentReplayMessage(res), { icon: 'ℹ️' });
-      else toast.success(`فیش عیدی ${(res as { payrollNumber?: string } | null)?.payrollNumber ?? ''} پیش‌نویس صادر شد؛ پرداخت آن پس از تأیید کاربر دیگری است.`);
+      else toast.success(`فیش عیدی ${formatPersianCode((res as { payrollNumber?: string } | null)?.payrollNumber)} پیش‌نویس صادر شد؛ پرداخت آن پس از تأیید کاربر دیگری است.`);
       onIssued();
       onClose();
     } catch (err) {

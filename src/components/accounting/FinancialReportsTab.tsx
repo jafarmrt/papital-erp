@@ -35,6 +35,7 @@ import { AutomationStatusView } from './reports/AutomationStatusView';
 import { ProjectReportView } from './reports/ProjectReportView';
 import { IncludeClosingToggle } from './reports/IncludeClosingToggle';
 import { trialBalanceTotals } from './reports/trialBalanceTotals';
+import { normalizeSearchText } from '../../lib/search/searchText';
 
 interface FinancialReportsTabProps {
   accounts: Account[];
@@ -192,11 +193,9 @@ export function FinancialReportsTab({
   // Filtered rows for live search
   const filteredTrialRows = useMemo(() => {
     if (!tableSearch.trim()) return safeTrialRows;
-    const q = tableSearch.trim().toLowerCase();
-    return safeTrialRows.filter(r => 
-      r.code.toLowerCase().includes(q) || 
-      r.name.toLowerCase().includes(q)
-    );
+    // review of #406 (U21): codes are shown in Persian digits, so a code typed in Persian digits is found too
+    const q = normalizeSearchText(tableSearch);
+    return safeTrialRows.filter(r => normalizeSearchText(r.code).includes(q) || normalizeSearchText(r.name).includes(q));
   }, [safeTrialRows, tableSearch]);
 
   // جمع ستون‌های تراز آزمایشی با FinancialDecimal (OBS-R1-53)، نه `Number` و `+=`

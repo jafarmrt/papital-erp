@@ -161,7 +161,7 @@ export function PieceworkPayrollsTab({
                   return (
                     <React.Fragment key={payroll.id}>
                     <tr className="hover:bg-slate-50/80 transition-all text-slate-700">
-                      <td className="p-3 font-mono font-black text-slate-900">{payroll.payrollNumber}</td>
+                      <td className="p-3 font-mono font-black text-slate-900">{formatPersianCode(payroll.payrollNumber)}</td>
                       <td className="p-3 font-black text-slate-900">{payroll.personnelName}</td>
                       <td className="p-3 font-mono text-slate-600">
                         {formatPersianDate(payroll.startDate)} تا {formatPersianDate(payroll.endDate)}

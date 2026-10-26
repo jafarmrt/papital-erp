@@ -1,6 +1,6 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { purchaseRequisitions, users, workflowInstances, workflowStates, workflowTransitions } from '../../db/schema.js';
+import { purchaseRequisitions, users, workflowDefinitions, workflowInstances, workflowStates, workflowTransitions } from '../../db/schema.js';
 import { ConflictError, ValidationError } from '../../errors/customErrors.js';
 import { WorkflowTransitionExecutor, type WorkflowSnapshotDsl, type WorkflowStateSnapshot, type WorkflowTransitionSnapshot } from '../workflow/workflowTransitionExecutor.js';
 import { isUsableSnapshot } from '../workflow/workflowSnapshot.js';
@@ -58,33 +58,36 @@ export async function requisitionWorkflowGraph(
 type RequisitionFlowRow = { id: number; workflowInstanceId?: number | null; requestedById?: number | null };
 
 /**
- * نمونه گردش‌کار درخواست (زیر قفل ردیف درخواست که فراخواننده گرفته است) و گام جاری‌اش؛ درخواستی که نمونه ندارد (شروع
- * گردش‌کار هنگام ثبت شکست خورده یا درخواست قدیمی است) در همین تراکنش نمونه می‌گیرد.
- * v11 phase 6.3a (review of #406, U10): the missing instance is started in the requester's name, as at registration.
- * Before, the user who pressed «صدور فاکتور» became its initiator, so a step that excludes the initiator refused every
- * approver with a 403 and the rolled-back request failed the same way each time.
+ * v11 phase 6.3a (reviews of #406, U10): a requisition with no workflow instance (an older one, or one whose workflow
+ * failed to start at registration) gets it here, in its requester's name as at registration, under the requisition row
+ * lock the caller holds. Before, whoever acted first (split, approve, receive) became its initiator, so a step that
+ * leaves the initiator out refused every approver with a 403 and the rolled-back request failed the same way each time.
+ * A requisition with no requester left (no `requestedById`, or the user row is gone) starts with no initiator, so no
+ * approver is left out.
  */
-export async function requisitionFlow(
-  tx: DbExecutor,
-  req: RequisitionFlowRow,
-  user: RequisitionActor,
-): Promise<RequisitionFlow> {
-  let instanceId = req.workflowInstanceId;
-  if (!instanceId) {
-    const [requester] = req.requestedById
-      ? await tx.select({ id: users.id, username: users.username }).from(users).where(eq(users.id, req.requestedById))
-      : [];
-    const started = await WorkflowTransitionExecutor.startInstance({
-      entityType: 'purchase_requisition',
-      entityId: String(req.id),
-      userId: requester?.id ?? user.id,
-      userName: requester?.username ?? user.username,
-      tx,
-    });
-    instanceId = started.id;
-    req.workflowInstanceId = instanceId;
-    await tx.update(purchaseRequisitions).set({ workflowInstanceId: instanceId }).where(eq(purchaseRequisitions.id, req.id));
-  }
+export async function ensureRequisitionInstance(tx: DbExecutor, req: RequisitionFlowRow): Promise<number> {
+  if (req.workflowInstanceId) return req.workflowInstanceId;
+  const [requester] = req.requestedById
+    ? await tx.select({ id: users.id, username: users.username }).from(users).where(eq(users.id, req.requestedById))
+    : [];
+  const started = await WorkflowTransitionExecutor.startInstance({
+    entityType: 'purchase_requisition',
+    entityId: String(req.id),
+    userId: requester?.id,
+    userName: requester?.username,
+    tx,
+  });
+  req.workflowInstanceId = started.id;
+  await tx.update(purchaseRequisitions).set({ workflowInstanceId: started.id }).where(eq(purchaseRequisitions.id, req.id));
+  return started.id;
+}
+
+/**
+ * نمونه گردش‌کار درخواست (زیر قفل ردیف درخواست که فراخواننده گرفته است) و گام جاری‌اش؛ درخواستی که نمونه ندارد
+ * (`ensureRequisitionInstance`) در همین تراکنش نمونه می‌گیرد.
+ */
+export async function requisitionFlow(tx: DbExecutor, req: RequisitionFlowRow): Promise<RequisitionFlow> {
+  const instanceId = await ensureRequisitionInstance(tx, req);
   const [instance] = await tx.select().from(workflowInstances).where(eq(workflowInstances.id, instanceId));
   if (!instance) throw new ValidationError('نمونه فرایند گردش کار درخواست خرید یافت نشد.');
   const { states, transitions } = await requisitionWorkflowGraph(instance, tx);
@@ -129,7 +132,7 @@ export async function ensureRequisitionApproved(
   user: RequisitionActor,
   opts: ApprovalOptions,
 ): Promise<RequisitionFlow> {
-  let flow = await requisitionFlow(tx, req, user);
+  let flow = await requisitionFlow(tx, req);
   for (let round = 0; flow.stepKey !== APPROVED_STEP_KEY && round <= flow.states.length; round += 1) {
     const approve = flow.instance.status === 'IN_PROGRESS' ? transitionFromStep(flow, APPROVE_ACTION_KEYS) : undefined;
     if (!opts.mayApprove || !approve) {
@@ -153,7 +156,7 @@ export async function ensureRequisitionApproved(
     if (!('toState' in result) || !result.toState) {
       throw new ConflictError(`تأیید درخواست خرید ${req.code} هنوز امضاهای دیگری می‌خواهد؛ سفارش پس از تکمیل تأیید صادر می‌شود.`, undefined, 'WF_APPROVAL_PENDING');
     }
-    flow = await requisitionFlow(tx, req, user);
+    flow = await requisitionFlow(tx, req);
   }
   if (flow.stepKey !== APPROVED_STEP_KEY) {
     throw new ConflictError(`درخواست خرید ${req.code} به گام تأییدشده نرسید.`, { step: flow.stepKey }, 'REQUISITION_NOT_APPROVED');
@@ -169,48 +172,70 @@ export async function ensureRequisitionApproved(
  */
 export async function requisitionsInitiatorCannotApprove(
   db: DbExecutor,
-  rows: ReadonlyArray<{ id: number; status?: string | null; workflowInstanceId?: number | null }>,
+  rows: ReadonlyArray<{ id: number; status?: string | null; workflowInstanceId?: number | null; requestedById?: number | null }>,
   viewer: { id?: number; role?: string },
 ): Promise<Set<number>> {
   const blocked = new Set<number>();
-  const open = rows.filter(r => r.workflowInstanceId && OPEN_REQUISITION_STATUSES.has(String(r.status)));
+  const open = rows.filter(r => OPEN_REQUISITION_STATUSES.has(String(r.status)));
   if (!viewer.id || open.length === 0) return blocked;
+  const signer = { userId: viewer.id, actorId: viewer.id, role: viewer.role };
+  const initiatorLeftOut = (graph: Awaited<ReturnType<typeof requisitionWorkflowGraph>>, fromStateId: number, startedBy: number | null) => {
+    let currentStateId = fromStateId;
+    for (let round = 0; round <= graph.states.length; round += 1) {
+      const step = graph.states.find(s => s.id === currentStateId);
+      const approve = step?.stateKey === APPROVED_STEP_KEY ? undefined : transitionFromStep({ ...graph, instance: { currentStateId } }, APPROVE_ACTION_KEYS);
+      if (!approve) return false;
+      if (WorkflowTransitionExecutor.initiatorExcluded(approve, startedBy, signer)) return true;
+      currentStateId = approve.toStateId;
+    }
+    return false;
+  };
+
   // review of #406: only the viewer's own running instances, with the columns the walk reads; a live graph is read once
   // per workflow definition
-  const instances = await db.select({
+  const withInstance = open.filter(r => r.workflowInstanceId);
+  const instances = withInstance.length === 0 ? [] : await db.select({
     id: workflowInstances.id,
     startedBy: workflowInstances.startedBy,
     currentStateId: workflowInstances.currentStateId,
     snapshotDsl: workflowInstances.snapshotDsl,
     workflowDefinitionId: workflowInstances.workflowDefinitionId,
   }).from(workflowInstances).where(and(
-    inArray(workflowInstances.id, open.map(r => Number(r.workflowInstanceId))),
+    inArray(workflowInstances.id, withInstance.map(r => Number(r.workflowInstanceId))),
     eq(workflowInstances.startedBy, viewer.id),
     eq(workflowInstances.status, 'IN_PROGRESS'),
   ));
   const liveGraphs = new Map<number, ReturnType<typeof requisitionWorkflowGraph>>();
-  const graphOf = (instance: (typeof instances)[number]) => {
-    if (isUsableSnapshot(instance.snapshotDsl as WorkflowSnapshotDsl | null)) return requisitionWorkflowGraph(instance, db);
-    const known = liveGraphs.get(instance.workflowDefinitionId);
+  const liveGraphOf = (workflowDefinitionId: number) => {
+    const known = liveGraphs.get(workflowDefinitionId);
     if (known) return known;
-    const graph = requisitionWorkflowGraph(instance, db);
-    liveGraphs.set(instance.workflowDefinitionId, graph);
+    const graph = requisitionWorkflowGraph({ snapshotDsl: null, workflowDefinitionId }, db);
+    liveGraphs.set(workflowDefinitionId, graph);
     return graph;
   };
-  const signer = { userId: viewer.id, actorId: viewer.id, role: viewer.role };
   for (const instance of instances) {
-    const { states, transitions } = await graphOf(instance);
-    let currentStateId = instance.currentStateId;
-    for (let round = 0; round <= states.length; round += 1) {
-      const step = states.find(s => s.id === currentStateId);
-      const approve = step?.stateKey === APPROVED_STEP_KEY ? undefined : transitionFromStep({ states, transitions, instance: { currentStateId } }, APPROVE_ACTION_KEYS);
-      if (!approve) break;
-      if (WorkflowTransitionExecutor.initiatorExcluded(approve, instance.startedBy, signer)) {
-        const req = open.find(r => Number(r.workflowInstanceId) === instance.id);
-        if (req) blocked.add(req.id);
-        break;
-      }
-      currentStateId = approve.toStateId;
+    const graph = isUsableSnapshot(instance.snapshotDsl as WorkflowSnapshotDsl | null)
+      ? await requisitionWorkflowGraph(instance, db)
+      : await liveGraphOf(instance.workflowDefinitionId);
+    if (initiatorLeftOut(graph, instance.currentStateId, instance.startedBy)) {
+      const req = withInstance.find(r => Number(r.workflowInstanceId) === instance.id);
+      if (req) blocked.add(req.id);
+    }
+  }
+
+  // review 2 of #406: a requisition with no instance gets one in its requester's name on its first action
+  // (`ensureRequisitionInstance`), so for its requester the walk starts at the first step of the active definition
+  const ownWithout = open.filter(r => !r.workflowInstanceId && r.requestedById === viewer.id);
+  if (ownWithout.length > 0) {
+    const [definition] = await db.select({ id: workflowDefinitions.id }).from(workflowDefinitions)
+      .where(and(eq(workflowDefinitions.entityType, 'purchase_requisition'), eq(workflowDefinitions.isActive, 1)))
+      .orderBy(asc(workflowDefinitions.id)).limit(1);
+    const [initial] = definition
+      ? await db.select({ id: workflowStates.id }).from(workflowStates)
+        .where(and(eq(workflowStates.workflowDefinitionId, definition.id), eq(workflowStates.stateType, 'initial'))).limit(1)
+      : [];
+    if (definition && initial && initiatorLeftOut(await liveGraphOf(definition.id), initial.id, viewer.id)) {
+      for (const r of ownWithout) blocked.add(r.id);
     }
   }
   return blocked;

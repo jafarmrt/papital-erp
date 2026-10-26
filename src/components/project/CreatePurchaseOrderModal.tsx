@@ -207,7 +207,7 @@ export function CreatePurchaseOrderModal({
           },
         );
         const order = converted?.data?.createdDocuments?.[0];
-        const orderRef = order?.refNumber || order?.ref_number || '';
+        const orderRef = formatPersianCode(order?.refNumber || order?.ref_number);
         toast.success(
           `سفارش خرید پیش‌نویس ${orderRef} برای ${supplier!.name} از درخواست ${formatPersianCode(prData.code) || ''} صادر شد؛ کالا با «تحویل به انبار» در تدارکات وارد انبار می‌شود.`,
         );

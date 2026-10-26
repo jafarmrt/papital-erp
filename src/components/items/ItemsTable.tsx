@@ -188,7 +188,7 @@ export function ItemsTable({
                       {((item as any).reserved_stock || 0) > 0 && (
                         <span 
                           className="text-[10px] bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md border border-amber-300 font-bold flex items-center gap-1"
-                          title={`رزرو شده در پروژه‌ها: ${((item as any).reservations || []).map((r: any) => `${r.projectCode} (${r.reservedQty} ${r.unit})`).join('، ')}`}
+                          title={`رزرو شده در پروژه‌ها: ${((item as any).reservations || []).map((r: any) => `${formatPersianCode(r.projectCode)} (${formatPersianNumber(r.reservedQty)} ${r.unit})`).join('، ')}`}
                         >
                           <Lock size={10} className="text-amber-700" />
                           رزرو: {formatPersianNumber((item as any).reserved_stock)}

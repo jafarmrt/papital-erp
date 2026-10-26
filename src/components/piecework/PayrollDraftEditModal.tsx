@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import { X } from 'lucide-react';
 import { fetchJson } from '../../api';
 import { PieceworkPayroll } from '../../types';
-import { errorMessageOf, formatCurrencyLabel } from '../../utils';
+import { errorMessageOf, formatCurrencyLabel, formatPersianCode } from '../../utils';
 import { PayrollDeductionsField, deductionsNeedDescription } from './PayrollDeductionsField';
 import { PayrollStatutoryFields } from './PayrollStatutoryFields';
 import { EMPTY_STATUTORY_ENTRY, statutoryPayloadOf, type PayrollStatutoryEntry } from '../../lib/payroll/statutoryForm';
@@ -53,7 +53,7 @@ export function PayrollDraftEditModal({ payroll, onClose, onSaved }: { payroll: 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, bonuses, deductions, deductionsDescription: deductions > 0 ? description.trim() : '', advanceDeduction: advance, ...statutoryPayloadOf(statutory) }),
       }) as { statutoryWarning?: string | null };
-      toast.success(`فیش ${payroll.payrollNumber} ویرایش شد و سند پیش‌نویس آن دوباره ساخته شد.`);
+      toast.success(`فیش ${formatPersianCode(payroll.payrollNumber)} ویرایش شد و سند پیش‌نویس آن دوباره ساخته شد.`);
       if (res?.statutoryWarning) toast(res.statutoryWarning, { icon: '⚠️' });
       onSaved();
       onClose();
@@ -70,7 +70,7 @@ export function PayrollDraftEditModal({ payroll, onClose, onSaved }: { payroll: 
       <DialogLayer onClose={onClose} disabled={isSaving} />
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
         <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
-          <h2 className="text-sm font-black text-slate-900">{`ویرایش فیش پیش‌نویس ${payroll.payrollNumber}`}</h2>
+          <h2 className="text-sm font-black text-slate-900">{`ویرایش فیش پیش‌نویس ${formatPersianCode(payroll.payrollNumber)}`}</h2>
           <button type="button" onClick={onClose} aria-label="بستن" className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-full cursor-pointer">
             <X className="w-4 h-4" />
           </button>

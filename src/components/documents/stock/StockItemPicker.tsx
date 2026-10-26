@@ -66,7 +66,7 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
               mapResultToOption={(it: Item) => {
                 const { totalReservedQty, reservedForOtherProjects, reservedForSelectedProject, locationStock, maxAllowedForExit } = getItemReservationSummary(it);
 
-                let label = `${it.code} - ${it.name} (موجودی فعلی: ${formatPersianNumber(it.current_stock)} ${it.unit})`;
+                let label = `${formatPersianCode(it.code)} - ${it.name} (موجودی فعلی: ${formatPersianNumber(it.current_stock)} ${it.unit})`;
 
                 if (actionType === 'out') {
                   // v9.0.242 (TD-799): سقف خروج از موجودی انبار انتخاب‌شده هم کم است

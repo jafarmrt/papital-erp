@@ -8,6 +8,7 @@ import { ProgressMatrixCell } from './ProgressMatrixCell';
 import { ProgressSummary } from './progress/ProgressSummary';
 import { StaleProgressNotice } from './progress/StaleProgressNotice';
 import { ProgressMatrixToolbar, type ProgressFilter } from './progress/ProgressMatrixToolbar';
+import { normalizeSearchText } from '../../lib/search/searchText';
 
 // V3.1.5 — تب «پیشرفت به تفکیک کد کالا» (ماتریسی SKU × مرحله + فیلتر، انتخاب ردیف و عملیات دسته‌ای)
 // مدل: هر ردیف = یک SKU (کد کالا × کمیت)؛ وضعیت هر مرحله دودویی (تمام/ناتمام)؛
@@ -45,11 +46,9 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
   // Filtered products based on search and progress status
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
-      const query = searchQuery.trim().toLowerCase();
-      const matchesSearch = !query || 
-        (p.item_name && p.item_name.toLowerCase().includes(query)) ||
-        (p.item_code && p.item_code.toLowerCase().includes(query)) ||
-        (p.customer_code && p.customer_code.toLowerCase().includes(query));
+      // review of #406 (U21): a code typed in Persian digits is found too
+      const query = normalizeSearchText(searchQuery);
+      const matchesSearch = !query || [p.item_name, p.item_code, p.customer_code].some(text => normalizeSearchText(text).includes(query));
 
       if (!matchesSearch) return false;
 
