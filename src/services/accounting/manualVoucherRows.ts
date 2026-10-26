@@ -40,20 +40,29 @@ export async function assertManualControlRows(
   tx: DbExecutor,
   rows: readonly ManualVoucherRowDetail[],
   adjustment: ControlAdjustment,
-  /** an edit's stored rows that the sent rows replace: taking a row off a control account is an adjustment too */
+  /**
+   * an edit's stored rows that the sent rows replace: taking a row off a control account needs the permission too, without
+   * a reason, as a delete or a reversal does (`assertMayChangeControlVoucher`)
+   */
   replaced: readonly Pick<ManualVoucherRowDetail, 'accountId'>[] = [],
 ): Promise<string> {
   const control = await AccountMappingService.controlAccountsById(tx);
-  const hit = new Map<number, ControlAccountEntry>();
-  for (const row of [...rows, ...replaced]) {
-    const entry = control.get(Number(row.accountId));
-    if (entry) hit.set(entry.id, entry);
+  const hitsOf = (list: readonly Pick<ManualVoucherRowDetail, 'accountId'>[]) => {
+    const hits = new Map<number, ControlAccountEntry>();
+    for (const row of list) {
+      const entry = control.get(Number(row.accountId));
+      if (entry) hits.set(entry.id, entry);
+    }
+    return hits;
+  };
+  const hit = hitsOf(rows);
+  const all = hitsOf([...rows, ...replaced]);
+  if (all.size === 0) return '';
+  if (!adjustment.mayAdjust) {
+    throw new ForbiddenError(controlAccountRefusalMessage([...all.values()], toPersianDigits), { accounts: [...all.values()] }, 'VOUCHER_CONTROL_ACCOUNT');
   }
   if (hit.size === 0) return '';
   const lines = [...hit.values()].map(entry => controlAccountLine(entry, toPersianDigits));
-  if (!adjustment.mayAdjust) {
-    throw new ForbiddenError(controlAccountRefusalMessage([...hit.values()], toPersianDigits), { accounts: [...hit.values()] }, 'VOUCHER_CONTROL_ACCOUNT');
-  }
   const reason = String(adjustment.reason ?? '').trim();
   if (!reason) {
     throw new ValidationError(`${CONTROL_REASON_REQUIRED_MESSAGE} حساب‌های کنترلی این سند: ${lines.join('؛ ')}.`, { accounts: [...hit.values()] }, 'VOUCHER_CONTROL_REASON_REQUIRED');
@@ -73,6 +82,7 @@ export async function assertManualControlRows(
  * user who may only draft vouchers deleted, edited, reversed or corrected them, and the inventory ledger left the Kardex.
  */
 export async function assertMayChangeControlVoucher(tx: DbExecutor, voucherId: number, mayAdjust: boolean): Promise<void> {
+  if (mayAdjust) return;
   const rows = await tx.select({ accountId: journalVoucherItems.accountId }).from(journalVoucherItems)
     .where(and(eq(journalVoucherItems.voucherId, voucherId), eq(journalVoucherItems.isDeleted, 0)));
   if (rows.length === 0) return;
@@ -82,7 +92,7 @@ export async function assertMayChangeControlVoucher(tx: DbExecutor, voucherId: n
     const entry = control.get(Number(row.accountId));
     if (entry) hit.set(entry.id, entry);
   }
-  if (hit.size === 0 || mayAdjust) return;
+  if (hit.size === 0) return;
   throw new ForbiddenError(controlVoucherChangeRefusalMessage([...hit.values()], toPersianDigits), { accounts: [...hit.values()] }, 'VOUCHER_CONTROL_ACCOUNT');
 }
 

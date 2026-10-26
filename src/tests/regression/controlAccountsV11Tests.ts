@@ -148,6 +148,14 @@ export async function runControlAccountsV11Tests(shouldRun: ShouldRun): Promise<
       if (!ok(headerEdit)) problems.push(`a header edit of the opening draft with the permission returned ${brief(headerEdit)}, expected success`);
       const deleted = await adjuster.del(`/api/accounting/vouchers/${openingDraft.id}`);
       if (!ok(deleted)) problems.push(`deleting the opening draft with the permission returned ${brief(deleted)}, expected success`);
+      // moving the opening row off the inventory account takes the permission, with no reason, as a delete does
+      const movable = await automatic('draft');
+      const movedRows = { version: (await orm.select({ version: journalVouchers.version }).from(journalVouchers).where(eq(journalVouchers.id, movable.id)))[0]?.version, items: [
+        { accountId: acc['7001'], debit: 5000, credit: 0 }, { accountId: acc['4001'], debit: 0, credit: 5000 },
+      ] };
+      expectRefused('moving the opening row off 1401 without the permission', await plain.put(`/api/accounting/vouchers/${movable.id}`, movedRows), 403, 'VOUCHER_CONTROL_ACCOUNT', INVENTORY_BOOK);
+      const moved = await adjuster.put(`/api/accounting/vouchers/${movable.id}`, movedRows);
+      if (!ok(moved)) problems.push(`moving the opening row off 1401 with the permission and no reason returned ${brief(moved)}, expected success`);
       const openingApproved = await automatic('approved');
       expectRefused('reversing an automatic opening voucher without the permission', await plain.post(`/api/accounting/vouchers/${openingApproved.id}/reverse`, reverse), 403, 'VOUCHER_CONTROL_ACCOUNT');
       const plainCorrection = { date: today, reason: CORRECTION_REASON, newItems: [

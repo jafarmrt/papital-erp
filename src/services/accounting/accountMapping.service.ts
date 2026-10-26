@@ -435,21 +435,19 @@ export class AccountMappingService {
       if (account) add({ id: account.id, code: account.code, name: account.name }, kind);
     }
 
-    // the accounts under a treasury or mapped account belong to its book (a detailed account under the trade receivables or
-    // the wages payable): their children, one level at a time, the chart's deepest level being three below a group
-    let parents = [...found.values()];
-    for (let depth = 0; depth < 3 && parents.length > 0; depth++) {
-      const kindOf = new Map(parents.map(entry => [entry.id, entry.kind]));
-      const children = await tx.select({ id: accounts.id, code: accounts.code, name: accounts.name, parentId: accounts.parentId })
-        .from(accounts)
-        .where(and(inArray(accounts.parentId, [...kindOf.keys()]), eq(accounts.isDeleted, 0)));
-      parents = [];
-      for (const child of children) {
-        const kind = kindOf.get(Number(child.parentId));
-        if (!kind || found.has(child.id)) continue;
-        add(child, kind);
-        parents.push(found.get(child.id)!);
-      }
+    // the posting accounts right under a treasury or mapped account belong to its book (a detailed account under the trade
+    // receivables or the wages payable); a posting account is a subsidiary or detailed one, so one level holds them all
+    const parentKinds = new Map([...found.values()].map(entry => [entry.id, entry.kind]));
+    const children = parentKinds.size === 0 ? [] : await tx.select({ id: accounts.id, code: accounts.code, name: accounts.name, parentId: accounts.parentId })
+      .from(accounts)
+      .where(and(
+        inArray(accounts.parentId, [...parentKinds.keys()]),
+        inArray(accounts.level, [...POSTING_ACCOUNT_LEVELS]),
+        eq(accounts.isDeleted, 0),
+      ));
+    for (const child of children) {
+      const kind = parentKinds.get(Number(child.parentId));
+      if (kind) add(child, kind);
     }
 
     const inventoryGroup = await tx.select({ id: accounts.id, code: accounts.code, name: accounts.name })
