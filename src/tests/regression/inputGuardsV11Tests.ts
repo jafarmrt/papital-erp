@@ -221,7 +221,7 @@ export async function runInputGuardsV11Tests(shouldRun: ShouldRun): Promise<Test
 
   const c10 = 'reg_daily_log_date_and_review_v11_6_1a_c10';
   if (shouldRun(c10, 'v11', 'phase6', 'c10', 'daily_log', 'review')) {
-    await runCase(results, c10, 'v11 phase 6.1a (C10): a work log dated after today is refused on create and edit; a reviewed log whose text changes goes back to «ارسال‌شده», an edit of its tags keeps the review', () => inFiscalSandbox(async () => {
+    await runCase(results, c10, 'v11 phase 6.1a (C10): a work log dated after today is refused on create and edit; a reviewed log whose text changes goes back to submitted, an edit of its tags keeps the review', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const today = await businessTodayIsoDate();

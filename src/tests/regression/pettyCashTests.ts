@@ -113,7 +113,8 @@ async function pettyCashCase(h: Harness, wrong: string[]): Promise<string> {
   expect('statement above the balance', `${tooMuch.status} ${codeOf(tooMuch)}`, '422 PETTY_CASH_INSUFFICIENT_BALANCE');
   const tooPrecise = await h.post(url, { lines: [{ accountId: expenseA, amount: '0.00004' }] });
   // v11 phase 6.1a (M16): the shared decimal input refuses a fifth decimal before the statement service sees it
-  expect('amount with five decimals', `${tooPrecise.status} ${codeOf(tooPrecise)} ${JSON.stringify(tooPrecise.body).includes('۴ رقم پس از ممیز')}`, '400 VALIDATION_ERROR true');
+  const fourDecimalsNote = '۴ رقم پس از ممیز';
+  expect('amount with five decimals', `${tooPrecise.status} ${codeOf(tooPrecise)} ${JSON.stringify(tooPrecise.body).includes(fourDecimalsNote)}`, '400 VALIDATION_ERROR true');
   const empty = await h.post(url, { lines: [] });
   expect('statement without lines', empty.status, 400);
   const withVat = await h.post(url, { lines: [{ accountId: expenseA, amount: 1000, vatAmount: 90 }] });
