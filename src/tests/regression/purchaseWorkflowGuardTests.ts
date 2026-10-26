@@ -280,6 +280,53 @@ export async function runPurchaseWorkflowGuardTests(shouldRun: ShouldRun): Promi
     }));
   }
 
+  if (shouldRun('reg_requisition_relink_open_instance_no_notice_v11_6_3a_u10', 'u10', 'workflow', 'procurement', 'notice')) {
+    await runCase(results, 'reg_requisition_relink_open_instance_no_notice_v11_6_3a_u10', 'v11 phase 6.3a (review 6 of #406, U10): a requisition that lost only its link to an instance still in progress is linked to that instance again on an approval, and nobody is told again of a step they were told of when it started', () => inFiscalSandbox(async () => {
+      await WorkflowEngineService.seedDefaultWorkflows();
+      const [definition] = await orm.select().from(workflowDefinitions)
+        .where(and(eq(workflowDefinitions.entityType, 'purchase_requisition'), eq(workflowDefinitions.isActive, 1)))
+        .orderBy(asc(workflowDefinitions.id)).limit(1);
+      expect(Boolean(definition), 'no active purchase requisition workflow');
+      // two signatures, so the step stays open after the first and a held notice would show
+      await orm.update(workflowTransitions).set({ approvalRuleType: 'K_OF_N', kValue: 2 })
+        .where(and(eq(workflowTransitions.workflowDefinitionId, definition.id), eq(workflowTransitions.actionKey, 'approve_request')));
+      await pool.query(`UPDATE workflow_definition_versions v
+        SET dsl_json = jsonb_set(v.dsl_json, '{transitions}', (SELECT jsonb_agg(CASE WHEN t ->> 'actionKey' = 'approve_request'
+          THEN t || '{"approvalRuleType": "K_OF_N", "kValue": 2}'::jsonb ELSE t END) FROM jsonb_array_elements(v.dsl_json -> 'transitions') t))
+        WHERE v.definition_id = $1 AND v.status = 'published'`, [definition.id]);
+
+      const keys = ['procurement.view', 'procurement.create', 'procurement.approve', 'procurement.order'];
+      const maker = await clientWith(keys);
+      const checker = await clientWith([...keys, 'workflow.approve']);
+      const otherApprover = await clientWith([...keys, 'workflow.approve']);
+      const created = await maker.post('/api/procurement/requisitions', {
+        title: 'Relink open instance notice test', priority: 'normal',
+        items: [{ itemName: 'Relink notice test service', unit: 'عدد', requestedQty: 1, unitPriceEstimate: 1000 }],
+      });
+      expect(created.status === 201, `requisition create returned ${brief(created)}`);
+      const id = Number(created.body?.data?.id);
+      const [row] = await orm.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.id, id));
+      const openInstanceId = Number(row.workflowInstanceId);
+      expect(openInstanceId > 0, 'the requisition started with no workflow instance');
+      // only the link is lost; the instance stays in progress
+      await orm.update(purchaseRequisitions).set({ workflowInstanceId: null }).where(eq(purchaseRequisitions.id, id));
+
+      const taskNotices = async () => Promise.all([checker, otherApprover, maker].map(async client =>
+        Number((await pool.query(`SELECT count(*)::int AS n FROM notifications WHERE user_id = $1 AND type = 'task'`, [client.userId])).rows[0]?.n ?? 0)));
+      const [checkerBefore, otherBefore, makerBefore] = await taskNotices();
+      const signed = await checker.post(`/api/procurement/requisitions/${id}/workflow-action`, { actionKey: 'approve_request' });
+      expect(signed.status === 200, `the first signature returned ${brief(signed)}`);
+      expect(await stepOf(id) === 'pending', 'the first of two signatures moved the requisition on');
+      const [after] = await orm.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.id, id));
+      expect(Number(after.workflowInstanceId) === openInstanceId, `the requisition was linked to instance ${after.workflowInstanceId}, expected the open ${openInstanceId}`);
+      const [checkerAfter, otherAfter, makerAfter] = await taskNotices();
+      expect(otherAfter === otherBefore, `the other approver got ${otherAfter - otherBefore} notices of a step they were told of at the start, expected 0`);
+      expect(checkerAfter === checkerBefore, `the approver who signed got ${checkerAfter - checkerBefore} notices`);
+      expect(makerAfter === makerBefore, `the requester got ${makerAfter - makerBefore} task notices`);
+      return 'link lost, instance open: linked again to the same instance, no second notice to anyone';
+    }));
+  }
+
   if (shouldRun('reg_requisition_mark_published_design_v11_6_3a_u10', 'u10', 'workflow', 'procurement')) {
     await runCase(results, 'reg_requisition_mark_published_design_v11_6_3a_u10', 'v11 phase 6.3a (review 4 of #406, U10): the initiator mark of a requisition without a workflow instance follows the published design, as its start does, not a draft saved in the designer', () => inFiscalSandbox(async () => {
       await WorkflowEngineService.seedDefaultWorkflows();

@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { DbExecutor, DbTransaction } from '../../db/drizzle.js';
 import { purchaseRequisitions, users, workflowDefinitions, workflowInstances, workflowStates, workflowTasks, workflowTransitions } from '../../db/schema.js';
-import { ConflictError, ValidationError } from '../../errors/customErrors.js';
+import { AppError, ConflictError, ValidationError } from '../../errors/customErrors.js';
 import { WorkflowTransitionExecutor, type WorkflowSnapshotDsl, type WorkflowStateSnapshot, type WorkflowTransitionSnapshot } from '../workflow/workflowTransitionExecutor.js';
 import { isUsableSnapshot, publishedDesignOf } from '../workflow/workflowSnapshot.js';
 import { notifyWorkflowTasksArrived } from '../workflow/workflowTaskNotice.js';
@@ -119,7 +119,8 @@ export async function ensureRequisitionInstance(tx: DbTransaction, req: Requisit
  * name and with its own notice, so a read never starts one without its acting user.
  */
 export async function requisitionFlow(tx: DbExecutor, req: RequisitionFlowRow): Promise<RequisitionFlow> {
-  if (!req.workflowInstanceId) throw new ValidationError('درخواست خرید نمونه فرایند گردش کار ندارد.');
+  // a caller that skipped `ensureRequisitionInstance`: a fault of the code, not of the user's input
+  if (!req.workflowInstanceId) throw new AppError('درخواست خرید نمونه فرایند گردش کار ندارد.', 500, 'REQUISITION_INSTANCE_MISSING');
   const [instance] = await tx.select().from(workflowInstances).where(eq(workflowInstances.id, req.workflowInstanceId));
   if (!instance) throw new ValidationError('نمونه فرایند گردش کار درخواست خرید یافت نشد.');
   const { states, transitions } = await requisitionWorkflowGraph(instance, tx);

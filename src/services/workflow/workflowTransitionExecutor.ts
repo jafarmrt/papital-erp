@@ -413,6 +413,7 @@ export class WorkflowTransitionExecutor {
   /**
    * v9.0.37 (TD-455): starts of one entity queue behind this transaction lock until the caller's transaction ends.
    * v11 phase 6.3a (review 5 of #406): exported so a caller can see under it whether the start finds an open instance.
+   * Call it inside a transaction: on the pool (`orm`) the lock ends with its own statement and guards nothing.
    */
   static async lockEntityStart(tx: DbClient, entityType: string, entityId: string): Promise<void> {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${ROW_ADVISORY_LOCK_NAMESPACES.WORKFLOW_ENTITY_START}::int, hashtext(${`${entityType}:${entityId}`}::text))`);
