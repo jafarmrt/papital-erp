@@ -299,7 +299,7 @@ export function useDailyLogs(user: User) {
           manager_notes: reviewNotes,
           version: reviewModalLog.version,
           // review 4 of #403: the review state this form opened, so a second manager's review is not silently replaced
-          opened_status: reviewModalLog.status,
+          opened_status: reviewModalLog.status || 'submitted',
           opened_manager_notes: reviewModalLog.manager_notes ?? reviewModalLog.managerNotes ?? '',
         })
       });

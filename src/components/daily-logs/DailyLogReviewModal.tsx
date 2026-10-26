@@ -54,8 +54,8 @@ export function DailyLogReviewModal({
             <p className="text-slate-500 text-[11px]">نویسنده: {reviewModalLog.user_full_name || reviewModalLog.username}</p>
           </div>
 
-          {storedNotes && storedNotes !== reviewNotes && (
-            <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-100 text-xs">
+          {storedNotes.trim() && storedNotes !== reviewNotes && (
+            <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-100 text-xs max-h-32 overflow-y-auto">
               <p className="font-bold text-amber-900 mb-1">بازخورد ثبت‌شده:</p>
               <p className="text-slate-700 whitespace-pre-wrap break-words">{storedNotes}</p>
             </div>

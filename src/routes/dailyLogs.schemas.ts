@@ -89,12 +89,17 @@ const DAILY_LOG_OPENED_REVIEW_MESSAGE = 'بازخورد گزارش کار هنگ
 export const reviewDailyLogSchema = z.object({
   body: z.object({
     manager_notes: z.string().max(DAILY_LOG_MANAGER_NOTES_MAX, atMost('یادداشت بازبینی', DAILY_LOG_MANAGER_NOTES_MAX)).optional(),
-    // required (review 5 of #403): a review without them would replace another manager's review unseen; the notes the
-    // form opened may predate the notes cap, so only the body size bounds them
-    opened_status: z.string({ message: DAILY_LOG_OPENED_REVIEW_MESSAGE }).max(40, DAILY_LOG_OPENED_REVIEW_MESSAGE),
-    opened_manager_notes: z.string({ message: DAILY_LOG_OPENED_REVIEW_MESSAGE }),
+    // the notes the form opened may predate the notes cap, so only the body size bounds them
+    opened_status: z.string().max(40, DAILY_LOG_OPENED_REVIEW_MESSAGE).optional(),
+    opened_manager_notes: z.string().optional(),
     version: z.coerce.number({ message: DAILY_LOG_VERSION_REQUIRED_MESSAGE })
       .int(DAILY_LOG_VERSION_REQUIRED_MESSAGE).positive(DAILY_LOG_VERSION_REQUIRED_MESSAGE),
+  }).superRefine((body, ctx) => {
+    // required (reviews 5-6 of #403): a review without them would replace another manager's review unseen; one Persian
+    // message for both, and none beside the version message of a tab loaded before they existed
+    if (body.opened_status === undefined || body.opened_manager_notes === undefined) {
+      ctx.addIssue({ code: 'custom', path: ['opened_status'], message: DAILY_LOG_OPENED_REVIEW_MESSAGE });
+    }
   }),
   params: z.object({ id: numericIdString })
 });

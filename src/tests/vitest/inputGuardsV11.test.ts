@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DrizzleQueryError } from 'drizzle-orm/errors';
 import { errorHandler } from '../../middleware/logger';
 import { decimalInput } from '../../middleware/validate.js';
+import { reviewDailyLogSchema } from '../../routes/dailyLogs.schemas.js';
 import { assertChequeDueAfterIssue, assertChequeStepAfterPrevious, lastChequeStepDay } from '../../services/accounting/treasury/chequeDateOrder.js';
 import { exactTreasuryAmount } from '../../services/accounting/treasury/treasuryAmount.js';
 import { stockMovementQuantity } from '../../services/documents/documentStockEngine.service.js';
@@ -15,6 +16,9 @@ import { readRowPrices } from '../../services/items/itemExcelRow.js';
 const SALE_PRICE_LIST = 'فروش';
 const SALE_PRICE_COLUMN = 'قیمت فروش';
 const ABOVE_ZERO = 'بزرگ‌تر از صفر';
+const WRITE_SMALLER = 'کوچک‌تر بنویسید';
+const ROUND_TO_FOUR = 'تا ۴ رقم اعشار گرد کنید';
+const BELOW_SMALLEST = 'کمتر از ۰٫۰۰۰۱';
 
 // v11 phase 6.1a: the pure parts of the input guards (the database cases are in regression/inputGuardsV11Tests.ts)
 const read = (v: unknown) => decimalInput('مبلغ').safeParse(v);
@@ -53,6 +57,18 @@ describe('decimalInput bounds (M16, S10, S12)', () => {
     for (const value of [100.00005, 1e-7, '1.23456', 123456789012345]) expect(pricesOf(value), String(value)).toBeNull();
   });
 
+  it('tells an item import row how to fix a price the column cannot hold', () => {
+    const adviceOf = (value: unknown) => {
+      const errors: string[] = [];
+      readRowPrices({ [SALE_PRICE_COLUMN]: value }, [SALE_PRICE_LIST], message => { errors.push(message); });
+      return errors.join(' ');
+    };
+    for (const value of [123456789012345, '123456789012345', 1e21]) expect(adviceOf(value), String(value)).toContain(WRITE_SMALLER);
+    expect(adviceOf('99999999999999.99994')).toContain(ROUND_TO_FOUR);
+    expect(adviceOf(100 / 3)).toContain(ROUND_TO_FOUR);
+    for (const value of [1e-7, '0.00001']) expect(adviceOf(value), String(value)).toContain(BELOW_SMALLEST);
+  });
+
   it('reports a price the column cannot hold as a bad cell of the quick price import, the other cells still saved', () => {
     const bad = [100.00005, 1e-7, '1.23456', 100 / 3];
     const rows = [{ 'کد کالا': 'A-1', [SALE_PRICE_COLUMN]: 1850000 * 1.1 }, ...bad.map((value, i) => ({ 'کد کالا': `B-${i}`, [SALE_PRICE_COLUMN]: value }))];
@@ -66,6 +82,18 @@ describe('decimalInput bounds (M16, S10, S12)', () => {
     expect(decimalTextScaleIssue('-123456789012345')).toBe('size');
     expect(decimalTextScaleIssue('1.00001')).toBe('scale');
     expect(decimalTextScaleIssue('1.10000')).toBeNull();
+  });
+});
+
+describe('daily log review body (C10)', () => {
+  const issuesOf = (body: Record<string, unknown>) => reviewDailyLogSchema.safeParse({ body, params: { id: '1' } }).error?.issues ?? [];
+
+  it('refuses a review that does not say what it opened with one message, and a tab loaded before with the version message only', () => {
+    const blind = issuesOf({ manager_notes: 'x', version: 1 });
+    expect(blind).toHaveLength(1);
+    expect(blind[0]?.path.join('.')).toBe('body.opened_status');
+    expect(issuesOf({ manager_notes: 'x' }).map(issue => issue.path.join('.'))).toEqual(['body.version']);
+    expect(issuesOf({ manager_notes: 'x', version: 1, opened_status: 'submitted', opened_manager_notes: '' })).toEqual([]);
   });
 });
 
