@@ -44,6 +44,14 @@ for _ in $(seq 1 30); do
 done
 pg_isready -h localhost -p 5432
 
+# The image may carry client tools of a newer major (Ubuntu 26.04's own PostgreSQL 18): postgresql-common's pg_wrapper
+# can pick those for a command that names a connection URL, and a dump written by a newer pg_dump cannot be read by
+# pg_restore 16 (backup.sh checks every dump with pg_restore --list). The later steps of the job run the version 16
+# tools directly, as a server whose only PostgreSQL is 16.
+echo "PostgreSQL majors on the runner: $(ls /usr/lib/postgresql 2>/dev/null | tr '\n' ' ')"
+export PATH="/usr/lib/postgresql/16/bin:$PATH"
+[ -z "${GITHUB_PATH:-}" ] || echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+
 as_postgres() { sudo -u postgres psql -X -v ON_ERROR_STOP=1 -qtA -d postgres "$@"; }
 
 version="$(as_postgres -c 'SHOW server_version_num')"

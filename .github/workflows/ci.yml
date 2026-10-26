@@ -107,7 +107,9 @@ jobs:
           fi
           psql --version && pg_dump --version && pg_restore --version
           # a newer pg_dump would write a dump the server's version 16 cannot read back
-          pg_dump --version | grep -qE ' 16\.' || { echo "pg_dump is not version 16" >&2; exit 1; }
+          for tool in pg_dump pg_restore; do
+            "$tool" --version | grep -qE ' 16\.' || { echo "$tool is not version 16" >&2; exit 1; }
+          done
 
       - name: Execute Full 21-Suite Test Matrix
         env:
@@ -160,7 +162,9 @@ jobs:
           fi
           psql --version && pg_dump --version && pg_restore --version
           # a newer pg_dump would write a dump the server's version 16 cannot read back
-          pg_dump --version | grep -qE ' 16\.' || { echo "pg_dump is not version 16" >&2; exit 1; }
+          for tool in pg_dump pg_restore; do
+            "$tool" --version | grep -qE ' 16\.' || { echo "$tool is not version 16" >&2; exit 1; }
+          done
 
       - name: Execute Test Matrix Under c8 Coverage
         env:
