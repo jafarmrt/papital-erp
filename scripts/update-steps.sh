@@ -100,26 +100,80 @@ update_backup_need_kb() {
   fi
 }
 
-# KB the upgrade rehearsal restores: twice the live database. The size is read with the application's own pg driver
-# from <app-dir>, the URL passed in the environment (never on a command line; psql does not read a URL from
-# PGDATABASE). When it cannot be read, ten times the newest pre-deployment dump stands in for it (a gzip dump is
-# smaller than the database), else 0.
+# Bytes of the live database, read with the application's own pg driver from <app-dir>, the URL passed in the
+# environment (never on a command line; psql does not read a URL from PGDATABASE); empty when it cannot be read
+update_database_bytes() {
+  local app_dir="$1" url="$2"
+  [ -n "$url" ] || return 0
+  (cd "$app_dir" && UPDATE_DB_URL="$url" timeout 30 node -e '
+    const { Client } = require("pg");
+    const c = new Client({ connectionString: process.env.UPDATE_DB_URL });
+    c.connect()
+      .then(() => c.query("SELECT pg_database_size(current_database())::text AS b"))
+      .then((r) => { process.stdout.write(String(r.rows[0].b)); return c.end(); })
+      .catch(() => process.exit(1));' 2>/dev/null | tr -dc '0-9' || true)
+}
+
+# KB the upgrade rehearsal restores: twice the live database (update_database_bytes). When it cannot be read, ten
+# times the newest pre-deployment dump stands in for it (a gzip dump is smaller than the database), else 0.
 update_rehearsal_need_kb() {
-  local app_dir="$1" url="$2" backup_dir="${3:-${BACKUP_DIR:-/var/backups/erp}}" bytes="" newest
-  if [ -n "$url" ]; then
-    bytes="$(cd "$app_dir" && UPDATE_DB_URL="$url" timeout 30 node -e '
-      const { Client } = require("pg");
-      const c = new Client({ connectionString: process.env.UPDATE_DB_URL });
-      c.connect()
-        .then(() => c.query("SELECT pg_database_size(current_database())::text AS b"))
-        .then((r) => { process.stdout.write(String(r.rows[0].b)); return c.end(); })
-        .catch(() => process.exit(1));' 2>/dev/null | tr -dc '0-9' || true)"
-  fi
+  local app_dir="$1" url="$2" backup_dir="${3:-${BACKUP_DIR:-/var/backups/erp}}" bytes newest
+  bytes="$(update_database_bytes "$app_dir" "$url")"
   if [ -z "$bytes" ]; then
     newest="$(ls -t "$backup_dir"/erp_pre-deployment_*.dump.gz 2>/dev/null | head -1 || true)"
     if [ -n "$newest" ]; then bytes=$(( $(update_size_kb "$newest") * 1024 * 10 )); fi
   fi
   echo $(( ${bytes:-0} * 2 / 1024 ))
+}
+
+# v11 (phase 4, card ت۵۳ question 5): the folder of the database files: UPDATE_DB_DATA_DIR, else /var/lib/postgresql
+# when the database runs on this server (SQL_HOST, else the host of DATABASE_URL or its host= parameter, is empty,
+# localhost, a 127.x address, ::1 or a socket folder); empty when the database is elsewhere
+update_database_dir() {
+  local app_dir="$1" url host query
+  if [ -n "${UPDATE_DB_DATA_DIR:-}" ]; then echo "$UPDATE_DB_DATA_DIR"; return 0; fi
+  host="$(update_env_value "$app_dir" SQL_HOST)"
+  url="$(update_env_value "$app_dir" DATABASE_URL)"
+  if [ -z "$host" ] && [ -n "$url" ]; then
+    host="${url#*://}"; host="${host%%[/?]*}"; host="${host##*@}"
+    case "$host" in \[*) host="${host%%]*}"; host="${host#[}" ;; *) host="${host%%:*}" ;; esac
+    query=""
+    case "$url" in *\?*) query="&${url#*\?}" ;; esac
+    case "$query" in *"&host="*) host="${query#*&host=}"; host="${host%%&*}" ;; esac
+  fi
+  host="$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')"
+  host="${host//%2f//}"
+  case "$host" in ""|localhost|127.[0-9]*|::1|/*) ;; *) return 0 ;; esac
+  if [ -d "${UPDATE_PG_DIR:-/var/lib/postgresql}" ]; then echo "${UPDATE_PG_DIR:-/var/lib/postgresql}"; fi
+}
+
+# v11 (phase 4, card ت۵۳ question 5): a migration that changes a column type rewrites its table, and PostgreSQL keeps
+# the old copy until the migration commits, so the disk of the database needs free space of twice the database. Run
+# after update_space_check: on the same disk as <app-dir> its free space and the update's own need (UPDATE_SPACE_FREE_KB,
+# UPDATE_SPACE_NEED_KB) are counted first. The size is read from DATABASE_URL (backup.sh needs it too). 0 when there is
+# room or the database size or folder cannot be read (a database on another server); else sets
+# UPDATE_DB_SPACE_MESSAGE and returns 1. Sets UPDATE_DB_SPACE_NEED_KB and UPDATE_DB_SPACE_FREE_KB when it checked.
+# UPDATE_DB_BYTES and UPDATE_PG_DIR replace the database size and /var/lib/postgresql for the tests.
+update_database_space_check() {
+  local app_dir="$1" done_text="Nothing was changed" db_dir bytes need free
+  if [ "${2:-0}" = "1" ]; then
+    done_text="The backup (when taken) and the new source are in place; the running build and the service are untouched"
+  fi
+  UPDATE_DB_SPACE_MESSAGE=""
+  UPDATE_DB_SPACE_NEED_KB=""
+  UPDATE_DB_SPACE_FREE_KB=""
+  db_dir="$(update_database_dir "$app_dir")"
+  [ -n "$db_dir" ] || return 0
+  bytes="${UPDATE_DB_BYTES:-$(update_database_bytes "$app_dir" "$(update_env_value "$app_dir" DATABASE_URL)")}"
+  [ -n "$bytes" ] || return 0
+  need=$(( bytes * 2 / 1024 ))
+  free="$(update_disk_free_kb "$db_dir")"
+  if update_same_disk "$app_dir" "$db_dir"; then free=$(( ${UPDATE_SPACE_FREE_KB:-$free} - ${UPDATE_SPACE_NEED_KB:-0} )); fi
+  UPDATE_DB_SPACE_NEED_KB="$need"
+  UPDATE_DB_SPACE_FREE_KB="$free"
+  [ "$free" -lt "$need" ] || return 0
+  UPDATE_DB_SPACE_MESSAGE="Not enough free disk space for the database migrations: a migration that changes a column type rewrites its table, so the disk of the database (${db_dir}, mounted at $(update_disk_mount "$db_dir")) needs about $(( need / 1024 )) MB free, twice the database, beside what the update itself needs; $(( (free > 0 ? free : 0) / 1024 )) MB is left. ${done_text}; free $(( (need - free) / 1024 + 1 )) MB more on that disk (old backups, logs) and run the update again."
+  return 1
 }
 
 # OBS-R1-22: free space the update needs before anything is touched. On the disk of <app-dir>: the side folder holds
