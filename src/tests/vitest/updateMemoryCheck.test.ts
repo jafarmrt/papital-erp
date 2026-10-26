@@ -90,7 +90,7 @@ function scratch(availableMb: number) {
   const src = path.join(dir, 'new-source');
   const bin = path.join(dir, 'bin');
   for (const root of [app, src]) {
-    for (const f of ['update.sh', 'scripts/update-steps.sh', 'scripts/env-file.sh', 'scripts/ensure-env-secrets.sh']) {
+    for (const f of ['update.sh', 'scripts/update-steps.sh', 'scripts/env-file.sh', 'scripts/ops-lock.sh', 'scripts/ensure-env-secrets.sh']) {
       mkdirSync(path.dirname(path.join(root, f)), { recursive: true });
       copyFileSync(path.join(ROOT, f), path.join(root, f));
     }

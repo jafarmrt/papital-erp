@@ -56,6 +56,16 @@ pg_strip_password() {
     echo "$url"
   fi
 }
+# v11 (O14): libpq takes PGPASSWORD before any password file, so a PGPASSWORD the operator exported for some other
+# database beat the lines written here and the restore failed with «password authentication failed». It becomes the
+# last line for any server, below the URLs' own lines (a URL without a password still gets it, as before), and leaves
+# the environment.
+pg_password_fold_env() {
+  if [ -n "${PGPASSWORD:-}" ]; then
+    printf '*:*:*:*:%s\n' "$(pg_pgpass_field "$PGPASSWORD")" >> "$PGPASSFILE"
+  fi
+  unset PGPASSWORD
+}
 pg_password_setup() {
   local inherited="${PGPASSFILE:-}"
   PG_FULL_DATABASE_URL="${PG_FULL_DATABASE_URL:-$DATABASE_URL}"
@@ -68,6 +78,7 @@ pg_password_setup() {
     RESTORE_ADMIN_URL="$(pg_strip_password "$RESTORE_ADMIN_URL")"
     export RESTORE_ADMIN_URL
   fi
+  pg_password_fold_env
   # after the URLs' lines: libpq takes the first matching line, and a password in the URL wins over a password file
   [ -n "$inherited" ] || inherited="${HOME:+$HOME/.pgpass}"
   if [ -n "$inherited" ] && [ -r "$inherited" ]; then cat "$inherited" >> "$PGPASSFILE"; fi

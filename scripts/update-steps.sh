@@ -292,7 +292,18 @@ update_sync_source() {
   local source_dir="$1" app_dir="$2"
   update_assert_source_outside "$source_dir" "$app_dir" || return 1
   update_state_excludes "$app_dir"
-  rsync -a --checksum --delete "${UPDATE_EXCLUDES[@]}" "$source_dir"/ "$app_dir"/
+  rsync -a --checksum --delete "${UPDATE_EXCLUDES[@]}" "$source_dir"/ "$app_dir"/ || return 1
+  update_fix_exec_bits "$app_dir"
+}
+
+# v11 (O3): a zip made without unix modes (Windows) unpacks every file as 0644, and the sync above copies that mode
+# over the scripts; the shell scripts of the source are made executable again, as git keeps them
+update_fix_exec_bits() {
+  local app_dir="$1" f
+  for f in "$app_dir"/*.sh "$app_dir"/scripts/*.sh; do
+    [ -f "$f" ] && [ ! -L "$f" ] && chmod a+x "$f"
+  done
+  return 0
 }
 
 # Puts <app-dir>/.previous-source back over <app-dir> (the source only; dist and node_modules are separate)
@@ -300,7 +311,8 @@ update_restore_source() {
   local app_dir="$1"
   [ -d "$app_dir/$UPDATE_PREVIOUS_SOURCE_NAME" ] || { echo "No previous source in $app_dir/$UPDATE_PREVIOUS_SOURCE_NAME" >&2; return 1; }
   update_state_excludes "$app_dir"
-  rsync -a --checksum --delete "${UPDATE_EXCLUDES[@]}" "$app_dir/$UPDATE_PREVIOUS_SOURCE_NAME"/ "$app_dir"/
+  rsync -a --checksum --delete "${UPDATE_EXCLUDES[@]}" "$app_dir/$UPDATE_PREVIOUS_SOURCE_NAME"/ "$app_dir"/ || return 1
+  update_fix_exec_bits "$app_dir"
 }
 
 # OBS-R1-22: a fresh side folder with the source of <app-dir>; prints its path. Its .env is a link to the live one,

@@ -114,7 +114,7 @@ function manualScratch() {
   const bin = path.join(dir, 'bin');
   const verify = `echo "$*" > "${path.join(dir, 'verify.args')}"\n[ -z "\${STUB_STARTUP_FAILS:-}" ] || { echo "startup failed"; exit 1; }\necho "startup ok"\n`;
   for (const root of [app, src]) {
-    for (const f of ['update.sh', 'scripts/update-steps.sh', 'scripts/env-file.sh', 'scripts/ensure-env-secrets.sh']) {
+    for (const f of ['update.sh', 'scripts/update-steps.sh', 'scripts/env-file.sh', 'scripts/ops-lock.sh', 'scripts/ensure-env-secrets.sh']) {
       mkdirSync(path.dirname(path.join(root, f)), { recursive: true });
       copyFileSync(path.join(ROOT, f), path.join(root, f));
     }
@@ -222,7 +222,7 @@ function gitScratch() {
   const bin = path.join(dir, 'bin');
   git(dir, ['init', '-q', '--bare', '-b', 'master', origin]);
   git(dir, ['clone', '-q', origin, work]);
-  for (const f of ['update.sh', 'scripts/update-steps.sh', 'scripts/env-file.sh', 'scripts/ensure-env-secrets.sh', 'scripts/untrack-node-modules-link.sh']) {
+  for (const f of ['update.sh', 'scripts/update-steps.sh', 'scripts/env-file.sh', 'scripts/ops-lock.sh', 'scripts/ensure-env-secrets.sh', 'scripts/untrack-node-modules-link.sh']) {
     mkdirSync(path.dirname(path.join(work, f)), { recursive: true });
     copyFileSync(path.join(ROOT, f), path.join(work, f));
   }

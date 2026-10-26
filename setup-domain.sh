@@ -14,6 +14,7 @@
 set -euo pipefail
 
 LOG_FILE="domain-setup-$(date +%Y%m%d-%H%M%S).log"
+( umask 077; : >> "$LOG_FILE" )
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 log()      { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }

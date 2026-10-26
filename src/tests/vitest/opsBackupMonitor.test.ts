@@ -26,8 +26,8 @@ describe('ops_cron_installed_td_1020: install.sh schedules the daily backup and 
     expect(first.status, first.stderr).toBe(0);
     const text = fs.readFileSync(cronFile, 'utf8');
     const user = os.userInfo().username;
-    expect(text).toContain(`30 2 * * * ${user} ${ROOT}/scripts/backup.sh >> ${ROOT}/logs/backup.log 2>&1`);
-    expect(text).toContain(`*/5 * * * * ${user} ${ROOT}/scripts/monitor.sh >> ${ROOT}/logs/monitor.log 2>&1`);
+    expect(text).toContain(`30 2 * * * ${user} bash ${ROOT}/scripts/backup.sh >> ${ROOT}/logs/backup.log 2>&1`);
+    expect(text).toContain(`*/5 * * * * ${user} bash ${ROOT}/scripts/monitor.sh >> ${ROOT}/logs/monitor.log 2>&1`);
     expect((fs.statSync(cronFile).mode & 0o777).toString(8)).toBe('644');
     expect(fs.existsSync(path.join(dir, 'cron.d', 'papital-erp-backup'))).toBe(false);
     expect(runCron({ CRON_FILE: cronFile, APP_DIR: ROOT }).status).toBe(0);

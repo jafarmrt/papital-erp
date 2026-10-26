@@ -49,6 +49,10 @@ fail() { log "ERROR: $*"; exit 1; }
 # shellcheck source=scripts/env-file.sh
 source "$(dirname "${BASH_SOURCE[0]}")/env-file.sh"
 env_file_value() { env_file_get "$APP_DIR/.env" "$1"; }
+# v11 (O13): the busy lock the nightly check and update.sh look for (scripts/ops-lock.sh)
+# shellcheck source=scripts/ops-lock.sh
+source "$(dirname "${BASH_SOURCE[0]}")/ops-lock.sh"
+ops_busy_hold "$APP_DIR"
 
 [ -n "${DATABASE_URL:-}" ] || DATABASE_URL="$(env_file_value DATABASE_URL)"
 [ -n "${DATABASE_URL:-}" ] || fail "DATABASE_URL must be set (or present in $APP_DIR/.env)"
@@ -250,14 +254,39 @@ if ! admin_sql "ALTER DATABASE \"$NEW_DB\" RENAME TO \"$TARGET_DB\";" >/dev/null
   fail "cannot rename $NEW_DB to $TARGET_DB — the original database was put back"
 fi
 NEW_DB=""
-log "Database $TARGET_DB replaced by the restored copy; the previous one is kept as ${OLD_DB} (drop it when no longer needed)"
+# v11 (O15): the line says what was done: a target that did not exist was not kept
+if [ "$TARGET_EXISTS" = "1" ]; then
+  log "Database $TARGET_DB replaced by the restored copy; the previous one is kept as ${OLD_DB}"
+else
+  log "Database $TARGET_DB created from the restored copy (there was no database of that name before)"
+fi
+# v11 (O11): the copies kept by this and earlier restores stay until someone drops them; each is named with its command
+KEPT_DBS="$(admin_sql "SELECT datname FROM pg_database WHERE datname LIKE '$(printf '%s' "$TARGET_DB" | sed 's/[_%]/\\&/g')\\_before\\_restore\\_%' ORDER BY 1")" || KEPT_DBS=""
+if [ -n "$KEPT_DBS" ]; then
+  log "Databases kept by restores (each holds a full copy of the data; drop one when it is no longer needed):"
+  while IFS= read -r kept; do
+    [ -n "$kept" ] && log "    sudo -u postgres dropdb \"$kept\""
+  done <<< "$KEPT_DBS"
+fi
 
+# v11 (O15): the archive holds the folder under the name it had when the backup was taken (public/uploads → uploads),
+# which is not always the name of <dir>; it is unpacked into a new folder beside <dir> and that one folder is moved to
+# <dir>, so the files land where the log says
 restore_archive() {
-  local archive="$1" dir="$2"
+  local archive="$1" dir="$2" parent unpack entries
   [ -f "$archive" ] || return 0
+  parent="$(dirname "$dir")"
+  mkdir -p "$parent"
+  unpack="$(mktemp -d "$parent/.restore_unpack_XXXXXX")"
+  tar -xzf "$archive" -C "$unpack" || { rm -rf "$unpack"; fail "cannot unpack $archive"; }
+  entries="$(find "$unpack" -mindepth 1 -maxdepth 1 | wc -l)"
+  if [ "$entries" -ne 1 ] || [ ! -d "$(find "$unpack" -mindepth 1 -maxdepth 1)" ]; then
+    rm -rf "$unpack"
+    fail "$archive does not hold exactly one folder; $dir was left as it is"
+  fi
   if [ -e "$dir" ]; then mv "$dir" "$dir.before_restore_${TIMESTAMP}"; log "Previous $(basename "$dir") kept as $dir.before_restore_${TIMESTAMP}"; fi
-  mkdir -p "$(dirname "$dir")"
-  tar -xzf "$archive" -C "$(dirname "$dir")"
+  mv "$(find "$unpack" -mindepth 1 -maxdepth 1)" "$dir"
+  rmdir "$unpack"
   log "Files restored from $archive into $dir"
 }
 restore_archive "$UPLOADS_ARCHIVE" "$UPLOADS_DIR"

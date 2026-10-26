@@ -118,19 +118,31 @@ const logFormat = printf(({ level, message, timestamp, stack, requestId, correla
 const isProduction = process.env.NODE_ENV === 'production';
 const logDir = process.env.LOG_DIR || path.join(process.cwd(), 'logs');
 
+// v11 (O16): the log folder and files are private to the server's user and group (they hold user ids, addresses and
+// error stacks); a folder made by an older version (0755) is tightened at start
+export const LOG_DIR_MODE = 0o750;
+export const LOG_FILE_MODE = 0o640;
+
 // Ensure log directory exists
 try {
   if (!fs.existsSync(logDir)) {
-    fs.mkdirSync(logDir, { recursive: true });
+    fs.mkdirSync(logDir, { recursive: true, mode: LOG_DIR_MODE });
   }
 } catch (err) {
   console.error('Failed to create log directory:', err);
 }
+try {
+  fs.chmodSync(logDir, LOG_DIR_MODE);
+} catch {
+  // a folder of another user stays as it is
+}
 
-// Initialize transports with Console by default
+// Initialize transports with Console by default; v11 (O16): colour codes only on a terminal, not in the journal
 const transports: winston.transport[] = [
   new winston.transports.Console({
-    format: combine(contextFormat(), sanitizeFormat(), colorize(), logFormat)
+    format: process.stdout.isTTY
+      ? combine(contextFormat(), sanitizeFormat(), colorize(), logFormat)
+      : combine(contextFormat(), sanitizeFormat(), logFormat)
   })
 ];
 
@@ -139,6 +151,7 @@ try {
   const fileTransport = new DailyRotateFile({
     dirname: logDir,
     filename: 'application-%DATE%.log',
+    options: { flags: 'a', mode: LOG_FILE_MODE },
     datePattern: 'YYYY-MM-DD',
     maxSize: '50m',
     maxFiles: '14d',
@@ -155,6 +168,7 @@ try {
     level: 'error',
     dirname: logDir,
     filename: 'error-%DATE%.log',
+    options: { flags: 'a', mode: LOG_FILE_MODE },
     datePattern: 'YYYY-MM-DD',
     maxSize: '50m',
     maxFiles: '30d',

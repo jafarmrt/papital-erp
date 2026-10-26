@@ -45,6 +45,8 @@ const NAMES: Array<[string, string, CriticalScenarioId | undefined, string]> = [
     'A no-op migration was accepted; a stock-changing migration (reported with the item name) and a broken migration were refused; the copy was dropped and the app database stayed untouched'],
   ['rec_td_360_apply_replaces_whole_database', 'v8.0.87: a real restore (apply) does not mix the backup with current data; the restored copy replaces the database after verification, the previous one is kept, and it is refused while the service has an open connection (TD-360)', undefined,
     'Refused with an open connection and nothing changed; then the database became exactly equal to the backup, and the previous copy and the previous attachment directory were kept'],
+  ['rec_o15_restore_log_says_what_it_did', 'v11 (O15, O11): a real restore puts the files into the folder it names even when that folder has another name than the one in the archive, says it kept a previous database only when there was one, and lists the databases earlier restores kept with their drop command', undefined,
+    'The files landed in a folder of another name with the attachment inside; a new target was reported as created, not kept; the kept copy was listed with its dropdb command'],
 ];
 
 const listBackups = (dir: string, suffix: string): string[] =>
@@ -285,6 +287,31 @@ async function checkApplyReplacesDatabase(ctx: Ctx): Promise<string[]> {
   return v;
 }
 
+/** v11 (O15, O11): runs after checkApplyReplacesDatabase, which left one «_before_restore_» copy of the database */
+async function checkRestoreLogSaysWhatItDid(ctx: Ctx): Promise<string[]> {
+  const v: string[] = [];
+  const { appDir, cluster, dump } = ctx;
+  const elsewhere = path.join(appDir, 'files-restored');
+  const env = scriptEnv({ RESTORE_ALLOW_SUDO: '0', RESTORE_ADMIN_URL: adminUrl(), RESTORE_MODE: 'apply', RESTORE_CONFIRM: 'yes', UPLOADS_DIR: elsewhere });
+  const fresh = `${cluster.database}_fresh`;
+  const r = await runCommand('bash', [path.join(appDir, 'scripts', 'restore.sh'), dump, fresh], { cwd: appDir, env });
+  if (r.code !== 0) return [`The restore into a new database failed (code ${r.code}): ${r.output.slice(-300)}`];
+  if (!r.output.includes(`Database ${fresh} created from the restored copy (there was no database of that name before)`)) v.push('A restore into a database that did not exist did not say it created it');
+  if (r.output.includes(`kept as ${fresh}_before_restore_`)) v.push('The log names a kept copy of a database that did not exist');
+  if (!fs.existsSync(path.join(elsewhere, '.attachments', 'k-a1.pdf'))) v.push(`The archive was not unpacked into the folder the log names (${elsewhere})`);
+  if (!r.output.includes(`Files restored from`) || !r.output.includes(`into ${elsewhere}`)) v.push('The log does not name the folder the files went to');
+  if (fs.readdirSync(appDir).some(d => d.startsWith('.restore_unpack_'))) v.push('The unpack folder was left behind');
+  const kept = await querySql<{ datname: string }>(adminUrl(), `SELECT datname FROM pg_database WHERE datname LIKE $1`, [`${cluster.database}\\_before\\_restore\\_%`]);
+  // the copy the earlier apply kept is of the other target, so this run lists nothing; an apply over the same target lists it
+  const again = await runCommand('bash', [path.join(appDir, 'scripts', 'restore.sh'), dump], { cwd: appDir, env: scriptEnv({ RESTORE_ALLOW_SUDO: '0', RESTORE_ADMIN_URL: adminUrl(), RESTORE_MODE: 'apply', RESTORE_CONFIRM: 'yes' }) });
+  if (again.code !== 0) v.push(`The second restore failed (code ${again.code}): ${again.output.slice(-300)}`);
+  for (const { datname } of kept) {
+    if (!again.output.includes(`dropdb "${datname}"`)) v.push(`The copy ${datname} kept by an earlier restore is not listed with its drop command`);
+  }
+  if (kept.length === 0) v.push('The earlier restore left no copy to list');
+  return v;
+}
+
 export async function runBackupRestoreChecks(): Promise<RecoveryCheckOutcome[]> {
   const outcome = (violations: string[][]): RecoveryCheckOutcome[] =>
     NAMES.map(([id, name, scenarioId, info], i) => ({ id, name, scenarioId, info, violations: violations[i] ?? ['اجرا نشد'] }));
@@ -305,6 +332,7 @@ export async function runBackupRestoreChecks(): Promise<RecoveryCheckOutcome[]> 
     results.push(await checkDrillWithInstalledRole(ctx));
     results.push(await checkUpgradeRehearsal(ctx));
     results.push(await checkApplyReplacesDatabase(ctx));
+    results.push(await checkRestoreLogSaysWhatItDid(ctx));
     return outcome(results);
   } finally {
     await cluster.teardown();

@@ -9,6 +9,9 @@
 #   offsite  the same for its off-server copy (.last_offsite_ok), only when BACKUP_RCLONE_REMOTE is set
 #   events   /metrics (read with METRICS_TOKEN): no unresolved dead-letter event and no outbox event stuck in
 #            processing, and the queue gauges were read (src/middleware/metrics.ts)
+#   media    v11 (O7): the copy of the media library (scripts/backup-media-offsite.sh, its report MEDIA_OFFSITE_REPORT,
+#            default APP_DIR/logs/media-offsite.json), only when MEDIA_RCLONE_REMOTE is set: the last night failed, the
+#            last complete copy is older than MONITOR_BACKUP_MAX_AGE_HOURS, or no copy after that long of monitoring
 #   nightly  v10.3.24 (TD-1350): the report of the nightly backup check (NIGHTLY_VERIFY_REPORT, default
 #            APP_DIR/logs/nightly-verify.json, written by scripts/nightly-verify.sh): a night that could not be checked
 #            or found something worse than the last healthy night, or a report older than 36 hours, the same verdict as
@@ -64,6 +67,9 @@ BACKUP_DIR_VALUE="$(setting BACKUP_DIR /var/backups/erp)"
 # a relative folder is under APP_DIR, whichever directory cron, update.sh or a shell starts from (v10.3.24)
 case "$BACKUP_DIR_VALUE" in /*) ;; *) BACKUP_DIR_VALUE="$APP_DIR/$BACKUP_DIR_VALUE" ;; esac
 OFFSITE_REMOTE="$(setting BACKUP_RCLONE_REMOTE)"
+MEDIA_REMOTE="$(setting MEDIA_RCLONE_REMOTE)"
+MEDIA_REPORT="$(setting MEDIA_OFFSITE_REPORT "$APP_DIR/logs/media-offsite.json")"
+case "$MEDIA_REPORT" in /*) ;; *) MEDIA_REPORT="$APP_DIR/$MEDIA_REPORT" ;; esac
 STATE_DIR="$(setting MONITOR_STATE_DIR "$APP_DIR/logs/monitor-state")"
 BOT_TOKEN="$(setting ALERT_BOT_TOKEN)"
 BOT_CHAT="$(setting ALERT_CHAT_ID)"
@@ -185,6 +191,35 @@ check_age() {
 }
 check_age backup "$BACKUP_DIR_VALUE/.last_daily_ok" backup
 [ -z "$OFFSITE_REMOTE" ] || check_age offsite "$BACKUP_DIR_VALUE/.last_offsite_ok" offsite
+
+# --- media library copy (v11, O7) ---
+# the report is one JSON line written by backup-media-offsite.sh: state ok|failed|off, at and lastOkAt in epoch seconds
+media_field() { sed -n "s/.*\"$1\":\"\{0,1\}\([a-z0-9]*\).*/\1/p" "$MEDIA_REPORT" 2>/dev/null | head -1; }
+if [ -n "$MEDIA_REMOTE" ]; then
+  if [ -f "$MEDIA_REPORT" ]; then
+    MEDIA_STATE="$(media_field state)"
+    MEDIA_LAST_OK="$(media_field lastOkAt)"
+    MEDIA_AT="$(media_field at)"
+    if [ "$MEDIA_STATE" = "failed" ]; then
+      record media fail media_failed
+    elif whole_number "${MEDIA_LAST_OK:-}"; then
+      if [ $((NOW - MEDIA_LAST_OK)) -gt $((MAX_AGE_HOURS * 3600)) ]; then
+        record media fail media_stale $(( (NOW - MEDIA_LAST_OK) / 3600 ))
+      else
+        record media ok media_ok
+      fi
+    elif [ "$MEDIA_STATE" = "off" ] && whole_number "${MEDIA_AT:-}"; then
+      # written before the remote was set: no copy yet
+      if [ $((NOW - MEDIA_AT)) -gt $((MAX_AGE_HOURS * 3600)) ]; then record media fail media_missing; else record media ok media_ok; fi
+    else
+      record media fail media_unreadable
+    fi
+  elif [ $((NOW - FIRST_RUN)) -gt $((MAX_AGE_HOURS * 3600)) ]; then
+    record media fail media_missing
+  else
+    record media ok media_ok
+  fi
+fi
 
 # --- event queue (only while the app answers; a down app is already the app alert) ---
 metric() { echo "$METRICS" | awk -v n="$1" '$1 == n { printf "%d", $2; found = 1 } END { if (!found) exit 1 }'; }

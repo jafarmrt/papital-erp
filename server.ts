@@ -1,5 +1,7 @@
 // v8.0.52 (TD-314): نخستین ایمپورت — منطقه زمانی فرایند پیش از هر ماژول دیگری UTC می‌شود
 import './src/lib/processTimezone.js';
+// v11 (O16): files the server creates are private to its user and group (src/lib/processFileMode.ts)
+import './src/lib/processFileMode.js';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';

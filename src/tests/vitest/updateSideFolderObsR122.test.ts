@@ -59,7 +59,7 @@ function scratch() {
   const app = path.join(dir, 'app');
   const src = path.join(dir, 'new-source');
   const bin = path.join(dir, 'bin');
-  for (const f of ['update.sh', 'scripts/update-steps.sh', 'scripts/env-file.sh', 'scripts/ensure-env-secrets.sh']) {
+  for (const f of ['update.sh', 'scripts/update-steps.sh', 'scripts/env-file.sh', 'scripts/ops-lock.sh', 'scripts/ensure-env-secrets.sh']) {
     mkdirSync(path.dirname(path.join(app, f)), { recursive: true });
     copyFileSync(path.join(ROOT, f), path.join(app, f));
   }
@@ -85,6 +85,7 @@ function scratch() {
   write(path.join(src, 'scripts/update-steps.sh'), read(path.join(app, 'scripts/update-steps.sh')));
   write(path.join(src, 'scripts/ensure-env-secrets.sh'), read(path.join(app, 'scripts/ensure-env-secrets.sh')));
   write(path.join(src, 'scripts/env-file.sh'), read(path.join(app, 'scripts/env-file.sh')));
+  write(path.join(src, 'scripts/ops-lock.sh'), read(path.join(app, 'scripts/ops-lock.sh')));
   write(path.join(src, 'scripts/verify-startup.sh'), VERIFY_STUB);
   write(path.join(src, '.env.example'), 'PORT=3000\n');
   // stubs

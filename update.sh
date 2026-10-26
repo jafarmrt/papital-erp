@@ -29,6 +29,9 @@ if [ -n "$UPDATE_RESUME" ]; then
   LOG_FILE="${UPDATE_RESUME_LOG:?}"
 else
   LOG_FILE="$PWD/update-$(date +%Y%m%d-%H%M%S).log"
+  # v11 (O16): the log names paths and versions of the server; only root reads it, and logs older than 90 days go
+  ( umask 077; : >> "$LOG_FILE" )
+  find "$PWD" -maxdepth 1 -type f \( -name 'update-*.log' -o -name 'install-*.log' -o -name 'domain-setup-*.log' \) -mtime +90 -delete 2>/dev/null || true
   # tee ignores HUP: a dropped SSH session must not kill the log writer, or the next log line would end the update
   exec > >(trap '' HUP; exec tee -a "$LOG_FILE") 2>&1
 fi
@@ -100,6 +103,12 @@ if [ -z "$UPDATE_RESUME" ]; then
   command -v flock >/dev/null 2>&1 || die "flock is required (apt-get install -y util-linux)."
   exec 9>"$APP_DIR/$UPDATE_LOCK_NAME"
   flock -n 9 || die "Another update is already running in ${APP_DIR} (lock file ${UPDATE_LOCK_NAME}). Nothing was changed; wait for it to finish."
+  # v11 (O18): a backup, restore or upgrade rehearsal that is running finishes first (scripts/ops-lock.sh); a daily
+  # backup that starts from now on waits for this update
+  # shellcheck source=scripts/ops-lock.sh
+  source scripts/ops-lock.sh
+  ops_wait_idle "$APP_DIR" "${UPDATE_OPS_WAIT_SECONDS:-1800}" \
+    || die "A backup, restore or upgrade rehearsal is still running in ${APP_DIR} (lock file ${OPS_BUSY_LOCK_NAME}). Nothing was changed; run the update again when it has finished."
 fi
 # v10.2.23 (OBS-R1-22): an earlier update stopped in the middle of the build swap (killed, power loss)
 if [ -e "$APP_DIR/$UPDATE_SWAP_MARKER_NAME" ]; then
@@ -470,6 +479,12 @@ RESTART_OK=0
 # grep -q exits early and SIGPIPEs systemctl, making the pipeline falsely fail.
 UNIT_LIST="$(systemctl list-unit-files 2>/dev/null || true)"
 log "[5/6] Restarting service..."
+# v11 (O16): log files an older version wrote readable by every user become private to the service's user and group
+# (the new server writes them so); the folder of an older install was 0755
+if [ -d logs ]; then
+  chmod 750 logs 2>/dev/null || true
+  find logs -maxdepth 1 -type f -perm /o=r -exec chmod o-rwx {} + 2>/dev/null || true
+fi
 if [[ "$UNIT_LIST" != *"$SERVICE_NAME.service"* ]]; then
   # Auto-detect the systemd unit managing the running app (unit may have a custom name)
   RUNNING_PID="$(pgrep -f 'dist/server.cjs' | head -1 || true)"
