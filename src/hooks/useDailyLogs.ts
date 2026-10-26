@@ -294,6 +294,12 @@ export function useDailyLogs(user: User) {
       setReviewModalLog(null);
       void loadLogsAndStats();
     } catch (err) {
+      // v11 phase 6.1a (review of #403): after a stale version (409) the form closes and the list is read again, so the
+      // manager sees the changed log and a reopened form has its stored version
+      if ((err as { status?: unknown } | null)?.status === 409) {
+        setReviewModalLog(null);
+        void loadLogsAndStats();
+      }
       toast.error(errorMessageOf(err) || 'خطا در ثبت بازخورد مدیریتی');
     } finally {
       setIsSubmittingReview(false);

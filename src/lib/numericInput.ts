@@ -51,3 +51,22 @@ export function hasMisplacedGroupSeparator(value: string): boolean {
 }
 
 export const DECIMAL_PATTERN = /^-?\d+(\.\d+)?$/;
+
+/** the float noise a computed double may carry, as a share of its size (a few units in the last place) */
+const DOUBLE_NOISE = 4 * Number.EPSILON;
+
+/**
+ * v11 phase 6.1a (review of #403): a JavaScript number as plain decimal text with at most `maxScale` decimals, or null
+ * when the number really has more. A computed number carries a few units of noise in its last place («1.1 * 3» is
+ * 3.3000000000000003, a price formula in Excel «1850000 * 1.1» is 2035000.0000000002), so a number that close to its
+ * `maxScale`-decimal value is that value. A fifth decimal someone typed («100.00005», «12345678901.23456») is further
+ * away and stays refused; only above about 1e11, where a double cannot hold a fifth decimal, is it read as its rounded
+ * value. Shared by the server's reading of JSON numbers and the browser code that sends a computed number as text.
+ */
+export function computedDecimalText(value: number, maxScale = 4): string | null {
+  if (!Number.isFinite(value)) return null;
+  const rounded = Number(value.toFixed(maxScale));
+  if (Math.abs(value - rounded) > DOUBLE_NOISE * Math.max(1, Math.abs(value))) return null;
+  const text = String(rounded === 0 ? 0 : rounded);
+  return DECIMAL_PATTERN.test(text) ? text : null;
+}

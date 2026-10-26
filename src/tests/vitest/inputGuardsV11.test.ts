@@ -7,6 +7,7 @@ import { exactTreasuryAmount } from '../../services/accounting/treasury/treasury
 import { stockMovementQuantity } from '../../services/documents/documentStockEngine.service.js';
 import { bomAllocationItemSchema } from '../../routes/inventory.routes.js';
 import { convertToOrdersSchema } from '../../routes/procurement.schemas.js';
+import { parsePriceAmount } from '../../lib/items/priceInput.js';
 
 // v11 phase 6.1a: the pure parts of the input guards (the database cases are in regression/inputGuardsV11Tests.ts)
 const read = (v: unknown) => decimalInput('مبلغ').safeParse(v);
@@ -18,18 +19,27 @@ describe('decimalInput bounds (M16, S10, S12)', () => {
     expect(read('00000000000000012')).toMatchObject({ success: true });
   });
 
-  it('refuses a 15th whole digit or a 5th decimal, as text or as a number of any size', () => {
-    const bad = ['100000000000000', '1.23456', '0.00001', '100.00005', 1e14, 1e-5, 1e-7, 1.23456, 100.00005, 99.99999, 12345678.12345, 10 / 3, 1000 / 3];
+  it('refuses a 15th whole digit or a 5th decimal, as text or as a number a double can hold it in', () => {
+    const bad = ['100000000000000', '1.23456', '0.00001', '100.00005', 1e14, 1e-5, 1e-7, 1.23456, 100.00005, 99.99999, 12345678.12345, 10 / 3, 1000 / 3,
+      12345678901.23456, 10000000000.00005, -0.00001];
     for (const value of bad) expect(read(value).success, String(value)).toBe(false);
   });
 
   it('cuts the float noise of a computed number and keeps a number as its sender wrote it', () => {
     expect(read(0.1 + 0.2)).toMatchObject({ success: true, data: '0.3' });
     expect(read(1.1 * 3)).toMatchObject({ success: true, data: '3.3' });
+    expect(read(0.1 + 0.2 - 0.3)).toMatchObject({ success: true, data: '0' });
+    expect(read(1500000.1 + 2300000.2)).toMatchObject({ success: true, data: '3800000.3' });
     expect(read(1200)).toMatchObject({ success: true, data: '1200' });
     expect(read(123.4568)).toMatchObject({ success: true, data: '123.4568' });
     // a double cannot hold 18 digits; the number keeps the digits it has, with no binary digits written out
     expect(read(12345678901234.5678)).toMatchObject({ success: true, data: '12345678901234.568' });
+  });
+
+  it('sends an Excel formula price without its float noise', () => {
+    expect(parsePriceAmount(1850000 * 1.1)).toBe('2035000');
+    expect(parsePriceAmount(1500 * 1.15)).toBe('1725');
+    expect(parsePriceAmount(100.00005)).toBe('100.00005');
   });
 
   it('names the bound it breaks', () => {

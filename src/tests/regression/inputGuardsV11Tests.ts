@@ -247,7 +247,11 @@ export async function runInputGuardsV11Tests(shouldRun: ShouldRun): Promise<Test
         const res = await api.put(`/api/daily-logs/${id}/review`, { manager_notes: 'C10 review', version: (await stored()).version });
         if (res.status !== 200) throw new Error(`setup: review ${brief(res)}`);
       };
+      const reviewedVersion = (await stored()).version;
       await review();
+      // a second manager who opened the same version cannot replace the first review
+      const second = await api.put(`/api/daily-logs/${id}/review`, { manager_notes: 'C10 second review', version: reviewedVersion });
+      if (second.status !== 409 || codeOf(second) !== 'OCC_CONFLICT') problems.push(`a second review of the reviewed version returned ${brief(second)}, expected 409 OCC_CONFLICT`);
       const tags = await api.put(`/api/daily-logs/${id}`, { tags: ['C10'], version: (await stored()).version });
       if (tags.status !== 200) problems.push(`editing the tags returned ${brief(tags)}`);
       if ((await stored()).status !== 'reviewed') problems.push(`a tag edit moved the reviewed log to ${(await stored()).status}`);
@@ -259,7 +263,7 @@ export async function runInputGuardsV11Tests(shouldRun: ShouldRun): Promise<Test
       if (stale.status !== 409 || codeOf(stale) !== 'OCC_CONFLICT') problems.push(`a review of the older version returned ${brief(stale)}, expected 409 OCC_CONFLICT`);
       if ((await stored()).status !== 'submitted') problems.push(`the stale review left the log ${(await stored()).status}`);
       assertNoProblems(problems);
-      return 'log dated tomorrow 422 on create and edit, not saved; reviewed log: tag edit keeps reviewed, text edit returns it to submitted; a review of the older version 409';
+      return 'log dated tomorrow 422 on create and edit, not saved; reviewed log: a second review of the same version 409, tag edit keeps reviewed, text edit returns it to submitted; a review of the older version 409';
     }));
   }
 

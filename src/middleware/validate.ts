@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { ZodSchema, ZodError } from 'zod';
 import { asyncHandler } from './asyncHandler.js';
 import { toStorageDate } from '../utils/calendarDate.js';
-import { DECIMAL_PATTERN, GROUP_SEPARATOR, normalizeGroupedDecimalString, toLatinDigits } from '../lib/numericInput.js';
+import { DECIMAL_PATTERN, GROUP_SEPARATOR, computedDecimalText, normalizeGroupedDecimalString, toLatinDigits } from '../lib/numericInput.js';
 import { FIELD_LABELS, issueFieldKey, persianIssueMessage } from '../lib/validationMessages.js';
 
 
@@ -71,10 +71,6 @@ export const DECIMAL_INPUT_MAX_SCALE = 4;
 export const DECIMAL_INPUT_MAX_WHOLE_DIGITS = 14;
 type DecimalBoundIssue = 'scale' | 'size';
 
-function trimDecimalZeros(text: string): string {
-  return text.includes('.') ? text.replace(/\.?0+$/, '') : text;
-}
-
 /** the bound a decimal text (`DECIMAL_PATTERN`) breaks, or null */
 export function decimalTextScaleIssue(text: string): DecimalBoundIssue | null {
   const [whole, fraction = ''] = text.replace(/^-/, '').split('.');
@@ -83,30 +79,19 @@ export function decimalTextScaleIssue(text: string): DecimalBoundIssue | null {
   return null;
 }
 
-/** a finite number as plain decimal text, never in exponent form («1e-7» → «0.0000001») */
-function plainDecimalText(value: number): string {
-  const text = String(value);
-  return /e/i.test(text) ? trimDecimalZeros(value.toFixed(20)) : text;
-}
-
-/** the 15 significant digits a double holds exactly: the float noise of a computed number goes, a typed decimal stays */
-const DOUBLE_EXACT_DIGITS = 15;
-
 /**
- * A JSON number as the decimal text the bounds are checked on, or the bound it breaks. The number's shortest form
- * (`String`) is the text the sender wrote whenever it has at most 4 decimals; a longer form is cut to the 15 significant
- * digits a double holds exactly, which turns the noise of a computed number («0.30000000000000004») into its value («0.3»)
- * and keeps a fifth decimal the user typed («100.00005»), which is refused like the same text. Before (review of #403), a
- * tolerance relative to the size let a fifth decimal of any number above about 50 through, rounded by `toFixed`, which
- * also wrote binary digits above about 1e13.
+ * A JSON number as the decimal text the bounds are checked on, or the bound it breaks. The noise of a computed number
+ * («0.30000000000000004») is read as its value («0.3»); a fifth decimal the sender really wrote («100.00005») is refused
+ * like the same text (`computedDecimalText`). Before (reviews of #403), a tolerance of a fixed share of the size let a
+ * fifth decimal through above about 50, and then cutting to 15 significant digits let it through above 1e10 and refused
+ * a zero left over from a sum («0.1 + 0.2 - 0.3»).
  */
 function readDecimalNumber(value: number): string | { issue: DecimalBoundIssue } {
   if (Math.abs(value) >= 10 ** DECIMAL_INPUT_MAX_WHOLE_DIGITS) return { issue: 'size' };
-  const shortest = plainDecimalText(value);
-  if (!decimalTextScaleIssue(shortest)) return shortest;
-  const exact = plainDecimalText(Number(value.toPrecision(DOUBLE_EXACT_DIGITS)));
-  const issue = decimalTextScaleIssue(exact);
-  return issue ? { issue } : exact;
+  const text = computedDecimalText(value, DECIMAL_INPUT_MAX_SCALE);
+  if (text === null) return { issue: 'scale' };
+  const issue = decimalTextScaleIssue(text);
+  return issue ? { issue } : text;
 }
 
 function decimalBoundMessage(label: string, issue: DecimalBoundIssue): string {

@@ -121,7 +121,8 @@ async function manageByPermissionCase(ctx: Ctx): Promise<string> {
   const logA = await ctx.insertLog(author, { title: 'p13 private A', content: 'secret A' });
   const review = await ctx.send(supervisor, 'put', `/api/daily-logs/${logA}/review`, { manager_notes: 'well done', version: 1 });
   if (review.status !== 200) wrong.push(`manage_all review answered ${review.status}`);
-  const edit = await ctx.send(supervisor, 'put', `/api/daily-logs/${logA}`, { version: 1, title: 'p13 private A edited' });
+  // v11 phase 6.1a (review of #403): a review is a new version of the log
+  const edit = await ctx.send(supervisor, 'put', `/api/daily-logs/${logA}`, { version: 2, title: 'p13 private A edited' });
   if (edit.status !== 200) wrong.push(`manage_all edit answered ${edit.status}`);
   const del = await ctx.send(supervisor, 'delete', `/api/daily-logs/${logA}`);
   if (del.status !== 200) wrong.push(`manage_all delete answered ${del.status}`);

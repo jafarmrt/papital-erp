@@ -1,4 +1,4 @@
-import { DECIMAL_PATTERN, normalizeGroupedDecimalString } from '../numericInput.js';
+import { DECIMAL_PATTERN, computedDecimalText, normalizeGroupedDecimalString } from '../numericInput.js';
 import { TREASURY_CURRENCIES, normalizeTreasuryCurrency } from '../treasury/treasuryCurrency.js';
 
 /**
@@ -25,7 +25,8 @@ export function priceCurrencyOf(value: unknown): PriceCurrency | null {
 
 /** مبلغ قیمت با ارقام لاتین (ارقام فارسی و جداکننده هزارگان پذیرفته)، یا null وقتی عدد بزرگ‌تر از صفر نیست */
 export function parsePriceAmount(value: unknown): string | null {
-  if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? String(value) : null;
+  // v11 phase 6.1a (review of #403): an Excel formula price («1850000 * 1.1» = 2035000.0000000002) is sent as its value
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? computedDecimalText(value) ?? String(value) : null;
   if (typeof value !== 'string') return null;
   // v11 phase 3.1 (M4): a misplaced group separator («12,5») is not a price, never 125 (the Excel import and the price page)
   const clean = normalizeGroupedDecimalString(value);

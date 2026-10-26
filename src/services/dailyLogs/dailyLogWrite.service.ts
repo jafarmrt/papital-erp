@@ -278,10 +278,11 @@ export async function reviewDailyLog(actor: AuthUserPayload, logId: number, mana
     const existing = await lockLog(tx, logId);
     // v11 phase 6.1a (C10): a review of an older version would mark as reviewed a text the manager has not read
     if (existing.version !== version) {
-      throw new ConflictError('نویسنده این گزارش کار را پس از باز شدن آن تغییر داده؛ دوباره باز کنید و بخوانید.', { currentVersion: existing.version }, 'OCC_CONFLICT');
+      throw new ConflictError('این گزارش کار پس از باز شدن تغییر کرده (ویرایش نویسنده یا بازخورد مدیری دیگر)؛ دوباره باز کنید و بخوانید.', { currentVersion: existing.version }, 'OCC_CONFLICT');
     }
+    // review of #403: a review is a new version too, so a second manager's review of the same version does not replace it
     const [updated] = await tx.update(dailyWorkLogs)
-      .set({ status: 'reviewed', managerNotes: managerNotes || '' })
+      .set({ status: 'reviewed', managerNotes: managerNotes || '', version: existing.version + 1 })
       .where(eq(dailyWorkLogs.id, logId)).returning();
     const name = actorName(actor);
     if (existing.userId !== actor.id) {
