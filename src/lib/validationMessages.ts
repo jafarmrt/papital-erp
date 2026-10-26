@@ -9,6 +9,9 @@ import { z } from 'zod';
 
 /** نام فارسی فیلدها؛ فیلد بی‌برچسب با نام خامش در «» نشان داده می‌شود (واژه‌ها فارسی، بی نویسه‌نویسی انگلیسی) */
 export const FIELD_LABELS: Record<string, string> = {
+  // v11 phase 6.1a (review 6 of #403): the review state a daily-log review form opened
+  opened_status: 'بازخورد گزارش کار',
+  opened_manager_notes: 'بازخورد گزارش کار',
   name: 'نام',
   title: 'عنوان',
   content: 'شرح / محتوا',

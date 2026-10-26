@@ -139,6 +139,8 @@ export function useDailyLogs(user: User) {
   // Manager Review Modal State
   const [reviewModalLog, setReviewModalLog] = useState<DailyWorkLog | null>(null);
   const [reviewNotes, setReviewNotes] = useState<string>('');
+  // review 3 of #403: the notes of a review refused as stale (409) wait for the manager to reopen the same log
+  const [reviewDraft, setReviewDraft] = useState<{ logId: number; notes: string } | null>(null);
   const [isSubmittingReview, setIsSubmittingReview] = useState<boolean>(false);
 
   const handleExportSummaryCSV = () => {
@@ -279,7 +281,12 @@ export function useDailyLogs(user: User) {
 
   const handleOpenReviewModal = (log: DailyWorkLog) => {
     setReviewModalLog(log);
-    setReviewNotes(log.manager_notes || log.managerNotes || '');
+    if (reviewDraft?.logId === log.id) {
+      setReviewNotes(reviewDraft.notes);
+      setReviewDraft(null);
+    } else {
+      setReviewNotes(log.manager_notes || log.managerNotes || '');
+    }
   };
 
   const handleSaveReview = async () => {
@@ -288,12 +295,26 @@ export function useDailyLogs(user: User) {
     try {
       await fetchJson(`/daily-logs/${reviewModalLog.id}/review`, {
         method: 'PUT',
-        body: JSON.stringify({ manager_notes: reviewNotes })
+        body: JSON.stringify({
+          manager_notes: reviewNotes,
+          version: reviewModalLog.version,
+          // review 4 of #403: the review state this form opened, so a second manager's review is not silently replaced
+          opened_status: reviewModalLog.status || 'submitted',
+          opened_manager_notes: reviewModalLog.manager_notes ?? reviewModalLog.managerNotes ?? '',
+        })
       });
       toast.success('بازخورد مدیریتی ثبت گردید');
       setReviewModalLog(null);
       void loadLogsAndStats();
     } catch (err) {
+      // v11 phase 6.1a (reviews of #403): after a stale version (409) the form closes at once with the notes typed here
+      // kept for this log, and the list is read again, so the manager reads the changed log and a reopened form has its
+      // stored version and these notes
+      if ((err as { status?: unknown } | null)?.status === 409) {
+        setReviewDraft({ logId: reviewModalLog.id, notes: reviewNotes });
+        setReviewModalLog(null);
+        void loadLogsAndStats();
+      }
       toast.error(errorMessageOf(err) || 'خطا در ثبت بازخورد مدیریتی');
     } finally {
       setIsSubmittingReview(false);

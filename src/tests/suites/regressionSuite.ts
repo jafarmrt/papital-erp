@@ -9897,7 +9897,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         const k = correctVoucherSchema.safeParse({ params: { id: '1' }, body: { reason: 'اصلاح آزمون', newItems: items(debit) } }).success;
         check(c === want && u === want && k === want, `the voucher schema with debit ${debit} and credit 100 must be ${want ? 'accepted' : 'refused'} (create ${c}, edit ${u}, correction ${k})`);
       }
-      const createRes = await send('post', '/api/accounting/vouchers', { ...base, status: 'draft', items: items(100.005) });
+      // dated today: a manual voucher is not dated before the books' first fiscal year (v11 phase 6.1a, M9)
+      const createRes = await send('post', '/api/accounting/vouchers', { ...base, date: await businessTodayIsoDate(), status: 'draft', items: items(100.005) });
       const createdId = (createRes.body as { id?: number })?.id;
       if (typeof createdId === 'number') createdVoucherIds.push(createdId);
       check(createRes.status === 201 || createRes.status === 200, `creating a voucher with a difference of 0.005 over HTTP must be accepted like the service (status ${createRes.status}: ${JSON.stringify(createRes.body).slice(0, 200)})`);
@@ -11129,6 +11130,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v11 phase 3.1: urgent money fixes (M1 correction draft, M2 sourced opening voucher, M4 separators, M5/S6/M23 fiscal lock)
   const { runMoneyUrgentFixesV11Tests } = await import('../regression/moneyUrgentFixesV11Tests.js');
   results.push(...await runMoneyUrgentFixesV11Tests(shouldRun));
+  // v11 phase 6.1a: input guards (M9 manual voucher dates, M12 cheque and payslip date order, M16/S10/S12 number bounds, M15 close preview decimals, C10 work logs)
+  const { runInputGuardsV11Tests } = await import('../regression/inputGuardsV11Tests.js');
+  results.push(...await runInputGuardsV11Tests(shouldRun));
 
   return results;
 }

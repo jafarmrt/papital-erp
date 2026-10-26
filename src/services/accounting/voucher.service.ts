@@ -18,6 +18,7 @@ import { assertVoucherRowsBalanced, isVoucherBalancedForFinalize, resolveManualV
 // v7.0.49 (audit P2-5): ثابت یگانه تلورانس تراز؛ v7.0.76 به src/lib/voucherBalance.ts منتقل شد تا فرم‌ها هم آن را بخوانند
 import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
 import { assertPostingAccounts } from './postingAccounts.js';
+import { assertManualVoucherDate } from './manualVoucherDate.js';
 import { isReversalReference } from '../../lib/accounting/voucherSource.js';
 import { assertVoucherWithoutSource, voucherActiveReversals, voucherSourceKinds } from './voucherSource.js';
 import { assertManualApprovedCreateAllowed, assertNotApprovedByMaker, makerApprovalRefusal } from './voucherMakerChecker.js';
@@ -326,6 +327,8 @@ export class VoucherService {
       // v7.0.49 (audit P2-5): اسناد اختتامیه هم بررسی می‌شوند؛ در فرایند بستن سال، سال تا پایان همان تراکنش باز
       // است و پس از بستن هیچ سندی (از جمله سند از نوع اختتامیه) وارد آن نمی‌شود
       await this.checkFiscalPeriodOpen(voucherDate, tx);
+      // v11 phase 6.1a (M9): a manual voucher is dated neither after today nor before the books' first fiscal year
+      if (data.manualEntry) await assertManualVoucherDate(tx, voucherDate, 'تاریخ سند');
       // v9.0.198 (TD-549، B03-07): ردیف سند دستی فقط روی حساب فعال معین یا تفصیلیِ بی زیرحساب فعال
       if (data.manualEntry) await assertPostingAccounts(tx, items.map(item => item.accountId));
       // v10.0.27 (TD-965): سند دستی تأییدشده یعنی ثبت‌کننده‌اش آن را تأیید کرده است
@@ -438,6 +441,7 @@ export class VoucherService {
 
       if (updatedDate) {
         await this.checkFiscalPeriodOpen(updatedDate, tx);
+        if (data.manualEntry) await assertManualVoucherDate(tx, updatedDate, 'تاریخ سند');
       } else {
         await this.checkFiscalPeriodOpen(existing.date, tx);
       }
@@ -690,6 +694,7 @@ export class VoucherService {
       const reversalDate = requireStorageDate(params.date, 'تاریخ سند برگشت') || (await businessTodayIsoDate());
 
       await this.checkFiscalPeriodOpen(reversalDate, tx);
+      if (params.manualEntry) await assertManualVoucherDate(tx, reversalDate, 'تاریخ سند برگشت');
 
       const nextNumber = await this.getNextVoucherNumber(tx);
       const reasonText = params.reason?.trim() ? ` (علت: ${params.reason.trim()})` : '';
@@ -808,6 +813,7 @@ export class VoucherService {
 
       const correctionDate = requireStorageDate(params.date, 'تاریخ سند اصلاحی') || (await businessTodayIsoDate());
       await this.checkFiscalPeriodOpen(correctionDate, tx);
+      await assertManualVoucherDate(tx, correctionDate, 'تاریخ سند اصلاحی');
 
       // C-03 & P0-06: گارد عدم وجود سند معکوس فعال قبلی (از v8.0.68 هر نوع برگشت، زیر قفل سند مبدأ)
       const existingReversal = await this.findActiveReversal(tx, original);

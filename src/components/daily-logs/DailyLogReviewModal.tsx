@@ -27,6 +27,9 @@ export function DailyLogReviewModal({
 }: DailyLogReviewModalProps) {
   const fieldId = useId();
   if (!reviewModalLog) return null;
+  // v11 phase 6.1a (review 5 of #403): the stored review stays in sight while the notes differ from it, so a manager
+  // whose draft was kept after another manager's review reads that review before replacing it
+  const storedNotes = reviewModalLog.manager_notes || reviewModalLog.managerNotes || '';
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 font-farsi text-right">
@@ -50,6 +53,13 @@ export function DailyLogReviewModal({
             <p className="font-bold text-slate-800">{reviewModalLog.title}</p>
             <p className="text-slate-500 text-[11px]">نویسنده: {reviewModalLog.user_full_name || reviewModalLog.username}</p>
           </div>
+
+          {storedNotes.trim() && storedNotes !== reviewNotes && (
+            <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-100 text-xs max-h-32 overflow-y-auto">
+              <p className="font-bold text-amber-900 mb-1">بازخورد ثبت‌شده:</p>
+              <p className="text-slate-700 whitespace-pre-wrap break-words">{storedNotes}</p>
+            </div>
+          )}
 
           <div>
             <label htmlFor={`${fieldId}-review-notes`} className="block text-xs font-bold text-slate-700 mb-1">

@@ -16,8 +16,11 @@ import { containsLikePattern } from '../../../lib/sqlLike.js';
 import { requireStorageDate } from '../../../lib/storageDate.js';
 import { isoToJalaliDate } from '../../../utils/calendarDate.js';
 import { assertNoVoucherAllowed } from './noVoucherTreasury.js';
+import { exactTreasuryAmount } from './treasuryAmount.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
+import { assertChequeDueAfterIssue, assertChequeStepAfterPrevious } from './chequeDateOrder.js';
 import { sameTreasuryCurrency } from '../../../lib/treasury/treasuryCurrency.js';
+import { businessTodayIsoDate } from '../../../lib/businessClock.js';
 import { assertChequeClearingAccountType, requireChequeBankAccount } from './bankLinks.js';
 import { normalizePartyPurpose, requireChoosableContraAccount } from './partyContraAccount.js';
 import { assertPersonnelPartyId, resolveTreasuryPartyName } from './treasuryLinks.js';
@@ -205,7 +208,7 @@ export class ChequeLifecycleService {
     /** v10.0.262 (TD-934): ممیزی ثبت چک با `tx` همین ثبت */
     audit?: ChequeAuditActor;
   }): Promise<Cheque> {
-    const amount = Number(data.amount) || 0;
+    const amount = exactTreasuryAmount(data.amount, 'مبلغ چک');
     if (amount <= 0) throw new ValidationError('مبلغ چک باید بزرگتر از صفر باشد');
     assertNoVoucherAllowed(data.createVoucher, data.allowNoVoucher, 'چک');
     // v9.0.84 (TD-497، ت۲ الف): نوع طرف حساب سرفصل سند چک را تعیین می‌کند؛ پرسنل هدف و «متفرقه» سرفصل انتخابی می‌خواهند
@@ -225,6 +228,7 @@ export class ChequeLifecycleService {
     // (مانند فرم خزانه). سررسید آینده همچنان مجاز است.
     const issueDate = await resolveTreasuryWriteDate(data.issueDate, 'تاریخ صدور چک');
     const dueDate = requireStorageDate(data.dueDate, 'تاریخ سررسید چک');
+    assertChequeDueAfterIssue(data.type, issueDate, dueDate);
     const dueJalali = isoToJalaliDate(dueDate);
 
     const initialHistory = [{
@@ -488,6 +492,7 @@ export class ChequeLifecycleService {
       const voucherIsoDate = await resolveTreasuryWriteDate(data.actionDate, 'تاریخ اقدام چک');
       // v11 phase 3.1 (M5): no cheque step is dated in a closed fiscal year, whether the step issues a voucher or not
       await VoucherService.checkFiscalPeriodOpen(voucherIsoDate, txEngine);
+      assertChequeStepAfterPrevious(voucherIsoDate, existing.issueDate, existing.statusHistory, await businessTodayIsoDate());
 
       // V1.7.0: کدینگ از مپینگ قابل‌تنظیم
       await ChartOfAccountsService.getAllAccounts(txEngine);

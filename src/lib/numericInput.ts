@@ -51,3 +51,40 @@ export function hasMisplacedGroupSeparator(value: string): boolean {
 }
 
 export const DECIMAL_PATTERN = /^-?\d+(\.\d+)?$/;
+
+/**
+ * v11 phase 6.1a (M16, S10, S12): the money, price and quantity columns are `numeric(18,4)`, so a value has at most 14
+ * whole digits and 4 decimals
+ */
+export const DECIMAL_INPUT_MAX_SCALE = 4;
+export const DECIMAL_INPUT_MAX_WHOLE_DIGITS = 14;
+export type DecimalBoundIssue = 'scale' | 'size';
+
+/** the bound a decimal text (`DECIMAL_PATTERN`) breaks, or null */
+export function decimalTextScaleIssue(text: string): DecimalBoundIssue | null {
+  const [whole, fraction = ''] = text.replace(/^-/, '').split('.');
+  if (whole.replace(/^0+/, '').length > DECIMAL_INPUT_MAX_WHOLE_DIGITS) return 'size';
+  if (fraction.replace(/0+$/, '').length > DECIMAL_INPUT_MAX_SCALE) return 'scale';
+  return null;
+}
+
+/** the float noise a computed double may carry, as a share of its size (a few units in the last place) */
+const DOUBLE_NOISE = 4 * Number.EPSILON;
+
+/**
+ * v11 phase 6.1a (review of #403): a JavaScript number as plain decimal text with at most `maxScale` decimals, or null
+ * when the number really has more. A computed number carries a few units of noise in its last place («1.1 * 3» is
+ * 3.3000000000000003, a price formula in Excel «1850000 * 1.1» is 2035000.0000000002), so a number that close to its
+ * `maxScale`-decimal value is that value. A fifth decimal someone typed («100.00005», «12345678901.23456») is further
+ * away and stays refused. The noise allowed grows with the number, so a fifth decimal is always refused below about
+ * 1e10 and always read as the rounded value (off by at most 0.00005) from about 6e10; in between it depends on the
+ * digits («20000000000.00001» reads as 20000000000). Shared by the server's reading of JSON numbers and the browser code
+ * that sends a computed number as text.
+ */
+export function computedDecimalText(value: number, maxScale = 4): string | null {
+  if (!Number.isFinite(value)) return null;
+  const rounded = Number(value.toFixed(maxScale));
+  if (Math.abs(value - rounded) > DOUBLE_NOISE * Math.max(1, Math.abs(value))) return null;
+  const text = String(rounded === 0 ? 0 : rounded);
+  return DECIMAL_PATTERN.test(text) ? text : null;
+}

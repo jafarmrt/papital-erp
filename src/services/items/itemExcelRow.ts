@@ -6,7 +6,8 @@ import { DocumentService } from '../document.service.js';
 import { money, Money } from '../../lib/money.js';
 import { ITEM_WAC_COLUMN, WAC_COLUMNS, extractRowPriceColumns, unknownPriceColumnMessage } from '../../lib/items/excelPriceColumns.js';
 import { REORDER_POINT_COLUMNS } from '../../lib/items/itemExcelColumns.js';
-import { parsePriceAmount, priceCurrencyOf } from '../../lib/items/priceInput.js';
+import { DECIMAL_INPUT_MAX_WHOLE_DIGITS, DECIMAL_PATTERN, decimalTextScaleIssue } from '../../lib/numericInput.js';
+import { parsePriceAmount, priceAmountFits, priceCurrencyOf } from '../../lib/items/priceInput.js';
 import type { ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
 import { newItemTypeOf, parseItemTypeCell, parseNumberCell } from '../../lib/items/itemExcelCells.js';
 import { PRODUCT_CARD_COLUMNS } from '../../lib/media/productCard.js';
@@ -277,7 +278,15 @@ export function readRowPrices(row: Row, strategies: string[], push: (message: st
     const amount = parsePriceAmount(cell.value);
     const currency = priceCurrencyOf(cell.currency);
     if (amount === null) invalid.push(`قیمت «${cell.title}» باید عددی بزرگ‌تر از صفر باشد (مقدار فایل: «${String(cell.value)}»)`);
-    else if (currency === null) invalid.push(`ارز «${cell.currency}» برای قیمت «${cell.title}» پشتیبانی نمی‌شود؛ یکی از IRR، USD، EUR، AED یا GBP را بنویسید`);
+    // v11 phase 6.1a (reviews of #403): the price column is numeric(18,4); a fifth decimal was rounded and a 15th whole
+    // digit overflowed, with no row error
+    else if (!priceAmountFits(amount)) {
+      const tooLarge = DECIMAL_PATTERN.test(amount) ? decimalTextScaleIssue(amount) === 'size' : Number(amount) >= 10 ** DECIMAL_INPUT_MAX_WHOLE_DIGITS;
+      const advice = tooLarge
+        ? 'قیمت را کوچک‌تر بنویسید'
+        : Number(amount) < 0.0001 ? 'قیمتِ کمتر از ۰٫۰۰۰۱ ثبت نمی‌شود' : 'عدد یا نتیجهٔ فرمول را در اکسل تا ۴ رقم اعشار گرد کنید';
+      invalid.push(`قیمت «${cell.title}» حداکثر ۱۴ رقم پیش از ممیز و ۴ رقم پس از ممیز می‌پذیرد؛ ${advice} (مقدار فایل: «${String(cell.value)}»)`);
+    } else if (currency === null) invalid.push(`ارز «${cell.currency}» برای قیمت «${cell.title}» پشتیبانی نمی‌شود؛ یکی از IRR، USD، EUR، AED یا GBP را بنویسید`);
     else extracted.set(cell.title, { price: amount, currency });
   }
   if (invalid.length > 0) {

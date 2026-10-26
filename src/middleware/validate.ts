@@ -2,7 +2,10 @@ import { Request, Response, NextFunction } from 'express';
 import { ZodSchema, ZodError } from 'zod';
 import { asyncHandler } from './asyncHandler.js';
 import { toStorageDate } from '../utils/calendarDate.js';
-import { DECIMAL_PATTERN, GROUP_SEPARATOR, normalizeGroupedDecimalString, toLatinDigits } from '../lib/numericInput.js';
+import {
+  DECIMAL_INPUT_MAX_SCALE, DECIMAL_INPUT_MAX_WHOLE_DIGITS, DECIMAL_PATTERN, GROUP_SEPARATOR, computedDecimalText, decimalTextScaleIssue,
+  normalizeGroupedDecimalString, toLatinDigits, type DecimalBoundIssue,
+} from '../lib/numericInput.js';
 import { FIELD_LABELS, issueFieldKey, persianIssueMessage } from '../lib/validationMessages.js';
 
 
@@ -34,7 +37,12 @@ export const decimalInput = (label: string) => z.union([z.number(), z.string()])
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${label} باید عدد معتبر باشد` });
       return z.NEVER;
     }
-    return String(v);
+    const read = readDecimalNumber(v);
+    if (typeof read !== 'string') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: decimalBoundMessage(label, read.issue) });
+      return z.NEVER;
+    }
+    return read;
   }
   const clean = normalizeGroupedDecimalString(v);
   if (clean === '') return undefined;
@@ -47,8 +55,57 @@ export const decimalInput = (label: string) => z.union([z.number(), z.string()])
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${label} باید عدد معتبر باشد (مقدار دریافتی: ${v})` });
     return z.NEVER;
   }
+  const issue = decimalTextScaleIssue(clean);
+  if (issue) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: decimalBoundMessage(label, issue) });
+    return z.NEVER;
+  }
   return clean;
 });
+
+/**
+ * v11 phase 6.1a (M16, S10, S12, U7): a value read by `decimalInput` or `decimalNumberBounds` fits the `numeric(18,4)`
+ * money, price and quantity columns (`DECIMAL_INPUT_MAX_WHOLE_DIGITS`, `DECIMAL_INPUT_MAX_SCALE`); before, a larger value
+ * came back as a 500 `DATABASE_ERROR` and a fifth decimal was rounded by the column after the service had priced it.
+ * A JSON number as the decimal text the bounds are checked on, or the bound it breaks. The noise of a computed number
+ * («0.30000000000000004») is read as its value («0.3»); a fifth decimal the sender really wrote («100.00005») is refused
+ * like the same text (`computedDecimalText`). Before (reviews of #403), a tolerance of a fixed share of the size let a
+ * fifth decimal through above about 50, and then cutting to 15 significant digits let it through above 1e10 and refused
+ * a zero left over from a sum («0.1 + 0.2 - 0.3»).
+ */
+function readDecimalNumber(value: number): string | { issue: DecimalBoundIssue } {
+  if (Math.abs(value) >= 10 ** DECIMAL_INPUT_MAX_WHOLE_DIGITS) return { issue: 'size' };
+  const text = computedDecimalText(value, DECIMAL_INPUT_MAX_SCALE);
+  if (text === null) return { issue: 'scale' };
+  const issue = decimalTextScaleIssue(text);
+  return issue ? { issue } : text;
+}
+
+function decimalBoundMessage(label: string, issue: DecimalBoundIssue): string {
+  return issue === 'size'
+    ? `${label} بیش از اندازهٔ مجاز است (حداکثر ۱۴ رقم پیش از ممیز).`
+    : `${label} حداکثر ۴ رقم پس از ممیز می‌پذیرد.`;
+}
+
+/**
+ * v11 phase 6.1a (M16, review of #403): the same 14-digit / 4-decimal bound for a field that stays a JSON number
+ * (`z.number()`, `z.coerce.number()`), as a `superRefine` step:
+ * `z.number().positive().superRefine(decimalNumberBounds('مقدار', { positive: true }))`
+ */
+export const decimalNumberBounds = (label: string, { positive = false }: { positive?: boolean } = {}) =>
+  (value: number, ctx: z.RefinementCtx): void => {
+    if (!Number.isFinite(value)) return;
+    const read = readDecimalNumber(value);
+    if (typeof read !== 'string') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: decimalBoundMessage(label, read.issue) });
+      return;
+    }
+    // reviews 3-4 of #403: the number itself goes on, so on a field that must be above zero one that reads as 0
+    // («1e-17») is refused rather than passing `.positive()` and being stored as a zero line; a field that may be zero
+    // takes the noise of a computed zero («0.1 + 0.2 - 0.3») as 0, like `decimalInput`
+    // (0 itself, or a negative number, is left to `.positive()`, so its message is not repeated)
+    if (positive && read === '0' && value > 0) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${label} باید بزرگ‌تر از صفر باشد.` });
+  };
 
 /** v8.0.108 (TD-385): شماره‌ها و شناسه‌های متنی (شماره چک، شناسه صیادی) با ارقام لاتین ذخیره می‌شوند */
 export const latinDigitsString = z.string().transform(v => toLatinDigits(v).trim());

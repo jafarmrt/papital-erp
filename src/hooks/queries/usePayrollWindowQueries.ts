@@ -5,6 +5,7 @@ import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { EidiReport } from '../../lib/payroll/eidiReport';
 import type { StatutoryReport } from '../../lib/payroll/statutoryReport';
 import { READ_ON_EVERY_OPENING } from './readOnEveryOpening';
+import { computedDecimalText } from '../../lib/numericInput';
 
 /**
  * 10.3 (ARCH review finding 3): the payroll windows (payment and its history, advance balance, eidi and statutory previews
@@ -110,7 +111,10 @@ export function useStatutoryPreviewQuery<T>(params: StatutoryPreviewParams | nul
     queryKey: QUERY_KEYS.piecework.statutoryPreview(params ?? {}),
     queryFn: ({ signal }) => {
       const p = params as StatutoryPreviewParams;
-      const query = new URLSearchParams({ personnelId: String(p.personnelId), startDate: p.startDate, endDate: p.endDate, gross: String(Math.max(0, p.gross || 0)) });
+      // v11 phase 6.1a (reviews of #403): the gross is a sum of the form's amounts, sent without its float noise; a sum
+      // of many amounts can carry more noise than that allows, and as a sum of 4-decimal amounts it is read to 4 decimals
+      const gross = Math.max(0, p.gross || 0);
+      const query = new URLSearchParams({ personnelId: String(p.personnelId), startDate: p.startDate, endDate: p.endDate, gross: computedDecimalText(gross) ?? gross.toFixed(4) });
       return fetchJson<T>(`/piecework/statutory-preview?${query.toString()}`, { signal });
     },
     ...PAYROLL_WINDOW_READ,
