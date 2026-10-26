@@ -42,6 +42,7 @@ const TREASURY_BOOK = 'خزانه';
 const INVENTORY_BOOK = 'اسناد انبار';
 const PHONE_PARTY_PREFIX = 'مشتری تلفن';
 const PARTY_ENTITY = 'طرف حساب';
+const CONTROL_WORD = 'حساب کنترلی';
 
 const count = async (query: ReturnType<typeof sql>) => Number(((await orm.execute(query)).rows[0] as { n: number | string }).n);
 
@@ -50,7 +51,7 @@ export async function runControlAccountsV11Tests(shouldRun: ShouldRun): Promise<
 
   const m3 = 'reg_manual_voucher_control_account_v11_6_1b_m3';
   if (shouldRun(m3, 'v11', 'phase6', 'm3', 'voucher', 'control')) {
-    await runCase(results, m3, 'v11 phase 6.1b (M3): a manual voucher row on a control account (party, treasury, inventory, statutory) is refused without «اصلاح حساب کنترلی» (403, naming the book), needs a reason with it (422, the system admin too) and stores the reason; a correction follows the same rule and a reversal needs neither', () => inFiscalSandbox(async () => {
+    await runCase(results, m3, 'v11 phase 6.1b (M3): a manual voucher row on a control account (party, treasury, inventory, statutory) is refused without the control adjustment permission (403, naming the book), needs a reason with it (422, the system admin too) and stores the reason; a correction follows the same rule and a reversal needs neither', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const today = await businessTodayIsoDate();
       const plain = await sandboxClientWith(['accounting.view', 'accounting.vouchers']);
@@ -169,20 +170,20 @@ export async function runControlAccountsV11Tests(shouldRun: ShouldRun): Promise<
         if (row?.name !== customer.name) problems.push(`the row stores the detail name «${row?.name}», expected the party's own «${customer.name}»`);
       }
       const other = await post({ detailedType: 'other', detailedId: customer.id, detailedName: WRONG_DETAIL_NAME });
-      if (other.status !== 201) problems.push(`a «متفرقه» detail returned ${brief(other)}, expected 201`);
+      if (other.status !== 201) problems.push(`a miscellaneous detail returned ${brief(other)}, expected 201`);
       else {
         const [row] = await orm.select({ id: journalVoucherItems.detailedId }).from(journalVoucherItems)
           .where(and(eq(journalVoucherItems.voucherId, Number(other.body.id)), eq(journalVoucherItems.accountId, acc['7001'])));
-        if (row?.id !== null) problems.push(`a «متفرقه» row keeps the id ${row?.id}, expected none`);
+        if (row?.id !== null) problems.push(`a miscellaneous row keeps the id ${row?.id}, expected none`);
       }
       assertNoProblems(problems);
-      return 'ghost, wrong-side and id-less details refused with 422 and nothing saved; a live party stores its own name; «متفرقه» keeps no id';
+      return 'ghost, wrong-side and id-less details refused with 422 and nothing saved; a live party stores its own name; a miscellaneous row keeps no id';
     }));
   }
 
   const m6 = 'reg_treasury_contra_control_v11_6_1b_m6';
   if (shouldRun(m6, 'v11', 'phase6', 'm6', 'treasury', 'contra')) {
-    await runCase(results, m6, 'v11 phase 6.1b (M6): a treasury «متفرقه» payment refuses a control account as its counter account (insurance and payroll tax payables, eidi, other deductions, advances, inventory) with 422 naming the book, and the counter account list leaves them out', () => inFiscalSandbox(async () => {
+    await runCase(results, m6, 'v11 phase 6.1b (M6): a treasury miscellaneous payment refuses a control account as its counter account (insurance and payroll tax payables, eidi, other deductions, advances, inventory) with 422 naming the book, and the counter account list leaves them out', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const today = await businessTodayIsoDate();
       const admin = await sandboxAdminClient();
@@ -197,7 +198,7 @@ export async function runControlAccountsV11Tests(shouldRun: ShouldRun): Promise<
       const before = await movements();
       for (const code of refusedCodes) {
         const res = await pay(acc[code]);
-        if (res.status !== 422 || codeOf(res) !== 'TREASURY_CONTRA_ACCOUNT_INVALID' || !textOf(res).includes('حساب کنترلی')) {
+        if (res.status !== 422 || codeOf(res) !== 'TREASURY_CONTRA_ACCOUNT_INVALID' || !textOf(res).includes(CONTROL_WORD)) {
           problems.push(`a payment against ${code} returned ${brief(res)}, expected 422 TREASURY_CONTRA_ACCOUNT_INVALID naming a control account`);
         }
       }
