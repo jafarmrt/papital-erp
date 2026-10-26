@@ -4,15 +4,14 @@
  * - `sql_host`: `SQL_HOST` with `SQL_USER` / `SQL_PASSWORD` / `SQL_DB_NAME` (Cloud SQL style). On v9.0.427 this branch
  *   ran only when DATABASE_URL was also a real URL, so `SQL_*` alone always ended in the in-memory database.
  * - `url`: a real `DATABASE_URL` (not empty, not the example placeholder).
- * - `demo`: the in-memory demo database (`mockPool`, user admin / admin), only with `ERP_DEMO_MODE=1` and never in
- *   production. On v9.0.427 it started by itself whenever DATABASE_URL was missing outside production, for example
- *   `node dist/server.cjs` run outside the application folder (no `.env`).
  * - `refused`: anything else; the server does not start and every query fails with `reason`.
+ *
+ * v11 (phase 4.1): the in-memory demo database (`mockPool`, `ERP_DEMO_MODE=1`) was removed; a leftover
+ * `ERP_DEMO_MODE=1` without a database is refused with a reason that says so.
  */
 export type DatabaseMode =
   | { kind: 'sql_host' }
   | { kind: 'url'; url: string }
-  | { kind: 'demo' }
   | { kind: 'refused'; reason: string };
 
 export type DatabaseModeEnv = Partial<Record<'SQL_HOST' | 'DATABASE_URL' | 'ERP_DEMO_MODE' | 'NODE_ENV', string | undefined>>;
@@ -26,17 +25,15 @@ export function isPlaceholderDatabaseUrl(url: string): boolean {
 }
 
 export const DATABASE_NOT_CONFIGURED =
-  'DATABASE_URL is not set (or is the example placeholder): set DATABASE_URL to the PostgreSQL database, or SQL_HOST with SQL_USER, SQL_PASSWORD and SQL_DB_NAME. The in-memory demo database starts only with ERP_DEMO_MODE=1 outside production.';
+  'DATABASE_URL is not set (or is the example placeholder): set DATABASE_URL to the PostgreSQL database, or SQL_HOST with SQL_USER, SQL_PASSWORD and SQL_DB_NAME. The application runs only on PostgreSQL.';
 
-export const DEMO_MODE_REFUSED_IN_PRODUCTION =
-  'ERP_DEMO_MODE=1 is refused in production: the in-memory demo database loses every record on restart. Set DATABASE_URL to the PostgreSQL database.';
+export const DEMO_MODE_REMOVED =
+  'ERP_DEMO_MODE=1 no longer starts anything: the in-memory demo database was removed in v11. Set DATABASE_URL to the PostgreSQL database and remove ERP_DEMO_MODE from .env.';
 
 export function resolveDatabaseMode(env: DatabaseModeEnv): DatabaseMode {
   if ((env.SQL_HOST ?? '').trim()) return { kind: 'sql_host' };
   const url = (env.DATABASE_URL ?? '').trim();
   if (!isPlaceholderDatabaseUrl(url)) return { kind: 'url', url };
-  if ((env.ERP_DEMO_MODE ?? '').trim() === '1') {
-    return env.NODE_ENV === 'production' ? { kind: 'refused', reason: DEMO_MODE_REFUSED_IN_PRODUCTION } : { kind: 'demo' };
-  }
+  if ((env.ERP_DEMO_MODE ?? '').trim() === '1') return { kind: 'refused', reason: DEMO_MODE_REMOVED };
   return { kind: 'refused', reason: DATABASE_NOT_CONFIGURED };
 }

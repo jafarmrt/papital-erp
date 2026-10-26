@@ -5,7 +5,7 @@ import type pkg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
-import { pool, orm, isMockDatabase } from './drizzle.js';
+import { pool } from './drizzle.js';
 import { logger } from '../middleware/logger.js';
 import { ADVISORY_LOCK_KEYS } from '../lib/advisoryLock.js';
 import { planMigrations, type AppliedMigrationRow, type MigrationJournalEntry } from './migrationPlan.js';
@@ -178,11 +178,6 @@ export async function runMigrations(options: RunMigrationsOptions = {}): Promise
   try {
     if (!fs.existsSync(migrationsFolder)) {
       throw new Error(`Migrations directory not found at ${migrationsFolder}`);
-    }
-
-    if (isMockDatabase()) {
-      await migrate(orm, { migrationsFolder, migrationsSchema: migrationsJournalSchema });
-      return { success: true, appliedCount: 0, errors: [] };
     }
 
     const entries = readMigrationJournal(migrationsFolder);
