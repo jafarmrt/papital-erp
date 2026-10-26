@@ -179,7 +179,7 @@ describe('TD-733 the WooCommerce order log headers name what the rows show', () 
       : undefined));
     const { result } = renderHook(() => useSettings(), { wrapper });
     renderTab(result.current);
-    await screen.findByText('#77');
+    await screen.findByText('#۷۷');
     const headers = screen.getAllByRole('columnheader').map(h => h.textContent);
     expect(headers).toContain('نام خریدار');
     expect(headers.some(h => String(h).includes('مبالغ'))).toBe(false);
