@@ -67,6 +67,10 @@ describe('ci_check_jobs_start_together_td_1260', () => {
     expect(script).toMatch(/pg_conftool 16 "\$cluster16" set port 5432/);
     // a newer client of the image never writes the dumps: the jobs run the version 16 tools directly
     expect(script).toContain('echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"');
+    expect(script).toContain('export PATH="/usr/lib/postgresql/16/bin:$PATH"');
+    expect(script).toContain('if [ ! -x /usr/lib/postgresql/16/bin/postgres ]; then');
+    expect(script).toContain('[ "$version" = "16" ] || sudo pg_dropcluster --stop "$version" "$cluster"');
+    expect(script).toMatch(/pg_ctlcluster 16 "\$cluster16" restart/);
     for (const name of ['test', 'coverage-gate']) {
       expect(jobs.get(name) ?? '', name).toMatch(/for tool in pg_dump pg_restore; do\s+"\$tool" --version \| grep -qE ' 16\\\.' \|\| \{/);
     }

@@ -33,8 +33,13 @@ if command -v pg_lsclusters >/dev/null 2>&1; then
     sudo pg_createcluster 16 main
     cluster16=main
   fi
+  # a cluster the package install already started (on another port while one of the image held 5432) restarts on 5432
   sudo pg_conftool 16 "$cluster16" set port 5432
-  sudo pg_ctlcluster 16 "$cluster16" status >/dev/null 2>&1 || sudo pg_ctlcluster 16 "$cluster16" start
+  if sudo pg_ctlcluster 16 "$cluster16" status >/dev/null 2>&1; then
+    sudo pg_ctlcluster 16 "$cluster16" restart
+  else
+    sudo pg_ctlcluster 16 "$cluster16" start
+  fi
 else
   sudo systemctl start postgresql.service
 fi
@@ -44,10 +49,11 @@ for _ in $(seq 1 30); do
 done
 pg_isready -h localhost -p 5432
 
-# The image may carry client tools of a newer major (Ubuntu 26.04's own PostgreSQL 18): postgresql-common's pg_wrapper
-# can pick those for a command that names a connection URL, and a dump written by a newer pg_dump cannot be read by
-# pg_restore 16 (backup.sh checks every dump with pg_restore --list). The later steps of the job run the version 16
-# tools directly, as a server whose only PostgreSQL is 16.
+# The image may carry client tools of a newer major (Ubuntu 26.04's own PostgreSQL 18). postgresql-common's pg_wrapper
+# always runs the newest psql and exports PGHOST for it; the pg_dump that backup.sh starts from inside psql (\!) sees
+# that PGHOST and so runs the newest major too, while its check `pg_restore --list` (no PGHOST) runs version 16 and
+# cannot read the newer dump. The later steps of the job run the version 16 tools directly, as on a server whose only
+# PostgreSQL is 16.
 echo "PostgreSQL majors on the runner: $(ls /usr/lib/postgresql 2>/dev/null | tr '\n' ' ')"
 export PATH="/usr/lib/postgresql/16/bin:$PATH"
 [ -z "${GITHUB_PATH:-}" ] || echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
