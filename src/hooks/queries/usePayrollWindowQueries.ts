@@ -111,9 +111,10 @@ export function useStatutoryPreviewQuery<T>(params: StatutoryPreviewParams | nul
     queryKey: QUERY_KEYS.piecework.statutoryPreview(params ?? {}),
     queryFn: ({ signal }) => {
       const p = params as StatutoryPreviewParams;
-      // v11 phase 6.1a (review of #403): the gross is a sum of the form's amounts, sent without its float noise
+      // v11 phase 6.1a (reviews of #403): the gross is a sum of the form's amounts, sent without its float noise; a sum
+      // of many amounts can carry more noise than that allows, and as a sum of 4-decimal amounts it is read to 4 decimals
       const gross = Math.max(0, p.gross || 0);
-      const query = new URLSearchParams({ personnelId: String(p.personnelId), startDate: p.startDate, endDate: p.endDate, gross: computedDecimalText(gross) ?? String(gross) });
+      const query = new URLSearchParams({ personnelId: String(p.personnelId), startDate: p.startDate, endDate: p.endDate, gross: computedDecimalText(gross) ?? gross.toFixed(4) });
       return fetchJson<T>(`/piecework/statutory-preview?${query.toString()}`, { signal });
     },
     ...PAYROLL_WINDOW_READ,

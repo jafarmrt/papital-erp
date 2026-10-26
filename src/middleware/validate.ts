@@ -2,7 +2,10 @@ import { Request, Response, NextFunction } from 'express';
 import { ZodSchema, ZodError } from 'zod';
 import { asyncHandler } from './asyncHandler.js';
 import { toStorageDate } from '../utils/calendarDate.js';
-import { DECIMAL_PATTERN, GROUP_SEPARATOR, computedDecimalText, normalizeGroupedDecimalString, toLatinDigits } from '../lib/numericInput.js';
+import {
+  DECIMAL_INPUT_MAX_SCALE, DECIMAL_INPUT_MAX_WHOLE_DIGITS, DECIMAL_PATTERN, GROUP_SEPARATOR, computedDecimalText, decimalTextScaleIssue,
+  normalizeGroupedDecimalString, toLatinDigits, type DecimalBoundIssue,
+} from '../lib/numericInput.js';
 import { FIELD_LABELS, issueFieldKey, persianIssueMessage } from '../lib/validationMessages.js';
 
 
@@ -67,17 +70,7 @@ export const decimalInput = (label: string) => z.union([z.number(), z.string()])
  * 500 `DATABASE_ERROR`, and a fifth decimal was rounded by the column while the service had already priced the unrounded
  * quantity (a Kardex row of quantity 0.0000 worth 0.011, a transfer of zero).
  */
-export const DECIMAL_INPUT_MAX_SCALE = 4;
-export const DECIMAL_INPUT_MAX_WHOLE_DIGITS = 14;
-type DecimalBoundIssue = 'scale' | 'size';
-
-/** the bound a decimal text (`DECIMAL_PATTERN`) breaks, or null */
-export function decimalTextScaleIssue(text: string): DecimalBoundIssue | null {
-  const [whole, fraction = ''] = text.replace(/^-/, '').split('.');
-  if (whole.replace(/^0+/, '').length > DECIMAL_INPUT_MAX_WHOLE_DIGITS) return 'size';
-  if (fraction.replace(/0+$/, '').length > DECIMAL_INPUT_MAX_SCALE) return 'scale';
-  return null;
-}
+export { DECIMAL_INPUT_MAX_SCALE, DECIMAL_INPUT_MAX_WHOLE_DIGITS, decimalTextScaleIssue };
 
 /**
  * A JSON number as the decimal text the bounds are checked on, or the bound it breaks. The noise of a computed number
@@ -107,7 +100,10 @@ function decimalBoundMessage(label: string, issue: DecimalBoundIssue): string {
 export const decimalNumberBounds = (label: string) => (value: number, ctx: z.RefinementCtx): void => {
   if (!Number.isFinite(value)) return;
   const read = readDecimalNumber(value);
-  if (typeof read !== 'string') ctx.addIssue({ code: z.ZodIssueCode.custom, message: decimalBoundMessage(label, read.issue) });
+  // review 3 of #403: the number itself goes on, so one that reads as 0 («1e-17») is refused rather than passing
+  // `.positive()` and being stored as a zero line
+  const issue = typeof read !== 'string' ? read.issue : read === '0' && value !== 0 ? 'scale' : null;
+  if (issue) ctx.addIssue({ code: z.ZodIssueCode.custom, message: decimalBoundMessage(label, issue) });
 };
 
 /** v8.0.108 (TD-385): شماره‌ها و شناسه‌های متنی (شماره چک، شناسه صیادی) با ارقام لاتین ذخیره می‌شوند */

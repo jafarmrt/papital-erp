@@ -139,6 +139,8 @@ export function useDailyLogs(user: User) {
   // Manager Review Modal State
   const [reviewModalLog, setReviewModalLog] = useState<DailyWorkLog | null>(null);
   const [reviewNotes, setReviewNotes] = useState<string>('');
+  // review 3 of #403: the notes of a review refused as stale (409) wait for the manager to reopen the same log
+  const [reviewDraft, setReviewDraft] = useState<{ logId: number; notes: string } | null>(null);
   const [isSubmittingReview, setIsSubmittingReview] = useState<boolean>(false);
 
   const handleExportSummaryCSV = () => {
@@ -279,7 +281,8 @@ export function useDailyLogs(user: User) {
 
   const handleOpenReviewModal = (log: DailyWorkLog) => {
     setReviewModalLog(log);
-    setReviewNotes(log.manager_notes || log.managerNotes || '');
+    setReviewNotes(reviewDraft?.logId === log.id ? reviewDraft.notes : log.manager_notes || log.managerNotes || '');
+    setReviewDraft(null);
   };
 
   const handleSaveReview = async () => {
@@ -294,11 +297,12 @@ export function useDailyLogs(user: User) {
       setReviewModalLog(null);
       void loadLogsAndStats();
     } catch (err) {
-      // v11 phase 6.1a (review of #403): after a stale version (409) the form closes and the list is read again, so the
-      // manager sees the changed log and a reopened form has its stored version
+      // v11 phase 6.1a (reviews of #403): after a stale version (409) the list is read again and the form closes, so the
+      // manager reads the changed log; reopening it gives its stored version and the notes typed here
       if ((err as { status?: unknown } | null)?.status === 409) {
+        setReviewDraft({ logId: reviewModalLog.id, notes: reviewNotes });
+        await loadLogsAndStats();
         setReviewModalLog(null);
-        void loadLogsAndStats();
       }
       toast.error(errorMessageOf(err) || 'خطا در ثبت بازخورد مدیریتی');
     } finally {

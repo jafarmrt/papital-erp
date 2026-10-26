@@ -8,6 +8,10 @@ import { stockMovementQuantity } from '../../services/documents/documentStockEng
 import { bomAllocationItemSchema } from '../../routes/inventory.routes.js';
 import { convertToOrdersSchema } from '../../routes/procurement.schemas.js';
 import { parsePriceAmount } from '../../lib/items/priceInput.js';
+import { readRowPrices } from '../../services/items/itemExcelRow.js';
+
+const SALE_PRICE_LIST = 'فروش';
+const SALE_PRICE_COLUMN = 'قیمت فروش';
 
 // v11 phase 6.1a: the pure parts of the input guards (the database cases are in regression/inputGuardsV11Tests.ts)
 const read = (v: unknown) => decimalInput('مبلغ').safeParse(v);
@@ -19,7 +23,7 @@ describe('decimalInput bounds (M16, S10, S12)', () => {
     expect(read('00000000000000012')).toMatchObject({ success: true });
   });
 
-  it('refuses a 15th whole digit or a 5th decimal, as text or as a number a double can hold it in', () => {
+  it('refuses a 15th whole digit or a 5th decimal, as text or as a number below about 1e10', () => {
     const bad = ['100000000000000', '1.23456', '0.00001', '100.00005', 1e14, 1e-5, 1e-7, 1.23456, 100.00005, 99.99999, 12345678.12345, 10 / 3, 1000 / 3,
       12345678901.23456, 10000000000.00005, -0.00001];
     for (const value of bad) expect(read(value).success, String(value)).toBe(false);
@@ -36,10 +40,14 @@ describe('decimalInput bounds (M16, S10, S12)', () => {
     expect(read(12345678901234.5678)).toMatchObject({ success: true, data: '12345678901234.568' });
   });
 
-  it('sends an Excel formula price without its float noise', () => {
+  it('sends an Excel formula price without its float noise, and the import holds a price to the bound', () => {
     expect(parsePriceAmount(1850000 * 1.1)).toBe('2035000');
     expect(parsePriceAmount(1500 * 1.15)).toBe('1725');
     expect(parsePriceAmount(100.00005)).toBe('100.00005');
+    expect(parsePriceAmount(0.1 + 0.2 - 0.3)).toBeNull();
+    const pricesOf = (value: unknown) => readRowPrices({ [SALE_PRICE_COLUMN]: value }, [SALE_PRICE_LIST], () => undefined);
+    expect(pricesOf(1850000 * 1.1)?.get(SALE_PRICE_LIST)?.price).toBe('2035000');
+    for (const value of [100.00005, 1e-7, '1.23456', 123456789012345]) expect(pricesOf(value), String(value)).toBeNull();
   });
 
   it('names the bound it breaks', () => {
@@ -110,6 +118,9 @@ describe('number fields that stay numbers take the same bound (M16)', () => {
     expect(allocation(1.2345)).toBe(true);
     expect(allocation(1.23456)).toBe(false);
     expect(allocation(1e14)).toBe(false);
+    // a number that reads as 0 is refused, since the number itself goes on past `.positive()`
+    expect(allocation(1e-17)).toBe(false);
+    expect(allocation(1.1 * 3)).toBe(true);
     const order = (quantity: number, unitPrice: number) => convertToOrdersSchema.safeParse({
       params: { id: '1' },
       body: { orderGroups: [{ items: [{ itemId: 1, quantity, unitPrice }] }] },
@@ -117,5 +128,7 @@ describe('number fields that stay numbers take the same bound (M16)', () => {
     expect(order(2, 1000.5)).toBe(true);
     expect(order(1.23456, 1000)).toBe(false);
     expect(order(2, 100000000000000)).toBe(false);
+    expect(order(1e-17, 1000)).toBe(false);
+    expect(order(2, 0)).toBe(true);
   });
 });

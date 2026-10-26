@@ -52,6 +52,22 @@ export function hasMisplacedGroupSeparator(value: string): boolean {
 
 export const DECIMAL_PATTERN = /^-?\d+(\.\d+)?$/;
 
+/**
+ * v11 phase 6.1a (M16, S10, S12): the money, price and quantity columns are `numeric(18,4)`, so a value has at most 14
+ * whole digits and 4 decimals
+ */
+export const DECIMAL_INPUT_MAX_SCALE = 4;
+export const DECIMAL_INPUT_MAX_WHOLE_DIGITS = 14;
+export type DecimalBoundIssue = 'scale' | 'size';
+
+/** the bound a decimal text (`DECIMAL_PATTERN`) breaks, or null */
+export function decimalTextScaleIssue(text: string): DecimalBoundIssue | null {
+  const [whole, fraction = ''] = text.replace(/^-/, '').split('.');
+  if (whole.replace(/^0+/, '').length > DECIMAL_INPUT_MAX_WHOLE_DIGITS) return 'size';
+  if (fraction.replace(/0+$/, '').length > DECIMAL_INPUT_MAX_SCALE) return 'scale';
+  return null;
+}
+
 /** the float noise a computed double may carry, as a share of its size (a few units in the last place) */
 const DOUBLE_NOISE = 4 * Number.EPSILON;
 
@@ -60,8 +76,8 @@ const DOUBLE_NOISE = 4 * Number.EPSILON;
  * when the number really has more. A computed number carries a few units of noise in its last place («1.1 * 3» is
  * 3.3000000000000003, a price formula in Excel «1850000 * 1.1» is 2035000.0000000002), so a number that close to its
  * `maxScale`-decimal value is that value. A fifth decimal someone typed («100.00005», «12345678901.23456») is further
- * away and stays refused; only above about 1e11, where a double cannot hold a fifth decimal, is it read as its rounded
- * value. Shared by the server's reading of JSON numbers and the browser code that sends a computed number as text.
+ * away and stays refused; only from about 1e10 up, where the noise allowed is as large as a fifth decimal, is a number
+ * read as its rounded value (off by at most 0.00005). Shared by the server's reading of JSON numbers and the browser code that sends a computed number as text.
  */
 export function computedDecimalText(value: number, maxScale = 4): string | null {
   if (!Number.isFinite(value)) return null;
