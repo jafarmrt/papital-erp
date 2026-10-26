@@ -16,12 +16,19 @@ import { codeAuditWrites, migrationAuditWrites } from './support/auditWriteScan'
 /** entity values that are runtime data, not code: an event rule's audit category is typed by the admin */
 const RUNTIME_ENTITY_EXPRESSIONS = new Set(['auditConfig.category']);
 
+/**
+ * v11 (phase 4.1): names written only by a series-10 migration that the baseline does not repeat (it runs on an empty
+ * database, so the masking notice of 0135 writes nothing there). Their rows exist on every database updated through
+ * v11.2, so the names stay classified.
+ */
+const SERIES_10_MIGRATION_ENTITIES = new Set(['رویدادهای سامانه']);
+
 const critical = new Set<string>(CRITICAL_AUDIT_ENTITIES);
 const purgeable = new Set<string>(PURGEABLE_AUDIT_ENTITIES);
 
 describe('audit entity retention (TD-522)', () => {
   const uses = [...codeAuditWrites('entity', RUNTIME_ENTITY_EXPRESSIONS), ...migrationAuditWrites('entity')];
-  const writtenNames = new Set(uses.flatMap(u => u.names));
+  const writtenNames = new Set([...uses.flatMap(u => u.names), ...SERIES_10_MIGRATION_ENTITIES]);
   const writtenHeads = new Set(uses.flatMap(u => u.heads));
 
   it('finds the audit writes of the code', () => {

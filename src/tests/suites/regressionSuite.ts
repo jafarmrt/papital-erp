@@ -8568,8 +8568,6 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const { journalVouchers } = await import('../../db/schema.js');
     const { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex, VOUCHER_NUMBER_UNIQUE_INDEX } = await import('../../services/accounting/voucherNumberIntegrity.js');
     const { FinancialHealthService } = await import('../../services/accounting/financialHealth.service.js');
-    const fs = await import('fs');
-    const path = await import('path');
     const createdIds: number[] = [];
     try {
       const violations: string[] = [];
@@ -8603,14 +8601,6 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
           const m = await nextNumber(tx);
           await tx.insert(journalVouchers).values([row(m), row(m)]);
           reported = (await findDuplicateVoucherNumbers(tx)).filter((r) => r.voucherNumber === m).map((r) => r.id);
-          // مهاجرت 0031 روی چنین داده‌ای خطا نمی‌دهد، ایندکس نمی‌سازد و sequence را از بزرگ‌ترین شماره جلو می‌برد
-          const ahead = m + 1000;
-          await tx.insert(journalVouchers).values(row(ahead));
-          const migrationSql = fs.readFileSync(path.join(process.cwd(), 'drizzle', '0031_journal_voucher_number_unique.sql'), 'utf8');
-          await tx.execute(sql.raw(migrationSql));
-          if (await hasVoucherNumberUniqueIndex(tx)) violations.push('the migration created a unique index on data with a duplicate number');
-          const afterMigration = await nextNumber(tx);
-          if (afterMigration <= ahead) violations.push(`the sequence fell behind after the migration: ${afterMigration} <= ${ahead}`);
           throw new Error('rollback');
         });
       } catch (err) {
@@ -8747,11 +8737,11 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
-  // Test: v7.0.101 (TD-085، تصمیم «بازگشایی با گزارش»): کار تاییدی با گذشتن مهلت منقضی نمی‌شود و مهاجرت 0032
-  // کار منقضی‌شده مرحله جاری فرایند در جریان را باز می‌کند، بقیه را با دلیل منقضی نگه می‌دارد و همه را گزارش می‌کند
+  // Test: v7.0.101 (TD-085، تصمیم «بازگشایی با گزارش»): کار تاییدی با گذشتن مهلت منقضی نمی‌شود
+  // (بازگشایی کارهای منقضی داده قدیمی کار مهاجرت 0032 بود که در خط پایه v11 دیگر اجرا نمی‌شود)
   if (shouldRun('reg_workflow_task_reopen_td_085', 'td085', 'workflow', 'expired', 'reopen')) {
     const tStart = Date.now();
-    const testName = 'v7.0.101: an approval task does not expire, and expired tasks of the current step are reopened with a report (TD-085)';
+    const testName = 'v7.0.101: an approval task does not expire after its deadline (TD-085)';
     const {
       workflowDefinitions, workflowStates, workflowTransitions, workflowInstances, workflowHistoryLogs,
       workflowPendingApprovals, workflowDefinitionVersions, workflowTasks, users, roles, notifications,
@@ -8759,8 +8749,6 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const { WorkflowDefinitionService } = await import('../../services/workflow/workflowDefinitionService.js');
     const { WorkflowTransitionExecutor } = await import('../../services/workflow/workflowTransitionExecutor.js');
     const { WorkflowTaskService } = await import('../../services/workflow/workflowTaskService.js');
-    const fs = await import('fs');
-    const path = await import('path');
     const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
     const entityType = `reg_td085r_${suffix}`;
     const role = `reg_reopen_${suffix}`;
@@ -8788,11 +8776,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       });
       defId = saved?.definition?.id;
       if (!defId) throw new Error('The definition was not saved');
-      const transitions = await orm.select().from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, defId));
-      const passId = transitions.find((t) => t.actionKey === 'pass')!.id;
-      const approveId = transitions.find((t) => t.actionKey === 'approve')!.id;
 
-      // ۱) کار مرحله جاری با مهلت گذشته پس از باز کردن کارتابل در انتظار می‌ماند
+      // کار مرحله جاری با مهلت گذشته پس از باز کردن کارتابل در انتظار می‌ماند
       const running = await WorkflowTransitionExecutor.startInstance({ workflowDefinitionId: defId, entityType, entityId: '1' });
       const past = new Date(Date.now() - 5 * 3600 * 1000).toISOString();
       await orm.update(workflowTasks).set({ dueAt: past }).where(eq(workflowTasks.instanceId, running.id));
@@ -8801,39 +8786,6 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (afterInbox.length === 0 || afterInbox.some((t) => t.status !== 'pending')) {
         violations.push(`overdue task after the inbox read: ${afterInbox.map((t) => t.status).join(', ') || '-'}`);
       }
-
-      // ۲) داده قدیمی: کار منقضی مرحله جاری، کار منقضی مرحله گذشته و کار منقضی فرایند پایان‌یافته (تراکنش برگشت‌خورده)
-      const finished = await WorkflowTransitionExecutor.startInstance({ workflowDefinitionId: defId, entityType, entityId: '2' });
-      let outcome: Record<string, string> = {};
-      let logged: Array<{ taskId: number; action: string; reason: string }> = [];
-      try {
-        await orm.transaction(async (tx) => {
-          await tx.update(workflowTasks).set({ status: 'expired' }).where(eq(workflowTasks.instanceId, running.id));
-          const [stale] = await tx.insert(workflowTasks).values({
-            instanceId: running.id, transitionId: approveId, assignedRole: role, status: 'expired', title: 'کار مرحله دیگر', dueAt: past,
-          }).returning({ id: workflowTasks.id });
-          await tx.update(workflowTasks).set({ status: 'expired' }).where(eq(workflowTasks.instanceId, finished.id));
-          await tx.update(workflowInstances).set({ status: 'COMPLETED' }).where(eq(workflowInstances.id, finished.id));
-          const migrationSql = fs.readFileSync(path.join(process.cwd(), 'drizzle', '0032_workflow_task_sla_reminder.sql'), 'utf8');
-          await tx.execute(sql.raw(migrationSql));
-          const rows = await tx.select().from(workflowTasks).where(inArray(workflowTasks.instanceId, [running.id, finished.id]));
-          for (const r of rows) {
-            const kind = r.id === stale.id ? 'stale' : r.instanceId === finished.id ? 'finished' : r.transitionId === passId ? 'current' : `other${r.id}`;
-            outcome[kind] = r.status;
-          }
-          const log = await tx.execute(sql`SELECT task_id, action, reason FROM workflow_task_reopen_log WHERE task_id IN (${sql.join(rows.map((r) => sql`${r.id}`), sql`, `)})`);
-          logged = (log.rows ?? []).map((r) => ({ taskId: Number(r.task_id), action: String(r.action), reason: String(r.reason) }));
-          throw new Error('rollback');
-        });
-      } catch (err) {
-        if (!(err instanceof Error && err.message === 'rollback')) throw err;
-      }
-      if (outcome.current !== 'pending') violations.push(`expired task of the current step: ${outcome.current} (expected pending)`);
-      if (outcome.stale !== 'expired') violations.push(`expired task of another step: ${outcome.stale} (expected expired)`);
-      if (outcome.finished !== 'expired') violations.push(`expired task of a finished instance: ${outcome.finished} (expected expired)`);
-      if (logged.length !== 3) violations.push(`log rows: ${logged.length} (expected 3)`);
-      if (logged.filter((l) => l.action === 'reopened').length !== 1) violations.push('the log must have exactly one reopening');
-      if (logged.some((l) => !l.reason)) violations.push('log row without a reason');
 
       if (violations.length > 0) throw new Error(violations.join(' | '));
       results.push(makeTestCase({
@@ -8844,7 +8796,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - tStart,
-        details: 'An overdue task stays pending; the migration reopens only the current-step task of a running instance and all three expired tasks are logged with a reason.'
+        details: 'An overdue task of the current step stays pending after the inbox is read.'
       }));
     } catch (err) {
       results.push(makeTestCase({
@@ -9064,23 +9016,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (badResult.status !== 'failed' || badLog?.erpDocumentId) violations.push(`an order with an inconsistent total must be refused: ${badResult.status}`);
       if (!String(badLog?.errorMessage || '').includes('مبلغ پرداختی')) violations.push(`failure message for the inconsistent total: ${badLog?.errorMessage}`);
 
-      // ۳. مهاجرت 0033 روی پایگاه‌داده موجود (بدون حساب ۵۰۰۴) حساب «درآمد حمل و خدمات» را زیر حساب کل ۵۰ می‌سازد
-      const fs = await import('fs');
-      const migrationSql = fs.readFileSync('drizzle/0033_document_service_charge.sql', 'utf8').split('--> statement-breakpoint');
-      let createdUnder50 = false;
-      try {
-        await orm.transaction(async (tx) => {
-          await tx.execute(sql`UPDATE accounts SET is_deleted = 1 WHERE code = '5004'`);
-          await tx.execute(sql.raw(migrationSql[migrationSql.length - 1]));
-          const res = await tx.execute(sql`SELECT a.name, p.code AS parent_code FROM accounts a JOIN accounts p ON p.id = a.parent_id WHERE a.code = '5004' AND a.is_deleted = 0`);
-          const row = (res.rows ?? [])[0] as { name?: string; parent_code?: string } | undefined;
-          createdUnder50 = row?.name === 'درآمد حمل و خدمات' && row?.parent_code === '50';
-          throw new Error('rollback');
-        });
-      } catch (err) {
-        if (!(err instanceof Error && err.message === 'rollback')) throw err;
-      }
-      if (!createdUnder50) violations.push('migration 0033 did not create account 5004 under account 50');
+      // ۳. حساب «درآمد حمل و خدمات» (۵۰۰۴) زیر حساب کل ۵۰ در پایگاه‌داده هست
+      const serviceRevenue = await orm.execute(sql`SELECT a.name, p.code AS parent_code FROM accounts a JOIN accounts p ON p.id = a.parent_id WHERE a.code = '5004' AND a.is_deleted = 0`);
+      const serviceRow = (serviceRevenue.rows ?? [])[0] as { name?: string; parent_code?: string } | undefined;
+      if (serviceRow?.name !== 'درآمد حمل و خدمات' || serviceRow?.parent_code !== '50') violations.push('account 5004 is missing or not under account 50');
 
       if (violations.length > 0) throw new Error(violations.join(' | '));
       results.push(makeTestCase({
@@ -9091,7 +9030,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - tStart,
-        details: 'The order invoice gets 350 shipping and service charge, a 20 line discount (negative fee, TD-295) and 230 VAT, and its payable amount is 2560 (amount paid); the journal voucher posts 350 to 5004 and an order with an inconsistent total is refused.'
+        details: 'The order invoice gets 350 shipping and service charge, a 20 line discount (negative fee, TD-295) and 230 VAT, and its payable amount is 2560 (amount paid); the journal voucher posts 350 to 5004 (an account under 50) and an order with an inconsistent total is refused.'
       }));
     } catch (err) {
       results.push(makeTestCase({
@@ -9410,8 +9349,6 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const payrollIds: number[] = [];
     let personnelId: number | null = null;
     try {
-      const fs = await import('fs');
-      const path = await import('path');
       const { personnel, pieceworkPayrolls } = await import('../../db/schema.js');
       const { PayrollReadService } = await import('../../services/piecework/payrollRead.service.js');
       const violations: string[] = [];
@@ -9510,7 +9447,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         check(vBAfter?.isDeleted === 1, `the draft voucher of payslip B must be deleted when the payslip is voided (is_deleted=${vBAfter?.isDeleted})`);
       }
 
-      // ۷) سند قدیمی بدون پیوند (پیش از مهاجرت 0035): سند دوم صادر نمی‌شود و ابطال فیش آن را هم باطل می‌کند
+      // ۷) سند قدیمی بدون پیوند (source_payroll_id خالی): سند دوم صادر نمی‌شود و ابطال فیش آن را هم باطل می‌کند
       const payC = await makePayroll('C');
       const legacyItems = itemsA.map(i => ({ ...i, description: 'ردیف سند قدیمی TD-242' }));
       const legacyVoucher = async (payrollId: number, payrollNumber: string) => {
@@ -9524,28 +9461,6 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const legacyC2 = await legacyVoucher(payC.id, payC.payrollNumber);
       const ensuredC = await VoucherSyncService.autoCreateVoucherForPayroll(payC.id, undefined, 'test-agent', undefined, { strict: true });
       check(ensuredC?.id === legacyC1.id, `a payslip with unlinked legacy vouchers must return the oldest one (#${legacyC1.id}), not a new voucher (got #${ensuredC?.id})`);
-
-      // ۸) پرکردن مهاجرت 0035: فقط فیش دارای یک سند با الگوی دقیق پیوند می‌گیرد؛ فیش دارای دو سند و سند معکوس دست‌نخورده
-      const payD = await makePayroll('D');
-      const legacyD = await legacyVoucher(payD.id, payD.payrollNumber);
-      const migrationSql = fs.readFileSync(path.join(process.cwd(), 'drizzle', '0035_journal_voucher_source_payroll.sql'), 'utf8');
-      const backfillSql = migrationSql.split('--> statement-breakpoint').find(part => /UPDATE journal_vouchers/.test(part));
-      check(Boolean(backfillSql), 'the backfill part of migration 0035 was not found');
-      if (backfillSql) {
-        try {
-          await orm.transaction(async (tx) => {
-            await tx.execute(sql.raw(backfillSql));
-            const res = await tx.execute(sql`SELECT id, source_payroll_id FROM journal_vouchers WHERE id IN (${legacyD.id}, ${legacyC1.id}, ${legacyC2.id}, ${rev.id}, ${corr.id})`) as unknown as { rows: Array<{ id: number; source_payroll_id: number | null }> };
-            const src = new Map(res.rows.map(r => [Number(r.id), r.source_payroll_id === null ? null : Number(r.source_payroll_id)]));
-            check(src.get(legacyD.id) === payD.id, `the migration must link the single voucher of payslip D (got ${src.get(legacyD.id)})`);
-            check(src.get(legacyC1.id) === null && src.get(legacyC2.id) === null, `the migration must not link the ambiguous vouchers of payslip C (${src.get(legacyC1.id)}, ${src.get(legacyC2.id)})`);
-            check(src.get(rev.id) === null && src.get(corr.id) === null, `the migration must not link the reversal or correction voucher (${src.get(rev.id)}, ${src.get(corr.id)})`);
-            throw new Error('rollback');
-          });
-        } catch (err) {
-          if (!(err instanceof Error && err.message === 'rollback')) throw err;
-        }
-      }
 
       let deleteCError = '';
       try {
@@ -9563,7 +9478,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       results.push(makeTestCase({
         id: 'reg_payroll_voucher_link_td_242', scenarioId: 'document_voucher_uniqueness', name: testName, layer: 'regression',
         executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-        details: 'The payslip voucher carries source_payroll_id with a unique index; a reversal/correction voucher with the same id is not picked when issuing, listing, viewing or voiding the payslip; a legacy unlinked voucher blocks a second issue and the migration backfill links only unambiguous cases.'
+        details: 'The payslip voucher carries source_payroll_id with a unique index; a reversal/correction voucher with the same id is not picked when issuing, listing, viewing or voiding the payslip; a legacy unlinked voucher blocks a second issue and is voided with its payslip.'
       }));
     } catch (err) {
       results.push(makeTestCase({
@@ -9703,11 +9618,11 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // ------------------------------------------------------------------
   // TD-246 (تصمیم «قید یکتا»): کد تکراری بین عناوین کاری فعال پرکیسی را برنامه با ConflictError فارسی و پایگاه‌داده
   // با ایندکس uq_ptask_code_active (lower(btrim(code)) WHERE is_deleted = 0) رد می‌کنند؛ عنوان حذف‌شده حساب نمی‌شود؛
-  // مهاجرت 0037 روی داده تکراری ایندکس نمی‌سازد و بازرس سلامت مالی تکراری‌ها را فهرست می‌کند
+  // بازرس سلامت مالی تکراری‌های داده بدون ایندکس را فهرست می‌کند
   // ------------------------------------------------------------------
   if (shouldRun('reg_piecework_task_code_unique_td_246', 'td246', 'piecework', 'task_code', 'unique')) {
     const tStart = Date.now();
-    const testName = 'TD-246 Regression: a piecework task code is unique among active tasks (create, edit, restore, Excel import, migration and health check)';
+    const testName = 'TD-246 Regression: a piecework task code is unique among active tasks (create, edit, restore, Excel import, unique index and health check)';
     const suffix = `${Date.now()}`;
     const taskIds: number[] = [];
     const { pieceworkTasks } = await import('../../db/schema.js');
@@ -9716,8 +9631,6 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const taskCodeMod: Partial<typeof import('../../services/piecework/taskCode.js')> = await import('../../services/piecework/taskCode.js');
       const healthMod: Partial<typeof import('../../services/accounting/financialHealth.service.js')> = await import('../../services/accounting/financialHealth.service.js');
       const { FinancialHealthService } = await import('../../services/accounting/financialHealth.service.js');
-      const fs = await import('fs');
-      const path = await import('path');
       const violations: string[] = [];
       const check = (cond: boolean, msg: string) => { if (!cond) violations.push(msg); };
       const title = (tag: string) => `ERP-TEST-MARKER عنوان آزمون TD-246 ${tag} ${suffix}`;
@@ -9828,13 +9741,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (!entry) violations.push('the financial health check has no task title code uniqueness check');
       else check(entry.status === 'healthy' && entry.count === 0, `the health check must be healthy on data without duplicates (status ${entry.status}, count ${entry.count})`);
 
-      // (ز) داده قدیمی بدون ایندکس (تراکنش برگشت‌خورده): تکراری‌ها گزارش می‌شوند و مهاجرت 0037 ایندکس نمی‌سازد؛
-      // پس از رفع تکرار مهاجرت ایندکس را می‌سازد. طرح پایگاه‌داده پس از برگشت دست‌نخورده می‌ماند.
-      const migrationPath = path.join(process.cwd(), 'drizzle', '0037_piecework_task_code_unique.sql');
+      // (ز) داده بدون ایندکس (تراکنش برگشت‌خورده): تکراری‌ها گزارش می‌شوند. طرح پایگاه‌داده پس از برگشت دست‌نخورده می‌ماند.
       const { findDuplicatePieceworkTaskCodes } = taskCodeMod;
       const { buildPieceworkTaskCodeHealthTest } = healthMod;
-      if (!fs.existsSync(migrationPath)) violations.push('migration 0037_piecework_task_code_unique.sql does not exist');
-      else if (typeof findDuplicatePieceworkTaskCodes !== 'function' || typeof buildPieceworkTaskCodeHealthTest !== 'function') {
+      if (typeof findDuplicatePieceworkTaskCodes !== 'function' || typeof buildPieceworkTaskCodeHealthTest !== 'function') {
         violations.push('the duplicate code finder or the task title code uniqueness health check is not defined');
       } else {
         try {
@@ -9853,12 +9763,6 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
             const healthEntry = buildPieceworkTaskCodeHealthTest(await findDuplicatePieceworkTaskCodes(tx), (await indexDef(tx)) !== null);
             check(healthEntry.status !== 'healthy' && healthEntry.count >= 1 && activeIds.every(id => healthEntry.items?.some(it => it.id === id)),
               `the health check must report the duplicate code with both tasks (status ${healthEntry.status}, count ${healthEntry.count})`);
-            const migrationSql = fs.readFileSync(migrationPath, 'utf8');
-            await tx.execute(sql.raw(migrationSql));
-            check((await indexDef(tx)) === null, 'migration 0037 created the unique index on data with a duplicate code');
-            await tx.update(pieceworkTasks).set({ isDeleted: 1 }).where(eq(pieceworkTasks.id, activeIds[1]));
-            await tx.execute(sql.raw(migrationSql));
-            check((await indexDef(tx)) !== null, 'migration 0037 did not create the unique index after the duplicate was removed');
             throw new Error('rollback');
           });
         } catch (err) {
@@ -9871,7 +9775,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       results.push(makeTestCase({
         id: 'reg_piecework_task_code_unique_td_246', scenarioId: 'v10_next_code_concurrent_unique', name: testName, layer: 'regression',
         executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-        details: 'A duplicate code (exact code, letter case/spaces, direct insert, edit, restore, Excel append) is refused; the code of a deleted title is reused; migration 0037 creates no index on duplicate data and the health check reports the duplicates.'
+        details: 'A duplicate code (exact code, letter case/spaces, direct insert, edit, restore, Excel append) is refused; the code of a deleted title is reused; the unique index exists and the health check reports duplicates in data without it.'
       }));
     } catch (err) {
       results.push(makeTestCase({

@@ -106,40 +106,5 @@ export async function runAccessPackageTwoDocumentTests(shouldRun: ShouldRun): Pr
     });
   }
 
-  if (shouldRun('sec_document_finalize_migration_td_541', 'security', 'td541', 'td771', 'permissions', 'package2', 'migration')) {
-    await runCase(results, {
-      id: 'sec_document_finalize_migration_td_541',
-      name: 'v9.0.108: migration 0063 gives documents.finalize to the seed roles that finalized sales documents and to roles expanded from «*», and logs every change (TD-541)',
-      details: 'seed manager, warehouse_keeper, accountant and cfo_accountant get documents.finalize; seed sales_manager and a custom role coded accountant do not; a role expanded from «*» by 0062 gets it while it holds documents.edit; one activity_logs row per changed role',
-    }, async (h, wrong) => {
-      const { runMigrationRolledBack } = await import('./workflowLifecycleTests.js');
-      const starCode = `td541_star_${h.tag}`;
-      const starIdle = `td541_idle_${h.tag}`;
-      const seedCodes = ['manager', 'warehouse_keeper', 'cfo_accountant', 'sales_manager'];
-      const outcome = await runMigrationRolledBack('0063_documents_finalize_permission.sql', async (q) => {
-        await q(`UPDATE roles SET permissions = (SELECT COALESCE(jsonb_agg(e), '[]'::jsonb) FROM jsonb_array_elements(permissions) e WHERE e <> '"documents.finalize"'), is_system = 1 WHERE code = ANY($1::text[])`, [seedCodes]);
-        await q(`UPDATE roles SET permissions = '["documents.view","documents.create"]'::jsonb, is_system = 0 WHERE code = 'accountant'`);
-        for (const [code, perms] of [[starCode, '["documents.view","documents.edit"]'], [starIdle, '["documents.view"]']] as const) {
-          const [role] = await q(`INSERT INTO roles (name, code, permissions, is_system) VALUES ($1, $1, $2::jsonb, 0) RETURNING id`, [code, perms]);
-          await q(`INSERT INTO activity_logs (username, user_full_name, action, entity, entity_id, description, details, ip_address, timestamp)
-                   VALUES ('system', 'سیستم', 'UPDATE', 'نقش و دسترسی', $1, 'td541', $2::jsonb, '', now())`,
-            [String(role.id), JSON.stringify({ migration: '0062_role_code_guards_to_permissions', reason: 'wildcard' })]);
-        }
-      }, async (q) => ({
-        roles: await q(`SELECT id, code, permissions FROM roles WHERE code = ANY($1::text[])`, [[...seedCodes, 'accountant', starCode, starIdle]]),
-        logs: await q(`SELECT entity_id, details FROM activity_logs WHERE details->>'migration' = '0063_documents_finalize_permission' ORDER BY id`),
-      }));
-      const holds = (code: string) => ((outcome.roles.find(r => r.code === code)?.permissions ?? []) as string[]).includes('documents.finalize');
-      for (const code of ['manager', 'warehouse_keeper', 'cfo_accountant', starCode]) if (!holds(code)) wrong.push(`${code} did not get documents.finalize`);
-      for (const code of ['sales_manager', 'accountant', starIdle]) if (holds(code)) wrong.push(`${code} got documents.finalize`);
-      const idOf = (code: string) => String(outcome.roles.find(r => r.code === code)?.id);
-      const logged = outcome.logs.map(l => String(l.entity_id)).sort();
-      const expected = ['manager', 'warehouse_keeper', 'cfo_accountant', starCode].map(idOf).sort();
-      if (JSON.stringify(logged) !== JSON.stringify(expected)) wrong.push(`activity_logs rows for roles ${logged.join(', ')}, expected ${expected.join(', ')}`);
-      const keeperLog = outcome.logs.find(l => l.entity_id === idOf('warehouse_keeper'))?.details as Record<string, unknown> | undefined;
-      if (JSON.stringify(keeperLog?.addedPermissions) !== '["documents.finalize"]' || keeperLog?.reason !== 'seed_role') wrong.push(`warehouse_keeper log: ${JSON.stringify(keeperLog)}`);
-    });
-  }
-
   return results;
 }

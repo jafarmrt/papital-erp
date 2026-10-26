@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { TestCaseResult } from '../types.js';
 import { pool, type DbExecutor } from '../../db/drizzle.js';
@@ -9,8 +7,6 @@ import { runCase, type Harness, type Row, type Session, type ShouldRun } from '.
  * بسته ۲ (مدل مجوز)، M3 — گردش کار گام را با مجوز لازم و نقش دقیق می‌سنجد، نه با جدول هم‌ارزی کد نقش (TD-542، یافته
  * B02-27). هر آزمون روی کد پیشین قرمز است.
  */
-
-const MIGRATION_FILE = '0065_workflow_roles_without_equivalence.sql';
 
 async function tasksOf(h: Harness, s: Session, instanceId: number): Promise<Row[]> {
   const res = await h.get('/api/workflow/tasks/my-tasks?limit=100', s);
@@ -175,137 +171,53 @@ export async function runAccessPackageTwoWorkflowTests(shouldRun: ShouldRun): Pr
     });
   }
 
-  if (shouldRun('sec_workflow_role_migration_td_542', 'security', 'td542', 'workflow', 'permissions', 'migration', 'package2')) {
+  if (shouldRun('sec_workflow_role_migration_td_542', 'security', 'td542', 'workflow', 'permissions', 'health', 'package2')) {
     await runCase(results, {
       id: 'sec_workflow_role_migration_td_542',
-      name: 'v9.0.111: migration 0065 drops a role a department permission implied, turns a permission-shaped role into the permission and lists the steps the removed equivalence served (TD-542)',
-      details: 'live transitions, a new definition version, the snapshot, pending tasks and pending approvals of unfinished instances are converted; completed instances are left; steps whose role is missing or that cfo_accountant or a role with the department permission signed only through equivalence get a review row the health check lists until the step changes',
+      name: 'v9.0.111: the health check lists the workflow steps recorded for role review until the step changes or the instance ends (TD-542)',
+      details: 'review rows (as an upgraded database holds them) for a definition step, the same step of a running instance and a step with a missing role are listed; after the step gets a permission and the instance completes only the missing-role step stays',
     }, async (_h, wrong) => {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
         const q = async (text: string, params: unknown[] = []) => (await client.query(text, params)).rows as Row[];
         const tag = String(Date.now()).slice(-7);
-        const [branchRole] = await q(`INSERT INTO roles (name, code, permissions, is_system) VALUES ($1, $2, '["accounting.vouchers","workflow.approve"]'::jsonb, 0) RETURNING id, code`, [`حسابدار شعبه ${tag}`, `td542_branch_${tag}`]);
-        const [plainRole] = await q(`INSERT INTO roles (name, code, permissions, is_system) VALUES ($1, $2, '["workflow.approve"]'::jsonb, 0) RETURNING id, code`, [`تأییدکننده ${tag}`, `td542_plain_${tag}`]);
         // v10.1.7 (TD-1229): one active workflow per record type; the earlier test ones step aside inside this rolled-back transaction
         await q(`UPDATE workflow_definitions SET is_active = 0 WHERE entity_type = 'test_document' AND is_active = 1`);
-        const [def] = await q(`INSERT INTO workflow_definitions (code, title, entity_type, version, is_active) VALUES ($1, $2, 'test_document', 1, 1) RETURNING id`, [`TD542_MIG_${tag}`, `گردش کار مهاجرت ۵۴۲ ${tag}`]);
+        const [def] = await q(`INSERT INTO workflow_definitions (code, title, entity_type, version, is_active) VALUES ($1, $2, 'test_document', 1, 1) RETURNING id`, [`TD542_REV_${tag}`, `گردش کار بازبینی ۵۴۲ ${tag}`]);
         const defId = Number(def.id);
         const states = await q(`INSERT INTO workflow_states (workflow_definition_id, state_key, title, state_type, step_order) VALUES
-          ($1, 'a', 'گام یک', 'initial', 1), ($1, 'b', 'گام دو', 'intermediate', 2), ($1, 'c', 'پایان', 'terminal', 3) RETURNING id`, [defId]);
+          ($1, 'a', 'گام یک', 'initial', 1), ($1, 'b', 'گام دو', 'intermediate', 2) RETURNING id`, [defId]);
         const [sa, sb] = states.map(s => Number(s.id));
-        const spec: Array<[string, string, string, string]> = [
-          ['t1', 'accountant', 'accounting.vouchers', 'SINGLE'],
-          ['t2', 'accountant', 'accounting.vouchers', 'AND_ALL'],
-          ['t3', 'warehouse.out', '', 'SINGLE'],
-          ['t4', 'accountant', '', 'SINGLE'],
-          ['t5', `td542_ghost_${tag}`, '', 'SINGLE'],
-          ['t6', '', 'warehouse.out', 'SINGLE'],
-          ['t7', String(plainRole.code), '', 'SINGLE'],
-          ['t8', 'warehouse_keeper', 'warehouse.in', 'OR_ANY'],
-        ];
+        const ghostRole = `td542_ghost_${tag}`;
         const ids: Record<string, number> = {};
-        for (const [key, role, permission, rule] of spec) {
+        for (const [key, role] of [['t4', 'accountant'], ['t5', ghostRole]] as const) {
           const [row] = await q(`INSERT INTO workflow_transitions (workflow_definition_id, from_state_id, to_state_id, action_key, title, required_role, required_permission, approval_rule_type)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`, [defId, sa, sb, key, `اقدام ${key}`, role, permission, rule]);
+            VALUES ($1, $2, $3, $4, $5, $6, '', 'SINGLE') RETURNING id`, [defId, sa, sb, key, `اقدام ${key}`, role]);
           ids[key] = Number(row.id);
         }
-        const snapshotSql = `SELECT jsonb_build_object('definitionId', d.id, 'code', d.code, 'version', 1,
-            'states', (SELECT jsonb_agg(jsonb_build_object('id', s.id, 'stateKey', s.state_key, 'title', s.title, 'stateType', s.state_type) ORDER BY s.id) FROM workflow_states s WHERE s.workflow_definition_id = d.id),
-            'transitions', (SELECT jsonb_agg(jsonb_build_object('id', t.id, 'fromStateId', t.from_state_id, 'toStateId', t.to_state_id, 'actionKey', t.action_key, 'title', t.title,
-              'requiredRole', t.required_role, 'requiredPermission', t.required_permission, 'approvalRuleType', t.approval_rule_type) ORDER BY t.id) FROM workflow_transitions t WHERE t.workflow_definition_id = d.id)) AS dsl
-          FROM workflow_definitions d WHERE d.id = $1`;
-        const [{ dsl }] = await q(snapshotSql, [defId]);
-        await q(`INSERT INTO workflow_definition_versions (definition_id, version, title, description, dsl_json) VALUES ($1, 1, 'v1', '', $2::jsonb)`, [defId, JSON.stringify(dsl)]);
-        const instance = async (entity: string, status: string, snapshot: unknown) => Number((await q(`INSERT INTO workflow_instances (workflow_definition_id, definition_version, snapshot_dsl, entity_type, entity_id, current_state_id, status)
-          VALUES ($1, 1, $2::jsonb, 'test_document', $3, $4, $5) RETURNING id`, [defId, JSON.stringify(snapshot), `${entity}-${tag}`, sa, status]))[0].id);
-        const running = await instance('TD542-RUN', 'IN_PROGRESS', dsl);
-        const finished = await instance('TD542-DONE', 'COMPLETED', dsl);
-        const legacy = await instance('TD542-LEGACY', 'IN_PROGRESS', {});
-        const task = async (instanceId: number, transitionId: number, role: string) => Number((await q(`INSERT INTO workflow_tasks (instance_id, transition_id, assigned_role, candidate_roles, status, title)
-          VALUES ($1, $2, $3, jsonb_build_array($3::text), 'pending', 'کار آزمون') RETURNING id`, [instanceId, transitionId, role]))[0].id);
-        const runningT1 = await task(running, ids.t1, 'accountant');
-        const runningT4 = await task(running, ids.t4, 'accountant');
-        const legacyT8 = await task(legacy, ids.t8, 'warehouse_keeper');
-        const finishedT1 = await task(finished, ids.t1, 'accountant');
-        await q(`INSERT INTO workflow_pending_approvals (instance_id, transition_id, assigned_role) VALUES ($1, $2, 'accountant')`, [running, ids.t1]);
-
-        await client.query(fs.readFileSync(path.join(process.cwd(), 'drizzle', MIGRATION_FILE), 'utf8'));
-
-        const guardOf = async (id: number) => (await q(`SELECT required_role AS r, required_permission AS p FROM workflow_transitions WHERE id = $1`, [id]))[0];
-        const expectGuard = (label: string, got: Row | undefined, role: string, permission: string) => {
-          if (String(got?.r ?? got?.requiredRole ?? '') !== role || String(got?.p ?? got?.requiredPermission ?? '') !== permission) {
-            wrong.push(`${label}: guard is ${JSON.stringify(got)}, not role "${role}" permission "${permission}"`);
-          }
-        };
-        expectGuard('live t1 (department permission)', await guardOf(ids.t1), '', 'accounting.vouchers');
-        expectGuard('live t2 (AND_ALL keeps its role)', await guardOf(ids.t2), 'accountant', 'accounting.vouchers');
-        expectGuard('live t3 (role was a permission)', await guardOf(ids.t3), '', 'warehouse.out');
-        expectGuard('live t4 (role only)', await guardOf(ids.t4), 'accountant', '');
-        expectGuard('live t8 (warehouse permission)', await guardOf(ids.t8), '', 'warehouse.in');
-
-        const [defRow] = await q(`SELECT version FROM workflow_definitions WHERE id = $1`, [defId]);
-        if (Number(defRow?.version) !== 2) wrong.push(`definition version is ${String(defRow?.version)}, not 2`);
-        const [v2] = await q(`SELECT dsl_json FROM workflow_definition_versions WHERE definition_id = $1 AND version = 2`, [defId]);
-        const snapshotGuard = (snapshot: unknown, id: number) => ((snapshot as { transitions?: Row[] } | null)?.transitions ?? []).find(t => Number(t.id) === id);
-        if (!v2) wrong.push('no new definition version was recorded');
-        else {
-          expectGuard('version 2 t1', snapshotGuard(v2.dsl_json, ids.t1), '', 'accounting.vouchers');
-          expectGuard('version 2 t4', snapshotGuard(v2.dsl_json, ids.t4), 'accountant', '');
-        }
-        const [runningRow] = await q(`SELECT snapshot_dsl FROM workflow_instances WHERE id = $1`, [running]);
-        expectGuard('running instance t1', snapshotGuard(runningRow?.snapshot_dsl, ids.t1), '', 'accounting.vouchers');
-        expectGuard('running instance t3', snapshotGuard(runningRow?.snapshot_dsl, ids.t3), '', 'warehouse.out');
-        expectGuard('running instance t2', snapshotGuard(runningRow?.snapshot_dsl, ids.t2), 'accountant', 'accounting.vouchers');
-        const [finishedRow] = await q(`SELECT snapshot_dsl FROM workflow_instances WHERE id = $1`, [finished]);
-        expectGuard('completed instance t1 (left as it was)', snapshotGuard(finishedRow?.snapshot_dsl, ids.t1), 'accountant', 'accounting.vouchers');
-
-        const taskRow = async (id: number) => (await q(`SELECT assigned_role, candidate_roles FROM workflow_tasks WHERE id = $1`, [id]))[0];
-        const expectTask = async (label: string, id: number, role: string, candidates: string[]) => {
-          const t = await taskRow(id);
-          if (String(t?.assigned_role ?? '') !== role || JSON.stringify(t?.candidate_roles) !== JSON.stringify(candidates)) wrong.push(`${label}: task is ${JSON.stringify(t)}`);
-        };
-        await expectTask('running t1 task', runningT1, '', ['ALL']);
-        await expectTask('running t4 task', runningT4, 'accountant', ['accountant']);
-        await expectTask('legacy-snapshot t8 task (live transition)', legacyT8, '', ['ALL']);
-        await expectTask('completed instance task', finishedT1, 'accountant', ['accountant']);
-        const [approval] = await q(`SELECT assigned_role FROM workflow_pending_approvals WHERE instance_id = $1 AND transition_id = $2`, [running, ids.t1]);
-        if (String(approval?.assigned_role ?? 'x') !== '') wrong.push(`pending approval role is "${String(approval?.assigned_role)}", not empty`);
-
-        const conversions = await q(`SELECT details FROM activity_logs WHERE details->>'source' = 'td542_workflow_role_conversion' AND (details->>'definitionId')::int = $1`, [defId]);
-        const defConversion = conversions.find(r => (r.details as Row).scope === 'definition')?.details as Row | undefined;
-        const converted = ((defConversion?.transitions ?? []) as Row[]).map(t => Number(t.transitionId)).sort((a, b) => a - b);
-        if (JSON.stringify(converted) !== JSON.stringify([ids.t1, ids.t3, ids.t8])) wrong.push(`definition conversion row lists ${JSON.stringify(converted)}`);
-        if (!conversions.some(r => (r.details as Row).scope === 'instance' && Number((r.details as Row).instanceId) === running)) wrong.push('no conversion row for the running instance');
-
-        const reviews = await q(`SELECT entity, details FROM activity_logs WHERE details->>'source' = 'td542_workflow_role_review' AND (details->>'definitionId')::int = $1`, [defId]);
-        const reviewOf = (scope: string, id: number) => reviews.find(r => (r.details as Row).scope === scope && Number((r.details as Row).transitionId) === id);
-        const lostCodes = (row: Row | undefined) => (((row?.details as Row | undefined)?.lostRoles ?? []) as Row[]).map(x => String(x.code));
-        for (const scope of ['definition', 'instance']) {
-          for (const key of ['t2', 't4']) {
-            const lost = lostCodes(reviewOf(scope, ids[key]));
-            if (!lost.includes('cfo_accountant') || !lost.includes(String(branchRole.code))) wrong.push(`${scope} review of ${key} lists ${JSON.stringify(lost)}, without cfo_accountant and the branch role`);
-            if (lost.includes(String(plainRole.code)) || lost.includes('accountant') || lost.includes('admin')) wrong.push(`${scope} review of ${key} lists a role that still signs or never signed: ${JSON.stringify(lost)}`);
-          }
-          const ghost = reviewOf(scope, ids.t5);
-          if (!ghost || (ghost.details as Row).roleExists !== false) wrong.push(`${scope} review of the missing role: ${JSON.stringify(ghost?.details)}`);
-          for (const key of ['t1', 't3', 't6', 't7', 't8']) {
-            if (reviewOf(scope, ids[key])) wrong.push(`${scope} step ${key} was listed for review`);
-          }
-        }
-        if (reviews.some(r => Number((r.details as Row).instanceId) === finished)) wrong.push('a completed instance was listed for review');
-        if (reviews.some(r => r.entity !== 'نقش و دسترسی')) wrong.push('a review row is not under the "role and access" audit entity');
+        const [inst] = await q(`INSERT INTO workflow_instances (workflow_definition_id, definition_version, snapshot_dsl, entity_type, entity_id, current_state_id, status)
+          VALUES ($1, 1, '{}'::jsonb, 'test_document', $2, $3, 'IN_PROGRESS') RETURNING id`, [defId, `TD542-REV-${tag}`, sa]);
+        const running = Number(inst.id);
+        const review = (details: Record<string, unknown>) => q(`INSERT INTO activity_logs (username, user_full_name, action, entity, entity_id, description, details, ip_address, timestamp)
+          VALUES ('system', 'سیستم', 'UPDATE', 'نقش و دسترسی', $1, 'td542 review', $2::jsonb, '', now())`,
+        [String(defId), JSON.stringify({ source: 'td542_workflow_role_review', definitionId: defId, definitionTitle: `گردش کار بازبینی ۵۴۲ ${tag}`, ...details })]);
+        const lostRoles = [{ id: 0, code: 'cfo_accountant', name: 'cfo_accountant' }];
+        await review({ scope: 'definition', transitionId: ids.t4, transitionTitle: 'اقدام t4', requiredRole: 'accountant', roleExists: true, lostRoles });
+        await review({ scope: 'instance', instanceId: running, transitionId: ids.t4, transitionTitle: 'اقدام t4', requiredRole: 'accountant', roleExists: true, lostRoles });
+        await review({ scope: 'definition', transitionId: ids.t5, transitionTitle: 'اقدام t5', requiredRole: ghostRole, roleExists: false, lostRoles: [] });
 
         const { findWorkflowRoleReviews } = await import('../../services/workflow/workflowRoleReview.js');
         const db = drizzle(client) as unknown as DbExecutor;
         const listed = async () => (await findWorkflowRoleReviews(db)).filter(r => r.definitionId === defId);
         const before = await listed();
-        if (before.length !== 6) wrong.push(`the health check lists ${before.length} review rows of the test workflow, not 6`);
+        if (before.length !== 3) wrong.push(`the health check lists ${before.length} review rows of the test workflow, not 3`);
+        const ghost = before.find(r => r.transitionId === ids.t5);
+        if (!ghost || ghost.roleExists !== false) wrong.push(`the review of the missing role: ${JSON.stringify(ghost)}`);
         await q(`UPDATE workflow_transitions SET required_role = '', required_permission = 'accounting.vouchers' WHERE id = $1`, [ids.t4]);
         await q(`UPDATE workflow_instances SET status = 'COMPLETED' WHERE id = $1`, [running]);
         const after = await listed();
-        if (after.length !== 2 || after.some(r => r.scope !== 'definition' || (r.transitionId !== ids.t2 && r.transitionId !== ids.t5))) {
+        if (after.length !== 1 || after[0].scope !== 'definition' || after[0].transitionId !== ids.t5) {
           wrong.push(`after changing step t4 and completing the instance the health check lists ${JSON.stringify(after.map(r => [r.scope, r.transitionId]))}`);
         }
       } finally {

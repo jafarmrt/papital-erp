@@ -189,7 +189,7 @@ fi
 # Migration level of the backup vs this code (informational: newer migrations run when the service starts)
 APPLIED="$(psql_new -c "SELECT count(*) FROM drizzle.__drizzle_migrations" 2>/dev/null || echo '?')"
 KNOWN="$(grep -c '"tag"' "$APP_DIR/drizzle/meta/_journal.json" 2>/dev/null || echo '?')"
-log "  migrations: backup has $APPLIED applied, this code knows $KNOWN"
+log "  migrations: backup has $APPLIED applied, this code knows $KNOWN (from v11 the 136 migrations of 11.2 count as one baseline, 0000)"
 
 # Attachment files: every active attachment record must have its file in the backup's archive
 ATT_KIND="$(grep '^meta|attachments_archive|' "$MANIFEST_FILE" 2>/dev/null | cut -d'|' -f3 || true)"

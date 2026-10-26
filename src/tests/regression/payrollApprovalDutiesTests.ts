@@ -1,5 +1,4 @@
 import { addLog, fundedBank, newTask, newWorker } from '../invariants/payrollScenarios.js';
-import { runMigrationRolledBack } from '../security/workflowLifecycleTests.js';
 import { TestCaseResult } from '../types.js';
 import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient, sandboxClientWith } from './fiscalClosingTests.js';
 import { q } from './projectStageIntegrityTests.js';
@@ -125,37 +124,6 @@ export async function runPayrollApprovalDutiesTests(shouldRun: ShouldRun): Promi
       assertNoProblems(problems);
       return 'The issuer was refused approve, pay and void with 403 and nothing changed; a colleague approved, paid and voided; the system admin approved and paid their own payslip.';
     }));
-  }
-
-  const migrationId = 'reg_payroll_approve_migration_td_1083';
-  if (shouldRun(migrationId, 'td1083', 'payroll', 'approve', 'migration', 'duties')) {
-    await runCase(results, migrationId, 'v10.0.193: migration 0101 gives piecework.payroll_approve to every role holding piecework.payroll and logs each change; other roles are untouched (TD-1083)', async () => {
-      const problems: string[] = [];
-      const tag = String(Date.now()).slice(-7);
-      const codes = { issuer: `td1083_iss_${tag}`, both: `td1083_both_${tag}`, plain: `td1083_plain_${tag}` };
-      const outcome = await runMigrationRolledBack('0101_payroll_approve_permission.sql', async (run) => {
-        await run(`INSERT INTO roles (name, code, permissions, is_system) VALUES
-          ($1, $1, '["piecework.view","piecework.payroll"]'::jsonb, 0),
-          ($2, $2, '["piecework.view","piecework.payroll","piecework.payroll_approve"]'::jsonb, 0),
-          ($3, $3, '["piecework.view","piecework.pay"]'::jsonb, 0)`, [codes.issuer, codes.both, codes.plain]);
-      }, async (run) => ({
-        roles: await run('SELECT id, code, permissions FROM roles WHERE code = ANY($1::text[])', [Object.values(codes)]),
-        logs: await run(`SELECT entity_id, details FROM activity_logs WHERE details->>'migration' = '0101_payroll_approve_permission'
-          AND entity_id = ANY(SELECT id::text FROM roles WHERE code = ANY($1::text[]))`, [Object.values(codes)]),
-      }));
-      const permsOf = (code: string) => JSON.stringify(outcome.roles.find(r => r.code === code)?.permissions ?? null);
-      const expectPerms = (code: string, perms: string[]) => {
-        if (permsOf(code) !== JSON.stringify(perms)) problems.push(`${code} after 0101: ${permsOf(code)}, expected ${JSON.stringify(perms)}`);
-      };
-      expectPerms(codes.issuer, ['piecework.view', 'piecework.payroll', 'piecework.payroll_approve']);
-      expectPerms(codes.both, ['piecework.view', 'piecework.payroll', 'piecework.payroll_approve']);
-      expectPerms(codes.plain, ['piecework.view', 'piecework.pay']);
-      const issuerId = String(outcome.roles.find(r => r.code === codes.issuer)?.id);
-      const logged = outcome.logs.map(l => String(l.entity_id));
-      if (JSON.stringify(logged) !== JSON.stringify([issuerId])) problems.push(`activity_logs rows for roles ${logged.join(', ')}, expected only ${issuerId}`);
-      assertNoProblems(problems);
-      return 'The issuing role got piecework.payroll_approve with one activity_logs row; a role already holding it and a role without piecework.payroll were untouched.';
-    });
   }
 
   return results;

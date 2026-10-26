@@ -1,9 +1,7 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import request from 'supertest';
 import { and, eq, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { journalVouchers, roles, users, workflowDefinitions, workflowStates, workflowTransitions } from '../../db/schema.js';
+import { journalVouchers, users, workflowDefinitions, workflowStates, workflowTransitions } from '../../db/schema.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { WorkflowEngineService } from '../../services/workflow/workflowEngineService.js';
 import { upgradeLegacySeedGuards } from '../../services/workflow/seedGuardUpgrade.js';
@@ -167,26 +165,6 @@ export async function runVoucherApprovalDutiesTests(shouldRun: ShouldRun): Promi
       const reopen = await voucherStepPermissions('draft', orm, String(draft.id));
       expect(perms.join() === 'accounting.vouchers_approve' && reopen.join() === 'accounting.vouchers', `domain permissions ${perms} / ${reopen}`);
       return 'seed and domain action ask the approve key; upgrade runs once and only on the untouched old seed';
-    }));
-  }
-
-  if (shouldRun('reg_voucher_approve_migration_td_965', 'td-965', 'migration')) {
-    await runCase(results, 'reg_voucher_approve_migration_td_965', 'TD-965: migration 0098 gives the approve key to every role holding accounting.vouchers, once', () => inFiscalSandbox(async () => {
-      const holder = await createTestRole({ permissions: RECORD });
-      const other = await createTestRole({ permissions: ['accounting.view'] });
-      const file = path.join(process.cwd(), 'drizzle', '0098_voucher_approve_permission.sql');
-      const statements = fs.readFileSync(file, 'utf8').split('--> statement-breakpoint').map(s => s.trim()).filter(Boolean);
-      const run = () => orm.transaction(async (tx) => { for (const s of statements) await tx.execute(sql.raw(s)); });
-      await run();
-      await run();
-      const perms = async (id: number) => {
-        const [row] = await orm.select({ p: roles.permissions }).from(roles).where(eq(roles.id, id));
-        return (row?.p ?? []) as string[];
-      };
-      const h = await perms(holder.id);
-      expect(h.filter(k => k === 'accounting.vouchers_approve').length === 1, `holder permissions ${JSON.stringify(h)}`);
-      expect(!(await perms(other.id)).includes('accounting.vouchers_approve'), 'a role without accounting.vouchers got the key');
-      return 'holder got the key exactly once, other role untouched';
     }));
   }
 

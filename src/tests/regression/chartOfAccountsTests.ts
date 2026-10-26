@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import { and, eq, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { accounts, appSettings, journalVoucherItems, journalVouchers } from '../../db/schema.js';
@@ -363,7 +361,7 @@ export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<Tes
 
   const constraintId = 'reg_accounting_check_constraints_td_562';
   if (shouldRun(constraintId, 'td562', 'constraint', 'account', 'chart', 'package3')) {
-    await runCase(results, constraintId, 'v9.0.202: the database refuses a negative or empty voucher row, an unknown voucher status or type, an unknown account level, type or nature and a missing parent account; a soft-deleted row is exempt, and a legacy row that breaks a rule leaves its constraint NOT VALID and is listed by the health check (TD-562)', async () => inFiscalSandbox(async () => {
+    await runCase(results, constraintId, 'v9.0.202: the database refuses a negative or empty voucher row, an unknown voucher status or type, an unknown account level, type or nature and a missing parent account; a soft-deleted row is exempt, and a legacy row under a NOT VALID constraint is listed by the health check (TD-562)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const acc = await accountIdsByCode('1001', '5001', '70');
       const today = await businessTodayIsoDate();
@@ -409,16 +407,17 @@ export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<Tes
       await refused('an account of nature «mixed»', '23514', () => account({ nature: 'mixed' }));
       await refused('an account under a missing parent', '23503', () => account({ parentId: 99_999_999 }));
 
-      // 3) a legacy row from before the constraint: the migration leaves it NOT VALID and the health check lists it
+      // 3) a legacy row from before the constraint, under that constraint added NOT VALID (as on a database that upgraded
+      //    with such a row): new rows are still refused and the health check lists it
+      const amountDef = await orm.execute(sql`SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conname = 'chk_jvi_amount_present' AND conrelid = to_regclass('journal_voucher_items')`);
+      const amountCheck = String((amountDef.rows as Array<{ def?: string }>)[0]?.def ?? '');
+      if (!amountCheck) throw new Error('constraint chk_jvi_amount_present is missing');
       await orm.execute(sql`ALTER TABLE journal_voucher_items DROP CONSTRAINT chk_jvi_amount_present`);
       const [legacy] = await row(0, 0).returning({ id: journalVoucherItems.id });
-      const dir = path.resolve(process.cwd(), 'drizzle');
-      const file = fs.readdirSync(dir).find(f => f.endsWith('_accounting_check_constraints.sql'));
-      if (!file) throw new Error('the accounting constraint migration file is missing');
-      await orm.execute(sql.raw(fs.readFileSync(path.join(dir, file), 'utf8')));
+      await orm.execute(sql.raw(`ALTER TABLE journal_voucher_items ADD CONSTRAINT chk_jvi_amount_present ${amountCheck} NOT VALID`));
       const state = await orm.execute(sql`SELECT convalidated FROM pg_constraint WHERE conname = 'chk_jvi_amount_present' AND conrelid = to_regclass('journal_voucher_items')`);
       if ((state.rows as Array<{ convalidated?: boolean }>)[0]?.convalidated !== false) problems.push(`chk_jvi_amount_present over a legacy row: ${JSON.stringify(state.rows)}`);
-      await refused('a new row with neither debit nor credit after the rerun', '23514', () => row(0, 0));
+      await refused('a new row with neither debit nor credit under the NOT VALID constraint', '23514', () => row(0, 0));
       const listed = await gaps();
       const item = listed?.items?.find(i => i.code === 'chk_jvi_amount_present');
       if (listed?.status !== 'warning' || listed?.items?.length !== 1 || !item?.subtitle?.includes('۱')) problems.push(`health check with a legacy row: ${String(JSON.stringify(listed)).slice(0, 400)}`);
@@ -426,7 +425,7 @@ export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<Tes
       await orm.update(journalVoucherItems).set({ isDeleted: 1 }).where(eq(journalVoucherItems.id, legacy.id));
 
       assertNoProblems(problems);
-      return 'Negative and empty rows, an unknown status, type, level and nature were refused (23514) and a missing parent (23503); a soft-deleted empty row was stored; a legacy empty row left chk_jvi_amount_present NOT VALID, was listed by the health check and was soft-deleted.';
+      return 'Negative and empty rows, an unknown status, type, level and nature were refused (23514) and a missing parent (23503); a soft-deleted empty row was stored; a legacy empty row under a NOT VALID chk_jvi_amount_present was listed by the health check and was soft-deleted.';
     }));
   }
 

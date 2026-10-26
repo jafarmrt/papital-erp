@@ -86,32 +86,5 @@ export async function runAccessPackageTwoSensitiveTests(shouldRun: ShouldRun): P
     });
   }
 
-  if (shouldRun('sec_sensitive_personnel_migration_td_882', 'security', 'td882', 'permissions', 'package2', 'migration')) {
-    await runCase(results, {
-      id: 'sec_sensitive_personnel_migration_td_882',
-      name: 'v9.0.109: migration 0064 gives the seed manager both bank-detail keys and the other key to roles holding one, and logs every change (TD-882)',
-      details: 'seed manager without the keys gets personnel.view_sensitive and payroll.view_sensitive; a role with only payroll.view_sensitive gets personnel.view_sensitive; a custom role coded manager-like and a role with neither key are untouched; one activity_logs row per changed role',
-    }, async (h, wrong) => {
-      const { runMigrationRolledBack } = await import('./workflowLifecycleTests.js');
-      const legacy = `td882_legacy_${h.tag}`;
-      const plain = `td882_plain_${h.tag}`;
-      const outcome = await runMigrationRolledBack('0064_sensitive_personnel_permissions.sql', async (q) => {
-        await q(`UPDATE roles SET permissions = '["personnel.view","personnel.manage"]'::jsonb, is_system = 1 WHERE code = 'manager'`);
-        await q(`INSERT INTO roles (name, code, permissions, is_system) VALUES ($1, $1, '["piecework.view","payroll.view_sensitive"]'::jsonb, 0), ($2, $2, '["personnel.view"]'::jsonb, 0)`, [legacy, plain]);
-      }, async (q) => ({
-        roles: await q(`SELECT id, code, permissions FROM roles WHERE code = ANY($1::text[])`, [['manager', legacy, plain]]),
-        logs: await q(`SELECT entity_id, details FROM activity_logs WHERE details->>'migration' = '0064_sensitive_personnel_permissions' ORDER BY id`),
-      }));
-      const permsOf = (code: string) => JSON.stringify(outcome.roles.find(r => r.code === code)?.permissions ?? null);
-      if (permsOf('manager') !== JSON.stringify(['personnel.view', 'personnel.manage', 'personnel.view_sensitive', 'payroll.view_sensitive'])) wrong.push(`manager after 0064: ${permsOf('manager')}`);
-      if (permsOf(legacy) !== JSON.stringify(['piecework.view', 'payroll.view_sensitive', 'personnel.view_sensitive'])) wrong.push(`legacy role after 0064: ${permsOf(legacy)}`);
-      if (permsOf(plain) !== JSON.stringify(['personnel.view'])) wrong.push(`a role with neither key changed: ${permsOf(plain)}`);
-      const idOf = (code: string) => String(outcome.roles.find(r => r.code === code)?.id);
-      const logged = outcome.logs.map(l => String(l.entity_id)).sort();
-      const expected = [idOf('manager'), idOf(legacy)].sort();
-      if (JSON.stringify(logged) !== JSON.stringify(expected)) wrong.push(`activity_logs rows for roles ${logged.join(', ')}, expected ${expected.join(', ')}`);
-    });
-  }
-
   return results;
 }

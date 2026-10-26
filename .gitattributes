@@ -1,2 +1,3 @@
 *.sh text eol=lf
 *.md text
+*.sql text eol=lf
