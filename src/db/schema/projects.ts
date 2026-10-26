@@ -25,7 +25,7 @@ export const productionProjects = pgTable('production_projects', {
   stageSchedules: jsonb('stage_schedules').default({}),
   customStages: jsonb('custom_stages').default([]),
   attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   createdBy: text('created_by').default(''),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').default(0),
@@ -52,7 +52,7 @@ export const projectStages = pgTable('project_stages', {
   progressPercent: integer('progress_percent').default(0),
   notes: text('notes').default(''),
   completedAt: text('completed_at').default(''),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
   idx_stage_proj: index('idx_stage_proj').on(table.projectId),
@@ -102,9 +102,9 @@ export const projectBomAllocations = pgTable('project_bom_allocations', {
   notes: text('notes').default(''),
   // v10.1.37 (N-01، TD-1283، تصمیم ت۴ الف): پرسنلی که مواد تخصیص‌یافته به دست او داده می‌شود (مهاجرت 0119)
   recipientPersonnelId: integer('recipient_personnel_id').references(baseRelations.personnelId),
-  allocatedAt: timestamp('allocated_at', { mode: 'string' }).defaultNow(),
-  consumedAt: timestamp('consumed_at', { mode: 'string' }),
-  releasedAt: timestamp('released_at', { mode: 'string' }),
+  allocatedAt: timestamp('allocated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  consumedAt: timestamp('consumed_at', { withTimezone: true, mode: 'string' }),
+  releasedAt: timestamp('released_at', { withTimezone: true, mode: 'string' }),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
   idx_bom_alloc_proj: index('idx_bom_alloc_proj').on(table.projectId),
@@ -129,8 +129,8 @@ export const projectReservationReleases = pgTable('project_reservation_releases'
   qtyField: text('qty_field').notNull(),
   quantity: numeric('quantity', { precision: 18, scale: 4, mode: 'number' }).notNull(),
   reservationRow: jsonb('reservation_row').notNull(),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  restoredAt: timestamp('restored_at', { mode: 'string' }),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  restoredAt: timestamp('restored_at', { withTimezone: true, mode: 'string' }),
 }, (table) => ({
   idx_prr_document: index('idx_prr_document').on(table.documentId),
   // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)

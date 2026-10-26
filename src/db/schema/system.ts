@@ -18,11 +18,11 @@ export const idempotencyKeys = pgTable('idempotency_keys', {
   responseStatus: integer('response_status'),
   responseBody: jsonb('response_body'),
   createdById: integer('created_by_id').references(() => users.id, { onDelete: 'set null' }),
-  lockedAt: timestamp('locked_at', { mode: 'string' }),
-  lockedUntil: timestamp('locked_until', { mode: 'string' }),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  completedAt: timestamp('completed_at', { mode: 'string' }),
-  expiresAt: timestamp('expires_at', { mode: 'string' })
+  lockedAt: timestamp('locked_at', { withTimezone: true, mode: 'string' }),
+  lockedUntil: timestamp('locked_until', { withTimezone: true, mode: 'string' }),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  completedAt: timestamp('completed_at', { withTimezone: true, mode: 'string' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' })
 }, (table) => ({
   idx_idempotency_key: index('idx_idempotency_key').on(table.key),
   idx_idempotency_scope_status: index('idx_idempotency_scope_status').on(table.scope, table.status),
@@ -39,9 +39,9 @@ export const formDrafts = pgTable('form_drafts', {
   draftKey: text('draft_key').default('default'), // e.g. 'new_invoice', 'voucher_create', or entityId for editing
   payload: jsonb('payload').notNull(),
   summary: text('summary').default(''),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
-  expiresAt: timestamp('expires_at', { mode: 'string' }),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }),
   isDeleted: integer('is_deleted').default(0)
 }, (table) => ({
   idx_form_drafts_user_entity: index('idx_form_drafts_user_entity').on(table.userId, table.entityType, table.draftKey),

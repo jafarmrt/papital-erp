@@ -76,7 +76,7 @@ export async function renewSessionCookie(
   if (!sid) return issueSessionCookie(req, res, user, lifetime);
   const renewed = await orm.update(userSessions).set({
     tokenVersion: user.tokenVersion || 0,
-    expiresAt: sql`(now() AT TIME ZONE 'UTC') + make_interval(secs => ${lifetime})`,
+    expiresAt: sql`now() + make_interval(secs => ${lifetime})`,
   }).where(and(eq(userSessions.sid, sid), eq(userSessions.userId, user.id), isNull(userSessions.revokedAt)))
     .returning({ id: userSessions.id });
   if (renewed.length === 0) return issueSessionCookie(req, res, user, lifetime);
@@ -96,7 +96,7 @@ export async function listUserSessions(userId: number, currentSid: string | null
     .where(and(
       eq(userSessions.userId, userId),
       isNull(userSessions.revokedAt),
-      gt(userSessions.expiresAt, sql`now() AT TIME ZONE 'UTC'`),
+      gt(userSessions.expiresAt, sql`now()`),
       eq(userSessions.tokenVersion, sql`COALESCE(${users.tokenVersion}, 0)`),
     ))
     .orderBy(desc(userSessions.lastSeenAt), desc(userSessions.id))
@@ -120,7 +120,7 @@ async function lockOpenSession(tx: DbExecutor, userId: number, sessionId: number
 }
 
 async function closeRow(tx: DbExecutor, id: number, reason: 'logout' | 'closed_by_user' | 'closed_by_admin'): Promise<void> {
-  await tx.update(userSessions).set({ revokedAt: sql`now() AT TIME ZONE 'UTC'`, revokeReason: reason })
+  await tx.update(userSessions).set({ revokedAt: sql`now()`, revokeReason: reason })
     .where(and(eq(userSessions.id, id), isNull(userSessions.revokedAt)));
 }
 
@@ -159,7 +159,7 @@ export async function closeOtherOwnSessions(req: Request, res: Response): Promis
     const tokenVersion = (row.tokenVersion || 0) + 1;
     await tx.update(users).set({ tokenVersion }).where(eq(users.id, userId));
     const closed = await tx.update(userSessions)
-      .set({ revokedAt: sql`now() AT TIME ZONE 'UTC'`, revokeReason: 'others_closed' })
+      .set({ revokedAt: sql`now()`, revokeReason: 'others_closed' })
       .where(and(eq(userSessions.userId, userId), isNull(userSessions.revokedAt), current ? ne(userSessions.sid, current) : sql`true`))
       .returning({ sid: userSessions.sid });
     await logActivity({
@@ -198,12 +198,12 @@ export async function closeSessionOnLogout(claims: SessionTokenClaims & { tokenV
   const expSeconds = Number(claims.exp) > 0 ? Number(claims.exp) : Math.floor(Date.now() / 1000);
   const [row] = await orm.insert(userSessions).values({
     userId: Number(claims.id), sid, tokenVersion: Number(claims.tokenVersion ?? 0), ...requestInfo(req),
-    expiresAt: sql`to_timestamp(${expSeconds}) AT TIME ZONE 'UTC'`,
-    revokedAt: sql`now() AT TIME ZONE 'UTC'`, revokeReason: 'logout',
+    expiresAt: sql`to_timestamp(${expSeconds})`,
+    revokedAt: sql`now()`, revokeReason: 'logout',
   }).onConflictDoUpdate({
     target: userSessions.sid,
     set: {
-      revokedAt: sql`COALESCE(${userSessions.revokedAt}, now() AT TIME ZONE 'UTC')`,
+      revokedAt: sql`COALESCE(${userSessions.revokedAt}, now())`,
       revokeReason: sql`COALESCE(${userSessions.revokeReason}, 'logout')`,
     },
     setWhere: eq(userSessions.userId, Number(claims.id)),
@@ -258,7 +258,7 @@ export async function closeAllUserSessionsByAdmin(req: Request, targetUserId: nu
     const target = await lockManagedUser(tx, req, targetUserId);
     await tx.update(users).set({ tokenVersion: (target.tokenVersion || 0) + 1 }).where(eq(users.id, targetUserId));
     const closed = await tx.update(userSessions)
-      .set({ revokedAt: sql`now() AT TIME ZONE 'UTC'`, revokeReason: 'closed_by_admin' })
+      .set({ revokedAt: sql`now()`, revokeReason: 'closed_by_admin' })
       .where(and(eq(userSessions.userId, targetUserId), isNull(userSessions.revokedAt)))
       .returning({ sid: userSessions.sid });
     await logActivity({

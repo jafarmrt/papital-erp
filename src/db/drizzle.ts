@@ -5,6 +5,7 @@ import pkg from 'pg';
 import fs from 'fs';
 import { logger } from '../middleware/logger.js';
 import { resolveDatabaseMode, type DatabaseMode } from './databaseMode.js';
+import { ServerTimestampClient } from './serverTimestampClient.js';
 
 const { Pool } = pkg;
 
@@ -48,6 +49,7 @@ if (databaseMode.kind === 'sql_host' || databaseMode.kind === 'url') {
       database: process.env.SQL_DB_NAME,
       ssl: (process.env.SQL_SSL === 'true' || process.env.POSTGRES_SSL === 'true') ? sslConfig : undefined,
       options: SESSION_STARTUP_OPTIONS,
+      Client: ServerTimestampClient,
       max: maxPoolSize,
       idleTimeoutMillis,
       connectionTimeoutMillis,
@@ -60,6 +62,7 @@ if (databaseMode.kind === 'sql_host' || databaseMode.kind === 'url') {
       connectionString: rawDbUrl,
       ssl: sslConfig,
       options: SESSION_STARTUP_OPTIONS,
+      Client: ServerTimestampClient,
       max: maxPoolSize,
       idleTimeoutMillis,
       connectionTimeoutMillis,

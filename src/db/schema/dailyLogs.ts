@@ -25,7 +25,7 @@ export const dailyWorkLogs = pgTable('daily_work_logs', {
   allowedUsers: jsonb('allowed_users').default([]),
   status: text('status').default('submitted'), // 'submitted', 'reviewed'
   managerNotes: text('manager_notes').default(''),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
   // v10.2.32 (TD-1327, OBS-R2-58, migration 0133): an edit sends the version it was built from (409 OCC_CONFLICT when stale)
   version: integer('version').notNull().default(1),
@@ -45,6 +45,6 @@ export const dailyLogVisibilityRepairs = pgTable('daily_log_visibility_repairs',
   dailyLogId: integer('daily_log_id').notNull().unique('uq_daily_log_visibility_repairs_log'),
   oldVisibility: text('old_visibility'),
   newVisibility: text('new_visibility').notNull(),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 });
 

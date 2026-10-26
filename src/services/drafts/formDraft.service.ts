@@ -10,7 +10,7 @@ import { DRAFT_EXPIRY_DAYS, DRAFT_MAX_PER_USER, isValidDraftExpiryDays } from '.
  * v9.0.306 (TD-676، B16-12): پیش‌نویس زنده هنوز منقضی نشده است. ردیف قدیمی بی `expires_at` تا ۳۰ روز پس از آخرین ذخیره
  * زنده است. زمان‌های سرور UTC و بی منطقه ذخیره می‌شوند (AGENTS §22)، پس با `now()` به UTC مقایسه می‌شوند.
  */
-const liveDraft = sql`COALESCE(${formDrafts.expiresAt}, ${formDrafts.updatedAt} + make_interval(days => ${DRAFT_EXPIRY_DAYS.default})) > (now() AT TIME ZONE 'UTC')`;
+const liveDraft = sql`COALESCE(${formDrafts.expiresAt}, ${formDrafts.updatedAt} + make_interval(days => ${DRAFT_EXPIRY_DAYS.default})) > now()`;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

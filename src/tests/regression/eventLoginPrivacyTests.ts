@@ -120,7 +120,7 @@ export async function runEventLoginPrivacyTests(shouldRun: ShouldRun): Promise<T
       const { purgeEndedSessions } = await import('../../services/auth/sessionPurge.js');
       const user = await createTestUser({ role: 'admin' });
       const tag = tagOf();
-      const ago = (days: number) => sql`(now() AT TIME ZONE 'UTC') - make_interval(days => ${days})` as unknown as string;
+      const ago = (days: number) => sql`now() - make_interval(days => ${days})` as unknown as string;
       const rows: Array<{ sid: string; expiresAt: string; revokedAt?: string; gone: boolean }> = [
         { sid: `p5_closed_old_${tag}`, revokedAt: ago(100), expiresAt: ago(95), gone: true },
         { sid: `p5_closed_old_valid_${tag}`, revokedAt: ago(100), expiresAt: ago(-5), gone: false },

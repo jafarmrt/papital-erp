@@ -23,7 +23,7 @@ export const users = pgTable('users', {
   // the version whose «تازه‌های این نسخه» card the user closed
   isPresenceVisible: integer('is_presence_visible').notNull().default(1),
   whatsNewSeenVersion: text('whats_new_seen_version').notNull().default(''),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow()
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow()
 }, (table) => ({
   idx_users_role: index('idx_users_role').on(table.role).where(sql`${table.role} IS NOT NULL`),
   // OBS-R1-30 (ت۴۰): نام کاربری کاربران فعال بی توجه به بزرگی و کوچکی حروف یکتاست؛ ایندکس را مهاجرت 0124 فقط روی داده
@@ -61,7 +61,7 @@ export const activityLogs = pgTable('activity_logs', {
   description: text('description').notNull(),
   details: jsonb('details').default({}),
   ipAddress: text('ip_address').default(''),
-  timestamp: timestamp('timestamp', { mode: 'string' }).defaultNow(),
+  timestamp: timestamp('timestamp', { withTimezone: true, mode: 'string' }).defaultNow(),
   // v10.0.198 (TD-963): trace id of the request that wrote the row (migration 0102)
   traceId: text('trace_id').default(''),
 }, (table) => ({
@@ -78,7 +78,7 @@ export const activityLogs = pgTable('activity_logs', {
 export const migrationsLog = pgTable('migrations_log', {
   id: serial('id').primaryKey(),
   name: text('name').notNull().unique(),
-  appliedAt: timestamp('applied_at', { mode: 'string' }).defaultNow()
+  appliedAt: timestamp('applied_at', { withTimezone: true, mode: 'string' }).defaultNow()
 });
 
 // (v4.0.29) جدول changelogs حذف شد — dual-storage زیان‌بار با منبع حقیقت واحد
@@ -97,10 +97,10 @@ export const userSessions = pgTable('user_sessions', {
   tokenVersion: integer('token_version').notNull().default(0),
   userAgent: text('user_agent').notNull().default(''),
   ipAddress: text('ip_address').notNull().default(''),
-  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
-  lastSeenAt: timestamp('last_seen_at', { mode: 'string' }).notNull().defaultNow(),
-  expiresAt: timestamp('expires_at', { mode: 'string' }).notNull(),
-  revokedAt: timestamp('revoked_at', { mode: 'string' }),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true, mode: 'string' }),
   revokeReason: text('revoke_reason').notNull().default(''), // '' | 'logout' | 'closed_by_user' | 'closed_by_admin' | 'others_closed'
 }, (table) => ({
   uq_user_sessions_sid: uniqueIndex('uq_user_sessions_sid').on(table.sid),

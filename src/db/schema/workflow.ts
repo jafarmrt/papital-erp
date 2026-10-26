@@ -18,7 +18,7 @@ export const workflowDefinitions = pgTable('workflow_definitions', {
   isArchived: integer('is_archived').notNull().default(0),
   description: text('description').default(''),
   dslJson: jsonb('dsl_json').default({}),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 }, (table) => ({
   // v10.1.7 (TD-1229): one active definition per record type; built by migration 0110 only on data without duplicates
   uq_workflow_definitions_active_entity_type: uniqueIndex('uq_workflow_definitions_active_entity_type').on(table.entityType).where(sql`${table.isActive} = 1`),
@@ -76,8 +76,8 @@ export const workflowInstances = pgTable('workflow_instances', {
   startedBy: integer('started_by'),
   startedByName: text('started_by_name').default(''),
   version: integer('version').notNull().default(1),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 }, (table) => ({
   idx_wfi_entity: index('idx_wfi_entity').on(table.entityType, table.entityId),
   // v9.0.448 (TD-613): built by migration 0056 only on data without duplicates; declared so the schema matches the database
@@ -93,7 +93,7 @@ export const workflowPendingApprovals = pgTable('workflow_pending_approvals', {
   assignedRole: text('assigned_role').default(''),
   assignedUserId: integer('assigned_user_id'),
   status: text('status').default('PENDING'),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 }, (table) => ({
   idx_wfpa_instance: index('idx_wfpa_instance').on(table.instanceId),
 }));
@@ -110,7 +110,7 @@ export const workflowHistoryLogs = pgTable('workflow_history_logs', {
   actionTitle: text('action_title').default(''),
   comment: text('comment').default(''),
   snapshotData: jsonb('snapshot_data').default({}),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 }, (table) => ({
   idx_wfh_instance: index('idx_wfh_instance').on(table.instanceId),
 }));
@@ -123,7 +123,7 @@ export const workflowDefinitionVersions = pgTable('workflow_definition_versions'
   description: text('description').default(''),
   dslJson: jsonb('dsl_json').default({}),
   createdBy: integer('created_by'),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   // v10.1.21 (TD-1270, D-06 part D): draft, published or retired (migration 0114); one published version per definition.
   // The code names every row's status; a row written without one never claims to be the published version.
   status: text('status').notNull().default('retired'),
@@ -145,11 +145,11 @@ export const workflowTasks = pgTable('workflow_tasks', {
   status: text('status').notNull().default('pending'), // 'pending', 'approved', 'rejected', 'delegated', 'canceled' ('expired' only on pre-v7.0.101 rows)
   title: text('title').notNull(),
   description: text('description').default(''),
-  dueAt: timestamp('due_at', { mode: 'string' }),
-  completedAt: timestamp('completed_at', { mode: 'string' }),
+  dueAt: timestamp('due_at', { withTimezone: true, mode: 'string' }),
+  completedAt: timestamp('completed_at', { withTimezone: true, mode: 'string' }),
   // v7.0.101 (TD-085 بند ۴): زمان ارسال یادآوری یک‌باره مهلت به مسئول کار (migration 0032)
-  slaRemindedAt: timestamp('sla_reminded_at', { mode: 'string' }),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow()
+  slaRemindedAt: timestamp('sla_reminded_at', { withTimezone: true, mode: 'string' }),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow()
 }, (table) => ({
   idx_wft_instance: index('idx_wft_instance').on(table.instanceId),
   idx_wft_assigned_user: index('idx_wft_assigned_user').on(table.assignedUserId),
@@ -164,10 +164,10 @@ export const workflowTaskReopenLog = pgTable('workflow_task_reopen_log', {
   taskId: integer('task_id').notNull(),
   instanceId: integer('instance_id').notNull(),
   taskTitle: text('task_title').notNull().default(''),
-  dueAt: timestamp('due_at', { mode: 'string' }),
+  dueAt: timestamp('due_at', { withTimezone: true, mode: 'string' }),
   action: text('action').notNull(), // 'reopened' | 'kept_expired'
   reason: text('reason').notNull(),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 });
 
 export const workflowDelegations = pgTable('workflow_delegations', {
@@ -175,11 +175,11 @@ export const workflowDelegations = pgTable('workflow_delegations', {
   fromUserId: integer('from_user_id').notNull(),
   toUserId: integer('to_user_id').notNull(),
   scope: text('scope').notNull().default('ALL'), // 'ALL', or specific workflow code
-  startDate: timestamp('start_date', { mode: 'string' }).notNull(),
-  endDate: timestamp('end_date', { mode: 'string' }).notNull(),
+  startDate: timestamp('start_date', { withTimezone: true, mode: 'string' }).notNull(),
+  endDate: timestamp('end_date', { withTimezone: true, mode: 'string' }).notNull(),
   isActive: integer('is_active').default(1),
   reason: text('reason').default(''),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow()
 }, (table) => ({
   idx_wfd_from_user: index('idx_wfd_from_user').on(table.fromUserId),
   idx_wfd_to_user: index('idx_wfd_to_user').on(table.toUserId),

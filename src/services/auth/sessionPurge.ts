@@ -15,8 +15,8 @@ export const ENDED_SESSION_RETENTION_DAYS = 90;
  */
 export async function purgeEndedSessions(olderThanDays: number = ENDED_SESSION_RETENTION_DAYS): Promise<number> {
   const ended = and(
-    lt(userSessions.expiresAt, sql`now() AT TIME ZONE 'UTC'`),
-    lt(sql`COALESCE(${userSessions.revokedAt}, ${userSessions.expiresAt})`, sql`(now() AT TIME ZONE 'UTC') - make_interval(days => ${olderThanDays})`),
+    lt(userSessions.expiresAt, sql`now()`),
+    lt(sql`COALESCE(${userSessions.revokedAt}, ${userSessions.expiresAt})`, sql`now() - make_interval(days => ${olderThanDays})`),
   );
   return deleteInBatches(OPERATIONAL_PURGE_BATCH_SIZE, async () => {
     const batch = orm.select({ id: userSessions.id }).from(userSessions).where(ended).limit(OPERATIONAL_PURGE_BATCH_SIZE);

@@ -41,7 +41,7 @@ export async function projectIssuedMaterials(executor: DbExecutor, projectId: nu
       quantity: projectBomAllocations.quantity,
       status: projectBomAllocations.status,
       allocatedAt: projectBomAllocations.allocatedAt,
-      sortKey: sql<string>`to_char((${projectBomAllocations.allocatedAt} AT TIME ZONE 'UTC') AT TIME ZONE ${timeZone}::text, 'YYYY-MM-DD HH24:MI:SS')`,
+      sortKey: sql<string>`to_char(${projectBomAllocations.allocatedAt} AT TIME ZONE ${timeZone}::text, 'YYYY-MM-DD HH24:MI:SS')`,
       txType: transactions.type,
       txUnitPrice: transactions.unitPrice,
       txQuantity: transactions.quantity,

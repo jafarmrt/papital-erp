@@ -45,7 +45,7 @@ export const documents = pgTable('documents', {
   attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').default(0),
-  deletedAt: timestamp('deleted_at', { mode: 'string' }),
+  deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
   deletedBy: text('deleted_by'),
 }, (table) => ({
   idx_type_deleted: index('docs_type_deleted').on(table.type, table.isDeleted),
@@ -76,7 +76,7 @@ export const refFiscalYearCorrections = pgTable('ref_fiscal_year_corrections', {
   oldFiscalYear: integer('old_fiscal_year').notNull(),
   newFiscalYear: integer('new_fiscal_year').notNull(),
   status: text('status').notNull(), // 'corrected' | 'conflict'
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 }, (table) => ({
   // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_ref_fiscal_year_corrections_document_id: index('idx_ref_fiscal_year_corrections_document_id').on(table.documentId),

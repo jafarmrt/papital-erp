@@ -17,7 +17,7 @@ export const projectManagers = pgTable('project_managers', {
   projectId: integer('project_id').notNull().references(() => productionProjects.id),
   userId: integer('user_id').notNull().references(() => users.id),
   createdById: integer('created_by_id').references(() => users.id),
-  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (table) => ({
   uq_project_managers_project_user: uniqueIndex('uq_project_managers_project_user').on(table.projectId, table.userId),
   idx_project_managers_user: index('idx_project_managers_user').on(table.userId),
@@ -32,7 +32,7 @@ export const stockReceiptConfirmations = pgTable('stock_receipt_confirmations', 
   status: text('status').notNull(),
   note: text('note').notNull().default(''),
   confirmedById: integer('confirmed_by_id').notNull().references(() => users.id),
-  confirmedAt: timestamp('confirmed_at', { mode: 'string' }).notNull().defaultNow(),
+  confirmedAt: timestamp('confirmed_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (table) => ({
   uq_stock_receipt_confirmations_document: uniqueIndex('uq_stock_receipt_confirmations_document').on(table.documentId).where(sql`${table.documentId} IS NOT NULL`),
   uq_stock_receipt_confirmations_allocation: uniqueIndex('uq_stock_receipt_confirmations_allocation').on(table.bomAllocationId).where(sql`${table.bomAllocationId} IS NOT NULL`),
@@ -54,11 +54,11 @@ export const workshopTaskReports = pgTable('workshop_task_reports', {
   approvedQuantity: numeric('approved_quantity', { precision: 18, scale: 4, mode: 'number' }),
   reviewNote: text('review_note').notNull().default(''),
   reviewedById: integer('reviewed_by_id').references(() => users.id),
-  reviewedAt: timestamp('reviewed_at', { mode: 'string' }),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true, mode: 'string' }),
   pieceworkLogId: integer('piecework_log_id').references(() => pieceworkLogs.id),
   createdById: integer('created_by_id').notNull().references(() => users.id),
-  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   version: integer('version').notNull().default(1),
 }, (table) => ({
   uq_workshop_task_reports_live_row: uniqueIndex('uq_workshop_task_reports_live_row').on(table.projectId, table.stageId, table.productId, table.rowId)

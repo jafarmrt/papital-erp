@@ -47,8 +47,8 @@ export const personnel = pgTable('personnel', {
   nobitexPassword: text('nobitex_password').default(''),
   address: text('address').default(''),
   notes: text('notes').default(''),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
   // v9.0.30 (TD-442، تصمیم D5 الف): نسخه قفل خوش‌بینانه ویرایش پرسنل (مهاجرت 0055)
   version: integer('version').notNull().default(1),
@@ -76,7 +76,7 @@ export const taskCategories = pgTable('task_categories', {
   name: text('name').notNull().unique(),
   description: text('description').default(''),
   isDeleted: integer('is_deleted').default(0),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 });
 
 export const pieceworkTasks = pgTable('piecework_tasks', {
@@ -88,7 +88,7 @@ export const pieceworkTasks = pgTable('piecework_tasks', {
   unit: text('unit').default('عدد'),
   description: text('description').default(''),
   isActive: integer('is_active').default(1),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
   // TD-246: ایندکس یکتای جزئی uq_ptask_code_active روی lower(btrim(code)) برای عناوین فعال را مهاجرت 0037 فقط روی داده
@@ -111,7 +111,7 @@ export const pieceworkTaskRateHistory = pgTable('piecework_task_rate_history', {
   changedByUserId: integer('changed_by_user_id').references(() => users.id),
   changedByUsername: text('changed_by_username').default(''),
   effectiveDate: text('effective_date').notNull(),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   // v9.0.284 (TD-809، مهاجرت 0076): ردیف تغییر نرخ اختصاصی این پرسنل؛ تاریخچه نرخ پایه عنوان کار NULL است
   personnelId: integer('personnel_id'),
 }, (table) => ({
@@ -128,7 +128,7 @@ export const pieceworkPersonnelRates = pgTable('piecework_personnel_rates', {
   personnelId: integer('personnel_id').notNull().references(() => personnel.id),
   taskId: integer('task_id').notNull().references(() => pieceworkTasks.id),
   customRate: moneyNumeric('custom_rate').notNull(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
   idx_ppr_personnel: index('idx_ppr_personnel').on(table.personnelId),
@@ -181,7 +181,7 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   eidiYear: integer('eidi_year'),
   isEidi: integer('is_eidi').notNull().default(0),
   createdById: integer('created_by_id').references(() => users.id),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
   idx_ppay_personnel: index('idx_ppay_personnel').on(table.personnelId),
@@ -207,8 +207,8 @@ export const payrollStatutoryRates = pgTable('payroll_statutory_rates', {
   taxBrackets: jsonb('tax_brackets').$type<TaxBracket[]>().notNull().default([]),
   isInsuranceDeductedFromTax: integer('is_insurance_deducted_from_tax').notNull().default(0),
   version: integer('version').notNull().default(1),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 }, (table) => ({
   uq_payroll_statutory_rates_year: uniqueIndex('uq_payroll_statutory_rates_year').on(table.jalaliYear),
 }));
@@ -228,8 +228,8 @@ export const payrollEidiRates = pgTable('payroll_eidi_rates', {
   minDailyWage: moneyNumeric('min_daily_wage').notNull().default(sql`0`),
   fixedAmount: moneyNumeric('fixed_amount').notNull().default(sql`0`),
   version: integer('version').notNull().default(1),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 }, (table) => ({
   uq_payroll_eidi_rates_year: uniqueIndex('uq_payroll_eidi_rates_year').on(table.jalaliYear),
 }));
@@ -249,7 +249,7 @@ export const pieceworkLogs = pgTable('piecework_logs', {
   status: text('status').default('pending'),
   createdById: integer('created_by_id').references(() => users.id),
   createdByUsername: text('created_by_username').default(''),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
   idx_plog_personnel: index('idx_plog_personnel').on(table.personnelId),

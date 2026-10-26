@@ -7,6 +7,7 @@ import { logger } from '../middleware/logger.js';
 import type { RequestIdempotencyKey } from '../lib/requestContext.js';
 import { IDEMPOTENCY_IN_FLIGHT_MESSAGE, IDEMPOTENT_REPLAY_MESSAGE } from '../lib/idempotentReplay.js';
 import { ConflictError } from '../errors/customErrors.js';
+import { serverTimestampToUtcIso } from '../lib/serverTimestamp.js';
 
 export interface AcquireKeyOptions {
   key?: string;
@@ -211,25 +212,11 @@ export class IdempotencyService {
     }
 
     if (record.status === 'processing') {
-      // Timezone-safe lock expiry check (Phase 8 fix): the writer stores a UTC
-      // wall-clock string into a TIMESTAMP (without tz) column. When the driver
-      // hands it back as a local-shifted Date, reconstruct the original UTC
-      // instant from its wall-clock parts — otherwise servers off UTC (e.g.
-      // UTC+3:30) treat every live lock as expired and OCC re-acquires it,
-      // defeating IN_PROGRESS deduplication.
+      // v11 (phase 4.2): locked_until is timestamptz, read as the UTC server time without an offset
+      // (withUtcTimestamptzText), so it parses as that instant whatever the process time zone is.
       const rawLock = record.lockedUntil as unknown;
-      const lockDate = rawLock instanceof Date ? rawLock : new Date(String(rawLock));
-      const lockExpiry = Number.isNaN(lockDate.getTime())
-        ? 0
-        : Date.UTC(
-            lockDate.getFullYear(),
-            lockDate.getMonth(),
-            lockDate.getDate(),
-            lockDate.getHours(),
-            lockDate.getMinutes(),
-            lockDate.getSeconds(),
-            lockDate.getMilliseconds()
-          );
+      const lockMs = rawLock instanceof Date ? rawLock.getTime() : Date.parse(serverTimestampToUtcIso(String(rawLock)) ?? '');
+      const lockExpiry = Number.isNaN(lockMs) ? 0 : lockMs;
       const nowMs = Date.now();
 
       if (lockExpiry > nowMs) {

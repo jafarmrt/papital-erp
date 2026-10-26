@@ -22,7 +22,7 @@ export const customers = pgTable('customers', {
   website: text('website').default(''),
   email: text('email').default(''),
   instagram: text('instagram').default(''),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').default(0)
 }, (table) => ({
@@ -41,8 +41,8 @@ export const customerTags = pgTable('customer_tags', {
   name: text('name').notNull(),
   color: text('color').notNull().default('slate'),
   createdById: integer('created_by_id').references(() => users.id),
-  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').notNull().default(0),
 }, (table) => ({
@@ -55,7 +55,7 @@ export const customerTagLinks = pgTable('customer_tag_links', {
   customerId: integer('customer_id').notNull().references(() => customers.id),
   tagId: integer('tag_id').notNull().references(() => customerTags.id),
   createdById: integer('created_by_id').references(() => users.id),
-  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (table) => ({
   uq_customer_tag_links_customer_tag: uniqueIndex('uq_customer_tag_links_customer_tag').on(table.customerId, table.tagId),
   idx_customer_tag_links_tag: index('idx_customer_tag_links_tag').on(table.tagId),
@@ -87,8 +87,8 @@ export const crmLeads = pgTable('crm_leads', {
   hasProforma: integer('has_proforma').default(0),
   // V3.1.29: Loose reference without circular FK constraint — documents.crmLeadId is the single source of truth for the relationship
   proformaId: integer('proforma_id'),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   createdBy: text('created_by').default(''),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
@@ -121,10 +121,10 @@ export const crmActivities = pgTable('crm_activities', {
   nextFollowUpDateIso: text('next_followup_date_iso').default(''),
   nextFollowUpTask: text('next_followup_task').default(''),
   isFollowUpCompleted: integer('is_followup_completed').default(0),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   // v10.1.18 (N-02 بخش ۲، migration 0113): ویرایش با نسخه (قفل خوش‌بینانه) و نام آخرین ویرایشگر
   version: integer('version').notNull().default(1),
-  updatedAt: timestamp('updated_at', { mode: 'string' }),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }),
   updatedBy: text('updated_by').default(''),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
@@ -151,7 +151,7 @@ export const crmLeadStageHistory = pgTable('crm_lead_stage_history', {
   assignedPersonnelId: integer('assigned_personnel_id').references(baseRelations.personnelId),
   changedById: integer('changed_by_id').references(() => users.id),
   changedByName: text('changed_by_name').notNull().default(''),
-  changedAt: timestamp('changed_at', { mode: 'string' }).notNull().defaultNow(),
+  changedAt: timestamp('changed_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   // v10.1.70 (migration 0125): `live` از همین نسخه به بعد؛ `backfill` / `backfill_estimated` بازسازی تاریخچه پیش از ۱۰.۱.۱۸
   // از دفترچه اقدامات پرونده (`erp_backfill_crm_lead_stage_history`)، دومی با مرحله یا تاریخ تخمینی
   source: text('source').notNull().default('live'),

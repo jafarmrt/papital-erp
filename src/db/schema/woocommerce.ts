@@ -15,8 +15,8 @@ export const woocommerceOrderLogs = pgTable('woocommerce_order_logs', {
   totalAmount: moneyNumeric('total_amount', { precision: 15, scale: 2 }).default(sql`0`),
   payload: jsonb('payload'),
   errorMessage: text('error_message').default(''),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow()
 }, (table) => ({
   idx_wc_order_id: index('idx_wc_order_id').on(table.wcOrderId),
   idx_wc_status: index('idx_wc_status').on(table.status),
@@ -36,8 +36,8 @@ export const wcProductLinks = pgTable('wc_product_links', {
   siteSku: text('site_sku').notNull().default(''),
   siteStock: integer('site_stock'),
   siteManageStock: integer('site_manage_stock').notNull().default(0),
-  lastReadAt: timestamp('last_read_at', { mode: 'string' }),
-  lastPushedAt: timestamp('last_pushed_at', { mode: 'string' }),
+  lastReadAt: timestamp('last_read_at', { withTimezone: true, mode: 'string' }),
+  lastPushedAt: timestamp('last_pushed_at', { withTimezone: true, mode: 'string' }),
   lastError: text('last_error').notNull().default(''),
   failureCount: integer('failure_count').notNull().default(0),
   /** D-04 part C (migration 0131): the shop product's type and regular price as last read or written */
@@ -49,8 +49,8 @@ export const wcProductLinks = pgTable('wc_product_links', {
   skuError: text('sku_error').notNull().default(''),
   skuFailureCount: integer('sku_failure_count').notNull().default(0),
   isDeleted: integer('is_deleted').notNull().default(0),
-  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (table) => ({
   idx_wc_product_links_item: index('idx_wc_product_links_item').on(table.itemId),
   uq_wc_product_links_item_live: uniqueIndex('uq_wc_product_links_item_live').on(table.itemId).where(sql`${table.isDeleted} = 0`),
@@ -63,8 +63,8 @@ export const wcSyncRuns = pgTable('wc_sync_runs', {
   kind: text('kind').notNull(), // 'refresh' | 'stock_push' | 'price_push' | 'sku_push' (0131)
   status: text('status').notNull(), // 'ok' | 'partial' | 'failed'
   userId: integer('user_id').references(() => users.id),
-  startedAt: timestamp('started_at', { mode: 'string' }).notNull().defaultNow(),
-  finishedAt: timestamp('finished_at', { mode: 'string' }),
+  startedAt: timestamp('started_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  finishedAt: timestamp('finished_at', { withTimezone: true, mode: 'string' }),
   summary: jsonb('summary').notNull().default(sql`'{}'::jsonb`),
   errorMessage: text('error_message').notNull().default(''),
 }, (table) => ({

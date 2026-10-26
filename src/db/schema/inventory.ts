@@ -36,8 +36,8 @@ export const itemWarehouseStocks = pgTable('item_warehouse_stocks', {
   currentStock: numeric('current_stock', { precision: 18, scale: 4, mode: 'number' }).notNull().default(0),
   reservedStock: numeric('reserved_stock', { precision: 18, scale: 4, mode: 'number' }).notNull().default(0),
   version: integer('version').notNull().default(1),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 }, (table) => ({
   uniqueItemWarehouse: uniqueIndex('idx_item_warehouse_unique').on(table.itemId, table.warehouseId),
   idxIwsItemId: index('idx_iws_item_id').on(table.itemId),
@@ -60,7 +60,7 @@ export const inventoryReconciliationAnomalies = pgTable('inventory_reconciliatio
   afterQty: numeric('after_qty', { precision: 18, scale: 4, mode: 'number' }),
   details: text('details').notNull().default(''),
   createdBy: text('created_by').notNull().default(''),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 }, (table) => ({
   idxRun: index('idx_inv_recon_anomalies_run').on(table.runId),
   idxItem: index('idx_inv_recon_anomalies_item').on(table.itemId),
@@ -91,7 +91,7 @@ export const items = pgTable('items', {
   transferCode: text('transfer_code'),
   productDescription: text('product_description'),
   technicalNotes: text('technical_notes'),
-  lastKardexRebuildAt: timestamp('last_kardex_rebuild_at', { mode: 'string' }),
+  lastKardexRebuildAt: timestamp('last_kardex_rebuild_at', { withTimezone: true, mode: 'string' }),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
@@ -149,8 +149,8 @@ export const itemPrices = pgTable('item_prices', {
   title: text('title').notNull(),
   price: moneyNumeric('price').notNull(),
   currency: text('currency').default('IRR'),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
   idx_item_id: index('item_prices_item_id').on(table.itemId),
@@ -166,7 +166,7 @@ export const itemPriceTitleCleanup = pgTable('item_price_title_cleanup', {
   price: moneyNumeric('price').notNull(),
   currency: text('currency'),
   reason: text('reason').notNull(),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 });
 
 export const pendingMaterials = pgTable('pending_materials', {
@@ -191,7 +191,7 @@ export const pendingMaterials = pgTable('pending_materials', {
   rejectionReason: text('rejection_reason').default(''),
   // v9.0.397 (TD-825): the item an approval made (migration 0087); null while pending, rejected, or approved before v9.0.397
   itemId: integer('item_id').references(baseRelations.itemsId),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
   idx_pmat_item: index('idx_pmat_item').on(table.itemId),
@@ -214,7 +214,7 @@ export const itemCodeHistory = pgTable('item_code_history', {
   reason: text('reason').notNull(),
   userId: integer('user_id').references(() => users.id),
   username: text('username').notNull().default(''),
-  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (table) => ({
   idx_item_code_history_item: index('idx_item_code_history_item').on(table.itemId),
   idx_item_code_history_user: index('idx_item_code_history_user').on(table.userId).where(sql`${table.userId} IS NOT NULL`),
@@ -229,8 +229,8 @@ export const transfers = pgTable('transfers', {
   image: text('image').default(''),
   thumbnail: text('thumbnail').default(''),
   notes: text('notes').default(''),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
   idx_transfer_code: index('idx_transfer_code').on(table.code),

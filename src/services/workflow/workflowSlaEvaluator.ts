@@ -186,9 +186,9 @@ export class WorkflowSlaEvaluator {
     // OBS-R2-72 / OBS-R2-69: the running instances with the latest entry row into their current step, in (created_at, id) order
     const activeInstances = rowsOf<ActiveInstanceRow>(await orm.execute(sql`
       SELECT i.id, i.workflow_definition_id AS "definitionId", i.current_state_id AS "currentStateId",
-             i.created_at::text AS "createdAt", i.entity_type AS "entityType", i.entity_id AS "entityId",
+             i.created_at AS "createdAt", i.entity_type AS "entityType", i.entity_id AS "entityId",
              i.started_by_name AS "startedByName", md5(i.snapshot_dsl::text) AS key,
-             (SELECT h.created_at::text FROM workflow_history_logs h
+             (SELECT h.created_at FROM workflow_history_logs h
                WHERE h.instance_id = i.id AND h.to_state_id = i.current_state_id AND ${STEP_ENTRY_SQL}
                ORDER BY h.created_at DESC, h.id DESC LIMIT 1) AS "enteredAt"
       FROM workflow_instances i
