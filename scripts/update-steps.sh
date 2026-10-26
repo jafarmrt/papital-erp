@@ -143,7 +143,7 @@ update_database_dir() {
   fi
   host="$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')"
   host="${host//%2f//}"
-  case "$host" in ""|localhost|127.*|::1|/*) ;; *) return 0 ;; esac
+  case "$host" in ""|localhost|127.[0-9]*|::1|/*) ;; *) return 0 ;; esac
   if [ -d "${UPDATE_PG_DIR:-/var/lib/postgresql}" ]; then echo "${UPDATE_PG_DIR:-/var/lib/postgresql}"; fi
 }
 
