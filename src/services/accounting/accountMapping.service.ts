@@ -414,8 +414,8 @@ export class AccountMappingService {
   /**
    * v11 phase 6.1b (M3, M6): the control accounts (`src/lib/accounting/controlAccounts.ts`) by account id: the ledger
    * account of every live treasury account, the mapped party, payroll, statutory, eidi, advance, cheque and inventory
-   * accounts, and every posting account of the inventory group 14 (the ledger side of the stock health check,
-   * `inventoryLedgerValue.ts`). An account in two roles keeps the first kind found, treasury first.
+   * accounts and the accounts under them, and every posting account of the inventory group 14 (the ledger side of the stock
+   * health check, `inventoryLedgerValue.ts`). An account in two roles keeps the first kind found, treasury first.
    */
   static async controlAccountsById(tx: DbExecutor): Promise<Map<number, ControlAccountEntry>> {
     const found = new Map<number, ControlAccountEntry>();
@@ -433,6 +433,23 @@ export class AccountMappingService {
     for (const [concept, kind] of MAPPED_CONTROL_CONCEPTS) {
       const account = await this.resolveAccount(concept, tx);
       if (account) add({ id: account.id, code: account.code, name: account.name }, kind);
+    }
+
+    // the accounts under a treasury or mapped account belong to its book (a detailed account under the trade receivables or
+    // the wages payable): their children, one level at a time, the chart's deepest level being three below a group
+    let parents = [...found.values()];
+    for (let depth = 0; depth < 3 && parents.length > 0; depth++) {
+      const kindOf = new Map(parents.map(entry => [entry.id, entry.kind]));
+      const children = await tx.select({ id: accounts.id, code: accounts.code, name: accounts.name, parentId: accounts.parentId })
+        .from(accounts)
+        .where(and(inArray(accounts.parentId, [...kindOf.keys()]), eq(accounts.isDeleted, 0)));
+      parents = [];
+      for (const child of children) {
+        const kind = kindOf.get(Number(child.parentId));
+        if (!kind || found.has(child.id)) continue;
+        add(child, kind);
+        parents.push(found.get(child.id)!);
+      }
     }
 
     const inventoryGroup = await tx.select({ id: accounts.id, code: accounts.code, name: accounts.name })

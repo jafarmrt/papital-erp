@@ -5,6 +5,8 @@ import { ValidationError } from '../../errors/customErrors.js';
 import type { HealthCheckTestResult } from '../../types.js';
 import { isoToJalaliDate } from '../../utils/calendarDate.js';
 import { DOCUMENT_PARTY_SIDE_LABELS, documentPartySide, partyFitsDocument } from '../../lib/documents/documentPartyKind.js';
+import type { DecimalValue } from '../../lib/financialDecimal.js';
+import { netLineUnitPrice } from './purchaseLineCost.js';
 
 /**
  * v9.0.336 (TD-778، یافته B08-09، تصمیم ت۶ الف بسته ۸): سند فروش و خرید طرف حسابش را با شناسه (`documents.party_id`) نگه
@@ -70,7 +72,8 @@ export async function resolveDocumentParty(tx: DbExecutor, input: {
   const matches = await tx.select({ id: customers.id }).from(customers)
     .where(and(
       eq(customers.isDeleted, 0),
-      sql`btrim(${customers.name}) = ${name}::text`,
+      // v11 phase 6.1b (C8): the trimmed name ignoring case, the key of `uq_customers_name_active`
+      sql`lower(btrim(${customers.name})) = lower(${name}::text)`,
       sql`coalesce(nullif(btrim(${customers.partyType}), ''), 'customer') IN (${side}::text, 'both')`,
     ))
     .orderBy(asc(customers.id))
@@ -98,9 +101,17 @@ export async function assertNameNotOtherKind(tx: DbExecutor, docType: string, bu
   const name = String(buyerName ?? '').trim();
   if (!name || !documentHasParty(docType)) return;
   const rows = await tx.select({ name: customers.name, partyType: customers.partyType }).from(customers)
-    .where(and(eq(customers.isDeleted, 0), sql`btrim(${customers.name}) = ${name}::text`))
+    .where(and(eq(customers.isDeleted, 0), sql`lower(btrim(${customers.name})) = lower(${name}::text)`))
     .limit(2);
   if (rows.length > 0 && !rows.some(r => partyFitsDocument(docType, r.partyType))) throw partyKindMismatch(docType, name);
+}
+
+/**
+ * v11 phase 6.1b (C8): a document line posts an amount when its net unit price after the line discount is above zero, the
+ * amount the purchase voucher credits to the payables (`netLineUnitPrice`)
+ */
+export function hasPricedLine(lines: ReadonlyArray<{ price: DecimalValue | null | undefined; quantity: DecimalValue; discount?: DecimalValue | null }>): boolean {
+  return lines.some(line => netLineUnitPrice(line.price ?? 0, line.quantity, line.discount).isPositive());
 }
 
 /**

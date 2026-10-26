@@ -6,7 +6,7 @@
  * that does not come from that book leaves the book and the ledger apart. So a manual voucher (and the replacement rows
  * of a correction) posts on one only with the permission `accounting.control_adjustment` and a reason, and a treasury,
  * cheque or petty cash entry never takes one as its free counter account. The server reads the accounts from the
- * account mapping and the treasury accounts (`src/services/accounting/controlAccounts.ts`).
+ * account mapping, the treasury accounts and the chart (`AccountMappingService.controlAccountsById`).
  */
 
 export const CONTROL_ADJUSTMENT_PERMISSION = 'accounting.control_adjustment';
@@ -65,4 +65,13 @@ export function controlAccountsOfRows(
 export function controlAccountRefusalMessage(entries: readonly Pick<ControlAccountEntry, 'code' | 'name' | 'kind'>[], persianDigits: (v: string) => string): string {
   const lines = entries.map(entry => controlAccountLine(entry, persianDigits));
   return `این حساب‌ها حساب کنترلی‌اند و ثبت هر کدام از دفتر خودش است: ${lines.join('؛ ')}. سند دستی روی حساب کنترلی فقط با اجازهٔ «اصلاح حساب کنترلی» و نوشتن دلیل ثبت می‌شود.`;
+}
+
+/**
+ * the refusal of a change to a stored voucher with a row on a control account (edit, delete, reversal, correction) to a
+ * user without the permission: taking an entry off a control account is the same adjustment as writing one
+ */
+export function controlVoucherChangeRefusalMessage(entries: readonly Pick<ControlAccountEntry, 'code' | 'name' | 'kind'>[], persianDigits: (v: string) => string): string {
+  const lines = entries.map(entry => controlAccountLine(entry, persianDigits));
+  return `این سند ردیف حساب کنترلی دارد و ویرایش، حذف، برگشت یا اصلاح آن هم فقط با اجازهٔ «اصلاح حساب کنترلی» انجام می‌شود: ${lines.join('؛ ')}.`;
 }

@@ -110,7 +110,7 @@ router.put('/accounting/vouchers/:id', authorizePermission('accounting.vouchers'
 router.delete('/accounting/vouchers/:id', authorizePermission('accounting.vouchers'), idempotency({ scope: 'accounting' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const before = await AccountingService.getJournalVoucherById(id); // v9.0.295 (TD-555): ممیزی حذف کل سند را دارد
-  const result = await AccountingService.deleteJournalVoucher(id);
+  const result = await AccountingService.deleteJournalVoucher(id, { mayAdjustControl: await can(req.user, CONTROL_ADJUSTMENT_PERMISSION) });
   await logActivity({
     userId: req.user?.id,
     username: req.user?.username || 'system',
@@ -135,6 +135,7 @@ router.post('/accounting/vouchers/:id/reverse', authorizePermission('accounting.
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
     manualEntry: true, // v9.0.294 (TD-552، ت۸): سند منشأدار فقط با ابطال منشأ برمی‌گردد
+    mayAdjustControl: await can(req.user, CONTROL_ADJUSTMENT_PERMISSION), // v11 phase 6.1b (M3)
   });
 
   await logActivity({

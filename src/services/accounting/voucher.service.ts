@@ -18,7 +18,7 @@ import { assertVoucherRowsBalanced, isVoucherBalancedForFinalize, resolveManualV
 // v7.0.49 (audit P2-5): ثابت یگانه تلورانس تراز؛ v7.0.76 به src/lib/voucherBalance.ts منتقل شد تا فرم‌ها هم آن را بخوانند
 import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
 import { assertPostingAccounts } from './postingAccounts.js';
-import { assertManualControlRows, resolveManualRowDetails, type ControlAdjustment } from './manualVoucherRows.js';
+import { assertManualControlRows, assertMayChangeControlVoucher, resolveManualRowDetails, type ControlAdjustment } from './manualVoucherRows.js';
 import { assertManualVoucherDate } from './manualVoucherDate.js';
 import { isReversalReference } from '../../lib/accounting/voucherSource.js';
 import { assertVoucherWithoutSource, voucherActiveReversals, voucherSourceKinds } from './voucherSource.js';
@@ -413,7 +413,10 @@ export class VoucherService {
     expectedVersion?: number;
     /** v10.0.27 (TD-965): ویرایشگر؛ ثبت‌کننده سند دستی آن را تأیید نمی‌کند */
     userId?: number;
-    /** v11 phase 6.1b (M3): the rows sent replace the voucher's rows, under the rule of `createJournalVoucher` */
+    /**
+     * v11 phase 6.1b (M3): the rows sent replace the voucher's rows, under the rule of `createJournalVoucher` over the sent
+     * and the replaced rows; a header edit of a voucher with a control row needs the permission too
+     */
     controlAdjustment?: ControlAdjustment;
     items?: {
       accountId: number;
@@ -458,15 +461,22 @@ export class VoucherService {
       let sumDebit = fin(existing.totalDebit);
       let sumCredit = fin(existing.totalCredit);
       let controlReason: string | undefined;
+      const replacesRows = Boolean(data.items && data.items.length >= 2);
+      // v11 phase 6.1b (M3, review of #407): a header edit of a voucher with a control row is an adjustment too
+      if (data.manualEntry && !replacesRows) await assertMayChangeControlVoucher(tx, id, data.controlAdjustment?.mayAdjust === true);
 
-      if (data.items && data.items.length >= 2) {
+      if (data.items && replacesRows) {
         // v9.0.190 (TD-551، ت۷): ارز ردیف بی ارز، ارز ذخیره‌شده سند است (سرآیند در ویرایش عوض نمی‌شود)
         const manualRows = data.manualEntry ? resolveManualVoucherRows(data.items, existing.currency) : null;
         const balancedRows = manualRows?.rows ?? data.items;
         ({ sumDebit, sumCredit } = manualRows?.totals ?? assertVoucherRowsBalanced(data.items, existing.currency));
         if (data.manualEntry) await assertPostingAccounts(tx, balancedRows.map(item => item.accountId)); // v9.0.198 (TD-549)
-        // v11 phase 6.1b (M3): as at registration; the reason belongs to the rows, so new rows bring their own
-        if (data.manualEntry) controlReason = await assertManualControlRows(tx, balancedRows, data.controlAdjustment ?? { mayAdjust: false });
+        // v11 phase 6.1b (M3): as at registration, over the sent rows and the rows they replace; new rows bring their reason
+        if (data.manualEntry) {
+          const replaced = await tx.select({ accountId: journalVoucherItems.accountId }).from(journalVoucherItems)
+            .where(and(eq(journalVoucherItems.voucherId, id), eq(journalVoucherItems.isDeleted, 0)));
+          controlReason = await assertManualControlRows(tx, balancedRows, data.controlAdjustment ?? { mayAdjust: false }, replaced);
+        }
         const items = data.manualEntry ? await resolveManualRowDetails(tx, balancedRows) : balancedRows;
 
         // V6.0.21 (TD-157): Soft-delete old items instead of physical hard delete (RULE 09)
@@ -517,7 +527,11 @@ export class VoucherService {
     return this.getJournalVoucherById(id, externalTx);
   }
 
-  static async deleteJournalVoucher(id: number): Promise<{ success: boolean }> {
+  static async deleteJournalVoucher(
+    id: number,
+    /** v11 phase 6.1b (M3): `accounting.control_adjustment`, checked by the route */
+    options: { mayAdjustControl?: boolean } = {},
+  ): Promise<{ success: boolean }> {
     return await idempotentTransaction(async (tx) => {
       const [existing] = await tx.select().from(journalVouchers).where(and(eq(journalVouchers.id, id), eq(journalVouchers.isDeleted, 0))).for('update');
       if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
@@ -529,6 +543,8 @@ export class VoucherService {
       if (existing.status === 'approved') {
         throw new BusinessLogicError('اسناد تاییدشده حسابداری به دلیل اثرگذاری در دفاتر و گزارش‌ها قابل حذف مستقیم نیستند. برای حذف، ابتدا سند را به وضعیت «پیش‌نویس» برگردانید یا در صورت نیاز از «صدور سند برگشتی (ابطال سند)» استفاده کنید.');
       }
+      // v11 phase 6.1b (M3): after the state rules, so a voucher that may not be deleted at all says why
+      await assertMayChangeControlVoucher(tx, id, options.mayAdjustControl === true);
 
       await this.checkFiscalPeriodOpen(existing.date, tx);
 
@@ -645,6 +661,8 @@ export class VoucherService {
       allowYearEndClosing?: boolean;
       /** v9.0.294 (TD-552، ت۸): برگشت از صفحه اسناد حسابداری؛ سند منشأدار فقط با ابطال منشأ برمی‌گردد */
       manualEntry?: boolean;
+      /** v11 phase 6.1b (M3): `accounting.control_adjustment`, checked by the route; read only with `manualEntry` */
+      mayAdjustControl?: boolean;
     }
   ): Promise<JournalVoucher> {
 
@@ -693,6 +711,8 @@ export class VoucherService {
           `برای سند شماره «${original.voucherNumber}» قبلاً سند برگشت به شماره «${otherReversal.voucherNumber}» صادر گردیده است و امکان ابطال مجدد وجود ندارد.`
         );
       }
+      // v11 phase 6.1b (M3): after the state rules, so a voucher that may not be reversed at all says why
+      if (params.manualEntry) await assertMayChangeControlVoucher(tx, original.id, params.mayAdjustControl === true);
 
       const originalItems = await tx.select().from(journalVoucherItems)
         .where(and(
@@ -789,7 +809,10 @@ export class VoucherService {
       newDescription?: string;
       userId?: number;
       username?: string;
-      /** v11 phase 6.1b (M3): `accounting.control_adjustment`; the correction's reason is the reason of its control rows */
+      /**
+       * v11 phase 6.1b (M3): `accounting.control_adjustment`, for the original's control rows the reversal takes off and
+       * the replacement's; the correction's reason is the reason of its control rows
+       */
       mayAdjustControl?: boolean;
     }
   ): Promise<{ reversalVoucher: JournalVoucher; correctedVoucher: JournalVoucher; message: string }> {
@@ -838,6 +861,8 @@ export class VoucherService {
           `برای سند شماره «${original.voucherNumber}» قبلاً سند معکوس اصلاحی به شماره «${existingReversal.voucherNumber}» صادر گردیده است.`
         );
       }
+      // v11 phase 6.1b (M3): after the state rules, so a voucher that may not be corrected at all says why
+      await assertMayChangeControlVoucher(tx, original.id, params.mayAdjustControl === true);
 
       // 1. Create Reversal Voucher
       const revNumber = await this.getNextVoucherNumber(tx);

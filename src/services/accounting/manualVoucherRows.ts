@@ -1,9 +1,10 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { bankAccounts, customers, personnel, productionProjects } from '../../db/schema.js';
+import { bankAccounts, customers, journalVoucherItems, personnel, productionProjects } from '../../db/schema.js';
 import { ForbiddenError, ValidationError } from '../../errors/customErrors.js';
 import {
-  CONTROL_REASON_MAX, CONTROL_REASON_REQUIRED_MESSAGE, controlAccountLine, controlAccountRefusalMessage, type ControlAccountEntry,
+  CONTROL_REASON_MAX, CONTROL_REASON_REQUIRED_MESSAGE, controlAccountLine, controlAccountRefusalMessage, controlVoucherChangeRefusalMessage,
+  type ControlAccountEntry,
 } from '../../lib/accounting/controlAccounts.js';
 import {
   VOUCHER_DETAILED_TYPE_LABELS, voucherDetailedTypeFromStored, voucherPersonnelName, voucherProjectLabel,
@@ -39,10 +40,12 @@ export async function assertManualControlRows(
   tx: DbExecutor,
   rows: readonly ManualVoucherRowDetail[],
   adjustment: ControlAdjustment,
+  /** an edit's stored rows that the sent rows replace: taking a row off a control account is an adjustment too */
+  replaced: readonly Pick<ManualVoucherRowDetail, 'accountId'>[] = [],
 ): Promise<string> {
   const control = await AccountMappingService.controlAccountsById(tx);
   const hit = new Map<number, ControlAccountEntry>();
-  for (const row of rows) {
+  for (const row of [...rows, ...replaced]) {
     const entry = control.get(Number(row.accountId));
     if (entry) hit.set(entry.id, entry);
   }
@@ -56,9 +59,31 @@ export async function assertManualControlRows(
     throw new ValidationError(`${CONTROL_REASON_REQUIRED_MESSAGE} حساب‌های کنترلی این سند: ${lines.join('؛ ')}.`, { accounts: [...hit.values()] }, 'VOUCHER_CONTROL_REASON_REQUIRED');
   }
   if (reason.length > CONTROL_REASON_MAX) {
-    throw new ValidationError(`دلیل ثبت روی حساب کنترلی حداکثر ${toPersianDigits(String(CONTROL_REASON_MAX))} نویسه است.`, undefined, 'VOUCHER_CONTROL_REASON_REQUIRED');
+    throw new ValidationError(`دلیل ثبت روی حساب کنترلی حداکثر ${toPersianDigits(String(CONTROL_REASON_MAX))} نویسه است.`, undefined, 'VOUCHER_CONTROL_REASON_TOO_LONG');
   }
   return reason;
+}
+
+/**
+ * v11 phase 6.1b (M3, review of #407): taking an entry off a control account is the same adjustment as writing one. An edit
+ * (rows or header), a delete, a reversal or a correction of a stored voucher with a live row on a control account needs
+ * `accounting.control_adjustment` (403 `VOUCHER_CONTROL_ACCOUNT`, naming each account and its book); a new row's reason
+ * stays with `assertManualControlRows`. This covers the automatic vouchers that carry no source link (item opening, WAC
+ * correction, void residue, a stock adjustment without a document), which the voucher page handles as manual: before, a
+ * user who may only draft vouchers deleted, edited, reversed or corrected them, and the inventory ledger left the Kardex.
+ */
+export async function assertMayChangeControlVoucher(tx: DbExecutor, voucherId: number, mayAdjust: boolean): Promise<void> {
+  const rows = await tx.select({ accountId: journalVoucherItems.accountId }).from(journalVoucherItems)
+    .where(and(eq(journalVoucherItems.voucherId, voucherId), eq(journalVoucherItems.isDeleted, 0)));
+  if (rows.length === 0) return;
+  const control = await AccountMappingService.controlAccountsById(tx);
+  const hit = new Map<number, ControlAccountEntry>();
+  for (const row of rows) {
+    const entry = control.get(Number(row.accountId));
+    if (entry) hit.set(entry.id, entry);
+  }
+  if (hit.size === 0 || mayAdjust) return;
+  throw new ForbiddenError(controlVoucherChangeRefusalMessage([...hit.values()], toPersianDigits), { accounts: [...hit.values()] }, 'VOUCHER_CONTROL_ACCOUNT');
 }
 
 /**
@@ -96,7 +121,9 @@ export async function resolveManualRowDetails<T extends ManualVoucherRowDetail>(
     const type = voucherDetailedTypeFromStored(row.detailedType);
     const id = Number(row.detailedId) > 0 ? Number(row.detailedId) : null;
     const label = VOUCHER_DETAILED_TYPE_LABELS[type];
-    if (type === 'none' || type === 'other') return { ...row, detailedType: type, detailedId: null };
+    // «بدون تفصیلی» keeps no name either; «متفرقه» keeps the name typed for it
+    if (type === 'none') return { ...row, detailedType: type, detailedId: null, detailedName: '' };
+    if (type === 'other') return { ...row, detailedType: type, detailedId: null };
     if (!id) {
       problems.push(`${rowLabel(index)}: ${label} از فهرست انتخاب نشده است`);
       return row;

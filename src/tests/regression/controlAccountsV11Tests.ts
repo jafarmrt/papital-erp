@@ -1,9 +1,10 @@
 import type request from 'supertest';
 import { and, eq, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { activityLogs, bankAccounts, crmLeads, documents, journalVoucherItems, journalVouchers, purchaseRequisitions } from '../../db/schema.js';
+import { accounts, activityLogs, bankAccounts, crmLeads, documents, journalVoucherItems, journalVouchers, purchaseRequisitions } from '../../db/schema.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { getDefaultWarehouseCode } from '../../services/inventory/warehouseResolver.js';
+import { VoucherService } from '../../services/accounting/voucher.service.js';
 import { WorkflowEngineService } from '../../services/workflow/workflowEngineService.js';
 import { createTestCustomer, createTestItem } from '../fixtures/factories.js';
 import { fundedBank } from '../invariants/payrollScenarios.js';
@@ -16,8 +17,9 @@ import {
  * v11 phase 6.1b (control accounts and known parties, findings of the phase 2 evaluation): real Express routes and services
  * on PostgreSQL, each scenario in its own schema with the standard chart of accounts; each is red on v11.3.0.
  *  - M3 (decisions ت۵۲-۲, ت۵۶-۳): a manual voucher row (and a replacement row of a correction) on a control account needs
- *    «اصلاح حساب کنترلی» and a reason, stored on the voucher; a reversal needs neither. A row's detail names a live record
- *    of its type and stores its name.
+ *    «اصلاح حساب کنترلی» and a reason, stored on the voucher. An edit, delete, reversal or correction of a voucher with a
+ *    control row needs the permission too, an automatic voucher without a source included, and so does an account under a
+ *    control account. A row's detail names a live record of its type and stores its name.
  *  - M6: a treasury «متفرقه» entry never takes a control account (insurance, payroll tax, eidi, advances, inventory) as its
  *    counter account.
  *  - C8, S16: a priced purchase names a supplier on the list, a purchase order goes to one, and a sales document by a
@@ -51,14 +53,14 @@ export async function runControlAccountsV11Tests(shouldRun: ShouldRun): Promise<
 
   const m3 = 'reg_manual_voucher_control_account_v11_6_1b_m3';
   if (shouldRun(m3, 'v11', 'phase6', 'm3', 'voucher', 'control')) {
-    await runCase(results, m3, 'v11 phase 6.1b (M3): a manual voucher row on a control account (party, treasury, inventory, statutory) is refused without the control adjustment permission (403, naming the book), needs a reason with it (422, the system admin too) and stores the reason; a correction follows the same rule and a reversal needs neither', () => inFiscalSandbox(async () => {
+    await runCase(results, m3, 'v11 phase 6.1b (M3): a manual voucher row on a control account (party, treasury, inventory, statutory) is refused without the control adjustment permission (403, naming the book), needs a reason with it (422, the system admin too) and stores the reason; a correction follows the same rule; changing a stored voucher with a control row (an automatic one without a source too) needs the permission, and an account under a control account is one', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const today = await businessTodayIsoDate();
       const plain = await sandboxClientWith(['accounting.view', 'accounting.vouchers']);
       const adjuster = await sandboxClientWith(['accounting.view', 'accounting.vouchers', 'accounting.control_adjustment']);
       const admin = await sandboxAdminClient();
       const customer = await createTestCustomer();
-      const acc = await accountIdsByCode('1201', '1404', '3204', '7001', '7009');
+      const acc = await accountIdsByCode('1201', '1401', '1404', '3204', '4001', '7001', '7009');
       const bank = await fundedBank();
       const [bankRow] = await orm.select({ accountId: bankAccounts.accountId }).from(bankAccounts).where(eq(bankAccounts.id, bank));
       const bankLedger = Number(bankRow?.accountId);
@@ -120,10 +122,38 @@ export async function runControlAccountsV11Tests(shouldRun: ShouldRun): Promise<
         if (v?.reason !== CORRECTION_REASON) problems.push(`the correction stores the reason «${v?.reason}», expected the correction reason`);
       }
 
-      // 6) reverse: undoing a voucher on a control account needs no permission
+      // 6) reverse: taking an entry off a control account is an adjustment too
       const onReceivable = await postApproved(today, acc['1201'], acc['7009'], 3000, 'M3 reverse');
-      const reversed = await plain.post(`/api/accounting/vouchers/${onReceivable}/reverse`, { reason: CORRECTION_REASON, date: today });
-      if (!ok(reversed)) problems.push(`reversing a voucher on the receivables without the permission returned ${brief(reversed)}, expected success`);
+      const reverse = { reason: CORRECTION_REASON, date: today };
+      expectRefused('reversing a voucher on the receivables without the permission', await plain.post(`/api/accounting/vouchers/${onReceivable}/reverse`, reverse), 403, 'VOUCHER_CONTROL_ACCOUNT', PERMISSION_TITLE, PARTY_BOOK);
+      const reversed = await adjuster.post(`/api/accounting/vouchers/${onReceivable}/reverse`, reverse);
+      if (!ok(reversed)) problems.push(`reversing a voucher on the receivables with the permission returned ${brief(reversed)}, expected success`);
+
+      // 6b) an automatic voucher without a source link (an item's opening stock on 1401): a user who may only draft
+      // vouchers neither edits its header, deletes, reverses nor corrects it
+      const automatic = (status: 'draft' | 'approved') => VoucherService.createJournalVoucher({
+        date: today, voucherType: 'opening', status, description: 'M3 item opening', referenceModule: 'item_opening', referenceId: 1, referenceNumber: 'ITEM-M3',
+        currency: 'IRR', items: [
+          { accountId: acc['1401'], detailedType: 'other', detailedName: 'opening', debit: 5000, credit: 0, currency: 'IRR' },
+          { accountId: acc['4001'], detailedType: 'other', detailedName: 'capital', debit: 0, credit: 5000, currency: 'IRR' },
+        ],
+      });
+      const openingDraft = await automatic('draft');
+      const draftVersion = async () => (await orm.select({ version: journalVouchers.version }).from(journalVouchers).where(eq(journalVouchers.id, openingDraft.id)))[0]?.version;
+      expectRefused('a header edit of an automatic opening draft without the permission', await plain.put(`/api/accounting/vouchers/${openingDraft.id}`, { description: 'M3 header', version: await draftVersion() }), 403, 'VOUCHER_CONTROL_ACCOUNT', PERMISSION_TITLE, INVENTORY_BOOK);
+      expectRefused('deleting an automatic opening draft without the permission', await plain.del(`/api/accounting/vouchers/${openingDraft.id}`), 403, 'VOUCHER_CONTROL_ACCOUNT', INVENTORY_BOOK);
+      const [kept] = await orm.select({ deleted: journalVouchers.isDeleted, description: journalVouchers.description }).from(journalVouchers).where(eq(journalVouchers.id, openingDraft.id));
+      if (kept?.deleted !== 0 || kept?.description !== 'M3 item opening') problems.push(`the refused edit or delete changed the opening draft: ${JSON.stringify(kept)}`);
+      const headerEdit = await adjuster.put(`/api/accounting/vouchers/${openingDraft.id}`, { description: 'M3 header', version: await draftVersion() });
+      if (!ok(headerEdit)) problems.push(`a header edit of the opening draft with the permission returned ${brief(headerEdit)}, expected success`);
+      const deleted = await adjuster.del(`/api/accounting/vouchers/${openingDraft.id}`);
+      if (!ok(deleted)) problems.push(`deleting the opening draft with the permission returned ${brief(deleted)}, expected success`);
+      const openingApproved = await automatic('approved');
+      expectRefused('reversing an automatic opening voucher without the permission', await plain.post(`/api/accounting/vouchers/${openingApproved.id}/reverse`, reverse), 403, 'VOUCHER_CONTROL_ACCOUNT');
+      const plainCorrection = { date: today, reason: CORRECTION_REASON, newItems: [
+        { accountId: acc['7001'], debit: 5000, credit: 0 }, { accountId: acc['7009'], debit: 0, credit: 5000 },
+      ] };
+      expectRefused('correcting an automatic opening voucher without the permission', await plain.post(`/api/accounting/vouchers/${openingApproved.id}/correct`, plainCorrection), 403, 'VOUCHER_CONTROL_ACCOUNT');
 
       // 7) the voucher forms read the control accounts
       const list = await plain.get('/api/accounting/control-accounts');
@@ -132,8 +162,16 @@ export async function runControlAccountsV11Tests(shouldRun: ShouldRun): Promise<
         if (!codes.has(code)) problems.push(`the control account list lacks ${code}`);
       }
       if (codes.has('7009') || codes.has('4401')) problems.push('the control account list names 7009 or 4401');
+
+      // 8) an account under a control account belongs to its book: a detailed account under the receivables
+      const [child] = await orm.insert(accounts).values({
+        code: '120199', name: 'M3 receivable detail', level: 'detailed', parentId: acc['1201'], accountType: 'asset', nature: 'debit',
+      }).returning({ id: accounts.id });
+      expectRefused('a row on an account under the receivables without the permission', await plain.post('/api/accounting/vouchers', body({ accountId: child.id, detailedType: 'customer', detailedId: customer.id })), 403, 'VOUCHER_CONTROL_ACCOUNT', PARTY_BOOK);
+      const listed = await plain.get('/api/accounting/control-accounts');
+      if (!(Array.isArray(listed.body?.data) ? listed.body.data : []).some((a: { code: string }) => a.code === '120199')) problems.push('the control account list lacks 120199 under 1201');
       assertNoProblems(problems);
-      return 'control rows: 403 without the permission, 422 without a reason (admin too), 201 with both and the reason stored; edit and correct follow it; reversal free';
+      return 'control rows: 403 without the permission, 422 without a reason (admin too), 201 with both and the reason stored; edit, delete, reversal and correction of a control voucher (automatic too) need it; a child account is one';
     }));
   }
 
@@ -217,7 +255,7 @@ export async function runControlAccountsV11Tests(shouldRun: ShouldRun): Promise<
 
   const c8 = 'reg_document_known_party_v11_6_1b_c8';
   if (shouldRun(c8, 'v11', 'phase6', 'c8', 's16', 'documents', 'party')) {
-    await runCase(results, c8, 'v11 phase 6.1b (C8, S16): a priced purchase receipt is finalized only with a supplier on the list (422 for a name no party has or none, on create and on finalize); a sales invoice by a known name is linked to that party, and an unknown name stays a walk-in sale with its name', () => inFiscalSandbox(async () => {
+    await runCase(results, c8, 'v11 phase 6.1b (C8, S16): a priced purchase receipt is finalized only with a supplier on the list (422 for a name no party has or none, on create and on finalize; a name matches ignoring case); a sales invoice by a known name is linked to that party, and an unknown name stays a walk-in sale with its name', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const today = await businessTodayIsoDate();
       const admin = await sandboxAdminClient();
@@ -254,6 +292,17 @@ export async function runControlAccountsV11Tests(shouldRun: ShouldRun): Promise<
       const known = await doc('receipt', 'final', supplier.name);
       if (!ok(known)) problems.push(`a final receipt from «${supplier.name}» by name returned ${brief(known)}, expected success`);
       else if ((await partyOf(known))?.partyId !== supplier.id) problems.push(`the receipt by name is not linked to supplier ${supplier.id}`);
+      // a line priced in the `price` field is priced too
+      const priceField = await admin.post('/api/documents', {
+        docType: 'receipt', status: 'final', refNumber: 'auto', date: today, location: main, buyer_name: '', inOut: 'in',
+        items: [{ itemId: item.id, quantity: 1, price: 2000 }],
+      });
+      if (priceField.status !== 422 || codeOf(priceField) !== 'DOCUMENT_SUPPLIER_REQUIRED') problems.push(`a final receipt priced in «price» with no supplier returned ${brief(priceField)}, expected 422 DOCUMENT_SUPPLIER_REQUIRED`);
+      // the name matches ignoring case, the key of the party name index
+      const latinSupplier = await createTestCustomer({ name: `C8 Rose Supply ${tagOf()}`, partyType: 'supplier' });
+      const upper = await doc('receipt', 'final', `  ${latinSupplier.name.toUpperCase()} `);
+      if (!ok(upper)) problems.push(`a final receipt from the upper-case supplier name returned ${brief(upper)}, expected success`);
+      else if ((await partyOf(upper))?.partyId !== latinSupplier.id) problems.push(`the receipt by the upper-case name is not linked to supplier ${latinSupplier.id}`);
 
       // 2) sales: a known name is linked, an unknown name is a walk-in sale that keeps its name
       const byName = await doc('invoice', 'final', customer.name);
