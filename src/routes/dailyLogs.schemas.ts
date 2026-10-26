@@ -81,8 +81,26 @@ export const updateDailyLogSchema = z.object({
   params: z.object({ id: numericIdString })
 });
 
+const DAILY_LOG_OPENED_REVIEW_MESSAGE = 'بازخورد گزارش کار هنگام باز شدن فرم فرستاده نشد؛ صفحه را تازه کنید و دوباره بازخورد ثبت کنید.';
+
+// v11 phase 6.1a (C10, reviews of #403): the review sends the version of the log the manager read (409 OCC_CONFLICT when
+// the log was edited since), so a review never stands for a text the manager did not see; and the review state it opened
+// (`opened_status`, `opened_manager_notes`), so a second manager's review never silently replaces the first
 export const reviewDailyLogSchema = z.object({
-  body: z.object({ manager_notes: z.string().max(DAILY_LOG_MANAGER_NOTES_MAX, atMost('یادداشت بازبینی', DAILY_LOG_MANAGER_NOTES_MAX)).optional() }),
+  body: z.object({
+    manager_notes: z.string().max(DAILY_LOG_MANAGER_NOTES_MAX, atMost('یادداشت بازبینی', DAILY_LOG_MANAGER_NOTES_MAX)).optional(),
+    // the notes the form opened may predate the notes cap, so only the body size bounds them
+    opened_status: z.string().max(40, DAILY_LOG_OPENED_REVIEW_MESSAGE).optional(),
+    opened_manager_notes: z.string().optional(),
+    version: z.coerce.number({ message: DAILY_LOG_VERSION_REQUIRED_MESSAGE })
+      .int(DAILY_LOG_VERSION_REQUIRED_MESSAGE).positive(DAILY_LOG_VERSION_REQUIRED_MESSAGE),
+  }).superRefine((body, ctx) => {
+    // required (reviews 5-6 of #403): a review without them would replace another manager's review unseen; one Persian
+    // message for both, and none beside the version message of a tab loaded before they existed
+    if (body.opened_status === undefined || body.opened_manager_notes === undefined) {
+      ctx.addIssue({ code: 'custom', path: ['opened_status'], message: DAILY_LOG_OPENED_REVIEW_MESSAGE });
+    }
+  }),
   params: z.object({ id: numericIdString })
 });
 

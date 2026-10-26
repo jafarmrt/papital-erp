@@ -19,7 +19,7 @@ import { payrollTreasuryEventPayload, recordPayrollEvent } from '../piecework/pa
 import { fin, type DecimalValue } from '../../lib/financialDecimal.js';
 import { isPayrollBankCurrency, PAYROLL_CURRENCY, payrollAmountText } from '../../lib/payroll/payrollCurrency.js';
 import { money } from '../../lib/money.js';
-import { isoToJalaliDate } from '../../utils.js';
+import { isoToJalaliDate, toPersianDigits } from '../../utils.js';
 import { resolveTreasuryWriteDate } from './treasury/treasuryDate.js';
 import { ConflictError, NotFoundError, PrivateRefusalError, ValidationError } from '../../errors/customErrors.js';
 import { idempotentTransaction } from '../../middleware/idempotency.js';
@@ -168,14 +168,26 @@ export class PayrollPaymentService {
           referenceId: journalVouchers.referenceId,
           referenceNumber: journalVouchers.referenceNumber,
           voucherType: journalVouchers.voucherType,
+          date: journalVouchers.date,
         })
         .from(journalVouchers)
         .where(payrollVouchersWhere(payroll.id, payroll.payrollNumber));
-      if (!pickPayrollVoucher(voucherCandidates, payroll.id, payroll.payrollNumber)) {
+      const payrollVoucher = pickPayrollVoucher(voucherCandidates, payroll.id, payroll.payrollNumber);
+      if (!payrollVoucher) {
         throw new ConflictError(
           `فیش ${payroll.payrollNumber} سند حسابداری ندارد؛ پیش از پرداخت، سند آن را با «همگام‌سازی سند» صادر کنید.`,
           undefined,
           'PAYROLL_WITHOUT_VOUCHER'
+        );
+      }
+      // v11 phase 6.1a (M12): wages are paid on or after the day the payslip's voucher records them. Before, a payment dated
+      // three weeks before that voucher was accepted and the bank was credited before the liability existed.
+      const accruedOn = String(payrollVoucher.date ?? '').slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(accruedOn) && payIso < accruedOn) {
+        throw new ValidationError(
+          `تاریخ پرداخت (${toPersianDigits(isoToJalaliDate(payIso))}) نمی‌تواند پیش از تاریخ سند فیش ${payroll.payrollNumber} (${toPersianDigits(isoToJalaliDate(accruedOn))}) باشد؛ پرداختِ پیش از آن را مساعده ثبت کنید تا در فیش کسر شود.`,
+          { paymentDate: payIso, payrollVoucherDate: accruedOn },
+          'PAYROLL_PAYMENT_BEFORE_ACCRUAL'
         );
       }
 

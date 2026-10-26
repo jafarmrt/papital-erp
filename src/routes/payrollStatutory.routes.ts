@@ -41,7 +41,8 @@ const previewSchema = z.object({
     personnelId: numericIdString,
     startDate: z.string().min(1, 'تاریخ شروع الزامی است'),
     endDate: z.string().min(1, 'تاریخ پایان الزامی است'),
-    gross: decimalInput('ناخالص فیش'),
+    // v11 phase 6.1a (M16): a negative gross answered 200 with zeros
+    gross: decimalInput('ناخالص فیش').refine(v => v === undefined || !v.startsWith('-'), 'ناخالص فیش نمی‌تواند منفی باشد.'),
   }).passthrough(),
 });
 

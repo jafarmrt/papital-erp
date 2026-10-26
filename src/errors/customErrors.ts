@@ -279,6 +279,18 @@ export function normalizeError(err: unknown): NormalizedError {
         stack: typeof errObj.stack === 'string' ? errObj.stack : undefined,
       };
     }
+    // v11 phase 6.1a (M16, S12): a value beyond its column (a quantity times a price above numeric(18,4)) is the user's
+    // input, not a server fault; before, it answered 500 DATABASE_ERROR
+    if (code === '22003') {
+      return {
+        message: 'عدد واردشده یا حاصل آن (مثلاً مقدار ضرب در قیمت) بیش از اندازهٔ مجاز است؛ عددها را بررسی کنید.',
+        statusCode: 422,
+        code: 'NUMERIC_OUT_OF_RANGE',
+        stack: typeof errObj.stack === 'string' ? errObj.stack : undefined,
+        // TD-1320: the stack holds the SQL and its values; log files only
+        internal: true,
+      };
+    }
     const transient = typeof code === 'string' ? PG_TRANSIENT_ERRORS[code] : undefined;
     if (transient) {
       return { ...transient, stack: typeof errObj.stack === 'string' ? errObj.stack : undefined };
