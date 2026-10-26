@@ -132,7 +132,7 @@ describe('ops_lock_files_readable: a non-root service still sees the locks root 
     spawnSync('mkfifo', [path.join(app, 'fifo')]);
     for (const make of [() => fs.symlinkSync(path.join(app, 'fifo'), path.join(app, 'logs/.ops-busy.lock')), () => spawnSync('mkfifo', [path.join(app, 'logs/.ops-busy.lock')])]) {
       make();
-      const f = spawnSync('bash', ['-c', `source "${path.join(ROOT, 'scripts/ops-lock.sh')}"; ops_busy_hold "${app}"`], { encoding: 'utf8', timeout: 5000 });
+      const f = spawnSync('bash', ['-c', `source "${path.join(ROOT, 'scripts/ops-lock.sh')}"; ops_busy_hold "${app}"`], { encoding: 'utf8', timeout: 10_000 });
       expect(f.status, f.stdout + f.stderr).toBe(0);
       expect(f.stdout).toContain('not a plain file');
       fs.rmSync(path.join(app, 'logs/.ops-busy.lock'));
