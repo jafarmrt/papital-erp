@@ -198,6 +198,9 @@ echo "$(date +%s) $(basename "$BASE")" > "$BACKUP_DIR/.last_${BACKUP_KIND}_ok"
 [ -z "$ATTACHMENTS_ARCHIVE" ] || log "Attachments archive created: $ATTACHMENTS_ARCHIVE ($(du -h "$ATTACHMENTS_ARCHIVE" | cut -f1))"
 log "${BACKUP_KIND} backup completed: $DUMP_FILE.gz ($(du -h "$DUMP_FILE.gz" | cut -f1), $ATT_COUNT attachment(s), retention ${RETENTION_DAYS}d)"
 
+# v11 (O18): the local backup is complete; the upload below does not touch the database, so an update need not wait for it
+ops_busy_release
+
 # 6. v10.0.4 (O-02, TD-957): the encrypted off-server copy (scripts/backup-offsite.sh) of the kinds in
 #    BACKUP_OFFSITE_KINDS (default: daily; update.sh's pre-deployment backup stays local and fast). A backup on the
 #    same disk is not a backup: when the copy fails the run exits 3 (the local backup is kept and complete), and

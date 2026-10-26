@@ -31,7 +31,9 @@ else
   LOG_FILE="$PWD/update-$(date +%Y%m%d-%H%M%S).log"
   # v11 (O16): the log names paths and versions of the server; only root reads it, and logs older than 90 days go
   ( umask 077; : >> "$LOG_FILE" )
+  # the logs sit in the folder update.sh, install.sh and setup-domain.sh were started from; older ones become private too
   find "$PWD" -maxdepth 1 -type f \( -name 'update-*.log' -o -name 'install-*.log' -o -name 'domain-setup-*.log' \) -mtime +90 -delete 2>/dev/null || true
+  find "$PWD" -maxdepth 1 -type f \( -name 'update-*.log' -o -name 'install-*.log' -o -name 'domain-setup-*.log' \) -perm /go=rwx -exec chmod go-rwx {} + 2>/dev/null || true
   # tee ignores HUP: a dropped SSH session must not kill the log writer, or the next log line would end the update
   exec > >(trap '' HUP; exec tee -a "$LOG_FILE") 2>&1
 fi
@@ -101,8 +103,11 @@ BUILD_SWAPPED=0
 # file descriptor 9 until the process ends, the run of the new update.sh included (it inherits it).
 if [ -z "$UPDATE_RESUME" ]; then
   command -v flock >/dev/null 2>&1 || die "flock is required (apt-get install -y util-linux)."
+  # v11 (O18): readable by every user whatever root's umask, so a daily backup of a non-root service sees it held
+  ( umask 022; : >> "$APP_DIR/$UPDATE_LOCK_NAME" ) && chmod 644 "$APP_DIR/$UPDATE_LOCK_NAME" 2>/dev/null || true
   exec 9>"$APP_DIR/$UPDATE_LOCK_NAME"
-  flock -n 9 || die "Another update is already running in ${APP_DIR} (lock file ${UPDATE_LOCK_NAME}). Nothing was changed; wait for it to finish."
+  # a few seconds: another job's lock check (scripts/ops-lock.sh) holds the file for a moment
+  flock -w 10 9 || die "Another update is already running in ${APP_DIR} (lock file ${UPDATE_LOCK_NAME}). Nothing was changed; wait for it to finish."
   # v11 (O18): a backup, restore or upgrade rehearsal that is running finishes first (scripts/ops-lock.sh); a daily
   # backup that starts from now on waits for this update
   # shellcheck source=scripts/ops-lock.sh
@@ -483,7 +488,7 @@ log "[5/6] Restarting service..."
 # (the new server writes them so); the folder of an older install was 0755
 if [ -d logs ]; then
   chmod 750 logs 2>/dev/null || true
-  find logs -maxdepth 1 -type f -perm /o=r -exec chmod o-rwx {} + 2>/dev/null || true
+  find logs -maxdepth 1 -type f ! -name '.*.lock' -perm /o=r -exec chmod o-rwx {} + 2>/dev/null || true
 fi
 if [[ "$UNIT_LIST" != *"$SERVICE_NAME.service"* ]]; then
   # Auto-detect the systemd unit managing the running app (unit may have a custom name)

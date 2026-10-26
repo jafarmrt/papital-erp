@@ -27,6 +27,8 @@ ops_busy_hold() {
     mkdir -p "$(dirname "$file")" 2>/dev/null || true
     ( umask 022; : >> "$file" ) 2>/dev/null || true
   fi
+  # readable by every user: root may have made it (a sudo restore), and a non-root backup must still see the lock
+  [ ! -O "$file" ] || chmod 644 "$file" 2>/dev/null || true
   if [ ! -r "$file" ]; then
     echo "[$(date)] WARNING: the operations lock $file cannot be read; this run is not seen by the nightly check and update.sh"
     return 0

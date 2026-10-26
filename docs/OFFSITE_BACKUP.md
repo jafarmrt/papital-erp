@@ -163,10 +163,11 @@ sudo /opt/papital-erp/scripts/backup-media-offsite.sh
 4. فایل‌های پشتیبان را در `/var/backups/erp` بگذارید و بازیابی را طبق README («بازیابی از Backup») با `scripts/restore.sh` انجام دهید: نخست آزمایشی (drill) و سپس `apply`.
 5. اگر گام ۴ برقرار بوده، کتابخانه تصاویر را برگردانید و نسخه‌های سبک را دوباره بسازید:
    ```bash
-   cd /opt/papital-erp && sudo bash scripts/restore-media.sh
-   npm run media:rebuild-light -- --apply
+   cd /opt/papital-erp && SVC_USER="$(stat -c %U /opt/papital-erp)"
+   sudo -u "$SVC_USER" bash scripts/restore-media.sh
+   sudo -u "$SVC_USER" npm run media:rebuild-light -- --apply
    ```
-   `scripts/restore-media.sh` (نسخهٔ ۱۱، O7) فقط پرونده‌هایی را که روی سرور نیستند از درایو می‌آورد، پس اجرای دوباره‌اش بی‌خطر است، و در پایان می‌سنجد همهٔ پرونده‌های درایو با همان اندازه رسیده‌اند. مثل ارسال، فقط remote رمزگذاری‌شده (crypt) را می‌پذیرد.
+   هر دو فرمان با کاربری اجرا می‌شوند که پوشهٔ برنامه از آن اوست (کاربر سرویس)، تا پرونده‌ها برای سرویس خواندنی بمانند؛ اسکریپت اگر با root برای نصبی با کاربر دیگر اجرا شود می‌ایستد و همین فرمان را می‌گوید. `scripts/restore-media.sh` (نسخهٔ ۱۱، O7) فقط پرونده‌هایی را که روی سرور نیستند از درایو می‌آورد، پس اجرای دوباره‌اش بی‌خطر است، و در پایان می‌سنجد همهٔ پرونده‌های درایو با همان اندازه رسیده‌اند. مثل ارسال، فقط remote رمزگذاری‌شده (crypt) را می‌پذیرد.
 
 ## تنظیم‌های اختیاری `.env`
 

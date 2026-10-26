@@ -90,6 +90,43 @@ sleep 1; ops_wait_idle "$1" 20 && echo update-idle; sleep 2; echo update-done`.r
   });
 });
 
+describe('ops_lock_files_readable: a non-root service still sees the locks root made', () => {
+  it('the busy lock file of its owner becomes readable by all, and update.sh keeps lock files readable when it tightens logs/', () => {
+    const app = tmp('ops-lock-mode-');
+    fs.mkdirSync(path.join(app, 'logs'));
+    const lock = path.join(app, 'logs/.ops-busy.lock');
+    fs.writeFileSync(lock, '', { mode: 0o600 });
+    fs.chmodSync(lock, 0o600);
+    const r = spawnSync('bash', ['-c', `source "${path.join(ROOT, 'scripts/ops-lock.sh')}"; ops_busy_hold "${app}"`], { encoding: 'utf8' });
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(fs.statSync(lock).mode & 0o777).toBe(0o644);
+    // the line update.sh runs on logs/ before the restart
+    const line = /^\s*(find logs -maxdepth 1 -type f .*-exec chmod o-rwx \{\} \+).*$/m.exec(read('update.sh'))?.[1];
+    expect(line).toBeTruthy();
+    fs.writeFileSync(path.join(app, 'logs/application.log'), 'x', { mode: 0o644 });
+    fs.chmodSync(path.join(app, 'logs/application.log'), 0o644);
+    const u = spawnSync('bash', ['-c', line ?? 'false'], { cwd: app, encoding: 'utf8' });
+    expect(u.status, u.stderr).toBe(0);
+    expect(fs.statSync(path.join(app, 'logs/application.log')).mode & 0o777).toBe(0o640);
+    expect(fs.statSync(lock).mode & 0o777).toBe(0o644);
+  });
+
+  it('update.sh makes .update.lock readable whatever root umask, and waits a moment for a lock check instead of refusing', () => {
+    const update = read('update.sh');
+    const make = update.indexOf('( umask 022; : >> "$APP_DIR/$UPDATE_LOCK_NAME" ) && chmod 644 "$APP_DIR/$UPDATE_LOCK_NAME"');
+    expect(make).toBeGreaterThan(0);
+    expect(make).toBeLessThan(update.indexOf('exec 9>"$APP_DIR/$UPDATE_LOCK_NAME"'));
+    expect(update).toContain('flock -w 10 9 || die');
+    expect(update).not.toContain('flock -n 9');
+  });
+
+  it('the daily backup lets the busy lock go before the off-server upload', () => {
+    const backup = read('scripts/backup.sh');
+    expect(backup.indexOf('ops_busy_release')).toBeGreaterThan(0);
+    expect(backup.indexOf('ops_busy_release')).toBeLessThan(backup.indexOf('scripts/backup-offsite.sh" "$BASE"'));
+  });
+});
+
 describe('cron_exec_bits_o3: a zip without unix modes no longer stops the backup and the monitor', () => {
   it('every shell script of the source is executable in git, and a manual sync puts the bits back', () => {
     const tracked = spawnSync('git', ['ls-files', '-s', '--', '*.sh'], { cwd: ROOT, encoding: 'utf8' });
@@ -222,6 +259,15 @@ esac`, { mode: 0o755 });
     expect(r.stdout).toContain('npm run media:rebuild-light -- --apply');
   });
 
+  it.runIf(process.getuid?.() === 0)('run by root for an install of another user it stops and names the command, and copies nothing', () => {
+    const m = fakeMedia();
+    spawnSync('chown', ['-R', 'nobody', m.app]);
+    const r = m.run();
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain(`sudo -u nobody bash ${m.app}/scripts/restore-media.sh`);
+    expect(fs.existsSync(path.join(m.app, 'media-library'))).toBe(false);
+  });
+
   it('refuses a remote that is not encrypted and a missing setting, and changes nothing', () => {
     const plain = fakeMedia('drive');
     const r = plain.run();
@@ -259,6 +305,8 @@ process.exit(0);
     // eslint-disable-next-line no-control-regex
     expect(r.stdout).not.toMatch(/\x1b\[/);
     expect(read('server.ts').indexOf("import './src/lib/processFileMode.js'")).toBeLessThan(read('server.ts').indexOf('./src/middleware/logger.js'));
+    // a mode option of the rotate transports changes the name of their audit file: logs written before would stay forever
+    expect(read('src/middleware/logger.ts')).not.toMatch(/options:\s*\{[^}]*mode/);
   }, 90_000);
 
   it('update.sh makes the files of an older version private and keeps its own logs for 90 days, readable by root only', () => {

@@ -100,12 +100,15 @@ log "Restoring from: $BACKUP_FILE (mode=$RESTORE_MODE)"
 
 WORK_DIR="$(mktemp -d)"
 NEW_DB=""
+UNPACK_DIRS=()
 cleanup() {
   local rc=$?
   if [ -n "$NEW_DB" ] && { [ "$RESTORE_MODE" = "apply" ] || [ "$RESTORE_KEEP" != "1" ]; }; then
     admin_sql "DROP DATABASE IF EXISTS \"$NEW_DB\";" >/dev/null 2>&1 || log "WARNING: could not drop $NEW_DB"
   fi
   rm -rf "$WORK_DIR"
+  local u
+  for u in "${UNPACK_DIRS[@]}"; do rm -rf "$u"; done
   exit $rc
 }
 # set before WORK_DIR holds the password file, so any exit from here on removes it (#346 review M1)
@@ -241,6 +244,43 @@ if [ "$RESTORE_MODE" = "drill" ]; then
 fi
 
 # ---------- apply: swap the verified database in (TD-360) ----------
+# v11 (O15): the archive holds the folder under the name it had when the backup was taken (public/uploads → uploads),
+# which is not always the name of <dir>; it is unpacked into a new folder beside <dir> and that one folder is moved to
+# <dir>, so the files land where the log says. Both archives are unpacked and checked before the database is swapped,
+# so an archive that cannot be used stops the run while nothing was changed.
+unpack_archive() {
+  local archive="$1" dir="$2" parent unpack entries
+  UNPACKED=""
+  [ -f "$archive" ] || return 0
+  parent="$(dirname "$dir")"
+  # never inside the uploads folder, which is itself moved aside before the attachments are put in place
+  case "$parent/" in "$UPLOADS_DIR"/*) parent="$(dirname "$UPLOADS_DIR")" ;; esac
+  mkdir -p "$parent"
+  unpack="$(mktemp -d "$parent/.restore_unpack_XXXXXX")"
+  UNPACK_DIRS+=("$unpack")
+  tar -xzf "$archive" -C "$unpack" || fail "cannot unpack $archive; nothing was changed"
+  entries="$(find "$unpack" -mindepth 1 -maxdepth 1 | wc -l)"
+  if [ "$entries" -ne 1 ] || [ ! -d "$(find "$unpack" -mindepth 1 -maxdepth 1)" ]; then
+    fail "$archive does not hold exactly one folder; nothing was changed"
+  fi
+  UNPACKED="$(find "$unpack" -mindepth 1 -maxdepth 1)"
+}
+place_archive() {
+  local archive="$1" unpacked="$2" dir="$3"
+  [ -n "$unpacked" ] || return 0
+  if [ -e "$dir" ]; then mv "$dir" "$dir.before_restore_${TIMESTAMP}"; log "Previous $(basename "$dir") kept as $dir.before_restore_${TIMESTAMP}"; fi
+  mv "$unpacked" "$dir"
+  rmdir "$(dirname "$unpacked")"
+  log "Files restored from $archive into $dir"
+}
+unpack_archive "$UPLOADS_ARCHIVE" "$UPLOADS_DIR"
+UPLOADS_UNPACKED="$UNPACKED"
+ATTACHMENTS_UNPACKED=""
+if [ "$ATT_KIND" = "attachments" ]; then
+  unpack_archive "$ATTACHMENTS_ARCHIVE" "$ATTACHMENTS_ROOT"
+  ATTACHMENTS_UNPACKED="$UNPACKED"
+fi
+
 TARGET_DB="${2:-$DB_NAME}"
 OLD_DB="${TARGET_DB}_before_restore_${TIMESTAMP}"
 OTHERS="$(psql "$(url_for_db "$TARGET_DB")" -X -tA -c "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()" 2>/dev/null || echo 0)"
@@ -269,28 +309,8 @@ if [ -n "$KEPT_DBS" ]; then
   done <<< "$KEPT_DBS"
 fi
 
-# v11 (O15): the archive holds the folder under the name it had when the backup was taken (public/uploads → uploads),
-# which is not always the name of <dir>; it is unpacked into a new folder beside <dir> and that one folder is moved to
-# <dir>, so the files land where the log says
-restore_archive() {
-  local archive="$1" dir="$2" parent unpack entries
-  [ -f "$archive" ] || return 0
-  parent="$(dirname "$dir")"
-  mkdir -p "$parent"
-  unpack="$(mktemp -d "$parent/.restore_unpack_XXXXXX")"
-  tar -xzf "$archive" -C "$unpack" || { rm -rf "$unpack"; fail "cannot unpack $archive"; }
-  entries="$(find "$unpack" -mindepth 1 -maxdepth 1 | wc -l)"
-  if [ "$entries" -ne 1 ] || [ ! -d "$(find "$unpack" -mindepth 1 -maxdepth 1)" ]; then
-    rm -rf "$unpack"
-    fail "$archive does not hold exactly one folder; $dir was left as it is"
-  fi
-  if [ -e "$dir" ]; then mv "$dir" "$dir.before_restore_${TIMESTAMP}"; log "Previous $(basename "$dir") kept as $dir.before_restore_${TIMESTAMP}"; fi
-  mv "$(find "$unpack" -mindepth 1 -maxdepth 1)" "$dir"
-  rmdir "$unpack"
-  log "Files restored from $archive into $dir"
-}
-restore_archive "$UPLOADS_ARCHIVE" "$UPLOADS_DIR"
-[ "$ATT_KIND" = "attachments" ] && restore_archive "$ATTACHMENTS_ARCHIVE" "$ATTACHMENTS_ROOT"
+place_archive "$UPLOADS_ARCHIVE" "$UPLOADS_UNPACKED" "$UPLOADS_DIR"
+place_archive "$ATTACHMENTS_ARCHIVE" "$ATTACHMENTS_UNPACKED" "$ATTACHMENTS_ROOT"
 
 log "SUCCESS: restore applied. Start the service (systemctl start papital-erp) and wait for http://localhost:3000/health/startup"
 exit 0

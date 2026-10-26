@@ -46,7 +46,7 @@ const NAMES: Array<[string, string, CriticalScenarioId | undefined, string]> = [
   ['rec_td_360_apply_replaces_whole_database', 'v8.0.87: a real restore (apply) does not mix the backup with current data; the restored copy replaces the database after verification, the previous one is kept, and it is refused while the service has an open connection (TD-360)', undefined,
     'Refused with an open connection and nothing changed; then the database became exactly equal to the backup, and the previous copy and the previous attachment directory were kept'],
   ['rec_o15_restore_log_says_what_it_did', 'v11 (O15, O11): a real restore puts the files into the folder it names even when that folder has another name than the one in the archive, says it kept a previous database only when there was one, and lists the databases earlier restores kept with their drop command', undefined,
-    'The files landed in a folder of another name with the attachment inside; a new target was reported as created, not kept; the kept copy was listed with its dropdb command'],
+    'The files landed in a folder of another name with the attachment inside; a new target was reported as created, not kept; the kept copy was listed with its dropdb command; an archive with two folders stopped the run before the swap'],
 ];
 
 const listBackups = (dir: string, suffix: string): string[] =>
@@ -309,6 +309,21 @@ async function checkRestoreLogSaysWhatItDid(ctx: Ctx): Promise<string[]> {
     if (!again.output.includes(`dropdb "${datname}"`)) v.push(`The copy ${datname} kept by an earlier restore is not listed with its drop command`);
   }
   if (kept.length === 0) v.push('The earlier restore left no copy to list');
+  // an archive that cannot be put in place stops the run before the database is swapped, so «nothing was changed» is true
+  const badDir = path.join(cluster.tmpDir, 'bad-archive');
+  const badDump = copyBackup(dump, badDir, { manifest: true });
+  const staging = path.join(badDir, 'staging');
+  fs.mkdirSync(path.join(staging, 'extra'), { recursive: true });
+  const good = await runCommand('tar', ['-xzf', dump.replace(/\.dump\.gz$/, '_uploads.tar.gz'), '-C', staging]);
+  const pack = await runCommand('tar', ['-czf', badDump.replace(/\.dump\.gz$/, '_uploads.tar.gz'), '-C', staging, 'uploads', 'extra']);
+  if (good.code !== 0 || pack.code !== 0) return [...v, `The two-folder archive could not be made: ${good.output}${pack.output}`];
+  const badTarget = `${cluster.database}_bad`;
+  const bad = await runCommand('bash', [path.join(appDir, 'scripts', 'restore.sh'), badDump, badTarget], { cwd: appDir, env: scriptEnv({ RESTORE_ALLOW_SUDO: '0', RESTORE_ADMIN_URL: adminUrl(), RESTORE_MODE: 'apply', RESTORE_CONFIRM: 'yes' }) });
+  if (bad.code === 0) v.push('A restore whose uploads archive holds two folders was reported successful');
+  if (!bad.output.includes('does not hold exactly one folder; nothing was changed')) v.push(`A bad uploads archive did not stop the run with «nothing was changed»: ${bad.output.slice(-300)}`);
+  const swapped = await querySql<{ datname: string }>(adminUrl(), `SELECT datname FROM pg_database WHERE datname = $1`, [badTarget]);
+  if (swapped.length > 0) v.push('A bad uploads archive stopped the run only after the database was swapped in');
+  if (fs.readdirSync(path.join(appDir, 'public')).some(d => d.startsWith('.restore_unpack_'))) v.push('The unpack folder of a failed run was left behind');
   return v;
 }
 

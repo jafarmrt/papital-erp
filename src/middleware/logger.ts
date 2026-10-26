@@ -119,9 +119,10 @@ const isProduction = process.env.NODE_ENV === 'production';
 const logDir = process.env.LOG_DIR || path.join(process.cwd(), 'logs');
 
 // v11 (O16): the log folder and files are private to the server's user and group (they hold user ids, addresses and
-// error stacks); a folder made by an older version (0755) is tightened at start
+// error stacks); a folder made by an older version (0755) is tightened at start. The files get 0640 from the server's
+// umask 027 (src/lib/processFileMode.ts): a mode option of the rotate transports would change the name of their audit
+// file, and the logs written before it would never be deleted.
 export const LOG_DIR_MODE = 0o750;
-export const LOG_FILE_MODE = 0o640;
 
 // Ensure log directory exists
 try {
@@ -132,7 +133,8 @@ try {
   console.error('Failed to create log directory:', err);
 }
 try {
-  fs.chmodSync(logDir, LOG_DIR_MODE);
+  // only the bits of other users go: a shared folder (LOG_DIR=/var/log/...) keeps its group's rights
+  fs.chmodSync(logDir, fs.statSync(logDir).mode & 0o7770);
 } catch {
   // a folder of another user stays as it is
 }
@@ -151,7 +153,6 @@ try {
   const fileTransport = new DailyRotateFile({
     dirname: logDir,
     filename: 'application-%DATE%.log',
-    options: { flags: 'a', mode: LOG_FILE_MODE },
     datePattern: 'YYYY-MM-DD',
     maxSize: '50m',
     maxFiles: '14d',
@@ -168,7 +169,6 @@ try {
     level: 'error',
     dirname: logDir,
     filename: 'error-%DATE%.log',
-    options: { flags: 'a', mode: LOG_FILE_MODE },
     datePattern: 'YYYY-MM-DD',
     maxSize: '50m',
     maxFiles: '30d',
