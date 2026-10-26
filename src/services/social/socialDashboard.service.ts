@@ -12,7 +12,7 @@ import { withdrawBirthdayNotifications } from './birthdayNotificationWithdraw.js
 
 /**
  * v10.2 package 9 (group dashboard, parts D and E of the social dashboard proposal): who is in the app, each user's own
- * birthday and presence choices, and the «تازه‌های این نسخه» card.
+ * birthday and presence choices, and the «تازه‌های این نسخه» routes (kept unused since the card left the dashboard after v11.2.0).
  */
 
 /** `GET /social/presence`: colleagues seen in the last five minutes («برخط است») or today («امروز آمده»), never the page */
