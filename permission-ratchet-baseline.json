@@ -1,6 +1,5 @@
 {
   "roleCodeLiteralsByFile": {
-    "src/db/mockPool.ts": 2,
     "src/pages/SetupPage.tsx": 1
   },
   "uncataloguedPermissionKeys": [],

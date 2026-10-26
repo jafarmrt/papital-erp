@@ -57,7 +57,7 @@ import reportsRoutes from './routes/reports.routes.js';
 import { authenticateToken, getJwtSecret, csrfProtection, shouldExposeTokenInBody } from './middleware/auth.js';
 import { sessionEndpointOriginGuard } from './middleware/sessionOrigin.js';
 import { startupGate, isStarting, isStartupComplete } from './middleware/startupGate.js';
-import { orm, isMockDatabase } from './db/drizzle.js';
+import { orm } from './db/drizzle.js';
 import { sql } from 'drizzle-orm';
 import { BUILD_INFO } from './lib/version.js';
 import { bootDegradedSteps } from './services/system/bootSequence.js';
@@ -300,8 +300,8 @@ export async function createApp(): Promise<express.Express> {
       res.status(200).json({
         status: 'ready',
         ...(degradedSteps.length > 0 ? { degradedSteps } : {}),
-        // v9.0.428 (TD-616): the in-memory demo database says so, so a probe never mistakes it for PostgreSQL
-        database: isMockDatabase() ? 'in_memory_demo' : 'postgresql',
+        // v11 (phase 4.1): PostgreSQL is the only database since the in-memory demo was removed
+        database: 'postgresql',
         pool: { total, idle, waiting },
         timestamp: new Date().toISOString(),
       });

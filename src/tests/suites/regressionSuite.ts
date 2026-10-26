@@ -3721,7 +3721,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
-  // Test 27.11: v7.0.38 (audit P2-12): رانر تست بدون پایگاه‌داده واقعی (mockPool) باید پیش از ساخت اسکیما و اجرای هر سوئیتی رد شود
+  // Test 27.11: v7.0.38 (audit P2-12): رانر تست بدون پایگاه‌داده واقعی باید پیش از ساخت اسکیما و اجرای هر سوئیتی رد شود
   if (shouldRun('reg_test_runner_mock_db_refusal_p2_12', 'p212', 'runner', 'mock')) {
     const tStart = Date.now();
     try {
@@ -3741,7 +3741,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const refused = output.includes(MOCK_DATABASE_REFUSAL) || output.includes('The test runner cannot start: required settings are missing.');
       const ranSuites = output.includes('Passed Tests') || output.includes('Migrator] Drizzle database migrations completed');
       if (child.status === 0 || !refused || ranSuites) {
-        throw new Error(`the runner on mockPool must stop with a non-zero exit code before migrations or suites run: ${JSON.stringify({ status: child.status, refused, ranSuites, tail: output.slice(-400) })}`);
+        throw new Error(`the runner without a real database must stop with a non-zero exit code before migrations or suites run: ${JSON.stringify({ status: child.status, refused, ranSuites, tail: output.slice(-400) })}`);
       }
       results.push(makeTestCase({
         id: 'reg_test_runner_mock_db_refusal_p2_12',
@@ -3751,7 +3751,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         executionType: 'real_code',
         passed: true,
         durationMs: Date.now() - tStart,
-        details: `running "--suite unit" with an empty DATABASE_URL stops with code ${child.status} and a clear message, without migrations on mockPool and without a result report.`
+        details: `running "--suite unit" with an empty DATABASE_URL stops with code ${child.status} and a clear message, without migrations and without a result report.`
       }));
     } catch (err: any) {
       results.push(makeTestCase({

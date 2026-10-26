@@ -175,7 +175,7 @@ Available Suites:
   let teardown: (() => Promise<void>) | null = null;
 
   try {
-    // v7.0.38 (P2-12): پیش از ساخت اسکیما و seed؛ وگرنه مهاجرت و داده پایه روی mockPool «موفق» گزارش می‌شوند
+    // v7.0.38 (P2-12): پیش از ساخت اسکیما و seed؛ بی پایگاه‌دادهٔ واقعی رانر همین‌جا می‌ایستد
     await assertRealTestDatabase();
 
     if (isolationEnabled) {

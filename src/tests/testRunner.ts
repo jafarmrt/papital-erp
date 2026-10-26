@@ -152,13 +152,13 @@ function isTestCleanupAllowed(): boolean {
 }
 
 export const MOCK_DATABASE_REFUSAL =
-  'FATAL: DATABASE_URL is missing/placeholder — the test runner needs a real PostgreSQL database and never runs on the ' +
-  'in-memory demo database. Configure a real PostgreSQL DATABASE_URL and re-run.';
+  'FATAL: DATABASE_URL is missing/placeholder — the test runner needs a real PostgreSQL database. ' +
+  'Configure a real PostgreSQL DATABASE_URL and re-run.';
 
 /**
  * V3.0.9 (TD-063) + v7.0.38 (P2-12): fail-fast شفاف روی DB جعلی برای همه لایه‌ها، از جمله unit.
  * تست‌های «واحد» صندوق ارسال و ایدم‌پوتنسی به پایگاه‌داده می‌نویسند و رانر پیش از اجرای سوئیت‌ها
- * اسکیمای تست و داده پایه را می‌سازد؛ روی mockPool همه این‌ها «۰ → ۰» و PASS جعلی گزارش می‌شدند.
+ * اسکیمای تست و داده پایه را می‌سازد؛ بی پایگاه‌دادهٔ واقعی (پیش‌تر روی mockPool که در v11 حذف شد) همه این‌ها «۰ → ۰» و PASS جعلی گزارش می‌شدند.
  */
 export async function assertRealTestDatabase(): Promise<void> {
   // v9.0.428 (TD-616): a missing DATABASE_URL is no longer the demo database but a refused mode; both stop the runner

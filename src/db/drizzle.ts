@@ -4,18 +4,16 @@ import { sql } from 'drizzle-orm';
 import pkg from 'pg';
 import fs from 'fs';
 import { logger } from '../middleware/logger.js';
-import { mockPool } from './mockPool.js';
 import { resolveDatabaseMode, type DatabaseMode } from './databaseMode.js';
 
 const { Pool } = pkg;
 
-// v9.0.428 (TD-616, decision t4 «الف»): SQL_HOST, a real DATABASE_URL, the in-memory demo only with ERP_DEMO_MODE=1
-// outside production, otherwise refused (the server does not start). Never an automatic fallback to the demo database.
+// v9.0.428 (TD-616, decision t4 «الف»): SQL_HOST or a real DATABASE_URL, otherwise refused (the server does not start).
+// v11 (phase 4.1): the in-memory demo database is gone; there is no other database than PostgreSQL.
 const databaseMode: DatabaseMode = resolveDatabaseMode(process.env);
 const rawDbUrl = databaseMode.kind === 'url' ? databaseMode.url : '';
 
 let realPool: pkg.Pool | null = null;
-const useMock = databaseMode.kind === 'demo';
 
 const maxPoolSize = parseInt(process.env.DB_POOL_MAX || '20', 10);
 const idleTimeoutMillis = parseInt(process.env.DB_IDLE_TIMEOUT || '30000', 10);
@@ -112,8 +110,6 @@ if (databaseMode.kind === 'sql_host' || databaseMode.kind === 'url') {
     }
     logger.error({ message: 'Unexpected error on PostgreSQL pool client', error: err });
   });
-} else if (databaseMode.kind === 'demo') {
-  logger.warn({ message: '[Database] ERP_DEMO_MODE=1: running on the in-memory demo database (user admin / admin); every record is lost on restart.' });
 }
 
 /** The pool of a refused configuration: every query fails with the reason, so nothing runs on a missing database */
@@ -128,12 +124,7 @@ function refusedPool(reason: string): pkg.Pool {
   return target as unknown as pkg.Pool;
 }
 
-if (useMock && mockPool) {
-  Object.setPrototypeOf(mockPool, Pool.prototype);
-}
-
-const activeTarget: pkg.Pool = realPool ?? (useMock ? (mockPool as unknown as pkg.Pool)
-  : refusedPool(databaseMode.kind === 'refused' ? databaseMode.reason : 'no database'));
+const activeTarget: pkg.Pool = realPool ?? refusedPool(databaseMode.kind === 'refused' ? databaseMode.reason : 'no database');
 
 const pool: pkg.Pool = new Proxy(activeTarget, {
   get: (_target, prop: string | symbol) => {
@@ -141,15 +132,6 @@ const pool: pkg.Pool = new Proxy(activeTarget, {
     return typeof val === 'function' ? (val as (...args: unknown[]) => unknown).bind(activeTarget) : val;
   }
 });
-
-/**
- * V3.0.9 (TD-063): فلاگ شفاف حالت DB جعلی (حافظه‌ای) — تست‌رانر و ابزارهای
- * تشخیصی از این طریق fail-fast می‌کنند به‌جای گزارش نتیجه گمراه‌کننده روی
- * mockPool حافظه‌ای.
- */
-export function isMockDatabase(): boolean {
-  return useMock;
-}
 
 /** v9.0.428 (TD-616): the database mode the process started with (`refused` carries the reason the server stops on) */
 export function getDatabaseMode(): DatabaseMode {
