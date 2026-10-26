@@ -111,6 +111,24 @@ describe('ops_lock_files_readable: a non-root service still sees the locks root 
     expect(fs.statSync(lock).mode & 0o777).toBe(0o644);
   });
 
+  it('a link in place of the busy lock is never followed: its target keeps its mode and no file is made through it', () => {
+    const app = tmp('ops-lock-link-');
+    fs.mkdirSync(path.join(app, 'logs'));
+    const target = path.join(app, 'secret');
+    fs.writeFileSync(target, 'x', { mode: 0o600 });
+    fs.chmodSync(target, 0o600);
+    fs.symlinkSync(target, path.join(app, 'logs/.ops-busy.lock'));
+    const r = spawnSync('bash', ['-c', `source "${path.join(ROOT, 'scripts/ops-lock.sh')}"; ops_busy_hold "${app}"`], { encoding: 'utf8' });
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain('is a link or cannot be read');
+    expect(fs.statSync(target).mode & 0o777).toBe(0o600);
+    // a dangling link: nothing is created at its target
+    fs.rmSync(path.join(app, 'logs/.ops-busy.lock'));
+    fs.symlinkSync(path.join(app, 'made-through-link'), path.join(app, 'logs/.ops-busy.lock'));
+    spawnSync('bash', ['-c', `source "${path.join(ROOT, 'scripts/ops-lock.sh')}"; ops_busy_hold "${app}"`], { encoding: 'utf8' });
+    expect(fs.existsSync(path.join(app, 'made-through-link'))).toBe(false);
+  });
+
   it('update.sh makes .update.lock readable whatever root umask, and waits a moment for a lock check instead of refusing', () => {
     const update = read('update.sh');
     const make = update.indexOf('( umask 022; : >> "$APP_DIR/$UPDATE_LOCK_NAME" ) && chmod 644 "$APP_DIR/$UPDATE_LOCK_NAME"');

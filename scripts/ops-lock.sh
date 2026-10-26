@@ -23,14 +23,15 @@ ops_lock_held() {
 ops_busy_hold() {
   local file="$1/$OPS_BUSY_LOCK_NAME"
   command -v flock >/dev/null 2>&1 || return 0
-  if [ ! -e "$file" ]; then
-    mkdir -p "$(dirname "$file")" 2>/dev/null || true
-    ( umask 022; : >> "$file" ) 2>/dev/null || true
-  fi
-  # readable by every user: root may have made it (a sudo restore), and a non-root backup must still see the lock
-  [ ! -O "$file" ] || chmod 644 "$file" 2>/dev/null || true
-  if [ ! -r "$file" ]; then
-    echo "[$(date)] WARNING: the operations lock $file cannot be read; this run is not seen by the nightly check and update.sh"
+  mkdir -p "$(dirname "$file")" 2>/dev/null || true
+  # made only when no file or link of that name is there (noclobber creates with O_EXCL): root never writes through a
+  # link that the user owning logs/ put in its place
+  ( set -C; umask 022; : > "$file" ) 2>/dev/null || true
+  # readable by every user: root may have made it (a sudo restore), and a non-root backup must still see the lock; only
+  # in a folder this user owns, where no one else can swap the file for a link between the test and the chmod
+  if [ -O "$(dirname "$file")" ] && [ -O "$file" ] && [ ! -L "$file" ]; then chmod 644 "$file" 2>/dev/null || true; fi
+  if [ -L "$file" ] || [ ! -r "$file" ]; then
+    echo "[$(date)] WARNING: the operations lock $file is a link or cannot be read; this run is not seen by the nightly check and update.sh"
     return 0
   fi
   exec 7<"$file"
