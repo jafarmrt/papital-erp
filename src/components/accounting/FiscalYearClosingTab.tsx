@@ -1,6 +1,6 @@
 import { useState, useEffect, useEffectEvent, useMemo, useId } from 'react';
 import { Lock, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Scale, RefreshCw, ShieldCheck, Check, Layers, Printer, ChevronDown, ChevronUp } from 'lucide-react';
-import { toPersianDigits, formatPersianDate, errorMessageOf } from '../../utils';
+import { toPersianDigits, formatPersianDate, errorMessageOf, formatPersianCode } from '../../utils';
 import { fiscalClosingJalaliDates } from '../../lib/fiscalClosingDates';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { FiscalYearClosingPreview, FiscalYearClosingResult, JournalVoucher, FiscalClosingAccountRow } from '../../types';
@@ -431,7 +431,7 @@ export function FiscalYearClosingTab({ onPrintVoucher }: FiscalYearClosingTabPro
                       {/* Revenues */}
                       {revenuesList.map((rev, idx) => (
                         <tr key={rev.accountId || `rev-${idx}`} className="hover:bg-slate-50/60 dark:hover:bg-slate-900/40">
-                          <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{rev.accountCode}</td>
+                          <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{formatPersianCode(rev.accountCode)}</td>
                           <td className="p-3 font-semibold text-slate-800 dark:text-slate-200">{rev.accountTitle || rev.accountName}</td>
                           <td className="p-3 text-center">
                             <span className="bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full text-[10px] font-bold">
@@ -449,7 +449,7 @@ export function FiscalYearClosingTab({ onPrintVoucher }: FiscalYearClosingTabPro
                       {/* Expenses */}
                       {expensesList.map((exp, idx) => (
                         <tr key={exp.accountId || `exp-${idx}`} className="hover:bg-slate-50/60 dark:hover:bg-slate-900/40">
-                          <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{exp.accountCode}</td>
+                          <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{formatPersianCode(exp.accountCode)}</td>
                           <td className="p-3 font-semibold text-slate-800 dark:text-slate-200">{exp.accountTitle || exp.accountName}</td>
                           <td className="p-3 text-center">
                             <span className="bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-300 px-2 py-0.5 rounded-full text-[10px] font-bold">
@@ -577,7 +577,7 @@ export function FiscalYearClosingTab({ onPrintVoucher }: FiscalYearClosingTabPro
                       {/* Assets */}
                       {assetsList.map((asset, idx) => (
                         <tr key={asset.accountId || `asset-${idx}`} className="hover:bg-slate-50/60 dark:hover:bg-slate-900/40">
-                          <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{asset.accountCode}</td>
+                          <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{formatPersianCode(asset.accountCode)}</td>
                           <td className="p-3 font-semibold text-slate-800 dark:text-slate-200">{asset.accountTitle || asset.accountName}</td>
                           <td className="p-3 text-center">
                             <span className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full text-[10px] font-bold">
@@ -594,7 +594,7 @@ export function FiscalYearClosingTab({ onPrintVoucher }: FiscalYearClosingTabPro
                       {/* Liabilities & Equity */}
                       {liabilitiesAndEquityList.map((item, idx) => (
                         <tr key={item.accountId || `liab-${idx}`} className="hover:bg-slate-50/60 dark:hover:bg-slate-900/40">
-                          <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{item.accountCode}</td>
+                          <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{formatPersianCode(item.accountCode)}</td>
                           <td className="p-3 font-semibold text-slate-800 dark:text-slate-200">{item.accountTitle || item.accountName}</td>
                           <td className="p-3 text-center">
                             <span className="bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full text-[10px] font-bold">

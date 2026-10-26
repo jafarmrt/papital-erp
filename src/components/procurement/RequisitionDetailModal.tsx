@@ -154,7 +154,7 @@ export function RequisitionDetailModal({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-black text-slate-900 text-base">
-                  جزئیات درخواست خرید {requisition.code}
+                  جزئیات درخواست خرید {formatPersianCode(requisition.code)}
                 </h3>
                 <PillBadge variants={REQUISITION_PRIORITY_DETAIL_BADGES} value={requisition.priority} fallback={REQUISITION_PRIORITY_DETAIL_FALLBACK} />
                 <PillBadge variants={REQUISITION_STATUS_BADGES} value={requisition.status} fallback={REQUISITION_STATUS_FALLBACK} />
@@ -309,7 +309,7 @@ export function RequisitionDetailModal({
                         <td className="p-2.5 text-center font-mono text-slate-400">{formatPersianNumber(idx + 1)}</td>
                         <td className="p-2.5">
                           <div className="font-bold text-slate-900">{row.itemName}</div>
-                          <div className="text-[11px] text-slate-500 font-mono">{row.itemCode || 'فاقد کد'}</div>
+                          <div className="text-[11px] text-slate-500 font-mono">{formatPersianCode(row.itemCode) || 'فاقد کد'}</div>
                         </td>
                         <td className="p-2.5 text-center font-bold text-slate-700">{row.unit}</td>
                         <td className="p-2.5 text-center font-mono font-bold text-slate-900">{formatPersianNumber(reqQty)}</td>
@@ -409,7 +409,7 @@ export function RequisitionDetailModal({
                         <div className="flex items-center gap-2 flex-wrap">
                           {/* v9.0.351 (TD-701): شماره و تاریخ سفارش از refNumber و date پاسخ سرور */}
                           <span className="font-mono font-bold text-xs text-slate-900">
-                            فاکتور خرید {order.refNumber}
+                            فاکتور خرید {formatPersianCode(order.refNumber)}
                           </span>
                           <span className="font-bold text-xs text-slate-700">
                             تامین‌کننده: {order.supplierName}

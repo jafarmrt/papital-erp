@@ -1,6 +1,6 @@
 import { Search, Plus, Award, Edit2, Trash2, FileSpreadsheet, Download, Upload, History, RotateCcw, Archive, CheckCircle2 } from 'lucide-react';
 import { PieceworkTask } from '../../types';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 
@@ -264,7 +264,7 @@ export function PieceworkTasksTab({
                       }`}
                     >
                       <td className="p-3 text-center font-mono text-[11px] text-slate-500 dark:text-gray-400">
-                        {task.code || `PW-${String(task.id).padStart(3, '0')}`}
+                        {formatPersianCode(task.code) || `PW-${String(task.id).padStart(3, '0')}`}
                       </td>
                       <td className="p-3 font-black text-slate-900 dark:text-white flex items-center gap-2">
                         <Award size={16} className={isDeleted ? 'text-rose-400 shrink-0' : 'text-blue-600 dark:text-blue-400 shrink-0'} />

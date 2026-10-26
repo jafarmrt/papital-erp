@@ -4,7 +4,7 @@ import { ShoppingBag, Plus, Layers, RefreshCw, Trash2, FileText, Truck, PackageC
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, ProcurementOrder } from '../../types';
 import { fetchJson } from '../../api';
-import { formatPersianNumber, getErrorMessage } from '../../utils';
+import { formatPersianNumber, getErrorMessage, formatPersianCode } from '../../utils';
 import { RequisitionDetailModal } from './RequisitionDetailModal';
 import { SplitOrderModal } from './SplitOrderModal';
 import { CreateRequisitionModal } from './CreateRequisitionModal';
@@ -450,7 +450,7 @@ export function ProcurementDesk() {
               </div>
               <div>
                 <h4 className="font-black text-slate-900 text-sm">حذف درخواست خرید</h4>
-                <p className="text-xs text-slate-500 mt-0.5">شناسه: {requisitionToDelete.code}</p>
+                <p className="text-xs text-slate-500 mt-0.5">شناسه: {formatPersianCode(requisitionToDelete.code)}</p>
               </div>
             </div>
 

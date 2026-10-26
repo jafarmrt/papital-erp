@@ -1,6 +1,6 @@
 import { Building2, Check, Eye, ShoppingCart, Trash2 } from 'lucide-react';
 import type { PurchaseRequisition } from '../../types';
-import { formatPersianDate, formatPersianNumber } from '../../utils';
+import { formatPersianDate, formatPersianNumber, formatPersianCode } from '../../utils';
 import { PillBadge } from '../common/PillBadge';
 import { REQUISITION_PRIORITY_BADGES, REQUISITION_PRIORITY_FALLBACK, REQUISITION_STATUS_BADGES, REQUISITION_STATUS_FALLBACK } from './requisitionBadges';
 import { canConsolidateRequisition, canDeleteRequisition, canOrderRequisition } from '../../lib/procurement/requisitionFields';
@@ -17,6 +17,8 @@ interface RequisitionRowProps {
   onDelete: (req: PurchaseRequisition) => void;
   onShowOrders: () => void;
 }
+
+const INITIATOR_CANNOT_APPROVE = 'ثبت این درخواست با شما بوده؛ پیش از صدور فاکتور، کس دیگری با حق تأیید باید آن را تأیید کند.';
 
 /** یک ردیف فهرست درخواست‌های میز تدارکات */
 export function RequisitionRow({ req, access, isSelected, onToggleSelect, onView, onSplit, onDelete, onShowOrders }: RequisitionRowProps) {
@@ -45,7 +47,7 @@ export function RequisitionRow({ req, access, isSelected, onToggleSelect, onView
 
       <td className="p-3">
         <div className="flex items-center gap-2 mb-1">
-          <span className="font-mono font-black text-slate-900 text-sm">{req.code}</span>
+          <span className="font-mono font-black text-slate-900 text-sm">{formatPersianCode(req.code)}</span>
           <PillBadge variants={REQUISITION_PRIORITY_BADGES} value={req.priority} fallback={REQUISITION_PRIORITY_FALLBACK} />
         </div>
         <span className="text-[11px] text-slate-400">ثبت: {req.requestedByName || 'نامشخص'}</span>
@@ -56,7 +58,7 @@ export function RequisitionRow({ req, access, isSelected, onToggleSelect, onView
         {req.projectName ? (
           <div className="flex items-center gap-1 text-[11px] text-blue-700">
             <Building2 className="w-3 h-3" />
-            <span>{req.projectName} ({req.projectCode || ''})</span>
+            <span>{req.projectName} ({formatPersianCode(req.projectCode) || ''})</span>
           </div>
         ) : (
           <span className="text-[11px] text-slate-400">خرید عمومی سازمان</span>
@@ -119,16 +121,27 @@ export function RequisitionRow({ req, access, isSelected, onToggleSelect, onView
           </button>
 
           {/* v9.0.352 (TD-702): صدور سفارش با procurement.order، و پیش از تأیید فقط با حق تأیید (TD-689) */}
+          {/* v11 phase 6.3a (U10): the initiator, whom the approval step leaves out, sees the button off with the reason
+              instead of filling the split form and getting a refusal */}
           {canOrderRequisition(req, access) && (
-            <button
-              type="button"
-              onClick={() => onSplit(req)}
-              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
-              title="تفکیک تامین‌کنندگان و صدور فاکتور خرید"
-            >
-              <ShoppingCart className="w-3.5 h-3.5" />
-              <span>تفکیک و صدور فاکتور</span>
-            </button>
+            <div className="flex flex-col items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => onSplit(req)}
+                disabled={req.initiatorCannotApprove === true}
+                aria-describedby={req.initiatorCannotApprove ? `split-blocked-${req.id}` : undefined}
+                className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg flex items-center gap-1 shadow-xs transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-amber-500"
+                title={req.initiatorCannotApprove ? INITIATOR_CANNOT_APPROVE : 'تفکیک تامین‌کنندگان و صدور فاکتور خرید'}
+              >
+                <ShoppingCart className="w-3.5 h-3.5" />
+                <span>تفکیک و صدور فاکتور</span>
+              </button>
+              {req.initiatorCannotApprove && (
+                <span id={`split-blocked-${req.id}`} className="text-[10px] text-slate-600 max-w-[11rem] leading-snug">
+                  {INITIATOR_CANNOT_APPROVE}
+                </span>
+              )}
+            </div>
           )}
 
           {/* v9.0.318 (TD-695): حذف فقط برای درخواستی که سفارش یا دریافت نشده است */}

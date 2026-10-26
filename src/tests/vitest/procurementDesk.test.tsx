@@ -106,7 +106,7 @@ describe('procurement desk sections and buttons (TD-702)', () => {
     granted.add('projects.view');
     deskApi({ '/api/procurement/inbox/summary': forbidden() });
     await deskRendered();
-    expect(screen.queryAllByText(/PR-1405-0005/).length).toBeGreaterThan(0);
+    expect(screen.queryAllByText(/PR-۱۴۰۵-۰۰۰۵/).length).toBeGreaterThan(0);
   });
 
   it('says the requisitions could not be loaded instead of "no requisition found"', async () => {
@@ -121,7 +121,7 @@ describe('procurement desk sections and buttons (TD-702)', () => {
     granted.add('procurement.view');
     deskApi();
     await deskRendered();
-    expect(screen.queryAllByText(/PR-1405-0006/).length).toBeGreaterThan(0);
+    expect(screen.queryAllByText(/PR-۱۴۰۵-۰۰۰۶/).length).toBeGreaterThan(0);
     expect(screen.queryByText('ثبت درخواست خرید جدید')).toBeNull();
     expect(screen.queryByText('تفکیک و صدور فاکتور')).toBeNull();
     expect(screen.queryByTitle('حذف درخواست')).toBeNull();
@@ -188,7 +188,7 @@ describe('delivery buttons need the stock-in permission (TD-904)', () => {
     deskApi();
     await deskRendered();
     screen.getByText('۲. فاکتورهای خرید (در انتظار تحویل انبار)').click();
-    await waitFor(() => expect(screen.queryAllByText(/R-1405-0009/).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.queryAllByText(/R-۱۴۰۵-۰۰۰۹/).length).toBeGreaterThan(0));
     expect(screen.queryByText(LIST_DELIVER)).toBeNull();
     expect(screen.queryByText('تکمیل شده')).toBeNull();
     cleanup();

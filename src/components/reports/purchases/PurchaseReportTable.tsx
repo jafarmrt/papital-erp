@@ -2,7 +2,7 @@ import type { ReportMoney } from '../../../hooks/reports/useReportMoney';
 import {
   PURCHASE_DIMENSION_LABELS, type PurchaseAmounts, type PurchaseGroup, type PurchaseReport,
 } from '../../../lib/reports/purchaseReport';
-import { formatPersianNumber } from '../../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../../utils';
 import { ReportPager } from '../ReportPager';
 import { percentText } from '../sales/SalesSummary';
 
@@ -25,7 +25,7 @@ function GroupCell({ group }: { group: PurchaseGroup | null }) {
   return (
     <span className="font-bold font-sans">
       {group.label}
-      {group.code && <span className="mr-1 text-[11px] text-slate-500 font-mono">{group.code}</span>}
+      {group.code && <span className="mr-1 text-[11px] text-slate-500 font-mono">{formatPersianCode(group.code)}</span>}
     </span>
   );
 }

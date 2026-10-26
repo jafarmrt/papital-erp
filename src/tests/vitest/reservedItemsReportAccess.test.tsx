@@ -62,14 +62,14 @@ describe('reserved items report by reader (TD-829)', () => {
   it('shows no cost column when the report has no cost', async () => {
     fetchJson.mockResolvedValueOnce(reservedItemsReportForAccess(report, { cost: false, buyer: false }));
     renderWithQuery(<MemoryRouter><ReservedItemsReportPage /></MemoryRouter>);
-    expect(await screen.findByText('P-7')).toBeTruthy();
+    expect(await screen.findByText('P-۷')).toBeTruthy();
     expect(screen.queryByText(/بهای تمام‌شده/)).toBeNull();
   });
 
   it('shows the cost column to a cost reader', async () => {
     fetchJson.mockResolvedValueOnce(reservedItemsReportForAccess(report, { cost: true, buyer: false }));
     renderWithQuery(<MemoryRouter><ReservedItemsReportPage /></MemoryRouter>);
-    expect(await screen.findByText('P-7')).toBeTruthy();
+    expect(await screen.findByText('P-۷')).toBeTruthy();
     expect(screen.getAllByText(/بهای تمام‌شده/).length).toBeGreaterThan(0);
   });
 });

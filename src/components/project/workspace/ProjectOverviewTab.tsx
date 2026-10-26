@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import { BarChart2, Layers, Package, Sparkles } from 'lucide-react';
 import type { FinancialAttachment, Personnel, ProductionProject } from '../../../types';
 import { fetchJson } from '../../../api';
-import { errorMessageOf, formatPersianDate, formatPersianNumber } from '../../../utils';
+import { errorMessageOf, formatPersianDate, formatPersianNumber, formatPersianCode } from '../../../utils';
 import { hasMatrixProducts } from '../../../lib/projects/progressMatrix';
 import { FinancialAttachmentUploader } from '../../accounting/FinancialAttachmentUploader';
 import { AddStageForm } from '../ProjectStageActions';
@@ -132,7 +132,7 @@ export function ProjectOverviewTab({ project, writeBase, rememberVersion, person
                     <tr key={p.id || idx}>
                       <td className="p-2.5 font-bold text-slate-400">{formatPersianNumber(idx + 1)}</td>
                       <td className="p-2.5 font-bold text-slate-900">
-                        {p.item_name} {p.item_code && <span className="text-slate-500 text-[11px]">[{p.item_code}]</span>}
+                        {p.item_name} {p.item_code && <span className="text-slate-500 text-[11px]">[{formatPersianCode(p.item_code)}]</span>}
                       </td>
                       <td className="p-2.5 font-bold text-amber-800">{p.customer_code || 'ثبت نشده'}</td>
                       <td className="p-2.5 text-center font-bold text-slate-800">{formatPersianNumber(p.quantity)} {p.unit}</td>

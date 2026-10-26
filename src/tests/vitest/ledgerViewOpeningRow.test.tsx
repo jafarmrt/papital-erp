@@ -39,6 +39,6 @@ describe('account card view (TD-574)', () => {
     renderLedger(1);
     expect(screen.getByRole('heading', { level: 4 }).textContent?.trim()).toBe('دفتر حساب گروه 1 - دارایی‌ها');
     expect(screen.getByText('با گردش همه زیرحساب‌ها')).toBeTruthy();
-    expect(screen.getByText('1101 - صندوق')).toBeTruthy();
+    expect(screen.getByText('۱۱۰۱ - صندوق')).toBeTruthy();
   });
 });

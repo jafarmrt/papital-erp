@@ -10,7 +10,7 @@ import {
   Paperclip, Ban
 } from 'lucide-react';
 import { Item } from '../types';
-import { formatPersianNumber } from '../utils';
+import { formatPersianNumber, formatPersianCode } from '../utils';
 import ProjectModal from '../components/ProjectModal';
 import { SectionErrorBoundary } from '../components/common';
 import { useSearch } from '../SearchContext';
@@ -389,7 +389,7 @@ export default function ProjectsPage() {
               <tbody className="divide-y divide-slate-100">
                 {filteredProjects.map(p => (
                   <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="p-3.5 font-mono font-bold text-blue-700 ltr text-right">{p.project_code}</td>
+                    <td className="p-3.5 font-mono font-bold text-blue-700 ltr text-right">{formatPersianCode(p.project_code)}</td>
                     <td className="p-3.5 font-bold text-slate-900">
                       <div className="flex items-center gap-1.5">
                         <span>{p.title}</span>
@@ -485,7 +485,7 @@ export default function ProjectsPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-xs font-bold text-blue-700 px-2 py-0.5 bg-blue-100 rounded">
-                      {p.project_code}
+                      {formatPersianCode(p.project_code)}
                     </span>
                     <h4 className="font-bold text-slate-900 text-xs">{p.title}</h4>
                     <span className="text-slate-500 text-[11px]">({p.customer_name})</span>
@@ -576,7 +576,7 @@ function ProjectKanbanCard({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <span className="font-mono font-bold text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200/60">
-            {project.project_code}
+            {formatPersianCode(project.project_code)}
           </span>
           {project.attachments_count > 0 && (
             <span 

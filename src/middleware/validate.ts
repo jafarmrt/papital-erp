@@ -126,10 +126,11 @@ export const validate = (schema: ZodSchema) => {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        // برچسب فیلد فقط وقتی پیش از پیام می‌آید که خود پیام نامش را نیاورده باشد
+        // برچسب فیلد فقط وقتی پیش از پیام می‌آید که خود پیام نامش را نیاورده باشد. v11 phase 6.3a (U21): فیلد بی‌برچسب فارسی
+        // پیشوندی نمی‌گیرد؛ پیش‌تر نام خام فیلد پیش از پیام می‌آمد («خطای اعتبارسنجی: (partyName) نام طرف حساب الزامی است»)
         const detailMessages = error.issues.map(e => {
           const key = issueFieldKey(e.path);
-          const translatedField = key === null ? '' : (FIELD_LABELS[key] || key);
+          const translatedField = key === null ? '' : (FIELD_LABELS[key] || '');
           return !translatedField || e.message.includes(translatedField) ? e.message : `(${translatedField}) ${e.message}`;
         }).join(' | ');
         return res.status(400).json({

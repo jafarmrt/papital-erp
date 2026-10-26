@@ -348,7 +348,7 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-black text-slate-900">{item.name}</span>
                             <span className="font-mono text-[11px] text-amber-900 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg">
-                              کد: {item.code}
+                              کد: {formatPersianCode(item.code)}
                             </span>
                           </div>
                           {(item.color || item.material || item.size) && (
@@ -645,7 +645,7 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
 
             <form onSubmit={handleConfirmRejection} className="p-5 space-y-4">
               <p className="text-xs text-slate-700 leading-relaxed font-bold">
-                آیا از رد ماده اولیه «{selectedItem.name}» (کد: {selectedItem.code}) اطمینان دارید؟
+                آیا از رد ماده اولیه «{selectedItem.name}» (کد: {formatPersianCode(selectedItem.code)}) اطمینان دارید؟
               </p>
               <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900">
                 با رد این کد، ماده جدید به انبار رسمی افزوده‌نمیشود و صرفاً در فرم‌های کنترل پروژه باقی می‌ماند.

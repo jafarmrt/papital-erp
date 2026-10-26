@@ -60,7 +60,7 @@ describe('account code rule (TD-558)', () => {
   it('the code is read-only when an account is edited', () => {
     renderTab();
     fireEvent.click(screen.getByText('نمای جدولی'));
-    const row = screen.getByText('1190').closest('tr') as HTMLElement;
+    const row = screen.getByText('۱۱۹۰').closest('tr') as HTMLElement;
     fireEvent.click(row.querySelector('button[title="ویرایش"]') as HTMLElement);
     expect(codeInput().readOnly).toBe(true);
   });

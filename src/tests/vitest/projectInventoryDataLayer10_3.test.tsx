@@ -127,10 +127,10 @@ describe('the allocation tab reads through the shared cache (10.3)', () => {
   it('follows a stock change made elsewhere while open', async () => {
     const client = newClient();
     render(<ProjectBomAllocationsTab />, { wrapper: wrapperOf(client) });
-    expect((await screen.findAllByText('P-1')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('P-۱')).length).toBeGreaterThan(0);
     serverAllocations = allocationPage('P-2');
     await invalidate(client, QUERY_KEYS.inventory.all);
-    expect((await screen.findAllByText('P-2')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('P-۲')).length).toBeGreaterThan(0);
   });
 
   it('a consume refreshes the stock screens and the projects that count the allocation', async () => {

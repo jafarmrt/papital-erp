@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { ArrowLeftRight, ClipboardCheck, Printer, RefreshCw, X, type LucideIcon } from 'lucide-react';
 import { TransferDocumentPrint } from './TransferDocumentPrint';
-import { formatPersianDate, formatPersianNumber } from '../../utils';
+import { formatPersianDate, formatPersianNumber, formatPersianCode } from '../../utils';
 import type { InventoryDocumentDetail } from '../../hooks/inventoryAudit/useInventoryAuditQueries';
 import { DialogLayer } from '../common/DialogLayer';
 
@@ -138,7 +138,7 @@ export function AuditDocumentDetailModal({ doc, loading, onClose }: DetailModalP
                   return (
                     <tr key={idx} className="hover:bg-slate-50/50">
                       <td className="p-3 text-slate-500">{formatPersianNumber(idx + 1)}</td>
-                      <td className="p-3 text-slate-600 font-mono">{line.code}</td>
+                      <td className="p-3 text-slate-600 font-mono">{formatPersianCode(line.code)}</td>
                       <td className="p-3 text-slate-800 font-medium">{line.name}</td>
                       <td className="p-3 text-center text-slate-600 font-mono">{line.system_stock} {line.unit}</td>
                       <td className="p-3 text-center text-slate-800 font-mono font-bold">{line.quantity} {line.unit}</td>
@@ -221,7 +221,7 @@ export function TransferDocumentDetailModal({ doc, loading, onClose }: DetailMod
                 {doc.items?.map((line, idx) => (
                   <tr key={idx} className="hover:bg-slate-50/50">
                     <td className="p-3 text-slate-500">{formatPersianNumber(idx + 1)}</td>
-                    <td className="p-3 text-slate-600 font-mono">{line.code}</td>
+                    <td className="p-3 text-slate-600 font-mono">{formatPersianCode(line.code)}</td>
                     <td className="p-3 text-slate-800 font-bold">{line.name}</td>
                     <td className="p-3 text-center text-blue-900 font-mono font-bold">{line.quantity} {line.unit}</td>
                   </tr>

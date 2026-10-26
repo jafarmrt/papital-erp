@@ -1,5 +1,5 @@
 import { FileText, Warehouse } from 'lucide-react';
-import { formatPersianDate, formatPersianNumber, toPersianDigits } from '../../../utils';
+import { formatPersianDate, formatPersianNumber, toPersianDigits, formatPersianCode } from '../../../utils';
 import { warehouseLabel } from '../../../lib/inventory/warehouseLabel';
 import { DialogLayer } from '../../common/DialogLayer';
 import type { WarehouseItem } from '../../../hooks/queries/useSettingsQueries';
@@ -25,11 +25,11 @@ export function AllocationTraceDialog({ alloc, warehousesList, onClose }: { allo
           <div className="bg-blue-50 border border-blue-200 p-3.5 rounded-2xl space-y-2">
             <div className="flex justify-between items-center text-blue-900 font-bold">
               <span>پروژه مقصد:</span>
-              <span className="font-mono">{alloc.projectCode}</span>
+              <span className="font-mono">{formatPersianCode(alloc.projectCode)}</span>
             </div>
             <div className="flex justify-between items-center text-blue-800">
               <span>ماده اولیه تخصیص‌یافته:</span>
-              <span className="font-bold">{alloc.itemName} ({alloc.itemCode})</span>
+              <span className="font-bold">{alloc.itemName} ({formatPersianCode(alloc.itemCode)})</span>
             </div>
             <div className="flex justify-between items-center text-blue-800">
               <span>مقدار کسر شده:</span>

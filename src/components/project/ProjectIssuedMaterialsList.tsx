@@ -60,7 +60,7 @@ export function ProjectIssuedMaterialsList({ projectId, reloadKey }: { projectId
                   </td>
                   <td className="p-2.5">
                     <span className="font-bold text-slate-900">{row.itemName}</span>
-                    {row.itemCode && <span className="block font-mono text-[10px] text-slate-500">کد: {row.itemCode}</span>}
+                    {row.itemCode && <span className="block font-mono text-[10px] text-slate-500">کد: {formatPersianCode(row.itemCode)}</span>}
                   </td>
                   <td className="p-2.5 text-center font-mono font-bold whitespace-nowrap">{formatPersianNumber(row.quantity)} {row.unit}</td>
                   <td className="p-2.5 text-center whitespace-nowrap">{ISSUED_MATERIAL_STATUS_LABELS[row.status] ?? row.status}</td>

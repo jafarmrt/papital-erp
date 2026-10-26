@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ChartOfAccountsTab } from '../../components/accounting/ChartOfAccountsTab';
+import { formatPersianCode } from '../../utils';
 
 vi.mock('react-hot-toast', () => {
   const t = Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() });
@@ -25,7 +26,7 @@ const openEdit = (code: string) => {
   const tab = render(<ChartOfAccountsTab accounts={accounts as never} treeAccounts={[]} loading={false} onRefresh={() => {}}
     onCreateAccount={vi.fn()} onUpdateAccount={vi.fn()} onDeleteAccount={vi.fn()} onSeedStandardAccounts={vi.fn()} />);
   fireEvent.click(screen.getByText('نمای جدولی'));
-  const row = screen.getByText(code).closest('tr') as HTMLElement;
+  const row = screen.getByText(formatPersianCode(code)).closest('tr') as HTMLElement;
   fireEvent.click(row.querySelector('button[title="ویرایش"]') as HTMLElement);
   return tab;
 };

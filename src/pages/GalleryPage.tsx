@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent, useState } from 'react';
 import toast from 'react-hot-toast';
 import { User } from '../types';
 import { Search, X, Image as ImageIcon, Loader2 } from 'lucide-react';
-import { cn, errorMessageOf, formatPersianNumber, formatPersianPrice } from '../utils';
+import { cn, errorMessageOf, formatPersianNumber, formatPersianPrice, formatPersianCode } from '../utils';
 import { SafeImage } from '../components/SafeImage';
 import { useSearch } from '../SearchContext';
 import { DialogLayer } from '../components/common/DialogLayer';
@@ -128,7 +128,7 @@ export default function GalleryPage({ user }: { user: User }) {
               </button>
               <div className="p-3 bg-white flex flex-col gap-1 border-t">
                 <div className="font-bold text-sm text-slate-800 line-clamp-1" title={item.name}>{item.name}</div>
-                <div className="font-mono text-xs text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded mr-auto select-all">{item.code}</div>
+                <div className="font-mono text-xs text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded mr-auto select-all">{formatPersianCode(item.code)}</div>
                 <div className="text-[10px] text-slate-400">{item.category || 'بدون دسته'}</div>
                 {/* V10-2.3: badge موجودی + میانگین موزون بهای تمام‌شده (WAC) */}
                 <div className="flex items-center justify-between gap-1.5 mt-0.5">

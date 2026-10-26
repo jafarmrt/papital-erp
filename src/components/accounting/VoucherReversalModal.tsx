@@ -1,6 +1,6 @@
 import React, { useState, useId } from 'react';
 import { RotateCcw, AlertTriangle, ArrowRightLeft, Calendar, FileText, CheckCircle2, Sparkles } from 'lucide-react';
-import { formatPersianNumber, getTodayIsoDate } from '../../utils';
+import { formatPersianNumber, getTodayIsoDate, formatPersianCode } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { Modal } from '../common/Modal';
 import type { JournalVoucher } from '../../types';
@@ -173,7 +173,7 @@ export function VoucherReversalModal({
                     <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
                       <td className="py-2 px-2.5">
                         <div className="font-medium text-slate-900 dark:text-slate-100">
-                          {item.accountName || item.accountCode}
+                          {item.accountName || formatPersianCode(item.accountCode)}
                         </div>
                         {item.detailedName && (
                           <div className="text-[10px] text-slate-400">{item.detailedName}</div>

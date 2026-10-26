@@ -27,7 +27,7 @@ import { describeOverOrders, findOverOrders } from './procurement/requisitionOrd
 import { money } from '../lib/money.js';
 import { canEditRequisition, REQUISITION_PRIORITIES, requisitionActionLabel, type RequisitionPriority } from '../lib/procurement/requisitionFields.js';
 import {
-  ensureRequisitionApproved, RECEIVE_ACTION_KEYS, RECEIVED_STEP_KEY, requisitionFlow, requisitionWorkflowGraph, transitionFromStep,
+  ensureRequisitionApproved, RECEIVE_ACTION_KEYS, RECEIVED_STEP_KEY, requisitionFlow, requisitionsInitiatorCannotApprove, requisitionWorkflowGraph, transitionFromStep,
   type RequisitionActor, type WorkflowStateRef, type WorkflowTransitionRef,
 } from './procurement/requisitionApproval.js';
 import { buildRequisitionRows, resolveRequisitionProject, type RequisitionRowFields } from './procurement/requisitionRows.js';
@@ -262,8 +262,14 @@ export class ProcurementService {
    * List purchase requisitions with filtering and pagination (v9.0.353, TD-697: status groups, item search and order
    * counts in SQL, the page and limit actually used)
    */
-  static async getRequisitions(filter: GetRequisitionsFilter = {}): Promise<{ data: PurchaseRequisition[]; total: number; page: number; limit: number }> {
-    return listRequisitions(filter);
+  static async getRequisitions(
+    filter: GetRequisitionsFilter = {},
+    viewer: { id?: number; role?: string } = {},
+  ): Promise<{ data: PurchaseRequisition[]; total: number; page: number; limit: number }> {
+    const list = await listRequisitions(filter);
+    // v11 phase 6.3a (U10): the rows whose approval this user may not sign as its initiator
+    const blocked = await requisitionsInitiatorCannotApprove(orm, list.data, viewer);
+    return blocked.size === 0 ? list : { ...list, data: list.data.map(r => (blocked.has(r.id) ? { ...r, initiatorCannotApprove: true } : r)) };
   }
 
   /**

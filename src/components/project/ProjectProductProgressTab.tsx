@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { RefreshCw, Package, CheckCircle2, Circle, Info, CheckSquare, Square } from 'lucide-react';
-import { toPersianDigits } from '../../utils';
+import { toPersianDigits, formatPersianCode } from '../../utils';
 import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 import { useProductProgressTicks } from '../../hooks/useProductProgressTicks';
 import { cellWorkOf, splitStageColumns } from '../../lib/projects/progressTicks';
@@ -237,7 +237,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
                       </td>
                       <td className="p-2.5 font-mono font-bold text-amber-900 sticky right-0 bg-white/95 z-10 border-l border-slate-100">
                         <div className="flex items-center gap-1.5">
-                          <span>{p.item_code || <span className="text-red-600 font-bold">بدون کد!</span>}</span>
+                          <span>{formatPersianCode(p.item_code) || <span className="text-red-600 font-bold">بدون کد!</span>}</span>
                           {p.customer_code && (
                             <span className="text-[9px] font-mono text-slate-500 bg-slate-100 px-1 py-0.2 rounded border border-slate-200" title="کد مشتری">
                               {p.customer_code}

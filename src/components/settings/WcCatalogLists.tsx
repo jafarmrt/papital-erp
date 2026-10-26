@@ -28,7 +28,7 @@ export function WcUnmatchedList({ rows, total }: { rows: WcUnmatchedProduct[]; t
       {rows.map(row => (
         <li key={`${row.productId}-${row.variationId}`} className="flex flex-wrap gap-x-2">
           <span className="font-medium text-slate-800">{row.name || `محصول ${formatPersianCode(row.productId)}`}</span>
-          {row.sku && <span dir="ltr" className="font-mono text-slate-600">{row.sku}</span>}
+          {row.sku && <span dir="ltr" className="font-mono text-slate-600">{formatPersianCode(row.sku)}</span>}
           <span className="text-amber-700">{WC_UNMATCHED_REASON_LABELS[row.reason]}</span>
         </li>
       ))}
@@ -45,7 +45,7 @@ export function WcItemList({ title, hint, rows, total, tone }: {
     <ListBox title={`${title} (${formatPersianNumber(total)})`} hint={hint}>
       {rows.map(row => (
         <li key={row.itemId} className="flex flex-wrap gap-x-2">
-          <span dir="ltr" className="font-mono text-slate-600">{row.code}</span>
+          <span dir="ltr" className="font-mono text-slate-600">{formatPersianCode(row.code)}</span>
           <span className="font-medium text-slate-800">{row.name}</span>
           {row.error && <span className={tone === 'rose' ? 'text-rose-700' : 'text-slate-500'}>{row.error}</span>}
         </li>

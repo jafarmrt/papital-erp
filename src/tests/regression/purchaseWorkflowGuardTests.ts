@@ -137,6 +137,35 @@ export async function runPurchaseWorkflowGuardTests(shouldRun: ShouldRun): Promi
     }));
   }
 
+  if (shouldRun('reg_split_button_initiator_v11_6_3a_u10', 'u10', 'workflow', 'procurement')) {
+    await runCase(results, 'reg_split_button_initiator_v11_6_3a_u10', 'v11 phase 6.3a (U10): the requisition list marks an open requisition its viewer started and may not approve, for that viewer only and only until it is approved', () => inFiscalSandbox(async () => {
+      await WorkflowEngineService.seedDefaultWorkflows();
+      const keys = ['procurement.view', 'procurement.create', 'procurement.approve', 'procurement.order'];
+      const maker = await clientWith(keys);
+      const checker = await clientWith(keys);
+      const created = await maker.post('/api/procurement/requisitions', {
+        title: 'Split button initiator test', priority: 'normal',
+        items: [{ itemName: 'Split button test service', unit: 'عدد', requestedQty: 1, unitPriceEstimate: 1000 }],
+      });
+      expect(created.status === 201, `requisition create returned ${brief(created)}`);
+      const id = Number(created.body?.data?.id);
+      const markOf = async (client: typeof maker) => {
+        const res = await client.get('/api/procurement/requisitions?search=Split%20button%20initiator&limit=50');
+        expect(res.status === 200, `requisition list returned ${brief(res)}`);
+        const row = (Array.isArray(res.body?.data) ? res.body.data : []).find((r: { id: number }) => Number(r.id) === id);
+        expect(Boolean(row), `requisition ${id} missing from the list: ${brief(res)}`);
+        return row.initiatorCannotApprove === true;
+      };
+      expect(await markOf(maker), 'the list does not mark the open requisition for its creator');
+      expect(!(await markOf(checker)), 'the list marks the requisition for another approver');
+
+      const approved = await checker.post(`/api/procurement/requisitions/${id}/workflow-action`, { actionKey: 'approve_request' });
+      expect(approved.status === 200, `another approver returned ${brief(approved)}`);
+      expect(!(await markOf(maker)), 'the list still marks the requisition for its creator after another user approved it');
+      return 'marked for the creator while open, not for another approver, not after approval';
+    }));
+  }
+
   if (shouldRun('reg_requisition_workflow_actions_obs_r2_38', 'obs-r2-38', 'workflow', 'procurement')) {
     await runCase(results, 'reg_requisition_workflow_actions_obs_r2_38', 'OBS-R2-38: the requisition window reads the actions this user may run in the current step; the creator is not offered the approval', () => inFiscalSandbox(async () => {
       await WorkflowEngineService.seedDefaultWorkflows();

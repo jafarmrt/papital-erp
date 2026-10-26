@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ChevronDown, Check, X } from 'lucide-react';
-import { normalizePersianText, toEnglishDigits } from '../../utils';
+import { normalizePersianText, toEnglishDigits, formatPersianCode } from '../../utils';
 
 /** متن جست‌وجوی حساب: «ی» و «ک» یکسان، فاصله و نیم‌فاصله یکی و رقم فارسی و عربی لاتین */
 const accountSearchText = (value: string | null | undefined) => toEnglishDigits(normalizePersianText(value));
@@ -233,7 +233,7 @@ export function AccountSearchSelect({
                   >
                     <div className="flex items-center gap-2 overflow-hidden">
                       <span className="font-mono font-bold text-xs text-slate-800 dark:text-slate-100 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded shrink-0">
-                        {acc.code}
+                        {formatPersianCode(acc.code)}
                       </span>
                       <span className="truncate">{acc.name}</span>
                     </div>

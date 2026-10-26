@@ -1,5 +1,5 @@
 import { ShieldCheck, Layers, AlertTriangle, TrendingDown, DollarSign, Warehouse, Search, Download, RefreshCw, RotateCcw, CheckCircle2, Eye } from 'lucide-react';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import type { InventoryIntegrityReport, ItemIntegrityAuditResult } from '../../types';
 import { integrityStatusLabel, integrityVariance, isIntegrityItemSynchronized } from '../../lib/inventoryAudit/integrityReport';
@@ -293,7 +293,7 @@ export function Inventory3WayIntegrityTab({
                       } ${isNegative ? 'bg-rose-50/30' : ''}`}
                     >
                       <td className="py-3 px-3 text-center font-mono text-slate-400">{formatPersianNumber(idx + 1)}</td>
-                      <td className="py-3 px-3 font-mono font-bold text-slate-800">{item.itemCode}</td>
+                      <td className="py-3 px-3 font-mono font-bold text-slate-800">{formatPersianCode(item.itemCode)}</td>
                       <td className="py-3 px-4">
                         <div className="font-bold text-slate-900">{item.itemName}</div>
                         <div className="text-[11px] text-slate-500 mt-0.5">{item.category}</div>

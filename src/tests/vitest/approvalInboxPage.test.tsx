@@ -158,7 +158,7 @@ describe('TD-464 the task modal shows only the opened task entity', () => {
     renderPage();
     await screen.findAllByText('تأیید سند 7');
     fireEvent.click(openButtons()[0]);
-    await screen.findByText('PR-7');
+    await screen.findByText('PR-۷');
     expect(fetchJson.mock.calls.filter((c) => c[0] === '/api/procurement/requisitions/7')).toHaveLength(1);
   });
 });

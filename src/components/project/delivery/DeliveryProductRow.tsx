@@ -1,6 +1,6 @@
 import { CheckSquare, Square, AlertCircle, DollarSign, RefreshCw, ArrowDownRight } from 'lucide-react';
 import type { Item, ProjectProductItem } from '../../../types';
-import { formatPersianNumber, toPersianDigits } from '../../../utils';
+import { formatPersianNumber, toPersianDigits, formatPersianCode } from '../../../utils';
 import { DecimalInput } from '../../common/DecimalInput';
 import type { ProjectDelivery } from './useProjectDelivery';
 
@@ -58,7 +58,7 @@ export function DeliveryProductRow({ product: p, index: idx, projectItemId, cata
           <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-slate-500">
             {hasCatalogLink ? (
               <span className="flex items-center gap-1">
-                کد انبار: <strong className="font-mono text-slate-700">{p.item_code || catItem?.code}</strong>
+                کد انبار: <strong className="font-mono text-slate-700">{formatPersianCode(p.item_code) || formatPersianCode(catItem?.code)}</strong>
               </span>
             ) : (
               <span className="text-rose-600 font-medium flex items-center gap-1">

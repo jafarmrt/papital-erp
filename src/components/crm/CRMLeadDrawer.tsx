@@ -389,7 +389,7 @@ export function CRMLeadDrawer({
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-mono font-bold">
-                              {item.code}
+                              {formatPersianCode(item.code)}
                             </span>
                             <h5 className="font-bold text-xs text-slate-900">{item.name}</h5>
                           </div>

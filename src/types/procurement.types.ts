@@ -69,6 +69,8 @@ export interface PurchaseRequisition {
   assigned_to_name?: string;
   workflowInstanceId?: number | null;
   workflow_instance_id?: number | null;
+  /** v11 phase 6.3a (U10): list rows only; this user started the requisition's workflow and its approval leaves the initiator out */
+  initiatorCannotApprove?: boolean;
   notes?: string;
   description?: string;
   totalEstimatedAmount?: number;

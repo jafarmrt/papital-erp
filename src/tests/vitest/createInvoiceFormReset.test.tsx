@@ -8,6 +8,7 @@ import type { User } from '../../types';
 import { INVOICE_STATUS_LABELS } from '../../components/invoices/create/InvoiceHeaderFields';
 import { INVOICE_BUYER_TEXT } from '../../components/invoices/create/InvoiceBuyerFields';
 import { INVOICE_LINE_TEXT } from '../../components/invoices/create/InvoiceLinePicker';
+import { formatPersianCode } from '../../utils';
 
 /** Persian texts of the invoice form the test reads (v10.2.4: options without emoji) */
 const CENTRAL_WAREHOUSE = 'انبار مرکزی';
@@ -93,7 +94,7 @@ const bodiesOf = (method: string, url: string) => fetchJson.mock.calls
   .map(([, i]) => JSON.parse(String((i as Init).body)) as Record<string, unknown>);
 
 async function clickEdit(ref: string) {
-  const row = (await screen.findByText(ref)).closest('tr') as HTMLElement;
+  const row = (await screen.findByText(formatPersianCode(ref))).closest('tr') as HTMLElement;
   fireEvent.click(within(row).getByText('ویرایش'));
 }
 

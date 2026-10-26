@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { FolderKanban, RefreshCw } from 'lucide-react';
-import { formatPersianNumber, formatPersianDate } from '../../../utils';
+import { formatPersianNumber, formatPersianDate, formatPersianCode } from '../../../utils';
 import { useRialDisplay } from '../../../hooks/useAppCurrency';
 import { useProjectDetailQuery, useProjectSummaryQuery } from '../../../hooks/accounting/usePartyProjectReportQueries';
 
@@ -87,7 +87,7 @@ export const ProjectReportView: React.FC = () => {
                   onClick={() => handleSelectProject(s.projectId)}
                   className={`hover:bg-slate-50/60 dark:hover:bg-slate-900/40 cursor-pointer ${selectedProjectId === s.projectId ? 'bg-indigo-50/60 dark:bg-indigo-950/30' : ''}`}
                 >
-                  <td className="p-3 font-mono text-slate-600 dark:text-slate-300">{s.projectCode || '-'}</td>
+                  <td className="p-3 font-mono text-slate-600 dark:text-slate-300">{formatPersianCode(s.projectCode) || '-'}</td>
                   <td className="p-3 text-slate-800 dark:text-slate-200">{s.projectTitle}</td>
                   <td className="p-3 text-center font-mono text-slate-600 dark:text-slate-300">{formatPersianNumber(s.entriesCount)}</td>
                   <td className="p-3 text-center font-mono text-slate-700 dark:text-slate-300">{rial.number(s.totalDebit)}</td>
@@ -134,9 +134,9 @@ export const ProjectReportView: React.FC = () => {
               ) : (
                 detail.map((d, idx) => (
                   <tr key={idx} className="hover:bg-slate-50/60 dark:hover:bg-slate-900/40">
-                    <td className="p-2.5 font-mono text-slate-700 dark:text-slate-300">{d.voucherNumber}</td>
+                    <td className="p-2.5 font-mono text-slate-700 dark:text-slate-300">{formatPersianCode(d.voucherNumber)}</td>
                     <td className="p-2.5 font-mono text-slate-600 dark:text-slate-400">{formatPersianDate(d.voucherDate)}</td>
-                    <td className="p-2.5 font-mono text-slate-600 dark:text-slate-400" dir="ltr">{d.accountCode || '-'}</td>
+                    <td className="p-2.5 font-mono text-slate-600 dark:text-slate-400" dir="ltr">{formatPersianCode(d.accountCode) || '-'}</td>
                     <td className="p-2.5 text-slate-700 dark:text-slate-300">{d.accountName || '-'}</td>
                     <td className="p-2.5 text-slate-600 dark:text-slate-400 max-w-[200px] truncate" title={d.lineDescription || d.voucherDescription}>
                       {d.lineDescription || d.voucherDescription || '-'}

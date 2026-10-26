@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, ShoppingCart, CheckCircle2, Loader2, Building2, FileText, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { formatPersianPrice, formatPersianNumber, getTodayIsoDate, errorMessageOf } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, getTodayIsoDate, errorMessageOf, formatPersianCode } from '../../utils';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import type { ReorderModalItem } from '../../lib/reorderAlerts/reorderItems';
 import { supplierNameOptions } from '../../lib/documents/documentPartyKind';
@@ -306,7 +306,7 @@ export function ReorderPurchaseModal({
                       <td className="p-2.5 text-center font-mono text-slate-400">{formatPersianNumber(idx + 1)}</td>
                       <td className="p-2.5">
                         <span className="font-bold text-slate-900 block">{it.name}</span>
-                        <span className="text-[11px] font-mono text-slate-500">{it.code}</span>
+                        <span className="text-[11px] font-mono text-slate-500">{formatPersianCode(it.code)}</span>
                       </td>
                       <td className="p-2.5 text-center font-mono font-bold text-rose-600">
                         {formatPersianNumber(it.current_stock)}

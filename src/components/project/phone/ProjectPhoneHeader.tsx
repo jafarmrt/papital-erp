@@ -5,6 +5,7 @@ import { PHONE_TAP_TARGET } from '../../../lib/pwa/phoneLayout';
 import { ProjectStatusActions } from '../ProjectStatusActions';
 import type { ProjectWriteBase } from '../../../lib/projects/projectParts';
 import { PROJECT_STATUS_STYLES } from '../workspace/ProjectWorkspaceHeader';
+import { formatPersianCode } from '../../../utils';
 
 interface ProjectPhoneHeaderProps {
   project: ProductionProject;
@@ -32,7 +33,7 @@ export function ProjectPhoneHeader({ project, writeBase, canEdit, editingSpecs, 
         <div className="min-w-0 flex-1">
           <h1 className="text-base font-bold text-slate-900 truncate">{project.title}</h1>
           <div className="flex items-center gap-1.5 mt-0.5">
-            {project.project_code && <span className="text-xs text-slate-500">{project.project_code}</span>}
+            {project.project_code && <span className="text-xs text-slate-500">{formatPersianCode(project.project_code)}</span>}
             <span className={`px-2 py-0.5 rounded-lg text-[11px] font-bold border ${PROJECT_STATUS_STYLES[status] ?? PROJECT_STATUS_STYLES.planned}`}>{projectStatusLabel(status)}</span>
           </div>
         </div>

@@ -1,14 +1,15 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { purchaseRequisitions, workflowInstances, workflowStates, workflowTransitions } from '../../db/schema.js';
 import { ConflictError, ValidationError } from '../../errors/customErrors.js';
 import { WorkflowTransitionExecutor, type WorkflowSnapshotDsl, type WorkflowStateSnapshot, type WorkflowTransitionSnapshot } from '../workflow/workflowTransitionExecutor.js';
 import { isUsableSnapshot } from '../workflow/workflowSnapshot.js';
+import { OPEN_REQUISITION_STATUSES } from '../../lib/procurement/requisitionFields.js';
 
 /** فیلدهای گام گردش‌کار که تدارکات می‌خواند (از تصویر فرایند یا جدول workflow_states) */
 export type WorkflowStateRef = Pick<WorkflowStateSnapshot, 'id' | 'stateKey' | 'title'>;
 /** فیلدهای انتقال گردش‌کار که تدارکات می‌خواند (از تصویر فرایند یا جدول workflow_transitions) */
-export type WorkflowTransitionRef = Pick<WorkflowTransitionSnapshot, 'id' | 'fromStateId' | 'toStateId' | 'actionKey' | 'title'>;
+export type WorkflowTransitionRef = Pick<WorkflowTransitionSnapshot, 'id' | 'fromStateId' | 'toStateId' | 'actionKey' | 'title' | 'isInitiatorExcluded'>;
 
 /** اقدام‌های «تأیید» درخواست خرید */
 export const APPROVE_ACTION_KEYS = ['direct_admin_order', 'approve_order', 'approve_request', 'direct_order'];
@@ -145,4 +146,40 @@ export async function ensureRequisitionApproved(
     throw new ConflictError(`درخواست خرید ${req.code} به گام تأییدشده نرسید.`, { step: flow.stepKey }, 'REQUISITION_NOT_APPROVED');
   }
   return flow;
+}
+
+/**
+ * v11 phase 6.3a (U10): the open requisitions of a list page whose approval this user may not sign, because the user
+ * started the requisition's workflow and an approval step on the way to «تأییدشده» leaves the initiator out (the engine's
+ * `initiatorExcluded`, system admin exempt). The desk disables «تفکیک و صدور فاکتور» on them with the reason; before, the
+ * initiator filled the whole split form and only then got the 403 `WF_INITIATOR_EXCLUDED` of `ensureRequisitionApproved`.
+ */
+export async function requisitionsInitiatorCannotApprove(
+  db: DbExecutor,
+  rows: ReadonlyArray<{ id: number; status?: string | null; workflowInstanceId?: number | null }>,
+  viewer: { id?: number; role?: string },
+): Promise<Set<number>> {
+  const blocked = new Set<number>();
+  const open = rows.filter(r => r.workflowInstanceId && OPEN_REQUISITION_STATUSES.has(String(r.status)));
+  if (!viewer.id || open.length === 0) return blocked;
+  const instances = await db.select().from(workflowInstances)
+    .where(inArray(workflowInstances.id, open.map(r => Number(r.workflowInstanceId))));
+  const signer = { userId: viewer.id, actorId: viewer.id, role: viewer.role };
+  for (const instance of instances) {
+    if (instance.status !== 'IN_PROGRESS' || instance.startedBy !== viewer.id) continue;
+    const { states, transitions } = await requisitionWorkflowGraph(instance, db);
+    let flow: RequisitionFlow = { instance, states, transitions, stepKey: '', stepTitle: '' };
+    for (let round = 0; round <= states.length; round += 1) {
+      const step = states.find(s => s.id === flow.instance.currentStateId);
+      const approve = step?.stateKey === APPROVED_STEP_KEY ? undefined : transitionFromStep(flow, APPROVE_ACTION_KEYS);
+      if (!approve) break;
+      if (WorkflowTransitionExecutor.initiatorExcluded(approve, instance.startedBy, signer)) {
+        const req = open.find(r => Number(r.workflowInstanceId) === instance.id);
+        if (req) blocked.add(req.id);
+        break;
+      }
+      flow = { ...flow, instance: { ...flow.instance, currentStateId: approve.toStateId } };
+    }
+  }
+  return blocked;
 }

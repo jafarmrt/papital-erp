@@ -7,6 +7,7 @@ import TimezoneProvider from './providers/TimezoneProvider';
 import { ConfirmDialogHost } from './ConfirmDialogHost';
 import { ErrorBoundary } from './ErrorBoundary';
 import { reloadOnceForNewVersion } from '../lib/system/chunkReload';
+import { NotFoundPage } from './NotFoundPage';
 
 // Helper for resilient lazy loading with auto-retry and cache-busting reload
 function lazyWithRetry<T extends React.ComponentType<any>>(
@@ -277,6 +278,10 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
             <DomainEventsPage />
           </ProtectedRoute>
         } />
+        {/* v11 phase 6.3a (U12): after login or setup the address may still be /login or /setup; it opens the پیشخوان */}
+        <Route path="/login" element={<Navigate to="/" replace />} />
+        <Route path="/setup" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
       </ErrorBoundary>
       </TimezoneProvider>

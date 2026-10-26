@@ -2,7 +2,7 @@ import { useState, useId } from 'react';
 import { fetchJson } from '../api';
 import { X, RefreshCw, ShieldCheck, AlertTriangle, CheckCircle2, Wrench, RotateCcw } from 'lucide-react';
 import { SearchableSelect } from './SearchableSelect';
-import { formatPersianNumber, errorMessageOf } from '../utils';
+import { formatPersianNumber, errorMessageOf, formatPersianCode } from '../utils';
 import { KardexWacDifferencesPanel } from './inventory/KardexWacDifferencesPanel';
 import { wacDifferencesOf } from '../lib/inventoryAudit/wacCorrection';
 import { DialogLayer } from './common/DialogLayer';
@@ -147,7 +147,7 @@ export default function InventoryRebuildModal({
                       <div key={idx} className="p-2.5 flex items-center justify-between hover:bg-slate-50">
                         <div>
                           <span className="font-bold text-slate-800">{d.itemName}</span>
-                          <span className="font-mono text-slate-400 mr-2">({d.itemCode})</span>
+                          <span className="font-mono text-slate-400 mr-2">({formatPersianCode(d.itemCode)})</span>
                         </div>
                         <div className="flex items-center gap-3 font-mono">
                           <span className="text-slate-500">قبل: {d.beforeStock}</span>

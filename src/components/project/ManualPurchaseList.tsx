@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ShoppingCart, Plus, Printer, CheckCircle2, Trash2, FilePlus, ExternalLink } from 'lucide-react';
 import { ProductionProject, PurchaseListItem, Item } from '../../types';
 import { COMMON_UNITS } from './projectInventoryUtils';
-import { formatPersianDate, formatPersianNumber, toPersianDigits } from '../../utils';
+import { formatPersianDate, formatPersianNumber, toPersianDigits, formatPersianCode } from '../../utils';
 import { CreatePurchaseOrderModal } from './CreatePurchaseOrderModal';
 import { ReservationShortageList } from './ReservationShortageList';
 import type { ReservationShortage } from '../../lib/projects/projectReservation';
@@ -68,7 +68,7 @@ export function ManualPurchaseList({
         <div>
           <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
             <ShoppingCart className="w-5 h-5 text-amber-600 print:text-slate-900" />
-            لیست نهایی نیازمندی‌ها و کسری‌های خرید (پروژه: {project.project_code || project.title})
+            لیست نهایی نیازمندی‌ها و کسری‌های خرید (پروژه: {formatPersianCode(project.project_code) || project.title})
           </h4>
           <p className="text-xs text-slate-500 mt-0.5 print:hidden">
             اقلام زیر بر اساس ارزیابی مراحل فوق استخراج شده‌اند. می‌توانید اقلام دستی مجزا نیز اضافه کنید.
@@ -115,7 +115,7 @@ export function ManualPurchaseList({
             <div>
               <span className="font-bold text-xs">سند سفارش خرید برای کسری‌ها صادر شد: </span>
               <span className="font-mono font-bold bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-300 text-emerald-900">
-                شماره سند: {lastCreatedOrderDoc.ref_number || lastCreatedOrderDoc.refNumber || '---'}
+                شماره سند: {formatPersianCode(lastCreatedOrderDoc.ref_number) || formatPersianCode(lastCreatedOrderDoc.refNumber) || '---'}
               </span>
               <span className="text-[11px] text-emerald-800 mr-2">
                 وضعیت اقلام سفارش‌داده‌شده به «در حال سفارش/خرید» ارتقا یافت.
@@ -170,7 +170,7 @@ export function ManualPurchaseList({
                   {effectiveReservedItems.map((rItem: any, idx: number) => (
                     <tr key={idx} className="hover:bg-purple-50/50">
                       <td className="p-2.5 text-center font-bold text-slate-500">{formatPersianNumber(idx + 1)}</td>
-                      <td className="p-2.5 font-mono font-bold text-purple-900">{rItem.itemCode || '---'}</td>
+                      <td className="p-2.5 font-mono font-bold text-purple-900">{formatPersianCode(rItem.itemCode) || '---'}</td>
                       <td className="p-2.5 font-bold text-slate-900">{rItem.itemName}</td>
                       <td className="p-2.5 text-center font-mono font-bold text-emerald-800">
                         <span className="px-2 py-0.5 bg-emerald-100 border border-emerald-300 rounded-md">
@@ -264,7 +264,7 @@ export function ManualPurchaseList({
                       <>
                         {item.itemName}
                         {item.itemCode && (
-                          <span className="block font-mono text-[10px] text-slate-500">کد: {item.itemCode}</span>
+                          <span className="block font-mono text-[10px] text-slate-500">کد: {formatPersianCode(item.itemCode)}</span>
                         )}
                       </>
                     )}

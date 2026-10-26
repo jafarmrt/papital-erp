@@ -1,6 +1,6 @@
 import React from 'react';
 import { History, RefreshCw, Save } from 'lucide-react';
-import { cn, formatPersianPrice, formatPersianNumber } from '../../utils';
+import { cn, formatPersianPrice, formatPersianNumber, formatPersianCode } from '../../utils';
 import { Item } from '../../types';
 import { COST_CURRENCY, markupPrice } from '../../lib/items/priceMargin';
 import { DecimalInput } from '../common/DecimalInput';
@@ -42,7 +42,7 @@ export function PricingGridView(props: PricingViewsShared) {
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-xs text-slate-800 truncate" title={item.name}>{item.name}</span>
                   <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-mono dir-ltr shrink-0">
-                    {item.code}
+                    {formatPersianCode(item.code)}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-1">
@@ -189,7 +189,7 @@ export function PricingTableView(props: PricingViewsShared) {
 
             return (
               <tr key={`pv-row-${item.id || idx}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
-                <td className="p-3 font-mono text-slate-600 dir-ltr text-right">{item.code}</td>
+                <td className="p-3 font-mono text-slate-600 dir-ltr text-right">{formatPersianCode(item.code)}</td>
                 <td className="p-3 font-bold text-slate-800">{item.name}</td>
                 <td className="p-3 text-slate-500">{item.category || '-'}</td>
                 <td className="p-3 font-mono text-slate-600">

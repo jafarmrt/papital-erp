@@ -563,7 +563,7 @@ export function PartyLedgerReportView({
               <div>
                 <span className="text-[11px] text-slate-400 block">شناسه / شهر:</span>
                 <span className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-0.5 block">
-                  {reportData.party?.code || reportData.party?.city || '—'}
+                  {formatPersianCode(reportData.party?.code) || reportData.party?.city || '—'}
                 </span>
               </div>
             </div>

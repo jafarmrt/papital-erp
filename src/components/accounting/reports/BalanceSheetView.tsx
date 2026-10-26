@@ -1,5 +1,5 @@
 import { FileSpreadsheet } from 'lucide-react';
-import { formatPersianPrice } from '../../../utils';
+import { formatPersianPrice, formatPersianCode } from '../../../utils';
 import type { BalanceSheetReport } from '../../../types';
 import { statementRows, type StatementRow } from '../../../lib/accounting/financialStatements';
 import { AsOfDateField, asOfCaption } from './ReportDateFields';
@@ -25,7 +25,7 @@ function StatementSection({ title, rows, total }: { title: string; rows: Stateme
       ) : (
         rows.map((row, i) => (
           <div key={`${row.code}-${i}`} className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-750">
-            <span className="text-slate-700 dark:text-slate-300">{row.code} - {row.name}</span>
+            <span className="text-slate-700 dark:text-slate-300">{formatPersianCode(row.code)} - {row.name}</span>
             <span className="font-mono font-bold">{formatPersianPrice(row.amount)}</span>
           </div>
         ))

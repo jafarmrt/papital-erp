@@ -37,7 +37,7 @@ router.get('/inbox/summary', authorizePermission(...READ_PERMISSIONS.purchaseReq
 router.get('/requisitions', authorizePermission(...READ_PERMISSIONS.purchaseRequisitions), validate(listRequisitionsSchema), asyncHandler(async (req, res) => {
   const { status, projectId, priority, search, page, limit } = req.query as z.infer<typeof listRequisitionsSchema>['query'];
 
-  const result = await ProcurementService.getRequisitions({ status, projectId, priority, search, page, limit });
+  const result = await ProcurementService.getRequisitions({ status, projectId, priority, search, page, limit }, { id: req.user?.id, role: req.user?.role });
   // v9.0.353 (TD-697): the page and limit the service used, not the ones asked for
   res.json({ success: true, data: result.data, total: result.total, page: result.page, limit: result.limit });
 }));

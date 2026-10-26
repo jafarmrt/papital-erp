@@ -14,7 +14,7 @@ import {
   ChevronUp, 
   DollarSign,
 } from 'lucide-react';
-import { formatPersianNumber, formatPersianDate, getTodayJalaliDate } from '../utils';
+import { formatPersianNumber, formatPersianDate, getTodayJalaliDate, formatPersianCode } from '../utils';
 import { downloadSheet } from '../lib/excel/downloadSheet';
 import { useRialDisplay } from '../hooks/useAppCurrency';
 import { toast } from 'react-hot-toast';
@@ -401,7 +401,7 @@ export default function ReservedItemsReportPage() {
                       <React.Fragment key={rowKey}>
                         <tr className={`hover:bg-slate-50 transition-colors ${isExpanded ? 'bg-amber-50/40' : ''}`}>
                           <td className="p-3.5 font-mono font-bold text-slate-900">
-                            {summary.itemCode || '---'}
+                            {formatPersianCode(summary.itemCode) || '---'}
                           </td>
                           <td className="p-3.5 font-bold text-slate-800">
                             {summary.itemName}
@@ -568,7 +568,7 @@ export default function ReservedItemsReportPage() {
                         {entry.sourceTitle}
                       </td>
                       <td className="p-3.5 font-mono text-slate-600">
-                        {entry.itemCode}
+                        {formatPersianCode(entry.itemCode)}
                       </td>
                       <td className="p-3.5 font-bold text-slate-900">
                         {entry.itemName}

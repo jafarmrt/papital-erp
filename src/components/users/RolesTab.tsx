@@ -3,7 +3,7 @@ import { Role, User } from '../../types';
 import { Plus, Trash2, Edit2, Users, Check, ShieldCheck, Layers } from 'lucide-react';
 import { isSystemAdminRole, withRequiredPermissions } from '../../lib/permissions/permissionCatalog';
 import { ROLE_TEMPLATES, type RoleTemplate } from '../../lib/permissions/roleTemplates';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../utils';
 
 interface RolesTabProps {
   rolesList: Role[];
@@ -136,7 +136,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                   )}
                 </div>
                 <p className="text-xs text-slate-400 mb-2">
-                  کد نقش: <span className="font-mono" dir="ltr">{r.code}</span>
+                  کد نقش: <span className="font-mono" dir="ltr">{formatPersianCode(r.code)}</span>
                 </p>
                 <p className="text-xs text-slate-600 line-clamp-2 min-h-[32px]">
                   {r.description || 'بدون توضیحات'}

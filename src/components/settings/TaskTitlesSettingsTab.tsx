@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { confirmAction } from '../ConfirmDialogHost';
 import { Layers, Plus, Edit3, Trash2, Search, FolderPlus, Tag, X } from 'lucide-react';
 import { fetchJson } from '../../api';
-import { formatPersianNumber, formatCurrencyLabel, errorMessageOf } from '../../utils';
+import { formatPersianNumber, formatCurrencyLabel, errorMessageOf, formatPersianCode } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { toast } from 'react-hot-toast';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
@@ -319,7 +319,7 @@ export function TaskTitlesSettingsTab() {
                 filteredTasks.map((task, idx) => (
                   <tr key={task.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-3.5 text-slate-400 font-mono">{formatPersianNumber(idx + 1)}</td>
-                    <td className="p-3.5 font-mono text-slate-700 font-bold">{task.code}</td>
+                    <td className="p-3.5 font-mono text-slate-700 font-bold">{formatPersianCode(task.code)}</td>
                     <td className="p-3.5 font-bold text-slate-900">{task.title}</td>
                     <td className="p-3.5">
                       <span className="inline-block px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-[10px] font-bold">

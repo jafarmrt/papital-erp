@@ -79,16 +79,16 @@ describe('InventoryAuditPage history tabs page through GET /documents (TD-787)',
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: 'سوابق دوره‌ها' }));
 
-    expect(await screen.findByText('AUD-1')).toBeTruthy();
+    expect(await screen.findByText('AUD-۱')).toBeTruthy();
     expect(listCalls()).toEqual([typedDocumentListUrl('audit', 1)]);
     expect(screen.getByText(/تعداد اسناد: ۱۲۰/)).toBeTruthy();
     expect(screen.getByText(/نمایش ۵۰ از ۱۲۰ سند انبارگردانی/)).toBeTruthy();
 
     fireEvent.click(screen.getByTitle('صفحه بعدی'));
-    expect(await screen.findByText('AUD-51')).toBeTruthy();
+    expect(await screen.findByText('AUD-۵۱')).toBeTruthy();
     expect(listCalls()).toContain(typedDocumentListUrl('audit', 2));
     expect(screen.getByText('۵۱')).toBeTruthy();
-    expect(screen.queryByText('AUD-1')).toBeNull();
+    expect(screen.queryByText('AUD-۱')).toBeNull();
   });
 
   it('transfer tab asks for one page and pages to the last one', async () => {
@@ -96,12 +96,12 @@ describe('InventoryAuditPage history tabs page through GET /documents (TD-787)',
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: 'حواله‌های انتقال' }));
 
-    expect(await screen.findByText('TRF-1')).toBeTruthy();
+    expect(await screen.findByText('TRF-۱')).toBeTruthy();
     expect(listCalls()).toEqual([typedDocumentListUrl('transfer', 1)]);
     fireEvent.click(screen.getByTitle('صفحه بعدی'));
-    expect(await screen.findByText('TRF-51')).toBeTruthy();
+    expect(await screen.findByText('TRF-۵۱')).toBeTruthy();
     fireEvent.click(screen.getByTitle('صفحه بعدی'));
-    expect(await screen.findByText('TRF-101')).toBeTruthy();
+    expect(await screen.findByText('TRF-۱۰۱')).toBeTruthy();
     await waitFor(() => expect((screen.getByTitle('صفحه بعدی') as HTMLButtonElement).disabled).toBe(true));
     expect(screen.getByText(/نمایش ۲۰ از ۱۲۰ حواله انتقال/)).toBeTruthy();
   });

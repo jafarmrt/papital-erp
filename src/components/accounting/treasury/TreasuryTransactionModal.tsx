@@ -5,7 +5,7 @@ import { SearchableSelect } from '../../SearchableSelect';
 import { FinancialAttachmentUploader } from '../FinancialAttachmentUploader';
 import { FinancialAmountInput } from '../../common/FinancialAmountInput';
 import { HelpBadge } from '../../common/HelpBadge';
-import { getTodayIsoDate } from '../../../utils';
+import { getTodayIsoDate, formatPersianCode } from '../../../utils';
 import { rialDisplayOf } from '../../../lib/rialDisplay';
 import { JalaliDateInput } from '../../common/JalaliDateInput';
 import { fetchJson } from '../../../api';
@@ -529,13 +529,13 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                     <tbody className="font-mono">
                       <tr className="border-b border-indigo-100 dark:border-indigo-900/50">
                         <td className="py-1.5 font-sans font-bold text-slate-800 dark:text-slate-200">{voucherPreview.debit.detailedName}</td>
-                        <td className="py-1.5 text-slate-600 dark:text-slate-300">{voucherPreview.debit.accountCode} — {voucherPreview.debit.accountName}</td>
+                        <td className="py-1.5 text-slate-600 dark:text-slate-300">{formatPersianCode(voucherPreview.debit.accountCode)} — {voucherPreview.debit.accountName}</td>
                         <td className="py-1.5 text-left font-bold text-slate-900 dark:text-white">{rial.money(voucherPreview.debit.amount, selectedBank?.currency)}</td>
                         <td className="py-1.5 text-left text-slate-300">—</td>
                       </tr>
                       <tr>
                         <td className="py-1.5 font-sans font-bold text-slate-800 dark:text-slate-200">{voucherPreview.credit.detailedName}</td>
-                        <td className="py-1.5 text-slate-600 dark:text-slate-300">{voucherPreview.credit.accountCode} — {voucherPreview.credit.accountName}</td>
+                        <td className="py-1.5 text-slate-600 dark:text-slate-300">{formatPersianCode(voucherPreview.credit.accountCode)} — {voucherPreview.credit.accountName}</td>
                         <td className="py-1.5 text-left text-slate-300">—</td>
                         <td className="py-1.5 text-left font-bold text-slate-900 dark:text-white">{rial.money(voucherPreview.credit.amount, selectedBank?.currency)}</td>
                       </tr>

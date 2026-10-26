@@ -50,7 +50,7 @@ export function LedgerView({
             <option value="">-- انتخاب حساب از لیست --</option>
             {safeAccounts.map(acc => (
               <option key={acc.id} value={acc.id}>
-                {acc.code} - {acc.name} ({LEVEL_LABELS[acc.level] ?? 'معین'})
+                {formatPersianCode(acc.code)} - {acc.name} ({LEVEL_LABELS[acc.level] ?? 'معین'})
               </option>
             ))}
           </select>
@@ -111,7 +111,7 @@ export function LedgerView({
                       <td className="py-2 px-4 border-l border-slate-200 dark:border-slate-700">
                         {item.description}
                         {rollsUp && !item.isOpening && item.accountCode && (
-                          <div className="text-[10px] text-slate-400 mt-0.5">{item.accountCode} - {item.accountName}</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">{formatPersianCode(item.accountCode)} - {item.accountName}</div>
                         )}
                       </td>
                       <td className="py-2 px-3 text-center border-l border-slate-200 dark:border-slate-700 text-purple-600">

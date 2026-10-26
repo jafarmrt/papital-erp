@@ -1,7 +1,7 @@
 import { useId } from 'react';
 import { Plus, Package } from 'lucide-react';
 import { Item } from '../../../types';
-import { formatCurrencyLabel, formatPersianNumber, formatPersianPrice } from '../../../utils';
+import { formatCurrencyLabel, formatPersianNumber, formatPersianPrice, formatPersianCode } from '../../../utils';
 import { SearchableSelect } from '../../SearchableSelect';
 import type { StockDocumentForm } from '../../../hooks/documents/useStockDocumentForm';
 import { PICK_LIST_URLS } from '../../../lib/permissions/pickLists';
@@ -145,7 +145,7 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
         {selectedItemObj && actionType === 'out' && (
           <div className="bg-white border border-slate-200 p-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
             <div className="flex items-center gap-2">
-              <span className="font-mono font-bold text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">{selectedItemObj.code}</span>
+              <span className="font-mono font-bold text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">{formatPersianCode(selectedItemObj.code)}</span>
               <span className="font-bold text-slate-900">{selectedItemObj.name}</span>
             </div>
             {(() => {

@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import toast from 'react-hot-toast';
 import { Item } from '../../types';
 import { fetchJson } from '../../api';
-import { errorMessageOf, formatPersianDateTime } from '../../utils';
+import { errorMessageOf, formatPersianDateTime, formatPersianCode } from '../../utils';
 import { ITEM_CODE_CHANGE_REASON_MAX, itemCodeChangeError } from '../../lib/items/itemCodeChange';
 import { PHONE_SHEET_OVERLAY, PHONE_TAP_TARGET } from '../../lib/pwa/phoneLayout';
 import { DialogLayer } from '../common/DialogLayer';
@@ -68,7 +68,7 @@ export function ItemCodeChangeModal({ item, onClose, onChanged }: ItemCodeChange
         <div className="p-4 space-y-3 overflow-y-auto flex-1 text-xs">
           <div>
             <span className="block text-slate-500 mb-1">کد فعلی</span>
-            <span className="font-mono font-bold text-slate-700" dir="ltr">{item.code}</span>
+            <span className="font-mono font-bold text-slate-700" dir="ltr">{formatPersianCode(item.code)}</span>
           </div>
           <label className="block">
             <span className="block text-slate-600 font-bold mb-1">کد تازه</span>

@@ -37,6 +37,8 @@ const grant = (...keys: string[]) => { granted.clear(); keys.forEach(key => gran
 const noop = () => undefined;
 
 /** wires the audit page buttons the way InventoryAuditPage does */
+const STOCK_TOOLS = 'ابزارهای موجودی';
+
 function AuditButtons() {
   const access = useInventoryAuditActionAccess();
   return (
@@ -80,6 +82,7 @@ describe('stock buttons follow the key of their API (TD-1130)', () => {
   it('hides rebuild, transfer, void and Kardex from a stock counter with audit.view only', () => {
     grant('audit.view');
     render(<AuditButtons />);
+    expect(screen.queryByTitle(STOCK_TOOLS)).toBeNull();
     expect(screen.queryByText('بازسازی موجودی از روی کاردکس')).toBeNull();
     expect(screen.queryByText('ثبت حواله انتقال انبار')).toBeNull();
     expect(screen.queryByText('ثبت حواله انتقال جدید')).toBeNull();
@@ -90,6 +93,8 @@ describe('stock buttons follow the key of their API (TD-1130)', () => {
   it('shows each button with its own key', () => {
     grant('audit.view', 'inventory.reconcile');
     render(<AuditButtons />);
+    // v11 phase 6.3a (U24): the rebuild is in the three-dot menu of the header
+    fireEvent.click(screen.getByTitle(STOCK_TOOLS));
     expect(screen.getByText('بازسازی موجودی از روی کاردکس')).toBeTruthy();
     expect(screen.queryByText('ثبت حواله انتقال انبار')).toBeNull();
     cleanup();
@@ -99,6 +104,7 @@ describe('stock buttons follow the key of their API (TD-1130)', () => {
     expect(screen.getByText('ثبت حواله انتقال جدید')).toBeTruthy();
     expect(screen.getByText('ابطال')).toBeTruthy();
     expect(screen.getByText('kardex-button')).toBeTruthy();
+    expect(screen.queryByTitle(STOCK_TOOLS)).toBeNull();
     expect(screen.queryByText('بازسازی موجودی از روی کاردکس')).toBeNull();
   });
 

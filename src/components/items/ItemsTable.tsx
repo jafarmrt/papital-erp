@@ -1,6 +1,6 @@
 import { Item } from '../../types';
 import { ChevronRight, ChevronLeft, Cloud, Edit2, Archive, Lock, CheckCircle2, Hash } from 'lucide-react';
-import { cn, formatPersianNumber, formatPersianPrice, parseMultiValue, formatMultiValue } from '../../utils';
+import { cn, formatPersianNumber, formatPersianPrice, parseMultiValue, formatMultiValue, formatPersianCode } from '../../utils';
 import { SafeImage } from '../SafeImage';
 import { ActionMenu } from '../ActionMenu';
 
@@ -105,7 +105,7 @@ export function ItemsTable({
                        <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200">{item.category}</span>
                     ) : <span className="text-slate-300">-</span>}
                   </td>
-                  <td className="p-3 font-mono font-bold text-slate-700 dir-ltr text-right">{item.code}</td>
+                  <td className="p-3 font-mono font-bold text-slate-700 dir-ltr text-right">{formatPersianCode(item.code)}</td>
                   <td className="p-3 font-bold text-slate-900">{item.name}</td>
                   
                   <td className="p-3 text-slate-600 text-xs text-right">

@@ -13,7 +13,7 @@ import {
   ChevronUp,
   Users
 } from 'lucide-react';
-import { formatPersianDate, formatPersianPrice, formatPersianNumber } from '../../utils';
+import { formatPersianDate, formatPersianPrice, formatPersianNumber, formatPersianCode } from '../../utils';
 import { toPersianDigits } from '../../utils/persianNumber';
 import { WorkflowActionConditionList, WorkflowBlockedActions } from './WorkflowActionConditions';
 import { WorkflowInstanceTerminate } from './WorkflowInstanceTerminate';
@@ -322,7 +322,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
                 <div className="mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs grid grid-cols-2 gap-2 border border-gray-200 dark:border-gray-600">
                   <div>
                     <span className="text-gray-400 text-[10px]">شماره سند: </span>
-                    <span className="font-mono font-bold text-gray-800 dark:text-gray-200">{wfData.entityContext.refNumber || entityId}</span>
+                    <span className="font-mono font-bold text-gray-800 dark:text-gray-200">{formatPersianCode(wfData.entityContext.refNumber) || entityId}</span>
                   </div>
                   <div>
                     <span className="text-gray-400 text-[10px]">خریدار: </span>

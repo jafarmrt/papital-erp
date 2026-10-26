@@ -192,12 +192,12 @@ describe('stock windows refresh while open (10.3)', () => {
     const client = newClient();
     client.setQueryData(QUERY_KEYS.inventory.reservedItems(), reservedReport('OLD-1'));
     render(withClient(client)(<MemoryRouter><ReservedItemsReportPage /></MemoryRouter>));
-    expect(screen.queryByText('OLD-1')).toBeNull();
-    expect(await screen.findByText('P-7')).toBeTruthy();
+    expect(screen.queryByText('OLD-۱')).toBeNull();
+    expect(await screen.findByText('P-۷')).toBeTruthy();
 
     reservedItemCode = 'P-8';
     await act(() => client.invalidateQueries({ queryKey: QUERY_KEYS.inventory.all }));
-    expect(await screen.findByText('P-8')).toBeTruthy();
+    expect(await screen.findByText('P-۸')).toBeTruthy();
   });
 
   it('the code history window shows a code change made meanwhile', async () => {

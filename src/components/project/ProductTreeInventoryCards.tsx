@@ -6,7 +6,7 @@ import {
   Item 
 } from '../../types';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
-import { formatPersianNumber, toPersianDigits } from '../../utils';
+import { formatPersianNumber, toPersianDigits, formatPersianCode } from '../../utils';
 import { MaterialNameCell, FreeStockCell, MaterialStatusCell, NotesCell, type OpenUnitConversionModalHandler } from './inventoryRowCells';
 import { rowIsShort, type MaterialAvailabilityView } from '../../lib/projects/materialAvailability';
 import { perItemRowRequiredQty, productOrderQuantity } from '../../lib/projects/materialQuantity';
@@ -220,7 +220,7 @@ export function ProductTreeInventoryCards({
                               ? 'bg-slate-800 text-amber-300 border-slate-700' 
                               : 'bg-white text-slate-600 border-slate-200'
                           }`}>
-                            کد: {prod.item_code}
+                            کد: {formatPersianCode(prod.item_code)}
                           </span>
                         )}
                         {prod.customer_code && (

@@ -1,5 +1,5 @@
 import { CheckCircle2, Clock, FileText, RefreshCw, RotateCcw, User, Warehouse } from 'lucide-react';
-import { formatPersianDate, formatPersianNumber, toPersianDigits } from '../../../utils';
+import { formatPersianDate, formatPersianNumber, toPersianDigits, formatPersianCode } from '../../../utils';
 import { warehouseLabel } from '../../../lib/inventory/warehouseLabel';
 import { ErrorStateView } from '../../common/ErrorStateView';
 import { ListPager } from '../../common/ListPager';
@@ -60,12 +60,12 @@ export function AllocationTable({ list, canConsumeAllocation, canReleaseAllocati
                     #{toPersianDigits(alloc.id)}
                   </td>
                   <td className="py-3 px-3">
-                    <div className="font-bold text-blue-700 font-mono">{alloc.projectCode}</div>
+                    <div className="font-bold text-blue-700 font-mono">{formatPersianCode(alloc.projectCode)}</div>
                     <div className="text-[11px] text-slate-500 truncate max-w-[160px]">{alloc.notes || 'پروژه تولید'}</div>
                   </td>
                   <td className="py-3 px-4">
                     <div className="font-bold text-slate-900">{alloc.itemName}</div>
-                    <div className="text-[11px] text-slate-400 font-mono">{alloc.itemCode}</div>
+                    <div className="text-[11px] text-slate-400 font-mono">{formatPersianCode(alloc.itemCode)}</div>
                   </td>
                   <td className="py-3 px-3 text-center">
                     <span className="font-bold text-slate-800 font-mono text-sm">

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { X, RefreshCw, ArrowDownRight, ArrowUpRight, Download, Search, Layers, ShieldCheck } from 'lucide-react';
 import { downloadSheet } from '../lib/excel/downloadSheet';
-import { formatPersianNumber, formatPersianDate, errorMessageOf } from '../utils';
+import { formatPersianNumber, formatPersianDate, errorMessageOf, formatPersianCode } from '../utils';
 import { kardexDocumentTypeLabel } from '../lib/documents/documentTypeTitles';
 import { warehouseLabel } from '../lib/inventory/warehouseLabel';
 import { useWarehousesQuery } from '../hooks/queries/useSettingsQueries';
@@ -105,7 +105,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                 کاردکس و ریز گردش کالا
                 {data?.item && (
                   <span className="text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-0.5 rounded-full font-bold">
-                    {data.item.code}
+                    {formatPersianCode(data.item.code)}
                   </span>
                 )}
               </h3>

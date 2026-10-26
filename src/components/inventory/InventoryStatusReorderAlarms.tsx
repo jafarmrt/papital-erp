@@ -1,5 +1,5 @@
 import { AlertTriangle, ArrowLeft, ShoppingCart } from 'lucide-react';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../utils';
 import type { InventoryStatusAlarm } from '../../lib/reorderAlerts/inventoryStatusAlarms';
 
 /**
@@ -81,7 +81,7 @@ export function ReorderAlarmBanner({ alarms, onOpen }: AlarmProps) {
         {alarms.slice(0, 3).map(item => (
           <div key={item.id} className="py-2.5 flex items-center justify-between text-xs">
             <div className="flex items-center gap-2 overflow-hidden">
-              <span className="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-[11px]">{item.code}</span>
+              <span className="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-[11px]">{formatPersianCode(item.code)}</span>
               <span className="font-bold text-slate-800 truncate">{item.name}</span>
               <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.type === 'product' ? 'bg-indigo-50 text-indigo-700' : 'bg-amber-50 text-amber-700'}`}>
                 {item.type === 'product' ? 'محصول' : 'ماده اولیه'}

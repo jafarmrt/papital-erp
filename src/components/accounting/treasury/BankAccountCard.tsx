@@ -14,7 +14,7 @@ import {
   HandCoins,
   Clock,
 } from 'lucide-react';
-import { formatPersianPrice, formatCurrencyLabel, formatBankCard, formatIranianSheba } from '../../../utils';
+import { formatPersianPrice, formatCurrencyLabel, formatBankCard, formatIranianSheba, formatPersianCode } from '../../../utils';
 import { isRialCurrency, rialDisplayOf } from '../../../lib/rialDisplay';
 import { ActionMenu } from '../../ActionMenu';
 import type { BankAccount } from '../../../types';
@@ -91,7 +91,7 @@ export const BankAccountCard: React.FC<BankAccountCardProps> = React.memo(({
                   {bank.title}
                 </h4>
                 <span className="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-700/60 px-1.5 py-0.5 rounded">
-                  {bank.code}
+                  {formatPersianCode(bank.code)}
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 mt-0.5">

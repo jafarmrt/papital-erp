@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Plus, Printer, Trash2, BookOpen, RefreshCw, Wallet, Info, Pencil, FileSpreadsheet, Gift } from 'lucide-react';
 import { PieceworkPayroll } from '../../types';
-import { formatPersianDate } from '../../utils';
+import { formatPersianDate, formatPersianCode } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { fetchJson } from '../../api';
@@ -195,7 +195,7 @@ export function PieceworkPayrollsTab({
                             title={`سند شماره ${payroll.voucherNumber}`}
                           >
                             <BookOpen size={12} />
-                            سند #{payroll.voucherNumber}
+                            سند #{formatPersianCode(payroll.voucherNumber)}
                           </span>
                         ) : !canIssuePayroll ? (
                           <StatusChip label="بی سند" />
