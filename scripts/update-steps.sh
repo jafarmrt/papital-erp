@@ -127,26 +127,31 @@ update_rehearsal_need_kb() {
 }
 
 # v11 (phase 4, card ت۵۳ question 5): the folder of the database files: UPDATE_DB_DATA_DIR, else /var/lib/postgresql
-# when the database runs on this server (DATABASE_URL or SQL_HOST names localhost, 127.0.0.1, ::1 or a socket);
-# empty when the database is elsewhere
+# when the database runs on this server (SQL_HOST, else the host of DATABASE_URL or its host= parameter, is empty,
+# localhost, a 127.x address, ::1 or a socket folder); empty when the database is elsewhere
 update_database_dir() {
-  local app_dir="$1" url host
+  local app_dir="$1" url host query
   if [ -n "${UPDATE_DB_DATA_DIR:-}" ]; then echo "$UPDATE_DB_DATA_DIR"; return 0; fi
+  host="$(update_env_value "$app_dir" SQL_HOST)"
   url="$(update_env_value "$app_dir" DATABASE_URL)"
-  if [ -n "$url" ]; then
-    host="${url#*://}"; host="${host%%/*}"; host="${host##*@}"
+  if [ -z "$host" ] && [ -n "$url" ]; then
+    host="${url#*://}"; host="${host%%[/?]*}"; host="${host##*@}"
     case "$host" in \[*) host="${host%%]*}"; host="${host#[}" ;; *) host="${host%%:*}" ;; esac
-  else
-    host="$(update_env_value "$app_dir" SQL_HOST)"
+    query=""
+    case "$url" in *\?*) query="&${url#*\?}" ;; esac
+    case "$query" in *"&host="*) host="${query#*&host=}"; host="${host%%&*}" ;; esac
   fi
-  case "$host" in ""|localhost|127.0.0.1|::1|/*) ;; *) return 0 ;; esac
+  host="$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')"
+  host="${host//%2f//}"
+  case "$host" in ""|localhost|127.*|::1|/*) ;; *) return 0 ;; esac
   if [ -d "${UPDATE_PG_DIR:-/var/lib/postgresql}" ]; then echo "${UPDATE_PG_DIR:-/var/lib/postgresql}"; fi
 }
 
 # v11 (phase 4, card ت۵۳ question 5): a migration that changes a column type rewrites its table, and PostgreSQL keeps
 # the old copy until the migration commits, so the disk of the database needs free space of twice the database. Run
-# after update_space_check: on the same disk as <app-dir> the update's own need (UPDATE_SPACE_NEED_KB) is counted
-# first. 0 when there is room or the database size or folder cannot be read (a database on another server); else sets
+# after update_space_check: on the same disk as <app-dir> its free space and the update's own need (UPDATE_SPACE_FREE_KB,
+# UPDATE_SPACE_NEED_KB) are counted first. The size is read from DATABASE_URL (backup.sh needs it too). 0 when there is
+# room or the database size or folder cannot be read (a database on another server); else sets
 # UPDATE_DB_SPACE_MESSAGE and returns 1. Sets UPDATE_DB_SPACE_NEED_KB and UPDATE_DB_SPACE_FREE_KB when it checked.
 # UPDATE_DB_BYTES and UPDATE_PG_DIR replace the database size and /var/lib/postgresql for the tests.
 update_database_space_check() {
@@ -163,7 +168,7 @@ update_database_space_check() {
   [ -n "$bytes" ] || return 0
   need=$(( bytes * 2 / 1024 ))
   free="$(update_disk_free_kb "$db_dir")"
-  if update_same_disk "$app_dir" "$db_dir"; then free=$(( free - ${UPDATE_SPACE_NEED_KB:-0} )); fi
+  if update_same_disk "$app_dir" "$db_dir"; then free=$(( ${UPDATE_SPACE_FREE_KB:-$free} - ${UPDATE_SPACE_NEED_KB:-0} )); fi
   UPDATE_DB_SPACE_NEED_KB="$need"
   UPDATE_DB_SPACE_FREE_KB="$free"
   [ "$free" -lt "$need" ] || return 0
