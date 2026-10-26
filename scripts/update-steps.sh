@@ -486,7 +486,7 @@ update_refresh_ops_config() {
   if [ "$(id -u)" -ne 0 ] && [ ! -w "$(dirname "${CRON_FILE:-/etc/cron.d/papital-erp}")" ]; then
     UPDATE_OPS_NOTES+=("WARN: the cron file was not rewritten (it needs root); run: sudo bash scripts/install-ops-cron.sh ${user}")
   elif out="$(APP_DIR="$app_dir" bash "$app_dir/scripts/install-ops-cron.sh" "$user" 2>&1)"; then
-    UPDATE_OPS_NOTES+=("$(printf '%s\n' "$out" | grep '^Installed' | head -1)")
+    UPDATE_OPS_NOTES+=("$(printf '%s\n' "$out" | grep '^Installed' | head -1 || true)")
     while IFS= read -r line; do
       [ -z "$line" ] || UPDATE_OPS_NOTES+=("$line")
     done <<< "$(printf '%s\n' "$out" | grep '^Removed' || true)"

@@ -307,6 +307,12 @@ export async function checkUpdateNoopAndLock(): Promise<string[]> {
     if (fs.readFileSync(path.join(root, 'restarts.log'), 'utf8').split('\n').filter(Boolean).length !== restartsAfterFirst) v.push('the service was restarted by an update with nothing new');
     const withBackup = await runUpdate(app, bin, {}, []);
     if (withBackup.code !== 0 || withBackup.output.includes('[1/6]')) v.push(`an update with nothing new and no --no-backup still took a backup (exit ${withBackup.code})`);
+    // a service that did not come up after an earlier update is restarted by a run with nothing new (#404 review)
+    const restartsBeforeDown = fs.readFileSync(path.join(root, 'restarts.log'), 'utf8').split('\n').filter(Boolean).length;
+    const down = await runUpdate(app, bin, { APP_PORT: '1', UPDATE_NOOP_CHECK_SECONDS: '2', STARTUP_TIMEOUT: '2' });
+    if (!down.output.includes('does not answer as started') || down.output.includes('Nothing to update')) v.push(`a run with nothing new left a service that is down as it was: ${down.output.slice(-300)}`);
+    if (fs.readFileSync(path.join(root, 'restarts.log'), 'utf8').split('\n').filter(Boolean).length !== restartsBeforeDown + 1) v.push('a run with nothing new did not restart a service that is down');
+    if (fs.existsSync(path.join(app, '.build-next'))) v.push('a run with nothing new left its side folder behind');
     const prev = path.join(app, 'dist.prev', 'server.cjs');
     if (!fs.existsSync(prev) || fs.readFileSync(prev, 'utf8') !== 'previous build') v.push('dist.prev/ no longer holds the build from before the update');
     const locked = await runCommand('bash', ['-c', `exec 9>"${app}/.update.lock"; flock 9; bash "${app}/update.sh" --no-backup`], {

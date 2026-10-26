@@ -277,6 +277,8 @@ NOTHING_NEW=0
 if [ -z "$UPDATE_RESUME" ] && [ "$UPDATE_MODE" = "git" ] && [ "$REBUILD" -eq 0 ] && git fetch --quiet 2>/dev/null \
   && [ "$(git rev-parse HEAD)" = "$(git rev-parse '@{u}' 2>/dev/null || true)" ]; then
   NOOP_DIR="$(update_prepare_build_dir "$APP_DIR")" || die "Could not prepare the side folder ${UPDATE_BUILD_DIR_NAME}/."
+  # removed at exit like the side folder of a build (on_exit)
+  BUILD_DIR="$NOOP_DIR"
   if [ "$(update_dist_fingerprint "$APP_DIR/dist")" = "$(update_source_fingerprint "$NOOP_DIR")" ]; then
     NOTHING_NEW=1
     PREVIOUS_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || true)"
@@ -501,11 +503,20 @@ for note in "${UPDATE_OPS_NOTES[@]}"; do
   [ -n "$note" ] || continue
   case "$note" in WARN:*) warn "${note#WARN: }" ;; *) log "$note" ;; esac
 done
-if [ "$NOTHING_NEW" -eq 1 ] && [ -z "$UPDATE_ENV_KEYS_ADDED" ]; then
+# a service that did not start after an earlier update (the cause since fixed) is restarted and checked, as before
+NOOP_RUNNING=0
+if [ "$NOTHING_NEW" -eq 1 ] && bash scripts/verify-startup.sh "$APP_PORT" "${UPDATE_NOOP_CHECK_SECONDS:-15}" "$PKG_VERSION" >/dev/null 2>&1; then
+  NOOP_RUNNING=1
+fi
+if [ "$NOTHING_NEW" -eq 1 ] && [ "$NOOP_RUNNING" -eq 1 ] && [ -z "$UPDATE_ENV_KEYS_ADDED" ]; then
   success "Nothing to update: v${PKG_VERSION} keeps running; no backup was taken and the service was not restarted."
   exit 0
 fi
-[ "$NOTHING_NEW" -eq 0 ] || log "Restarting only so the service reads the keys added to .env (nothing else changed)."
+if [ "$NOTHING_NEW" -eq 1 ] && [ "$NOOP_RUNNING" -eq 0 ]; then
+  log "Nothing new, but the service does not answer as started on port ${APP_PORT}: restarting it (nothing else changed)."
+elif [ "$NOTHING_NEW" -eq 1 ]; then
+  log "Restarting only so the service reads the keys added to .env (nothing else changed)."
+fi
 log "[5/6] Restarting service..."
 # v11 (O16): log files an older version wrote readable by every user become private to the service's user and group
 # (the new server writes them so); the folder of an older install was 0755
