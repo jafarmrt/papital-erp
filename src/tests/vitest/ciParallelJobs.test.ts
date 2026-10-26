@@ -58,7 +58,32 @@ describe('ci_check_jobs_start_together_td_1260', () => {
       expect(body, name).toContain(`bash scripts/ci-start-postgres.sh ${db}`);
     }
     const script = fs.readFileSync(path.join(ROOT, 'scripts/ci-start-postgres.sh'), 'utf8');
-    expect(script).toMatch(/systemctl start postgresql/);
     expect(script).toMatch(/SHOW server_version_num/);
+    // v11 (TD-1355): the 26.04 image has no PostgreSQL 16; it comes from the PostgreSQL apt repository, and only its
+    // cluster is left on 5432 so pg_dump and pg_restore are version 16 too
+    expect(script).toMatch(/apt\.postgresql\.org\/pub\/repos\/apt \$\{codename\}-pgdg/);
+    expect(script).toMatch(/apt-get install -y -qq postgresql-16 postgresql-client-16/);
+    expect(script).toMatch(/pg_dropcluster --stop/);
+    expect(script).toMatch(/pg_conftool 16 "\$cluster16" set port 5432/);
+    for (const name of ['test', 'coverage-gate']) {
+      expect(jobs.get(name) ?? '', name).toMatch(/pg_dump --version \| grep -qE ' 16\\\.' \|\| \{/);
+    }
+  });
+
+  it('every job runs on Ubuntu 26.04, never on a moving or older label (TD-1355)', () => {
+    const workflows = ['ci.yml', 'delete-merged-branches.yml'];
+    for (const file of workflows) {
+      const text = fs.readFileSync(path.join(ROOT, '.github/workflows', file), 'utf8');
+      const labels = [...text.matchAll(/^\s+runs-on:\s*(\S+)\s*$/gm)].map(m => m[1]);
+      expect(labels.length, file).toBeGreaterThan(0);
+      expect(labels.filter(label => label !== 'ubuntu-26.04'), file).toEqual([]);
+    }
+    expect([...ciJobs().keys()].filter(name => !/^ {4}runs-on: ubuntu-26\.04$/m.test(ciJobs().get(name) ?? ''))).toEqual([]);
+  });
+
+  it('Playwright knows Ubuntu 26.04 (1.61 or newer) so the e2e job installs its browser libraries there', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as { devDependencies: Record<string, string> };
+    const [major, minor] = pkg.devDependencies['@playwright/test'].replace(/^[^\d]*/, '').split('.').map(Number);
+    expect(major > 1 || (major === 1 && minor >= 61)).toBe(true);
   });
 });
