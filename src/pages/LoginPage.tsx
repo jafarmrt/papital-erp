@@ -7,6 +7,7 @@ import SetupPage from './SetupPage';
 import { useAppVersionLabel } from '../hooks/useAppVersionLabel';
 import { formatLockoutCountdown, loginLockoutMinutes } from '../lib/auth/loginLockout';
 import { errorMessageOf } from '../utils';
+import { persianRequired } from '../lib/ui/persianRequired';
 
 interface LoginPageProps {
   onLogin: (user: User, token: string) => void;
@@ -152,7 +153,8 @@ export default function LoginPage({ onLogin, notice }: LoginPageProps) {
             <div className="relative">
               <UserIcon className="absolute right-3 top-2.5 text-slate-400" size={18} />
               <input id={`${fieldId}-username`} 
-                required 
+                {...persianRequired('نام کاربری')}
+                autoComplete="username"
                 type="text" 
                 value={username} 
                 onChange={e => setUsername(e.target.value)} 
@@ -169,7 +171,8 @@ export default function LoginPage({ onLogin, notice }: LoginPageProps) {
             <div className="relative">
               <Lock className="absolute right-3 top-2.5 text-slate-400" size={18} />
               <input id={`${fieldId}-password`} 
-                required 
+                {...persianRequired('رمز عبور')}
+                autoComplete="current-password"
                 type={showPassword ? 'text' : 'password'} 
                 value={password} 
                 onChange={e => setPassword(e.target.value)} 

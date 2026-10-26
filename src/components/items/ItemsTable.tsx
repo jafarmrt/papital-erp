@@ -1,6 +1,6 @@
 import { Item } from '../../types';
 import { ChevronRight, ChevronLeft, Cloud, Edit2, Archive, Lock, CheckCircle2, Hash } from 'lucide-react';
-import { cn, formatPersianNumber, formatPersianPrice, parseMultiValue, formatMultiValue } from '../../utils';
+import { cn, formatPersianNumber, formatPersianPrice, parseMultiValue, formatMultiValue, formatPersianCode } from '../../utils';
 import { SafeImage } from '../SafeImage';
 import { ActionMenu } from '../ActionMenu';
 
@@ -105,7 +105,7 @@ export function ItemsTable({
                        <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200">{item.category}</span>
                     ) : <span className="text-slate-300">-</span>}
                   </td>
-                  <td className="p-3 font-mono font-bold text-slate-700 dir-ltr text-right">{item.code}</td>
+                  <td className="p-3 font-mono font-bold text-slate-700 dir-ltr text-right">{formatPersianCode(item.code)}</td>
                   <td className="p-3 font-bold text-slate-900">{item.name}</td>
                   
                   <td className="p-3 text-slate-600 text-xs text-right">
@@ -188,7 +188,7 @@ export function ItemsTable({
                       {((item as any).reserved_stock || 0) > 0 && (
                         <span 
                           className="text-[10px] bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md border border-amber-300 font-bold flex items-center gap-1"
-                          title={`رزرو شده در پروژه‌ها: ${((item as any).reservations || []).map((r: any) => `${r.projectCode} (${r.reservedQty} ${r.unit})`).join('، ')}`}
+                          title={`رزرو شده در پروژه‌ها: ${((item as any).reservations || []).map((r: any) => `${formatPersianCode(r.projectCode)} (${formatPersianNumber(r.reservedQty)} ${r.unit})`).join('، ')}`}
                         >
                           <Lock size={10} className="text-amber-700" />
                           رزرو: {formatPersianNumber((item as any).reserved_stock)}

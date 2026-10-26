@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { User } from '../../types';
-import { extractDateString, errorMessageOf, formatPersianNumber, getTodayJalaliDate } from '../../utils';
+import { extractDateString, errorMessageOf, formatPersianCode, formatPersianNumber, getTodayJalaliDate } from '../../utils';
 import { exchangeRateError } from '../../components/documents/ExchangeRateField';
 import { invalidatePreset } from '../../lib/queryInvalidation';
 import { refNumberToSend } from '../../lib/documents/documentRefRules';
@@ -151,7 +151,7 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
       if (actionType === 'out' && selectedProjectObj) {
         const releasedQty = Number(created?.projectReservation?.releasedQuantity || 0);
         if (releasedQty > 0) {
-          toast.success(`سند خروج با موفقیت ثبت شد و تعداد ${formatPersianNumber(releasedQty)} عدد از اقلام رزرو شده پروژه «${selectedProjectObj.project_code || selectedProjectObj.title}» کسر گردید.`);
+          toast.success(`سند خروج با موفقیت ثبت شد و تعداد ${formatPersianNumber(releasedQty)} عدد از اقلام رزرو شده پروژه «${formatPersianCode(selectedProjectObj.project_code) || selectedProjectObj.title}» کسر گردید.`);
         } else {
           // v9.0.346 (TD-803): سند انبار نهایی ثبت می‌شود و گردش کاری آغاز نمی‌شود
           toast.success('سند حواله خروج ثبت و موجودی انبار به‌روزرسانی شد.');

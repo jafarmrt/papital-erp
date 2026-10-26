@@ -1,7 +1,7 @@
 import { useState, type ComponentProps } from 'react';
 import { X, FileText, Printer } from 'lucide-react';
 import { PieceworkPayroll } from '../../types';
-import { formatQuantityOrTime, formatPersianDate, formatPersianNumber } from '../../utils';
+import { formatQuantityOrTime, formatPersianDate, formatPersianNumber, formatPersianCode } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { PayrollPaymentModal } from './PayrollPaymentModal';
@@ -74,7 +74,7 @@ export function PieceworkPayslipModal({
         <div className="p-4 bg-slate-800 text-white flex items-center justify-between print:hidden">
           <div className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-emerald-400" />
-            <span className="font-bold text-sm">فیش حقوقی رسمی پرسنل ({viewingPayroll.payrollNumber})</span>
+            <span className="font-bold text-sm">فیش حقوقی رسمی پرسنل ({formatPersianCode(viewingPayroll.payrollNumber)})</span>
           </div>
           <div className="flex items-center gap-2">
             {/* v9.0.269 (TD-816): فیش پیش‌نویس پرداخت نمی‌شود؛ نخست تأیید می‌شود */}

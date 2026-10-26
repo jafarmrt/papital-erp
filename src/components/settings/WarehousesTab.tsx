@@ -3,6 +3,7 @@ import { Plus, Edit2, Trash2, Building2 } from 'lucide-react';
 import { Warehouse } from '../../hooks/useSettings';
 import { InactiveWarehousesPanel } from './InactiveWarehousesPanel';
 import { DialogLayer } from '../common/DialogLayer';
+import { formatPersianCode } from '../../utils';
 
 interface WarehousesTabProps {
   warehouses: Warehouse[];
@@ -62,7 +63,7 @@ export function WarehousesTab({
                 <tr key={w.id} className="hover:bg-slate-50">
                   <td className="p-3 font-medium text-slate-800">{w.name}</td>
                   <td className="p-3 font-mono text-slate-500 text-left" dir="ltr">
-                    {w.code}
+                    {formatPersianCode(w.code)}
                   </td>
                   <td className="p-3 text-center">
                     <div className="flex items-center justify-center gap-2">

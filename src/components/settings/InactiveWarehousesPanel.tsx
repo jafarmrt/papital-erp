@@ -1,6 +1,7 @@
 import { RotateCcw } from 'lucide-react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { useInactiveWarehousesQuery, useReactivateWarehouseMutation } from '../../hooks/queries/useSettingsQueries';
+import { formatPersianCode } from '../../utils';
 
 /**
  * v9.0.112 (TD-490، تصمیم ت۵ الف): انبارهای غیرفعال و فعال‌سازی دوباره آن‌ها در «مدیریت انبارها»؛ فقط برای مدیر سیستم
@@ -29,7 +30,7 @@ export function InactiveWarehousesPanel({ enabled }: { enabled: boolean }) {
           {inactive.map((w) => (
             <tr key={w.id} className="text-slate-500">
               <td className="p-3">{w.name}</td>
-              <td className="p-3 font-mono text-left" dir="ltr">{w.code}</td>
+              <td className="p-3 font-mono text-left" dir="ltr">{formatPersianCode(w.code)}</td>
               <td className="p-3 text-center">
                 <button
                   type="button"

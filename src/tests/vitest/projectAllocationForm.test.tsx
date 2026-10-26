@@ -73,7 +73,7 @@ describe('material allocation warehouse (TD-751)', () => {
     await waitFor(() => expect(openPicker(field).some(t => t.includes('PRJ-OPEN'))).toBe(true));
     chooseRow('PRJ-OPEN - در جریان');
     const material = screen.getByText('ماده اولیه / قطعه مصرفی:').parentElement as HTMLElement;
-    pick(material, 'مهره (R-1) - موجودی کل: ۲۰ عدد');
+    pick(material, 'مهره (R-۱) - موجودی کل: ۲۰ عدد');
     const warehouse = screen.getByText('انبار مبداء کسر موجودی:').parentElement as HTMLElement;
     expect((within(warehouse).getByRole('combobox') as HTMLSelectElement).value).toBe('WH-A');
     fireEvent.click(screen.getByText('تأیید و ثبت تخصیص'));

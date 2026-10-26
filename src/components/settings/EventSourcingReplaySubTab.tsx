@@ -1,6 +1,6 @@
 import { useState, useId } from 'react';
 import { History, Play, RotateCcw, Search, CheckCircle2, AlertTriangle, FileText, Package, Users, Landmark, Layers, GitBranch, Clock, ShieldCheck, ChevronDown, ChevronUp, Sparkles, Zap } from 'lucide-react';
-import { formatPersianDate, errorMessageOf, formatPersianNumber } from '../../utils';
+import { formatPersianDate, errorMessageOf, formatPersianNumber, formatPersianCode } from '../../utils';
 import { fetchJson } from '../../api';
 import { useHasPermission } from '../../contexts/AuthContext';
 import { useDebounce } from '../../hooks/useDebounce';
@@ -223,7 +223,7 @@ export function EventSourcingReplaySubTab() {
           <div className="flex items-center gap-2">
             <Clock className="w-5 h-5 text-indigo-500" />
             <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-              خط زمان رویدادها: {selectedType} #{selectedAggregateId || '...'}
+              خط زمان رویدادها: {selectedType} #{formatPersianCode(selectedAggregateId) || '...'}
             </h4>
           </div>
           <span className="text-xs text-slate-400 font-mono">
@@ -389,7 +389,7 @@ export function EventSourcingReplaySubTab() {
                   موتور بازپخش و شبیه‌سازی رویداد
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  رویداد <span className="font-mono text-indigo-400">{selectedEventForReplay.eventType}</span> برای {selectedType}#{selectedAggregateId}
+                  رویداد <span className="font-mono text-indigo-400">{selectedEventForReplay.eventType}</span> برای {selectedType}#{formatPersianCode(selectedAggregateId)}
                 </p>
               </div>
               <button

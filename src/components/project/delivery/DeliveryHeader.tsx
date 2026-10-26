@@ -1,6 +1,6 @@
 import { Package, CheckCircle2, RefreshCw, Boxes, Warehouse, Tag, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { toPersianDigits } from '../../../utils';
+import { toPersianDigits, formatPersianCode } from '../../../utils';
 import { DELIVERY_MATERIALS_ONLY_NOTE } from '../../../lib/projects/deliveryCost';
 import { ProjectDeliveryCostPanel } from '../ProjectDeliveryCostPanel';
 import type { ProjectDelivery } from './useProjectDelivery';
@@ -162,7 +162,7 @@ export function DeliveryHeader({ delivery }: { delivery: ProjectDelivery }) {
               >
                 {warehouses.map((w) => (
                   <option key={w.id} value={w.code}>
-                    {w.name} ({w.code})
+                    {w.name} ({formatPersianCode(w.code)})
                   </option>
                 ))}
               </select>

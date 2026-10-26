@@ -7,7 +7,7 @@ import {
   Layers 
 } from 'lucide-react';
 import { JalaliDateInput } from '../../common/JalaliDateInput';
-import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate, formatPersianCode } from '../../../utils';
 import type { TrialBalanceRow } from '../../../types';
 
 interface TrialBalanceViewProps {
@@ -321,7 +321,7 @@ export function TrialBalanceView({
                         {formatPersianNumber(idx + 1)}
                       </td>
                       <td className="py-2 px-3 text-center border-l border-slate-200 dark:border-slate-700 font-mono font-bold">
-                        {r.code}
+                        {formatPersianCode(r.code)}
                       </td>
                       <td className="py-2 px-4 border-l border-slate-200 dark:border-slate-700">
                         <div className="flex items-center gap-1.5" style={{ paddingRight: `${isGroup ? 0 : isGeneral ? 12 : isSubsidiary ? 24 : 36}px` }}>

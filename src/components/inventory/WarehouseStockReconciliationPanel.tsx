@@ -6,7 +6,7 @@ import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { confirmAction } from '../ConfirmDialogHost';
 import { invalidateAfterStockAdjustment } from '../../hooks/inventoryAudit/useInventoryAuditSave';
-import { errorMessageOf, formatPersianNumber } from '../../utils';
+import { errorMessageOf, formatPersianNumber, formatPersianCode } from '../../utils';
 import { useWarehouseReconciliationQuery } from '../../hooks/queries/useStockWindowQueries';
 import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 
@@ -168,7 +168,7 @@ export function WarehouseStockReconciliationPanel() {
               </tr>
             ) : rows.map(r => (
               <tr key={`${r.itemId}-${r.warehouseId}`} className="hover:bg-slate-50/80">
-                <td className="p-2.5"><span className="font-mono text-slate-500">{r.itemCode}</span> {r.itemName}</td>
+                <td className="p-2.5"><span className="font-mono text-slate-500">{formatPersianCode(r.itemCode)}</span> {r.itemName}</td>
                 <td className="p-2.5">{r.warehouseName}</td>
                 <td className="p-2.5 font-mono">{formatPersianNumber(r.ledgerQty)}</td>
                 <td className="p-2.5 font-mono">{r.tableQty === null ? '—' : formatPersianNumber(r.tableQty)}</td>
@@ -186,7 +186,7 @@ export function WarehouseStockReconciliationPanel() {
         <div className="m-4 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1">
           <div className="font-bold flex items-center gap-1"><AlertTriangle size={13} className="text-amber-600" /> گردش کاردکس در محل‌های نامعلوم (این کالاها ترمیم نمی‌شوند):</div>
           {unresolved.slice(0, 50).map((u, idx) => (
-            <div key={`${u.itemId}-${idx}`}><span className="font-mono">{u.itemCode}</span> — محل «{u.location}»: {formatPersianNumber(u.qty)}</div>
+            <div key={`${u.itemId}-${idx}`}><span className="font-mono">{formatPersianCode(u.itemCode)}</span> — محل «{u.location}»: {formatPersianNumber(u.qty)}</div>
           ))}
         </div>
       )}

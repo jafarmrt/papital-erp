@@ -4,12 +4,17 @@ import { useHasAnyPermission } from '../../contexts/AuthContext';
 import { READ_PERMISSIONS } from '../../lib/recordReadPermissions';
 import { BOM_ALLOCATIONS_TAB_LABEL } from '../../lib/projects/allocationLabels';
 import { formatPersianNumber } from '../../utils';
+import { ActionMenu } from '../ActionMenu';
 
-/** سربرگ صفحه انبارگردانی: عنوان، دکمه‌های بازسازی موجودی و حواله انتقال، و زبانه‌ها */
+/**
+ * سربرگ صفحه انبارگردانی: عنوان، دکمه حواله انتقال، منوی سه‌نقطه (بازسازی موجودی) و زبانه‌ها. v11 phase 6.3a (U24): شمارش،
+ * زبانه پیش‌فرض صفحه، نخستین زبانه است و بازسازی موجودی که کار نگهداری است در منوی سه‌نقطه می‌آید (AGENTS §6.8)؛ زبانه‌ها
+ * در گوشی به سطر بعد می‌روند. پیش‌تر نخستین و پررنگ‌ترین دکمه صفحه شمارش در گوشی «بازسازی موجودی» بود و زبانه چهارم بریده می‌شد.
+ */
 
 const TABS: Array<{ id: InventoryAuditTab; label: string; icon: LucideIcon }> = [
-  { id: 'integrity', label: 'بررسی سلامت و تطبیق موجودی', icon: ShieldCheck },
   { id: 'new_audit', label: 'شمارش و ثبت انبارگردانی', icon: ClipboardCheck },
+  { id: 'integrity', label: 'بررسی سلامت و تطبیق موجودی', icon: ShieldCheck },
   { id: 'reports', label: 'سوابق دوره‌ها', icon: Layers },
   { id: 'transfers', label: 'حواله‌های انتقال', icon: ArrowLeftRight },
   { id: 'bom_allocations', label: BOM_ALLOCATIONS_TAB_LABEL, icon: Boxes },
@@ -48,19 +53,9 @@ export function InventoryAuditHeader({ activeTab, onTabChange, discrepancyItems,
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {onOpenRebuild && (
-          <button
-            onClick={onOpenRebuild}
-            className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
-            title="محاسبه مجدد مانده کالاها از روی کاردکس اسناد"
-          >
-            <RotateCcw size={15} />
-            <span>بازسازی موجودی از روی کاردکس</span>
-          </button>
-          )}
-
           {onOpenTransfer && (
           <button
+            type="button"
             onClick={onOpenTransfer}
             className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
           >
@@ -68,13 +63,21 @@ export function InventoryAuditHeader({ activeTab, onTabChange, discrepancyItems,
             <span>ثبت حواله انتقال انبار</span>
           </button>
           )}
+
+          {onOpenRebuild && (
+            <ActionMenu
+              title="ابزارهای موجودی"
+              items={[{ label: 'بازسازی موجودی از روی کاردکس', icon: RotateCcw, onClick: onOpenRebuild, variant: 'warning' }]}
+            />
+          )}
         </div>
       </div>
 
       {/* Tab Buttons */}
-      <div className="flex items-center gap-2 pt-3 overflow-x-auto text-xs font-semibold">
+      <div className="flex flex-wrap items-center gap-2 pt-3 text-xs font-semibold">
         {tabs.map(({ id, label, icon: Icon }) => (
           <button
+            type="button"
             key={id}
             onClick={() => onTabChange(id)}
             className={`px-4 py-2 rounded-xl flex items-center gap-2 transition-all cursor-pointer ${

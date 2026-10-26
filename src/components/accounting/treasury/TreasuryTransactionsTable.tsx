@@ -162,7 +162,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
             <option value="all">همه حساب‌ها و صندوق‌ها</option>
             {bankAccounts.map(b => (
               <option key={b.id} value={b.id}>
-                {b.title} ({b.code})
+                {b.title} ({formatPersianCode(b.code)})
               </option>
             ))}
           </select>

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { toPersianDigits } from '../../src/utils/persianNumber';
 import {
   adminApi, businessToday, closeDb, dataOf, db, expectBalanced, netByAccount, signIn, uniqueSuffix, voucherRowsOf,
   type AdminApi, type Json,
@@ -87,7 +88,8 @@ async function allocateInBrowser(page: Page): Promise<Json> {
   const pick = async (index: number, text: string): Promise<void> => {
     await form.getByRole('button').nth(index).click();
     await page.getByPlaceholder(ALLOCATION_TEXT.search).fill(text);
-    await page.locator('li', { hasText: text }).first().click();
+    // v11 phase 6.3a (U21): the picker shows codes in Persian digits and finds them typed in Latin digits too
+    await page.locator('li', { hasText: toPersianDigits(text) }).first().click();
   };
   await pick(0, projectCodeOf());
   await pick(1, String(setup.raw.code));
@@ -96,7 +98,8 @@ async function allocateInBrowser(page: Page): Promise<Json> {
   await form.getByRole('button', { name: ALLOCATION_TEXT.submit }).click();
   const response = await posted;
   expect(response.status(), 'allocation answer').toBe(200);
-  const row = page.locator('tr', { hasText: String(setup.raw.code) });
+  // v11 phase 6.3a (U21): codes are shown in Persian digits
+  const row = page.locator('tr', { hasText: toPersianDigits(String(setup.raw.code)) });
   await expect(row.getByText(ALLOCATION_TEXT.inProgress)).toBeVisible();
   return (await response.json()) as Json;
 }

@@ -1,5 +1,5 @@
 import { TrendingUp } from 'lucide-react';
-import { formatPersianNumber, formatPersianPrice } from '../../../utils';
+import { formatPersianNumber, formatPersianPrice, formatPersianCode } from '../../../utils';
 import type { IncomeStatementReport } from '../../../types';
 import { netProfitMarginPercent, statementRows } from '../../../lib/accounting/financialStatements';
 import { PeriodFields, periodCaption } from './ReportDateFields';
@@ -80,7 +80,7 @@ export function IncomeStatementView({
               ) : (
                 safeRevenues.map((r, i) => (
                   <div key={i} className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-750">
-                    <span>{r.code} - {r.name}</span>
+                    <span>{formatPersianCode(r.code)} - {r.name}</span>
                     <span className="font-mono font-semibold">{formatPersianPrice(r.amount)}</span>
                   </div>
                 ))
@@ -100,7 +100,7 @@ export function IncomeStatementView({
               ) : (
                 safeCostOfSales.map((r, i) => (
                   <div key={i} className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-750">
-                    <span>{r.code} - {r.name}</span>
+                    <span>{formatPersianCode(r.code)} - {r.name}</span>
                     <span className="font-mono font-semibold">{formatPersianPrice(r.amount)}</span>
                   </div>
                 ))
@@ -126,7 +126,7 @@ export function IncomeStatementView({
               ) : (
                 safeExpenses.map((r, i) => (
                   <div key={i} className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-750">
-                    <span>{r.code} - {r.name}</span>
+                    <span>{formatPersianCode(r.code)} - {r.name}</span>
                     <span className="font-mono font-semibold">{formatPersianPrice(r.amount)}</span>
                   </div>
                 ))

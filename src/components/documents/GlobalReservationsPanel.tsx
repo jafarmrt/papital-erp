@@ -1,4 +1,4 @@
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../utils';
 
 
 export interface GlobalReservationRow {
@@ -65,7 +65,7 @@ export function GlobalReservationsPanel({ isOpen, onClose, reservations }: Globa
               {reservations.map((res, idx) => (
                 <tr key={idx} className="hover:bg-purple-50/50">
                   <td className="p-2.5 text-center font-bold text-slate-500">{formatPersianNumber(idx + 1)}</td>
-                  <td className="p-2.5 font-mono font-bold text-purple-900">{res.itemCode || '---'}</td>
+                  <td className="p-2.5 font-mono font-bold text-purple-900">{formatPersianCode(res.itemCode) || '---'}</td>
                   <td className="p-2.5 font-bold text-slate-900">{res.itemName}</td>
                   <td className="p-2.5">
                     <span className={`px-2 py-0.5 font-bold rounded-md border text-[11px] ${
@@ -73,7 +73,7 @@ export function GlobalReservationsPanel({ isOpen, onClose, reservations }: Globa
                         ? 'bg-blue-50 text-blue-900 border-blue-200' 
                         : 'bg-purple-100 text-purple-950 border-purple-200'
                     }`}>
-                      {res.sourceLabel || (res.sourceType === 'proforma' ? 'پیش‌فاکتور' : 'پروژه')}: {res.projectCode} {res.projectTitle ? `- ${res.projectTitle}` : ''}
+                      {res.sourceLabel || (res.sourceType === 'proforma' ? 'پیش‌فاکتور' : 'پروژه')}: {formatPersianCode(res.projectCode)} {res.projectTitle ? `- ${res.projectTitle}` : ''}
                     </span>
                   </td>
                   <td className="p-2.5 text-center font-mono font-bold text-emerald-800">
@@ -82,7 +82,7 @@ export function GlobalReservationsPanel({ isOpen, onClose, reservations }: Globa
                     </span>
                   </td>
                   <td className="p-2.5 text-center font-bold text-[11px] text-amber-900">
-                    فقط مجاز برای {res.projectCode || 'منبع فوق'}
+                    فقط مجاز برای {formatPersianCode(res.projectCode) || 'منبع فوق'}
                   </td>
                 </tr>
               ))}

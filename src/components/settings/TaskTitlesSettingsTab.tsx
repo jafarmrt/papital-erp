@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { confirmAction } from '../ConfirmDialogHost';
 import { Layers, Plus, Edit3, Trash2, Search, FolderPlus, Tag, X } from 'lucide-react';
 import { fetchJson } from '../../api';
-import { formatPersianNumber, formatCurrencyLabel, errorMessageOf } from '../../utils';
+import { formatPersianNumber, formatCurrencyLabel, errorMessageOf, formatPersianCode } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { toast } from 'react-hot-toast';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
@@ -12,6 +12,7 @@ import type { PieceworkTask } from '../../types';
 import { usePieceworkCategoriesQuery, usePieceworkTasksQuery, type PieceworkCategory as TaskCategory } from '../../hooks/queries/usePieceworkQueries';
 import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 import { invalidateDomain } from '../../lib/queryInvalidation';
+import { normalizeSearchText } from '../../lib/search/searchText';
 
 const NO_TASKS: PieceworkTask[] = [];
 const NO_CATEGORIES: TaskCategory[] = [];
@@ -159,8 +160,9 @@ export function TaskTitlesSettingsTab() {
   const filteredTasks = tasks.filter(t => {
     if (selectedCatFilter !== 'ALL' && t.category !== selectedCatFilter) return false;
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      return t.title.toLowerCase().includes(q) || t.code.toLowerCase().includes(q) || (t.category && t.category.toLowerCase().includes(q));
+      // review of #406 (U21): a code typed in Persian digits is found too
+      const q = normalizeSearchText(searchQuery);
+      return normalizeSearchText(t.title).includes(q) || normalizeSearchText(t.code).includes(q) || (t.category && normalizeSearchText(t.category).includes(q));
     }
     return true;
   });
@@ -319,7 +321,7 @@ export function TaskTitlesSettingsTab() {
                 filteredTasks.map((task, idx) => (
                   <tr key={task.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-3.5 text-slate-400 font-mono">{formatPersianNumber(idx + 1)}</td>
-                    <td className="p-3.5 font-mono text-slate-700 font-bold">{task.code}</td>
+                    <td className="p-3.5 font-mono text-slate-700 font-bold">{formatPersianCode(task.code)}</td>
                     <td className="p-3.5 font-bold text-slate-900">{task.title}</td>
                     <td className="p-3.5">
                       <span className="inline-block px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-[10px] font-bold">

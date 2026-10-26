@@ -1,5 +1,5 @@
 import React, { useState, useId } from 'react';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../utils';
 import type { ReorderItem } from '../../lib/reorderAlerts/reorderItems';
 import { DecimalInput } from '../common/DecimalInput';
 import { DialogLayer } from '../common/DialogLayer';
@@ -28,7 +28,7 @@ export function ReorderPointEditModal({ item, saving, onCancel, onSave }: Reorde
       <div className="bg-white rounded-2xl max-w-md w-full shadow-xl space-y-4 max-h-[85vh] overflow-y-auto p-6">
         <h3 className="font-bold text-slate-800 text-base">ویرایش نقطه سفارش کالا</h3>
         <p className="text-xs text-slate-500">
-          تنظیم حد آستانه هشدار برای <strong className="text-slate-800">{item.name}</strong> (کد: {item.code})
+          تنظیم حد آستانه هشدار برای <strong className="text-slate-800">{item.name}</strong> (کد: {formatPersianCode(item.code)})
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">

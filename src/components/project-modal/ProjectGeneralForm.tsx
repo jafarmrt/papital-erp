@@ -3,6 +3,7 @@ import { Sparkles } from 'lucide-react';
 import { SearchableSelect } from '../SearchableSelect';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { Customer, FinancialAttachment } from '../../types';
+import { formatPersianCode } from '../../utils';
 import { FinancialAttachmentUploader } from '../accounting/FinancialAttachmentUploader';
 import { PROJECT_PRIORITIES, PROJECT_PRIORITY_LABELS } from '../../lib/projects/projectStatus';
 
@@ -98,7 +99,7 @@ export const ProjectGeneralForm: React.FC<ProjectGeneralFormProps> = ({
             id={`${fieldId}-selected-customer-id`}
             options={activeCustomersList.map((c) => ({
               value: String(c.id),
-              label: `${c.name}${c.code ? ` (کد: ${c.code})` : ''}${c.phone ? ` - ${c.phone}` : ''}`,
+              label: `${c.name}${c.code ? ` (کد: ${formatPersianCode(c.code)})` : ''}${c.phone ? ` - ${c.phone}` : ''}`,
             }))}
             value={selectedCustomerId ? String(selectedCustomerId) : ''}
             onChange={(val) => onCustomerSelect(val ? Number(val) : null)}

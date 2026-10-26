@@ -49,9 +49,9 @@ describe('package 11 entity pickers are searchable (TD-767)', () => {
   it('finds a project past the first rows by searching the project picker', async () => {
     render(<QueryWrapper><MemoryRouter initialEntries={['/project-inventory']}><ProjectInventoryPage /></MemoryRouter></QueryWrapper>);
     await waitFor(() => expect(fetchJson.mock.calls.some(([url]) => url === '/projects/1')).toBe(true));
-    fireEvent.click(screen.getByRole('button', { name: /PRJ-1\]/ }));
+    fireEvent.click(screen.getByRole('button', { name: /PRJ-۱\]/ }));
     fireEvent.change(screen.getByPlaceholderText('جست‌وجو...'), { target: { value: 'PRJ-60' } });
-    const row = screen.getAllByRole('option').find(li => li.textContent?.includes('[PRJ-60]'));
+    const row = screen.getAllByRole('option').find(li => li.textContent?.includes('[PRJ-۶۰]'));
     expect(row?.textContent).toContain('متوقف');
     fireEvent.click(row as HTMLElement);
     await waitFor(() => expect(fetchJson.mock.calls.some(([url]) => url === '/projects/60')).toBe(true));

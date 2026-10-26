@@ -1,5 +1,6 @@
 import { Warehouse } from 'lucide-react';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
+import { formatPersianCode } from '../../utils';
 
 interface ShopWarehouseSelectProps {
   value: string;
@@ -27,7 +28,7 @@ export function ShopWarehouseSelect({ value, onChange, warehouses }: ShopWarehou
       >
         <option value="">انبار پیش‌فرض سامانه</option>
         {active.map(w => (
-          <option key={w.id} value={w.code}>{w.name} ({w.code})</option>
+          <option key={w.id} value={w.code}>{w.name} ({formatPersianCode(w.code)})</option>
         ))}
       </select>
       <p className="text-[11px] text-slate-500 leading-normal">

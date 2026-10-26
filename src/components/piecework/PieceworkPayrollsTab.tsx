@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Plus, Printer, Trash2, BookOpen, RefreshCw, Wallet, Info, Pencil, FileSpreadsheet, Gift } from 'lucide-react';
 import { PieceworkPayroll } from '../../types';
-import { formatPersianDate } from '../../utils';
+import { formatPersianDate, formatPersianCode } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { fetchJson } from '../../api';
@@ -59,7 +59,7 @@ export function PieceworkPayrollsTab({
         acceptReplay: true,
       });
       if (res && res.voucher) {
-        toast.success(`سند حسابداری به شماره ${res.voucher.voucherNumber} با موفقیت ثبت/همگام شد.`);
+        toast.success(`سند حسابداری به شماره ${formatPersianCode(res.voucher.voucherNumber)} با موفقیت ثبت/همگام شد.`);
         (onVoucherSynced ?? onReload)?.();
       } else if (isIdempotentReplay(res)) {
         // v10.2.34 (#351 review L1): a repeat of a sync that already ran has no voucher; the list shows it
@@ -161,7 +161,7 @@ export function PieceworkPayrollsTab({
                   return (
                     <React.Fragment key={payroll.id}>
                     <tr className="hover:bg-slate-50/80 transition-all text-slate-700">
-                      <td className="p-3 font-mono font-black text-slate-900">{payroll.payrollNumber}</td>
+                      <td className="p-3 font-mono font-black text-slate-900">{formatPersianCode(payroll.payrollNumber)}</td>
                       <td className="p-3 font-black text-slate-900">{payroll.personnelName}</td>
                       <td className="p-3 font-mono text-slate-600">
                         {formatPersianDate(payroll.startDate)} تا {formatPersianDate(payroll.endDate)}
@@ -192,10 +192,10 @@ export function PieceworkPayrollsTab({
                         {payroll.voucherNumber ? (
                           <span
                             className="px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-[10px] inline-flex items-center gap-1 font-mono font-bold"
-                            title={`سند شماره ${payroll.voucherNumber}`}
+                            title={`سند شماره ${formatPersianCode(payroll.voucherNumber)}`}
                           >
                             <BookOpen size={12} />
-                            سند #{payroll.voucherNumber}
+                            سند #{formatPersianCode(payroll.voucherNumber)}
                           </span>
                         ) : !canIssuePayroll ? (
                           <StatusChip label="بی سند" />

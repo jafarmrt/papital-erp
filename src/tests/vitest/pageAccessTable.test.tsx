@@ -50,7 +50,8 @@ describe('one page-access table for menu, routes, shortcuts and settings tabs (T
     const routes = [...source.matchAll(/<Route path="([^"]+)" element=\{\s*(<ProtectedRoute page="([^"]+)")?/g)];
     const routed = new Set<string>();
     for (const [, routePath, guarded, page] of routes) {
-      if (routePath === '/materials' || routePath === '/remittances') continue; // redirects
+      if (['/materials', '/remittances', '/login', '/setup'].includes(routePath)) continue; // redirects
+      if (routePath === '*') continue; // v11 phase 6.3a (U12): the «page not found» page, open to every signed-in user
       // a page with tabs routes `/<page>/:tab` under the page's own row; each tab has its own row (accounting, management reports)
       const expected = TABBED_PAGES.find(p => routePath === `${p}/:tab`) ?? routePath;
       expect(PAGE_ACCESS, `route ${routePath} has no page-access row`).toHaveProperty([expected]);

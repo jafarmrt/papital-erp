@@ -3,7 +3,7 @@ import { ShoppingCart, FileText, CheckCircle2, AlertCircle, X, Loader2, Check } 
 import { toast } from 'react-hot-toast';
 import { ProductionProject, PurchaseListItem, Item } from '../../types';
 import { fetchJson } from '../../api';
-import { errorMessageOf, formatPersianPrice, getTodayIsoDate, toPersianDigits } from '../../utils';
+import { errorMessageOf, formatPersianPrice, getTodayIsoDate, toPersianDigits, formatPersianCode } from '../../utils';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { useSupplierSelectOptions } from '../../hooks/useEntitySelectors';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
@@ -191,7 +191,7 @@ export function CreatePurchaseOrderModal({
       const prData = res?.data || res;
 
       if (mode === 'requisition') {
-        toast.success(`درخواست خرید ${prData.code || ''} در کارتابل مسئول خرید و تدارکات ثبت و وارد گردش کار شد.`);
+        toast.success(`درخواست خرید ${formatPersianCode(prData.code) || ''} در کارتابل مسئول خرید و تدارکات ثبت و وارد گردش کار شد.`);
         onOrderCreated(prData, orderedIds);
         onClose();
         return;
@@ -207,13 +207,13 @@ export function CreatePurchaseOrderModal({
           },
         );
         const order = converted?.data?.createdDocuments?.[0];
-        const orderRef = order?.refNumber || order?.ref_number || '';
+        const orderRef = formatPersianCode(order?.refNumber || order?.ref_number);
         toast.success(
-          `سفارش خرید پیش‌نویس ${orderRef} برای ${supplier!.name} از درخواست ${prData.code || ''} صادر شد؛ کالا با «تحویل به انبار» در تدارکات وارد انبار می‌شود.`,
+          `سفارش خرید پیش‌نویس ${orderRef} برای ${supplier!.name} از درخواست ${formatPersianCode(prData.code) || ''} صادر شد؛ کالا با «تحویل به انبار» در تدارکات وارد انبار می‌شود.`,
         );
       } catch (orderErr: unknown) {
         // درخواست ثبت شده است و در کارتابل تدارکات می‌ماند؛ فقط سفارش صادر نشد
-        toast.error(`درخواست خرید ${prData.code || ''} ثبت شد ولی سفارش صادر نشد: ${errorMessageOf(orderErr)} سفارش را از کارتابل تدارکات صادر کنید.`);
+        toast.error(`درخواست خرید ${formatPersianCode(prData.code) || ''} ثبت شد ولی سفارش صادر نشد: ${errorMessageOf(orderErr)} سفارش را از کارتابل تدارکات صادر کنید.`);
       }
       onOrderCreated(prData, orderedIds);
       onClose();
@@ -238,7 +238,7 @@ export function CreatePurchaseOrderModal({
               <h3 className="font-black text-slate-900 text-base flex items-center gap-2">
                 صدور سفارش خرید کسری‌های پروژه
                 <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 rounded-lg text-xs font-mono font-bold">
-                  {project.project_code || project.title}
+                  {formatPersianCode(project.project_code) || project.title}
                 </span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
@@ -410,7 +410,7 @@ export function CreatePurchaseOrderModal({
                         <td className="p-2.5">
                           <div className="font-bold text-slate-900">{row.itemName}</div>
                           {row.itemCode && (
-                            <div className="font-mono text-[10px] text-slate-500">کد: {row.itemCode}</div>
+                            <div className="font-mono text-[10px] text-slate-500">کد: {formatPersianCode(row.itemCode)}</div>
                           )}
                         </td>
                         <td className="p-2.5">
@@ -429,7 +429,7 @@ export function CreatePurchaseOrderModal({
                                 className="min-w-[180px]"
                                 value=""
                                 onChange={value => { if (value) handleAssignWarehouseItem(idx, Number(value)); }}
-                                options={warehouseItems.map(w => ({ value: w.id, label: `${w.name} (${w.code})` }))}
+                                options={warehouseItems.map(w => ({ value: w.id, label: `${w.name} (${formatPersianCode(w.code)})` }))}
                                 placeholder="انتخاب کالای انبار"
                               />
                             </div>

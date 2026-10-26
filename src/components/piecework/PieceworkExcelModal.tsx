@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { X, FileSpreadsheet, Upload, Download, CheckCircle2, AlertTriangle, Loader2, Check } from 'lucide-react';
 import { PieceworkTask } from '../../types';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import {
@@ -422,7 +422,7 @@ export function PieceworkExcelModal({
                         className={r.isValid ? 'hover:bg-slate-50/70' : 'bg-rose-50/60 text-rose-700'}
                       >
                         <td className="p-2.5 text-center text-slate-400">{formatPersianNumber(r.index)}</td>
-                        <td className="p-2.5 font-mono text-slate-600">{r.code || 'خودکار'}</td>
+                        <td className="p-2.5 font-mono text-slate-600">{formatPersianCode(r.code) || 'خودکار'}</td>
                         <td className="p-2.5 text-slate-900">{r.title || '—'}</td>
                         <td className="p-2.5">
                           <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-lg text-[11px]">

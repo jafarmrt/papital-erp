@@ -2,7 +2,7 @@ import React, { useEffect, useState, useId } from 'react';
 import { Layers, Plus, Trash2, CheckCircle2 } from 'lucide-react';
 import { SearchableSelect } from '../SearchableSelect';
 import { Item } from '../../types';
-import { formatPersianNumber, toPersianDigits } from '../../utils';
+import { formatPersianNumber, toPersianDigits, formatPersianCode } from '../../utils';
 import { ProductRow } from './types';
 import { DecimalInput } from '../common/DecimalInput';
 
@@ -84,7 +84,7 @@ export const ProjectProductsForm: React.FC<ProjectProductsFormProps> = ({
                     })
                     .map((item) => ({
                       value: String(item.id),
-                      label: `${item.name} (کد: ${item.code} | موجودی: ${formatPersianNumber(item.current_stock || 0)} ${item.unit || 'عدد'})`,
+                      label: `${item.name} (کد: ${formatPersianCode(item.code)} | موجودی: ${formatPersianNumber(item.current_stock || 0)} ${item.unit || 'عدد'})`,
                     }))}
                   value={product.item_id ? String(product.item_id) : ''}
                   onChange={(val) => onUpdateProductRow(idx, 'item_id', val ? Number(val) : null)}

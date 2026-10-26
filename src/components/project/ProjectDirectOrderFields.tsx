@@ -2,6 +2,7 @@ import { useId } from 'react';
 import { SearchableSelect } from '../SearchableSelect';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
+import { formatPersianCode } from '../../utils';
 
 interface ProjectDirectOrderFieldsProps {
   supplierId: string;
@@ -52,7 +53,7 @@ export function ProjectDirectOrderFields(props: ProjectDirectOrderFieldsProps) {
         >
           {warehouses.length === 0 && <option value="">انبار فعالی یافت نشد</option>}
           {warehouses.map(w => (
-            <option key={w.id} value={w.code}>{w.name} ({w.code})</option>
+            <option key={w.id} value={w.code}>{w.name} ({formatPersianCode(w.code)})</option>
           ))}
         </select>
       </div>

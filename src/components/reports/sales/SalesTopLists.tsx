@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Trophy, Users } from 'lucide-react';
 import type { ReportMoney } from '../../../hooks/reports/useReportMoney';
 import type { SalesTopEntry } from '../../../lib/reports/salesReport';
-import { formatPersianNumber } from '../../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../../utils';
 
 /**
  * v10.1.8 (D-03، طرح گزارش‌های مدیریتی §۲.۳): ده کالای پرفروش و ده مشتری بزرگ بازه، به فروش خالص پس از برگشت، با همان
@@ -28,7 +28,7 @@ function TopList({ title, icon, entries, money, withQuantity }: {
               <span className="flex items-center gap-2 min-w-0">
                 <span className="w-5 text-center font-black text-slate-400">{formatPersianNumber(index + 1)}</span>
                 <span className="font-bold text-slate-800 dark:text-slate-100 truncate">{entry.label}</span>
-                {entry.code && <span className="text-[11px] text-slate-500 font-mono">{entry.code}</span>}
+                {entry.code && <span className="text-[11px] text-slate-500 font-mono">{formatPersianCode(entry.code)}</span>}
               </span>
               <span className="flex items-center gap-3 shrink-0 font-mono">
                 {withQuantity && entry.quantity !== null && (

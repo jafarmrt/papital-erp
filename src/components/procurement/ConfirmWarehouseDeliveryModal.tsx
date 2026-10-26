@@ -1,6 +1,6 @@
 import React from 'react';
 import { PackageCheck, Warehouse, FileText, CheckCircle2, X, Loader2, Building2 } from 'lucide-react';
-import { formatPersianNumber, formatPersianDate } from '../../utils';
+import { formatPersianNumber, formatPersianDate, formatPersianCode } from '../../utils';
 import { sumAmounts } from '../../lib/procurement/procurementNumbers';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { DialogLayer } from '../common/DialogLayer';
@@ -81,7 +81,7 @@ export const ConfirmWarehouseDeliveryModal: React.FC<ConfirmWarehouseDeliveryMod
               <p className="text-[11px] text-emerald-100 mt-0.5">
                 {isBulk 
                   ? `تحویل همزمان ${formatPersianNumber(bulkOrders.length)} فاکتور خرید تامین‌کننده`
-                  : `فاکتور شماره ${order?.refNumber || 'سفارش'} - صدور رسید قطعی انبار`}
+                  : `فاکتور شماره ${formatPersianCode(order?.refNumber) || 'سفارش'} - صدور رسید قطعی انبار`}
               </p>
             </div>
           </div>
@@ -105,7 +105,7 @@ export const ConfirmWarehouseDeliveryModal: React.FC<ConfirmWarehouseDeliveryMod
                 <div className="flex items-center gap-2 font-bold text-slate-800">
                   <FileText className="w-4 h-4 text-emerald-600" />
                   <span>شماره فاکتور:</span>
-                  <span className="font-mono text-emerald-700 font-black">{order.refNumber}</span>
+                  <span className="font-mono text-emerald-700 font-black">{formatPersianCode(order.refNumber)}</span>
                 </div>
                 {order.date && (
                   <span className="text-[11px] text-slate-500 font-mono">تاریخ: {formatPersianDate(order.date)}</span>
@@ -148,7 +148,7 @@ export const ConfirmWarehouseDeliveryModal: React.FC<ConfirmWarehouseDeliveryMod
                   <div className="max-h-24 overflow-y-auto space-y-1 bg-white p-2 rounded-lg border border-slate-100 text-[11px]">
                     {order.items.map((it, i) => (
                       <div key={i} className="flex justify-between items-center text-slate-700">
-                        <span className="truncate max-w-[240px] font-medium">{it.itemName || it.itemCode}</span>
+                        <span className="truncate max-w-[240px] font-medium">{it.itemName || formatPersianCode(it.itemCode)}</span>
                         <span className="font-mono font-bold text-emerald-700">
                           {formatPersianNumber(it.quantity)} {it.unit || 'عدد'}
                         </span>
@@ -170,7 +170,7 @@ export const ConfirmWarehouseDeliveryModal: React.FC<ConfirmWarehouseDeliveryMod
               <div className="max-h-32 overflow-y-auto space-y-1 bg-white p-2 rounded-lg border border-slate-100 text-[11px]">
                 {bulkOrders.map(bo => (
                   <div key={bo.id} className="flex justify-between items-center py-0.5 border-b border-slate-50 last:border-0">
-                    <span className="font-mono font-bold text-slate-800">{bo.refNumber}</span>
+                    <span className="font-mono font-bold text-slate-800">{formatPersianCode(bo.refNumber)}</span>
                     <span className="text-slate-600 truncate max-w-[140px]">{bo.supplierName}</span>
                     <span className="font-mono font-black text-amber-800">{rial.amount(bo.totalAmount || 0)}</span>
                   </div>

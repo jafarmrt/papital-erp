@@ -62,7 +62,8 @@ describe('item code change window (D-15)', () => {
       : Promise.reject(new Error(CODE_TAKEN_MESSAGE))));
     const onChanged = vi.fn();
     renderWithQuery(<ItemCodeChangeModal item={item} onClose={() => undefined} onChanged={onChanged} />);
-    expect(await screen.findByText('NE-090 → NE-100')).not.toBeNull();
+    // v11 phase 6.3a (U21): the history shows codes in Persian digits
+    expect(await screen.findByText('NE-۰۹۰ → NE-۱۰۰')).not.toBeNull();
     fireEvent.change(screen.getByRole('textbox', { name: 'کد تازه' }), { target: { value: ' NE-200 ' } });
     fireEvent.change(screen.getByRole('textbox', { name: 'دلیل تغییر' }), { target: { value: 'کد تکراری' } });
     fireEvent.click(screen.getByRole('button', { name: 'تغییر کد' }));

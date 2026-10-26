@@ -459,7 +459,7 @@ export function CustomerDossierDrawer({
                   <tbody className="divide-y text-slate-700">
                     {documents.map((doc: any) => (
                       <tr key={doc.id} className="hover:bg-slate-50">
-                        <td className="p-2.5 font-bold font-mono text-blue-700">#{doc.refNumber || doc.ref_number || doc.id}</td>
+                        <td className="p-2.5 font-bold font-mono text-blue-700">#{formatPersianCode(doc.refNumber) || formatPersianCode(doc.ref_number) || doc.id}</td>
                         <td className="p-2.5 font-bold">
                           <span className={`px-2 py-0.5 rounded-md text-[10px] ${salesDocumentKindLabel(doc) === 'پیش‌فاکتور' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'}`}>{salesDocumentKindLabel(doc)}</span>
                         </td>
@@ -581,7 +581,7 @@ export function CustomerDossierDrawer({
                             <tr key={entry.id || idx} className="hover:bg-slate-50/80 transition-colors">
                               <td className="p-2.5 text-slate-400 font-mono text-[11px]">{formatPersianNumber(idx + 1)}</td>
                               <td className="p-2.5 font-mono text-blue-700 font-black">
-                                #{entry.voucherNumber || entry.voucherId}
+                                #{formatPersianCode(entry.voucherNumber) || formatPersianCode(entry.voucherId)}
                               </td>
                               <td className="p-2.5 font-mono text-slate-600 text-[11px]">
                                 {formatPersianDate(entry.voucherDate || entry.date)}

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useId } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { FolderTree, Plus, Search, ChevronRight, ChevronDown, Edit3, Trash2, RefreshCw } from 'lucide-react';
-import { formatPersianPrice, errorMessageOf } from '../../utils';
+import { formatPersianPrice, errorMessageOf, formatPersianCode } from '../../utils';
 import type { Account, AccountLevel, AccountType, AccountNature } from '../../types';
 import toast from 'react-hot-toast';
 import { ACCOUNT_CODE_FORMAT_MESSAGE, isValidAccountCode, normalizeAccountCode } from '../../lib/accounting/accountCode';
@@ -9,6 +9,7 @@ import { accountActiveConfirmText, accountDeleteConfirmText } from '../../lib/ac
 import { AccountActiveToggle, InactiveAccountBadge } from './AccountActiveToggle';
 import { useIsSystemAdmin } from '../../contexts/AuthContext';
 import { DialogLayer } from '../common/DialogLayer';
+import { normalizeSearchText } from '../../lib/search/searchText';
 
 interface ChartOfAccountsTabProps {
   accounts: Account[];
@@ -170,10 +171,10 @@ export function ChartOfAccountsTab({
 
   // Filtered accounts for table view & search
   const filteredAccounts = useMemo(() => {
+    // review of #406 (U21): codes are shown in Persian digits, so a code typed or pasted in Persian digits is found too
+    const q = normalizeSearchText(searchQuery);
     return safeAccounts.filter(acc => {
-      const matchSearch = !searchQuery.trim() || 
-        acc.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        acc.code.includes(searchQuery.trim());
+      const matchSearch = !q || normalizeSearchText(acc.name).includes(q) || normalizeSearchText(acc.code).includes(q);
       const matchLevel = selectedLevel === 'all' || acc.level === selectedLevel;
       const matchType = selectedType === 'all' || acc.accountType === selectedType;
       return matchSearch && matchLevel && matchType;
@@ -236,7 +237,7 @@ export function ChartOfAccountsTab({
             )}
 
             <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-              {node.code}
+              {formatPersianCode(node.code)}
             </span>
 
             <span className="text-slate-800 dark:text-slate-200 font-medium">
@@ -455,7 +456,7 @@ export function ChartOfAccountsTab({
                   filteredAccounts.map(acc => (
                     <tr key={acc.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
                       <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
-                        {acc.code}
+                        {formatPersianCode(acc.code)}
                       </td>
                       <td className="py-3 px-4 font-semibold text-slate-800 dark:text-slate-200">
                         {acc.name} <InactiveAccountBadge account={acc} />
@@ -610,7 +611,7 @@ export function ChartOfAccountsTab({
                       })
                       .map(a => (
                         <option key={a.id} value={a.id}>
-                          {a.code} - {a.name} ({levelLabels[a.level].label})
+                          {formatPersianCode(a.code)} - {a.name} ({levelLabels[a.level].label})
                         </option>
                       ))}
                   </select>

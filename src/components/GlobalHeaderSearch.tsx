@@ -6,7 +6,7 @@ import { Search, X, Package, Box, UsersRound, ClipboardList, Layers, ArrowLeft, 
 import { useSearch } from '../SearchContext';
 import { fetchJson } from '../api';
 import { SafeImage } from './SafeImage';
-import { formatPersianNumber, formatPersianDate } from '../utils';
+import { formatPersianNumber, formatPersianDate, formatPersianCode } from '../utils';
 import { GLOBAL_SEARCH_MAX_LENGTH, globalSearchTarget, type GlobalSearchHit } from '../lib/search/globalSearchTarget';
 
 interface SearchResultItems {
@@ -231,7 +231,7 @@ export default function GlobalHeaderSearch() {
                           <div className="min-w-0">
                             <p className="text-xs font-bold text-slate-800 truncate group-hover:text-blue-600">{item.name}</p>
                             <p className="text-[10px] text-slate-400 flex items-center gap-2">
-                              <span>کد: {item.code}</span>
+                              <span>کد: {formatPersianCode(item.code)}</span>
                               {item.category && <span>• دسته‌بندی: {item.category}</span>}
                             </p>
                           </div>
@@ -301,7 +301,7 @@ export default function GlobalHeaderSearch() {
                         </div>
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-slate-800 truncate group-hover:text-purple-600">
-                            شماره مرجع: {doc.ref_number}
+                            شماره مرجع: {formatPersianCode(doc.ref_number)}
                           </p>
                           <p className="text-[10px] text-slate-400 truncate">
                             خریدار/طرف حساب: {doc.buyer_name || 'ثبت نشده'} {doc.date ? `• تاریخ: ${formatPersianDate(doc.date)}` : ''}
@@ -335,7 +335,7 @@ export default function GlobalHeaderSearch() {
                         </div>
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-slate-800 truncate group-hover:text-amber-600">
-                            [{proj.project_code}] {proj.title}
+                            [{formatPersianCode(proj.project_code)}] {proj.title}
                           </p>
                           <p className="text-[10px] text-slate-400 truncate">
                             مشتری: {proj.customer_name || 'عام'} • وضعیت: {projectStatusLabel(proj.status)}

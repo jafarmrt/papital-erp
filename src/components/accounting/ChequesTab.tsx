@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useId } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { CreditCard, Plus, Search, ArrowDownLeft, ArrowUpRight, Trash2, X, History, Download, ShieldCheck, Copy, Edit3 } from 'lucide-react';
 import { downloadSheet } from '../../lib/excel/downloadSheet';
-import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, getTodayIsoDate, formatPersianDate, errorMessageOf, toStorageDate, isoToJalaliDate, toEnglishDigits, toPersianDigits } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, getTodayIsoDate, formatPersianDate, errorMessageOf, toStorageDate, isoToJalaliDate, toEnglishDigits, toPersianDigits, formatPersianCode } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { ActionMenu } from '../ActionMenu';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
@@ -439,7 +439,7 @@ export function ChequesTab({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
               {chqReconRows.map(r => (
                 <tr key={r.code}>
-                  <td className="p-2 font-mono font-bold">{r.code}</td>
+                  <td className="p-2 font-mono font-bold">{formatPersianCode(r.code)}</td>
                   <td className="p-2 font-bold">{r.title}</td>
                   <td className="p-2 text-left font-mono">{rial.amount(r.ledgerBalance)}</td>
                   <td className="p-2 text-left font-mono">{rial.amount(r.expectedBalance)}</td>
@@ -777,7 +777,7 @@ export function ChequesTab({
                     id={`${fieldId}-sayad-number`}
                     type="text"
                     maxLength={16}
-                    placeholder="1234567890123456"
+                    placeholder="۱۲۳۴۵۶۷۸۹۰۱۲۳۴۵۶"
                     value={newFormData.sayadNumber}
                     onChange={e => setNewFormData({ ...newFormData, sayadNumber: e.target.value })}
                     className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono tracking-widest text-left"

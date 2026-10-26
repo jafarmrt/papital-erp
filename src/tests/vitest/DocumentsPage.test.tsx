@@ -92,7 +92,7 @@ describe('DocumentsPage — stock receipt / remittance form (TD-080 part 3 chara
     expect(screen.getByText('انبار مبدا (خروج)')).toBeTruthy();
     expect(screen.getByText('⚠️ خروج کالا تنها از موجودی آزاد و غیررزروی امکان‌پذیر است')).toBeTruthy();
     expect(screen.queryByText('واحد پول (ارز سند)')).toBeNull();
-    expect(await screen.findByText('پروژه PRJ-7 - گردنبند سفارشی')).toBeTruthy();
+    expect(await screen.findByText('پروژه PRJ-۷ - گردنبند سفارشی')).toBeTruthy();
     expect(await screen.findByDisplayValue('RM-2001')).toBeTruthy();
     expect(submitButton('ثبت نهایی و صدور حواله خروج').disabled).toBe(true);
   });
@@ -100,11 +100,11 @@ describe('DocumentsPage — stock receipt / remittance form (TD-080 part 3 chara
   it('shows the selected project reservations and adds a reserved item to the remittance', async () => {
     renderPage();
     fireEvent.click(screen.getByText('خروج از انبار (حواله مصرف)'));
-    await screen.findByText('پروژه PRJ-7 - گردنبند سفارشی');
+    await screen.findByText('پروژه PRJ-۷ - گردنبند سفارشی');
     await screen.findByText('اقلام رزرو شده انبار (۱ کالا)');
     const projectSelect = screen.getByDisplayValue('— خروج عمومی (بدون تخصیص به پروژه) —');
     fireEvent.change(projectSelect, { target: { value: '7' } });
-    expect(await screen.findByText('اقلام رزرو شده انبار برای پروژه «PRJ-7»')).toBeTruthy();
+    expect(await screen.findByText('اقلام رزرو شده انبار برای پروژه «PRJ-۷»')).toBeTruthy();
     expect(screen.getByText('۱ قلم کالای رزروشده')).toBeTruthy();
     // v9.0.139 (TD-889): پروژه برگزیده از فهرست انتخاب می‌آید، نه از پرونده کامل پروژه
     expect(fetchJson.mock.calls.some(([url]) => String(url).startsWith('/projects/7'))).toBe(false);
@@ -124,7 +124,7 @@ describe('DocumentsPage — stock receipt / remittance form (TD-080 part 3 chara
     ));
     renderPage();
     fireEvent.click(screen.getByText('خروج از انبار (حواله مصرف)'));
-    await screen.findByText('پروژه PRJ-7 - گردنبند سفارشی');
+    await screen.findByText('پروژه PRJ-۷ - گردنبند سفارشی');
     await screen.findByText('اقلام رزرو شده انبار (۱ کالا)');
     await screen.findByText('📦 انبار دوم');
     fireEvent.change(screen.getByDisplayValue('— خروج عمومی (بدون تخصیص به پروژه) —'), { target: { value: '7' } });

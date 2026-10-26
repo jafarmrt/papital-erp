@@ -74,7 +74,7 @@ function renderPage() {
   );
 }
 
-const systemCell = () => screen.getByText('A-501').closest('tr')!.querySelectorAll('td')[4];
+const systemCell = () => screen.getByText('A-۵۰۱').closest('tr')!.querySelectorAll('td')[4];
 const countInput = () => screen.getByPlaceholderText('عدد شمارش شده...') as HTMLInputElement;
 const locationSelect = () => screen.getByRole('combobox', { name: 'موقعیت انبار جهت شمارش:' }) as HTMLSelectElement;
 
@@ -90,7 +90,7 @@ describe('stock-count sheet (TD-480)', () => {
     stock = { main: 10, shop: 3 };
     fetchJson.mockImplementation(server);
     renderPage();
-    await screen.findByText('A-501');
+    await screen.findByText('A-۵۰۱');
     await waitFor(() => expect(systemCell().textContent).toBe('۱۰'));
     const values = within(locationSelect()).getAllByRole('option').map(o => (o as HTMLOptionElement).value);
     expect(values).toEqual(['main', 'shop']);
@@ -113,7 +113,7 @@ describe('stock-count sheet (TD-480)', () => {
     staleOnce = true;
     fetchJson.mockImplementation(server);
     renderPage();
-    await screen.findByText('A-501');
+    await screen.findByText('A-۵۰۱');
     await waitFor(() => expect(systemCell().textContent).toBe('۱۰'));
     fireEvent.change(countInput(), { target: { value: '9' } });
     fireEvent.click(screen.getByRole('button', { name: /ثبت نهایی سند انبارگردانی/ }));
@@ -131,7 +131,7 @@ describe('stock-count sheet warehouse change (TD-484)', () => {
     stock = { main: 10, shop: 3 };
     fetchJson.mockImplementation(server);
     renderPage();
-    await screen.findByText('A-501');
+    await screen.findByText('A-۵۰۱');
     fireEvent.change(countInput(), { target: { value: '7' } });
 
     fireEvent.change(locationSelect(), { target: { value: 'shop' } });
@@ -152,7 +152,7 @@ describe('stock-count sheet warehouse change (TD-484)', () => {
     stock = { main: 10, shop: 3 };
     fetchJson.mockImplementation(server);
     renderPage();
-    await screen.findByText('A-501');
+    await screen.findByText('A-۵۰۱');
     fireEvent.change(locationSelect(), { target: { value: 'shop' } });
     await waitFor(() => expect(systemCell().textContent).toBe('۳'));
     expect(screen.queryByRole('button', { name: 'پاک کردن و تغییر انبار' })).toBeNull();

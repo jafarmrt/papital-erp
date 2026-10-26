@@ -62,7 +62,7 @@ const typeValues = () => Array.from(typeSelect().options).map(o => o.value);
 const submitButton = () => screen.getByText(/ثبت نهایی و صدور/).closest('button') as HTMLButtonElement;
 
 async function addReservedItemToRemittance() {
-  await screen.findByText('پروژه PRJ-7 - گردنبند سفارشی');
+  await screen.findByText('پروژه PRJ-۷ - گردنبند سفارشی');
   await screen.findByText('اقلام رزرو شده انبار (۱ کالا)');
   fireEvent.change(screen.getByDisplayValue('— خروج عمومی (بدون تخصیص به پروژه) —'), { target: { value: '7' } });
   fireEvent.click(await screen.findByText('+ افزودن'));

@@ -1,7 +1,7 @@
 import { useId } from 'react';
 import { Plus } from 'lucide-react';
 import type { Item, ItemPrice } from '../../../types';
-import { formatCurrencyLabel, formatPersianNumber, formatPersianPrice } from '../../../utils';
+import { formatCurrencyLabel, formatPersianCode, formatPersianNumber, formatPersianPrice } from '../../../utils';
 import { SearchableSelect } from '../../SearchableSelect';
 import { DecimalInput, refuseInvalidDecimalInputs } from '../../common/DecimalInput';
 import { getSellableStock } from '../../../lib/stockAvailability';
@@ -44,7 +44,7 @@ export function invoiceItemOptionLabel(it: Item, location: string, warehouses: W
   const stock = location
     ? `${whName}: ${formatPersianNumber(loc)} | رزرو: ${formatPersianNumber(reserved)} | قابل فروش: ${formatPersianNumber(sellable)} ${it.unit}`
     : `کل: ${formatPersianNumber(total)} | رزرو: ${formatPersianNumber(reserved)} | قابل فروش: ${formatPersianNumber(sellable)} ${it.unit}`;
-  return `${it.code} - ${it.name} (${stock})`;
+  return `${formatPersianCode(it.code)} - ${it.name} (${stock})`;
 }
 
 const amountOf = (text: string): Amount => (text ? Number(text) : '');

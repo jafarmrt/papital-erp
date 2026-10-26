@@ -8,7 +8,7 @@ import { allocationStatusLabel } from '../../../lib/projects/allocationLabels';
 import { warehouseLabel } from '../../../lib/inventory/warehouseLabel';
 import { EXPORT_FAILED_MESSAGE, bomAllocationsExportFileName } from '../../../lib/inventoryAudit/exportFileNames';
 import { EMPTY_ALLOCATION_STATUS_COUNTS, bomAllocationListUrl } from '../../../lib/inventory/bomAllocationList';
-import { errorMessageOf, formatPersianDate, formatPersianNumber, getTodayJalaliDate } from '../../../utils';
+import { errorMessageOf, formatPersianCode, formatPersianDate, formatPersianNumber, getTodayJalaliDate } from '../../../utils';
 import { useDebounce } from '../../../hooks/useDebounce';
 import { useWarehousesQuery } from '../../../hooks/queries/useSettingsQueries';
 import { invalidateProjectChange, useProjectPickQuery } from '../../../hooks/queries/useProjectQueries';
@@ -72,7 +72,7 @@ export function useBomAllocations() {
     }).then(afterWrite);
 
   const consume = async (alloc: BomAllocationRow) => {
-    if (!(await confirmAction({ title: 'مصرف قطعی تخصیص', message: `آیا از مصرف قطعی ${formatPersianNumber(alloc.quantity)} ${alloc.unit} کالای ${alloc.itemName} در پروژه ${alloc.projectCode} اطمینان دارید؟` }))) {
+    if (!(await confirmAction({ title: 'مصرف قطعی تخصیص', message: `آیا از مصرف قطعی ${formatPersianNumber(alloc.quantity)} ${alloc.unit} کالای ${alloc.itemName} در پروژه ${formatPersianCode(alloc.projectCode)} اطمینان دارید؟` }))) {
       return;
     }
     try {

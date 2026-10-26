@@ -1,5 +1,5 @@
 import { siteCurrencyLabel, WC_PRICE_SKIP_LABELS, type WcDriftRow, type WcPriceSkipRow } from '../../lib/woocommerce/wcShopSync';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../utils';
 import { ListBox, MoreRow } from './WcCatalogLists';
 
 /** 10.2 package 6 (D-04 part C): the prices not sent and the differences the nightly re-read found */
@@ -15,7 +15,7 @@ export function WcPriceSkipList({ rows, total }: { rows: WcPriceSkipRow[]; total
     >
       {rows.map(row => (
         <li key={row.itemId} className="flex flex-wrap gap-x-2">
-          <span dir="ltr" className="font-mono text-slate-600">{row.code}</span>
+          <span dir="ltr" className="font-mono text-slate-600">{formatPersianCode(row.code)}</span>
           <span className="font-medium text-slate-800">{row.name}</span>
           <span className="text-amber-700">{WC_PRICE_SKIP_LABELS[row.reason]}</span>
         </li>
@@ -41,7 +41,7 @@ export function WcDriftList({ rows, total, siteCurrency }: { rows: WcDriftRow[];
     >
       {rows.map(row => (
         <li key={`${row.itemId}-${row.kind}`} className="flex flex-wrap gap-x-2">
-          <span dir="ltr" className="font-mono text-slate-600">{row.code}</span>
+          <span dir="ltr" className="font-mono text-slate-600">{formatPersianCode(row.code)}</span>
           <span className="font-medium text-slate-800">{row.name}</span>
           <span className="text-amber-700">
             {row.kind === 'stock' ? 'موجودی' : 'قیمت عادی'} در سایت {withUnit(row.site, row.kind === 'stock' ? row.unit ?? '' : priceUnit)}،

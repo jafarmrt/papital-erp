@@ -1,7 +1,7 @@
 import {
   BarChart2, Flame, RefreshCw, AlertCircle
 } from 'lucide-react';
-import { formatPersianNumber, jalaliMonthLabel } from '../../utils';
+import { formatPersianNumber, jalaliMonthLabel, formatPersianCode } from '../../utils';
 import { useDashboardBIStatsQuery } from '../../hooks/queries';
 
 /**
@@ -122,7 +122,7 @@ export default function MovementAnalysisSection() {
                     </span>
                     <div className="truncate">
                       <p className="text-xs font-bold text-slate-800 truncate">{item.name}</p>
-                      <span className="text-[10px] text-slate-400 font-mono block">کد: {item.code}</span>
+                      <span className="text-[10px] text-slate-400 font-mono block">کد: {formatPersianCode(item.code)}</span>
                     </div>
                   </div>
                   <div className="text-left shrink-0">
@@ -157,7 +157,7 @@ export default function MovementAnalysisSection() {
                     </span>
                     <div className="truncate">
                       <p className="text-xs font-bold text-slate-800 truncate">{item.name}</p>
-                      <span className="text-[10px] text-slate-400 font-mono block">کد: {item.code}</span>
+                      <span className="text-[10px] text-slate-400 font-mono block">کد: {formatPersianCode(item.code)}</span>
                     </div>
                   </div>
                   <div className="text-left shrink-0">
@@ -192,7 +192,7 @@ export default function MovementAnalysisSection() {
                     </span>
                     <div className="truncate">
                       <p className="text-xs font-bold text-slate-700 truncate">{item.name}</p>
-                      <span className="text-[10px] text-slate-400 font-mono block">کد: {item.code}</span>
+                      <span className="text-[10px] text-slate-400 font-mono block">کد: {formatPersianCode(item.code)}</span>
                     </div>
                   </div>
                   <div className="text-left shrink-0">

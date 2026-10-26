@@ -1,7 +1,7 @@
 import React, { useId } from 'react';
 import { Scale, X } from 'lucide-react';
 import { COMMON_UNITS, roundToOneDecimal } from './projectInventoryUtils';
-import { toPersianDigits, formatPersianNumber } from '../../utils';
+import { toPersianDigits, formatPersianNumber, formatPersianCode } from '../../utils';
 import { DecimalInput } from '../common/DecimalInput';
 import { DialogLayer } from '../common/DialogLayer';
 
@@ -68,7 +68,7 @@ export function UnitConversionModal({
         <form onSubmit={handleApplyUnitConversion} className="p-5 space-y-4 font-farsi text-xs">
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
             <p className="font-bold text-amber-950">
-              نام کالا: {conversionTarget.itemName} {conversionTarget.itemCode ? `(${conversionTarget.itemCode})` : ''}
+              نام کالا: {conversionTarget.itemName} {conversionTarget.itemCode ? `(${formatPersianCode(conversionTarget.itemCode)})` : ''}
             </p>
             <p className="text-amber-900">
               مقدار مورد نیاز پروژه: <strong className="font-mono text-sm">{toPersianDigits(conversionTarget.originalQty)} {conversionTarget.originalUnit}</strong>

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { RefreshCw, Package, CheckCircle2, Circle, Info, CheckSquare, Square } from 'lucide-react';
-import { toPersianDigits } from '../../utils';
+import { toPersianDigits, formatPersianCode } from '../../utils';
 import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 import { useProductProgressTicks } from '../../hooks/useProductProgressTicks';
 import { cellWorkOf, splitStageColumns } from '../../lib/projects/progressTicks';
@@ -8,6 +8,7 @@ import { ProgressMatrixCell } from './ProgressMatrixCell';
 import { ProgressSummary } from './progress/ProgressSummary';
 import { StaleProgressNotice } from './progress/StaleProgressNotice';
 import { ProgressMatrixToolbar, type ProgressFilter } from './progress/ProgressMatrixToolbar';
+import { normalizeSearchText } from '../../lib/search/searchText';
 
 // V3.1.5 — تب «پیشرفت به تفکیک کد کالا» (ماتریسی SKU × مرحله + فیلتر، انتخاب ردیف و عملیات دسته‌ای)
 // مدل: هر ردیف = یک SKU (کد کالا × کمیت)؛ وضعیت هر مرحله دودویی (تمام/ناتمام)؛
@@ -45,11 +46,9 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
   // Filtered products based on search and progress status
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
-      const query = searchQuery.trim().toLowerCase();
-      const matchesSearch = !query || 
-        (p.item_name && p.item_name.toLowerCase().includes(query)) ||
-        (p.item_code && p.item_code.toLowerCase().includes(query)) ||
-        (p.customer_code && p.customer_code.toLowerCase().includes(query));
+      // review of #406 (U21): a code typed in Persian digits is found too
+      const query = normalizeSearchText(searchQuery);
+      const matchesSearch = !query || [p.item_name, p.item_code, p.customer_code].some(text => normalizeSearchText(text).includes(query));
 
       if (!matchesSearch) return false;
 
@@ -237,7 +236,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate, onDirty
                       </td>
                       <td className="p-2.5 font-mono font-bold text-amber-900 sticky right-0 bg-white/95 z-10 border-l border-slate-100">
                         <div className="flex items-center gap-1.5">
-                          <span>{p.item_code || <span className="text-red-600 font-bold">بدون کد!</span>}</span>
+                          <span>{formatPersianCode(p.item_code) || <span className="text-red-600 font-bold">بدون کد!</span>}</span>
                           {p.customer_code && (
                             <span className="text-[9px] font-mono text-slate-500 bg-slate-100 px-1 py-0.2 rounded border border-slate-200" title="کد مشتری">
                               {p.customer_code}

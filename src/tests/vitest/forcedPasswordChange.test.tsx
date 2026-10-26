@@ -73,17 +73,26 @@ const passwordInputs = () => Array.from(document.querySelectorAll('input[type="p
 const APP_OPEN_TIMEOUT_MS = 10_000;
 const waitForStep = (check: () => void) => waitFor(check, { timeout: APP_OPEN_TIMEOUT_MS });
 const passwordFormShown = () => waitForStep(() => expect(passwordInputs()).toHaveLength(3));
+const PASSWORD_FORM_VALUES = ['Tempor4ry!', 'N3w-passw0rd', 'N3w-passw0rd'];
+/**
+ * The form clears its fields in an effect when it opens. On a busy runner the inputs can be in the page before that
+ * effect has run; the first change then flushes it and the first field is cleared again. So each field is filled
+ * until it holds its value.
+ */
+const fillPasswordForm = () => waitForStep(() => {
+  passwordInputs().forEach((input, i) => {
+    if (input.value !== PASSWORD_FORM_VALUES[i]) fireEvent.change(input, { target: { value: PASSWORD_FORM_VALUES[i] } });
+  });
+  expect(passwordInputs().map(input => input.value)).toEqual(PASSWORD_FORM_VALUES);
+});
 
 async function changePasswordAndOpenApp(profileDelayMs = 0) {
   meUser = temporaryUser;
   stubServer(profileDelayMs);
   renderApp();
   await passwordFormShown();
-  const [current, next, confirm] = passwordInputs();
-  fireEvent.change(current, { target: { value: 'Tempor4ry!' } });
-  fireEvent.change(next, { target: { value: 'N3w-passw0rd' } });
-  fireEvent.change(confirm, { target: { value: 'N3w-passw0rd' } });
-  fireEvent.submit(next.closest('form')!);
+  await fillPasswordForm();
+  fireEvent.submit(passwordInputs()[1].closest('form')!);
   await waitForStep(() => expect(calls.some(c => c.url === '/api/users/profile' && c.method === 'PUT')).toBe(true));
   await waitForStep(() => expect(passwordInputs()).toHaveLength(0));
   await waitForStep(() => expect(document.querySelector('aside')).not.toBeNull());

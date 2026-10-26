@@ -301,7 +301,7 @@ describe('TD-1288 number and amount fields show Persian digits and Persian thous
         <MemoryRouter><CreateInvoicePage user={user} /></MemoryRouter>
       </QueryClientProvider>,
     );
-    const row = (await screen.findByText('PF-5')).closest('tr') as HTMLElement;
+    const row = (await screen.findByText('PF-۵')).closest('tr') as HTMLElement;
     fireEvent.click(within(row).getByText(SHOWN.edit));
     const field = (await screen.findByLabelText(SHOWN.serviceChargeLabel)) as HTMLInputElement;
     const saves = () => fetchJson.mock.calls.filter(([url, init]) => url === '/documents/5' && init?.method === 'PUT');

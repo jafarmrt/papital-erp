@@ -2,7 +2,7 @@ import React, { useState, useEffect, useEffectEvent, useId } from 'react';
 import { fetchJson } from '../api';
 import { X, RefreshCw, ArrowLeftRight, Warehouse, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { SearchableSelect } from './SearchableSelect';
-import { formatPersianNumber, parseCleanNumber, errorMessageOf, toStorageDate, getTodayJalaliDate } from '../utils';
+import { formatPersianNumber, parseCleanNumber, errorMessageOf, toStorageDate, getTodayJalaliDate, formatPersianCode } from '../utils';
 import { JalaliDateInput } from './common/JalaliDateInput';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 import { refNumberToSend } from '../lib/documents/documentRefRules';
@@ -27,7 +27,7 @@ type TransferPickItem = StockPickItem;
 export function transferItemOption(it: TransferPickItem) {
   return {
     value: it.id,
-    label: `${it.name} (کد: ${it.code}) - موجودی کل: ${formatPersianNumber(it.current_stock || it.currentStock || 0)} ${it.unit}`,
+    label: `${it.name} (کد: ${formatPersianCode(it.code)}) - موجودی کل: ${formatPersianNumber(it.current_stock || it.currentStock || 0)} ${it.unit}`,
   };
 }
 
@@ -281,7 +281,7 @@ export default function WarehouseTransferModal({
                     <option value="">انتخاب انبار مبدا...</option>
                     {warehouses.map(wh => (
                       <option key={wh.code} value={wh.code}>
-                        {wh.name} ({wh.code})
+                        {wh.name} ({formatPersianCode(wh.code)})
                       </option>
                     ))}
                   </select>
@@ -306,7 +306,7 @@ export default function WarehouseTransferModal({
                     <option value="">انتخاب انبار مقصد...</option>
                     {warehouses.map(wh => (
                       <option key={wh.code} value={wh.code} disabled={wh.code === fromLocation}>
-                        {wh.name} ({wh.code}) {wh.code === fromLocation ? '(مبدا)' : ''}
+                        {wh.name} ({formatPersianCode(wh.code)}) {wh.code === fromLocation ? '(مبدا)' : ''}
                       </option>
                     ))}
                   </select>

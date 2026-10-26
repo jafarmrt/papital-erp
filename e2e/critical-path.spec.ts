@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { E2E_ADMIN } from './global-setup';
+import { toPersianDigits } from '../src/utils/persianNumber';
 
 /**
  * v7.0.77 (audit P3-7): مسیر حیاتی — ورود، صدور فاکتور فروش نهایی، دیدن سند حسابداری دوبل همان فاکتور.
@@ -27,7 +28,8 @@ test('login, issue a final sales invoice and see its journal voucher', async ({ 
   await page.locator('li', { hasText: customerName }).first().click();
   await page.locator('button', { hasText: 'کد یا نام کالا را بنویسید' }).click();
   await page.getByPlaceholder('جست‌وجو...', { exact: true }).fill(itemCode);
-  await page.locator('li', { hasText: itemCode }).first().click();
+  // v11 phase 6.3a (U21): the picker shows the code in Persian digits and finds it typed in Latin digits too
+  await page.locator('li', { hasText: toPersianDigits(itemCode) }).first().click();
   // v10.1.22 (TD-1273): number fields are text fields with the decimal keypad, found by their label
   await page.getByLabel('تعداد', { exact: true }).fill('2');
   await page.getByLabel(/^مبلغ واحد/).fill('750000');

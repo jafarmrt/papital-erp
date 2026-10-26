@@ -189,12 +189,12 @@ describe('the party dossier reads through the shared cache (10.3)', () => {
     renderDossier(client);
     fireEvent.click(screen.getByText(SHOWN.documentsTab));
     await until(1);
-    expect(screen.queryByText('#S-0')).toBeNull();
+    expect(screen.queryByText('#S-۰')).toBeNull();
     await act(async () => { held[0]?.resolve({ data: [{ id: 1, refNumber: 'S-1', type: 'invoice', status: 'final', date: '2026-10-01', currency: 'IRR' }] }); });
-    expect(await screen.findByText('#S-1')).toBeTruthy();
+    expect(await screen.findByText('#S-۱')).toBeTruthy();
     serverDocRef = 'S-2';
     await invalidate(client, QUERY_KEYS.customers.all);
-    expect(await screen.findByText('#S-2')).toBeTruthy();
+    expect(await screen.findByText('#S-۲')).toBeTruthy();
   });
 
   it.each([

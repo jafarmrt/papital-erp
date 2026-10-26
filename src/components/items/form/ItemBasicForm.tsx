@@ -154,7 +154,7 @@ export const ItemBasicForm: React.FC<ItemBasicFormProps> = ({
                 value={productYear}
                 onChange={e => setProductYear(e.target.value)}
                 className={`${segmentInputCls} w-16`}
-                placeholder="1404"
+                placeholder="۱۴۰۴"
               />
               <span className="text-slate-400 font-bold">-</span>
               <input
@@ -170,7 +170,7 @@ export const ItemBasicForm: React.FC<ItemBasicFormProps> = ({
                 value={productTransferCode}
                 onChange={e => setProductTransferCode(e.target.value)}
                 className={`${segmentInputCls} w-16`}
-                placeholder="101"
+                placeholder="۱۰۱"
               />
               <span className="text-slate-400 font-bold">-</span>
               <input
@@ -178,7 +178,7 @@ export const ItemBasicForm: React.FC<ItemBasicFormProps> = ({
                 value={productDesignVar}
                 onChange={e => setProductDesignVar(e.target.value)}
                 className={`${segmentInputCls} w-14`}
-                placeholder="01"
+                placeholder="۰۱"
               />
             </div>
             {/* V10-2.1: برچسب هر segment برای جلوگیری از خطای ورود دستی */}
@@ -223,7 +223,7 @@ export const ItemBasicForm: React.FC<ItemBasicFormProps> = ({
                 value={rawNum}
                 onChange={e => setRawNum(e.target.value)}
                 className={`${segmentInputCls} w-20`}
-                placeholder="101"
+                placeholder="۱۰۱"
               />
             </div>
             <div className="flex items-start select-none">

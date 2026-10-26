@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useEffectEvent, useMemo } from 'react';
 import { X, History, TrendingUp, TrendingDown, Clock, User, Search, FileSpreadsheet, RotateCcw, CheckCircle2, Trash2, Filter, RefreshCw } from 'lucide-react';
 import { PieceworkTask, PieceworkTaskRateHistory } from '../../types';
-import { formatPersianPrice, isoToJalaliDate, formatPersianDate, toEnglishDigits, formatPersianNumber, errorMessageOf } from '../../utils';
+import { formatPersianPrice, isoToJalaliDate, formatPersianDate, toEnglishDigits, formatPersianNumber, errorMessageOf, formatPersianCode } from '../../utils';
 import { useTaskRateHistoryQuery } from '../../hooks/queries/usePayrollWindowQueries';
 import { toast as hotToast } from 'react-hot-toast';
 import { DialogLayer } from '../common/DialogLayer';
@@ -154,7 +154,7 @@ export const PieceworkRateHistoryModal: React.FC<PieceworkRateHistoryModalProps>
                       «{selectedTask.title}»
                     </span>
                     <span className="text-xs px-2 py-0.5 bg-gray-200/70 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-300 font-mono">
-                      {selectedTask.code}
+                      {formatPersianCode(selectedTask.code)}
                     </span>
                   </>
                 ) : (

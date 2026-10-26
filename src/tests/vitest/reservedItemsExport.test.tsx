@@ -51,7 +51,7 @@ const report = (cost: boolean): ReservedItemsFullReport => ({
 async function exportReport(cost: boolean, tab?: RegExp) {
   fetchJson.mockResolvedValueOnce(report(cost));
   renderWithQuery(<MemoryRouter><ReservedItemsReportPage /></MemoryRouter>);
-  expect(await screen.findAllByText('P-7')).toBeTruthy();
+  expect(await screen.findAllByText('P-۷')).toBeTruthy();
   if (tab) fireEvent.click(screen.getByText(tab));
   fireEvent.click(screen.getByText('خروجی اکسل'));
   // 10.3 package 6: the xlsx library loads on the click, so the file is written a moment later
@@ -94,7 +94,7 @@ describe('reserved items report export and source links (TD-828)', () => {
   it('links a proforma to the searched documents list and a project to its inventory control', async () => {
     fetchJson.mockResolvedValueOnce(report(true));
     renderWithQuery(<MemoryRouter><ReservedItemsReportPage /></MemoryRouter>);
-    expect(await screen.findAllByText('P-7')).toBeTruthy();
+    expect(await screen.findAllByText('P-۷')).toBeTruthy();
     fireEvent.click(screen.getByText(/دفتر ریز پرونده‌های رزرو/));
     expect(screen.getByText('مشاهده پیش‌فاکتور').closest('a')?.getAttribute('href')).toBe('/invoices?search=PF%2F1001');
     expect(screen.getByText('مشاهده کنترل موجودی پروژه').closest('a')?.getAttribute('href')).toBe('/project-inventory?projectId=5');

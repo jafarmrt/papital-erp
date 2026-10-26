@@ -1,5 +1,5 @@
 import { RefreshCw, FileText, AlertTriangle, CheckCircle2, Clock, ShoppingCart } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianCode } from '../../utils';
 import { PurchaseRequisition, PurchaseRequisitionItemRow } from '../../types';
 import { PillBadge, type PillBadgeVariant, type PillBadgeVariants } from '../common/PillBadge';
 
@@ -57,13 +57,13 @@ export function RequisitionDetailsPreview({ requisition, isLoading }: Requisitio
           <div className="text-slate-400 dark:text-gray-400 text-[10px]">کد درخواست خرید:</div>
           <div className="font-mono font-bold text-slate-800 dark:text-gray-200 mt-0.5 flex items-center gap-1">
             <FileText className="w-3.5 h-3.5 text-amber-500" />
-            <span>{requisition.code}</span>
+            <span>{formatPersianCode(requisition.code)}</span>
           </div>
         </div>
         <div>
           <div className="text-slate-400 dark:text-gray-400 text-[10px]">پروژه یا کارگاه:</div>
           <div className="font-bold text-slate-800 dark:text-gray-200 mt-0.5 truncate" title={requisition.projectName || 'عمومی'}>
-            {requisition.projectName ? `${requisition.projectName} (${requisition.projectCode || ''})` : 'عمومی / کارگاهی'}
+            {requisition.projectName ? `${requisition.projectName} (${formatPersianCode(requisition.projectCode) || ''})` : 'عمومی / کارگاهی'}
           </div>
         </div>
         <div>
@@ -129,7 +129,7 @@ export function RequisitionDetailsPreview({ requisition, isLoading }: Requisitio
                         <span>{item.itemName}</span>
                         {item.itemCode && (
                           <span className="font-mono text-[11px] text-slate-500 dark:text-gray-400 mr-1.5 font-normal">
-                            [{item.itemCode}]
+                            [{formatPersianCode(item.itemCode)}]
                           </span>
                         )}
                       </div>

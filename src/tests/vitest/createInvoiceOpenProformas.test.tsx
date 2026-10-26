@@ -54,18 +54,18 @@ describe('CreateInvoicePage — open proformas are the sales proformas, page by 
   it('asks only for invoice and proforma types, shows the whole count in Persian digits and pages through it', async () => {
     server();
     renderPage();
-    expect(await screen.findByText('PF-1-0')).toBeTruthy();
+    expect(await screen.findByText('PF-۱-۰')).toBeTruthy();
     expect(fetchJson).toHaveBeenCalledWith('/documents?statuses=proforma,draft&types=invoice,proforma&page=1&limit=20', expect.anything());
     expect(fetchJson.mock.calls.some(([url]) => String(url).startsWith('/documents?statuses=proforma,draft') && !String(url).includes('types=invoice,proforma'))).toBe(false);
-    expect(screen.queryByText('RCP-6')).toBeNull();
+    expect(screen.queryByText('RCP-۶')).toBeNull();
     expect(screen.getByRole('heading', { name: OPEN_PROFORMAS_HEADING })).toBeTruthy();
     expect(screen.getByText('صفحه ۱ از ۳')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'بعدی' }));
-    expect(await screen.findByText('PF-2-0')).toBeTruthy();
+    expect(await screen.findByText('PF-۲-۰')).toBeTruthy();
     expect(screen.getByText('صفحه ۲ از ۳')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'بعدی' }));
-    expect(await screen.findByText('PF-3-4')).toBeTruthy();
+    expect(await screen.findByText('PF-۳-۴')).toBeTruthy();
     await waitFor(() => expect((screen.getByRole('button', { name: 'بعدی' }) as HTMLButtonElement).disabled).toBe(true));
   });
 });

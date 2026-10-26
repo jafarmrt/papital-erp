@@ -1,6 +1,6 @@
 import React from 'react';
 import { Printer, X, ShieldAlert } from 'lucide-react';
-import { formatPersianDateTime, formatPersianNumber, formatPersianDate, displayClockNow } from '../../utils';
+import { formatPersianDateTime, formatPersianNumber, formatPersianDate, displayClockNow, formatPersianCode } from '../../utils';
 import { parseUserAgent } from '../../utils/userAgentParser';
 import type { ActivityLogItem } from '../../hooks/queries/useActivityLogQueries';
 import { auditActionLabel } from '../../lib/audit/auditActionLabels';
@@ -184,7 +184,7 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, total, o
                         </span>
                       </td>
                       <td className="py-2 px-3 border-l border-slate-200 font-medium text-slate-800">
-                        {log.entity} {log.entityId ? `(#${log.entityId})` : ''}
+                        {log.entity} {log.entityId ? `(#${formatPersianCode(log.entityId)})` : ''}
                       </td>
                       <td className="py-2 px-3 border-l border-slate-200 text-slate-800 leading-normal">
                         {log.description}

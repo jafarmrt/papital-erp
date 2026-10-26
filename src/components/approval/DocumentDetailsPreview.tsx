@@ -1,5 +1,5 @@
 import { RefreshCw } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianCode } from '../../utils';
 import { fin } from '../../lib/financialDecimal';
 import { serverPayableOf, payableDecimalsOf, type PayableAmountFields } from '../../lib/invoices/documentPayable';
 import { lineStockOf, type DocumentLineStock } from '../../lib/documents/documentLineStock';
@@ -76,7 +76,7 @@ export function DocumentDetailsPreview({ docDetails, isLoadingDoc }: DocumentDet
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs bg-white dark:bg-gray-800 p-2.5 rounded-lg border border-gray-100 dark:border-gray-700">
         <div>
           <div className="text-gray-400 text-[10px]">شماره سند:</div>
-          <div className="font-mono font-bold text-gray-800 dark:text-gray-200">{docDetails.ref_number || docDetails.refNumber || '-'}</div>
+          <div className="font-mono font-bold text-gray-800 dark:text-gray-200">{formatPersianCode(docDetails.ref_number) || formatPersianCode(docDetails.refNumber) || '-'}</div>
         </div>
         <div>
           <div className="text-gray-400 text-[10px]">خریدار:</div>
@@ -118,7 +118,7 @@ export function DocumentDetailsPreview({ docDetails, isLoadingDoc }: DocumentDet
                 return (
                   <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                     <td className="p-2 text-gray-400 font-mono">{formatPersianNumber(idx + 1)}</td>
-                    <td className="p-2 font-medium text-gray-900 dark:text-gray-100">{it.item_name || it.itemName || it.code || 'کالا'}</td>
+                    <td className="p-2 font-medium text-gray-900 dark:text-gray-100">{it.item_name || it.itemName || formatPersianCode(it.code) || 'کالا'}</td>
                     <td className="p-2 text-center font-mono font-bold text-indigo-600 dark:text-indigo-400">{formatPersianNumber(lineQty)} <span className="text-[10px] text-gray-400 font-normal">{it.unit || 'عدد'}</span></td>
                     {hasLineStock && <td className="p-2 text-gray-700 dark:text-gray-200">{stock?.warehouseName ?? '—'}</td>}
                     {hasLineStock && (

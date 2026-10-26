@@ -18,7 +18,7 @@ import { partyTemporaryRowsOf } from '../lib/accounting/partyTemporaryRows';
 import { PartyTemporaryRowsPanel } from '../components/accounting/reports/PartyTemporaryRowsPanel';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidatePreset } from '../lib/queryInvalidation';
-import { formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber, formatPersianDate, formatPersianNumber, errorMessageOf } from '../utils';
+import { formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber, formatPersianDate, formatPersianNumber, errorMessageOf, formatPersianCode } from '../utils';
 import { useRialDisplay } from '../hooks/useAppCurrency';
 import { useHasPermission } from '../contexts/AuthContext';
 import { blankContactPerson } from '../lib/customers/contactPerson';
@@ -765,7 +765,7 @@ export default function CustomersPage({ user }: { user: User }) {
                           <tr key={i} className="hover:bg-slate-50">
                             <td className="p-2.5 text-center text-slate-400">{formatPersianNumber(i + 1)}</td>
                             <td className="p-2.5 text-center text-slate-700">{formatPersianDate(row.date)}</td>
-                            <td className="p-2.5 text-center font-bold text-blue-700">#{row.voucherNumber}</td>
+                            <td className="p-2.5 text-center font-bold text-blue-700">#{formatPersianCode(row.voucherNumber)}</td>
                             <td className="p-2.5 text-right font-sans text-slate-800">{row.itemDescription || row.description}</td>
                             <td className="p-2.5 text-left text-blue-700 font-bold">{row.debit > 0 ? rial.number(row.debit) : '—'}</td>
                             <td className="p-2.5 text-left text-amber-700 font-bold">{row.credit > 0 ? rial.number(row.credit) : '—'}</td>

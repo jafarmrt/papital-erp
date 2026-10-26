@@ -7,6 +7,7 @@ const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
 
 import { CustomerDossierDrawer } from '../../components/crm/CustomerDossierDrawer';
+import { formatPersianCode } from '../../utils';
 
 const customer = { id: 7, name: 'علی کاظمی', phone: '09121110001', partyType: 'customer', version: 1 } as Customer;
 const doc = (id: number, type: string, status: string) => ({ id, refNumber: `S-${id}`, type, status, date: '2026-10-01', currency: 'IRR', payableAmount: 1_000_000 });
@@ -48,7 +49,7 @@ describe('customer dossier documents (TD-417)', () => {
     expect(calledUrls().filter(u => u.startsWith('/documents'))).toEqual([]);
 
     fireEvent.click(await screen.findByText(/پیش‌فاکتورها و اسناد/));
-    const rowOf = async (ref: string) => (await screen.findByText(`#${ref}`)).closest('tr') as HTMLElement;
+    const rowOf = async (ref: string) => (await screen.findByText(`#${formatPersianCode(ref)}`)).closest('tr') as HTMLElement;
     expect(within(await rowOf('S-1')).getByText('فاکتور فروش')).toBeTruthy();
     expect(within(await rowOf('S-1')).getByText('نهایی')).toBeTruthy();
     expect(within(await rowOf('S-2')).getAllByText('پیش‌فاکتور').length).toBe(2);

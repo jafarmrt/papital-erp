@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Layers, ChevronLeft, Search, Printer, Download, Eye, ArrowUpRight, ArrowDownLeft, User, Users, FolderKanban, RotateCcw, FileText, X } from 'lucide-react';
 import { JalaliDateInput } from '../common/JalaliDateInput';
-import { formatPersianNumber, formatPersianDate, getTodayJalaliDate } from '../../utils';
+import { formatPersianNumber, formatPersianDate, getTodayJalaliDate, formatPersianCode } from '../../utils';
 import { accountExplorerFileName } from '../../lib/accounting/accountingExport';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { SearchableSelect } from '../SearchableSelect';
@@ -322,7 +322,7 @@ export function AccountExplorerTab({
                 {safeAccounts
                   .filter(a => a.level === 'subsidiary' || a.level === 'general')
                   .map((a, idx) => (
-                    <option key={`acc-flt-${a.id || idx}-${idx}`} value={a.id}>{a.code} - {a.name}</option>
+                    <option key={`acc-flt-${a.id || idx}-${idx}`} value={a.id}>{formatPersianCode(a.code)} - {a.name}</option>
                   ))
                 }
               </select>
@@ -436,7 +436,7 @@ export function AccountExplorerTab({
                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
                 }`}
               >
-                <span className="font-mono text-[11px] text-indigo-500">[{selectedGroupObj.code}]</span>
+                <span className="font-mono text-[11px] text-indigo-500">[{formatPersianCode(selectedGroupObj.code)}]</span>
                 <span>{selectedGroupObj.name}</span>
               </button>
             </>
@@ -453,7 +453,7 @@ export function AccountExplorerTab({
                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
                 }`}
               >
-                <span className="font-mono text-[11px] text-indigo-500">[{selectedGeneralObj.code}]</span>
+                <span className="font-mono text-[11px] text-indigo-500">[{formatPersianCode(selectedGeneralObj.code)}]</span>
                 <span>{selectedGeneralObj.name}</span>
               </button>
             </>
@@ -463,7 +463,7 @@ export function AccountExplorerTab({
             <>
               <ChevronLeft size={14} className="text-slate-400" />
               <div className="font-bold bg-indigo-600 text-white px-2.5 py-1 rounded-lg flex items-center gap-1">
-                <span className="font-mono text-[11px]">[{selectedSubsidiaryObj.code}]</span>
+                <span className="font-mono text-[11px]">[{formatPersianCode(selectedSubsidiaryObj.code)}]</span>
                 <span>{selectedSubsidiaryObj.name}</span>
               </div>
             </>
@@ -500,7 +500,7 @@ export function AccountExplorerTab({
               >
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md">
-                    کد {grp.code}
+                    کد {formatPersianCode(grp.code)}
                   </span>
                   <ChevronLeft className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 transition-transform group-hover:-translate-x-1" />
                 </div>
@@ -523,7 +523,7 @@ export function AccountExplorerTab({
               >
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md">
-                    کد کل {gen.code}
+                    کد کل {formatPersianCode(gen.code)}
                   </span>
                   <ChevronLeft className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 transition-transform group-hover:-translate-x-1" />
                 </div>
@@ -546,7 +546,7 @@ export function AccountExplorerTab({
               >
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md">
-                    کد معین {sub.code}
+                    کد معین {formatPersianCode(sub.code)}
                   </span>
                   <ChevronLeft className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 transition-transform group-hover:-translate-x-1" />
                 </div>
@@ -666,7 +666,7 @@ export function AccountExplorerTab({
                       {formatPersianDate(item.date)}
                     </td>
                     <td className="py-3 px-3 font-medium">
-                      {item.accountCode && <span className="font-mono text-[11px] text-slate-500 ml-1">[{item.accountCode}]</span>}
+                      {item.accountCode && <span className="font-mono text-[11px] text-slate-500 ml-1">[{formatPersianCode(item.accountCode)}]</span>}
                       <span>{item.accountName}</span>
                     </td>
                     <td className="py-3 px-3">
@@ -761,7 +761,7 @@ export function AccountExplorerTab({
                       <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/40">
                         <td className="p-2.5 text-center font-mono text-slate-400">{formatPersianNumber(idx + 1)}</td>
                         <td className="p-2.5 font-medium">
-                          <span className="font-mono text-[11px] text-indigo-600 ml-1">[{it.accountCode}]</span>
+                          <span className="font-mono text-[11px] text-indigo-600 ml-1">[{formatPersianCode(it.accountCode)}]</span>
                           <span>{it.accountName}</span>
                         </td>
                         <td className="p-2.5">{it.detailedName || '-'}</td>

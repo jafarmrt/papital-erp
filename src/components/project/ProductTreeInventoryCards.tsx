@@ -6,11 +6,12 @@ import {
   Item 
 } from '../../types';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
-import { formatPersianNumber, toPersianDigits } from '../../utils';
+import { formatPersianNumber, toPersianDigits, formatPersianCode } from '../../utils';
 import { MaterialNameCell, FreeStockCell, MaterialStatusCell, NotesCell, type OpenUnitConversionModalHandler } from './inventoryRowCells';
 import { rowIsShort, type MaterialAvailabilityView } from '../../lib/projects/materialAvailability';
 import { perItemRowRequiredQty, productOrderQuantity } from '../../lib/projects/materialQuantity';
 import { PerItemQtyCell } from './PerItemQtyCell';
+import { normalizeSearchText } from '../../lib/search/searchText';
 
 interface ProductTreeInventoryCardsProps {
   products: ProjectProductItem[];
@@ -129,9 +130,10 @@ export function ProductTreeInventoryCards({
         {products
           .filter(prod => {
             if (searchQuery.trim()) {
-              const q = searchQuery.toLowerCase();
-              const matchName = (prod.item_name || '').toLowerCase().includes(q);
-              const matchCode = (prod.item_code || '').toLowerCase().includes(q);
+              // review of #406 (U21): a code typed in Persian digits is found too
+              const q = normalizeSearchText(searchQuery);
+              const matchName = normalizeSearchText(prod.item_name).includes(q);
+              const matchCode = normalizeSearchText(prod.item_code).includes(q);
               if (!matchName && !matchCode) return false;
             }
             return true;
@@ -220,7 +222,7 @@ export function ProductTreeInventoryCards({
                               ? 'bg-slate-800 text-amber-300 border-slate-700' 
                               : 'bg-white text-slate-600 border-slate-200'
                           }`}>
-                            کد: {prod.item_code}
+                            کد: {formatPersianCode(prod.item_code)}
                           </span>
                         )}
                         {prod.customer_code && (

@@ -1,7 +1,7 @@
 import { useId } from 'react';
 import { Lock, Building2, Calendar, UserCheck } from 'lucide-react';
 import { Customer, Personnel, User } from '../../../types';
-import { isoToJalaliDate } from '../../../utils';
+import { isoToJalaliDate, formatPersianCode } from '../../../utils';
 import { JalaliDateInput } from '../../common/JalaliDateInput';
 import { ExchangeRateField } from '../ExchangeRateField';
 import type { WarehouseItem } from '../../../hooks/queries/useSettingsQueries';
@@ -110,7 +110,7 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
               <option value="">— خروج عمومی (بدون تخصیص به پروژه) —</option>
               {projectsList.map((p, idx) => (
                 <option key={`proj-${p.id || idx}-${idx}`} value={p.id}>
-                  پروژه {p.project_code || p.id} - {p.title}
+                  پروژه {formatPersianCode(p.project_code) || p.id} - {p.title}
                 </option>
               ))}
             </select>

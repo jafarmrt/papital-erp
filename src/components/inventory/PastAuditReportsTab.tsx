@@ -1,5 +1,5 @@
 import { Eye } from 'lucide-react';
-import { formatPersianNumber, formatPersianDate } from '../../utils';
+import { formatPersianNumber, formatPersianDate, formatPersianCode } from '../../utils';
 import type { DocumentListPager as Pager } from '../../hooks/inventoryAudit/useInventoryAuditQueries';
 import { DocumentListPager } from './DocumentListPager';
 
@@ -57,7 +57,7 @@ export function PastAuditReportsTab({
               auditDocs.map((doc, idx) => (
                 <tr key={doc.id} className="hover:bg-slate-50 transition-colors">
                   <td className="py-3 px-3 text-center font-mono text-slate-400">{formatPersianNumber(rowOffset + idx + 1)}</td>
-                  <td className="py-3 px-3 font-mono font-bold text-blue-600">{doc.refNumber || `#${doc.id}`}</td>
+                  <td className="py-3 px-3 font-mono font-bold text-blue-600">{formatPersianCode(doc.refNumber) || `#${doc.id}`}</td>
                   <td className="py-3 px-3 font-mono">{formatPersianDate(doc.date)}</td>
                   <td className="py-3 px-3 font-bold text-slate-700">{doc.location || 'انبار مرکزی'}</td>
                   <td className="py-3 px-3 text-slate-600">{doc.user || 'سیستم'}</td>

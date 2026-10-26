@@ -1,6 +1,6 @@
 import { useEffect, useId } from 'react';
 import { Search } from 'lucide-react';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../utils';
 import toast from 'react-hot-toast';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
 import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
@@ -129,7 +129,7 @@ export function PhysicalAuditSheetTab({
             <input
               id={`${fieldId}-notes`}
               type="text"
-              placeholder="مثلاً: انبارگردانی پایان سال ۱۴۰۳ - تیم شمارش ۲"
+              placeholder="مثلاً: انبارگردانی پایان سال، تیم شمارش ۲"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
@@ -211,7 +211,7 @@ export function PhysicalAuditSheetTab({
                 filteredItems.map((item, idx) => (
                   <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                     <td className="py-3 px-3 text-center font-mono text-slate-400">{formatPersianNumber(idx + 1)}</td>
-                    <td className="py-3 px-3 font-mono font-bold text-slate-800">{item.code}</td>
+                    <td className="py-3 px-3 font-mono font-bold text-slate-800">{formatPersianCode(item.code)}</td>
                     <td className="py-3 px-4">
                       <div className="font-bold text-slate-900">{item.name}</div>
                       <div className="text-[11px] text-slate-500">{item.category}</div>
