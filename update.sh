@@ -188,13 +188,16 @@ die_if_disk_full() {
     die "The disk of ${APP_DIR} is full (ENOSPC): $1 could not write. The service still runs the previous build, untouched. Free space on the disk mounted at $(update_disk_mount "$APP_DIR") and run the update again."
   fi
 }
-# v11 (failed v11.2.0 update): the kernel killed <what> for lack of memory when its count of such kills grew past
-# <kills-before>; the shell only printed 'Killed'
-die_if_out_of_memory() {
+# v11 (failed v11.2.0 update): whether the kernel killed a process for lack of memory since its count was <kills-before>
+oom_kills_grew() {
   local now
   now="$(update_oom_kills)"
-  if [ -n "$1" ] && [ -n "$now" ] && [ "$now" -gt "$1" ]; then
-    die "The server ran out of memory: the kernel stopped $2 ('Killed'). The service still runs the previous build, untouched. The build needs about ${UPDATE_MIN_MEMORY_MB:-2048} MB of free RAM and swap together; ${UPDATE_SWAP_ADVICE}, and run the update again."
+  [ -n "$1" ] && [ -n "$now" ] && [ "$now" -gt "$1" ]
+}
+# <what> failed and the kernel killed a process for lack of memory meanwhile; the shell only printed 'Killed'
+die_if_out_of_memory() {
+  if oom_kills_grew "$1"; then
+    die "The server ran out of memory: the kernel killed a process during $2 ('Killed'; journalctl -k | grep -i oom names it). The previous build stays untouched in dist/. The build needs about ${UPDATE_MIN_MEMORY_MB:-2048} MB of free RAM and swap together; ${UPDATE_SWAP_ADVICE}, and run the update again."
   fi
 }
 
@@ -385,8 +388,11 @@ if [ "$SKIP_BUILD" -eq 0 ]; then
   NPM_CI_OUT="$BUILD_DIR/.npm-ci.log"
   NPM_CI_ATTEMPT=1
   LOCK_REGENERATED=0
+  OOM_KILLS_BEFORE="$(update_oom_kills)"
   until NODE_ENV=development npm ci --include=dev 2>&1 | tee "$NPM_CI_OUT"; do
     die_if_disk_full "npm ci"
+    # killed for lack of memory, not a network failure: retrying would only be killed again
+    die_if_out_of_memory "$OOM_KILLS_BEFORE" "npm ci"
     if update_npm_lock_mismatch "$NPM_CI_OUT"; then
       if git -C "$APP_DIR" ls-files --error-unmatch package-lock.json >/dev/null 2>&1; then
         die "npm ci refused the package-lock.json of this release: it does not match package.json. The service still runs the previous build, untouched; the lock file was not changed. This is a fault of the release: report it and do not regenerate the lock on the server."
@@ -415,6 +421,9 @@ if [ "$SKIP_BUILD" -eq 0 ]; then
     die_if_disk_full "the build"
     die_if_out_of_memory "$OOM_KILLS_BEFORE" "the build"
     die "Build failed - the service was NOT restarted and still runs the previous build, untouched in dist/."
+  fi
+  if oom_kills_grew "$OOM_KILLS_BEFORE"; then
+    warn "The build passed, but the kernel killed a process for lack of memory meanwhile (journalctl -k | grep -i oom names it). Before the next update, ${UPDATE_SWAP_ADVICE}."
   fi
   echo "$SOURCE_FINGERPRINT" > dist/"$UPDATE_FINGERPRINT_NAME"
   echo "$BUILD_SOURCE" > dist/"$UPDATE_COMMIT_NAME"

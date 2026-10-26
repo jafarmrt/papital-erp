@@ -27,7 +27,7 @@ const meminfo = (availableMb: number, swapFreeMb: number) =>
 
 function steps(script: string, env: Record<string, string>) {
   return spawnSync('bash', ['-c', `source "${path.join(ROOT, 'scripts/update-steps.sh')}"\n${script}`], {
-    encoding: 'utf8', env: { ...process.env, ...env },
+    encoding: 'utf8', env: { ...process.env, UPDATE_MIN_MEMORY_MB: '2048', ...env },
   });
 }
 
@@ -41,6 +41,7 @@ describe('update_memory_check', () => {
     expect(low.stdout).toContain('needs about 2048 MB of free RAM and swap together, 1500 MB is free');
     expect(low.stdout).toContain('Nothing was changed');
     expect(low.stdout).toContain('sudo fallocate -l 2G /swapfile');
+    expect(low.stdout).toContain('UPDATE_MIN_MEMORY_MB=<MB> sets a lower bar');
     expect(low.stdout).toContain('free=1500');
 
     write(file, meminfo(1500, 2048));
@@ -75,7 +76,8 @@ describe('update_memory_check', () => {
 /** npm: the build fails with STUB_BUILD_FAILS; with STUB_OOM it is killed for lack of memory (the kernel's count grows) */
 const NPM_STUB = `#!/usr/bin/env bash
 case "$1" in
-  ci) mkdir -p node_modules ;;
+  ci) if [ -n "$STUB_CI_OOM" ]; then echo "oom_kill 1" > "$UPDATE_VMSTAT"; echo "Killed"; exit 137; fi
+      mkdir -p node_modules ;;
   run) if [ -n "$STUB_OOM" ]; then echo "oom_kill 1" > "$UPDATE_VMSTAT"; echo "Killed"; exit 137; fi
        [ -z "$STUB_BUILD_FAILS" ] || exit 1
        mkdir -p dist && echo '// new' > dist/server.cjs ;;
@@ -112,8 +114,9 @@ function scratch(availableMb: number) {
 function run(s: ReturnType<typeof scratch>, extraEnv: Record<string, string> = {}) {
   return spawnSync('bash', [path.join(s.app, 'update.sh'), '--no-backup', '--source', s.src], {
     cwd: dir, encoding: 'utf8',
-    env: { ...process.env, PATH: `${s.bin}:${process.env.PATH}`, APP_DIR: s.app, NODE_ENV: '', STUB_BUILD_FAILS: '', STUB_OOM: '',
-      UPDATE_MEMINFO: path.join(dir, 'meminfo'), UPDATE_VMSTAT: path.join(dir, 'vmstat'), ...extraEnv },
+    env: { ...process.env, PATH: `${s.bin}:${process.env.PATH}`, APP_DIR: s.app, NODE_ENV: '', STUB_BUILD_FAILS: '', STUB_OOM: '', STUB_CI_OOM: '',
+      NPM_CI_RETRY_DELAY: '0',
+      UPDATE_MIN_MEMORY_MB: '2048', UPDATE_MEMINFO: path.join(dir, 'meminfo'), UPDATE_VMSTAT: path.join(dir, 'vmstat'), ...extraEnv },
   });
 }
 
@@ -141,8 +144,34 @@ describe('update_refuses_or_explains_a_build_without_memory', () => {
     const s = scratch(4000);
     const r = run(s, { STUB_OOM: '1' });
     expect(r.status).not.toBe(0);
-    expect(r.stdout).toContain('The server ran out of memory: the kernel stopped the build');
+    expect(r.stdout).toContain('The server ran out of memory: the kernel killed a process during the build');
     expect(r.stdout).toContain('sudo fallocate -l 2G /swapfile');
+    expect(read(path.join(s.app, 'dist/server.cjs'))).toBe('// old');
+  });
+
+  itRunsUpdate('npm ci killed for lack of memory stops at once instead of being retried as a network failure', () => {
+    const s = scratch(4000);
+    const r = run(s, { STUB_CI_OOM: '1' });
+    expect(r.status).not.toBe(0);
+    expect(r.stdout).toContain('the kernel killed a process during npm ci');
+    expect(r.stdout).not.toContain('retrying in');
+    expect(read(path.join(s.app, 'dist/server.cjs'))).toBe('// old');
+  });
+
+  itRunsUpdate('the first run of an update can be an older update.sh without the check: the new one checks before the build', () => {
+    const s = scratch(1200);
+    // the running version's update.sh: this one without the check before the backup (as v11.2.0 had none)
+    const current = read(path.join(s.app, 'update.sh'));
+    const first = /\n {2}update_memory_check \|\| die "\$UPDATE_MEMORY_MESSAGE"\n[\s\S]*?\n {2}fi\n/;
+    expect(current).toMatch(first);
+    write(path.join(s.app, 'update.sh'), current.replace(first, '\n'));
+    const r = run(s);
+    expect(r.status).not.toBe(0);
+    expect(r.stdout).toContain('The new version brings another update.sh; continuing with it.');
+    expect(r.stdout).toContain('Not enough memory to build the update');
+    expect(r.stdout).toContain('the new source are in place; the running build and the service are untouched');
+    // the rollback steps put the previous source back; the running build was never touched
+    expect(r.stdout).toContain('restore-source');
     expect(read(path.join(s.app, 'dist/server.cjs'))).toBe('// old');
   });
 

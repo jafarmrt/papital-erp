@@ -175,7 +175,7 @@ update_space_check() {
 # peak; on a server without swap the kernel killed it half way ('Killed'). The update now needs RAM available plus free
 # swap of at least UPDATE_MIN_MEMORY_MB (default 2048) before it starts, and says when the kernel stopped the build for
 # lack of memory. UPDATE_MEMINFO and UPDATE_VMSTAT replace the /proc files for the tests.
-UPDATE_SWAP_ADVICE="add a swap file once (sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile, then add the line '/swapfile none swap sw 0 0' to /etc/fstab so it stays after a restart)"
+UPDATE_SWAP_ADVICE="when 'swapon --show' lists nothing, add a swap file once (sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile, then add the line '/swapfile none swap sw 0 0' to /etc/fstab so it stays after a restart)"
 
 # Prints the memory the build can use, in MB: MemAvailable plus SwapFree of /proc/meminfo; fails when unreadable
 update_memory_available_mb() {
@@ -196,7 +196,7 @@ update_memory_check() {
   avail="$(update_memory_available_mb)" || return 0
   UPDATE_MEMORY_FREE_MB="$avail"
   [ "$avail" -lt "$need" ] || return 0
-  UPDATE_MEMORY_MESSAGE="Not enough memory to build the update: the build needs about ${need} MB of free RAM and swap together, ${avail} MB is free (free -m: 'available' plus free swap). ${done_text}; ${UPDATE_SWAP_ADVICE}, and run the update again."
+  UPDATE_MEMORY_MESSAGE="Not enough memory to build the update: the build needs about ${need} MB of free RAM and swap together, ${avail} MB is free (free -m: 'available' plus free swap). ${done_text}; ${UPDATE_SWAP_ADVICE}, and run the update again (where swap cannot be added, UPDATE_MIN_MEMORY_MB=<MB> sets a lower bar at your own risk)."
   return 1
 }
 
