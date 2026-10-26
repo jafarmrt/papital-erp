@@ -12,7 +12,6 @@ import { DailyLogsMentionsWidget } from '../components/dashboard/DailyLogsMentio
 import { SalesSummaryWidget } from '../components/dashboard/SalesSummaryWidget';
 import { DASHBOARD_SALES_WIDGET_PERMISSIONS } from '../lib/permissions/reportPermissions';
 import { MyBirthdayBanner } from '../components/dashboard/social/MyBirthdayBanner';
-import { WhatsNewCard } from '../components/dashboard/social/WhatsNewCard';
 import { ColleagueBirthdaysCard } from '../components/dashboard/social/ColleagueBirthdaysCard';
 import { OnlineColleaguesCard } from '../components/dashboard/social/OnlineColleaguesCard';
 import { useBirthdaysQuery, usePresenceQuery } from '../hooks/queries/useSocialQueries';
@@ -142,7 +141,6 @@ export default function Dashboard() {
       <PersonalBanner user={user} onLogout={logout} />
 
       {birthdays.data && <MyBirthdayBanner answer={birthdays.data} firstName={(user.full_name || '').trim().split(/\s+/)[0] ?? ''} />}
-      <WhatsNewCard />
 
       {/* 2. Customizable Quick Shortcuts / User Workbench */}
       <CustomizableShortcuts user={user} userPermissions={userPermissions} />
