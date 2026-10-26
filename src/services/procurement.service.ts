@@ -275,7 +275,7 @@ export class ProcurementService {
   /**
    * Get single requisition by ID with latest details
    */
-  static async getRequisitionById(id: number): Promise<PurchaseRequisition> {
+  static async getRequisitionById(id: number, viewer: { id?: number; role?: string } = {}): Promise<PurchaseRequisition> {
     const [req] = await orm
       .select()
       .from(purchaseRequisitions)
@@ -286,7 +286,11 @@ export class ProcurementService {
     }
 
     const [dto] = await requisitionDtos(orm, [req]);
-    return withRowCurrentStock(orm, dto);
+    const row = await withRowCurrentStock(orm, dto);
+    // v11 phase 6.3a (review 3 of #406, U10): the detail window reads the requisition again, so it carries the same mark
+    // as the list row
+    const blocked = await requisitionsInitiatorCannotApprove(orm, [row], viewer);
+    return blocked.has(row.id) ? { ...row, initiatorCannotApprove: true } : row;
   }
 
   /**
@@ -461,7 +465,7 @@ export class ProcurementService {
       }
 
       // v11 phase 6.3a (review of #406, U10): a missing instance starts in the requester's name, as on every other path
-      const instanceId = await ensureRequisitionInstance(tx, req);
+      const instanceId = await ensureRequisitionInstance(tx, req, user.id);
 
       const [wfInst] = await tx.select().from(workflowInstances).where(eq(workflowInstances.id, instanceId));
       if (!wfInst) {
@@ -926,7 +930,7 @@ export class ProcurementService {
         .filter(order => order.status !== 'final');
       if (!alreadyReceived && openOrders.length === 0 && updatedReqItems.every(isSettledRequisitionRow)) {
         // وضعیت «دریافت‌شده» را اقدام پس از انتقال (applyRequisitionTransition) در همین تراکنش می‌نویسد
-        const flow = await requisitionFlow(tx, lockedReq);
+        const flow = await requisitionFlow(tx, lockedReq, user.id);
         const receive = transitionFromStep(flow, RECEIVE_ACTION_KEYS, RECEIVED_STEP_KEY);
         if (!receive) {
           throw new ConflictError(

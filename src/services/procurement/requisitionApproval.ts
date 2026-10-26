@@ -3,7 +3,7 @@ import type { DbExecutor } from '../../db/drizzle.js';
 import { purchaseRequisitions, users, workflowDefinitions, workflowInstances, workflowStates, workflowTransitions } from '../../db/schema.js';
 import { ConflictError, ValidationError } from '../../errors/customErrors.js';
 import { WorkflowTransitionExecutor, type WorkflowSnapshotDsl, type WorkflowStateSnapshot, type WorkflowTransitionSnapshot } from '../workflow/workflowTransitionExecutor.js';
-import { isUsableSnapshot } from '../workflow/workflowSnapshot.js';
+import { isUsableSnapshot, publishedDesignOf } from '../workflow/workflowSnapshot.js';
 import { OPEN_REQUISITION_STATUSES } from '../../lib/procurement/requisitionFields.js';
 
 /** فیلدهای گام گردش‌کار که تدارکات می‌خواند (از تصویر فرایند یا جدول workflow_states) */
@@ -62,10 +62,11 @@ type RequisitionFlowRow = { id: number; workflowInstanceId?: number | null; requ
  * failed to start at registration) gets it here, in its requester's name as at registration, under the requisition row
  * lock the caller holds. Before, whoever acted first (split, approve, receive) became its initiator, so a step that
  * leaves the initiator out refused every approver with a 403 and the rolled-back request failed the same way each time.
- * A requisition with no requester left (no `requestedById`, or the user row is gone) starts with no initiator, so no
- * approver is left out.
+ * An older requisition with no requester (`requestedById` empty) starts with no initiator, so no approver is left out (and
+ * a step only its initiator may take is then left to the system admin). `actorId` is the user whose action starts it:
+ * the task-arrived notice skips them, since they finish the first task in the same transaction.
  */
-export async function ensureRequisitionInstance(tx: DbExecutor, req: RequisitionFlowRow): Promise<number> {
+export async function ensureRequisitionInstance(tx: DbExecutor, req: RequisitionFlowRow, actorId?: number): Promise<number> {
   if (req.workflowInstanceId) return req.workflowInstanceId;
   const [requester] = req.requestedById
     ? await tx.select({ id: users.id, username: users.username }).from(users).where(eq(users.id, req.requestedById))
@@ -75,6 +76,7 @@ export async function ensureRequisitionInstance(tx: DbExecutor, req: Requisition
     entityId: String(req.id),
     userId: requester?.id,
     userName: requester?.username,
+    actorUserId: actorId,
     tx,
   });
   req.workflowInstanceId = started.id;
@@ -86,8 +88,8 @@ export async function ensureRequisitionInstance(tx: DbExecutor, req: Requisition
  * نمونه گردش‌کار درخواست (زیر قفل ردیف درخواست که فراخواننده گرفته است) و گام جاری‌اش؛ درخواستی که نمونه ندارد
  * (`ensureRequisitionInstance`) در همین تراکنش نمونه می‌گیرد.
  */
-export async function requisitionFlow(tx: DbExecutor, req: RequisitionFlowRow): Promise<RequisitionFlow> {
-  const instanceId = await ensureRequisitionInstance(tx, req);
+export async function requisitionFlow(tx: DbExecutor, req: RequisitionFlowRow, actorId?: number): Promise<RequisitionFlow> {
+  const instanceId = await ensureRequisitionInstance(tx, req, actorId);
   const [instance] = await tx.select().from(workflowInstances).where(eq(workflowInstances.id, instanceId));
   if (!instance) throw new ValidationError('نمونه فرایند گردش کار درخواست خرید یافت نشد.');
   const { states, transitions } = await requisitionWorkflowGraph(instance, tx);
@@ -132,7 +134,7 @@ export async function ensureRequisitionApproved(
   user: RequisitionActor,
   opts: ApprovalOptions,
 ): Promise<RequisitionFlow> {
-  let flow = await requisitionFlow(tx, req);
+  let flow = await requisitionFlow(tx, req, user.id);
   for (let round = 0; flow.stepKey !== APPROVED_STEP_KEY && round <= flow.states.length; round += 1) {
     const approve = flow.instance.status === 'IN_PROGRESS' ? transitionFromStep(flow, APPROVE_ACTION_KEYS) : undefined;
     if (!opts.mayApprove || !approve) {
@@ -224,17 +226,17 @@ export async function requisitionsInitiatorCannotApprove(
   }
 
   // review 2 of #406: a requisition with no instance gets one in its requester's name on its first action
-  // (`ensureRequisitionInstance`), so for its requester the walk starts at the first step of the active definition
+  // (`ensureRequisitionInstance`), so for its requester the walk starts at the first step of the active definition's
+  // published design, as `startInstance` does (review 3: never the step tables, which may hold an unpublished draft)
   const ownWithout = open.filter(r => !r.workflowInstanceId && r.requestedById === viewer.id);
   if (ownWithout.length > 0) {
     const [definition] = await db.select({ id: workflowDefinitions.id }).from(workflowDefinitions)
       .where(and(eq(workflowDefinitions.entityType, 'purchase_requisition'), eq(workflowDefinitions.isActive, 1)))
       .orderBy(asc(workflowDefinitions.id)).limit(1);
-    const [initial] = definition
-      ? await db.select({ id: workflowStates.id }).from(workflowStates)
-        .where(and(eq(workflowStates.workflowDefinitionId, definition.id), eq(workflowStates.stateType, 'initial'))).limit(1)
-      : [];
-    if (definition && initial && initiatorLeftOut(await liveGraphOf(definition.id), initial.id, viewer.id)) {
+    const design = definition ? await publishedDesignOf(db, definition.id) : null;
+    const graph = isUsableSnapshot(design) ? { states: design.states ?? [], transitions: design.transitions ?? [] } : null;
+    const initial = graph?.states.find(state => state.stateType === 'initial');
+    if (graph && initial && initiatorLeftOut(graph, initial.id, viewer.id)) {
       for (const r of ownWithout) blocked.add(r.id);
     }
   }

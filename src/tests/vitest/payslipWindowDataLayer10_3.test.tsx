@@ -174,7 +174,7 @@ describe('opening the payslip window (10.3)', () => {
     await act(async () => { await hook.handleViewPayslip(8); });
     expect((await screen.findAllByText(/PAY-۸/)).length).toBeGreaterThan(0);
     await act(async () => { reads.held[0]?.(slips.get(7)); await first; });
-    expect(screen.queryAllByText(/PAY-۷/)).toHaveLength(0);
+    expect(screen.queryAllByText(/PAY-[7۷]/)).toHaveLength(0);
     expect(screen.getAllByText(/PAY-۸/).length).toBeGreaterThan(0);
   });
 

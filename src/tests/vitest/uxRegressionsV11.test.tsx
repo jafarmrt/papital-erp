@@ -10,6 +10,7 @@ import { DialogLayer } from '../../components/common/DialogLayer';
 import { JalaliDateInput } from '../../components/common/JalaliDateInput';
 import { NotFoundPage } from '../../components/NotFoundPage';
 import { RequisitionRow } from '../../components/procurement/RequisitionRow';
+import { requisitionActionsWithoutInstance } from '../../lib/procurement/requisitionActions';
 import type { PurchaseRequisition } from '../../types';
 import type { ProcurementAccess } from '../../hooks/procurement/useProcurementAccess';
 import { InventoryAuditHeader } from '../../components/inventory/InventoryAuditHeader';
@@ -103,6 +104,11 @@ describe('v11 phase 6.3a (U10): the initiator sees the split button off with the
     expect(button?.getAttribute('aria-describedby')).toBe('split-blocked-6');
     fireEvent.click(button as HTMLButtonElement);
     expect(onSplit).not.toHaveBeenCalled();
+  });
+
+  it('a requisition without a workflow offers its marked requester only the reject action in the detail window', () => {
+    expect(requisitionActionsWithoutInstance('pending', true, true).map(a => a.actionKey)).toEqual(['reject_request']);
+    expect(requisitionActionsWithoutInstance('pending', true).map(a => a.actionKey)).toEqual(['approve_request', 'reject_request']);
   });
 
   it('an unmarked requisition opens the split form as before', () => {

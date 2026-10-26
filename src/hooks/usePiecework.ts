@@ -26,7 +26,7 @@ import {
 } from '../types';
 import { toast as hotToast } from 'react-hot-toast';
 import { hasMisplacedGroupSeparator } from '../lib/numericInput';
-import { parseQuantityOrTime, formatPersianPrice, errorMessageOf, toStorageDate, getTodayIsoDate } from '../utils';
+import { parseQuantityOrTime, formatPersianPrice, formatPersianCode, errorMessageOf, toStorageDate, getTodayIsoDate } from '../utils';
 import { computeFixedSalaryShares, priorFixedGrantsOf } from '../lib/payroll/fixedSalaryProration';
 import { fixedSalaryPeriodEnd, fixedSalaryPeriodStart, payrollPrepaymentError, serviceEndOf, serviceStartOf } from '../lib/payroll/payrollPeriod';
 import { refreshSuggestedRates, submittedRate, suggestedRate } from '../lib/payroll/workLogRate';
@@ -229,7 +229,7 @@ export function usePiecework() {
       { value: '', label: '-- بدون پروژه کارگاهی --' },
       ...safeProjects.map(p => ({
         value: String(p.id),
-        label: `${p.title || p.name || 'پروژه'} ${p.project_code || p.projectCode ? `(${p.project_code || p.projectCode})` : ''}`
+        label: `${p.title || p.name || 'پروژه'} ${p.project_code || p.projectCode ? `(${formatPersianCode(p.project_code || p.projectCode)})` : ''}`
       }))
     ];
   }, [projectsList]);
@@ -640,7 +640,7 @@ export function usePiecework() {
       if (isIdempotentReplay(res)) {
         hotToast(idempotentReplayMessage(res), { icon: 'ℹ️' });
       } else {
-        hotToast.success(`فیش حقوقی شماره ${res.payrollNumber || ''} پیش‌نویس صادر شد؛ پرداخت آن پس از تأیید کاربر دیگری است.`);
+        hotToast.success(`فیش حقوقی شماره ${formatPersianCode(res.payrollNumber)} پیش‌نویس صادر شد؛ پرداخت آن پس از تأیید کاربر دیگری است.`);
         if (res.statutoryWarning) hotToast(res.statutoryWarning, { icon: '⚠️' });
         if (res.eidiWarning) hotToast(res.eidiWarning, { icon: '⚠️' });
       }

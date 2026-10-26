@@ -10,28 +10,30 @@ import { validate } from '../../middleware/validate';
  * same identifier never shows in Latin digits on one screen and in Persian on another («PR-1405-0001» in the list,
  * «PR-۱۴۰۵-۰۰۰۱» in the notice). This guard lists every such field shown raw: in a JSX child, a text attribute
  * (`title`, `placeholder`, `aria-label`, `label`, `alt`), a picker option's `label`, a lightbox's `title` or `subtitle`
- * or a toast, alone or inside a template literal (reviews of #406).
+ * or a toast (`toast`, `hotToast`), alone or inside a template literal, in the screens and in the hooks that build their
+ * notices and pick lists (reviews of #406). A code put into a variable first (a confirm message) is not seen here and is
+ * written with `formatPersianCode` by hand.
  */
 const TEXT_ATTRIBUTES = new Set(['title', 'placeholder', 'aria-label', 'label', 'alt']);
 /** object properties that hold shown text: a picker option's `label`, a lightbox's `title` and `subtitle` */
 const TEXT_PROPERTIES = new Set(['label', 'title', 'subtitle']);
-const TOAST_CALL = /^toast(\.\w+)?$/;
+const TOAST_CALL = /^(toast|hotToast)(\.\w+)?$/;
 const IDENTIFIER_FIELDS = new Set(['code', 'refNumber', 'ref_number', 'voucherNumber', 'documentNumber', 'docNumber', 'invoiceNumber', 'orderNumber',
   'accountCode', 'account_code', 'projectCode', 'project_code', 'itemCode', 'item_code', 'customerCode', 'supplierCode', 'requisitionCode', 'requisition_code', 'sku',
   'payrollNumber', 'payroll_number']);
-const SCREEN_ROOTS = ['src/pages', 'src/components'];
+const SCREEN_ROOTS = ['src/pages', 'src/components', 'src/hooks'];
 
 function screenFiles(dir: string, out: string[] = []): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const file = path.join(dir, entry.name);
     if (entry.isDirectory()) screenFiles(file, out);
-    else if (file.endsWith('.tsx')) out.push(file);
+    else if (/\.tsx?$/.test(file) && !file.endsWith('.d.ts')) out.push(file);
   }
   return out;
 }
 
 function rawIdentifierChildren(file: string): string[] {
-  const source = ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const source = ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const found: string[] = [];
   const operands = (node: ts.Expression): void => {
     let e = node;

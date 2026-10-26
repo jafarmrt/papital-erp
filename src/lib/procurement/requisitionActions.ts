@@ -46,12 +46,17 @@ export function requisitionActionButtons(transitions: readonly RequisitionTransi
 
 /**
  * درخواست قدیمی بی نمونه گردش کار: سرور با نخستین اقدام، گردش کار را از گام آغاز می‌سازد، پس فقط درخواستِ «در انتظار»
- * با مجوز تأیید، اقدام‌های گام آغاز گردش کار پیش‌فرض را می‌گیرد.
+ * با مجوز تأیید، اقدام‌های گام آغاز گردش کار پیش‌فرض را می‌گیرد. v11 phase 6.3a (review 3 of #406, U10): the workflow
+ * starts in the requester's name, so the requester whom the approval step leaves out (`initiatorCannotApprove`) is not
+ * offered «تأیید», which the server refuses; «رد» stays.
  */
-export function requisitionActionsWithoutInstance(status: string, canApprove: boolean): RequisitionActionButton[] {
+export function requisitionActionsWithoutInstance(status: string, canApprove: boolean, initiatorCannotApprove = false): RequisitionActionButton[] {
   if (status !== 'pending' || !canApprove) return [];
-  return [buttonOf('approve_request'), buttonOf('reject_request')];
+  return initiatorCannotApprove ? [buttonOf('reject_request')] : [buttonOf('approve_request'), buttonOf('reject_request')];
 }
+
+/** v11 phase 6.3a (U10): why the split and order buttons are off for the requisition's initiator */
+export const INITIATOR_CANNOT_APPROVE = 'ثبت این درخواست با شما بوده؛ پیش از صدور فاکتور، کس دیگری با حق تأیید باید آن را تأیید کند.';
 
 /** وضعیت ناشناخته «other» است؛ وضعیت‌های قدیمی approved، completed و cancelled را سرور هنوز می‌خواند (TD-326) */
 export type RequisitionStage = 'approval' | 'ordered' | 'received' | 'rejected' | 'consolidated' | 'other';

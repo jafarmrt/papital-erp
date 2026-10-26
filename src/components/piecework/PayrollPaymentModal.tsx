@@ -120,8 +120,8 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
     }
 
     const confirmMsg = isFullSettlement
-      ? `مبلغ ${payAmount.toLocaleString('fa-IR')} ریال بابت تسویه کامل فیش ${payroll.payrollNumber} از حساب «${selectedBank?.title || ''}» پرداخت می‌شود و وضعیت فیش به «پرداخت‌شده» تغییر می‌کند. ادامه می‌دهید؟`
-      : `مبلغ ${payAmount.toLocaleString('fa-IR')} ریال بابت پرداخت مرحله‌ای فیش ${payroll.payrollNumber} از حساب «${selectedBank?.title || ''}» پرداخت می‌شود (مانده پس از پرداخت: ${remainingAfterThis.toLocaleString('fa-IR')} ریال). ادامه می‌دهید؟`;
+      ? `مبلغ ${payAmount.toLocaleString('fa-IR')} ریال بابت تسویه کامل فیش ${formatPersianCode(payroll.payrollNumber)} از حساب «${selectedBank?.title || ''}» پرداخت می‌شود و وضعیت فیش به «پرداخت‌شده» تغییر می‌کند. ادامه می‌دهید؟`
+      : `مبلغ ${payAmount.toLocaleString('fa-IR')} ریال بابت پرداخت مرحله‌ای فیش ${formatPersianCode(payroll.payrollNumber)} از حساب «${selectedBank?.title || ''}» پرداخت می‌شود (مانده پس از پرداخت: ${remainingAfterThis.toLocaleString('fa-IR')} ریال). ادامه می‌دهید؟`;
 
     const ok = await confirmAction({
       title: isFullSettlement ? 'تایید تسویه کامل حقوق' : 'تایید پرداخت مرحله‌ای حقوق',

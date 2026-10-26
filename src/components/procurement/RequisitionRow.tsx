@@ -4,6 +4,7 @@ import { formatPersianDate, formatPersianNumber, formatPersianCode } from '../..
 import { PillBadge } from '../common/PillBadge';
 import { REQUISITION_PRIORITY_BADGES, REQUISITION_PRIORITY_FALLBACK, REQUISITION_STATUS_BADGES, REQUISITION_STATUS_FALLBACK } from './requisitionBadges';
 import { canConsolidateRequisition, canDeleteRequisition, canOrderRequisition } from '../../lib/procurement/requisitionFields';
+import { INITIATOR_CANNOT_APPROVE } from '../../lib/procurement/requisitionActions';
 import type { ProcurementAccess } from '../../hooks/procurement/useProcurementAccess';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 
@@ -18,7 +19,6 @@ interface RequisitionRowProps {
   onShowOrders: () => void;
 }
 
-const INITIATOR_CANNOT_APPROVE = 'ثبت این درخواست با شما بوده؛ پیش از صدور فاکتور، کس دیگری با حق تأیید باید آن را تأیید کند.';
 
 /** یک ردیف فهرست درخواست‌های میز تدارکات */
 export function RequisitionRow({ req, access, isSelected, onToggleSelect, onView, onSplit, onDelete, onShowOrders }: RequisitionRowProps) {

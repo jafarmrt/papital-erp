@@ -48,7 +48,7 @@ router.get('/requisitions', authorizePermission(...READ_PERMISSIONS.purchaseRequ
  */
 router.get('/requisitions/:id', authorizePermission(...READ_PERMISSIONS.purchaseRequisitions), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const requisition = await ProcurementService.getRequisitionById(id);
+  const requisition = await ProcurementService.getRequisitionById(id, { id: req.user?.id, role: req.user?.role });
   res.json({ success: true, data: requisition });
 }));
 

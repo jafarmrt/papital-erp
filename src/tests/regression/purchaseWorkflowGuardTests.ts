@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { orm, pool } from '../../db/drizzle.js';
 import { purchaseRequisitions, workflowDefinitions, workflowInstances, workflowStates, workflowTransitions } from '../../db/schema.js';
 import { WorkflowEngineService } from '../../services/workflow/workflowEngineService.js';
+import { ensureRequisitionApproved } from '../../services/procurement/requisitionApproval.js';
 import { upgradeLegacySeedGuards } from '../../services/workflow/seedGuardUpgrade.js';
 import { PURCHASE_REQUISITION_GUARD_UPGRADE } from '../../services/workflow/purchaseWorkflowGuards.js';
 import { buildUnguardedPurchaseActionHealthTest, findUnguardedPurchaseActions } from '../../services/accounting/unguardedPurchaseActionHealth.js';
@@ -28,6 +29,7 @@ async function clientWith(permissions: string[]) {
   const s = await loginTestUserWithSession(app, user.username);
   return {
     userId: user.id,
+    username: user.username,
     get: (url: string) => request(app).get(url).set('Cookie', s.cookie),
     post: (url: string, body: unknown) => request(app).post(url).set('Cookie', s.cookie).set('x-csrf-token', s.csrfToken).send(body as object),
   };
@@ -167,21 +169,26 @@ export async function runPurchaseWorkflowGuardTests(shouldRun: ShouldRun): Promi
   }
 
   if (shouldRun('reg_lazy_requisition_instance_requester_v11_6_3a_u10', 'u10', 'workflow', 'procurement')) {
-    await runCase(results, 'reg_lazy_requisition_instance_requester_v11_6_3a_u10', 'v11 phase 6.3a (reviews of #406, U10): a requisition without a workflow instance is marked for its requester, and an approval by another user starts the instance in the requester\'s name and goes through', () => inFiscalSandbox(async () => {
+    await runCase(results, 'reg_lazy_requisition_instance_requester_v11_6_3a_u10', 'v11 phase 6.3a (reviews of #406, U10): a requisition without a workflow instance is marked for its requester in the list and the window, its own approval is refused, and an approval by another user (by action or by convert) starts the instance in the requester\'s name and goes through', () => inFiscalSandbox(async () => {
       await WorkflowEngineService.seedDefaultWorkflows();
       const keys = ['procurement.view', 'procurement.create', 'procurement.approve', 'procurement.order'];
       const maker = await clientWith(keys);
-      const checker = await clientWith(keys);
-      const created = await maker.post('/api/procurement/requisitions', {
-        title: 'Lazy instance requester test', priority: 'normal',
-        items: [{ itemName: 'Lazy instance test service', unit: 'عدد', requestedQty: 1, unitPriceEstimate: 1000 }],
-      });
-      expect(created.status === 201, `requisition create returned ${brief(created)}`);
-      const id = Number(created.body?.data?.id);
+      // the checker also holds `workflow.approve`, so the first step's task notice is meant for them
+      const checker = await clientWith([...keys, 'workflow.approve']);
       // an older requisition, or one whose workflow failed to start at registration, has no instance
-      const [row] = await orm.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.id, id));
-      await orm.update(workflowInstances).set({ status: 'TERMINATED' }).where(eq(workflowInstances.id, Number(row.workflowInstanceId)));
-      await orm.update(purchaseRequisitions).set({ workflowInstanceId: null }).where(eq(purchaseRequisitions.id, id));
+      const withoutInstance = async (title: string) => {
+        const created = await maker.post('/api/procurement/requisitions', {
+          title, priority: 'normal',
+          items: [{ itemName: 'Lazy instance test service', unit: 'عدد', requestedQty: 1, unitPriceEstimate: 1000 }],
+        });
+        expect(created.status === 201, `requisition create returned ${brief(created)}`);
+        const createdId = Number(created.body?.data?.id);
+        const [row] = await orm.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.id, createdId));
+        await orm.update(workflowInstances).set({ status: 'TERMINATED' }).where(eq(workflowInstances.id, Number(row.workflowInstanceId)));
+        await orm.update(purchaseRequisitions).set({ workflowInstanceId: null }).where(eq(purchaseRequisitions.id, createdId));
+        return { id: createdId, code: String(row.code) };
+      };
+      const { id } = await withoutInstance('Lazy instance requester test');
 
       const markOf = async (client: typeof maker) => {
         const res = await client.get('/api/procurement/requisitions?search=Lazy%20instance%20requester&limit=50');
@@ -192,16 +199,36 @@ export async function runPurchaseWorkflowGuardTests(shouldRun: ShouldRun): Promi
       };
       expect(await markOf(maker), 'the list does not mark the requisition without an instance for its requester');
       expect(!(await markOf(checker)), 'the list marks the requisition without an instance for another approver');
+      // review 3 of #406: the requisition window reads the requisition again and carries the same mark
+      const detailMarkOf = async (client: typeof maker) => (await client.get(`/api/procurement/requisitions/${id}`)).body?.data?.initiatorCannotApprove === true;
+      expect(await detailMarkOf(maker), 'the requisition window does not mark the requisition for its requester');
+      expect(!(await detailMarkOf(checker)), 'the requisition window marks the requisition for another approver');
 
-      // the approve button of the desk and the requisition window (workflow-action), with no instance started before it
+      // the requester's own approval is refused and starts nothing
+      const own = await maker.post(`/api/procurement/requisitions/${id}/workflow-action`, { actionKey: 'approve_request' });
+      expect(own.status === 403 && own.body?.code === 'WF_INITIATOR_EXCLUDED', `the requester's own approval returned ${brief(own)}`);
+      expect(await stepOf(id) === 'none', 'the refused approval left a workflow instance');
+
+      // the approve button of the desk and the requisition window (workflow-action), with no instance started before it;
+      // the approver who starts it is not told of the task they finish in the same step
+      const checkerTasks = async () => Number((await pool.query(`SELECT count(*)::int AS n FROM notifications WHERE user_id = $1 AND type = 'task'`, [checker.userId])).rows[0]?.n ?? 0);
+      const tasksBefore = await checkerTasks();
       const approved = await checker.post(`/api/procurement/requisitions/${id}/workflow-action`, { actionKey: 'approve_request' });
       expect(approved.status === 200, `another approver returned ${brief(approved)}`);
-      const [started] = await orm.select({ startedBy: workflowInstances.startedBy }).from(purchaseRequisitions)
+      const startedByOf = async (requisitionId: number) => (await orm.select({ startedBy: workflowInstances.startedBy }).from(purchaseRequisitions)
         .innerJoin(workflowInstances, eq(workflowInstances.id, purchaseRequisitions.workflowInstanceId))
-        .where(eq(purchaseRequisitions.id, id));
-      expect(started?.startedBy === maker.userId, `the missing instance was started by user ${started?.startedBy}, expected the requester ${maker.userId}`);
+        .where(eq(purchaseRequisitions.id, requisitionId)))[0]?.startedBy;
+      expect(await startedByOf(id) === maker.userId, `the missing instance was started by user ${await startedByOf(id)}, expected the requester ${maker.userId}`);
       expect(await stepOf(id) === 'ordered', 'approval by another user did not reach the ordered step');
-      return 'marked for the requester only; another approver approved it and the instance names the requester';
+      expect(await checkerTasks() === tasksBefore, 'the approver who started the instance was told of the task they finished');
+
+      // the split and convert path (`ensureRequisitionApproved`) starts a missing instance the same way
+      const second = await withoutInstance('Lazy instance requester convert test');
+      await orm.transaction(tx => ensureRequisitionApproved(tx, { ...second, workflowInstanceId: null, requestedById: maker.userId },
+        { id: checker.userId, username: checker.username, permissions: keys }, { mayApprove: true, comment: 'Lazy instance convert test' }));
+      expect(await startedByOf(second.id) === maker.userId, `the convert path started the instance as user ${await startedByOf(second.id)}, expected the requester ${maker.userId}`);
+      expect(await stepOf(second.id) === 'ordered', 'the convert path did not approve the requisition');
+      return 'marked for the requester only, in the list and the window; the requester\'s own approval 403 with no instance; another approver approved it (by action and by convert), the instance names the requester and the approver gets no task notice';
     }));
   }
 

@@ -421,6 +421,12 @@ export class WorkflowTransitionExecutor {
     entityId: string;
     userId?: number;
     userName?: string;
+    /**
+     * v11 phase 6.3a (review 3 of #406): whose action starts the instance when it starts in another user's name (a
+     * requisition whose missing instance starts in its requester's name on an approver's action): the task-arrived notice
+     * skips this user, as it skips the starter otherwise
+     */
+    actorUserId?: number;
     /** v8.0.71 (TD-326): تراکنش فراخواننده؛ بی آن تراکنش جدا (مانند executeTransition) */
     tx?: DbClient;
   }) {
@@ -544,7 +550,7 @@ export class WorkflowTransitionExecutor {
         updatedAt: new Date().toISOString()
       }).returning();
 
-      await WorkflowTransitionExecutor.refreshPendingApprovals(newInstance.id, initialStateId, def.id, tx, snapshotDsl, { actorUserId: params.userId });
+      await WorkflowTransitionExecutor.refreshPendingApprovals(newInstance.id, initialStateId, def.id, tx, snapshotDsl, { actorUserId: params.actorUserId ?? params.userId });
 
       await tx.insert(workflowHistoryLogs).values({
         instanceId: newInstance.id,

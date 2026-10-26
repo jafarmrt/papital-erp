@@ -950,9 +950,9 @@ export default function TransfersPage({ user }: { user?: User }) {
         isOpen={printTarget !== null}
         onClose={() => setPrintTarget(null)}
         title="کارت کد ترنسفر"
-        subtitle={printTarget?.title || `ترنسفر کد ${printTarget?.code || ''}`}
+        subtitle={printTarget?.title || `ترنسفر کد ${formatPersianCode(printTarget?.code)}`}
         meta={[
-          { label: 'کد ترنسفر', value: printTarget?.code || '' },
+          { label: 'کد ترنسفر', value: formatPersianCode(printTarget?.code) },
           { label: 'عنوان', value: printTarget?.title || '-' },
           { label: 'تعداد محصولات متصل', value: formatPersianNumber(printTarget?.productCount ?? 0) }
         ]}
