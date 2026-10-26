@@ -2,7 +2,7 @@ import { pool } from '../../db/drizzle.js';
 import { ProcurementService } from '../../services/procurement.service.js';
 import { REQUISITION_UNSETTLED_HINT } from '../../services/procurement/requisitionReceiveAction.js';
 import { getErrorMessage } from '../../utils/formatters.js';
-import { createTestItem } from '../fixtures/factories.js';
+import { testSupplier, createTestItem } from '../fixtures/factories.js';
 import type { InvariantScope } from './businessInvariants.js';
 import { outcomeProblems, raceBehindRowLock } from './concurrencyHarness.js';
 import { invariantProblems, itemState, watermarks } from './scenarioHelpers.js';
@@ -28,7 +28,7 @@ async function requisition(itemId: number, quantity: number): Promise<number> {
 async function order(requisitionId: number, itemId: number, quantity: number, wh: string): Promise<number> {
   const res = await ProcurementService.convertToPurchaseOrders({
     requisitionId,
-    orderGroups: [{ supplierName: 'تامین‌کننده آزمون همزمانی', targetWarehouse: wh, status: 'draft', items: [{ itemId, quantity, unitPrice: 1000 }] }],
+    orderGroups: [{ supplierName: await testSupplier('تامین‌کننده آزمون همزمانی'), targetWarehouse: wh, status: 'draft', items: [{ itemId, quantity, unitPrice: 1000 }] }],
   }, ADMIN);
   return res.createdDocuments[0].id;
 }

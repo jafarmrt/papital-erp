@@ -8,7 +8,7 @@ import { ProjectService } from '../../services/projects.service.js';
 import { ProjectBomAllocationService } from '../../services/inventory/projectBomAllocation.service.js';
 import { ProcurementService } from '../../services/procurement.service.js';
 import { VoucherService } from '../../services/accounting/voucher.service.js';
-import { createTestItem } from '../fixtures/factories.js';
+import { testSupplier, createTestItem } from '../fixtures/factories.js';
 import { getErrorMessage } from '../../utils/formatters.js';
 import { inventoryValueGap } from './businessInvariants.js';
 
@@ -31,7 +31,7 @@ async function stockOf(itemId: number): Promise<string> {
 async function rawWithStock(wh: string, quantity: number, unitPrice: number): Promise<{ itemId: number; documentId: number }> {
   const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
   const documentId = await DocumentService.createDocument({
-    docType: 'receipt', inOut: 'in', status: 'final', date: await businessTodayIsoDate(), user: 'inv', items: [{ itemId: item.id, quantity, unitPrice, location: wh }],
+    docType: 'receipt', inOut: 'in', status: 'final', date: await businessTodayIsoDate(), user: 'inv', buyerName: await testSupplier('تامین‌کننده آزمون انبار'), items: [{ itemId: item.id, quantity, unitPrice, location: wh }],
   });
   return { itemId: item.id, documentId };
 }
@@ -64,7 +64,7 @@ export async function checkBomReleaseAtOwnCost(wh: string): Promise<string[]> {
   const projectId = await newProject('پروژه آزمون آزادسازی');
   const allocated = await ProjectBomAllocationService.allocateMaterialsForProject({ projectId, allocations: [{ itemId, quantity: 4, location: wh }], username: 'inv' });
   await DocumentService.createDocument({
-    docType: 'receipt', inOut: 'in', status: 'final', date: await businessTodayIsoDate(), user: 'inv', items: [{ itemId, quantity: 10, unitPrice: 200000, location: wh }],
+    docType: 'receipt', inOut: 'in', status: 'final', date: await businessTodayIsoDate(), user: 'inv', buyerName: await testSupplier('تامین‌کننده آزمون انبار'), items: [{ itemId, quantity: 10, unitPrice: 200000, location: wh }],
   });
   await ProjectBomAllocationService.releaseAllocation(allocated.allocations[0].id, { username: 'inv' });
   const [back] = await orm.select({ unitPrice: transactions.unitPrice }).from(transactions)
@@ -106,7 +106,7 @@ export async function checkBomAllocationPostsVoucher(wh: string): Promise<string
   const raw = await rawWithStock(wh, 10, 100000);
   const product = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
   await DocumentService.createDocument({
-    docType: 'receipt', inOut: 'in', status: 'final', date: await businessTodayIsoDate(), user: 'inv', items: [{ itemId: product.id, quantity: 5, unitPrice: 300000, location: wh }],
+    docType: 'receipt', inOut: 'in', status: 'final', date: await businessTodayIsoDate(), user: 'inv', buyerName: await testSupplier('تامین‌کننده آزمون انبار'), items: [{ itemId: product.id, quantity: 5, unitPrice: 300000, location: wh }],
   });
   const scope = { itemIds: [raw.itemId, product.id], documentIdAfter: 0, voucherIdAfter: mark };
   const projectId = await newProject('پروژه آزمون سند تخصیص');
@@ -183,7 +183,7 @@ async function requisitionRows(requisitionId: number): Promise<Array<{ receivedQ
 /** سفارش خرید یک گروه از درخواست؛ شناسه سند سفارش */
 async function orderOf(requisitionId: number, wh: string, lines: Array<{ itemId: number; quantity: number }>): Promise<number> {
   const converted = await ProcurementService.convertToPurchaseOrders({ requisitionId, orderGroups: [
-    { supplierName: 'تامین‌کننده آزمون TD-290', targetWarehouse: wh, items: lines.map(l => ({ ...l, unitPrice: 1000 })) },
+    { supplierName: await testSupplier('تامین‌کننده آزمون TD-290'), targetWarehouse: wh, items: lines.map(l => ({ ...l, unitPrice: 1000 })) },
   ] as never }, USER);
   return converted.createdDocuments[0].id;
 }
@@ -268,7 +268,7 @@ export async function probeBomReleaseAtCurrentWac(wh: string): Promise<boolean> 
   const projectId = await newProject('پروژه کاوش آزادسازی');
   const allocated = await ProjectBomAllocationService.allocateMaterialsForProject({ projectId, allocations: [{ itemId, quantity: 4, location: wh }], username: 'inv' });
   await DocumentService.createDocument({
-    docType: 'receipt', inOut: 'in', status: 'final', date: await businessTodayIsoDate(), user: 'inv', items: [{ itemId, quantity: 10, unitPrice: 200000, location: wh }],
+    docType: 'receipt', inOut: 'in', status: 'final', date: await businessTodayIsoDate(), user: 'inv', buyerName: await testSupplier('تامین‌کننده آزمون انبار'), items: [{ itemId, quantity: 10, unitPrice: 200000, location: wh }],
   });
   await ProjectBomAllocationService.releaseAllocation(allocated.allocations[0].id, { username: 'inv' });
   const [out] = await orm.select({ unitPrice: transactions.unitPrice }).from(transactions).where(eq(transactions.id, allocated.allocations[0].sourceTransactionId ?? 0));
@@ -281,7 +281,8 @@ export async function probeBomReleaseAtCurrentWac(wh: string): Promise<boolean> 
 export async function probeRequisitionReconvertedOverOrdered(wh: string): Promise<boolean> {
   const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
   const req = await ProcurementService.createRequisition({ title: 'درخواست کاوش سفارش دوباره', items: [{ itemId: item.id, requestedQty: 10, unitPriceEstimate: 1000 } as never] }, USER);
-  const group = (quantity: number) => ({ supplierName: 'تامین‌کننده کاوش', targetWarehouse: wh, items: [{ itemId: item.id, quantity, unitPrice: 1000 }] });
+  const supplier = await testSupplier('تامین‌کننده کاوش');
+  const group = (quantity: number) => ({ supplierName: supplier, targetWarehouse: wh, items: [{ itemId: item.id, quantity, unitPrice: 1000 }] });
   await ProcurementService.convertToPurchaseOrders({ requisitionId: req.id, orderGroups: [group(10)] as never }, USER);
   const again = await refusalOf(() => ProcurementService.convertToPurchaseOrders({ requisitionId: req.id, orderGroups: [group(10)] as never }, USER));
   return again === null;
@@ -292,7 +293,7 @@ export async function probeRequisitionReceiptCountsFirstLine(wh: string): Promis
   const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
   const req = await ProcurementService.createRequisition({ title: 'درخواست کاوش دو سطر', items: [{ itemId: item.id, requestedQty: 5, unitPriceEstimate: 1000 } as never] }, USER);
   const converted = await ProcurementService.convertToPurchaseOrders({ requisitionId: req.id, orderGroups: [
-    { supplierName: 'تامین‌کننده کاوش', targetWarehouse: wh, items: [{ itemId: item.id, quantity: 2, unitPrice: 1000 }, { itemId: item.id, quantity: 3, unitPrice: 1000 }] },
+    { supplierName: await testSupplier('تامین‌کننده کاوش'), targetWarehouse: wh, items: [{ itemId: item.id, quantity: 2, unitPrice: 1000 }, { itemId: item.id, quantity: 3, unitPrice: 1000 }] },
   ] as never }, USER);
   await ProcurementService.deliverOrderToWarehouse(converted.createdDocuments[0].id, USER);
   const after = await ProcurementService.getRequisitionById(req.id);

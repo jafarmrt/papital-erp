@@ -3,7 +3,7 @@ import { fin } from '../../lib/financialDecimal.js';
 import { DocumentService } from '../../services/document.service.js';
 import { VoucherService } from '../../services/accounting/voucher.service.js';
 import { KardexWacRecalculatorService } from '../../services/inventory/kardexWacRecalculator.service.js';
-import { createTestItem } from '../fixtures/factories.js';
+import { testSupplier, createTestItem } from '../fixtures/factories.js';
 import type { InvariantScope } from './businessInvariants.js';
 import { invariantProblems, itemState, watermarks } from './scenarioHelpers.js';
 
@@ -31,9 +31,10 @@ export async function checkPurchaseDiscountInCost(wh: string): Promise<string[]>
   const usdRounding = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
   const drafted = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
   const scope: InvariantScope = { ...mark, itemIds: [irr.id, usd.id, usdRounding.id, drafted.id] };
+  const supplier = await testSupplier('تامین‌کننده آزمون تخفیف');
   const receipt = (itemId: number, quantity: number, unitPrice: number, discount: number, date: string, extra: Record<string, unknown> = {}) =>
     DocumentService.createDocument({
-      docType: 'receipt', inOut: 'in', status: 'final', date, user: 'inv', buyerName: 'تامین‌کننده آزمون تخفیف',
+      docType: 'receipt', inOut: 'in', status: 'final', date, user: 'inv', buyerName: supplier,
       items: [{ itemId, quantity, unitPrice, discount, location: wh }], ...extra,
     });
 
@@ -78,8 +79,9 @@ export async function checkVoidOutflowRestoresCost(wh: string): Promise<string[]
   const approved = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
   const issued = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
   const scope: InvariantScope = { ...mark, itemIds: [sold.id, approved.id, issued.id] };
+  const supplier = await testSupplier('تامین‌کننده آزمون ابطال خروج');
   const receipt = (itemId: number, quantity: number, unitPrice: number, date: string) => DocumentService.createDocument({
-    docType: 'receipt', inOut: 'in', status: 'final', date, user: 'inv', buyerName: 'تامین‌کننده آزمون ابطال خروج',
+    docType: 'receipt', inOut: 'in', status: 'final', date, user: 'inv', buyerName: supplier,
     items: [{ itemId, quantity, unitPrice, location: wh }],
   });
   const outflow = (docType: 'invoice' | 'remittance', itemId: number, quantity: number, date: string) => DocumentService.createDocument({
@@ -171,8 +173,9 @@ export async function probeZeroPricePurchaseWithoutVoucher(wh: string): Promise<
   const mark = await watermarks();
   const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
   const scope: InvariantScope = { ...mark, itemIds: [item.id] };
+  const supplier = await testSupplier('تامین‌کننده آزمون کالای رایگان');
   const receipt = (unitPrice: number, quantity: number, date: string) => DocumentService.createDocument({
-    docType: 'receipt', inOut: 'in', status: 'final', date, user: 'inv', buyerName: 'تامین‌کننده آزمون کالای رایگان',
+    docType: 'receipt', inOut: 'in', status: 'final', date, user: 'inv', buyerName: supplier,
     items: [{ itemId: item.id, quantity, unitPrice, location: wh }],
   });
   await receipt(100000, 10, '2026-04-01');
@@ -209,9 +212,10 @@ export async function checkFreeGoodsVoucherAtWac(wh: string): Promise<string[]> 
   const imported = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
   const scope: InvariantScope = { ...mark, itemIds: [material.id, other.id, imported.id] };
   type Line = { itemId: number; quantity: number; unitPrice: number; discount?: number };
+  const supplier = await testSupplier('تامین‌کننده آزمون کالای اهدایی');
   const receipt = (docType: 'receipt' | 'purchase', lines: Line[], date: string, extra: Record<string, unknown> = {}) =>
     DocumentService.createDocument({
-      docType, inOut: 'in', status: 'final', date, user: 'inv', buyerName: 'تامین‌کننده آزمون کالای اهدایی',
+      docType, inOut: 'in', status: 'final', date, user: 'inv', buyerName: supplier,
       items: lines.map(l => ({ ...l, location: wh })), ...extra,
     });
 

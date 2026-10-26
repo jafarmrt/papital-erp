@@ -193,6 +193,8 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
       { key: 'accounting.vouchers', title: 'صدور و ویرایش اسناد حسابداری', description: 'ثبت، ویرایش و حذف پیش‌نویس، سند برگشتی و سند اصلاحی', requires: ['accounting.view'] },
       // v10.0.27 (TD-965، طرح حقوق ت۹): تأیید جدا از ثبت؛ مهاجرت 0098 آن را به هر نقش دارای accounting.vouchers داد
       { key: 'accounting.vouchers_approve', title: 'تأیید و قطعی کردن سند حسابداری', description: 'تأیید سند پیش‌نویس، بازگرداندن سند تأییدشده به پیش‌نویس و قطعی کردن سند؛ ثبت‌کننده سند دستی آن را تأیید نمی‌کند', requires: ['accounting.vouchers', 'workflow.approve'] },
+      // v11 phase 6.1b (M3, decision ت۵۶-۳): پیش‌فرض به هیچ نقشی داده نمی‌شود؛ مدیر سیستم همیشه دارد
+      { key: 'accounting.control_adjustment', title: 'اصلاح حساب کنترلی', description: 'ثبت سند دستی و سند اصلاحی روی حساب‌های کنترلی (بانک و صندوق، موجودی کالا، بدهکاران و بستانکاران تجاری، حقوق، بیمه، مالیات و عیدی پرداختنی، مساعده و حساب‌های چک) با نوشتن دلیل؛ ثبت عادی این حساب‌ها از دفتر خودشان است', requires: ['accounting.vouchers'] },
       { key: 'accounting.coa', title: 'مدیریت کدینگ حساب‌ها', description: 'تعریف، ویرایش و حذف حساب‌های گروه، کل، معین و تفصیلی', requires: ['accounting.view'] },
       { key: 'accounting.treasury', title: 'عملیات خزانه‌داری (دریافت و پرداخت)', description: 'ثبت و پیگیری نقدینگی، حساب‌های بانکی، پوز و حواله‌ها', requires: ['accounting.view'] },
       { key: 'accounting.cheques', title: 'مدیریت دفتر چک صیادی', description: 'ثبت چک‌های دریافتی/پرداختی، تغییر وضعیت وصول، برگشت و واگذاری', requires: ['accounting.view'] },

@@ -7,7 +7,7 @@ import { fin } from '../../lib/financialDecimal.js';
 import { PayrollPaymentService } from '../../services/accounting/payrollPayment.service.js';
 import { getDefaultWarehouseCode } from '../../services/inventory/warehouseResolver.js';
 import { jalaliYearBounds } from '../../utils/calendarDate.js';
-import { createTestItem } from '../fixtures/factories.js';
+import { createTestItem, testSupplier } from '../fixtures/factories.js';
 import { miscContraAccountId } from '../fixtures/treasuryParty.js';
 import { addLog, fundedBank, issueApproved, newTask, newWorker, refusalOf } from '../invariants/payrollScenarios.js';
 import { TestCaseResult } from '../types.js';
@@ -181,8 +181,9 @@ export async function runInputGuardsV11Tests(shouldRun: ShouldRun): Promise<Test
       // 3) document lines: a fifth decimal, and a line whose value overflows the column
       const main = String(await getDefaultWarehouseCode(orm));
       const item = await createTestItem({ type: 'raw_material', stocks: { [main]: 5 }, weightedAverageCost: 1000 });
+      const supplier = await testSupplier('M16 supplier');
       const receipt = (quantity: unknown, unitPrice: unknown) => api.post('/api/documents', {
-        docType: 'receipt', status: 'final', refNumber: 'auto', date: today, location: main, buyer_name: 'M16 supplier',
+        docType: 'receipt', status: 'final', refNumber: 'auto', date: today, location: main, buyer_name: supplier,
         items: [{ itemId: item.id, quantity, unit_price: unitPrice }],
       });
       fourXX('a receipt line of 1.23456', await receipt('1.23456', 1100), 400);

@@ -1,6 +1,6 @@
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { appSettings } from '../../db/schema.js';
-import { eq } from 'drizzle-orm';
+import { accounts, appSettings, bankAccounts } from '../../db/schema.js';
+import { and, eq, inArray, like, sql } from 'drizzle-orm';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import type { Account } from '../../types.js';
 import { AppError, ValidationError } from '../../errors/customErrors.js';
@@ -11,6 +11,7 @@ import {
 } from '../../lib/accounting/accountMappingConcepts.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
 import { idempotentTransaction } from '../../middleware/idempotency.js';
+import type { ControlAccountEntry, ControlAccountKind } from '../../lib/accounting/controlAccounts.js';
 
 /**
  * v9.0.199 (TD-550، B03-08): فهرست مفهوم‌ها، برچسب، کد پیش‌فرض و نوع‌های پذیرفته هر مفهوم در
@@ -72,6 +73,25 @@ function unreadableMappingError(what: string): AppError {
     'ACCOUNT_MAPPING_UNREADABLE',
   );
 }
+
+/** the mapped accounts that are control accounts, by kind (the account mapping page may move any of them) */
+const MAPPED_CONTROL_CONCEPTS: ReadonlyArray<[keyof ConceptualAccountMappingConfig, ControlAccountKind]> = [
+  ['tradeReceivablesAccountCode', 'party'],
+  ['tradePayablesAccountCode', 'party'],
+  ['wagesPayableAccountCode', 'payroll'],
+  ['employeeDeductionsPayableAccountCode', 'payroll'],
+  ['insurancePayableAccountCode', 'statutory'],
+  ['payrollTaxPayableAccountCode', 'statutory'],
+  ['eidiPayableAccountCode', 'eidi'],
+  ['employeeAdvanceAccountCode', 'advance'],
+  ['chequeReceivableAccountCode', 'cheque'],
+  ['chequeInCollectionAccountCode', 'cheque'],
+  ['chequeProtestAccountCode', 'cheque'],
+  ['chequePayableAccountCode', 'cheque'],
+  ['inventoryRawMaterialsCode', 'inventory'],
+  ['workInProgressCode', 'inventory'],
+  ['inventoryFinishedGoodsCode', 'inventory'],
+];
 
 export class AccountMappingService {
   /**
@@ -389,5 +409,47 @@ export class AccountMappingService {
    */
   static async getWorkInProgressAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('workInProgressCode', tx);
+  }
+
+  /**
+   * v11 phase 6.1b (M3, M6): the control accounts (`src/lib/accounting/controlAccounts.ts`) by account id: the ledger
+   * account of every live treasury account, the mapped party, payroll, statutory, eidi, advance, cheque and inventory
+   * accounts, and every posting account of the inventory group 14 (the ledger side of the stock health check,
+   * `inventoryLedgerValue.ts`). An account in two roles keeps the first kind found, treasury first.
+   */
+  static async controlAccountsById(tx: DbExecutor): Promise<Map<number, ControlAccountEntry>> {
+    const found = new Map<number, ControlAccountEntry>();
+    const add = (row: { id: number; code: string | null; name: string | null }, kind: ControlAccountKind) => {
+      if (!found.has(row.id)) found.set(row.id, { id: row.id, code: String(row.code ?? ''), name: String(row.name ?? ''), kind });
+    };
+
+    const treasury = await tx.select({ id: accounts.id, code: accounts.code, name: accounts.name })
+      .from(bankAccounts)
+      .innerJoin(accounts, eq(accounts.id, bankAccounts.accountId))
+      .where(eq(bankAccounts.isDeleted, 0));
+    for (const row of treasury) add(row, 'treasury');
+
+    // one read at a time on a transaction's connection (v10.0.262, OWN-01)
+    for (const [concept, kind] of MAPPED_CONTROL_CONCEPTS) {
+      const account = await this.resolveAccount(concept, tx);
+      if (account) add({ id: account.id, code: account.code, name: account.name }, kind);
+    }
+
+    const inventoryGroup = await tx.select({ id: accounts.id, code: accounts.code, name: accounts.name })
+      .from(accounts)
+      .where(and(
+        like(accounts.code, '14%'),
+        inArray(accounts.level, [...POSTING_ACCOUNT_LEVELS]),
+        eq(accounts.isDeleted, 0),
+        sql`COALESCE(${accounts.isActive}, 1) = 1`,
+      ));
+    for (const row of inventoryGroup) add(row, 'inventory');
+    return found;
+  }
+
+  /** the control accounts by code, for the voucher forms (`GET /accounting/control-accounts`) */
+  static async listControlAccounts(): Promise<ControlAccountEntry[]> {
+    const control = await this.controlAccountsById(orm);
+    return [...control.values()].sort((a, b) => a.code.localeCompare(b.code));
   }
 }

@@ -4,7 +4,7 @@ import { AccountMappingService } from '../../services/accounting/accountMapping.
 import { AccountingReportService } from '../../services/accounting/accountingReport.service.js';
 import { VoucherService } from '../../services/accounting/voucher.service.js';
 import { DocumentService } from '../../services/document.service.js';
-import { createTestItem } from '../fixtures/factories.js';
+import { testSupplier, createTestItem } from '../fixtures/factories.js';
 import { healthMetric } from './voucherReportScenarios.js';
 
 /**
@@ -33,7 +33,7 @@ export async function checkReportsConvertForeignRows(wh: string): Promise<string
   const buyer = `مشتری ارزی آزمون TD-260 ${Date.now()}`;
   const product = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
   await DocumentService.createDocument({
-    docType: 'receipt', inOut: 'in', status: 'final', date: '2026-07-01', user: 'inv',
+    docType: 'receipt', inOut: 'in', status: 'final', date: '2026-07-01', user: 'inv', buyerName: await testSupplier('تامین‌کننده آزمون انبار'),
     items: [{ itemId: product.id, quantity: 5, unitPrice: 100000, location: wh }],
   });
   const sale = (date: string, unitPrice: number, extra: Record<string, unknown>) => DocumentService.createDocument({
@@ -72,7 +72,7 @@ export async function checkReportsConvertForeignRows(wh: string): Promise<string
   const material = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
   const before = await healthMetric('inventory_reconciliation', 'ledgerValuation');
   await approveDocumentVouchers(await DocumentService.createDocument({
-    docType: 'receipt', inOut: 'in', status: 'final', date: '2026-07-05', user: 'inv', buyerName: 'تامین‌کننده ارزی آزمون TD-260',
+    docType: 'receipt', inOut: 'in', status: 'final', date: '2026-07-05', user: 'inv', buyerName: await testSupplier('تامین‌کننده ارزی آزمون TD-260'),
     currency: 'USD', exchangeRate: RATE, items: [{ itemId: material.id, quantity: 10, unitPrice: 2, location: wh }],
   }));
   const after = await healthMetric('inventory_reconciliation', 'ledgerValuation');

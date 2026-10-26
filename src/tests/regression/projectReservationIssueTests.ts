@@ -1,4 +1,5 @@
 import type { TestCaseResult } from '../types.js';
+import { testSupplier } from '../fixtures/factories.js';
 import type { Harness, ShouldRun } from '../security/workflowTestHarness.js';
 import { brief, fixture } from './documentEntryTests.js';
 import { createProject, globalSection, reservedOf, runReservationCases, storedReservation } from './stockReservationTests.js';
@@ -86,7 +87,7 @@ async function procurementOrderCase(h: Harness, wrong: string[]): Promise<string
     const approved = await pf.action(created.id, 'approve_request');
     if (approved.status !== 200) throw new Error(`setup: approve answered ${approved.status}`);
     const converted = await h.post(`/api/procurement/requisitions/${created.id}/convert-to-orders`, {
-      orderGroups: [{ supplierName: `P3 supplier ${h.tag}`, targetWarehouse: pf.wh, docType: 'receipt', status: 'draft',
+      orderGroups: [{ supplierName: await testSupplier(`P3 supplier ${h.tag}`), targetWarehouse: pf.wh, docType: 'receipt', status: 'draft',
         items: [{ itemId: raw.id, quantity: 4, unitPrice: 1_500, unit: 'عدد' }] }],
     });
     const orderId = Number(((converted.body as { data?: { createdDocuments?: Array<{ id?: unknown }> } })?.data?.createdDocuments ?? [])[0]?.id);

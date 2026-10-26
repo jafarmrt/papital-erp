@@ -6,7 +6,7 @@ import { DocumentService } from '../../services/document.service.js';
 import { ProjectBomAllocationService } from '../../services/inventory/projectBomAllocation.service.js';
 import { ProcurementService } from '../../services/procurement.service.js';
 import { ProjectService } from '../../services/projects.service.js';
-import { createTestCustomer, createTestItem, createTestUser } from '../fixtures/factories.js';
+import { testSupplier, createTestCustomer, createTestItem, createTestUser } from '../fixtures/factories.js';
 import { runBusinessYearSimulation } from '../simulation/businessYearSimulator.js';
 import type { InvariantScope } from './businessInvariants.js';
 import { accountIdByCode, outcomeProblems, raceBehindRowLock } from './concurrencyHarness.js';
@@ -54,7 +54,7 @@ async function orderedRequisition(itemId: number, quantity: number, unitPrice: n
   }, ADMIN);
   await ProcurementService.convertToPurchaseOrders({
     requisitionId: req.id,
-    orderGroups: [{ supplierName: 'cross-path supplier', targetWarehouse: wh, status: 'draft', items: [{ itemId, quantity, unitPrice }] }],
+    orderGroups: [{ supplierName: await testSupplier('cross-path supplier'), targetWarehouse: wh, status: 'draft', items: [{ itemId, quantity, unitPrice }] }],
   }, ADMIN);
   return req.id;
 }

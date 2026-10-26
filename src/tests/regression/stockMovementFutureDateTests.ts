@@ -1,4 +1,5 @@
 import request from 'supertest';
+import { testSupplier } from '../fixtures/factories.js';
 import { and, eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
@@ -82,7 +83,7 @@ export async function runStockMovementFutureDateTests(shouldRun: (id: string, ..
     let receiptError = '';
     try {
       await DocumentService.createDocument({
-        docType: 'receipt', status: 'final', inOut: 'in', date: tomorrow, user: 'td483', buyerName: 'td483',
+        docType: 'receipt', status: 'final', inOut: 'in', date: tomorrow, user: 'td483', buyerName: await testSupplier('td483'),
         location: code, items: [{ itemId: a.id, quantity: 1, unit_price: 1000, location: code }],
       });
     } catch (err) {

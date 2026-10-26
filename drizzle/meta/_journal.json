@@ -15,6 +15,13 @@
       "when": 1796566800000,
       "tag": "0001_server_timestamps_timestamptz",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1796576800000,
+      "tag": "0002_voucher_control_reason",
+      "breakpoints": true
     }
   ]
 }

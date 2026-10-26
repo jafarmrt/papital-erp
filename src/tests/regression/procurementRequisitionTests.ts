@@ -1,4 +1,5 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
+import { testSupplier } from '../fixtures/factories.js';
 import { orm } from '../../db/drizzle.js';
 import { createHarness, type Harness, type Row, type Session, type ShouldRun } from '../security/workflowTestHarness.js';
 
@@ -119,7 +120,7 @@ export async function fixture(h: Harness): Promise<Fixture> {
       // the body SplitOrderModal sends
       const res = await h.post(`/api/procurement/requisitions/${reqId}/convert-to-orders`, {
         orderGroups: [{
-          supplierName: `تامین‌کننده بسته ۱۰ ${h.tag}`, targetWarehouse: wh, docType: 'receipt', status: 'draft',
+          supplierName: await testSupplier(`تامین‌کننده بسته ۱۰ ${h.tag}`), targetWarehouse: wh, docType: 'receipt', status: 'draft',
           items: lines.map(l => ({ itemId: l.itemId, quantity: l.quantity, unitPrice: 1000, unit: 'عدد' })),
         }],
         ...extra,
@@ -325,7 +326,7 @@ async function deliveryWorkflowCase(h: Harness, wrong: string[]): Promise<string
   const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
   const legacy = await f.create({ title: `سفارش قدیمی ${h.tag}`, priority: 'normal', items: [formRow(x, 2, 1000)] });
   const legacyDoc = Number(await DocumentService.createDocument({
-    docType: 'receipt', status: 'draft', inOut: 'in', date: await businessTodayIsoDate(), user: 'آزمون بسته ۱۰', buyer_name: `تامین‌کننده قدیمی ${h.tag}`,
+    docType: 'receipt', status: 'draft', inOut: 'in', date: await businessTodayIsoDate(), user: 'آزمون بسته ۱۰', buyer_name: await testSupplier(`تامین‌کننده قدیمی ${h.tag}`),
     notes: `[تدارکات: درخواست ${legacy.code}]`, items: [{ itemId: x.id, quantity: 2, unit_price: 1000, location: f.wh }],
   } as never));
   const rows = (await f.requisition(legacy.id)).items.map(r => ({ ...r, orderedQty: 2, remainingQty: 0, status: 'ordered', linkedDocumentIds: [legacyDoc] }));

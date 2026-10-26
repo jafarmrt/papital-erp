@@ -42,7 +42,7 @@ import { assertDocumentStatus, assertRecordableDocument, stockDirectionOf } from
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
 import { consumesProjectReservation } from '../../lib/transactions/projectIssueTypes.js';
 import { assertDocumentNotInReview } from './documentReviewLock.js';
-import { assertReturnPartyOfInvoice, parseDocumentPartyId, resolveDocumentParty, returnInvoicePartyId } from './documentParty.js';
+import { assertReturnPartyOfInvoice, linkKnownDocumentParty, parseDocumentPartyId, resolveDocumentParty, returnInvoicePartyId } from './documentParty.js';
 import { documentAuditSnapshot, logDocumentCreated, type DocumentAuditActor, type DocumentAuditChange } from './documentAudit.js';
 import { assertLiveRecipient, documentRecipientInput } from './documentRecipient.js';
 import { idempotentTransaction } from '../../middleware/idempotency.js';
@@ -467,6 +467,12 @@ export class DocumentCreationService {
       });
       if (returnOfDocumentId !== null && requestedPartyId !== undefined) {
         await assertReturnPartyOfInvoice(tx, returnOfDocumentId, party.partyId);
+      }
+      // v11 phase 6.1b (C8, S16): a document registered as final follows the finalize rule (a known party or none)
+      if (docStatus === 'final') {
+        party.partyId = await linkKnownDocumentParty(tx, {
+          docType, partyId: party.partyId, buyerName: finalBuyerName, pricedLines: (lines || []).some(l => fin(l.unit_price ?? l.unitPrice ?? 0).isPositive()),
+        });
       }
       await assertLiveRecipient(tx, recipientPersonnelId);
 

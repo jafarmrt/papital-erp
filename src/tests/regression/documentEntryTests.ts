@@ -51,11 +51,14 @@ export interface Fixture {
 }
 
 export async function fixture(h: Harness): Promise<Fixture> {
-  const { createTestItem } = await import('../fixtures/factories.js');
+  const { createTestItem, testSupplier } = await import('../fixtures/factories.js');
   const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
   const { getDefaultWarehouseCode } = await import('../../services/inventory/warehouseResolver.js');
+  const { documentPartySide } = await import('../../lib/documents/documentPartyKind.js');
   const wh = String(await getDefaultWarehouseCode(orm));
   const today = await businessTodayIsoDate();
+  // v11 phase 6.1b (C8, S16): a priced purchase finalizes only with a supplier on the list
+  const supplier = await testSupplier(`P8 supplier ${h.tag}`);
   let serial = 0;
   return {
     wh,
@@ -76,7 +79,8 @@ export async function fixture(h: Harness): Promise<Fixture> {
       return Number(row?.qty ?? 0);
     },
     doc(docType, status, lines, extra = {}) {
-      return { docType, status, refNumber: 'auto', date: today, buyer_name: `P8 party ${h.tag}`, items: lines, ...extra };
+      const buyer = documentPartySide(docType) === 'supplier' ? supplier : `P8 party ${h.tag}`;
+      return { docType, status, refNumber: 'auto', date: today, buyer_name: buyer, items: lines, ...extra };
     },
   };
 }

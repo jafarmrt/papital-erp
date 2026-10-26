@@ -12,7 +12,7 @@ import { FiscalYearService } from '../../services/accounting/fiscalYear.service.
 import { getDefaultWarehouseCode } from '../../services/inventory/warehouseResolver.js';
 import { getErrorMessage } from '../../utils/formatters.js';
 import { fin } from '../../lib/financialDecimal.js';
-import { createTestItem } from '../fixtures/factories.js';
+import { testSupplier, createTestItem } from '../fixtures/factories.js';
 import { runBusinessYearSimulation, SimulationResult } from '../simulation/businessYearSimulator.js';
 import { classifyFinding, KNOWN_FINDINGS } from '../simulation/knownFindings.js';
 import { checkAuditMustBeFinal, checkExcelAdjustmentVoucher, checkExcelWacChangeRefused, checkStockCountVoucher, probeExcelWacOverwrite } from '../invariants/stockAdjustmentScenarios.js';
@@ -65,7 +65,7 @@ function push(results: TestCaseResult[], id: string, name: string, start: number
 async function probeFiscalClosingIgnoresDrafts(wh: string): Promise<boolean> {
   const item = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
   await DocumentService.createDocument({
-    docType: 'receipt', inOut: 'in', status: 'final', date: '2011-04-01', user: 'inv', buyerName: 'تامین‌کننده آزمون بستن سال',
+    docType: 'receipt', inOut: 'in', status: 'final', date: '2011-04-01', user: 'inv', buyerName: await testSupplier('تامین‌کننده آزمون بستن سال'),
     items: [{ itemId: item.id, quantity: 5, unitPrice: 100000, location: wh }],
   });
   const invoiceId = await DocumentService.createDocument({
@@ -98,7 +98,7 @@ async function probePurchaseIgnoresMapping(wh: string): Promise<boolean> {
     await AccountMappingService.saveMappings({ inventoryRawMaterialsCode: code });
     const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
     const receiptId = await DocumentService.createDocument({
-      docType: 'receipt', inOut: 'in', status: 'final', date: '2025-04-01', user: 'inv', buyerName: 'تامین‌کننده آزمون نگاشت',
+      docType: 'receipt', inOut: 'in', status: 'final', date: '2025-04-01', user: 'inv', buyerName: await testSupplier('تامین‌کننده آزمون نگاشت'),
       items: [{ itemId: item.id, quantity: 3, unitPrice: 100000, location: wh }],
     });
     const lines = await pool.query<{ account_id: number; debit: string }>(
@@ -117,7 +117,7 @@ async function probeAccountCardMixesCurrencies(wh: string): Promise<boolean> {
   const buyer = `مشتری ارزی آزمون ${Date.now()}`;
   const item = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
   await DocumentService.createDocument({
-    docType: 'receipt', inOut: 'in', status: 'final', date: '2025-04-01', user: 'inv',
+    docType: 'receipt', inOut: 'in', status: 'final', date: '2025-04-01', user: 'inv', buyerName: await testSupplier('تامین‌کننده آزمون انبار'),
     items: [{ itemId: item.id, quantity: 5, unitPrice: 100000, location: wh }],
   });
   const invoiceId = await DocumentService.createDocument({
@@ -153,7 +153,7 @@ async function checkVoidDraftVoucher(wh: string): Promise<string[]> {
   const problems: string[] = [];
   const item = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
   await DocumentService.createDocument({
-    docType: 'receipt', inOut: 'in', status: 'final', date: '2025-05-01', user: 'inv',
+    docType: 'receipt', inOut: 'in', status: 'final', date: '2025-05-01', user: 'inv', buyerName: await testSupplier('تامین‌کننده آزمون انبار'),
     items: [{ itemId: item.id, quantity: 10, unitPrice: 100000, location: wh }],
   });
 
@@ -207,7 +207,7 @@ async function checkClosingRefusesDrafts(wh: string): Promise<string[]> {
   const year = CLOSING_PROBE_YEAR + 1; // ۱۳۹۱: جدا از سال آزمون خط پایه
   const item = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
   await DocumentService.createDocument({
-    docType: 'receipt', inOut: 'in', status: 'final', date: '2012-05-01', user: 'inv',
+    docType: 'receipt', inOut: 'in', status: 'final', date: '2012-05-01', user: 'inv', buyerName: await testSupplier('تامین‌کننده آزمون انبار'),
     items: [{ itemId: item.id, quantity: 5, unitPrice: 100000, location: wh }],
   });
   const invoiceId = await DocumentService.createDocument({

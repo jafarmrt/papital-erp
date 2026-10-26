@@ -1,4 +1,5 @@
 import request from 'supertest';
+import { testSupplier } from '../fixtures/factories.js';
 import { eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
@@ -40,7 +41,7 @@ export async function runActorDisplayNameTests(shouldRun: (id: string, ...extra:
     const wh2 = await createTestWarehouse();
     const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
     const receiptId = await DocumentService.createDocument({
-      docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'td1132', buyerName: 'td1132',
+      docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'td1132', buyerName: await testSupplier('td1132'),
       location: main, items: [{ itemId: item.id, quantity: 5, unit_price: 1000, location: main }],
     });
     docIds.push(Number(receiptId));

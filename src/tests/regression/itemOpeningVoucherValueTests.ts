@@ -1,4 +1,5 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { testSupplier } from '../fixtures/factories.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { items, journalVoucherItems, journalVouchers, transactions, workflowDefinitions } from '../../db/schema.js';
@@ -50,8 +51,9 @@ export async function runItemOpeningVoucherValueTests(shouldRun: (id: string, ..
       itemIds.push(created.insertedId);
       return created.insertedId;
     };
+    const supplier = await testSupplier('td481');
     const receipt = (itemId: number) => DocumentService.createDocument({
-      docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'td481', buyerName: 'td481',
+      docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'td481', buyerName: supplier,
       location: main, items: [{ itemId, quantity: 5, unit_price: 200, location: main }],
     });
     const openingAmount = async (itemId: number) => {

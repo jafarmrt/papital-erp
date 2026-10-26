@@ -2,6 +2,7 @@ import { orm, pool } from '../../db/drizzle.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { DocumentService } from '../../services/document.service.js';
 import { checkBusinessInvariants, type InvariantScope } from './businessInvariants.js';
+import { testSupplier } from '../fixtures/factories.js';
 
 /** ابزارهای مشترک سناریوهای سخت‌گیرانه سوئیت business_invariants (v8.0.3، در v8.0.4 جدا شد) */
 
@@ -36,7 +37,7 @@ export async function invariantProblems(scope: InvariantScope, when: string): Pr
 /** رسید نهایی؛ allowBackdate همان مجوز «ثبت سند انبار با تاریخ گذشته» است (v8.0.4) */
 export async function receive(itemId: number, quantity: number, unitPrice: number, wh: string, date: string, allowBackdate = false): Promise<number> {
   const { docId } = await DocumentService.createDocumentWithDetails({
-    docType: 'receipt', inOut: 'in', status: 'final', date, user: 'inv', buyerName: 'تامین‌کننده آزمون انبار',
+    docType: 'receipt', inOut: 'in', status: 'final', date, user: 'inv', buyerName: await testSupplier('تامین‌کننده آزمون انبار'),
     items: [{ itemId, quantity, unitPrice, location: wh }],
   }, { allowBackdate });
   return docId;

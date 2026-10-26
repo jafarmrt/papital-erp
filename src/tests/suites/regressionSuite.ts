@@ -37,7 +37,7 @@ import {
   TreasuryTxCandidate
 } from '../../components/accounting/reconciliation/bankStatementMatcher.js';
 import { LockHierarchyLevel, sortIdsForLocking, validateLockOrder } from '../../lib/lockOrder.js';
-import { seedFixtureItemStocks } from '../fixtures/factories.js';
+import { seedFixtureItemStocks, testSupplier } from '../fixtures/factories.js';
 import { ItemWarehouseStockService } from '../../services/inventory/itemWarehouseStock.service.js';
 import type { CreateDocumentInput } from '../../services/documents/types.js';
 import { miscContraAccountId } from '../fixtures/treasuryParty.js';
@@ -1700,7 +1700,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       status: 'final',
       refNumber: `REC-TD144-${Date.now()}`,
       date: '2026-09-27',
-      buyerName: 'تامین‌کننده تستی آزمون',
+      buyerName: await testSupplier('تامین‌کننده تستی آزمون'),
       user: 'تستر سیستم',
       isDeleted: 0
     }).returning();
@@ -3676,7 +3676,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const item = await createTestItem({ stocks: {}, currentStock: 0, weightedAverageCost: 0 });
       const today = await businessTodayIsoDate();
       const receiptId = await DocumentService.createDocument({
-        docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'test-agent', buyerName: 'تأمین‌کننده آزمون TD-201',
+        docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'test-agent', buyerName: await testSupplier('تأمین‌کننده آزمون TD-201'),
         location: w1.code, items: [{ itemId: item.id, quantity: 10, unit_price: 50000, location: w1.code }]
       });
       createdDocIds.push(receiptId);
@@ -6242,8 +6242,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const today = await businessTodayIsoDate();
 
       // الف) دو رسید با قیمت ۱۷ رقمی: WAC = (۳ × ...۴۵۶۷ + ۱ × ...۴۵۷۱) ÷ ۴ = ...۴۵۶۸ دقیق
+      const supplier = await testSupplier('تأمین‌کننده آزمون P2-6');
       const receipt = (qty: number, unitPrice: string) => DocumentService.createDocument({
-        docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'test-agent', buyerName: 'تأمین‌کننده آزمون P2-6',
+        docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'test-agent', buyerName: supplier,
         location: w1.code, items: [{ itemId: item.id, quantity: qty, unit_price: unitPrice, location: w1.code }]
       });
       createdDocIds.push(await receipt(3, '1234567890123.4567'));
@@ -6259,7 +6260,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
 
       // ب) جمع سند با Decimal: ۰٫۱ + ۰٫۲ = ۰٫۳ (نه 0.30000000000000004) و خروجی API عدد
       const smallId = await DocumentService.createDocument({
-        docType: 'receipt', status: 'draft', inOut: 'in', date: today, user: 'test-agent', buyerName: 'تأمین‌کننده آزمون P2-6',
+        docType: 'receipt', status: 'draft', inOut: 'in', date: today, user: 'test-agent', buyerName: await testSupplier('تأمین‌کننده آزمون P2-6'),
         location: w1.code, items: [
           { itemId: item.id, quantity: 1, unit_price: 0.1, location: w1.code },
           { itemId: item.id, quantity: 1, unit_price: 0.2, location: w1.code },
@@ -6328,7 +6329,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
 
       // الف) رسید قطعی ۲ عدد × ۱۵۰ دلار با نرخ ۶۰۰٬۰۰۰ ← WAC = ۹۰٬۰۰۰٬۰۰۰ ریال
       const docA = await DocumentService.createDocument({
-        docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'test-agent', buyerName: 'تأمین‌کننده آزمون TD-227',
+        docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'test-agent', buyerName: await testSupplier('تأمین‌کننده آزمون TD-227'),
         currency: 'USD', exchangeRate: 600000, location: w1.code,
         items: [{ itemId: item.id, quantity: 2, unit_price: 150, location: w1.code }]
       });
@@ -6342,7 +6343,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
 
       // ب) پیش‌نویس ۲ عدد × ۱۰۰ دلار، نهایی‌سازی با نرخ ۵۰۰٬۰۰۰ ← WAC = (۱۸۰M + ۱۰۰M) ÷ ۴ = ۷۰٬۰۰۰٬۰۰۰
       const docB = await DocumentService.createDocument({
-        docType: 'receipt', status: 'draft', inOut: 'in', date: today, user: 'test-agent', buyerName: 'تأمین‌کننده آزمون TD-227',
+        docType: 'receipt', status: 'draft', inOut: 'in', date: today, user: 'test-agent', buyerName: await testSupplier('تأمین‌کننده آزمون TD-227'),
         currency: 'USD', exchangeRate: 400000, location: w1.code,
         items: [{ itemId: item.id, quantity: 2, unit_price: 100, location: w1.code }]
       });
@@ -6508,7 +6509,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       await orm.transaction(async (tx) => {
         documentId = await DocumentService.createDocument({
           docType: 'receipt', status: 'draft', inOut: 'in', date: await businessTodayIsoDate(), user: 'test-agent',
-          buyerName: 'تأمین‌کننده آزمون P3-5',
+          buyerName: await testSupplier('تأمین‌کننده آزمون P3-5'),
           items: Array.from({ length: 20 }, (_, i) => ({ itemId: item.id, quantity: i + 1, unit_price: 1000 })),
           externalTx: countingTx(tx, docCounts),
         });
@@ -6936,9 +6937,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const item = await createTestItem({ currentStock: 50, stocks: { [defWh.code]: 50 }, weightedAverageCost: 20000 });
       const other = await createTestItem({ currentStock: 50, stocks: { [defWh.code]: 50 }, weightedAverageCost: 30000 });
       const today = await businessTodayIsoDate();
+      const buyer = await testSupplier('خریدار آزمون TD-230', 'both');
       const create = async (input: Partial<CreateDocumentInput>) => {
         const id = await DocumentService.createDocument({
-          docType: 'return', status: 'final', date: today, user: 'test-agent', buyerName: 'خریدار آزمون TD-230',
+          docType: 'return', status: 'final', date: today, user: 'test-agent', buyerName: buyer,
           location: defWh.code, items: [{ itemId: item.id, quantity: 2, unit_price: 100000, location: defWh.code }], ...input
         });
         createdDocIds.push(id);
@@ -11133,6 +11135,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v11 phase 6.1a: input guards (M9 manual voucher dates, M12 cheque and payslip date order, M16/S10/S12 number bounds, M15 close preview decimals, C10 work logs)
   const { runInputGuardsV11Tests } = await import('../regression/inputGuardsV11Tests.js');
   results.push(...await runInputGuardsV11Tests(shouldRun));
+  // v11 phase 6.1b: control accounts (M3 manual voucher rows and their detail, M6 treasury counter account) and known parties (C8/S16 documents and orders, C5 CRM)
+  const { runControlAccountsV11Tests } = await import('../regression/controlAccountsV11Tests.js');
+  results.push(...await runControlAccountsV11Tests(shouldRun));
 
   return results;
 }

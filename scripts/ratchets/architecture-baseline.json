@@ -13,7 +13,7 @@
     "src/services/accounting/fiscalYearOrder.ts": 1,
     "src/services/accounting/payrollPayment.service.ts": 1,
     "src/services/accounting/treasury/bankAccount.service.ts": 1,
-    "src/services/accounting/treasury/partyContraAccount.ts": 3,
+    "src/services/accounting/treasury/partyContraAccount.ts": 2,
     "src/services/accounting/treasury/treasuryTransaction.service.ts": 1,
     "src/services/accounting/voucher.service.ts": 2,
     "src/services/accounting/voucherNumberIntegrity.ts": 2,

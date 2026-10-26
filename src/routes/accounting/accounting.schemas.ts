@@ -14,6 +14,8 @@ import { PERSONNEL_PURPOSES } from '../../lib/treasury/partyPurpose.js';
 import { CHEQUE_STATUSES } from '../../lib/treasury/chequeTransitions.js';
 import { isReservedVoucherReference, MANUAL_CLOSING_TYPE_MESSAGE, RESERVED_REFERENCE_MESSAGE } from '../../lib/accounting/manualVoucherRules.js';
 import { ACCOUNT_CODE_FORMAT_MESSAGE, ACCOUNT_CODE_PATTERN } from '../../lib/accounting/accountCode.js';
+import { CONTROL_REASON_MAX } from '../../lib/accounting/controlAccounts.js';
+import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /** query پس از validate: میدل‌ور validate مقدار req.query را با خروجی parse شده Zod جایگزین می‌کند. */
 export type ValidatedQuery<S extends z.ZodTypeAny> = z.infer<S> extends { query?: infer Q } ? Partial<NonNullable<Q>> : never;
@@ -140,6 +142,9 @@ const isVoucherBalanced = (rows: readonly CurrencyBalanceRow[], voucherCurrency?
 const manualVoucherType = z.enum(['general', 'opening', 'closing', 'sales', 'purchase', 'treasury', 'payroll', 'adjustment', 'settlement'])
   .refine(type => type !== 'closing', MANUAL_CLOSING_TYPE_MESSAGE);
 
+// v11 phase 6.1b (M3): why the voucher posts on a control account; the service asks for it only then
+const controlReasonField = z.string().max(CONTROL_REASON_MAX, `دلیل ثبت روی حساب کنترلی حداکثر ${toPersianDigits(String(CONTROL_REASON_MAX))} نویسه است`).optional();
+
 export const createVoucherSchema = z.object({
   body: z.object({
     date: z.string().min(1, 'تاریخ سند الزامی است'),
@@ -152,6 +157,7 @@ export const createVoucherSchema = z.object({
     referenceNumber: z.string().optional().refine(ref => !isReservedVoucherReference(ref), RESERVED_REFERENCE_MESSAGE),
     currency: manualVoucherCurrency,
     attachments: z.array(z.any()).optional(),
+    controlReason: controlReasonField,
     items: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند حسابداری الزامی است')
   }).refine((data) => isVoucherBalanced(data.items, data.currency), {
     message: 'سند حسابداری تراز نیست؛ مجموع مبالغ بدهکار و بستانکار باید برابر و بزرگتر از صفر باشند',
@@ -170,6 +176,7 @@ export const updateVoucherSchema = z.object({
     voucherType: manualVoucherType.optional(),
     currency: manualVoucherCurrency,
     attachments: z.array(z.any()).optional(),
+    controlReason: controlReasonField,
     items: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند حسابداری الزامی است').optional(),
     // v9.0.295 (TD-555، B03-13): نسخه‌ای که ویرایشگر خوانده است؛ نسخه کهنه ۴۰۹ OCC_CONFLICT. پیش‌تر ذخیره دوم دو حسابدار
     // ذخیره اول را بی‌صدا پاک می‌کرد

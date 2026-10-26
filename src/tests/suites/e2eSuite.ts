@@ -1,7 +1,7 @@
 import { money } from '../../lib/money.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { ensureTestDatabaseReady, cleanupAllTestFixtures } from '../fixtures/dbTestHelper.js';
-import { createTestUser, createTestItem, createTestWorkflow } from '../fixtures/factories.js';
+import { testSupplier, createTestUser, createTestItem, createTestWorkflow } from '../fixtures/factories.js';
 import { DocumentService } from '../../services/document.service.js';
 import { AccountingService } from '../../services/accounting.service.js';
 import { VoucherSyncService } from '../../services/accounting/voucherSync.service.js';
@@ -73,7 +73,7 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
       docType: 'purchase',
       type: 'purchase',
       refNumber: `PURCHASE-E2E-${Date.now()}`,
-      buyerName: 'تامین‌کننده فلزات گرانبها',
+      buyerName: await testSupplier('تامین‌کننده فلزات گرانبها'),
       status: 'final',
       inOut: 'in',
       date: new Date().toISOString().split('T')[0],

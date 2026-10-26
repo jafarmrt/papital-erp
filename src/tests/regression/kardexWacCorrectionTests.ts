@@ -1,4 +1,5 @@
 import request from 'supertest';
+import { testSupplier } from '../fixtures/factories.js';
 import { and, eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
@@ -37,7 +38,7 @@ export async function runKardexWacCorrectionTests(shouldRun: (id: string, ...ext
     const a = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
     itemIds.push(a.id);
     await DocumentService.createDocument({
-      docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'td487', buyerName: 'td487',
+      docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'td487', buyerName: await testSupplier('td487'),
       location: main, items: [{ itemId: a.id, quantity: 10, unit_price: 100, location: main }],
     });
     // a WAC that no longer matches the Kardex (what B06-02 / B06-09 produced)

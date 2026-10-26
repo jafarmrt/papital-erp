@@ -16,15 +16,16 @@ export async function runAccessPackageTwoDocumentTests(shouldRun: ShouldRun): Pr
       name: 'v9.0.108: recording and finalizing a document asks the permission of its type and status, never the role code; the workflow approval step asks the same (TD-541, TD-771)',
       details: 'a custom role with warehouse.in records a final receipt but no waste draft and cannot finalize a waste; a sales role keeps its draft a draft and cannot finalize its proforma; documents.finalize records and finalizes sales documents; audit.apply records a stock count and the seed accountant no longer does; the workflow approval step needs documents.finalize for a sales document',
     }, async (h, wrong) => {
-      const { createTestItem, createTestWorkflow } = await import('../fixtures/factories.js');
+      const { createTestItem, createTestWorkflow, testSupplier } = await import('../fixtures/factories.js');
       const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
       const { getDefaultWarehouseCode } = await import('../../services/inventory/warehouseResolver.js');
       const { draftSalesDocument } = await import('./workflowTestHarness.js');
       const wh = String(await getDefaultWarehouseCode(orm));
       const today = await businessTodayIsoDate();
       const item = await createTestItem({ type: 'product', stocks: { [wh]: 100 }, weightedAverageCost: 10_000, code: `P2DOC-${h.tag}` } as never);
+      const party = await testSupplier(`طرف حساب ${h.tag}`, 'both');
       const body = (docType: string, status: string, extra: Record<string, unknown> = {}) => ({
-        docType, status, refNumber: 'auto', date: today, buyer_name: `طرف حساب ${h.tag}`,
+        docType, status, refNumber: 'auto', date: today, buyer_name: party,
         items: [{ itemId: item.id, quantity: 1, unit_price: 20_000, location: wh }], ...extra,
       });
       const stored = async (id: unknown) => (await h.q(`SELECT type, status FROM documents WHERE id = $1`, [Number(id)]))[0];

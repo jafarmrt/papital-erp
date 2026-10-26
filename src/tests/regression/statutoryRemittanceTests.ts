@@ -194,9 +194,20 @@ export async function runStatutoryRemittanceTests(shouldRun: ShouldRun): Promise
         if (refused.status !== 422 || codeOf(refused) !== code) problems.push(`a penalty on ${label} answered ${brief(refused)}, expected 422 ${code}`);
       }
 
-      const legacyPayment = () => admin.post('/api/accounting/treasury', {
-        type: 'payment', method: 'bank_transfer', amount: 200_000, bankAccountId: bankId, partyType: 'other', partyName: 'TD-1243 social security', contraAccountId: insuranceAccountId, date: PAY_DATE,
-      });
+      // v11 phase 6.1b (M6): the treasury form now refuses 3204 as a contra account, so the legacy payment is stored on a
+      // miscellaneous account and its rows are moved to 3204, as a payment saved before that rule
+      const miscAccountId = await miscContraAccountId();
+      const legacyPayment = async () => {
+        const res = await admin.post('/api/accounting/treasury', {
+          type: 'payment', method: 'bank_transfer', amount: 200_000, bankAccountId: bankId, partyType: 'other', partyName: 'TD-1243 social security', contraAccountId: miscAccountId, date: PAY_DATE,
+        });
+        const id = Number(field(res, 'id'));
+        if (res.status === 201) {
+          await q('UPDATE treasury_transactions SET contra_account_id = $1 WHERE id = $2', [insuranceAccountId, id]);
+          await q('UPDATE journal_voucher_items SET account_id = $1 WHERE account_id = $2 AND voucher_id = (SELECT voucher_id FROM treasury_transactions WHERE id = $3)', [insuranceAccountId, miscAccountId, id]);
+        }
+        return res;
+      };
       const legacy = await legacyPayment();
       if (legacy.status !== 201) throw new Error(`setup: legacy payment ${brief(legacy)}`);
       const listed = await health();
@@ -218,7 +229,7 @@ export async function runStatutoryRemittanceTests(shouldRun: ShouldRun): Promise
 
       // the correction voucher the health check asks for moves the payment to the person and clears both warnings
       const correction = await admin.post('/api/accounting/vouchers', {
-        date: PAY_DATE, description: 'TD-1243 correction', items: [
+        date: PAY_DATE, description: 'TD-1243 correction', controlReason: 'TD-1243 legacy payment moved to the person', items: [
           { accountId: insuranceAccountId, detailedType: 'personnel', detailedId: high, detailedName: 'TD-1243 high', debit: '200000', credit: '0' },
           { accountId: insuranceAccountId, detailedType: 'none', debit: '0', credit: '200000' },
         ],

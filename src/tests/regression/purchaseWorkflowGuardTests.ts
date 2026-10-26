@@ -7,7 +7,7 @@ import { upgradeLegacySeedGuards } from '../../services/workflow/seedGuardUpgrad
 import { PURCHASE_REQUISITION_GUARD_UPGRADE } from '../../services/workflow/purchaseWorkflowGuards.js';
 import { buildUnguardedPurchaseActionHealthTest, findUnguardedPurchaseActions } from '../../services/accounting/unguardedPurchaseActionHealth.js';
 import { buildUnknownPermissionActionHealthTest, findUnknownPermissionActions } from '../../services/accounting/workflowUnknownPermissionHealth.js';
-import { createTestRole, createTestUser } from '../fixtures/factories.js';
+import { testSupplier, createTestRole, createTestUser } from '../fixtures/factories.js';
 import { TestCaseResult } from '../types.js';
 import { type ShouldRun, inFiscalSandbox, runCase } from './fiscalClosingTests.js';
 
@@ -176,7 +176,7 @@ export async function runPurchaseWorkflowGuardTests(shouldRun: ShouldRun): Promi
       expect(created.status === 201, `requisition create returned ${brief(created)}`);
       const id = Number(created.body?.data?.id);
       const converted = await manager.post(`/api/procurement/requisitions/${id}/convert-to-orders`, {
-        orderGroups: [{ supplierName: 'Duties test supplier', docType: 'receipt', status: 'draft', items: [{ itemId: 1, quantity: 1, unitPrice: 1000 }] }],
+        orderGroups: [{ supplierName: await testSupplier('Duties test supplier'), docType: 'receipt', status: 'draft', items: [{ itemId: 1, quantity: 1, unitPrice: 1000 }] }],
       });
       expect(converted.status === 409 && converted.body?.code === 'REQUISITION_NOT_APPROVED', `manager converting a pending requisition returned ${brief(converted)}`);
       expect(await stepOf(id) === 'pending', 'refused convert moved the requisition');

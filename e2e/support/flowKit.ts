@@ -45,6 +45,17 @@ export async function adminApi(): Promise<AdminApi> {
   };
 }
 
+/**
+ * v11 phase 6.1b (C8, S16): a priced purchase receipt finalizes only with a supplier on the party list, so a flow that
+ * brings stock in creates its supplier first and sends its id.
+ */
+export async function createSupplier(api: AdminApi, name: string): Promise<{ id: number; name: string }> {
+  const created = dataOf(await api.send('post', '/api/customers', {
+    name, phone: `0935${String(Date.now()).slice(-7)}`, partyType: 'supplier',
+  }));
+  return { id: Number(created.id), name };
+}
+
 /** Unwraps `{ data: x }` answers and plain ones alike. */
 export function dataOf<T = Json>(body: Json): T {
   return ('data' in body && body.data !== null && typeof body.data === 'object' ? body.data : body) as T;

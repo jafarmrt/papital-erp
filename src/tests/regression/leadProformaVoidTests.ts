@@ -4,6 +4,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { crmActivities, crmLeads } from '../../db/schema.js';
 
+import { testSupplier } from '../fixtures/factories.js';
 /**
  * بسته ۹ (مشتریان و CRM) — ابطال پیش‌فاکتور پرونده فروش در مسیر واقعی Express؛ روی کد پیشین قرمز است.
  */
@@ -91,7 +92,7 @@ export async function runLeadProformaVoidTests(shouldRun: (id: string, ...extra:
     // ۴) ابطال ردشده (رسیدی که کالایش فروخته شده، TD-265) پرونده را دست نمی‌زند: آزادسازی در همان تراکنش ابطال است
     const fresh = await createTestItem({ type: 'product' });
     const receiptId = await DocumentService.createDocument({
-      docType: 'receipt', inOut: 'in', status: 'final', date: today, user: 'td423', buyerName: 'تامین td423',
+      docType: 'receipt', inOut: 'in', status: 'final', date: today, user: 'td423', buyerName: await testSupplier('تامین td423'),
       items: [{ itemId: fresh.id, quantity: 3, unitPrice: 1000, location: wh }],
     } as Parameters<typeof DocumentService.createDocument>[0]);
     await DocumentService.createDocument({

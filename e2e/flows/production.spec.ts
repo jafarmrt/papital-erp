@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import {
-  adminApi, businessToday, closeDb, dataOf, db, expectBalanced, netByAccount, signIn, uniqueSuffix, voucherRowsOf,
+  adminApi, businessToday, closeDb, createSupplier, dataOf, db, expectBalanced, netByAccount, signIn, uniqueSuffix, voucherRowsOf,
   type AdminApi, type Json,
 } from '../support/flowKit';
 
@@ -50,9 +50,10 @@ async function prepare(): Promise<void> {
   const raw = await admin.send('post', '/api/items', {
     type: 'raw_material', name: `مهره آزمون تولید ${suffix}`, code: `PWR-${suffix}`, unit: 'عدد', category: 'مهره',
   });
+  const supplier = await createSupplier(admin, `تأمین‌کننده آزمون تولید ${suffix}`);
   await admin.send('post', '/api/documents', {
     docType: 'receipt', inOut: 'in', status: 'final', refNumber: `PWR-REC-${suffix}`, date: today,
-    buyerName: 'تأمین‌کننده آزمون تولید', items: [{ itemId: raw.id, quantity: RECEIPT_QTY, unit_price: RAW_UNIT_COST }],
+    partyId: supplier.id, buyerName: supplier.name, items: [{ itemId: raw.id, quantity: RECEIPT_QTY, unit_price: RAW_UNIT_COST }],
   });
   const product = await admin.send('post', '/api/items', {
     type: 'product', name: `گردنبند آزمون تولید ${suffix}`, code: `PWP-${suffix}`, unit: 'عدد', category: 'گردنبند',

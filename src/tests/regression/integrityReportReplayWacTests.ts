@@ -1,4 +1,5 @@
 import { eq, inArray } from 'drizzle-orm';
+import { testSupplier } from '../fixtures/factories.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { items } from '../../db/schema.js';
@@ -29,8 +30,9 @@ export async function runIntegrityReportReplayWacTests(shouldRun: (id: string, .
     const main = (await getDefaultWarehouseCode(orm)) as string;
     const a = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
     itemIds.push(a.id);
+    const supplier = await testSupplier('td486', 'both');
     const move = (docType: 'receipt' | 'remittance', quantity: number, price: number) => DocumentService.createDocument({
-      docType, status: 'final', inOut: docType === 'receipt' ? 'in' : 'out', date: today, user: 'td486', buyerName: 'td486',
+      docType, status: 'final', inOut: docType === 'receipt' ? 'in' : 'out', date: today, user: 'td486', buyerName: supplier,
       location: main, items: [{ itemId: a.id, quantity, unit_price: price, location: main }],
     });
     await move('receipt', 10, 100);

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import {
-  adminApi, businessToday, closeDb, dataOf, db, expectBalanced, netByAccount, signIn, uniqueSuffix, voucherRowsOf,
+  adminApi, businessToday, closeDb, createSupplier, dataOf, db, expectBalanced, netByAccount, signIn, uniqueSuffix, voucherRowsOf,
   type AdminApi, type Json, type VoucherRow,
 } from '../support/flowKit';
 import { toPersianDigits } from '../../src/utils/persianNumber';
@@ -57,9 +57,10 @@ async function prepare(api: AdminApi): Promise<Setup> {
   const item = dataOf(await api.send('post', '/api/items', {
     type: 'product', name: `گوشواره خزانه ${suffix}`, code: `TR-${suffix}`, unit: 'عدد', category: 'انگشتر',
   }));
+  const supplier = await createSupplier(api, `تأمین‌کننده خزانه آزمون ${suffix}`);
   await api.send('post', '/api/documents', {
     docType: 'receipt', inOut: 'in', status: 'final', refNumber: `TR-REC-${suffix}`, date: today.jalali,
-    buyerName: 'تأمین‌کننده خزانه آزمون', items: [{ itemId: item.id, quantity: 10, unit_price: 400_000 }],
+    partyId: supplier.id, buyerName: supplier.name, items: [{ itemId: item.id, quantity: 10, unit_price: 400_000 }],
   });
   const invoice = dataOf(await api.send('post', '/api/documents', {
     docType: 'invoice', inOut: 'out', status: 'final', refNumber: 'auto', date: today.jalali, partyId: customer.id, buyerName: customerName,

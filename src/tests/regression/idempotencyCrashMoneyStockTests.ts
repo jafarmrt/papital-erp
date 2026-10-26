@@ -4,6 +4,7 @@ import { miscContraAccountId } from '../fixtures/treasuryParty.js';
 import { TestCaseResult } from '../types.js';
 import { adminClient, brief, keyState, lapseLock, runCase, tagOf, withCrashAfterCommit, type ShouldRun } from './idempotencyCrashTests.js';
 
+import { testSupplier } from '../fixtures/factories.js';
 /**
  * 10.3 (ARCH review finding 1): every money and stock write completes its resubmission key in its own transaction, as
  * payroll and piecework have since v10.2.35. Before, the key was completed only after the answer was ready, so a process
@@ -121,7 +122,7 @@ export async function runIdempotencyCrashMoneyStockTests(shouldRun: ShouldRun): 
         const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
         return {
           url: '/api/documents',
-          body: { docType: 'receipt', inOut: 'in', status: 'final', refNumber: 'auto', date: today, buyer_name: 'ERP-TEST-MARKER crash supplier', location: main, items: [{ itemId: item.id, quantity: 5, unit_price: 1_000, location: main }] },
+          body: { docType: 'receipt', inOut: 'in', status: 'final', refNumber: 'auto', date: today, buyer_name: await testSupplier('ERP-TEST-MARKER crash supplier'), location: main, items: [{ itemId: item.id, quantity: 5, unit_price: 1_000, location: main }] },
           records: () => count(`SELECT count(DISTINCT di.document_id)::text AS n FROM document_items di JOIN documents d ON d.id = di.document_id WHERE di.item_id = $1 AND d.type = 'receipt'`, [item.id]),
           after: async () => { const stock = await stockOf(item.id, main); return stock === 5 ? null : `the stock is ${stock}, expected 5`; },
         };
