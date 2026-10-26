@@ -217,6 +217,15 @@ export async function runFiscalClosingTests(shouldRun: ShouldRun): Promise<TestC
         }
       };
 
+      // legacy rows the old form saved: a manual «CLOSING-1395» and a manual opening saved as closing type; written first so the
+      // books reach 1395 before the manual posts (v11 phase 6.1a: a manual date before the earliest fiscal year is refused)
+      const legacyClosingRef = await VoucherService.createJournalVoucher({
+        date: '2016-06-01', voucherType: 'general', status: 'approved', description: 'TD-559 legacy manual CLOSING ref', referenceModule: 'manual', referenceNumber: `CLOSING-${year}`,
+        items: [{ accountId: acc['1001'], debit: 2000, credit: 0 }, { accountId: acc['5001'], debit: 0, credit: 2000 }],
+      });
+      const legacyOpening = await postApproved(firstDay, acc['1001'], acc['4001'], 3000, 'TD-559 legacy opening saved as closing');
+      await orm.update(journalVouchers).set({ voucherType: 'closing' }).where(inArray(journalVouchers.id, [legacyClosingRef.id, legacyOpening]));
+
       await refused('manual closing type', await admin.post('/api/accounting/vouchers', body({ voucherType: 'closing' })), 400, 'بستن سال مالی');
       for (const ref of [' closing-1395', 'REV-V77', 'Corr-V5', 'OPENING-1396']) {
         await refused(`reserved reference «${ref}»`, await admin.post('/api/accounting/vouchers', body({ referenceNumber: ref })), 400, 'رزروشده');
@@ -227,13 +236,6 @@ export async function runFiscalClosingTests(shouldRun: ShouldRun): Promise<TestC
       await refused('edit a draft to closing type', await admin.put(`/api/accounting/vouchers/${draft.body?.id}`, { voucherType: 'closing', version: draft.body?.version }), 400, 'بستن سال مالی');
       await VoucherService.deleteJournalVoucher(Number(draft.body?.id));
 
-      // legacy rows the old form saved: a manual «CLOSING-1395» and a manual opening saved as closing type
-      const legacyClosingRef = await VoucherService.createJournalVoucher({
-        date: '2016-06-01', voucherType: 'general', status: 'approved', description: 'TD-559 legacy manual CLOSING ref', referenceModule: 'manual', referenceNumber: `CLOSING-${year}`,
-        items: [{ accountId: acc['1001'], debit: 2000, credit: 0 }, { accountId: acc['5001'], debit: 0, credit: 2000 }],
-      });
-      const legacyOpening = await postApproved(firstDay, acc['1001'], acc['4001'], 3000, 'TD-559 legacy opening saved as closing');
-      await orm.update(journalVouchers).set({ voucherType: 'closing' }).where(inArray(journalVouchers.id, [legacyClosingRef.id, legacyOpening]));
 
       try {
         await FiscalYearService.executeFiscalYearClosing({ year, createOpeningVoucher: true, username: 'reg' });
