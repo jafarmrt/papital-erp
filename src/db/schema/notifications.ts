@@ -13,9 +13,9 @@ export const notifications = pgTable('notifications', {
   message: text('message').notNull(),
   link: text('link').default(''),
   isRead: integer('is_read').default(0),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   // v9.0.434 (TD-717): «حذف» در زنگ اعلان ردیف را نگه می‌دارد و فقط این زمان (UTC کارساز) را می‌نویسد؛ اعلان کنارگذاشته فهرست و شمرده نمی‌شود
-  dismissedAt: timestamp('dismissed_at', { mode: 'string' }),
+  dismissedAt: timestamp('dismissed_at', { withTimezone: true, mode: 'string' }),
 }, (table) => ({
   idx_notif_user: index('idx_notif_user').on(table.userId),
   idx_notif_read: index('idx_notif_read').on(table.isRead),

@@ -26,8 +26,8 @@ export const purchaseRequisitions = pgTable('purchase_requisitions', {
   /** v9.0.349 (TD-694, migration 0083): the requisition this one was consolidated into (status 'consolidated') */
   consolidatedIntoId: integer('consolidated_into_id').references((): AnyPgColumn => purchaseRequisitions.id),
   isDeleted: integer('is_deleted').default(0),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 }, (table) => ({
   idx_pr_code: index('idx_pr_code').on(table.code),
   idx_pr_project: index('idx_pr_project').on(table.projectId),

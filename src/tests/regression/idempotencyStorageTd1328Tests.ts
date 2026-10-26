@@ -107,29 +107,28 @@ export async function runIdempotencyRunningKeyTests(shouldRun: (id: string, ...e
   const lapsed = `td-1328-i1-lapsed-${h.tag}`;
   const retried = `td-1328-i1-retried-${h.tag}`;
   const keys = [running, lapsed, retried];
-  const utcNow = `(now() AT TIME ZONE 'UTC')`;
   try {
     const [admin] = await h.q(`SELECT id FROM users WHERE username = 'pen_admin' AND is_deleted = 0`);
     const insert = (key: string, lockedUntil: string, expiresAt: string) => h.q(
       `INSERT INTO idempotency_keys (key, scope, status, request_method, request_path, created_by_id, locked_at, locked_until, created_at, expires_at)
-       VALUES ($1, 'td1328_i1', 'processing', 'POST', '/api/payroll/td1328-i1', $2, ${utcNow} - interval '25 hours', ${lockedUntil}, ${utcNow} - interval '25 hours', ${expiresAt})`,
+       VALUES ($1, 'td1328_i1', 'processing', 'POST', '/api/payroll/td1328-i1', $2, now() - interval '25 hours', ${lockedUntil}, now() - interval '25 hours', ${expiresAt})`,
       [key, admin.id]);
     const wrong: string[] = [];
 
     // past its window: a run still holding its lock stays, a run whose lock lapsed goes
-    await insert(running, `${utcNow} + interval '10 minutes'`, `${utcNow} - interval '1 minute'`);
-    await insert(lapsed, `${utcNow} - interval '10 minutes'`, `${utcNow} - interval '1 minute'`);
+    await insert(running, `now() + interval '10 minutes'`, `now() - interval '1 minute'`);
+    await insert(lapsed, `now() - interval '10 minutes'`, `now() - interval '1 minute'`);
     await IdempotencyService.cleanupExpired();
     const left = (await h.q('SELECT key FROM idempotency_keys WHERE key = ANY($1::text[])', [[running, lapsed]])).map((r) => String(r.key));
     if (!left.includes(running)) wrong.push('the purge deleted a key whose request is still running');
     if (left.includes(lapsed)) wrong.push('the purge kept a key past its window whose lock lapsed');
 
     // a crashed run near the end of its window: the retry takes the key with a new window, and a resend waits for it
-    await insert(retried, `${utcNow} - interval '1 minute'`, `${utcNow} + interval '1 minute'`);
+    await insert(retried, `now() - interval '1 minute'`, `now() + interval '1 minute'`);
     const options = { scope: 'td1328_i1', userId: Number(admin.id), requestMethod: 'POST', requestPath: '/api/payroll/td1328-i1', ttlSeconds: 24 * 60 * 60 };
     const takeover = await IdempotencyService.acquireKey(retried, options);
     if (takeover.action !== 'PROCESS_NEW') wrong.push(`the retry of a timed-out key got ${takeover.action}`);
-    const [row] = await h.q(`SELECT expires_at > ${utcNow} + interval '23 hours' AS renewed FROM idempotency_keys WHERE key = $1`, [retried]);
+    const [row] = await h.q(`SELECT expires_at > now() + interval '23 hours' AS renewed FROM idempotency_keys WHERE key = $1`, [retried]);
     if (row?.renewed !== true) wrong.push('the retry kept the first run\'s window');
     const resend = await IdempotencyService.acquireKey(retried, options);
     if (resend.action !== 'IN_PROGRESS') wrong.push(`a resend during the retry got ${resend.action}`);

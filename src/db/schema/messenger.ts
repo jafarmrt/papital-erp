@@ -14,12 +14,12 @@ export const messengerBots = pgTable('messenger_bots', {
   token: text('token').notNull().default(''),
   botUsername: text('bot_username').notNull().default(''),
   updatedById: integer('updated_by_id').references(() => users.id),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   // the next `getUpdates` offset of this bot, so a restart never reads old messages again; 0 after the bot changes
   updateOffset: bigint('update_offset', { mode: 'number' }).notNull().default(0),
   // wrong link codes sent to this bot in the current ten-minute window (every chat together)
   wrongCodesCount: integer('wrong_codes_count').notNull().default(0),
-  wrongCodesSince: timestamp('wrong_codes_since', { mode: 'string' }),
+  wrongCodesSince: timestamp('wrong_codes_since', { withTimezone: true, mode: 'string' }),
 }, (table) => ({
   idx_messenger_bots_updated_by_id: index('idx_messenger_bots_updated_by_id').on(table.updatedById).where(sql`${table.updatedById} IS NOT NULL`),
 }));
@@ -31,8 +31,8 @@ export const userMessengerLinks = pgTable('user_messenger_links', {
   chatId: text('chat_id').notNull(),
   chatName: text('chat_name').notNull().default(''),
   isActive: integer('is_active').notNull().default(1),
-  linkedAt: timestamp('linked_at', { mode: 'string' }).defaultNow(),
-  unlinkedAt: timestamp('unlinked_at', { mode: 'string' }),
+  linkedAt: timestamp('linked_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  unlinkedAt: timestamp('unlinked_at', { withTimezone: true, mode: 'string' }),
   unlinkReason: text('unlink_reason').notNull().default(''), // '' | 'user' | 'stop' | 'blocked' | 'relinked' | 'bot_changed' | 'user_deleted' (0121)
 }, (table) => ({
   idx_user_messenger_links_user_id: index('idx_user_messenger_links_user_id').on(table.userId),
@@ -45,8 +45,8 @@ export const messengerLinkCodes = pgTable('messenger_link_codes', {
   userId: integer('user_id').notNull().references(() => users.id),
   messenger: text('messenger').notNull(),
   codeHash: text('code_hash').notNull(),
-  expiresAt: timestamp('expires_at', { mode: 'string' }).notNull(),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 }, (table) => ({
   idx_messenger_link_codes_user_id: index('idx_messenger_link_codes_user_id').on(table.userId),
   uq_messenger_link_codes_code: unique('uq_messenger_link_codes_code').on(table.messenger, table.codeHash),
@@ -61,7 +61,7 @@ export const userNotificationPreferences = pgTable('user_notification_preference
   userId: integer('user_id').notNull().references(() => users.id),
   category: text('category').notNull(),
   sendToMessenger: integer('send_to_messenger').notNull().default(1),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 }, (table) => ({
   uq_user_notification_preferences_user_category: unique('uq_user_notification_preferences_user_category').on(table.userId, table.category),
 }));

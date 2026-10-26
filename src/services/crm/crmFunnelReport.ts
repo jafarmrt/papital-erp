@@ -29,8 +29,8 @@ export async function crmFunnelReport(filter: FunnelFilter): Promise<FunnelRepor
   const range = zonedDayRangeUtc(filter.fromDate, filter.toDate, await getDisplayTimezone());
   const inRange = sql.join([
     sql`true`,
-    range.from ? sql`h.changed_at >= ${range.from}::timestamp` : sql`true`,
-    range.before ? sql`h.changed_at < ${range.before}::timestamp` : sql`true`,
+    range.from ? sql`h.changed_at >= ${range.from}::timestamptz` : sql`true`,
+    range.before ? sql`h.changed_at < ${range.before}::timestamptz` : sql`true`,
     filter.assignedPersonnelId ? sql`h.assigned_personnel_id = ${filter.assignedPersonnelId}` : sql`true`,
   ], sql` AND `);
 

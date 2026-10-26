@@ -16,7 +16,7 @@ export const accounts = pgTable('accounts', {
   description: text('description').default(''),
   isSystem: integer('is_system').default(0),
   isActive: integer('is_active').default(1),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
   idx_acc_code: index('idx_acc_code').on(table.code),
@@ -65,7 +65,7 @@ export const journalVouchers = pgTable('journal_vouchers', {
   approvedById: integer('approved_by_id').references(() => users.id),
   // v10.0.21 (TD-965): who last edited the voucher; the maker (creator or last editor) of a manual voucher does not approve it (migration 0096)
   updatedById: integer('updated_by_id').references(() => users.id),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
@@ -105,10 +105,10 @@ export const journalVouchers = pgTable('journal_vouchers', {
 export const fiscalPeriods = pgTable('fiscal_periods', {
   fiscalYear: integer('fiscal_year').primaryKey(),
   status: text('status').notNull().default('open'), // 'open' | 'closed'
-  closedAt: timestamp('closed_at', { mode: 'string' }),
+  closedAt: timestamp('closed_at', { withTimezone: true, mode: 'string' }),
   closedBy: text('closed_by'),
   closingVoucherId: integer('closing_voucher_id').references(() => journalVouchers.id),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 }, (table) => ({
   // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_fiscal_periods_closing_voucher_id: index('idx_fiscal_periods_closing_voucher_id').on(table.closingVoucherId).where(sql`${table.closingVoucherId} IS NOT NULL`),
@@ -129,7 +129,7 @@ export const legacyDateRepairs = pgTable('legacy_date_repairs', {
   reason: text('reason'),
   // v7.0.131 (TD-232, مهاجرت 0038): 'mdy' اصلاح «07-10-1405 AP» (TD-231)؛ 'calendar' یکسان‌سازی تاریخ متنی به ISO میلادی
   repairKind: text('repair_kind').notNull().default('mdy'),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 });
 
 export const journalVoucherItems = pgTable('journal_voucher_items', {
@@ -145,7 +145,7 @@ export const journalVoucherItems = pgTable('journal_voucher_items', {
   currency: text('currency').default('IRR'),
   exchangeRate: moneyNumeric('exchange_rate').default(sql`1`),
   description: text('description').default(''),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
   idx_jvi_voucher: index('idx_jvi_voucher').on(table.voucherId),
@@ -163,7 +163,7 @@ export const itemOpeningVoucherItems = pgTable('item_opening_voucher_items', {
   voucherId: integer('voucher_id').notNull().references(() => journalVouchers.id, { onDelete: 'cascade' }),
   itemId: integer('item_id').notNull().references(baseRelations.itemsId, { onDelete: 'cascade' }),
   amount: moneyNumeric('amount').notNull(),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 }, (table) => ({
   pk: primaryKey({ columns: [table.voucherId, table.itemId] }),
   idx_iovi_item: index('idx_iovi_item').on(table.itemId),
@@ -187,7 +187,7 @@ export const bankAccounts = pgTable('bank_accounts', {
   notes: text('notes').default(''),
   // 10.3 package 4 (OBS-R1-65, migration 0134): «تاریخ آغاز حساب», ISO; the opening voucher is dated with it ('' = not recorded)
   openingDate: text('opening_date').default(''),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
@@ -229,7 +229,7 @@ export const cheques = pgTable('cheques', {
   reconciledAt: text('reconciled_at').default(''),
   reconciledBatch: text('reconciled_batch').default(''),
   createdById: integer('created_by_id').references(() => users.id),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
@@ -283,8 +283,8 @@ export const treasuryTransactions = pgTable('treasury_transactions', {
   reconciledBatch: text('reconciled_batch').default(''),
   attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
   createdById: integer('created_by_id').references(() => users.id),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
@@ -314,7 +314,7 @@ export const pettyCashExpenseLines = pgTable('petty_cash_expense_lines', {
   description: text('description').notNull().default(''),
   sellerName: text('seller_name').notNull().default(''),
   invoiceNumber: text('invoice_number').notNull().default(''),
-  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (table) => ({
   uq_petty_cash_expense_lines_transaction_line: uniqueIndex('uq_petty_cash_expense_lines_transaction_line').on(table.treasuryTransactionId, table.lineNo),
   idx_petty_cash_expense_lines_account: index('idx_petty_cash_expense_lines_account').on(table.accountId),
@@ -332,7 +332,7 @@ export const statutoryRemittanceLines = pgTable('statutory_remittance_lines', {
   jalaliMonth: integer('jalali_month').notNull(),
   personnelId: integer('personnel_id').notNull().references(baseRelations.personnelId),
   amount: moneyNumeric('amount').notNull(),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 }, (table) => ({
   idx_statutory_remittance_lines_treasury_transaction_id: index('idx_statutory_remittance_lines_treasury_transaction_id').on(table.treasuryTransactionId),
   idx_statutory_remittance_lines_personnel_id: index('idx_statutory_remittance_lines_personnel_id').on(table.personnelId),
@@ -343,7 +343,7 @@ export const accountingSettings = pgTable('accounting_settings', {
   key: text('key').notNull().unique(),
   accountId: integer('account_id').references(() => accounts.id),
   description: text('description').default(''),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
 }, (table) => ({
   // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_accounting_settings_account_id: index('idx_accounting_settings_account_id').on(table.accountId).where(sql`${table.accountId} IS NOT NULL`),

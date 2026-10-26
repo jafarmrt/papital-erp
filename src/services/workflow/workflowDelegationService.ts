@@ -57,8 +57,8 @@ export async function findOverlappingDelegation(
     .where(and(
       eq(workflowDelegations.fromUserId, candidate.fromUserId),
       eq(workflowDelegations.isActive, 1),
-      sql`${workflowDelegations.startDate} <= ${candidate.endDate}::timestamp`,
-      sql`${workflowDelegations.endDate} >= ${candidate.startDate}::timestamp`,
+      sql`${workflowDelegations.startDate} <= ${candidate.endDate}::timestamptz`,
+      sql`${workflowDelegations.endDate} >= ${candidate.startDate}::timestamptz`,
       isAllScope(scopeKey)
         ? undefined
         : sql`lower(btrim(COALESCE(${workflowDelegations.scope}, 'ALL'))) IN ('all', '*', ${scopeKey})`,
@@ -231,11 +231,9 @@ export class WorkflowDelegationService {
       toUsername: sql<string>`tu.username`,
       // v10.1.16 (D-06 part C): the scope's workflow title, so the inbox names it without the definition list
       scopeTitle: sql<string | null>`(SELECT d.title FROM workflow_definitions d WHERE lower(btrim(d.code)) = lower(btrim(${workflowDelegations.scope})) ORDER BY d.id LIMIT 1)`,
-      // V3.0.9 (TD-055/BUG): ستون‌ها `timestamp WITHOUT time zone` هستند و نود
-      // رشته‌های UTC ISO (با Z که PG نادیده می‌گیرد) را literal ذخیره می‌کند؛ بنابراین
-      // مقایسه باید با «ساعت UTC» باشد نه now() با TZ سشن (تهران) که +۳:۳۰ انحراف می‌دهد.
-      isActiveNow: sql<number>`(${workflowDelegations.isActive} = 1 AND ${workflowDelegations.startDate} <= (now() AT TIME ZONE 'utc') AND ${workflowDelegations.endDate} >= (now() AT TIME ZONE 'utc'))`,
-      isExpiredFlag: sql<number>`(${workflowDelegations.isActive} = 1 AND ${workflowDelegations.endDate} < (now() AT TIME ZONE 'utc'))`
+      // V3.0.9 (TD-055/BUG), v11 (phase 4.2): start and end are timestamptz, so they compare with now() itself
+      isActiveNow: sql<number>`(${workflowDelegations.isActive} = 1 AND ${workflowDelegations.startDate} <= now() AND ${workflowDelegations.endDate} >= now())`,
+      isExpiredFlag: sql<number>`(${workflowDelegations.isActive} = 1 AND ${workflowDelegations.endDate} < now())`
     })
     .from(workflowDelegations)
     .leftJoin(sql`users fu`, sql`fu.id = ${workflowDelegations.fromUserId}`)

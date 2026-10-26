@@ -14,7 +14,7 @@ export const fileAttachments = pgTable('file_attachments', {
   sizeBytes: integer('size_bytes').notNull(),
   sha256: text('sha256').notNull(),
   createdBy: text('created_by').notNull().default(''),
-  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   isDeleted: integer('is_deleted').notNull().default(0),
   /** v10.2 package 7 (migration 0127): the light WEBP of an image attachment of a sales file or activity; null otherwise */
   lightStoragePath: text('light_storage_path'),

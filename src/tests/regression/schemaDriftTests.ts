@@ -16,7 +16,8 @@ import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdmi
  * The check compares the current (migrated) schema with the Drizzle tables: every matched foreign key's ON DELETE, every
  * column's nullability, every index by table and name (uniqueness, partial or not, and the column list of an index on plain
  * columns; an index on SQL, such as an expression or a column with its operator class, is matched by name only), every
- * database index that backs no constraint, and every unique constraint. Tables that exist only in the database are listed
+ * database index that backs no constraint, and every unique constraint. v11 (phase 4.2): every timestamp column is timestamptz in
+ * both, except the business dates in `WALL_CLOCK_TIMESTAMP_COLUMNS`. Tables that exist only in the database are listed
  * below with their reason. A unique index or NOT NULL that a migration builds only on clean data is part of the clean test
  * schema, so it is declared; a database where it was left out lists it in the health check (conditional_constraints_missing).
  */
@@ -26,6 +27,14 @@ export const DATABASE_ONLY_TABLES: ReadonlyArray<{ table: string; reason: string
   { table: '_repair_0011_timestamps_backup', reason: 'migration 0011 keeps the timestamps it repaired; read only by hand' },
   { table: 'items_stocks_archive', reason: 'migration 0021 archived the dropped items.stocks values (TD-214); read only by hand' },
 ];
+
+/**
+ * v11 (phase 4.2): the business dates kept as Tehran wall-clock `timestamp`; every other timestamp column is timestamptz
+ * (the server time is an instant, whatever the session or process time zone).
+ */
+export const WALL_CLOCK_TIMESTAMP_COLUMNS: ReadonlySet<string> = new Set([
+  'documents.date', 'ref_fiscal_year_corrections.document_date', 'transactions.date',
+]);
 
 type Row = Record<string, unknown>;
 const rows = async (q: SQL) => (await orm.execute(q)).rows as Row[];
@@ -58,9 +67,25 @@ export async function schemaDrift(): Promise<string[]> {
     if (c && c.onDelete !== d.onDelete) problems.push(`${d.key} is ON DELETE ${d.onDelete} in Drizzle but ${c.onDelete} in the database (${c.name})`);
   }
 
-  // nullability
-  const columns = await rows(sql`SELECT table_name, column_name, is_nullable FROM information_schema.columns WHERE table_schema = current_schema()`);
+  // nullability, and the time zone of every timestamp column
+  const columns = await rows(sql`SELECT table_name, column_name, is_nullable, data_type FROM information_schema.columns WHERE table_schema = current_schema()`);
   const nullable = new Map(columns.map(r => [`${r.table_name}.${r.column_name}`, r.is_nullable === 'YES']));
+  const dataType = new Map(columns.map(r => [`${r.table_name}.${r.column_name}`, String(r.data_type)]));
+  for (const [key, type] of dataType) {
+    const wallClock = WALL_CLOCK_TIMESTAMP_COLUMNS.has(key);
+    if (type === 'timestamp without time zone' && !wallClock) problems.push(`column ${key} is timestamp without time zone; a server time is timestamptz`);
+    if (type === 'timestamp with time zone' && wallClock) problems.push(`column ${key} is a business date kept as timestamp without time zone, but the database has timestamptz`);
+  }
+  for (const [t, cfg] of tables) {
+    for (const c of cfg.columns) {
+      const key = `${t}.${c.name}`;
+      const declared = c.getSQLType();
+      const db = dataType.get(key);
+      if (declared.startsWith('timestamp') && db !== undefined && (db === 'timestamp with time zone') !== declared.endsWith('with time zone')) {
+        problems.push(`column ${key} is ${declared} in Drizzle but ${db} in the database`);
+      }
+    }
+  }
   for (const [t, cfg] of tables) {
     for (const c of cfg.columns) {
       const key = `${t}.${c.name}`;
@@ -151,7 +176,7 @@ async function scenario(): Promise<string> {
   if ((await findMissingConditionalConstraints()).some(e => e.name === name)) problems.push('the column is still listed after the build');
 
   assertNoProblems(problems);
-  return 'the Drizzle tables match the migrated schema (foreign key actions, nullability, indexes, unique constraints); a column left nullable over a NULL row was listed and made NOT NULL after the fix';
+  return 'the Drizzle tables match the migrated schema (foreign key actions, nullability, timestamp time zones, indexes, unique constraints); a column left nullable over a NULL row was listed and made NOT NULL after the fix';
 }
 
 export async function runSchemaDriftTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {

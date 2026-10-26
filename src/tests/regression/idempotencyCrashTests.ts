@@ -17,7 +17,6 @@ export type ShouldRun = (id: string, ...extra: string[]) => boolean;
 let seq = 0;
 export const tagOf = () => `${String(Date.now()).slice(-6)}${++seq}`;
 export const brief = (res: { status: number; body?: unknown }) => `${res.status} ${JSON.stringify(res.body ?? null).slice(0, 220)}`;
-const utcNow = `(now() AT TIME ZONE 'UTC')`;
 
 export async function adminClient() {
   const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
@@ -44,7 +43,7 @@ export const keyState = async (key: string) =>
   (await pool.query<{ status: string }>('SELECT status FROM idempotency_keys WHERE key = $1', [key])).rows[0]?.status ?? 'none';
 /** The lock of a crashed run has lapsed (its heartbeat died with it) */
 export const lapseLock = (key: string) =>
-  pool.query(`UPDATE idempotency_keys SET locked_until = ${utcNow} - interval '1 minute' WHERE key = $1`, [key]);
+  pool.query(`UPDATE idempotency_keys SET locked_until = now() - interval '1 minute' WHERE key = $1`, [key]);
 
 /** Waits until `count` other sessions wait on a row lock (the requests sent are parked behind the held row) */
 async function waitForLockWaiters(count: number): Promise<void> {

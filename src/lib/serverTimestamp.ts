@@ -61,3 +61,20 @@ export function zonedDayRangeUtc(
   }
   return range;
 }
+
+const TIMESTAMPTZ_TEXT = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(\.\d+)?([+-])(\d{2})(?::?(\d{2}))?(?::?(\d{2}))?$/;
+
+/**
+ * v11 (phase 4.2): PostgreSQL's text of a timestamptz value (`2026-10-26 07:17:40.12+00`) as the UTC server time
+ * without an offset (`2026-10-26 07:17:40.12`), the text the plain timestamp columns gave before they became
+ * timestamptz. Another offset (a session outside UTC) is moved to UTC; anything else, such as `infinity`, is kept.
+ */
+export function timestamptzTextAsUtc(text: string): string {
+  const match = TIMESTAMPTZ_TEXT.exec(text);
+  if (!match) return text;
+  const [, wall, fraction = '', sign, hours, minutes = '00', seconds = '00'] = match;
+  const offsetMs = ((Number(hours) * 60 + Number(minutes)) * 60 + Number(seconds)) * 1000;
+  if (offsetMs === 0) return wall + fraction;
+  const utcMs = Date.parse(`${wall.replace(' ', 'T')}Z`) - (sign === '-' ? -offsetMs : offsetMs);
+  return new Date(utcMs).toISOString().slice(0, 19).replace('T', ' ') + fraction;
+}

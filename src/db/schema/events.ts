@@ -12,11 +12,11 @@ export const outboxEvents = pgTable('outbox_events', {
   payload: jsonb('payload').default({}),
   metadata: jsonb('metadata').default({}),
   retryCount: integer('retry_count').default(0),
-  nextRetryAt: timestamp('next_retry_at', { mode: 'string' }),
+  nextRetryAt: timestamp('next_retry_at', { withTimezone: true, mode: 'string' }),
   lastError: text('last_error').default(''),
-  occurredAt: timestamp('occurred_at', { mode: 'string' }).defaultNow(),
-  processedAt: timestamp('processed_at', { mode: 'string' }),
-  lockedAt: timestamp('locked_at', { mode: 'string' }),
+  occurredAt: timestamp('occurred_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  processedAt: timestamp('processed_at', { withTimezone: true, mode: 'string' }),
+  lockedAt: timestamp('locked_at', { withTimezone: true, mode: 'string' }),
   lockedBy: text('locked_by').default(''),
   // v7.0.25 (TD-183): نام هندلرهایی که برای این رویداد موفق شده‌اند — تلاش مجدد فقط هندلرهای ناموفق را اجرا می‌کند
   completedHandlers: jsonb('completed_handlers').$type<string[]>().notNull().default([])
@@ -36,10 +36,10 @@ export const eventActionRules = pgTable('event_action_rules', {
   actionConfigJson: jsonb('action_config_json').default({}),
   isActive: integer('is_active').default(1),
   executionCount: integer('execution_count').default(0),
-  lastExecutedAt: timestamp('last_executed_at', { mode: 'string' }),
+  lastExecutedAt: timestamp('last_executed_at', { withTimezone: true, mode: 'string' }),
   createdBy: integer('created_by').references(() => users.id),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow()
 }, (table) => ({
   idx_action_rules_event_active: index('idx_action_rules_event_active').on(table.eventType, table.isActive),
   // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
@@ -57,7 +57,7 @@ export const eventActionLogs = pgTable('event_action_logs', {
   result: jsonb('result').default({}),
   errorMessage: text('error_message').default(''),
   executionDurationMs: integer('execution_duration_ms').default(0),
-  executedAt: timestamp('executed_at', { mode: 'string' }).defaultNow()
+  executedAt: timestamp('executed_at', { withTimezone: true, mode: 'string' }).defaultNow()
 }, (table) => ({
   idx_action_logs_rule: index('idx_action_logs_rule').on(table.ruleId, table.executedAt),
   idx_action_logs_event: index('idx_action_logs_event').on(table.eventId)
@@ -71,7 +71,7 @@ export const eventActionRuleRetirements = pgTable('event_action_rule_retirements
   actionType: text('action_type').notNull(),
   wasActive: integer('was_active').notNull(),
   actionConfig: jsonb('action_config'),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow()
 });
 
 // v9.0.405 (TD-707, migration 0088): each stored webhook subscription whose event patterns were converted to published types
@@ -85,7 +85,7 @@ export const webhookEventPatternRepairs = pgTable('webhook_event_pattern_repairs
   droppedPatterns: jsonb('dropped_patterns').notNull().default([]),
   wasActive: integer('was_active').notNull(),
   deactivated: integer('deactivated').notNull().default(0),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow()
 });
 
 // v9.0.378 (TD-705, migration 0086): one durable row per delivery (webhook subscription x event, rule action x event)
@@ -99,11 +99,11 @@ export const integrationDeliveryJobs = pgTable('integration_delivery_jobs', {
   status: text('status').notNull().default('pending'),
   attempts: integer('attempts').notNull().default(0),
   maxAttempts: integer('max_attempts').notNull().default(5),
-  nextAttemptAt: timestamp('next_attempt_at', { mode: 'string' }).defaultNow(),
-  lockedAt: timestamp('locked_at', { mode: 'string' }),
+  nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  lockedAt: timestamp('locked_at', { withTimezone: true, mode: 'string' }),
   lastError: text('last_error').notNull().default(''),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow()
 }, (table) => ({
   uq_integration_delivery_jobs_target_event: unique('uq_integration_delivery_jobs_target_event').on(table.kind, table.targetId, table.eventId),
   idx_integration_delivery_jobs_due: index('idx_integration_delivery_jobs_due').on(table.status, table.nextAttemptAt)
@@ -122,8 +122,8 @@ export const deadLetterEvents = pgTable('dead_letter_events', {
   errorStack: text('error_stack').default(''),
   retryCount: integer('retry_count').default(0),
   status: text('status').notNull().default('quarantined'),
-  quarantinedAt: timestamp('quarantined_at', { mode: 'string' }).defaultNow(),
-  resolvedAt: timestamp('resolved_at', { mode: 'string' }),
+  quarantinedAt: timestamp('quarantined_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true, mode: 'string' }),
   resolvedBy: integer('resolved_by').references(() => users.id),
   resolutionNotes: text('resolution_notes').default('')
 }, (table) => ({
@@ -147,12 +147,12 @@ export const webhookSubscriptions = pgTable('webhook_subscriptions', {
   totalDeliveries: integer('total_deliveries').default(0),
   successfulDeliveries: integer('successful_deliveries').default(0),
   failedDeliveries: integer('failed_deliveries').default(0),
-  lastDeliveryAt: timestamp('last_delivery_at', { mode: 'string' }),
+  lastDeliveryAt: timestamp('last_delivery_at', { withTimezone: true, mode: 'string' }),
   lastStatus: text('last_status').default('idle'),
   lastError: text('last_error').default(''),
   createdBy: integer('created_by').references(() => users.id),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow()
 }, (table) => ({
   idx_webhook_subs_active: index('idx_webhook_subs_active').on(table.isActive),
   // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
@@ -173,7 +173,7 @@ export const webhookDeliveries = pgTable('webhook_deliveries', {
   signature: text('signature').default(''),
   attempt: integer('attempt').default(1),
   durationMs: integer('duration_ms').default(0),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow()
 }, (table) => ({
   // v9.0.448 (TD-613): the indexes migration 0000 built; the three declared before never existed in the database
   idx_webhook_deliv_sub: index('idx_webhook_deliv_sub').on(table.subscriptionId, table.createdAt),

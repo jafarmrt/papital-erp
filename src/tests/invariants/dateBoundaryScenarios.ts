@@ -228,8 +228,8 @@ export async function checkProformaInvoiceTakesFinalizeDate(wh: string): Promise
 
 /**
  * TD-314: زمان سرور در جلسه پایگاه‌داده UTC است. استخر برنامه TimeZone=UTC را از پارامترهای راه‌اندازی دارد، و جلسه‌ای
- * که پیش‌فرضش تهران است (نصب محلی) با همان پارامترها `now()::timestamp` (مقدار `defaultNow()`) را هم‌وقتِ
- * `toISOString` کد می‌نویسد.
+ * که پیش‌فرضش تهران است (نصب محلی) با همان پارامترها متن زمان سرور (`now()::timestamp`، متنی که برنامه از یک
+ * `timestamptz` می‌خواند) را هم‌وقتِ `toISOString` کد می‌نویسد.
  */
 export async function checkSessionClockUtc(): Promise<string[]> {
   const problems: string[] = [];

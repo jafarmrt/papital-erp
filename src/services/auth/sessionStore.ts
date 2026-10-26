@@ -87,7 +87,7 @@ export async function insertSession(
     tokenVersion: input.tokenVersion,
     userAgent: cut(input.userAgent, SESSION_USER_AGENT_MAX),
     ipAddress: cut(input.ipAddress, 100),
-    expiresAt: sql`(now() AT TIME ZONE 'UTC') + make_interval(secs => ${input.lifetimeSeconds})` as unknown as string,
+    expiresAt: sql`now() + make_interval(secs => ${input.lifetimeSeconds})` as unknown as string,
   });
 }
 
@@ -99,7 +99,7 @@ async function adoptLegacySession(claims: SessionTokenClaims, sid: string, token
     tokenVersion,
     userAgent: cut(info.userAgent, SESSION_USER_AGENT_MAX),
     ipAddress: cut(info.ipAddress, 100),
-    expiresAt: sql`to_timestamp(${expSeconds}) AT TIME ZONE 'UTC'` as unknown as string,
+    expiresAt: sql`to_timestamp(${expSeconds})` as unknown as string,
   }).onConflictDoNothing({ target: userSessions.sid });
 }
 
@@ -149,7 +149,7 @@ export async function checkSession(claims: SessionTokenClaims, tokenVersion: num
   if (session.expiresAtMs > 0 && session.expiresAtMs <= now) return { ok: false, reason: 'expired' };
   if (now - session.lastSeenAtMs >= SESSION_TOUCH_INTERVAL_MS) {
     session.lastSeenAtMs = now;
-    await orm.update(userSessions).set({ lastSeenAt: sql`now() AT TIME ZONE 'UTC'` as unknown as string })
+    await orm.update(userSessions).set({ lastSeenAt: sql`now()` as unknown as string })
       .where(and(eq(userSessions.id, session.id), sql`${userSessions.revokedAt} IS NULL`));
   }
   return { ok: true, sid, sessionId: session.id };

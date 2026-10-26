@@ -16,8 +16,8 @@ export const birthdayGreetings = pgTable('birthday_greetings', {
   reaction: text('reaction'),
   message: text('message').notNull().default(''),
   isDeleted: integer('is_deleted').notNull().default(0),
-  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (table) => ({
   uq_birthday_greetings_live: uniqueIndex('uq_birthday_greetings_live').on(table.personnelId, table.jalaliYear, table.senderUserId)
     .where(sql`${table.isDeleted} = 0`),
