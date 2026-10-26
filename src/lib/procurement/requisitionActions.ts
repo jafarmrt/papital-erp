@@ -73,10 +73,18 @@ export function requisitionStage(status: unknown): RequisitionStage {
   return STAGE_OF_STATUS[String(status ?? '')] ?? 'other';
 }
 
-/** نام سند پیوسته به ردیف: شماره عطف سفارش خرید، وگرنه «سند» با شماره فارسی؛ هرگز «سند #شناسه» */
-export function linkedDocumentLabel(docId: number, orders: readonly { id: number; refNumber?: string | null }[], formatNumber: (n: number) => string): string {
+/**
+ * نام سند پیوسته به ردیف: شماره عطف سفارش خرید، وگرنه «سند» با شماره فارسی؛ هرگز «سند #شناسه». v11 phase 6.3a (review 4
+ * of #406, U21): the reference goes through `formatCode`, so the window shows it as the order list beside it does.
+ */
+export function linkedDocumentLabel(
+  docId: number,
+  orders: readonly { id: number; refNumber?: string | null }[],
+  formatNumber: (n: number) => string,
+  formatCode: (code: string) => string = code => code,
+): string {
   const ref = orders.find(o => Number(o.id) === Number(docId))?.refNumber?.trim();
-  return ref ? `سفارش ${ref}` : `سند ${formatNumber(docId)}`;
+  return ref ? `سفارش ${formatCode(ref)}` : `سند ${formatNumber(docId)}`;
 }
 
 // v10.1.9: after approval the window's order button is «مشاهده / ثبت فاکتور تامین‌کننده» (the desk row's «تفکیک و صدور فاکتور»);

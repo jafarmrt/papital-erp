@@ -1,9 +1,10 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import type { DbExecutor } from '../../db/drizzle.js';
-import { purchaseRequisitions, users, workflowDefinitions, workflowInstances, workflowStates, workflowTransitions } from '../../db/schema.js';
+import type { DbExecutor, DbTransaction } from '../../db/drizzle.js';
+import { purchaseRequisitions, users, workflowDefinitions, workflowInstances, workflowStates, workflowTasks, workflowTransitions } from '../../db/schema.js';
 import { ConflictError, ValidationError } from '../../errors/customErrors.js';
 import { WorkflowTransitionExecutor, type WorkflowSnapshotDsl, type WorkflowStateSnapshot, type WorkflowTransitionSnapshot } from '../workflow/workflowTransitionExecutor.js';
 import { isUsableSnapshot, publishedDesignOf } from '../workflow/workflowSnapshot.js';
+import { notifyWorkflowTasksArrived } from '../workflow/workflowTaskNotice.js';
 import { OPEN_REQUISITION_STATUSES } from '../../lib/procurement/requisitionFields.js';
 
 /** فیلدهای گام گردش‌کار که تدارکات می‌خواند (از تصویر فرایند یا جدول workflow_states) */
@@ -57,17 +58,25 @@ export async function requisitionWorkflowGraph(
 /** the requisition fields `requisitionFlow` reads; the requester starts a missing workflow instance */
 type RequisitionFlowRow = { id: number; workflowInstanceId?: number | null; requestedById?: number | null };
 
+/** the requisition's workflow instance, and the notice of its first-step tasks a start here has held back */
+export interface RequisitionInstance {
+  instanceId: number;
+  /** sends the held-back task-arrived notice for the first-step tasks still open; nothing when no instance started here */
+  sendStartNotice: () => Promise<void>;
+}
+
 /**
  * v11 phase 6.3a (reviews of #406, U10): a requisition with no workflow instance (an older one, or one whose workflow
  * failed to start at registration) gets it here, in its requester's name as at registration, under the requisition row
  * lock the caller holds. Before, whoever acted first (split, approve, receive) became its initiator, so a step that
  * leaves the initiator out refused every approver with a 403 and the rolled-back request failed the same way each time.
  * An older requisition with no requester (`requestedById` empty) starts with no initiator, so no approver is left out (and
- * a step only its initiator may take is then left to the system admin). `actorId` is the user whose action starts it:
- * the task-arrived notice skips them, since they finish the first task in the same transaction.
+ * a step only its initiator may take is then left to the system admin). The caller acts on the instance in the same
+ * transaction, so the task-arrived notice of the first step waits for `sendStartNotice` after that action: it goes only
+ * for the first-step tasks still open (a step the action finished is not announced), never to `actorId`.
  */
-export async function ensureRequisitionInstance(tx: DbExecutor, req: RequisitionFlowRow, actorId?: number): Promise<number> {
-  if (req.workflowInstanceId) return req.workflowInstanceId;
+export async function ensureRequisitionInstance(tx: DbExecutor, req: RequisitionFlowRow, actorId?: number): Promise<RequisitionInstance> {
+  if (req.workflowInstanceId) return { instanceId: req.workflowInstanceId, sendStartNotice: async () => undefined };
   const [requester] = req.requestedById
     ? await tx.select({ id: users.id, username: users.username }).from(users).where(eq(users.id, req.requestedById))
     : [];
@@ -76,20 +85,32 @@ export async function ensureRequisitionInstance(tx: DbExecutor, req: Requisition
     entityId: String(req.id),
     userId: requester?.id,
     userName: requester?.username,
-    actorUserId: actorId,
+    notifyTasks: false,
     tx,
   });
   req.workflowInstanceId = started.id;
   await tx.update(purchaseRequisitions).set({ workflowInstanceId: started.id }).where(eq(purchaseRequisitions.id, req.id));
-  return started.id;
+  const pendingTasks = () => tx.select().from(workflowTasks)
+    .where(and(eq(workflowTasks.instanceId, started.id), eq(workflowTasks.status, 'pending')));
+  const startTaskIds = new Set((await pendingTasks()).map(task => task.id));
+  return {
+    instanceId: started.id,
+    sendStartNotice: async () => {
+      const open = (await pendingTasks()).filter(task => startTaskIds.has(task.id));
+      if (open.length > 0) await notifyWorkflowTasksArrived(tx as DbTransaction, started.id, open, { actorUserId: actorId });
+    },
+  };
 }
 
 /**
  * نمونه گردش‌کار درخواست (زیر قفل ردیف درخواست که فراخواننده گرفته است) و گام جاری‌اش؛ درخواستی که نمونه ندارد
  * (`ensureRequisitionInstance`) در همین تراکنش نمونه می‌گیرد.
  */
-export async function requisitionFlow(tx: DbExecutor, req: RequisitionFlowRow, actorId?: number): Promise<RequisitionFlow> {
-  const instanceId = await ensureRequisitionInstance(tx, req, actorId);
+export async function requisitionFlow(tx: DbExecutor, req: RequisitionFlowRow): Promise<RequisitionFlow> {
+  // a caller that acts on the flow starts a missing instance itself first (`ensureRequisitionInstance`); one started here
+  // is not acted on, so its notice goes at once
+  const { instanceId, sendStartNotice } = await ensureRequisitionInstance(tx, req);
+  await sendStartNotice();
   const [instance] = await tx.select().from(workflowInstances).where(eq(workflowInstances.id, instanceId));
   if (!instance) throw new ValidationError('نمونه فرایند گردش کار درخواست خرید یافت نشد.');
   const { states, transitions } = await requisitionWorkflowGraph(instance, tx);
@@ -134,7 +155,8 @@ export async function ensureRequisitionApproved(
   user: RequisitionActor,
   opts: ApprovalOptions,
 ): Promise<RequisitionFlow> {
-  let flow = await requisitionFlow(tx, req, user.id);
+  const started = await ensureRequisitionInstance(tx, req, user.id);
+  let flow = await requisitionFlow(tx, req);
   for (let round = 0; flow.stepKey !== APPROVED_STEP_KEY && round <= flow.states.length; round += 1) {
     const approve = flow.instance.status === 'IN_PROGRESS' ? transitionFromStep(flow, APPROVE_ACTION_KEYS) : undefined;
     if (!opts.mayApprove || !approve) {
@@ -163,6 +185,7 @@ export async function ensureRequisitionApproved(
   if (flow.stepKey !== APPROVED_STEP_KEY) {
     throw new ConflictError(`درخواست خرید ${req.code} به گام تأییدشده نرسید.`, { step: flow.stepKey }, 'REQUISITION_NOT_APPROVED');
   }
+  await started.sendStartNotice();
   return flow;
 }
 

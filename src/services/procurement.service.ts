@@ -465,7 +465,7 @@ export class ProcurementService {
       }
 
       // v11 phase 6.3a (review of #406, U10): a missing instance starts in the requester's name, as on every other path
-      const instanceId = await ensureRequisitionInstance(tx, req, user.id);
+      const { instanceId, sendStartNotice } = await ensureRequisitionInstance(tx, req, user.id);
 
       const [wfInst] = await tx.select().from(workflowInstances).where(eq(workflowInstances.id, instanceId));
       if (!wfInst) {
@@ -560,6 +560,8 @@ export class ProcurementService {
         allowBackdate,
         tx
       });
+      // a first step this action left open (a step that wants more signatures) is announced now, never the one it finished
+      await sendStartNotice();
 
       // وضعیت و ردیف‌ها را اقدام پس از انتقال (applyRequisitionTransition) در همین تراکنش نوشته است
       const [updatedReq] = await tx.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.id, req.id));
@@ -930,7 +932,7 @@ export class ProcurementService {
         .filter(order => order.status !== 'final');
       if (!alreadyReceived && openOrders.length === 0 && updatedReqItems.every(isSettledRequisitionRow)) {
         // وضعیت «دریافت‌شده» را اقدام پس از انتقال (applyRequisitionTransition) در همین تراکنش می‌نویسد
-        const flow = await requisitionFlow(tx, lockedReq, user.id);
+        const flow = await requisitionFlow(tx, lockedReq);
         const receive = transitionFromStep(flow, RECEIVE_ACTION_KEYS, RECEIVED_STEP_KEY);
         if (!receive) {
           throw new ConflictError(

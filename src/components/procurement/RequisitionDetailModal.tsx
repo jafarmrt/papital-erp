@@ -341,7 +341,7 @@ export function RequisitionDetailModal({
                             <div className="flex items-center justify-center gap-1">
                               {row.linkedDocumentIds.map(docId => (
                                 <span key={docId} className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-mono border border-blue-200">
-                                  {linkedDocumentLabel(docId, linkedOrders, formatPersianNumber)}
+                                  {linkedDocumentLabel(docId, linkedOrders, formatPersianNumber, formatPersianCode)}
                                 </span>
                               ))}
                             </div>
@@ -577,7 +577,7 @@ export function RequisitionDetailModal({
                 <div className="w-full p-3 bg-violet-50 border border-violet-200 rounded-xl text-xs text-violet-900 font-bold flex items-center gap-2">
                   <Layers className="w-4 h-4 text-violet-600 shrink-0" />
                   {requisition.consolidatedIntoCode
-                    ? `این درخواست در درخواست تجمیعی ${requisition.consolidatedIntoCode} آمده و بسته است؛ کار را با همان درخواست ادامه دهید.`
+                    ? `این درخواست در درخواست تجمیعی ${formatPersianCode(requisition.consolidatedIntoCode)} آمده و بسته است؛ کار را با همان درخواست ادامه دهید.`
                     : 'این درخواست در درخواست تجمیعی دیگری آمده و بسته است.'}
                 </div>
               )}

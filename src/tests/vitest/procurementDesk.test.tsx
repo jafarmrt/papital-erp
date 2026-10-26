@@ -71,7 +71,8 @@ describe('procurement order fields (TD-701)', () => {
     fetchJson.mockResolvedValue({ success: true, data: [serverOrder] });
     render(<RequisitionDetailModal isOpen requisition={requisition} onClose={() => undefined} onOpenSplitOrder={() => undefined} />, { wrapper: QueryWrapper });
     await waitFor(() => expect(screen.queryAllByText(/تامین الماس/).length).toBeGreaterThan(0));
-    expect(screen.queryAllByText(/R-1405-0009/).length).toBeGreaterThan(0);
+    // v11 phase 6.3a (U21): the window shows order numbers in Persian digits
+    expect(screen.queryAllByText(/R-۱۴۰۵-۰۰۰۹/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/۱۴۰۵\/۰۷\/۱۴/)).not.toBeNull();
   });
 });
@@ -173,7 +174,7 @@ describe('delivery buttons need the stock-in permission (TD-904)', () => {
     fetchJson.mockResolvedValue({ success: true, data: [serverOrder] });
     for (const key of ['procurement.view', 'procurement.manage', 'procurement.order']) granted.add(key);
     const { unmount } = render(<RequisitionDetailModal isOpen requisition={requisition} onClose={() => undefined} onOpenSplitOrder={() => undefined} />, { wrapper: QueryWrapper });
-    await waitFor(() => expect(screen.queryAllByText(/R-1405-0009/).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.queryAllByText(/R-۱۴۰۵-۰۰۰۹/).length).toBeGreaterThan(0));
     expect(screen.queryByText(ROW_DELIVER)).toBeNull();
     expect(screen.queryByText(BULK_DELIVER)).toBeNull();
     unmount();

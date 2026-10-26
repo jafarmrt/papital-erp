@@ -20,7 +20,7 @@ const TEXT_PROPERTIES = new Set(['label', 'title', 'subtitle']);
 const TOAST_CALL = /^(toast|hotToast)(\.\w+)?$/;
 const IDENTIFIER_FIELDS = new Set(['code', 'refNumber', 'ref_number', 'voucherNumber', 'documentNumber', 'docNumber', 'invoiceNumber', 'orderNumber',
   'accountCode', 'account_code', 'projectCode', 'project_code', 'itemCode', 'item_code', 'customerCode', 'supplierCode', 'requisitionCode', 'requisition_code', 'sku',
-  'payrollNumber', 'payroll_number']);
+  'payrollNumber', 'payroll_number', 'consolidatedIntoCode', 'oldCode', 'newCode']);
 const SCREEN_ROOTS = ['src/pages', 'src/components', 'src/hooks'];
 
 function screenFiles(dir: string, out: string[] = []): string[] {

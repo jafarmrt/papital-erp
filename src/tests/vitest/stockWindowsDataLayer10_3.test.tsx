@@ -204,11 +204,12 @@ describe('stock windows refresh while open (10.3)', () => {
     const client = newClient();
     const item = { id: 7, code: 'NE-100', name: 'N', version: 3 } as unknown as Item;
     render(withClient(client)(<ItemCodeChangeModal item={item} onClose={() => undefined} onChanged={() => undefined} />));
-    expect(await screen.findByText(/NE-090/)).toBeTruthy();
+    expect(await screen.findByText(/NE-۰۹۰/)).toBeTruthy();
 
     codeHistory = [...codeHistory, { oldCode: 'NE-100', newCode: 'NE-200', reason: 'r', username: 'u', createdAt: '2026-10-02T08:00:00.000Z' }];
     await act(() => invalidatePreset(client, 'itemChange'));
-    expect(await screen.findByText(/NE-200/)).toBeTruthy();
+    // v11 phase 6.3a (U21): the history shows codes in Persian digits
+    expect(await screen.findByText(/NE-۲۰۰/)).toBeTruthy();
   });
 });
 

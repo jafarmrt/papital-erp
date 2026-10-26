@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryWrapper } from './helpers/queryWrapper';
 import type { ProcurementOrder, PurchaseRequisition } from '../../types';
+import { formatPersianCode } from '../../utils';
 import { BULK_DELIVERY_ALL_DELIVERED, bulkDeliveryPlan, linkedDocumentLabel, requisitionActionButtons, requisitionStage } from '../../lib/procurement/requisitionActions';
 import { REQUISITION_STATUS_BADGES } from '../../components/procurement/requisitionBadges';
 
@@ -96,7 +97,8 @@ describe('labels and delivery of the requisition window (OBS-R2-38)', () => {
   it('names a linked document by the order reference, never "#id"', async () => {
     api({ hasInstance: true, actions: [] }, [order]);
     open(requisitionOf('received', [77]));
-    expect(await screen.findByText(`سفارش ${ORDER_REF}`)).not.toBeNull();
+    // v11 phase 6.3a (U21): in Persian digits, as the order list beside it
+    expect(await screen.findByText(`سفارش ${formatPersianCode(ORDER_REF)}`)).not.toBeNull();
     expect(screen.queryByText(/سند #/)).toBeNull();
     expect(linkedDocumentLabel(12, [], n => String(n))).toBe('سند 12');
   });

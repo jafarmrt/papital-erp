@@ -100,7 +100,7 @@ export function ItemCodeChangeModal({ item, onClose, onChanged }: ItemCodeChange
               <ul className="space-y-1.5">
                 {history.map(h => (
                   <li key={`${h.createdAt}-${h.oldCode}`} className="border border-slate-200 rounded-lg p-2">
-                    <span className="font-mono" dir="ltr">{h.oldCode} → {h.newCode}</span>
+                    <span className="font-mono" dir="ltr">{formatPersianCode(h.oldCode)} → {formatPersianCode(h.newCode)}</span>
                     <span className="block text-slate-500 mt-0.5">{formatPersianDateTime(h.createdAt)}{h.username ? ` · ${h.username}` : ''}</span>
                     <span className="block text-slate-600 mt-0.5">{h.reason}</span>
                   </li>
