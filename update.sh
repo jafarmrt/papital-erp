@@ -29,6 +29,11 @@ if [ -n "$UPDATE_RESUME" ]; then
   LOG_FILE="${UPDATE_RESUME_LOG:?}"
 else
   LOG_FILE="$PWD/update-$(date +%Y%m%d-%H%M%S).log"
+  # v11 (O16): the log names paths and versions of the server; only root reads it, and logs older than 90 days go
+  ( umask 077; : >> "$LOG_FILE" )
+  # the logs sit in the folder update.sh, install.sh and setup-domain.sh were started from; older ones become private too
+  find "$PWD" -maxdepth 1 -type f \( -name 'update-*.log' -o -name 'install-*.log' -o -name 'domain-setup-*.log' \) -mtime +90 -delete 2>/dev/null || true
+  find "$PWD" -maxdepth 1 -type f \( -name 'update-*.log' -o -name 'install-*.log' -o -name 'domain-setup-*.log' \) -perm /go=rwx -exec chmod go-rwx {} + 2>/dev/null || true
   # tee ignores HUP: a dropped SSH session must not kill the log writer, or the next log line would end the update
   exec > >(trap '' HUP; exec tee -a "$LOG_FILE") 2>&1
 fi
@@ -98,8 +103,17 @@ BUILD_SWAPPED=0
 # file descriptor 9 until the process ends, the run of the new update.sh included (it inherits it).
 if [ -z "$UPDATE_RESUME" ]; then
   command -v flock >/dev/null 2>&1 || die "flock is required (apt-get install -y util-linux)."
+  # v11 (O18): readable by every user whatever root's umask, so a daily backup of a non-root service sees it held
+  ( umask 022; : >> "$APP_DIR/$UPDATE_LOCK_NAME" ) && chmod 644 "$APP_DIR/$UPDATE_LOCK_NAME" 2>/dev/null || true
   exec 9>"$APP_DIR/$UPDATE_LOCK_NAME"
-  flock -n 9 || die "Another update is already running in ${APP_DIR} (lock file ${UPDATE_LOCK_NAME}). Nothing was changed; wait for it to finish."
+  # a few seconds: another job's lock check (scripts/ops-lock.sh) holds the file for a moment
+  flock -w 10 9 || die "Another update is already running in ${APP_DIR} (lock file ${UPDATE_LOCK_NAME}). Nothing was changed; wait for it to finish."
+  # v11 (O18): a backup, restore or upgrade rehearsal that is running finishes first (scripts/ops-lock.sh); a daily
+  # backup that starts from now on waits for this update
+  # shellcheck source=scripts/ops-lock.sh
+  source scripts/ops-lock.sh
+  ops_wait_idle "$APP_DIR" "${UPDATE_OPS_WAIT_SECONDS:-1800}" \
+    || die "A backup, restore or upgrade rehearsal is still running in ${APP_DIR} (lock file ${OPS_BUSY_LOCK_NAME}). Nothing was changed; run the update again when it has finished."
 fi
 # v10.2.23 (OBS-R1-22): an earlier update stopped in the middle of the build swap (killed, power loss)
 if [ -e "$APP_DIR/$UPDATE_SWAP_MARKER_NAME" ]; then
@@ -250,20 +264,31 @@ if [ "$NODE_MAJOR" -lt 24 ]; then
   warn "Node.js $(node -v 2>/dev/null || echo 'not found') is older than 24; install Node.js 24 (see install.sh) before the next update."
 fi
 
-# v10.1.68 (TD-1286): without ERP_SECRETS_KEY every new WooCommerce key, bot token or webhook key is refused (503), and
-# only install.sh used to add it; add that one key when .env lacks it (in any form the service reads), nothing else
-if ! KEY_STEP="$(bash "$APP_DIR/scripts/ensure-env-secrets.sh" "$APP_DIR/.env" ERP_SECRETS_KEY 2>&1)"; then
-  warn "ERP_SECRETS_KEY could not be checked or added ($KEY_STEP); new secrets are refused until it is set."
-elif [[ "$KEY_STEP" == *"Added ERP_SECRETS_KEY"* ]]; then
-  warn "ERP_SECRETS_KEY was missing and has been added to .env; keep a copy of it somewhere safe off this server. If secrets were encrypted with an earlier key, put that key back instead."
-elif [[ "$KEY_STEP" == *"WARN:"* ]]; then
-  warn "ERP_SECRETS_KEY is empty in .env and was left as it is; new secrets are refused until it is set."
-fi
+# v10.1.68 (TD-1286) / v11 (O10, O17): the generated .env keys (ERP_SECRETS_KEY among them) are added right before the
+# restart (update_refresh_ops_config), so a run stopped by a missing tool or by the checks below leaves .env as it was
 
 # v10.2.23 (OBS-R1-22): the side build needs room next to the running one, and the backup and the rehearsal need
 # theirs; stop before the backup, the source or the build is touched when a disk cannot hold them
 command -v rsync >/dev/null 2>&1 || die "rsync is required to build the update in a side folder (apt-get install -y rsync)."
-if [ -z "$UPDATE_RESUME" ]; then
+
+# v11 (O11): a git update with nothing new (the branch has no new commit and dist/ is built from this very source) takes
+# no backup and does not restart the service; it only adds what this version's .env and cron file lack (below)
+NOTHING_NEW=0
+if [ -z "$UPDATE_RESUME" ] && [ "$UPDATE_MODE" = "git" ] && [ "$REBUILD" -eq 0 ] && git fetch --quiet 2>/dev/null \
+  && [ "$(git rev-parse HEAD)" = "$(git rev-parse '@{u}' 2>/dev/null || true)" ]; then
+  NOOP_DIR="$(update_prepare_build_dir "$APP_DIR")" || die "Could not prepare the side folder ${UPDATE_BUILD_DIR_NAME}/."
+  # removed at exit like the side folder of a build (on_exit)
+  BUILD_DIR="$NOOP_DIR"
+  if [ "$(update_dist_fingerprint "$APP_DIR/dist")" = "$(update_source_fingerprint "$NOOP_DIR")" ]; then
+    NOTHING_NEW=1
+    PREVIOUS_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || true)"
+    PRE_DEPLOY_DUMP=""
+    log "Nothing new: ${APP_DIR} is at $(git rev-parse --short HEAD) like its branch on the remote, and dist/ is built from this source. No backup and no restart (--rebuild builds and restarts anyway)."
+    [ "$REHEARSE" -eq 0 ] || log "--rehearse: no new migration to rehearse."
+  fi
+fi
+
+if [ -z "$UPDATE_RESUME" ] && [ "$NOTHING_NEW" -eq 0 ]; then
   BACKUP_STEP=0
   if [ "$SKIP_BACKUP" -eq 0 ] && [ -f scripts/backup.sh ]; then BACKUP_STEP=1; fi
   update_space_check "$APP_DIR" "$UPDATE_MODE" "$BACKUP_STEP" "$REHEARSE" || die "$UPDATE_SPACE_MESSAGE"
@@ -345,11 +370,14 @@ if [ -z "$UPDATE_RESUME" ]; then
   fi
 fi
 
-# the backup and the source are written now: check again what the build and the rehearsal still need
-update_space_check "$APP_DIR" git 0 "$REHEARSE" 1 || die "$UPDATE_SPACE_MESSAGE"
-# checked again here: a first run with an older update.sh (the one an update starts with) had no database check
-update_database_space_check "$APP_DIR" 1 || die "$UPDATE_DB_SPACE_MESSAGE"
-if [ -n "$UPDATE_DB_SPACE_NEED_KB" ]; then
+# the backup and the source are written now: check again what the build and the rehearsal still need (nothing to build
+# or migrate when nothing is new)
+if [ "$NOTHING_NEW" -eq 0 ]; then
+  update_space_check "$APP_DIR" git 0 "$REHEARSE" 1 || die "$UPDATE_SPACE_MESSAGE"
+  # checked again here: a first run with an older update.sh (the one an update starts with) had no database check
+  update_database_space_check "$APP_DIR" 1 || die "$UPDATE_DB_SPACE_MESSAGE"
+fi
+if [ "$NOTHING_NEW" -eq 0 ] && [ -n "$UPDATE_DB_SPACE_NEED_KB" ]; then
   success "Free disk space for the database: $(( UPDATE_DB_SPACE_FREE_KB / 1024 )) MB left for it (the migrations may need about $(( UPDATE_DB_SPACE_NEED_KB / 1024 )) MB, twice the database)."
 fi
 
@@ -469,7 +497,33 @@ RESTART_OK=0
 # NOTE: string matching instead of `systemctl | grep -q` — under `set -o pipefail`,
 # grep -q exits early and SIGPIPEs systemctl, making the pipeline falsely fail.
 UNIT_LIST="$(systemctl list-unit-files 2>/dev/null || true)"
+# v11 (O10): the generated .env keys and the cron jobs of this version (scripts/update-steps.sh)
+update_refresh_ops_config "$APP_DIR"
+for note in "${UPDATE_OPS_NOTES[@]}"; do
+  [ -n "$note" ] || continue
+  case "$note" in WARN:*) warn "${note#WARN: }" ;; *) log "$note" ;; esac
+done
+# a service that did not start after an earlier update (the cause since fixed) is restarted and checked, as before
+NOOP_RUNNING=0
+if [ "$NOTHING_NEW" -eq 1 ] && bash scripts/verify-startup.sh "$APP_PORT" "${UPDATE_NOOP_CHECK_SECONDS:-15}" "$PKG_VERSION" >/dev/null 2>&1; then
+  NOOP_RUNNING=1
+fi
+if [ "$NOTHING_NEW" -eq 1 ] && [ "$NOOP_RUNNING" -eq 1 ] && [ -z "$UPDATE_ENV_KEYS_ADDED" ]; then
+  success "Nothing to update: v${PKG_VERSION} keeps running; no backup was taken and the service was not restarted."
+  exit 0
+fi
+if [ "$NOTHING_NEW" -eq 1 ] && [ "$NOOP_RUNNING" -eq 0 ]; then
+  log "Nothing new, but the service does not answer as started on port ${APP_PORT}: restarting it (nothing else changed)."
+elif [ "$NOTHING_NEW" -eq 1 ]; then
+  log "Restarting only so the service reads the keys added to .env (nothing else changed)."
+fi
 log "[5/6] Restarting service..."
+# v11 (O16): log files an older version wrote readable by every user become private to the service's user and group
+# (the new server writes them so); the folder of an older install was 0755
+if [ -d logs ]; then
+  chmod 750 logs 2>/dev/null || true
+  find logs -maxdepth 1 -type f ! -name '.*.lock' -perm /o=r -exec chmod o-rwx {} + 2>/dev/null || true
+fi
 if [[ "$UNIT_LIST" != *"$SERVICE_NAME.service"* ]]; then
   # Auto-detect the systemd unit managing the running app (unit may have a custom name)
   RUNNING_PID="$(pgrep -f 'dist/server.cjs' | head -1 || true)"

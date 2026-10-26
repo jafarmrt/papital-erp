@@ -34,6 +34,18 @@ fail() { log "Backup FAILED: $*"; exit 1; }
 source "$(dirname "${BASH_SOURCE[0]}")/env-file.sh"
 env_file_value() { env_file_get "$APP_DIR/.env" "$1"; }
 
+# v11 (O13, O18): the busy lock the nightly check and update.sh look for (scripts/ops-lock.sh). The daily run waits
+# while an update runs (BACKUP_UPDATE_WAIT_SECONDS, default 3600): its pg_dump would hold up the migration of the
+# restart; update.sh's own pre-deployment backup runs inside the update and does not wait.
+# shellcheck source=scripts/ops-lock.sh
+source "$(dirname "${BASH_SOURCE[0]}")/ops-lock.sh"
+if [ "$BACKUP_KIND" = "daily" ]; then
+  ops_backup_wait_for_update "$APP_DIR" "${BACKUP_UPDATE_WAIT_SECONDS:-3600}"
+  TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+else
+  ops_busy_hold "$APP_DIR"
+fi
+
 # v10.3.24 (TD-1353): BACKUP_DIR from .env too, the folder nightly-verify.sh, monitor.sh and update.sh read
 [ -n "${BACKUP_DIR:-}" ] || BACKUP_DIR="$(env_file_value BACKUP_DIR)"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/erp}"
@@ -185,6 +197,9 @@ echo "$(date +%s) $(basename "$BASE")" > "$BACKUP_DIR/.last_${BACKUP_KIND}_ok"
 [ -z "$UPLOADS_ARCHIVE" ] || log "Uploads archive created: $UPLOADS_ARCHIVE ($(du -h "$UPLOADS_ARCHIVE" | cut -f1))"
 [ -z "$ATTACHMENTS_ARCHIVE" ] || log "Attachments archive created: $ATTACHMENTS_ARCHIVE ($(du -h "$ATTACHMENTS_ARCHIVE" | cut -f1))"
 log "${BACKUP_KIND} backup completed: $DUMP_FILE.gz ($(du -h "$DUMP_FILE.gz" | cut -f1), $ATT_COUNT attachment(s), retention ${RETENTION_DAYS}d)"
+
+# v11 (O18): the local backup is complete; the upload below does not touch the database, so an update need not wait for it
+ops_busy_release
 
 # 6. v10.0.4 (O-02, TD-957): the encrypted off-server copy (scripts/backup-offsite.sh) of the kinds in
 #    BACKUP_OFFSITE_KINDS (default: daily; update.sh's pre-deployment backup stays local and fast). A backup on the

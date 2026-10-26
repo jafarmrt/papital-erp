@@ -19,7 +19,7 @@ interface RehearsalCtx {
 function rehearsalAppDir(ctx: RehearsalCtx, name: string, probeSql: string): string {
   const dir = path.join(ctx.cluster.tmpDir, name);
   fs.mkdirSync(path.join(dir, 'scripts', 'sql'), { recursive: true });
-  for (const rel of ['scripts/backup.sh', 'scripts/restore.sh', 'scripts/pg-password.sh', 'scripts/env-file.sh', 'scripts/sql/backup-manifest.sql', 'scripts/upgrade-rehearsal.sh', '.env']) {
+  for (const rel of ['scripts/backup.sh', 'scripts/restore.sh', 'scripts/pg-password.sh', 'scripts/env-file.sh', 'scripts/ops-lock.sh', 'scripts/sql/backup-manifest.sql', 'scripts/upgrade-rehearsal.sh', '.env']) {
     const from = fs.existsSync(path.join(ctx.appDir, rel)) ? path.join(ctx.appDir, rel) : path.join(REPO_ROOT, rel);
     if (fs.existsSync(from)) fs.copyFileSync(from, path.join(dir, rel));
   }

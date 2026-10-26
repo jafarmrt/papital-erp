@@ -64,7 +64,7 @@ export function alertPattern(key: string): RegExp {
 }
 
 /** The settings monitor.sh reads (`setting KEY` in scripts/monitor.sh) */
-export const MONITOR_SETTING = /^(ALERT_\w+|BACKUP_DIR|BACKUP_RCLONE_REMOTE|METRICS_TOKEN|MONITOR_\w+|NIGHTLY_VERIFY_REPORT|PORT)$/;
+export const MONITOR_SETTING = /^(ALERT_\w+|BACKUP_DIR|BACKUP_RCLONE_REMOTE|MEDIA_\w+|METRICS_TOKEN|MONITOR_\w+|NIGHTLY_VERIFY_REPORT|PORT)$/;
 
 /** One fake server for the describe that calls it, and a fresh app directory per `fresh()` */
 export function monitorHarness() {

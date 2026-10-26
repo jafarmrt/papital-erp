@@ -29,6 +29,10 @@ fail() { log "Upgrade rehearsal FAILED: $*"; exit 1; }
 # shellcheck source=scripts/env-file.sh
 source "$(dirname "${BASH_SOURCE[0]}")/env-file.sh"
 env_file_value() { env_file_get "$APP_DIR/.env" "$1"; }
+# v11 (O13): the busy lock the nightly check and update.sh look for (scripts/ops-lock.sh)
+# shellcheck source=scripts/ops-lock.sh
+source "$(dirname "${BASH_SOURCE[0]}")/ops-lock.sh"
+ops_busy_hold "$APP_DIR"
 [ -n "${DATABASE_URL:-}" ] || DATABASE_URL="$(env_file_value DATABASE_URL)"
 [ -n "${DATABASE_URL:-}" ] || fail "DATABASE_URL must be set (or present in $APP_DIR/.env)"
 export DATABASE_URL

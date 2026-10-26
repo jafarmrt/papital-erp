@@ -118,19 +118,33 @@ const logFormat = printf(({ level, message, timestamp, stack, requestId, correla
 const isProduction = process.env.NODE_ENV === 'production';
 const logDir = process.env.LOG_DIR || path.join(process.cwd(), 'logs');
 
+// v11 (O16): the log folder and files are private to the server's user and group (they hold user ids, addresses and
+// error stacks); a folder made by an older version (0755) is tightened at start. The files get 0640 from the server's
+// umask 027 (src/lib/processFileMode.ts): a mode option of the rotate transports would change the name of their audit
+// file, and the logs written before it would never be deleted.
+export const LOG_DIR_MODE = 0o750;
+
 // Ensure log directory exists
 try {
   if (!fs.existsSync(logDir)) {
-    fs.mkdirSync(logDir, { recursive: true });
+    fs.mkdirSync(logDir, { recursive: true, mode: LOG_DIR_MODE });
   }
 } catch (err) {
   console.error('Failed to create log directory:', err);
 }
+try {
+  // only the bits of other users go: a shared folder (LOG_DIR=/var/log/...) keeps its group's rights
+  fs.chmodSync(logDir, fs.statSync(logDir).mode & 0o7770);
+} catch {
+  // a folder of another user stays as it is
+}
 
-// Initialize transports with Console by default
+// Initialize transports with Console by default; v11 (O16): colour codes only on a terminal, not in the journal
 const transports: winston.transport[] = [
   new winston.transports.Console({
-    format: combine(contextFormat(), sanitizeFormat(), colorize(), logFormat)
+    format: process.stdout.isTTY
+      ? combine(contextFormat(), sanitizeFormat(), colorize(), logFormat)
+      : combine(contextFormat(), sanitizeFormat(), logFormat)
   })
 ];
 

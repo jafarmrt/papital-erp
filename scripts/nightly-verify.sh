@@ -77,7 +77,9 @@ TIMEOUT_SECONDS="$(setting_number NIGHTLY_VERIFY_TIMEOUT 7200)"
 MAX_DUMP_AGE_HOURS="$(setting_number NIGHTLY_VERIFY_MAX_DUMP_AGE_HOURS 26)"
 DRILL_MAX_AGE_HOURS=12
 FREE_MARGIN_PERCENT=10
-BUSY_PATTERN="${NIGHTLY_VERIFY_BUSY_PATTERN:-scripts/(backup|upgrade-rehearsal|restore)\.sh( |$)|(^|[ /])update\.sh( |$)}"
+# v11 (O13): the other jobs are seen by their locks (scripts/ops-lock.sh), never by their names in the process list
+# shellcheck source=scripts/ops-lock.sh
+source "$(dirname "${BASH_SOURCE[0]}")/ops-lock.sh"
 DRILL_RE='^erp_restore_drill_[0-9]{8}_[0-9]{6}$'
 # a database that never answers must not hold the lock for every later night
 export PGCONNECT_TIMEOUT="${PGCONNECT_TIMEOUT:-30}"
@@ -86,7 +88,7 @@ CALL_LIMIT=120
 TSX="$APP_DIR/node_modules/.bin/tsx"
 [ -x "$TSX" ] || fail "$TSX not found — install the dependencies (npm ci --include=dev)"
 
-# one run at a time; the lock is ours alone, so the other jobs that restore or rebuild are looked for by name
+# one run at a time
 LOCK_FILE="$APP_DIR/logs/.nightly-verify.lock"
 mkdir -p "$(dirname "$LOCK_FILE")" "$(dirname "$REPORT")"
 exec 9>"$LOCK_FILE"
@@ -111,7 +113,7 @@ if [ "${1:-}" = "--accept-baseline" ]; then
   report_owner
   exit "$rc"
 fi
-if pgrep -f -- "$BUSY_PATTERN" >/dev/null 2>&1; then
+if ops_busy_now "$APP_DIR"; then
   log "SKIPPED: a backup, an upgrade rehearsal, an update or a restore is running; the check runs again next night"
   exit 0
 fi
@@ -166,6 +168,10 @@ if [ -n "${RESTORE_ADMIN_URL:-}" ]; then
   RESTORE_ADMIN_URL="$(strip_password "$RESTORE_ADMIN_URL")"
   export RESTORE_ADMIN_URL
 fi
+# v11 (O14): an exported PGPASSWORD must not beat the lines above (scripts/pg-password.sh)
+# shellcheck source=scripts/pg-password.sh
+source "$(dirname "${BASH_SOURCE[0]}")/pg-password.sh"
+pg_password_fold_env
 
 # a URL of another database on the same server (query string kept); the second argument picks the URL
 url_for_db() {

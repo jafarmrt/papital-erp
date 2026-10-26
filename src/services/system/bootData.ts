@@ -24,7 +24,8 @@ export function bootDataSteps(): BootStep[] {
       name: 'base data seed',
       essential: false,
       run: async () => {
-        const seed = await runSeedWithLock();
+        // v11 (O17): the step above migrated; the seed does not run the migrator again
+        const seed = await runSeedWithLock({ afterMigrations: true });
         if (!seed.success) throw new Error(`Base data seed failed: ${seed.message}`);
       },
     },
