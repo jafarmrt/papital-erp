@@ -61,6 +61,12 @@ export interface StockReversalResult {
 /** نوع سند انبارگردانی و اصلاح موجودی (شمارش، ورود اکسل، موجودی اولیه و افتتاحیه) در کاردکس */
 export const STOCK_COUNT_DOCUMENT_TYPE = 'audit';
 
+/** v11 phase 6.1a (S10): a movement quantity at the Kardex column's 4 decimals (NaN and infinity pass for the checks below) */
+export function stockMovementQuantity(quantity: unknown): number {
+  const raw = Number(quantity);
+  return Number.isFinite(raw) ? fin(raw).round(4).toNumber() : raw;
+}
+
 export class DocumentStockEngine {
   /**
    * Applies stock movement for a single document item (creates transaction and updates item stocks/WAC).
@@ -73,8 +79,7 @@ export class DocumentStockEngine {
     // v11 phase 6.1a (S10): the quantity is rounded once to the column's 4 decimals and both the Kardex row and its value
     // use that quantity; before, 1.23456 was stored as 1.2346 but valued unrounded, and 0.00001 became a row of 0.0000 worth
     // 0.011 (now it is refused below, as zero)
-    const rawQty = Number(quantity);
-    const qty = Number.isFinite(rawQty) ? fin(rawQty).round(4).toNumber() : rawQty;
+    const qty = stockMovementQuantity(quantity);
     const priceNum = Number(price);
 
     const whInfo = await ItemWarehouseStockService.resolveWarehouse(tx, targetLoc);

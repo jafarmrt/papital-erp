@@ -68,7 +68,7 @@ router.put('/daily-logs/:id', authorizePermission('daily_logs.create'), validate
 // PUT manager review / feedback: only holders of daily_logs.manage_all (v9.0.231, TD-626)
 router.put('/daily-logs/:id/review', requirePermission('daily_logs.manage_all'), validate(reviewDailyLogSchema), asyncHandler(async (req, res) => {
   if (!req.user?.id) throw new UnauthorizedError('احراز هویت انجام نشده است');
-  const updated = await reviewDailyLog(req.user, Number(req.params.id), req.body.manager_notes);
+  const updated = await reviewDailyLog(req.user, Number(req.params.id), req.body.manager_notes, req.body.version);
   res.json(formatDailyLog(updated));
 }));
 

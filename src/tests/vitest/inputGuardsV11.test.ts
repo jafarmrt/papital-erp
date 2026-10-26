@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { DrizzleQueryError } from 'drizzle-orm/errors';
+import { errorHandler } from '../../middleware/logger';
 import { decimalInput, decimalTextScaleIssue } from '../../middleware/validate.js';
 import { assertChequeDueAfterIssue, assertChequeStepAfterPrevious, lastChequeStepDay } from '../../services/accounting/treasury/chequeDateOrder.js';
 import { exactTreasuryAmount } from '../../services/accounting/treasury/treasuryAmount.js';
+import { stockMovementQuantity } from '../../services/documents/documentStockEngine.service.js';
+import { bomAllocationItemSchema } from '../../routes/inventory.routes.js';
+import { convertToOrdersSchema } from '../../routes/procurement.schemas.js';
 
 // v11 phase 6.1a: the pure parts of the input guards (the database cases are in regression/inputGuardsV11Tests.ts)
 const read = (v: unknown) => decimalInput('مبلغ').safeParse(v);
@@ -13,13 +18,18 @@ describe('decimalInput bounds (M16, S10, S12)', () => {
     expect(read('00000000000000012')).toMatchObject({ success: true });
   });
 
-  it('refuses a 15th whole digit or a 5th decimal, as text or as a number', () => {
-    for (const bad of ['100000000000000', '1.23456', '0.00001', 1e14, 1e-5, 1.23456]) expect(read(bad).success).toBe(false);
+  it('refuses a 15th whole digit or a 5th decimal, as text or as a number of any size', () => {
+    const bad = ['100000000000000', '1.23456', '0.00001', '100.00005', 1e14, 1e-5, 1e-7, 1.23456, 100.00005, 99.99999, 12345678.12345, 10 / 3, 1000 / 3];
+    for (const value of bad) expect(read(value).success, String(value)).toBe(false);
   });
 
-  it('cuts the float noise of a computed number at 4 decimals', () => {
+  it('cuts the float noise of a computed number and keeps a number as its sender wrote it', () => {
     expect(read(0.1 + 0.2)).toMatchObject({ success: true, data: '0.3' });
+    expect(read(1.1 * 3)).toMatchObject({ success: true, data: '3.3' });
     expect(read(1200)).toMatchObject({ success: true, data: '1200' });
+    expect(read(123.4568)).toMatchObject({ success: true, data: '123.4568' });
+    // a double cannot hold 18 digits; the number keeps the digits it has, with no binary digits written out
+    expect(read(12345678901234.5678)).toMatchObject({ success: true, data: '12345678901234.568' });
   });
 
   it('names the bound it breaks', () => {
@@ -30,9 +40,10 @@ describe('decimalInput bounds (M16, S10, S12)', () => {
 });
 
 describe('cheque date order (M12)', () => {
-  it('refuses a due day before the issue day', () => {
-    expect(() => assertChequeDueAfterIssue('2026-10-20', '2026-10-19')).toThrow();
-    expect(() => assertChequeDueAfterIssue('2026-10-20', '2026-10-20')).not.toThrow();
+  it('refuses a paid cheque due before its issue day, and records a received cheque that is already due', () => {
+    expect(() => assertChequeDueAfterIssue('paid', '2026-10-20', '2026-10-19')).toThrow();
+    expect(() => assertChequeDueAfterIssue('paid', '2026-10-20', '2026-10-20')).not.toThrow();
+    expect(() => assertChequeDueAfterIssue('received', '2026-10-20', '2026-10-17')).not.toThrow();
   });
 
   it('takes the latest ISO day of the issue and the history, skipping legacy entries', () => {
@@ -41,6 +52,11 @@ describe('cheque date order (M12)', () => {
     expect(() => assertChequeStepAfterPrevious('2026-10-21', '2026-10-20', history)).toThrow();
     expect(() => assertChequeStepAfterPrevious('2026-10-22', '2026-10-20', history)).not.toThrow();
   });
+
+  it('skips a legacy issue day after today, so the cheque\'s steps are not blocked until then', () => {
+    expect(lastChequeStepDay('2026-11-30', [], '2026-10-26')).toBe('');
+    expect(() => assertChequeStepAfterPrevious('2026-10-26', '2026-11-30', [], '2026-10-26')).not.toThrow();
+  });
 });
 
 describe('exact treasury amount (M16)', () => {
@@ -48,5 +64,48 @@ describe('exact treasury amount (M16)', () => {
     expect(() => exactTreasuryAmount('12345678901234.5678', 'مبلغ')).toThrow();
     expect(exactTreasuryAmount('1234567890.12', 'مبلغ')).toBe(1234567890.12);
     expect(exactTreasuryAmount('', 'مبلغ')).toBe(0);
+  });
+});
+
+describe('numeric overflow answer (M16, S12)', () => {
+  it('answers 422 NUMERIC_OUT_OF_RANGE without the SQL text, values or stack', () => {
+    const pgError = Object.assign(new Error('numeric field overflow'), { severity: 'ERROR', code: '22003' });
+    const err = new DrizzleQueryError('insert into "transactions" ("total_price") values ($1)', ['1e20'], pgError);
+    const out = { status: 0, body: {} as Record<string, unknown> };
+    const res = {
+      headersSent: false,
+      status(code: number) { out.status = code; return res; },
+      json(body: Record<string, unknown>) { out.body = body; return res; },
+    };
+    errorHandler(err, { method: 'POST', originalUrl: '/api/documents', headers: {} }, res, () => undefined);
+    expect(out.status).toBe(422);
+    expect(out.body.code).toBe('NUMERIC_OUT_OF_RANGE');
+    expect(out.body.stack).toBeUndefined();
+    expect(JSON.stringify(out.body)).not.toContain('transactions');
+  });
+});
+
+describe('stock movement quantity (S10)', () => {
+  it('rounds once to 4 decimals, so a quantity below the scale is zero and refused as zero', () => {
+    expect(stockMovementQuantity(1.23456)).toBe(1.2346);
+    expect(stockMovementQuantity('2.00005')).toBe(2.0001);
+    expect(stockMovementQuantity(0.00004)).toBe(0);
+    expect(Number.isNaN(stockMovementQuantity('abc'))).toBe(true);
+  });
+});
+
+describe('number fields that stay numbers take the same bound (M16)', () => {
+  it('refuses a fifth decimal or a 15th whole digit on a BOM allocation and a purchase order line', () => {
+    const allocation = (quantity: number) => bomAllocationItemSchema.safeParse({ itemId: 1, quantity }).success;
+    expect(allocation(1.2345)).toBe(true);
+    expect(allocation(1.23456)).toBe(false);
+    expect(allocation(1e14)).toBe(false);
+    const order = (quantity: number, unitPrice: number) => convertToOrdersSchema.safeParse({
+      params: { id: '1' },
+      body: { orderGroups: [{ items: [{ itemId: 1, quantity, unitPrice }] }] },
+    }).success;
+    expect(order(2, 1000.5)).toBe(true);
+    expect(order(1.23456, 1000)).toBe(false);
+    expect(order(2, 100000000000000)).toBe(false);
   });
 });

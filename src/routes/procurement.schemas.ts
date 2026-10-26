@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { decimalInput } from '../middleware/validate.js';
+import { decimalInput, decimalNumberBounds } from '../middleware/validate.js';
 import { fin } from '../lib/financialDecimal.js';
 import { REQUISITION_MAX_ROWS, REQUISITION_PRIORITIES } from '../lib/procurement/requisitionFields.js';
 import {
@@ -123,8 +123,8 @@ export const convertToOrdersSchema = z.object({
         itemCode: z.string().max(100).optional(),
         itemName: z.string().max(300).optional(),
         unit: z.string().max(50).optional(),
-        quantity: z.number().positive(),
-        unitPrice: z.number().nonnegative(),
+        quantity: z.number().positive().superRefine(decimalNumberBounds('مقدار')),
+        unitPrice: z.number().nonnegative().superRefine(decimalNumberBounds('قیمت واحد')),
         location: z.string().optional(),
         notes: z.string().max(500).optional()
         // v10.0.235 (TD-941، تصمیم ت۹ ب): سفارش تدارکات ریالی و بی تخفیف ردیف است؛ کلید دیگری (مانند `discount`) ۴۰۰ می‌گیرد

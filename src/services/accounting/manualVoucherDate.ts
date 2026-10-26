@@ -23,6 +23,9 @@ export async function assertManualVoucherDate(tx: DbExecutor, iso: string, label
     );
   }
   const previousYear = resolveJalaliFiscalYear(today) - 1;
+  // a day from last year on is always allowed: the scan of the oldest voucher only matters for an earlier day
+  const lastYearFirstDay = jalaliYearBounds(previousYear)?.firstDay;
+  if (lastYearFirstDay && iso >= lastYearFirstDay) return;
   const oldest = await earliestVoucherYear(tx);
   const firstYear = oldest === null ? previousYear : Math.min(oldest, previousYear);
   const firstDay = jalaliYearBounds(firstYear)?.firstDay;

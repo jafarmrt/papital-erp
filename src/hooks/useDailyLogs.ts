@@ -288,7 +288,7 @@ export function useDailyLogs(user: User) {
     try {
       await fetchJson(`/daily-logs/${reviewModalLog.id}/review`, {
         method: 'PUT',
-        body: JSON.stringify({ manager_notes: reviewNotes })
+        body: JSON.stringify({ manager_notes: reviewNotes, version: reviewModalLog.version })
       });
       toast.success('بازخورد مدیریتی ثبت گردید');
       setReviewModalLog(null);

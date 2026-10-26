@@ -185,7 +185,7 @@ export class PayrollPaymentService {
       const accruedOn = String(payrollVoucher.date ?? '').slice(0, 10);
       if (/^\d{4}-\d{2}-\d{2}$/.test(accruedOn) && payIso < accruedOn) {
         throw new ValidationError(
-          `تاریخ پرداخت (${toPersianDigits(isoToJalaliDate(payIso))}) نمی‌تواند پیش از تاریخ سند فیش ${payroll.payrollNumber} (${toPersianDigits(isoToJalaliDate(accruedOn))}) باشد.`,
+          `تاریخ پرداخت (${toPersianDigits(isoToJalaliDate(payIso))}) نمی‌تواند پیش از تاریخ سند فیش ${payroll.payrollNumber} (${toPersianDigits(isoToJalaliDate(accruedOn))}) باشد؛ پرداختِ پیش از آن را مساعده ثبت کنید تا در فیش کسر شود.`,
           { paymentDate: payIso, payrollVoucherDate: accruedOn },
           'PAYROLL_PAYMENT_BEFORE_ACCRUAL'
         );

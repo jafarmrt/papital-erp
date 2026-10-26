@@ -273,9 +273,13 @@ export async function updateDailyLog(actor: AuthUserPayload, logId: number, body
 }
 
 /** Manager review (route guard `daily_logs.manage_all`): sets the notes and notifies the author */
-export async function reviewDailyLog(actor: AuthUserPayload, logId: number, managerNotes: string | undefined): Promise<DailyLogRow> {
+export async function reviewDailyLog(actor: AuthUserPayload, logId: number, managerNotes: string | undefined, version: number): Promise<DailyLogRow> {
   return orm.transaction(async (tx) => {
     const existing = await lockLog(tx, logId);
+    // v11 phase 6.1a (C10): a review of an older version would mark as reviewed a text the manager has not read
+    if (existing.version !== version) {
+      throw new ConflictError('نویسنده این گزارش کار را پس از باز شدن آن تغییر داده؛ دوباره باز کنید و بخوانید.', { currentVersion: existing.version }, 'OCC_CONFLICT');
+    }
     const [updated] = await tx.update(dailyWorkLogs)
       .set({ status: 'reviewed', managerNotes: managerNotes || '' })
       .where(eq(dailyWorkLogs.id, logId)).returning();

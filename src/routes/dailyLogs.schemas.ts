@@ -81,8 +81,14 @@ export const updateDailyLogSchema = z.object({
   params: z.object({ id: numericIdString })
 });
 
+// v11 phase 6.1a (C10, review of #403): the review sends the version of the log the manager read (409 OCC_CONFLICT when the
+// author changed it since), so a review never stands for a text the manager did not see
 export const reviewDailyLogSchema = z.object({
-  body: z.object({ manager_notes: z.string().max(DAILY_LOG_MANAGER_NOTES_MAX, atMost('یادداشت بازبینی', DAILY_LOG_MANAGER_NOTES_MAX)).optional() }),
+  body: z.object({
+    manager_notes: z.string().max(DAILY_LOG_MANAGER_NOTES_MAX, atMost('یادداشت بازبینی', DAILY_LOG_MANAGER_NOTES_MAX)).optional(),
+    version: z.coerce.number({ message: DAILY_LOG_VERSION_REQUIRED_MESSAGE })
+      .int(DAILY_LOG_VERSION_REQUIRED_MESSAGE).positive(DAILY_LOG_VERSION_REQUIRED_MESSAGE),
+  }),
   params: z.object({ id: numericIdString })
 });
 

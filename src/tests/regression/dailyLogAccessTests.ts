@@ -119,7 +119,7 @@ async function manageByPermissionCase(ctx: Ctx): Promise<string> {
 
   // a) a role with daily_logs.manage_all whose code is not "manager" reviews, edits and deletes another user's log
   const logA = await ctx.insertLog(author, { title: 'p13 private A', content: 'secret A' });
-  const review = await ctx.send(supervisor, 'put', `/api/daily-logs/${logA}/review`, { manager_notes: 'well done' });
+  const review = await ctx.send(supervisor, 'put', `/api/daily-logs/${logA}/review`, { manager_notes: 'well done', version: 1 });
   if (review.status !== 200) wrong.push(`manage_all review answered ${review.status}`);
   const edit = await ctx.send(supervisor, 'put', `/api/daily-logs/${logA}`, { version: 1, title: 'p13 private A edited' });
   if (edit.status !== 200) wrong.push(`manage_all edit answered ${edit.status}`);
@@ -140,7 +140,7 @@ async function manageByPermissionCase(ctx: Ctx): Promise<string> {
   try {
     const manager = await ctx.userWith([], 'manager');
     const logB = await ctx.insertLog(author, { title: 'p13 private B', content: 'secret B' });
-    const mReview = await ctx.send(manager, 'put', `/api/daily-logs/${logB}/review`, { manager_notes: 'x' });
+    const mReview = await ctx.send(manager, 'put', `/api/daily-logs/${logB}/review`, { manager_notes: 'x', version: 1 });
     if (mReview.status !== 403) wrong.push(`manager without manage_all review answered ${mReview.status}${mReview.body?.content ? ` and leaked «${mReview.body.content}»` : ''}`);
     const mGet = await ctx.send(manager, 'get', `/api/daily-logs/${logB}`);
     if (mGet.status !== 404) wrong.push(`manager without manage_all read a private log: ${mGet.status}`);
@@ -159,7 +159,7 @@ async function manageByPermissionCase(ctx: Ctx): Promise<string> {
   const logC = await ctx.insertLog(author, { title: 'p13 own C' });
   const own = await ctx.send(author, 'put', `/api/daily-logs/${logC}`, { version: 1, title: 'p13 own C edited' });
   if (own.status !== 200) wrong.push(`author edit answered ${own.status}`);
-  const ownReview = await ctx.send(author, 'put', `/api/daily-logs/${logC}/review`, { manager_notes: 'self' });
+  const ownReview = await ctx.send(author, 'put', `/api/daily-logs/${logC}/review`, { manager_notes: 'self', version: 1 });
   if (ownReview.status !== 403) wrong.push(`author without manage_all review answered ${ownReview.status}`);
 
   if (wrong.length > 0) throw new Error(wrong.join('; '));

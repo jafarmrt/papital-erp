@@ -287,6 +287,8 @@ export function normalizeError(err: unknown): NormalizedError {
         statusCode: 422,
         code: 'NUMERIC_OUT_OF_RANGE',
         stack: typeof errObj.stack === 'string' ? errObj.stack : undefined,
+        // TD-1320: the stack holds the SQL and its values; log files only
+        internal: true,
       };
     }
     const transient = typeof code === 'string' ? PG_TRANSIENT_ERRORS[code] : undefined;

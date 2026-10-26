@@ -34,13 +34,12 @@ export const decimalInput = (label: string) => z.union([z.number(), z.string()])
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${label} باید عدد معتبر باشد` });
       return z.NEVER;
     }
-    const issue = numberScaleIssue(v);
-    if (issue) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: decimalBoundMessage(label, issue) });
+    const read = readDecimalNumber(v);
+    if (typeof read !== 'string') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: decimalBoundMessage(label, read.issue) });
       return z.NEVER;
     }
-    // float noise of a computed number («0.30000000000000004») is cut at the stored scale, as the column would store it
-    return trimDecimalZeros(v.toFixed(DECIMAL_INPUT_MAX_SCALE));
+    return read;
   }
   const clean = normalizeGroupedDecimalString(v);
   if (clean === '') return undefined;
@@ -62,8 +61,9 @@ export const decimalInput = (label: string) => z.union([z.number(), z.string()])
 });
 
 /**
- * v11 phase 6.1a (M16, S10, S12, U7): every amount, rate and quantity column is `numeric(18,4)`, so a value read by
- * `decimalInput` has at most 14 whole digits and 4 decimals. Before, a larger value reached the database and came back as a
+ * v11 phase 6.1a (M16, S10, S12, U7): the money, price and quantity columns are `numeric(18,4)`, so a value read by
+ * `decimalInput` has at most 14 whole digits and 4 decimals (a narrower column, such as a percent `numeric(7,4)` or an
+ * integer field, keeps its own bound in its schema). Before, a larger value reached the database and came back as a
  * 500 `DATABASE_ERROR`, and a fifth decimal was rounded by the column while the service had already priced the unrounded
  * quantity (a Kardex row of quantity 0.0000 worth 0.011, a transfer of zero).
  */
@@ -83,10 +83,30 @@ export function decimalTextScaleIssue(text: string): DecimalBoundIssue | null {
   return null;
 }
 
-function numberScaleIssue(value: number): DecimalBoundIssue | null {
-  if (Math.abs(value) >= 10 ** DECIMAL_INPUT_MAX_WHOLE_DIGITS) return 'size';
-  const scaled = value * 10 ** DECIMAL_INPUT_MAX_SCALE;
-  return Math.abs(scaled - Math.round(scaled)) > 1e-6 * Math.max(1, Math.abs(scaled)) ? 'scale' : null;
+/** a finite number as plain decimal text, never in exponent form («1e-7» → «0.0000001») */
+function plainDecimalText(value: number): string {
+  const text = String(value);
+  return /e/i.test(text) ? trimDecimalZeros(value.toFixed(20)) : text;
+}
+
+/** the 15 significant digits a double holds exactly: the float noise of a computed number goes, a typed decimal stays */
+const DOUBLE_EXACT_DIGITS = 15;
+
+/**
+ * A JSON number as the decimal text the bounds are checked on, or the bound it breaks. The number's shortest form
+ * (`String`) is the text the sender wrote whenever it has at most 4 decimals; a longer form is cut to the 15 significant
+ * digits a double holds exactly, which turns the noise of a computed number («0.30000000000000004») into its value («0.3»)
+ * and keeps a fifth decimal the user typed («100.00005»), which is refused like the same text. Before (review of #403), a
+ * tolerance relative to the size let a fifth decimal of any number above about 50 through, rounded by `toFixed`, which
+ * also wrote binary digits above about 1e13.
+ */
+function readDecimalNumber(value: number): string | { issue: DecimalBoundIssue } {
+  if (Math.abs(value) >= 10 ** DECIMAL_INPUT_MAX_WHOLE_DIGITS) return { issue: 'size' };
+  const shortest = plainDecimalText(value);
+  if (!decimalTextScaleIssue(shortest)) return shortest;
+  const exact = plainDecimalText(Number(value.toPrecision(DOUBLE_EXACT_DIGITS)));
+  const issue = decimalTextScaleIssue(exact);
+  return issue ? { issue } : exact;
 }
 
 function decimalBoundMessage(label: string, issue: DecimalBoundIssue): string {
@@ -94,6 +114,16 @@ function decimalBoundMessage(label: string, issue: DecimalBoundIssue): string {
     ? `${label} بیش از اندازهٔ مجاز است (حداکثر ۱۴ رقم پیش از ممیز).`
     : `${label} حداکثر ۴ رقم پس از ممیز می‌پذیرد.`;
 }
+
+/**
+ * v11 phase 6.1a (M16, review of #403): the same 14-digit / 4-decimal bound for a field that stays a JSON number
+ * (`z.number()`, `z.coerce.number()`), as a `superRefine` step: `z.number().positive().superRefine(decimalNumberBounds('مقدار'))`
+ */
+export const decimalNumberBounds = (label: string) => (value: number, ctx: z.RefinementCtx): void => {
+  if (!Number.isFinite(value)) return;
+  const read = readDecimalNumber(value);
+  if (typeof read !== 'string') ctx.addIssue({ code: z.ZodIssueCode.custom, message: decimalBoundMessage(label, read.issue) });
+};
 
 /** v8.0.108 (TD-385): شماره‌ها و شناسه‌های متنی (شماره چک، شناسه صیادی) با ارقام لاتین ذخیره می‌شوند */
 export const latinDigitsString = z.string().transform(v => toLatinDigits(v).trim());

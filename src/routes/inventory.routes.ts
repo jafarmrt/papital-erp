@@ -3,7 +3,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission, can, requirePermission, userHasRoleOrPermission } from '../middleware/authorize.js';
 import { BACKDATE_PERMISSION } from '../services/inventory/stockMovementDate.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString, decimalInput } from '../middleware/validate.js';
+import { validate, paramsIdSchema, numericIdString, decimalInput, decimalNumberBounds } from '../middleware/validate.js';
 import { fin } from '../lib/financialDecimal.js';
 import { InventoryIntegrityService } from '../services/inventory/inventoryIntegrity.service.js';
 import { ItemsService } from '../services/items.service.js';
@@ -97,7 +97,7 @@ export const allocationsQuerySchema = z.object({
 
 export const bomAllocationItemSchema = z.object({
   itemId: z.coerce.number().int().positive('شناسه کالا باید عدد مثبت باشد'),
-  quantity: z.coerce.number().positive('مقدار تخصیص باید بزرگتر از صفر باشد'),
+  quantity: z.coerce.number().positive('مقدار تخصیص باید بزرگتر از صفر باشد').superRefine(decimalNumberBounds('مقدار تخصیص')),
   location: z.string().optional(),
   notes: z.string().optional()
 });

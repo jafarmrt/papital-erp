@@ -98,23 +98,26 @@ export async function runInputGuardsV11Tests(shouldRun: ShouldRun): Promise<Test
 
   const m12 = 'reg_cheque_and_payslip_date_order_v11_6_1a_m12';
   if (shouldRun(m12, 'v11', 'phase6', 'm12', 'cheque', 'payroll', 'payment', 'date')) {
-    await runCase(results, m12, 'v11 phase 6.1a (M12): a cheque due before its issue day is refused, a cheque step dated before its previous step is refused, and a payslip payment dated before the payslip\'s voucher is refused; in-order dates are accepted', () => inFiscalSandbox(async () => {
+    await runCase(results, m12, 'v11 phase 6.1a (M12): a paid cheque due before its issue day is refused (a received one already due is recorded), a cheque step dated before its previous step is refused, and a payslip payment dated before the payslip\'s voucher is refused; in-order dates are accepted', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const today = await businessTodayIsoDate();
       const yesterday = shiftDay(today, -1);
       const contra = await miscContraAccountId();
-      const cheque = (issueDate: string, dueDate: string) => api.post('/api/accounting/cheques', {
-        type: 'received', chequeNumber: `M12${tagOf()}`, amount: 250_000, partyType: 'other', contraAccountId: contra, partyName: 'M12 party',
-        bankName: BANK_NAME, issueDate, dueDate,
+      const chequeOf = (type: 'received' | 'paid', issueDate: string, dueDate: string, extra: Record<string, unknown> = {}) => api.post('/api/accounting/cheques', {
+        type, chequeNumber: `M12${tagOf()}`, amount: 250_000, partyType: 'other', contraAccountId: contra, partyName: 'M12 party',
+        bankName: BANK_NAME, issueDate, dueDate, ...extra,
       });
+      const cheque = (issueDate: string, dueDate: string) => chequeOf('received', issueDate, dueDate);
       const cheques = () => count(sql`SELECT count(*)::int AS n FROM cheques WHERE is_deleted = 0`);
 
-      // 1) due before issue
+      // 1) a paid cheque due before its issue is refused; a received cheque that is already due is recorded
       const before = await cheques();
-      const early = await cheque(today, yesterday);
-      if (early.status !== 422 || codeOf(early) !== 'CHEQUE_DUE_BEFORE_ISSUE') problems.push(`a cheque due the day before its issue returned ${brief(early)}, expected 422 CHEQUE_DUE_BEFORE_ISSUE`);
+      const early = await chequeOf('paid', today, yesterday, { bankAccountId: await fundedBank() });
+      if (early.status !== 422 || codeOf(early) !== 'CHEQUE_DUE_BEFORE_ISSUE') problems.push(`a paid cheque due the day before its issue returned ${brief(early)}, expected 422 CHEQUE_DUE_BEFORE_ISSUE`);
       if (await cheques() !== before) problems.push('the refused cheque was saved');
+      const overdue = await cheque(today, shiftDay(today, -3));
+      if (overdue.status !== 201 && overdue.status !== 200) problems.push(`a received cheque already due returned ${brief(overdue)}, expected it recorded`);
 
       // 2) a step before the issue day, then one on it
       const ok = await cheque(today, today);
@@ -140,7 +143,7 @@ export async function runInputGuardsV11Tests(shouldRun: ShouldRun): Promise<Test
       const paid = await refusalOf(() => pay('2026-04-30'));
       if (paid) problems.push(`a payment dated the payslip voucher's day was refused: ${paid}`);
       assertNoProblems(problems);
-      return 'cheque due before issue 422, not saved; step before issue 422, cheque still received; step on issue day 200; payslip voucher 2026-04-30: payment 2026-04-10 refused with no treasury row, 2026-04-30 accepted';
+      return 'paid cheque due before issue 422, not saved; received cheque already due recorded; step before issue 422, cheque still received; step on issue day 200; payslip voucher 2026-04-30: payment 2026-04-10 refused with no treasury row, 2026-04-30 accepted';
     }));
   }
 
@@ -221,7 +224,7 @@ export async function runInputGuardsV11Tests(shouldRun: ShouldRun): Promise<Test
 
   const c10 = 'reg_daily_log_date_and_review_v11_6_1a_c10';
   if (shouldRun(c10, 'v11', 'phase6', 'c10', 'daily_log', 'review')) {
-    await runCase(results, c10, 'v11 phase 6.1a (C10): a work log dated after today is refused on create and edit; a reviewed log whose text changes goes back to submitted, an edit of its tags keeps the review', () => inFiscalSandbox(async () => {
+    await runCase(results, c10, 'v11 phase 6.1a (C10): a work log dated after today is refused on create and edit; a reviewed log whose text changes goes back to submitted, an edit of its tags keeps the review, and a review of an older version is refused', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const today = await businessTodayIsoDate();
@@ -241,7 +244,7 @@ export async function runInputGuardsV11Tests(shouldRun: ShouldRun): Promise<Test
       if (movedAhead.status !== 422 || codeOf(movedAhead) !== 'DAILY_LOG_DATE_IN_FUTURE') problems.push(`moving the log to tomorrow returned ${brief(movedAhead)}, expected 422 DAILY_LOG_DATE_IN_FUTURE`);
 
       const review = async () => {
-        const res = await api.put(`/api/daily-logs/${id}/review`, { manager_notes: 'C10 review' });
+        const res = await api.put(`/api/daily-logs/${id}/review`, { manager_notes: 'C10 review', version: (await stored()).version });
         if (res.status !== 200) throw new Error(`setup: review ${brief(res)}`);
       };
       await review();
@@ -251,8 +254,12 @@ export async function runInputGuardsV11Tests(shouldRun: ShouldRun): Promise<Test
       const text = await api.put(`/api/daily-logs/${id}`, { content: LOG_TEXT_CHANGED, version: (await stored()).version });
       if (text.status !== 200) problems.push(`editing the text returned ${brief(text)}`);
       if ((await stored()).status !== 'submitted') problems.push(`after its text changed the reviewed log is ${(await stored()).status}, expected submitted`);
+      // a review sent from the page the manager opened before the text changed is refused, and the log stays submitted
+      const stale = await api.put(`/api/daily-logs/${id}/review`, { manager_notes: 'C10 stale review', version: (await stored()).version - 1 });
+      if (stale.status !== 409 || codeOf(stale) !== 'OCC_CONFLICT') problems.push(`a review of the older version returned ${brief(stale)}, expected 409 OCC_CONFLICT`);
+      if ((await stored()).status !== 'submitted') problems.push(`the stale review left the log ${(await stored()).status}`);
       assertNoProblems(problems);
-      return 'log dated tomorrow 422 on create and edit, not saved; reviewed log: tag edit keeps reviewed, text edit returns it to submitted';
+      return 'log dated tomorrow 422 on create and edit, not saved; reviewed log: tag edit keeps reviewed, text edit returns it to submitted; a review of the older version 409';
     }));
   }
 

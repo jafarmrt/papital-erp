@@ -20,6 +20,7 @@ import { exactTreasuryAmount } from './treasuryAmount.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { assertChequeDueAfterIssue, assertChequeStepAfterPrevious } from './chequeDateOrder.js';
 import { sameTreasuryCurrency } from '../../../lib/treasury/treasuryCurrency.js';
+import { businessTodayIsoDate } from '../../../lib/businessClock.js';
 import { assertChequeClearingAccountType, requireChequeBankAccount } from './bankLinks.js';
 import { normalizePartyPurpose, requireChoosableContraAccount } from './partyContraAccount.js';
 import { assertPersonnelPartyId, resolveTreasuryPartyName } from './treasuryLinks.js';
@@ -227,7 +228,7 @@ export class ChequeLifecycleService {
     // (مانند فرم خزانه). سررسید آینده همچنان مجاز است.
     const issueDate = await resolveTreasuryWriteDate(data.issueDate, 'تاریخ صدور چک');
     const dueDate = requireStorageDate(data.dueDate, 'تاریخ سررسید چک');
-    assertChequeDueAfterIssue(issueDate, dueDate);
+    assertChequeDueAfterIssue(data.type, issueDate, dueDate);
     const dueJalali = isoToJalaliDate(dueDate);
 
     const initialHistory = [{
@@ -491,7 +492,7 @@ export class ChequeLifecycleService {
       const voucherIsoDate = await resolveTreasuryWriteDate(data.actionDate, 'تاریخ اقدام چک');
       // v11 phase 3.1 (M5): no cheque step is dated in a closed fiscal year, whether the step issues a voucher or not
       await VoucherService.checkFiscalPeriodOpen(voucherIsoDate, txEngine);
-      assertChequeStepAfterPrevious(voucherIsoDate, existing.issueDate, existing.statusHistory);
+      assertChequeStepAfterPrevious(voucherIsoDate, existing.issueDate, existing.statusHistory, await businessTodayIsoDate());
 
       // V1.7.0: کدینگ از مپینگ قابل‌تنظیم
       await ChartOfAccountsService.getAllAccounts(txEngine);
