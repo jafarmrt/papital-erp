@@ -268,6 +268,10 @@ if [ -z "$UPDATE_RESUME" ]; then
   if [ "$SKIP_BACKUP" -eq 0 ] && [ -f scripts/backup.sh ]; then BACKUP_STEP=1; fi
   update_space_check "$APP_DIR" "$UPDATE_MODE" "$BACKUP_STEP" "$REHEARSE" || die "$UPDATE_SPACE_MESSAGE"
   success "Free disk space: $(( UPDATE_SPACE_FREE_KB / 1024 )) MB on the disk of ${APP_DIR} (the update needs about $(( UPDATE_SPACE_NEED_KB / 1024 )) MB)."
+  update_database_space_check "$APP_DIR" || die "$UPDATE_DB_SPACE_MESSAGE"
+  if [ -n "$UPDATE_DB_SPACE_NEED_KB" ]; then
+    success "Free disk space for the database: $(( UPDATE_DB_SPACE_FREE_KB / 1024 )) MB left for it (the migrations may need about $(( UPDATE_DB_SPACE_NEED_KB / 1024 )) MB, twice the database)."
+  fi
   update_memory_check || die "$UPDATE_MEMORY_MESSAGE"
   if [ -n "$UPDATE_MEMORY_FREE_MB" ]; then
     success "Free memory: ${UPDATE_MEMORY_FREE_MB} MB of RAM and swap (the build needs about ${UPDATE_MIN_MEMORY_MB:-2048} MB)."
