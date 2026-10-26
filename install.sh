@@ -77,18 +77,22 @@ $SUDO apt-get update -y
 # v10.2.23 (OBS-R1-22): rsync syncs a manual update's source (update.sh --source / --zip)
 $SUDO apt-get install -y curl git ca-certificates openssl gnupg rclone rsync
 
-# PostgreSQL (>=14 required; add PGDG repo when distro version is older)
-PG_MAJOR="$(psql --version 2>/dev/null | grep -oE '^[0-9]+' | head -1 || true)"
-if [ -z "$PG_MAJOR" ] || [ "$PG_MAJOR" -lt 14 ]; then
+# PostgreSQL 16, the version CI tests: from the distribution when it has it (Ubuntu 24.04), else from PGDG.
+# v11 (phase 5.3): the earlier check of `psql --version` never matched, so every install added PGDG and also its
+# postgresql-contrib, which pulls in PGDG's newest major; that major's client tools write dumps version 16 cannot read
+# (scripts/backup.sh checks every dump). The contrib modules are part of postgresql-16.
+if [ -x /usr/lib/postgresql/16/bin/postgres ]; then
+  log "PostgreSQL 16 is already installed."
+elif apt-cache policy postgresql-16 2>/dev/null | grep -qE 'Candidate: [0-9]'; then
+  $SUDO apt-get install -y postgresql-16
+else
   log "Installing PostgreSQL 16 from PGDG repository..."
   . /etc/os-release
   curl -fsSL "https://www.postgresql.org/media/keys/ACCC4CF8.asc" | $SUDO gpg --batch --yes --dearmor -o /usr/share/keyrings/pgdg.gpg
   echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
     | $SUDO tee /etc/apt/sources.list.d/pgdg.list >/dev/null
   $SUDO apt-get update -y
-  $SUDO apt-get install -y postgresql-16 postgresql-contrib
-else
-  $SUDO apt-get install -y postgresql postgresql-contrib
+  $SUDO apt-get install -y postgresql-16
 fi
 $SUDO systemctl enable --now postgresql
 
@@ -126,6 +130,25 @@ fi
 # v11 (O3): the scripts of a source unpacked from a zip without unix modes are made executable again, as git keeps them
 chmod a+x ./*.sh scripts/*.sh 2>/dev/null || true
 success "Source ready at $APP_DIR"
+
+# ---------- 3b) Service user (v11, phase 5.3, TD-1354) ----------
+# A new install runs the service as its own system user, not as root. That user owns only what the app writes (logs,
+# uploads, media library, backups) and reads .env through its group; the code stays with the installing user, so the app
+# cannot change the scripts root runs at night. SERVICE_USER=root keeps the earlier layout (everything as root).
+SERVICE_USER="${SERVICE_USER:-papital}"
+as_service_user() { if [ -n "$SUDO" ]; then $SUDO -u "$SERVICE_USER" "$@"; else runuser -u "$SERVICE_USER" -- "$@"; fi; }
+if ! id "$SERVICE_USER" >/dev/null 2>&1; then
+  # a home of its own holds the user's rclone configuration of the off-server copy (docs/OFFSITE_BACKUP.md)
+  $SUDO useradd --system --user-group --home-dir "/var/lib/${SERVICE_USER}" --no-create-home --shell /usr/sbin/nologin "$SERVICE_USER"
+  success "System user $SERVICE_USER created for the service."
+fi
+SERVICE_GROUP="$(id -gn "$SERVICE_USER")"
+SERVICE_HOME="$(getent passwd "$SERVICE_USER" | cut -d: -f6)"
+if [ "$SERVICE_USER" != root ] && [ -n "$SERVICE_HOME" ] && [ "$SERVICE_HOME" != /nonexistent ] && [ ! -e "$SERVICE_HOME" ]; then
+  $SUDO install -d -m 750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$SERVICE_HOME"
+fi
+as_service_user test -r "$APP_DIR/package.json" \
+  || die "The service user $SERVICE_USER cannot read ${APP_DIR} (a folder inside a home folder?). Put the source in /opt/papital-erp and run install.sh there, or run with SERVICE_USER=$(id -un). Nothing was installed yet."
 
 # ---------- 4) Database & .env ----------
 log "[3/7] Preparing database and .env ..."
@@ -186,6 +209,32 @@ fi
 # v9.0.187 (TD-609): the encryption key of stored third-party passwords and the webhook signing token; only added
 # when missing, never changed. Keep ERP_SECRETS_KEY with the backups: encrypted values cannot be read without it.
 bash scripts/ensure-env-secrets.sh .env || die "Could not add the generated secrets to .env"
+# v11 (phase 5.3): the service reads .env through its group; nobody else reads it
+if [ "$SERVICE_USER" != "$(id -un)" ]; then
+  $SUDO chown "$(id -un):${SERVICE_GROUP}" .env
+  chmod 640 .env
+fi
+# shellcheck source=scripts/env-file.sh
+source scripts/env-file.sh
+# what the app writes belongs to the service user: logs, uploads with their attachments, the media library
+state_dir() { case "$1" in /*) echo "$1" ;; *) echo "$APP_DIR/$1" ;; esac; }
+UPLOADS_STATE="$APP_DIR/public/uploads"
+for dir in "$(state_dir "$(env_file_get .env LOG_DIR)")" "$UPLOADS_STATE" \
+  "$(state_dir "$(env_file_get .env ATTACHMENTS_DIR)")" "$UPLOADS_STATE/.attachments" \
+  "$(state_dir "$(env_file_get .env MEDIA_DIR)")" "$APP_DIR/media-library" "$APP_DIR/logs"; do
+  [ "$dir" != "$APP_DIR/" ] || continue
+  case "$dir" in
+    "$APP_DIR"/*) ;;
+    # a folder of .env outside the app that is already there may be shared with others: it is not taken over
+    *) if [ -d "$dir" ] && [ "$(stat -c %U "$dir")" != "$SERVICE_USER" ]; then
+         warn "$dir is not owned by ${SERVICE_USER}; give it to the service: sudo chown -R ${SERVICE_USER}:${SERVICE_GROUP} $dir"
+         continue
+       fi ;;
+  esac
+  # files an earlier install left there (INSTALL_AGAIN=1) go to the service user too; links are not followed
+  if [ -d "$dir" ] && [ "$(stat -c %U "$dir")" != "$SERVICE_USER" ]; then $SUDO chown -R -h "$SERVICE_USER:$SERVICE_GROUP" "$dir"; fi
+  $SUDO install -d -m 750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$dir"
+done
 
 # ---------- 5) Install & build ----------
 log "[4/7] Installing npm dependencies (npm ci)..."
@@ -209,9 +258,19 @@ ExecStart=$(command -v node) --env-file=${APP_DIR}/.env ${APP_DIR}/dist/server.c
 Environment=NODE_ENV=production
 Restart=always
 RestartSec=5
-# v10.2.24 (OBS-R1-16): the service runs as the installing user (root under plain sudo); a separate service user needs
-# update.sh to keep .env, logs and uploads owned by it, which is open in TD-1354
-User=$(id -un)
+# v11 (phase 5.3, TD-1354): its own system user (SERVICE_USER, default papital), files private to it (UMask), and no
+# way to gain rights or to change the system
+User=${SERVICE_USER}
+Group=${SERVICE_GROUP}
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
 # MemoryLimit=2G
 [Install]
 WantedBy=multi-user.target
@@ -224,12 +283,10 @@ success "systemd service ${SERVICE_NAME} enabled and started."
 
 # v10.0.3 (TD-1020): the daily backup and the five-minute monitor run from one cron file; the backup directory
 # belongs to the service user and only it can read it (scripts/backup.sh, TD-585)
-# v11 (O5): .env read as the service reads it (scripts/env-file.sh)
-# shellcheck source=scripts/env-file.sh
-source scripts/env-file.sh
+# v11 (O5): .env read as the service reads it (scripts/env-file.sh); v11 (phase 5.3): the jobs run as the service user
 BACKUP_DIR_ENV="$(env_file_get .env BACKUP_DIR)"
-$SUDO install -d -m 700 -o "$(id -un)" "${BACKUP_DIR_ENV:-/var/backups/erp}"
-$SUDO env APP_DIR="$APP_DIR" bash scripts/install-ops-cron.sh "$(id -un)" || die "Could not install the backup and monitor schedule"
+$SUDO install -d -m 700 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "${BACKUP_DIR_ENV:-/var/backups/erp}"
+$SUDO env APP_DIR="$APP_DIR" bash scripts/install-ops-cron.sh "$SERVICE_USER" || die "Could not install the backup and monitor schedule"
 success "Daily backup and monitor schedule installed (/etc/cron.d/papital-erp)."
 
 # ---------- 7) Health probe ----------

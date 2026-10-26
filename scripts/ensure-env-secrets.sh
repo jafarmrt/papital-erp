@@ -45,5 +45,7 @@ for key in ERP_SECRETS_KEY ERP_WEBHOOK_SECRET_TOKEN METRICS_TOKEN; do
   echo "Added ${key} to $ENV_FILE"
   added=$((added + 1))
 done
-chmod 600 "$ENV_FILE"
+# v11 (phase 5.3, TD-1354): a .env given to the group of the service user (install.sh) keeps that group's read;
+# nobody else reads it
+if [ "$(stat -c %g "$ENV_FILE")" != "$(id -g "$(stat -c %U "$ENV_FILE")" 2>/dev/null)" ]; then chmod 640 "$ENV_FILE"; else chmod 600 "$ENV_FILE"; fi
 [ "$added" -gt 0 ] || echo "All generated secrets already present in $ENV_FILE"

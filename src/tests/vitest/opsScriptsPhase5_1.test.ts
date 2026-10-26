@@ -308,7 +308,7 @@ esac`, { mode: 0o755 });
     spawnSync('chown', ['-R', 'nobody', m.app]);
     const r = m.run();
     expect(r.status).toBe(1);
-    expect(r.stdout).toContain(`sudo -u nobody bash ${m.app}/scripts/restore-media.sh`);
+    expect(r.stdout).toContain(`sudo -u nobody -H bash ${m.app}/scripts/restore-media.sh`);
     expect(fs.existsSync(path.join(m.app, 'media-library'))).toBe(false);
   });
 

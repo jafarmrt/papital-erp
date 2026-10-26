@@ -248,28 +248,41 @@ fi
 # which is not always the name of <dir>; it is unpacked into a new folder beside <dir> and that one folder is moved to
 # <dir>, so the files land where the log says. Both archives are unpacked and checked before the database is swapped,
 # so an archive that cannot be used stops the run while nothing was changed.
+# v11 (phase 5.3, TD-1354): the files belong to whoever owns the folder (the service user of a new install); root
+# unpacks in a folder of another user as that user, and in a folder of its own without the owners of the archive, then
+# gives the unpacked files to the owner of <dir>. Links are never followed.
+as_owner() {
+  local owner="$1"; shift
+  if [ "$(id -u)" -eq 0 ] && [ "$owner" != root ]; then runuser -u "$owner" -- "$@"; else "$@"; fi
+}
 unpack_archive() {
-  local archive="$1" dir="$2" parent unpack entries
+  local archive="$1" dir="$2" parent unpack entries owner target_owner
   UNPACKED=""
   [ -f "$archive" ] || return 0
   parent="$(dirname "$dir")"
   # never inside the uploads folder, which is itself moved aside before the attachments are put in place
   case "$parent/" in "$UPLOADS_DIR"/*) parent="$(dirname "$UPLOADS_DIR")" ;; esac
   mkdir -p "$parent"
-  unpack="$(mktemp -d "$parent/.restore_unpack_XXXXXX")"
+  owner="$(stat -c %U "$parent")"
+  unpack="$(as_owner "$owner" mktemp -d "$parent/.restore_unpack_XXXXXX")"
   UNPACK_DIRS+=("$unpack")
-  tar -xzf "$archive" -C "$unpack" || fail "cannot unpack $archive; nothing was changed"
+  # the archive is read by this script and only its contents reach tar
+  as_owner "$owner" tar -xzf - --no-same-owner -C "$unpack" < "$archive" || fail "cannot unpack $archive; nothing was changed"
   entries="$(find "$unpack" -mindepth 1 -maxdepth 1 | wc -l)"
-  if [ "$entries" -ne 1 ] || [ ! -d "$(find "$unpack" -mindepth 1 -maxdepth 1)" ]; then
+  if [ "$entries" -ne 1 ] || [ ! -d "$(find "$unpack" -mindepth 1 -maxdepth 1)" ] || [ -L "$(find "$unpack" -mindepth 1 -maxdepth 1)" ]; then
     fail "$archive does not hold exactly one folder; nothing was changed"
   fi
   UNPACKED="$(find "$unpack" -mindepth 1 -maxdepth 1)"
+  target_owner="$(stat -c %U:%G "$dir" 2>/dev/null || true)"
+  if [ "$(id -u)" -eq 0 ] && [ "$owner" = root ] && [ -n "$target_owner" ] && [ "${target_owner%%:*}" != root ]; then
+    chown -R -h "$target_owner" "$UNPACKED" || fail "cannot give the files of $archive to ${target_owner}; nothing was changed"
+  fi
 }
 place_archive() {
   local archive="$1" unpacked="$2" dir="$3"
   [ -n "$unpacked" ] || return 0
-  if [ -e "$dir" ]; then mv "$dir" "$dir.before_restore_${TIMESTAMP}"; log "Previous $(basename "$dir") kept as $dir.before_restore_${TIMESTAMP}"; fi
-  mv "$unpacked" "$dir"
+  if [ -e "$dir" ] || [ -L "$dir" ]; then mv -T "$dir" "$dir.before_restore_${TIMESTAMP}"; log "Previous $(basename "$dir") kept as $dir.before_restore_${TIMESTAMP}"; fi
+  mv -T "$unpacked" "$dir"
   rmdir "$(dirname "$unpacked")"
   log "Files restored from $archive into $dir"
 }
