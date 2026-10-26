@@ -8,6 +8,7 @@
 set -euo pipefail
 
 LOG_FILE="install-$(date +%Y%m%d-%H%M%S).log"
+( umask 077; : >> "$LOG_FILE" )
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 log()      { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
@@ -59,6 +60,14 @@ if [ "$LOCAL_MODE" -eq 0 ]; then
     [ -n "$REPO_URL" ] || die "Repository URL is required."
   fi
 fi
+
+# v11 (O9): an install that already runs is updated by update.sh, which takes a backup first, builds beside the running
+# version and checks the start; running install.sh again built in place without any of that. Stopped before anything
+# changes. A folder without .env (a reinstall over a kept database) or without a build still goes on.
+if [ -f "$APP_DIR/.env" ] && [ -f "$APP_DIR/dist/server.cjs" ] && [ "${INSTALL_AGAIN:-0}" != "1" ]; then
+  die "Papital ERP is already installed in ${APP_DIR}. Update it with: cd ${APP_DIR} && sudo ./update.sh (it takes a backup first). Nothing was changed. Only to rebuild a broken install in place, without a backup: INSTALL_AGAIN=1 bash install.sh"
+fi
+[ "${INSTALL_AGAIN:-0}" != "1" ] || warn "INSTALL_AGAIN=1: installing again over ${APP_DIR} without a backup."
 
 # ---------- 2) System dependencies ----------
 log "[1/7] Installing system dependencies (curl, git, OpenSSL, PostgreSQL, Node.js 24)..."
@@ -114,6 +123,8 @@ fi
 if git -C "$APP_DIR" remote get-url origin 2>/dev/null | grep -qE '^https?://[^/@]+@'; then
   warn "The git remote of $APP_DIR holds an access token in .git/config; remove it with: git remote set-url origin <URL without the token>"
 fi
+# v11 (O3): the scripts of a source unpacked from a zip without unix modes are made executable again, as git keeps them
+chmod a+x ./*.sh scripts/*.sh 2>/dev/null || true
 success "Source ready at $APP_DIR"
 
 # ---------- 4) Database & .env ----------

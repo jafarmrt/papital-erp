@@ -30,25 +30,19 @@ describe('secrets_key_missing_warns_td_1286', () => {
   });
 });
 
-const UPDATE_SH = () => readFileSync(path.join(ROOT, 'update.sh'), 'utf8');
-
-/** The ERP_SECRETS_KEY step of update.sh with its own log helpers, run on its own against a scratch app directory. */
-function updateKeyStep(): string {
-  const src = UPDATE_SH();
-  const start = src.indexOf('# v10.1.68 (TD-1286)');
-  expect(start).toBeGreaterThan(0);
-  const end = src.indexOf('\nfi\n', start);
-  expect(end).toBeGreaterThan(start);
-  // the step runs before the pre-update backup, so a failed update later on still leaves the key in place
-  expect(start).toBeLessThan(src.indexOf('# ---------- 1) Pre-update database backup'));
-  const helpers = src.split('\n').filter(l => /^(log|warn)\(\)/.test(l));
-  expect(helpers).toHaveLength(2);
-  return `${helpers.join('\n')}\n${src.slice(start, end + 4)}`;
-}
-
+/**
+ * v11 (O10, O17): update.sh adds the generated keys a server lacks through update_refresh_ops_config of
+ * scripts/update-steps.sh, right before the restart (so a run stopped earlier leaves .env as it was); run here on its own
+ * against a scratch app directory, with the cron file in the scratch directory too.
+ */
 function runStep(appDir: string): string {
-  const prelude = ['set -euo pipefail', `APP_DIR=${JSON.stringify(appDir)}`, 'cd "$APP_DIR"'].join('\n');
-  return execFileSync('bash', ['-c', `${prelude}\n${updateKeyStep()}`], { encoding: 'utf8' });
+  const code = [
+    'set -euo pipefail',
+    `source ${JSON.stringify(path.join(ROOT, 'scripts/update-steps.sh'))}`,
+    `update_refresh_ops_config ${JSON.stringify(appDir)}`,
+    'for n in "${UPDATE_OPS_NOTES[@]}"; do case "$n" in WARN:*|Added*) echo "$n" ;; esac; done',
+  ].join('\n');
+  return execFileSync('bash', ['-c', code], { encoding: 'utf8', env: { ...process.env, CRON_FILE: path.join(appDir, 'cron.d/papital-erp') } });
 }
 
 describe('update_adds_missing_secrets_key_td_1286', () => {
@@ -58,21 +52,22 @@ describe('update_adds_missing_secrets_key_td_1286', () => {
   function scratchApp(env: string): string {
     dir = mkdtempSync(path.join(tmpdir(), 'td1286-'));
     mkdirSync(path.join(dir, 'scripts'));
-    copyFileSync(path.join(ROOT, 'scripts/ensure-env-secrets.sh'), path.join(dir, 'scripts/ensure-env-secrets.sh'));
+    for (const f of ['ensure-env-secrets.sh', 'install-ops-cron.sh', 'backup.sh']) copyFileSync(path.join(ROOT, 'scripts', f), path.join(dir, 'scripts', f));
     writeFileSync(path.join(dir, '.env'), env);
     return dir;
   }
   const envOf = (app: string) => readFileSync(path.join(app, '.env'), 'utf8');
 
-  it('adds only ERP_SECRETS_KEY to a .env without it and keeps the existing values', () => {
+  it('adds ERP_SECRETS_KEY and METRICS_TOKEN to a .env without them and keeps the existing values', () => {
     const app = scratchApp('PORT=3000\nJWT_SECRET=keep-me');
     const out = runStep(app);
     const env = envOf(app);
     expect(env).toMatch(/^ERP_SECRETS_KEY=[0-9a-f]{64}$/m);
+    expect(env).toMatch(/^METRICS_TOKEN=[0-9a-f]{64}$/m);
     expect(env).toMatch(/^JWT_SECRET=keep-me$/m);
-    // the echo token would replace the stored one and the metrics token would start monitor alerts
+    // the echo token would replace the one the settings hold
     expect(env).not.toContain('ERP_WEBHOOK_SECRET_TOKEN');
-    expect(env).not.toContain('METRICS_TOKEN');
+    expect(out).toContain('Added to .env: ERP_SECRETS_KEY METRICS_TOKEN');
     expect(out).toContain('ERP_SECRETS_KEY was missing and has been added');
     expect(out).toContain('off this server');
     expect(out).not.toMatch(/[0-9a-f]{64}/);
@@ -84,17 +79,25 @@ describe('update_adds_missing_secrets_key_td_1286', () => {
     '  ERP_SECRETS_KEY="existing"',
     "ERP_SECRETS_KEY = 'existing'",
   ])('leaves a key already present as %j untouched and stays silent', line => {
-    const before = `PORT=3000\n${line}\n`;
+    const before = `PORT=3000\n${line}\nMETRICS_TOKEN=present\n`;
     const app = scratchApp(before);
-    expect(runStep(app)).toBe('');
+    expect(runStep(app).split('\n').filter(l => l && !l.includes('cron file'))).toEqual([]);
     expect(envOf(app)).toBe(before);
   });
 
   it.each(['ERP_SECRETS_KEY=', 'ERP_SECRETS_KEY=""'])('warns and keeps an empty key line %j as it is', line => {
-    const before = `PORT=3000\n${line}\n`;
+    const before = `PORT=3000\n${line}\nMETRICS_TOKEN=present\n`;
     const app = scratchApp(before);
     expect(runStep(app)).toContain('ERP_SECRETS_KEY is empty in .env and was left as it is');
     expect(envOf(app)).toBe(before);
+  });
+
+  it('update.sh adds them right before the restart, not before its tool checks (O17)', () => {
+    const update = readFileSync(path.join(ROOT, 'update.sh'), 'utf8');
+    expect(update).not.toContain('ensure-env-secrets.sh "$APP_DIR/.env"');
+    const refresh = update.indexOf('update_refresh_ops_config "$APP_DIR"');
+    expect(refresh).toBeGreaterThan(update.indexOf('command -v rsync'));
+    expect(refresh).toBeLessThan(update.indexOf('log "[5/6] Restarting service..."'));
   });
 
   it('ensure-env-secrets.sh still adds every missing key without a key list and refuses an unknown key', () => {

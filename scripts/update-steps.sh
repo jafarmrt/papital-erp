@@ -292,7 +292,18 @@ update_sync_source() {
   local source_dir="$1" app_dir="$2"
   update_assert_source_outside "$source_dir" "$app_dir" || return 1
   update_state_excludes "$app_dir"
-  rsync -a --checksum --delete "${UPDATE_EXCLUDES[@]}" "$source_dir"/ "$app_dir"/
+  rsync -a --checksum --delete "${UPDATE_EXCLUDES[@]}" "$source_dir"/ "$app_dir"/ || return 1
+  update_fix_exec_bits "$app_dir"
+}
+
+# v11 (O3): a zip made without unix modes (Windows) unpacks every file as 0644, and the sync above copies that mode
+# over the scripts; the shell scripts of the source are made executable again, as git keeps them
+update_fix_exec_bits() {
+  local app_dir="$1" f
+  for f in "$app_dir"/*.sh "$app_dir"/scripts/*.sh; do
+    [ -f "$f" ] && [ ! -L "$f" ] && chmod a+x "$f"
+  done
+  return 0
 }
 
 # Puts <app-dir>/.previous-source back over <app-dir> (the source only; dist and node_modules are separate)
@@ -300,7 +311,8 @@ update_restore_source() {
   local app_dir="$1"
   [ -d "$app_dir/$UPDATE_PREVIOUS_SOURCE_NAME" ] || { echo "No previous source in $app_dir/$UPDATE_PREVIOUS_SOURCE_NAME" >&2; return 1; }
   update_state_excludes "$app_dir"
-  rsync -a --checksum --delete "${UPDATE_EXCLUDES[@]}" "$app_dir/$UPDATE_PREVIOUS_SOURCE_NAME"/ "$app_dir"/
+  rsync -a --checksum --delete "${UPDATE_EXCLUDES[@]}" "$app_dir/$UPDATE_PREVIOUS_SOURCE_NAME"/ "$app_dir"/ || return 1
+  update_fix_exec_bits "$app_dir"
 }
 
 # OBS-R1-22: a fresh side folder with the source of <app-dir>; prints its path. Its .env is a link to the live one,
@@ -434,6 +446,54 @@ update_migrations_changed() {
 # also repairs a swap that stopped half way and never deletes the only node_modules
 update_restore_build_command() {
   echo "{ [ ! -d dist.prev ] || { rm -rf dist && mv dist.prev dist; }; } && { [ ! -d node_modules.prev ] || { rm -rf node_modules && mv node_modules.prev node_modules; }; } && rm -f ${UPDATE_SWAP_MARKER_NAME}"
+}
+
+# v11 (O10): the user the cron jobs run as: the one of the backup line of the cron file, else the owner of <app-dir>
+update_ops_cron_user() {
+  local app_dir="$1" cron_file="${CRON_FILE:-/etc/cron.d/papital-erp}" user=""
+  if [ -f "$cron_file" ]; then
+    user="$(awk '$0 !~ /^#/ && index($0, "/scripts/backup.sh") { print $6; exit }' "$cron_file" 2>/dev/null || true)"
+  fi
+  [ -n "$user" ] || user="$(stat -c %U "$app_dir" 2>/dev/null || true)"
+  echo "${user:-root}"
+}
+
+# v11 (O10): a server installed earlier gets what a new install of this version has: the generated .env keys it lacks
+# (scripts/ensure-env-secrets.sh: ERP_SECRETS_KEY and METRICS_TOKEN, without which monitor.sh cannot read the event
+# queue; a value already there is never changed; not ERP_WEBHOOK_SECRET_TOKEN, which would replace the echo token the
+# settings hold, TD-1286) and the cron file of
+# this version's jobs (scripts/install-ops-cron.sh, which keeps the times the file has). It runs before the restart, so
+# the service reads a new key at once. Sets UPDATE_ENV_KEYS_ADDED (the keys added, space separated) and UPDATE_OPS_NOTES
+# (lines to log; a line starting with WARN: is a warning). Never fails the update.
+update_refresh_ops_config() {
+  local app_dir="$1" out user
+  UPDATE_ENV_KEYS_ADDED=""
+  UPDATE_OPS_NOTES=()
+  if out="$(bash "$app_dir/scripts/ensure-env-secrets.sh" "$app_dir/.env" ERP_SECRETS_KEY METRICS_TOKEN 2>&1)"; then
+    UPDATE_ENV_KEYS_ADDED="$(printf '%s\n' "$out" | sed -n 's/^Added \([A-Z_]*\) to .*/\1/p' | tr '\n' ' ' | sed 's/ $//')"
+    [ -z "$UPDATE_ENV_KEYS_ADDED" ] || UPDATE_OPS_NOTES+=("Added to .env: ${UPDATE_ENV_KEYS_ADDED} (generated; the service reads them from this restart on)")
+    case " $UPDATE_ENV_KEYS_ADDED " in *" ERP_SECRETS_KEY "*)
+      UPDATE_OPS_NOTES+=("WARN: ERP_SECRETS_KEY was missing and has been added to .env; keep a copy of it somewhere safe off this server. If secrets were encrypted with an earlier key, put that key back instead.") ;;
+    esac
+    # an empty value is kept: the key then stays unset for the service
+    while IFS= read -r key; do
+      [ -z "$key" ] || UPDATE_OPS_NOTES+=("WARN: ${key} is empty in .env and was left as it is; set it by hand (ERP_SECRETS_KEY: new secrets are refused until it is set).")
+    done <<< "$(printf '%s\n' "$out" | sed -n 's/^WARN: \([A-Z_]*\) is empty.*/\1/p')"
+  else
+    UPDATE_OPS_NOTES+=("WARN: the generated .env keys could not be checked or added ($out); run: bash scripts/ensure-env-secrets.sh .env ERP_SECRETS_KEY METRICS_TOKEN")
+  fi
+  user="$(update_ops_cron_user "$app_dir")"
+  if [ "$(id -u)" -ne 0 ] && [ ! -w "$(dirname "${CRON_FILE:-/etc/cron.d/papital-erp}")" ]; then
+    UPDATE_OPS_NOTES+=("WARN: the cron file was not rewritten (it needs root); run: sudo bash scripts/install-ops-cron.sh ${user}")
+  elif out="$(APP_DIR="$app_dir" bash "$app_dir/scripts/install-ops-cron.sh" "$user" 2>&1)"; then
+    UPDATE_OPS_NOTES+=("$(printf '%s\n' "$out" | grep '^Installed' | head -1 || true)")
+    while IFS= read -r line; do
+      [ -z "$line" ] || UPDATE_OPS_NOTES+=("$line")
+    done <<< "$(printf '%s\n' "$out" | grep '^Removed' || true)"
+  else
+    UPDATE_OPS_NOTES+=("WARN: the cron file could not be rewritten ($(printf '%s' "$out" | tail -1)); run: sudo bash scripts/install-ops-cron.sh ${user}")
+  fi
+  return 0
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then

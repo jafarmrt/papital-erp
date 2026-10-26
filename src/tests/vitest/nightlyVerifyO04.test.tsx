@@ -210,7 +210,7 @@ describe('nightly_verify_o_04: the nightly check on a copy of the backup', () =>
       encoding: 'utf8', env: { ...process.env, CRON_FILE: cronFile, APP_DIR: ROOT },
     });
     expect(run.status, run.stderr).toBe(0);
-    expect(fs.readFileSync(cronFile, 'utf8')).toContain(`0 4 * * * root ${ROOT}/scripts/nightly-verify.sh >> ${ROOT}/logs/nightly-verify.log 2>&1`);
+    expect(fs.readFileSync(cronFile, 'utf8')).toContain(`0 4 * * * root bash ${ROOT}/scripts/nightly-verify.sh >> ${ROOT}/logs/nightly-verify.log 2>&1`);
     const bad = spawnSync('bash', [path.join(ROOT, 'scripts/install-ops-cron.sh'), os.userInfo().username], {
       encoding: 'utf8', env: { ...process.env, CRON_FILE: path.join(dir, 'other'), APP_DIR: ROOT, NIGHTLY_VERIFY_HOUR: '25' },
     });
@@ -223,7 +223,7 @@ describe('nightly_verify_o_04: the nightly check on a copy of the backup', () =>
     // 08 and 09 are decimal hours
     const nine = cron({ BACKUP_HOUR: '08', BACKUP_MINUTE: '09', NIGHTLY_VERIFY_HOUR: '09', NIGHTLY_VERIFY_MINUTE: '09', MEDIA_OFFSITE_HOUR: '01', MEDIA_OFFSITE_MINUTE: '00' });
     expect(nine.status, nine.stderr).toBe(0);
-    expect(fs.readFileSync(path.join(dir, 'times'), 'utf8')).toContain(`9 9 * * * root ${ROOT}/scripts/nightly-verify.sh`);
+    expect(fs.readFileSync(path.join(dir, 'times'), 'utf8')).toContain(`9 9 * * * root bash ${ROOT}/scripts/nightly-verify.sh`);
     expect(nine.stderr).not.toContain('not given');
     // a variable not given keeps the time the file has: only the check moves, the 08:09 backup stays
     const keep = cron({ NIGHTLY_VERIFY_HOUR: '11', NIGHTLY_VERIFY_MINUTE: '0' });

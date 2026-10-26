@@ -19,8 +19,12 @@ BASE="http://localhost:${PORT}"
 
 deadline=$(( $(date +%s) + TIMEOUT ))
 started=0
+body=""
 while :; do
-  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$BASE/health/startup" || true)"
+  # the body, then the status code on its own last line
+  reply="$(curl -s -w '\n%{http_code}' --max-time 5 "$BASE/health/startup" || true)"
+  code="${reply##*$'\n'}"
+  body="${reply%$'\n'*}"
   if [ "$code" = "200" ]; then started=1; break; fi
   [ "$(date +%s)" -ge "$deadline" ] && break
   sleep "$INTERVAL"
@@ -38,5 +42,8 @@ if [ -n "$EXPECTED" ]; then
     exit 1
   fi
 fi
+# v11 (O12): a step the server left out after its attempts (seed, an engine) is named; the update still counts as started
+degraded="$(printf '%s' "$body" | grep -oE '"degradedSteps":\[[^]]*\]' | sed 's/^"degradedSteps"://' || true)"
+[ -z "$degraded" ] || echo "WARNING: started without these steps: ${degraded} (the reasons are in journalctl -u papital-erp)."
 echo "Startup completed${EXPECTED:+ (v$EXPECTED)}."
 exit 0

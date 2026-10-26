@@ -123,7 +123,7 @@ export async function clientToolsMissing(): Promise<string | null> {
 /** پوشه برنامه آزمایشی: اسکریپت‌های واقعی مخزن، بی .env و بی پوشه بارگذاری‌ها (هر آزمون خودش می‌سازد) */
 export function makeAppDir(root: string): string {
   const appDir = path.join(root, 'app');
-  for (const rel of ['scripts/backup.sh', 'scripts/backup-offsite.sh', 'scripts/restore.sh', 'scripts/pg-password.sh', 'scripts/env-file.sh', 'scripts/sql/backup-manifest.sql', 'drizzle/meta/_journal.json']) {
+  for (const rel of ['scripts/backup.sh', 'scripts/backup-offsite.sh', 'scripts/restore.sh', 'scripts/pg-password.sh', 'scripts/env-file.sh', 'scripts/ops-lock.sh', 'scripts/sql/backup-manifest.sql', 'drizzle/meta/_journal.json']) {
     const from = path.join(REPO_ROOT, rel);
     if (!fs.existsSync(from)) continue;
     fs.mkdirSync(path.dirname(path.join(appDir, rel)), { recursive: true });

@@ -3,6 +3,10 @@
 # The app runs migrations from dist/drizzle at startup (never db:push).
 # Build:  docker build -t papital-erp:v<version> .
 # Run:    docker run -p 3000:3000 --env-file .env papital-erp:v<version>
+# Update: the image has no backup script and nothing takes a backup when it changes (v11, O9): before a new image starts
+#         on the database, take a dump from outside the container, e.g.
+#           pg_dump --format=custom --file=papital-before-v<version>.dump "$DATABASE_URL"
+#         a newer image migrates the database at start, and an older image refuses a migrated database.
 #
 # v7.0.20 (TD-175): the server bundle is built with `--packages=external`, so every npm
 # package (express, pg, drizzle-orm, ...) is `require`d from node_modules at runtime.
@@ -50,8 +54,9 @@ USER node
 
 EXPOSE 3000
 
-# Container-level startup/liveness fallback (K8s probes remain the authoritative gates)
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:3000/health/startup >/dev/null 2>&1 || exit 1
+# Container-level health (K8s probes remain the authoritative gates). v11 (O12, O17): /health/ready, which fails while
+# the database is unreachable (/health/startup stays 200 once the server started), on the PORT the server listens on
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+  CMD wget -qO- "http://127.0.0.1:${PORT:-3000}/health/ready" >/dev/null 2>&1 || exit 1
 
 CMD ["node", "dist/server.cjs"]

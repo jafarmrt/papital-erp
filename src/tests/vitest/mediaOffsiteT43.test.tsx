@@ -161,11 +161,11 @@ describe('media_offsite_t43: the nightly encrypted copy of the media library', (
       encoding: 'utf8', env: { ...process.env, CRON_FILE: cronFile, APP_DIR: ROOT, ...env },
     });
     expect(cron({}).status).toBe(0);
-    expect(fs.readFileSync(cronFile, 'utf8')).toContain(`0 1 * * * ${user} ${ROOT}/scripts/backup-media-offsite.sh >> ${ROOT}/logs/media-offsite.log 2>&1`);
+    expect(fs.readFileSync(cronFile, 'utf8')).toContain(`0 1 * * * ${user} bash ${ROOT}/scripts/backup-media-offsite.sh >> ${ROOT}/logs/media-offsite.log 2>&1`);
     expect(cron({ MEDIA_OFFSITE_HOUR: '23', MEDIA_OFFSITE_MINUTE: '15' }).status).toBe(0);
     const again = cron({});
     expect(again.stderr).toContain('MEDIA_OFFSITE_HOUR not given, the existing 23 is kept');
-    expect(fs.readFileSync(cronFile, 'utf8')).toContain(`15 23 * * * ${user} ${ROOT}/scripts/backup-media-offsite.sh`);
+    expect(fs.readFileSync(cronFile, 'utf8')).toContain(`15 23 * * * ${user} bash ${ROOT}/scripts/backup-media-offsite.sh`);
     expect(cron({ MEDIA_OFFSITE_HOUR: '24' }).status).toBe(1);
   });
 });

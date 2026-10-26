@@ -14,6 +14,7 @@
 set -euo pipefail
 
 LOG_FILE="domain-setup-$(date +%Y%m%d-%H%M%S).log"
+( umask 077; : >> "$LOG_FILE" )
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 log()      { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
@@ -157,11 +158,12 @@ fi
 chmod 600 "$APP_DIR/.env"
 
 systemctl restart "$SERVICE_NAME"
-sleep 3
-if curl -fsS "http://127.0.0.1:${APP_PORT}/health/live" >/dev/null 2>&1; then
+# v11 (O12): healthy means started (migrations, seed and engines done), as update.sh checks it; /health/live answers
+# even right before a failed migration ends the process
+if bash "$APP_DIR/scripts/verify-startup.sh" "$APP_PORT" "${STARTUP_TIMEOUT:-300}"; then
   success "Application restarted and healthy."
 else
-  log "WARN: Health probe did not pass immediately — check: journalctl -u ${SERVICE_NAME} -n 50"
+  log "WARN: the application did not finish starting — check: journalctl -u ${SERVICE_NAME} -n 50"
 fi
 
 echo ""
