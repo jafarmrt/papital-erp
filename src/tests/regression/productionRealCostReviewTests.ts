@@ -33,7 +33,7 @@ async function reviewCase(h: Harness, wrong: string[]): Promise<string> {
   await h.q(`UPDATE journal_voucher_items SET is_deleted = 1 WHERE voucher_id IN (SELECT id FROM journal_vouchers WHERE source_document_id = $1)`, [legacy]);
   await h.q(`UPDATE journal_vouchers SET is_deleted = 1 WHERE source_document_id = $1`, [legacy]);
   const { VoucherSyncService } = await import('../../services/accounting/voucherSync.service.js');
-  await VoucherSyncService.autoCreateVoucherForInvoice(legacy, 1, 'review', undefined, { strict: true });
+  await VoucherSyncService.autoCreateVoucherForInvoice(legacy, undefined, 'review', undefined, { strict: true });
   if (await wipOf(h, legacyProject) !== -300) throw new Error(`setup: the legacy receipt left 1402 at ${await wipOf(h, legacyProject)}, expected -300`);
   const unasked = await deliver(h, f, legacyProject, [{ itemId: product, quantity: 1 }]);
   if (unasked.status !== 422 || (unasked.body as CostRefusal).details?.kind !== 'no_wip') wrong.push(`the completing receipt of a 1402 below zero answered ${brief(unasked)} without a reason, expected 422 no_wip`);
