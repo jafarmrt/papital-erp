@@ -51,9 +51,9 @@ export function setCsrfToken(token: string | null | undefined): void {
   inMemoryCsrfToken = token || null;
   if (typeof document !== 'undefined') {
     if (token) {
-      document.cookie = `csrf_token=${encodeURIComponent(token)}; path=/; SameSite=None; Secure; max-age=86400`;
+      document.cookie = `csrf_token=${encodeURIComponent(token)}; path=/; SameSite=Lax; Secure; max-age=86400`;
     } else {
-      document.cookie = `csrf_token=; path=/; SameSite=None; Secure; max-age=0`;
+      document.cookie = `csrf_token=; path=/; SameSite=Lax; Secure; max-age=0`;
     }
     try {
       localStorage.removeItem('csrf_token');

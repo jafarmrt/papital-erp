@@ -19,6 +19,7 @@ import {
   resetFailedAttempts,
   verifyPasswordConstantWork,
   loginLockedError,
+  markPasswordNotChecked,
   GENERIC_LOGIN_FAILURE_MESSAGE
 } from '../services/auth/loginSecurity.service.js';
 import { notSyntheticTestUsername, isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/syntheticUsers.js';
@@ -32,6 +33,7 @@ import {
   SETUP_USERNAME_MIN_LENGTH, SETUP_USERNAME_TOO_SHORT_MESSAGE, SETUP_COMPANY_NAME_REQUIRED_MESSAGE,
   SETUP_TOKEN_NOT_CONFIGURED_MESSAGE, SETUP_DEFAULT_PASSWORD_MESSAGE, SETUP_STATE_UNREADABLE_MESSAGE,
 } from '../lib/auth/setupRules.js';
+import { setupTokenOf } from '../services/auth/setupToken.js';
 
 const router = Router();
 
@@ -119,18 +121,14 @@ const setupSchema = z.object({
 });
 
 router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
-  // 1. Enforce setup token (SEC-012 / S-4)
+  // 1. Enforce setup token (SEC-012 / S-4; v11 phase 6.2, X18: in every environment but test)
   const isProduction = process.env.NODE_ENV === 'production';
-  const configuredSetupToken = process.env.ERP_SETUP_TOKEN;
-
-  if (isProduction) {
-    if (!configuredSetupToken || configuredSetupToken.trim() === 'papital_erp_setup_token_2026' || configuredSetupToken.trim().length < 16) {
-      logger.error(`[Setup] ERP_SETUP_TOKEN is not securely configured in production environment (IP: ${req.ip})`);
-      throw new UnauthorizedError(SETUP_TOKEN_NOT_CONFIGURED_MESSAGE);
-    }
+  const effectiveSetupToken = setupTokenOf(process.env.ERP_SETUP_TOKEN, process.env.NODE_ENV);
+  if (!effectiveSetupToken) {
+    logger.error(`[Setup] ERP_SETUP_TOKEN is missing, built-in or shorter than 16 characters; setup refused (IP: ${req.ip})`);
+    throw new UnauthorizedError(SETUP_TOKEN_NOT_CONFIGURED_MESSAGE);
   }
 
-  const effectiveSetupToken = (configuredSetupToken || 'papital_erp_setup_token_2026').trim();
   const headerToken = (req.headers['x-setup-token'] as string || '').trim();
   const bodyToken = (req.body?.setupToken as string || '').trim();
   const providedToken = headerToken || bodyToken;
@@ -195,6 +193,8 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
   //    applies equally to unknown usernames
   const lockout = await checkAccountLockout(tUsername, clientIp);
   if (lockout.isLocked) {
+    // v11 phase 6.2 (X15): refused before any password check, so the address limiter does not count it
+    markPasswordNotChecked(res);
     const minutes = lockout.remainingMinutes || 1;
     logger.warn(`[Login Rejected] Account ${tUsername} is locked for ${minutes} more minute(s)`);
     await logActivity({
