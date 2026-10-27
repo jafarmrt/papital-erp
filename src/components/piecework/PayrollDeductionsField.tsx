@@ -1,27 +1,29 @@
 import { DecimalInput } from '../common/DecimalInput';
+import { RIAL_INPUT_UNIT, RialEquivalent } from '../common/RialEquivalent';
 
 /**
  * v9.0.329 (TD-861، تصمیم ت۵ الف): کادر «سایر کسورات» فرم صدور فیش. پیش‌تر برچسب «(بیمه/مالیات...)» داشت، در حالی که سامانه
  * بیمه و مالیات حساب نمی‌کند، و مبلغ بی هیچ توضیحی به حساب ۳۲۰۲ می‌رفت. اکنون کسورات بالای صفر شرح می‌خواهد (سرور هم ۴۲۲ می‌دهد)
  * و شرح روی فیش و در ردیف سند می‌آید.
+ * v11 phase 6.3 (U3, decision ت۵۷): the amount is rial and the label says so, with its toman equivalent under it; the
+ * payslip form labelled it with the display unit («(تومان)») while it sent the number as rial.
  */
 interface PayrollDeductionsFieldProps {
   amount: number;
   onAmountChange: (val: number) => void;
   description: string;
   onDescriptionChange: (val: string) => void;
-  currencyLabel: string;
 }
 
 /** کسورات بالای صفر بی شرح صادر نمی‌شود */
 export const deductionsNeedDescription = (amount: number, description: string): boolean =>
   (amount || 0) > 0 && !description.trim();
 
-export function PayrollDeductionsField({ amount, onAmountChange, description, onDescriptionChange, currencyLabel }: PayrollDeductionsFieldProps) {
+export function PayrollDeductionsField({ amount, onAmountChange, description, onDescriptionChange }: PayrollDeductionsFieldProps) {
   const missing = deductionsNeedDescription(amount, description);
   return (
     <div>
-      <label htmlFor="payroll-deductions" className="block text-xs font-bold text-slate-700 mb-1">{`سایر کسورات (${currencyLabel})`}</label>
+      <label htmlFor="payroll-deductions" className="block text-xs font-bold text-slate-700 mb-1">{`سایر کسورات (${RIAL_INPUT_UNIT})`}</label>
       <DecimalInput
         id="payroll-deductions"
         min="0"
@@ -29,6 +31,7 @@ export function PayrollDeductionsField({ amount, onAmountChange, description, on
         onValueChange={(v) => onAmountChange(Math.max(0, Number(v) || 0))}
         className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
       />
+      <RialEquivalent value={amount} />
       {(amount || 0) > 0 && (
         <>
           <label htmlFor="payroll-deductions-description" className="block text-xs font-bold text-slate-700 mt-2 mb-1">شرح سایر کسورات</label>

@@ -7,6 +7,9 @@
  */
 import { fin } from '../financialDecimal';
 import { documentTypeTitle } from '../documents/documentTypeTitles';
+import { isRialCurrency, type RialDisplay } from '../rialDisplay';
+import { formatPersianPrice } from '../../utils/persianNumber';
+import { formatCurrencyLabel } from '../../utils/formatters';
 
 /** یک ردیف کالا در سند (پاسخ GET /documents/:id یا لیست) */
 export interface InvoiceListLine {
@@ -104,6 +107,23 @@ export function documentStatusLabelOf(status: string | undefined, finalLabel = '
  */
 export function amountDecimalsOf(currency: string | undefined): number {
   return currency && currency !== 'IRR' ? 2 : 0;
+}
+
+/** how one document's amounts read on a screen: the figure without its unit, and the unit for the column or line */
+export interface DocAmountFormat {
+  number: (amount: number | string | null | undefined) => string;
+  label: string;
+}
+
+/**
+ * v11 phase 6.3 (U3, decision ت۵۷): a screen that only shows a document's amounts (the invoice list, its detail window, the
+ * quick settlement) reads a rial document in the display unit, as the list's totals cards already did; a foreign one stays
+ * in its own currency with its decimals. Before, the cards read toman over rows in rial. A printed invoice stays in rial.
+ */
+export function docAmountFormatOf(currency: string | null | undefined, rial: RialDisplay): DocAmountFormat {
+  if (isRialCurrency(currency)) return { number: rial.number, label: rial.label };
+  const decimals = amountDecimalsOf(currency ?? undefined);
+  return { number: amount => formatPersianPrice(amount, undefined, decimals), label: formatCurrencyLabel(currency ?? undefined) };
 }
 
 export interface InvoiceListSummary {

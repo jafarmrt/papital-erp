@@ -1,5 +1,6 @@
 import { RefreshCw, FileText, AlertTriangle, CheckCircle2, Clock, ShoppingCart } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, formatPersianCode } from '../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../utils';
+import { useShownRial } from '../../contexts/RialDisplayContext';
 import { PurchaseRequisition, PurchaseRequisitionItemRow } from '../../types';
 import { PillBadge, type PillBadgeVariant, type PillBadgeVariants } from '../common/PillBadge';
 
@@ -28,6 +29,8 @@ interface RequisitionDetailsPreviewProps {
 }
 
 export function RequisitionDetailsPreview({ requisition, isLoading }: RequisitionDetailsPreviewProps) {
+  // v11 phase 6.3 (U3): the estimates (stored in rial) in the display unit, with the unit named; before, a bare figure
+  const rial = useShownRial();
   if (isLoading) {
     return (
       <div className="p-8 text-center text-xs text-slate-500 dark:text-gray-400 flex flex-col items-center justify-center gap-2.5">
@@ -75,7 +78,7 @@ export function RequisitionDetailsPreview({ requisition, isLoading }: Requisitio
         <div>
           <div className="text-slate-400 dark:text-gray-400 text-[10px]">برآورد کل هزینه:</div>
           <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
-            {totalAmount > 0 ? formatPersianPrice(totalAmount) : 'تعیین نشده'}
+            {totalAmount > 0 ? rial.amount(totalAmount) : 'تعیین نشده'}
           </div>
         </div>
       </div>
@@ -102,8 +105,8 @@ export function RequisitionDetailsPreview({ requisition, isLoading }: Requisitio
               <th className="p-2.5">نام کالا / مواد اولیه مورد نیاز</th>
               <th className="p-2.5 text-center">تعداد / مقدار</th>
               <th className="p-2.5 text-center">موجودی فعلی انبار</th>
-              <th className="p-2.5 text-left">برآورد قیمت واحد</th>
-              <th className="p-2.5 text-left">مجموع برآورد</th>
+              <th className="p-2.5 text-left">برآورد قیمت واحد ({rial.label})</th>
+              <th className="p-2.5 text-left">مجموع برآورد ({rial.label})</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-gray-700/60">
@@ -156,10 +159,10 @@ export function RequisitionDetailsPreview({ requisition, isLoading }: Requisitio
                       )}
                     </td>
                     <td className="p-2.5 text-left font-mono text-slate-700 dark:text-gray-300">
-                      {unitPrice > 0 ? formatPersianPrice(unitPrice) : '-'}
+                      {unitPrice > 0 ? rial.number(unitPrice) : '-'}
                     </td>
                     <td className="p-2.5 text-left font-mono font-bold text-emerald-700 dark:text-emerald-400">
-                      {rowTotal > 0 ? formatPersianPrice(rowTotal) : '-'}
+                      {rowTotal > 0 ? rial.number(rowTotal) : '-'}
                     </td>
                   </tr>
                 );

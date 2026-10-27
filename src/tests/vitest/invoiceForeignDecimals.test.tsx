@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { InvoiceRowSettlementCell } from '../../components/invoices/list/InvoiceRowSettlementCell';
 import { InvoiceDetailsTotals } from '../../components/invoices/list/InvoiceDetailsTotals';
-import { amountDecimalsOf, type InvoiceListDocument } from '../../lib/invoices/invoiceListDocuments';
+import { amountDecimalsOf, docAmountFormatOf, type InvoiceListDocument } from '../../lib/invoices/invoiceListDocuments';
+import { rialDisplayOf } from '../../lib/rialDisplay';
 import { formatPersianPrice } from '../../utils';
 
 // v7.0.96 (TD-235 بند ۲): مبلغ و مانده سند ارزی با اعشار (تا ۲ رقم)؛ پیش‌تر ۲۰۰٫۵ دلار «۲۰۱» نمایش داده می‌شد
@@ -14,7 +15,7 @@ describe('foreign-currency amounts in the invoices list', () => {
   });
 
   it('row remaining keeps the cents of a USD invoice', () => {
-    render(<InvoiceRowSettlementCell isCommercial settlementStatus="unpaid" remainingAmt={200.5} currency="USD" />);
+    render(<InvoiceRowSettlementCell isCommercial settlementStatus="unpaid" remainingAmt={200.5} amounts={docAmountFormatOf('USD', rialDisplayOf('TOMAN'))} />);
     const expected = formatPersianPrice(200.5, undefined, 2);
     expect(expected).not.toBe(formatPersianPrice(200.5));
     expect(screen.getByText(`مانده: ${expected}`)).toBeTruthy();

@@ -170,7 +170,7 @@ describe('TD-1273 numeric fields read Persian digits and the Persian decimal sep
 
   it('the payslip deductions field takes an amount typed with Persian digits', () => {
     const onAmountChange = vi.fn();
-    render(<PayrollDeductionsField amount={0} onAmountChange={onAmountChange} description="" onDescriptionChange={() => {}} currencyLabel="ریال" />);
+    render(<PayrollDeductionsField amount={0} onAmountChange={onAmountChange} description="" onDescriptionChange={() => {}} />);
     fireEvent.change(screen.getByLabelText(/سایر کسورات/), { target: { value: '۱۲۵٬۰۰۰' } });
     expect(onAmountChange).toHaveBeenLastCalledWith(125000);
   });

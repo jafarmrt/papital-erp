@@ -14,6 +14,7 @@ import { confirmAction } from '../ConfirmDialogHost';
 import { openRequisitionQuestion } from '../../lib/reorderAlerts/openRequisitionQuestion';
 import { DecimalInput } from '../common/DecimalInput';
 import { DialogLayer } from '../common/DialogLayer';
+import { RialEquivalent } from '../common/RialEquivalent';
 
 export type { ReorderModalItem } from '../../lib/reorderAlerts/reorderItems';
 
@@ -296,7 +297,7 @@ export function ReorderPurchaseModal({
                     <th className="p-2.5 text-center w-28">مقدار سفارش</th>
                     <th className="p-2.5 text-center w-16">واحد</th>
                     <th className="p-2.5 text-center w-32">قیمت تخمینی (ریال)</th>
-                    <th className="p-2.5 text-center w-32">مبلغ کل</th>
+                    <th className="p-2.5 text-center w-32">مبلغ کل (ریال)</th>
                     <th className="p-2.5 text-center w-12">عملیات</th>
                   </tr>
                 </thead>
@@ -368,8 +369,9 @@ export function ReorderPurchaseModal({
             </div>
             <div className="flex items-center gap-2">
               <span className="font-bold text-amber-950">مجموع برآورد ارزش خرید:</span>
-              <span className="text-base font-black font-mono text-slate-900">
-                {formatPersianPrice(grandTotal)}
+              <span className="text-base font-black font-mono text-slate-900 text-left">
+                {formatPersianPrice(grandTotal, 'IRR')}
+                <RialEquivalent value={grandTotal} className="font-sans font-normal" />
               </span>
             </div>
           </div>

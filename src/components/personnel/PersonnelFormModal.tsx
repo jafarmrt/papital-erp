@@ -20,6 +20,7 @@ import { DecimalInput } from '../common/DecimalInput';
 import { SALARY_TYPES, SALARY_TYPE_LABELS, salaryTypeOf } from '../../lib/personnel/salaryType';
 import { DialogLayer } from '../common/DialogLayer';
 import { PERSONNEL_LIST_STATE_TEXT, type PersonnelListState } from '../../lib/personnel/personnelList';
+import { RialEquivalent } from '../common/RialEquivalent';
 
 interface PersonnelFormModalProps {
   isOpen: boolean;
@@ -333,6 +334,7 @@ export function PersonnelFormModal({
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-left outline-none focus:border-blue-500"
                     dir="ltr"
                   />
+                  <RialEquivalent value={formData.monthlySalary} />
                   {formData.salaryType === 'mixed' && (
                     <p className="text-[10px] text-slate-500 mt-1">در فیش‌های ترکیبی، سهم ثابت به کارکرد کارمزدی دوره اضافه می‌شود.</p>
                   )}

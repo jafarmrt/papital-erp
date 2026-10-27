@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import { useAuth } from './contexts/AuthContext';
 import { PageLoader } from './components/PageLoader';
 import { AppLayout } from './components/layout';
+import { RialDisplayProvider } from './contexts/RialDisplayContext';
 import { AppRoutes } from './components/AppRoutes';
 import { ForcedPasswordChange } from './components/auth/ForcedPasswordChange';
 import { mustChangePassword } from './lib/auth/passwordReset';
@@ -128,22 +129,24 @@ export default function App() {
       {permissionsError && (
         <PermissionsLoadError message={permissionsError} onRetry={() => void loadUserPermissions()} />
       )}
-      <AppLayout
-        user={user}
-        userPermissions={userPermissions}
-        onLogout={logout}
-        onUserUpdate={updateUser}
-        isProfileModalOpen={isProfileModalOpen}
-        setIsProfileModalOpen={setIsProfileModalOpen}
-        isSidebarCollapsed={isSidebarCollapsed}
-        toggleSidebar={toggleSidebar}
-      >
-        <AppRoutes
+      <RialDisplayProvider>
+        <AppLayout
           user={user}
           userPermissions={userPermissions}
-          permissionsLoaded={permissionsLoaded}
-        />
-      </AppLayout>
+          onLogout={logout}
+          onUserUpdate={updateUser}
+          isProfileModalOpen={isProfileModalOpen}
+          setIsProfileModalOpen={setIsProfileModalOpen}
+          isSidebarCollapsed={isSidebarCollapsed}
+          toggleSidebar={toggleSidebar}
+        >
+          <AppRoutes
+            user={user}
+            userPermissions={userPermissions}
+            permissionsLoaded={permissionsLoaded}
+          />
+        </AppLayout>
+      </RialDisplayProvider>
     </Router>
   );
 }

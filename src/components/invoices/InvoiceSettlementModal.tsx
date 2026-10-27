@@ -28,6 +28,7 @@ import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { accountCurrencyOf, defaultSettlementAccountId, settlementAccountsFor, halfRemainingAmount } from '../../lib/invoices/settlementAccounts';
 import { settlementDefaultDescription } from '../../lib/invoices/settlementDescription';
 import { DialogLayer } from '../common/DialogLayer';
+import { useShownRial } from '../../contexts/RialDisplayContext';
 import { PAYMENT_METHOD_LABELS, treasuryMethodLabel } from '../../lib/treasury/treasuryExport';
 import { useBankAccountOptionsQuery } from '../../hooks/accounting/useTreasuryQueries';
 import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
@@ -135,6 +136,9 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
   useEffect(() => {
     if (accountsFailedAt) toast.error('خطا در دریافت فهرست حساب‌های بانکی و صندوق‌ها');
   }, [accountsFailedAt]);
+
+  // v11 phase 6.3 (U3): the figures of the invoice read in the display unit; the amount field stays in rial with its toman equivalent
+  const shown = useShownRial();
 
   if (!isOpen || !doc) return null;
 
@@ -256,14 +260,14 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
             <div className="p-2 bg-white rounded-lg border border-slate-100">
               <span className="block text-[11px] text-slate-500 font-medium">مبلغ کل فاکتور</span>
               <span className="font-bold text-sm text-slate-800 mt-1 block">
-                {formatPersianPrice(totalAmount, currency)}
+                {shown.money(totalAmount, currency)}
               </span>
             </div>
 
             <div className="p-2 bg-white rounded-lg border border-slate-100">
               <span className="block text-[11px] text-slate-500 font-medium">پرداخت‌شده قبلی</span>
               <span className="font-bold text-sm text-emerald-600 mt-1 block">
-                {formatPersianPrice(paidAmount, currency)}
+                {shown.money(paidAmount, currency)}
               </span>
             </div>
 
@@ -276,7 +280,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
               <span className={`font-black text-sm mt-1 block ${
                 remainingAmount > 0 ? 'text-amber-700' : 'text-emerald-700'
               }`}>
-                {formatPersianPrice(remainingAmount, currency)}
+                {shown.money(remainingAmount, currency)}
               </span>
             </div>
           </div>
@@ -499,7 +503,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
                       )}
                     </div>
                     <span className="font-bold text-emerald-700">
-                      {formatPersianPrice(st.amount, currency)}
+                      {shown.money(st.amount, currency)}
                     </span>
                   </div>
                 ))}

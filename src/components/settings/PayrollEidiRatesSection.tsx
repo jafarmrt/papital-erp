@@ -12,6 +12,7 @@ import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 import { useSeededForm } from '../../hooks/useSeededForm';
 import { invalidateDomain } from '../../lib/queryInvalidation';
 import { QUERY_KEYS } from '../../lib/queryKeys';
+import { RIAL_INPUT_UNIT, RialEquivalent } from '../common/RialEquivalent';
 
 /**
  * v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۴ تا ت۱۶ الف): روش و نرخ عیدی هر سال جلالی، کنار نرخ‌های بیمه و مالیات. هیچ نرخ
@@ -134,6 +135,7 @@ export function PayrollEidiRatesSection() {
             <div key={f.key}>
               <label className="block text-xs font-bold text-slate-700 mb-1" htmlFor={`eidi-${f.key}`}>{f.label}</label>
               <input id={`eidi-${f.key}`} inputMode="decimal" value={form[f.key]} onChange={(e) => setForm(p => ({ ...p, [f.key]: e.target.value }))} className={inputClass} />
+              {f.label.endsWith(`(${RIAL_INPUT_UNIT})`) && <RialEquivalent value={form[f.key]} />}
             </div>
           ))}
         </div>
