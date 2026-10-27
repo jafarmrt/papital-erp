@@ -26,6 +26,7 @@ import { logBomAllocation, logBomConsumption, logBomRelease } from './bomAllocat
 import { RECIPIENT_INVALID, RECIPIENT_INVALID_MESSAGE, RECIPIENT_TERMINATED_STATUS } from '../../lib/workshop/recipient.js';
 import { toAllocationRecord, type ProjectBomAllocationRecord } from './bomAllocationRecord.js';
 import { idempotentTransaction } from '../../middleware/idempotency.js';
+import { assertProjectMaterialsNotDelivered } from '../accounting/projectDeliveredMaterials.js';
 export { toAllocationRecord, type ProjectBomAllocationRecord };
 export interface BomAllocationItemInput {
   itemId: number;
@@ -415,6 +416,8 @@ export class ProjectBomAllocationService {
       if (alloc.status !== 'allocated') {
         throw new ConflictError(`این تخصیص «${allocationStatusLabel(alloc.status)}» است و فقط تخصیص «${allocationStatusLabel('allocated')}» به انبار آزاد می‌شود.`, { status: alloc.status }, 'ALLOCATION_NOT_OPEN');
       }
+      // v11 phase 6.1ث (decision ت۵۲-۳): the materials of a project that delivered goods are in their cost
+      await assertProjectMaterialsNotDelivered(txEngine, alloc.projectId, 'allocation');
 
       const qty = fin(alloc.quantity).toNumber();
       const loc = alloc.sourceLocation || 'main';

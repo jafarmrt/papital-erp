@@ -1,4 +1,4 @@
-import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, uniqueIndex, check } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { FinancialAttachment } from '../../types';
 import { users } from './auth';
@@ -136,4 +136,22 @@ export const projectReservationReleases = pgTable('project_reservation_releases'
   // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_project_reservation_releases_project_id: index('idx_project_reservation_releases_project_id').on(table.projectId),
   idx_project_reservation_releases_bom_allocation_id: index('idx_project_reservation_releases_bom_allocation_id').on(table.bomAllocationId).where(sql`${table.bomAllocationId} IS NOT NULL`),
+}));
+
+// v11 phase 6.1ث (S2, decision ت۵۲-۳, migration 0003): how a project's production receipt was priced under the project lock:
+// the project's 1402 before it, what the receipt takes from 1402 (its voucher credits exactly that and posts the difference to
+// the lines' value on «اختلاف بهای تولید»), the rule (`DeliveryCostRule`) and the reason of a cost other than the real one. A
+// receipt recorded before has no row and its voucher credits 1402 with the lines' value, as before.
+export const productionReceiptCosts = pgTable('production_receipt_costs', {
+  documentId: integer('document_id').primaryKey().references(baseRelations.documentsId, { onDelete: 'cascade' }),
+  projectId: integer('project_id').notNull().references(() => productionProjects.id, { onDelete: 'cascade' }),
+  wipBalance: numeric('wip_balance', { precision: 18, scale: 4 }).notNull(),
+  wipCredit: numeric('wip_credit', { precision: 18, scale: 4 }).notNull(),
+  costRule: text('cost_rule').notNull(),
+  reason: text('reason').notNull().default(''),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+}, (table) => ({
+  idx_production_receipt_costs_project_id: index('idx_production_receipt_costs_project_id').on(table.projectId),
+  chk_production_receipt_costs_rule: check('chk_production_receipt_costs_rule', sql`${table.costRule} IN ('share', 'complete', 'entered', 'no_wip')`),
+  chk_production_receipt_costs_wip_credit: check('chk_production_receipt_costs_wip_credit', sql`${table.wipCredit} >= 0`),
 }));

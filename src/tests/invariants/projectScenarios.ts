@@ -138,19 +138,26 @@ export async function checkBomAllocationPostsVoucher(wh: string): Promise<string
 
 /**
  * TD-285 (تصمیم مالک محصول — گزینه الف): «ورود به انبار» زبانه پروژه سند «رسید تولید» نهایی با پیوند پروژه صادر می‌کند که
- * سند حسابداری دارد — بدهکار کالای ساخته‌شده / بستانکار کالای در جریان ساخت پروژه. با تخصیص ۴ × ۱۰۰٬۰۰۰ و تحویل ۲ × ۲۰۰٬۰۰۰،
- * ۱۴۰۲ پروژه صفر می‌شود؛ تحویل بی‌بها به میانگین موزون ثبت می‌شود و ارزش انبار با دفتر کل یکی می‌ماند.
+ * سند حسابداری دارد — بدهکار کالای ساخته‌شده / بستانکار کالای در جریان ساخت پروژه — و ارزش انبار با دفتر کل یکی می‌ماند.
+ * v11 phase 6.1ث (decision ت۵۲-۳): the receipt costs the project's real cost. With 4 × 100,000 allocated to a plan of 4,
+ * 2 units without a cost take 200,000 of 1402; 1 unit typed at 400,000 is refused without a reason, and with one takes its
+ * 100,000 share and posts 300,000 to «اختلاف بهای تولید» (6005); the last unit closes 1402 at zero. The costs keep the
+ * product's weighted average cost whole (200,000, then 175,000), so the stock value is exact.
  */
 export async function checkProjectDeliveryPostsVoucher(wh: string): Promise<string[]> {
   const problems: string[] = [];
   const mark = await voucherMark();
   const raw = await rawWithStock(wh, 10, 100000);
   const product = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
-  const projectId = await newProject('پروژه آزمون تحویل', [{ itemId: product.id, quantity: 3 }]);
+  const projectId = await newProject('پروژه آزمون تحویل', [{ itemId: product.id, quantity: 4 }]);
   const scope = { itemIds: [raw.itemId, product.id], documentIdAfter: 0, voucherIdAfter: mark };
   await ProjectBomAllocationService.allocateMaterialsForProject({ projectId, allocations: [{ itemId: raw.itemId, quantity: 4, location: wh }], username: 'inv' });
+  const gapIsZero = async (when: string) => {
+    const { gap } = await inventoryValueGap(scope);
+    if (!gap.isZero()) problems.push(`${when}: warehouse value vs general ledger difference ${gap}`);
+  };
 
-  const delivered = await ProjectService.addProjectToInventory({ projectId, itemsToAdd: [{ itemId: product.id, quantity: 2, unitPrice: 200000, location: wh }], currentUser: 'inv' });
+  const delivered = await ProjectService.addProjectToInventory({ projectId, itemsToAdd: [{ itemId: product.id, quantity: 2, location: wh }], currentUser: 'inv' });
   const [doc] = delivered.documentId
     ? await orm.select({ type: documents.type, status: documents.status, projectId: documents.projectId }).from(documents).where(eq(documents.id, delivered.documentId))
     : [];
@@ -161,16 +168,27 @@ export async function checkProjectDeliveryPostsVoucher(wh: string): Promise<stri
   if (Number(linked.rows[0].n) !== 1) problems.push(`production receipt journal vouchers ${linked.rows[0].n}, expected 1`);
   if (!fin(await stockOf(product.id)).equals(2)) problems.push(`product stock after delivery ${await stockOf(product.id)}, expected 2`);
   const wip = await projectNet('1402', projectId);
-  if (!fin(wip).isZero()) problems.push(`project 1402 after delivery ${wip}, expected 0 (400,000 allocation − 400,000 delivery)`);
-  const afterFirst = await inventoryValueGap(scope);
-  if (!afterFirst.gap.isZero()) problems.push(`after delivery: warehouse value vs general ledger difference ${afterFirst.gap}`);
+  if (!fin(wip).equals(200000)) problems.push(`project 1402 after delivering 2 of 4 ${wip}, expected 200,000 (400,000 − 2 × 100,000)`);
+  await gapIsZero('after delivery');
 
-  // تحویل بی‌بها: به میانگین موزون فعلی (۲۰۰٬۰۰۰) ثبت می‌شود
+  // a cost other than the real one: refused without a reason, with one the difference goes to 6005
+  const typed = () => ProjectService.addProjectToInventory({ projectId, itemsToAdd: [{ itemId: product.id, quantity: 1, unitPrice: 400000, location: wh }], currentUser: 'inv' });
+  const refused = await refusalOf(typed);
+  if (!refused?.includes('بهای واقعی تولید')) problems.push(`a typed cost of 400,000 against a real cost of 100,000 without a reason: ${refused ?? 'accepted'}`);
+  await ProjectService.addProjectToInventory({
+    projectId, itemsToAdd: [{ itemId: product.id, quantity: 1, unitPrice: 400000, location: wh }], productionCostReason: 'invariant: a dearer part', currentUser: 'inv',
+  });
+  const wipAfterTyped = await projectNet('1402', projectId);
+  if (!fin(wipAfterTyped).equals(100000)) problems.push(`project 1402 after the delivery typed with a reason ${wipAfterTyped}, expected 100,000 (its share only)`);
+  const variance = await projectNet('6005', projectId);
+  if (!fin(variance).equals(-300000)) problems.push(`production cost variance (6005) of the project ${variance}, expected a credit of 300,000`);
+  await gapIsZero('after the delivery typed with a reason');
+
+  // the receipt that completes the plan closes 1402
   await ProjectService.addProjectToInventory({ projectId, itemsToAdd: [{ itemId: product.id, quantity: 1, location: wh }], currentUser: 'inv' });
   const wipAfter = await projectNet('1402', projectId);
-  if (!fin(wipAfter).equals(-200000)) problems.push(`project 1402 after the unpriced delivery ${wipAfter}, expected −200,000 (at weighted average cost)`);
-  const afterSecond = await inventoryValueGap(scope);
-  if (!afterSecond.gap.isZero()) problems.push(`after the unpriced delivery: warehouse value vs general ledger difference ${afterSecond.gap}`);
+  if (!fin(wipAfter).isZero()) problems.push(`project 1402 after the delivery that completes the plan ${wipAfter}, expected 0`);
+  await gapIsZero('after the delivery that completes the plan');
   return problems;
 }
 
@@ -247,7 +265,7 @@ export async function probeProjectDeliveryWithoutVoucher(wh: string): Promise<bo
   const product = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
   const projectId = await newProject('پروژه کاوش تحویل', [{ itemId: product.id, quantity: 2 }]);
   const mark = await voucherMark();
-  await ProjectService.addProjectToInventory({ projectId, itemsToAdd: [{ itemId: product.id, quantity: 2, unitPrice: 300000, location: wh }], currentUser: 'inv' });
+  await ProjectService.addProjectToInventory({ projectId, itemsToAdd: [{ itemId: product.id, quantity: 2, unitPrice: 300000, location: wh }], productionCostReason: 'probe: a project without materials', currentUser: 'inv' });
   const { gap } = await inventoryValueGap({ itemIds: [product.id], documentIdAfter: 0, voucherIdAfter: mark });
   return !gap.isZero();
 }

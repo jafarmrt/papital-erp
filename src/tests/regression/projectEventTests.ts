@@ -36,7 +36,7 @@ async function productionReceiptEventCase(h: Harness, wrong: string[]): Promise<
   const f = await fixture(h);
   const product = await f.item(0, 0);
   const projectId = await deliverableProject(h, f, product, 3);
-  const delivered = await h.post(`/api/projects/${projectId}/add-to-inventory`, { itemsToAdd: [{ itemId: product, quantity: 3, unitPrice: 200_000, location: f.wh }] });
+  const delivered = await h.post(`/api/projects/${projectId}/add-to-inventory`, { itemsToAdd: [{ itemId: product, quantity: 3, unitPrice: 200_000, location: f.wh }], productionCostReason: 'TD-942: no project materials' });
   const documentId = Number((delivered.body as { documentId?: unknown })?.documentId);
   if (delivered.status !== 200 || !Number.isInteger(documentId)) throw new Error(`setup: the delivery answered ${brief(delivered)}`);
   const events = await h.q(`SELECT event_type, aggregate_type, payload FROM outbox_events WHERE aggregate_id = $1 OR payload->>'documentId' = $1`, [String(documentId)]);

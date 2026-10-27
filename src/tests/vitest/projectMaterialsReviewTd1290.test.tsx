@@ -2,17 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QueryWrapper } from './helpers/queryWrapper';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { buildMaterialAvailabilityView, storedShortagesNowFree, type AvailabilityStockItem, type MaterialAvailabilityReport } from '../../lib/projects/materialAvailability';
-import { checkDeliveryPrices, type DeliveryCostReport } from '../../lib/projects/deliveryCostSuggestion';
+import type { DeliveryCostReport } from '../../lib/projects/deliveryCostSuggestion';
 import { buildSectionPurchaseList, sectionPurchaseRows } from '../../components/project/projectInventoryUtils';
 
 type FetchOpts = { method?: string; body?: string; signal?: AbortSignal };
 type Route = (url: string, opts?: FetchOpts) => unknown;
 let route: Route = () => [];
 const fetchJson = vi.fn(async (url: string, opts?: FetchOpts): Promise<unknown> => route(url, opts));
-const confirmAction = vi.fn(async (_opts: { message: string }) => true);
 const toastError = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (url: string, opts?: FetchOpts) => fetchJson(url, opts) }));
-vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: (opts: { message: string }) => confirmAction(opts) }));
 vi.mock('../../hooks/queries/useSettingsQueries', () => ({ useSettingsQuery: () => ({ data: [] }), useWarehousesQuery: () => ({ data: [{ id: 1, code: 'WH1', name: 'test warehouse' }] }) }));
 vi.mock('react-hot-toast', () => ({
   toast: { success: vi.fn(), error: (m: string) => toastError(m) },
@@ -30,7 +28,7 @@ import ProjectInventoryTab from '../../components/project/ProjectInventoryTab';
 import ProjectStockEntryTab from '../../components/project/ProjectStockEntryTab';
 import type { Item, ProductionProject, ProjectInventoryControlSectionData } from '../../types';
 
-afterEach(() => { cleanup(); vi.clearAllMocks(); route = () => []; confirmAction.mockImplementation(async () => true); });
+afterEach(() => { cleanup(); vi.clearAllMocks(); route = () => []; });
 
 // Persian text the screens show (kept in constants: terminal output stays English)
 const SECTION_ORDER_ONE = 'ثبت سفارش خرید (۱)';
@@ -38,8 +36,8 @@ const SECTION_ORDER = 'ثبت سفارش خرید';
 const REFINALIZE_HINT = 'برای رزرو آن «تکمیل رزرو» را بزنید';
 const DELIVER = 'ورود به انبار';
 const PRICE_LABEL = 'بهای واحد:';
-const OVER_DELIVERY_CONFIRM = 'ثبت تحویل با دلیل';
 const SAVE_FORM = 'ذخیره فرم';
+const REAL_COST_HINT = 'بهای واقعی: ۸۰۰';
 
 const GLUE: AvailabilityStockItem = { id: 3, code: 'G-1', name: 'glue', unit: 'pcs', current_stock: 10 };
 const glueRow = (gIdx: number, requiredQty: number, extra: Record<string, unknown> = {}) =>
@@ -155,30 +153,6 @@ const deliveryReport = (over: Partial<DeliveryCostReport> = {}): DeliveryCostRep
   ...over,
 });
 
-// v10.2.3 (TD-1290, review F2): a suggestion read before another delivery, or kept in the over-delivery resend, could
-// credit more than the project's 1402 balance
-describe('delivery prices are checked against a fresh balance (TD-1290 review F2)', () => {
-  const line = (typedPrice: number | undefined, shownSuggestion: number | null = 800) => ({ itemId: 42, quantity: 10, typedPrice, shownSuggestion });
-
-  it('posts the shown suggestion while the balance is unchanged', () => {
-    expect(checkDeliveryPrices(deliveryReport(), [line(undefined)], true)).toMatchObject({ kind: 'post', prices: [800], overdraws: false });
-  });
-
-  it('refuses a suggestion the balance no longer gives', () => {
-    expect(checkDeliveryPrices(deliveryReport({ wipBalance: 4000 }), [line(undefined)], true)).toEqual({ kind: 'suggestion_changed' });
-  });
-
-  it('flags a delivery that leaves the balance negative, a cleared price included', () => {
-    expect(checkDeliveryPrices(deliveryReport(), [line(2000)], true)).toMatchObject({ kind: 'post', prices: [2000], overdraws: true, outlook: { remaining: -12000 } });
-    expect(checkDeliveryPrices(deliveryReport(), [line(0)], true)).toMatchObject({ prices: [undefined], overdraws: true, outlook: { credit: 50000 } });
-    expect(checkDeliveryPrices(deliveryReport(), [line(500)], true)).toMatchObject({ prices: [500], overdraws: false });
-  });
-
-  it('suggests nothing for several products', () => {
-    expect(checkDeliveryPrices(deliveryReport(), [line(undefined, null)], false)).toMatchObject({ kind: 'post', prices: [undefined] });
-  });
-});
-
 const PRODUCT = { id: 'prod-1', item_id: 42, item_code: 'N-1', item_name: 'necklace', customer_code: '', quantity: 10, unit: 'pcs', needs_assembly: false };
 const PROJECT = { id: 1, project_code: 'PRJ-1', status: 'in_progress', item_id: 42, item_name: 'necklace', quantity: 10, unit: 'pcs', products: [PRODUCT] } as unknown as ProductionProject;
 const ITEMS = [{ id: 42, code: 'N-1', name: 'necklace', weightedAverageCost: 5000 }, { id: 43, code: 'N-2', name: 'ring', weightedAverageCost: 100 }] as unknown as Item[];
@@ -191,66 +165,28 @@ const deliveryRoute: Route = (url, opts) => {
   return {};
 };
 const deliveryCalls = () => fetchJson.mock.calls.filter(([url]) => url.endsWith('/add-to-inventory'));
-const sentBody = (call: number) => JSON.parse(deliveryCalls()[call][1]?.body ?? '{}') as { itemsToAdd: Array<{ unitPrice?: number; itemId: number }>; overDeliveryReason?: string };
+const sentBody = (call: number) => JSON.parse(deliveryCalls()[call][1]?.body ?? '{}') as { itemsToAdd: Array<{ unitPrice?: number; itemId: number }> };
 const priceInputs = () => screen.getAllByText(PRICE_LABEL).map(label => label.parentElement?.querySelector('input') as HTMLInputElement);
 const deliverButton = (i = 0) => screen.getAllByText(DELIVER).map(span => span.closest('button') as HTMLButtonElement)[i];
 
-describe('the delivery tab prices with a fresh balance before posting (TD-1290 review F2, F3, F6)', () => {
+// v10.2.3 (TD-1290, review F2): a suggestion read before another delivery, or kept in the over-delivery resend, could
+// credit more than the project's 1402 balance. v11 phase 6.1ث (decision ت۵۲-۳): the server prices the receipt from the
+// 1402 it reads under the project lock, so the tab sends only the costs the user typed and the hint can never go stale
+describe('the delivery tab sends only typed costs (TD-1290 review F2, F3, F6; v11 6.1th)', () => {
   afterEach(() => { costAnswer = deliveryReport(); deliveryAnswer = () => ({ success: true, addedCount: 1, refNumber: 'PR-9' }); });
 
-  it('does not post a suggestion that changed meanwhile and posts the fresh one after the user sees it', async () => {
+  it('sends no price for the hint, without reading the balance again first', async () => {
     route = deliveryRoute;
     render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
-    await waitFor(() => expect(priceInputs()[0].value).toBe('۸۰۰'));
-    costAnswer = deliveryReport({ wipBalance: 4000 });
-    fireEvent.click(deliverButton());
-    await vi.waitFor(() => expect(toastError).toHaveBeenCalled());
-    expect(deliveryCalls()).toHaveLength(0);
-    await waitFor(() => expect(priceInputs()[0].value).toBe('۴۰۰'));
-    await waitFor(() => expect(deliverButton().disabled).toBe(false));
+    await waitFor(() => expect(priceInputs()[0].placeholder).toBe(REAL_COST_HINT));
+    const reads = () => fetchJson.mock.calls.filter(([url]) => url === '/projects/1/delivery-cost').length;
+    const before = reads();
     fireEvent.click(deliverButton());
     await vi.waitFor(() => expect(deliveryCalls()).toHaveLength(1));
-    expect(sentBody(0).itemsToAdd[0].unitPrice).toBe(400);
-  });
-
-  it('asks before a delivery that leaves the project balance negative', async () => {
-    route = deliveryRoute;
-    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
-    await waitFor(() => expect(priceInputs()[0].value).toBe('۸۰۰'));
-    fireEvent.change(priceInputs()[0], { target: { value: '2000' } });
-    confirmAction.mockImplementation(async () => false);
-    fireEvent.click(deliverButton());
-    await vi.waitFor(() => expect(confirmAction).toHaveBeenCalledTimes(1));
-    expect(confirmAction.mock.calls[0][0].message).toContain('۱۲٬۰۰۰ ریال منفی');
-    await waitFor(() => expect(deliverButton().disabled).toBe(false));
-    expect(deliveryCalls()).toHaveLength(0);
-    confirmAction.mockImplementation(async () => true);
-    fireEvent.click(deliverButton());
-    await vi.waitFor(() => expect(deliveryCalls()).toHaveLength(1));
-    expect(sentBody(0).itemsToAdd[0].unitPrice).toBe(2000);
-  });
-
-  it('prices the over-delivery resend again instead of resending the first suggestion', async () => {
-    route = deliveryRoute;
-    deliveryAnswer = opts => {
-      if (JSON.parse(opts?.body ?? '{}').overDeliveryReason) return { success: true, addedCount: 1 };
-      throw Object.assign(new Error('over'), { code: 'OVER_DELIVERY_REASON_REQUIRED', details: { overDeliveries: [{ itemId: 42, itemName: 'necklace', plannedQty: 10, deliveredQty: 0, requestedQty: 10 }] } });
-    };
-    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
-    await waitFor(() => expect(priceInputs()[0].value).toBe('۸۰۰'));
-    fireEvent.click(deliverButton());
-    const reason = await screen.findByRole('textbox', { name: content => content.length > 0 }).catch(() => document.querySelector('textarea') as HTMLTextAreaElement);
-    expect(sentBody(0).itemsToAdd[0].unitPrice).toBe(800);
-    fireEvent.change(reason, { target: { value: 'customer asked for more' } });
-    costAnswer = deliveryReport({ wipBalance: 4000 });
-    fireEvent.click(screen.getByText(OVER_DELIVERY_CONFIRM));
-    await vi.waitFor(() => expect(toastError).toHaveBeenCalled());
-    expect(deliveryCalls()).toHaveLength(1);
-    await waitFor(() => expect(priceInputs()[0].value).toBe('۴۰۰'));
-    await waitFor(() => expect((screen.getByText(OVER_DELIVERY_CONFIRM).closest('button') as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByText(OVER_DELIVERY_CONFIRM));
-    await vi.waitFor(() => expect(deliveryCalls()).toHaveLength(2));
-    expect(sentBody(1)).toMatchObject({ overDeliveryReason: 'customer asked for more', itemsToAdd: [{ unitPrice: 400 }] });
+    expect(sentBody(0).itemsToAdd[0].unitPrice).toBeUndefined();
+    const urls = fetchJson.mock.calls.map(([url]) => url);
+    expect(urls.slice(0, urls.findIndex(url => url.endsWith('/add-to-inventory'))).filter(url => url === '/projects/1/delivery-cost')).toHaveLength(before);
+    expect(toastError).not.toHaveBeenCalled();
   });
 
   it('keeps the unit cost typed for a product that was not delivered (F3)', async () => {
@@ -268,14 +204,13 @@ describe('the delivery tab prices with a fresh balance before posting (TD-1290 r
     expect(priceInputs()[1].value).toBe('۲۲۲');
   });
 
-  it('keeps delivery off until the first balance read answers (F6)', async () => {
+  it('lets a delivery go before the balance read answers, then shows the hint (F6)', async () => {
     let answer: (v: unknown) => void = () => undefined;
     route = url => (url === '/projects/1/delivery-cost' ? new Promise(resolve => { answer = resolve; }) : deliveryRoute(url));
     render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     await vi.waitFor(() => expect(fetchJson).toHaveBeenCalledWith('/projects/1/delivery-cost', expect.anything()));
-    expect(deliverButton().disabled).toBe(true);
+    expect(deliverButton().disabled).toBe(false);
     answer(deliveryReport());
-    await waitFor(() => expect(deliverButton().disabled).toBe(false));
-    await waitFor(() => expect(priceInputs()[0].value).toBe('۸۰۰'));
+    await waitFor(() => expect(priceInputs()[0].placeholder).toBe(REAL_COST_HINT));
   });
 });

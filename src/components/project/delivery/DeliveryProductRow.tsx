@@ -16,12 +16,13 @@ interface DeliveryProductRowProps {
 
 /** one product of the delivery tab: its selection, item and stock, the quantity and unit cost to deliver, and «ورود به انبار» */
 export function DeliveryProductRow({ product: p, index: idx, projectItemId, catalogItem: catItem, delivery }: DeliveryProductRowProps) {
-  const { selectedIds, setSelectedIds, targetLocation, producedQuantities, unitCosts, handleQtyChange, handleCostChange, suggestedCostOf, canDeliver, submitting, batchSubmitting, costPending, handleAddToInventory } = delivery;
+  const { selectedIds, setSelectedIds, targetLocation, producedQuantities, unitCosts, handleQtyChange, handleCostChange, computedCostOf, canDeliver, submitting, batchSubmitting, handleAddToInventory } = delivery;
   const isSelected = selectedIds.has(p.id);
   const hasCatalogLink = Boolean(p.item_id || projectItemId);
   const defaultWac = catItem?.weightedAverageCost || catItem?.costPrice || 0;
   const enteredCost = unitCosts[p.id];
-  const suggestedCost = enteredCost === undefined ? suggestedCostOf(p) : null;
+  // v11 phase 6.1ث (decision ت۵۲-۳): an empty field posts the cost the server computes from the project's 1402, shown as its hint
+  const computedCost = computedCostOf(p);
   const currentStockInLoc = catItem?.stocks && targetLocation ? (catItem.stocks as Record<string, number>)[targetLocation] || 0 : catItem?.currentStock || 0;
   const toggleSelect = () => setSelectedIds(prev => {
     const next = new Set(prev);
@@ -90,14 +91,14 @@ export function DeliveryProductRow({ product: p, index: idx, projectItemId, cata
         </div>
 
         {/* Unit Cost Basis (Optional WAC Override) */}
-        <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200" title="بهای تمام‌شده هر واحد جهت محاسبه مجدد میانگین موزون در انبار">
+        <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200" title="خالی بماند تا بهای واقعی تولید از کالای در جریان ساخت پروژه ثبت شود؛ بهای دیگر دلیل می‌خواهد">
           <DollarSign className="w-3.5 h-3.5 text-slate-400" />
           <span className="text-slate-600 font-semibold text-[11px]">بهای واحد:</span>
           <DecimalInput
             min="0"
             step="any"
-            placeholder={defaultWac > 0 ? `میانگین موزون بها: ${toPersianDigits(defaultWac)}` : 'میانگین موزون بها'}
-            value={enteredCost !== undefined ? (enteredCost > 0 ? enteredCost : '') : (suggestedCost ?? '')}
+            placeholder={computedCost !== null ? `بهای واقعی: ${formatPersianNumber(computedCost, 4)}` : defaultWac > 0 ? `میانگین موزون بها: ${toPersianDigits(defaultWac)}` : 'بهای واقعی'}
+            value={enteredCost !== undefined && enteredCost > 0 ? enteredCost : ''}
             onValueChange={(v) => handleCostChange(p.id, Number(v) || 0)}
             className="w-24 px-1.5 py-1 bg-white border border-slate-300 rounded-lg text-center font-mono font-bold text-xs focus:ring-2 focus:ring-amber-400 focus:outline-none placeholder:text-slate-400"
           />
@@ -109,8 +110,7 @@ export function DeliveryProductRow({ product: p, index: idx, projectItemId, cata
           <button
             type="button"
             onClick={() => void handleAddToInventory(p)}
-            disabled={submitting || batchSubmitting || costPending}
-            title={costPending ? 'در حال خواندن ماندهٔ کالای در جریان ساخت پروژه…' : undefined}
+            disabled={submitting || batchSubmitting}
             className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 transition-all shadow-2xs hover:shadow disabled:opacity-50 shrink-0 cursor-pointer"
           >
             {submitting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ArrowDownRight className="w-3.5 h-3.5" />}

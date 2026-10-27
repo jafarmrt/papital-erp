@@ -22,6 +22,8 @@ async function projectWith(title: string, itemId: number, quantity: number): Pro
 function deliver(projectId: number, itemId: number, quantity: number, wh: string, overDeliveryReason?: string) {
   return ProjectService.addProjectToInventory({
     projectId, itemsToAdd: [{ itemId, quantity, unitPrice: 100000, location: wh }], currentUser: 'inv', overDeliveryReason,
+    // v11 phase 6.1ث: these projects hold no materials, so a cost of 100,000 is a cost other than their real cost
+    productionCostReason: 'invariant: a project without materials',
   });
 }
 

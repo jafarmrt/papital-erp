@@ -82,7 +82,7 @@ function MarkCompletedBox({ delivery }: { delivery: ProjectDelivery }) {
 
 /** the delivery buttons of the stats bar: the selected products, else all of a project with more than one */
 function BatchDeliveryButton({ delivery }: { delivery: ProjectDelivery }) {
-  const { canDeliver, selectedIds, selectedProducts, products, batchSubmitting, submitting, costPending, handleBatchAddToInventory } = delivery;
+  const { canDeliver, selectedIds, selectedProducts, products, batchSubmitting, submitting, handleBatchAddToInventory } = delivery;
   if (!canDeliver) {
     return (
       <span className="px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 font-bold text-[11px]">
@@ -95,7 +95,7 @@ function BatchDeliveryButton({ delivery }: { delivery: ProjectDelivery }) {
       <button
         type="button"
         onClick={() => void handleBatchAddToInventory(selectedProducts)}
-        disabled={batchSubmitting || submitting || costPending}
+        disabled={batchSubmitting || submitting}
         className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
       >
         {batchSubmitting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
@@ -108,7 +108,7 @@ function BatchDeliveryButton({ delivery }: { delivery: ProjectDelivery }) {
     <button
       type="button"
       onClick={() => void handleBatchAddToInventory(products)}
-      disabled={batchSubmitting || submitting || costPending}
+      disabled={batchSubmitting || submitting}
       className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-400 font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
       title="تحویل تمامی محصولات این پروژه به انبار با یک کلیک"
     >
@@ -120,7 +120,7 @@ function BatchDeliveryButton({ delivery }: { delivery: ProjectDelivery }) {
 
 /** the top of the delivery tab: what it does, the destination warehouse, the «تکمیل‌شده» box, the 1402 outlook and the totals */
 export function DeliveryHeader({ delivery }: { delivery: ProjectDelivery }) {
-  const { warehouses, targetLocation, setTargetLocation, canDeliver, deliveryCost, costOutlook, singleSuggestion, remainingPlanQty, products, totalDeliveredQty } = delivery;
+  const { warehouses, targetLocation, setTargetLocation, canDeliver, deliveryCost, costOutlook, remainingPlanQty, products, totalDeliveredQty } = delivery;
   return (
     <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-2xs space-y-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -175,7 +175,7 @@ export function DeliveryHeader({ delivery }: { delivery: ProjectDelivery }) {
       </div>
 
       {canDeliver && (deliveryCost.status !== 'ready' || deliveryCost.data?.costVisible) && (
-        <ProjectDeliveryCostPanel status={deliveryCost.status} outlook={costOutlook} suggestedUnitCost={singleSuggestion} remainingPlanQty={singleSuggestion === null ? null : remainingPlanQty} />
+        <ProjectDeliveryCostPanel status={deliveryCost.status} outlook={costOutlook} remainingPlanQty={remainingPlanQty} />
       )}
 
       {/* Quick Stats & Controls Bar */}

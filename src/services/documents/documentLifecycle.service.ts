@@ -38,6 +38,7 @@ import { assertNameNotOtherKind, hasPricedLine, linkKnownDocumentParty } from '.
 import { lockRequisitionOfOrder, releaseVoidedProcurementOrder } from './procurementOrderVoid.js';
 import { documentVoidVoucherReason } from '../../lib/documents/documentTypeName.js';
 import { idempotentTransaction } from '../../middleware/idempotency.js';
+import { assertProjectMaterialsNotDelivered } from '../accounting/projectDeliveredMaterials.js';
 
 export class DocumentLifecycleService {
   /**
@@ -329,6 +330,10 @@ export class DocumentLifecycleService {
       await assertVoidHasNoReturns(tx, { id: doc.id, refNumber: doc.refNumber });
       // v9.0.272 (TD-779، ت۴ الف): و نه سندی که دریافت یا پرداخت زنده خزانه دارد (۴۰۹ با فهرست آن‌ها)
       await assertVoidHasNoTreasuryRows(tx, { id: doc.id, refNumber: doc.refNumber });
+      // v11 phase 6.1ث (decision ت۵۲-۳): nor a project remittance once the project delivered goods (409 with the receipts)
+      if (doc.type === 'remittance' && doc.status === 'final' && doc.projectId) {
+        await assertProjectMaterialsNotDelivered(tx, Number(doc.projectId), 'remittance');
+      }
       // v9.0.337 (TD-785): سند و ردیف‌هایش پیش از ابطال برای تنها ردیف ممیزی ابطال
       const auditBefore = await documentAuditSnapshot(tx, id);
 

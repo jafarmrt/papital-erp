@@ -3,6 +3,7 @@ import { CheckSquare, Square, Search } from 'lucide-react';
 import type { ProductionProject, Item } from '../../types';
 import { toPersianDigits } from '../../utils';
 import { ProjectOverDeliveryPrompt } from './ProjectOverDeliveryPrompt';
+import { ProductionCostPrompt } from './delivery/ProductionCostPrompt';
 import { useProjectDelivery } from './delivery/useProjectDelivery';
 import { DeliveryHeader } from './delivery/DeliveryHeader';
 import { DeliveryProductRow } from './delivery/DeliveryProductRow';
@@ -21,7 +22,7 @@ interface ProjectStockEntryTabProps {
  */
 export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate }: ProjectStockEntryTabProps) {
   const delivery = useProjectDelivery(project, onUpdate);
-  const { products, selectedIds, setSelectedIds, overDelivery } = delivery;
+  const { products, selectedIds, setSelectedIds, pendingReason } = delivery;
   const [searchQuery, setSearchQuery] = useState('');
 
   // Map of itemId to catalog Item for looking up WAC and cost basis
@@ -54,14 +55,24 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
 
   return (
     <div className="space-y-4 text-xs animate-fadeIn">
-      {overDelivery && (
+      {pendingReason?.kind === 'over_delivery' && (
         <ProjectOverDeliveryPrompt
-          items={overDelivery.items}
-          reason={delivery.overDeliveryReason}
-          onReasonChange={delivery.setOverDeliveryReason}
-          onConfirm={() => void delivery.confirmOverDelivery()}
-          onCancel={() => delivery.setOverDelivery(null)}
-          submitting={delivery.submitting || delivery.costPending}
+          items={pendingReason.items}
+          reason={delivery.reasonText}
+          onReasonChange={delivery.setReasonText}
+          onConfirm={() => void delivery.confirmReason()}
+          onCancel={() => delivery.setPendingReason(null)}
+          submitting={delivery.submitting}
+        />
+      )}
+      {pendingReason?.kind === 'production_cost' && (
+        <ProductionCostPrompt
+          ask={pendingReason.ask}
+          reason={delivery.reasonText}
+          onReasonChange={delivery.setReasonText}
+          onConfirm={() => void delivery.confirmReason()}
+          onCancel={() => delivery.setPendingReason(null)}
+          submitting={delivery.submitting}
         />
       )}
       <DeliveryHeader delivery={delivery} />

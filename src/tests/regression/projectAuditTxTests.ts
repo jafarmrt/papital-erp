@@ -43,7 +43,7 @@ async function deliveryAndAllocationAuditCase(h: Harness, wrong: string[]): Prom
   if (projectRes.status !== 201) throw new Error(`setup: project create answered ${brief(projectRes)}`);
 
   // 1) the delivery route: the production receipt has its CREATE row with the stored document, and the project its row
-  const delivered = await h.post(`/api/projects/${projectId}/add-to-inventory`, { itemsToAdd: [{ itemId: product, quantity: 4, unitPrice: 300_000, location: f.wh }] });
+  const delivered = await h.post(`/api/projects/${projectId}/add-to-inventory`, { itemsToAdd: [{ itemId: product, quantity: 4, unitPrice: 300_000, location: f.wh }], productionCostReason: 'TD-943: no project materials' });
   const documentId = Number((delivered.body as { documentId?: unknown }).documentId);
   if (delivered.status !== 200 || !Number.isInteger(documentId)) throw new Error(`setup: delivery answered ${brief(delivered)}`);
   const [receiptRow] = await h.q(`SELECT user_id, details FROM activity_logs WHERE entity = $1 AND entity_id = $2 AND action = 'CREATE'`, [RECEIPT_ENTITY, String(documentId)]);
@@ -62,7 +62,7 @@ async function deliveryAndAllocationAuditCase(h: Harness, wrong: string[]): Prom
   try {
     await orm.transaction(async tx => {
       const projectRowsBefore = await auditRows(tx, PROJECT_ENTITY, projectId, 'UPDATE');
-      const result = await ProjectService.addProjectToInventory({ projectId, itemsToAdd: [{ itemId: product, quantity: 1, unitPrice: 300_000, location: f.wh }], currentUser: 'td943' }, tx);
+      const result = await ProjectService.addProjectToInventory({ projectId, itemsToAdd: [{ itemId: product, quantity: 1, unitPrice: 300_000, location: f.wh }], productionCostReason: 'TD-943: no project materials', currentUser: 'td943' }, tx);
       rolledBackDoc = Number(result.documentId);
       inTx = { receipt: await auditRows(tx, RECEIPT_ENTITY, rolledBackDoc, 'CREATE'), project: await auditRows(tx, PROJECT_ENTITY, projectId, 'UPDATE') - projectRowsBefore };
       throw new Rollback();

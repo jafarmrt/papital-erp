@@ -10890,6 +10890,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10.2 package 3 (v10.2.3, TD-1290): free stock, delivery cost and issued materials of a project
   const { runProjectMaterialsCostTests } = await import('../regression/projectMaterialsCostTests.js');
   results.push(...await runProjectMaterialsCostTests(shouldRun));
+  // v11 phase 6.1ث (S2, decision ت۵۲-۳): a production receipt costs the project's real cost; the materials of a delivering project stay
+  const { runProductionRealCostTests } = await import('../regression/productionRealCostTests.js');
+  results.push(...await runProductionRealCostTests(shouldRun));
   // Series 10 N-05 PR 3 (v10.0.247+): sections, tags, order, cover, replace and the item picture of the media library
   const { runMediaArrangeTests } = await import('../regression/mediaArrangeTests.js');
   results.push(...await runMediaArrangeTests(shouldRun));

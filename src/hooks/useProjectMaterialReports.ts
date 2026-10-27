@@ -79,18 +79,6 @@ export function useProjectDeliveryCost(projectId: unknown, enabled: boolean, rel
   return useProjectReadReport([...QUERY_KEYS.projects.detail(pid ?? 0), 'delivery-cost'], url, deliveryCostReportOf, reloadKey);
 }
 
-/**
- * 10.3 (ARCH review finding 3): the delivery cost read again right before a delivery is sent, never from the cache, so its
- * prices are checked against the balance as it is now (TD-1290); null when it could not be read or is unreadable
- */
-export async function readDeliveryCostNow(projectId: number): Promise<DeliveryCostReport | null> {
-  try {
-    return deliveryCostReportOf(await fetchJson<unknown>(`/projects/${projectId}/delivery-cost`));
-  } catch {
-    return null;
-  }
-}
-
 /** «مواد گرفته‌شده از انبار» پروژه (`GET /projects/:id/issued-materials`) */
 export function useProjectIssuedMaterials(projectId: unknown, reloadKey: unknown): ProjectReadReport<IssuedMaterialsReport> {
   const pid = projectIdOf(projectId);

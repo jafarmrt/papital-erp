@@ -74,7 +74,7 @@ export async function runProjectEditTests(shouldRun: ShouldRun): Promise<TestCas
       const api = await sandboxAdminClient();
       const item = await createTestItem({ type: 'product', weightedAverageCost: 100000 });
       const project = await newProject(api, { products: [{ itemId: item.id, qty: 5 }] });
-      const deliver = (line: Record<string, unknown>) => api.post(`/api/projects/${project.id}/add-to-inventory`, { itemsToAdd: [{ itemId: item.id, ...line }] });
+      const deliver = (line: Record<string, unknown>) => api.post(`/api/projects/${project.id}/add-to-inventory`, { itemsToAdd: [{ itemId: item.id, ...line }], productionCostReason: 'TD-741: no project materials' });
       const receiptLines = async () => q(
         `SELECT di.quantity::text AS quantity, di.unit_price::text AS unit_price FROM documents d JOIN document_items di ON di.document_id = d.id
           WHERE d.project_id = $1 AND d.type = 'production_receipt' AND d.is_deleted = 0 AND di.is_deleted = 0 ORDER BY di.id`, [project.id]);
