@@ -203,7 +203,7 @@ export function Sidebar({
 
   return (
     <aside className={cn(
-      "bg-slate-900 text-slate-300 flex-col shrink-0 h-screen print:hidden transition-all duration-300 ease-in-out z-30 select-none",
+      "bg-slate-900 text-slate-300 flex-col shrink-0 h-dvh print:hidden transition-all duration-300 ease-in-out z-30 select-none",
       // v10.0.17 (D-11): on a phone the collapsed menu is hidden (the bottom bar replaces it) and the open one covers the page
       isCollapsed ? "hidden md:flex w-16" : "flex w-64 fixed inset-y-0 right-0 z-50 md:static md:z-30"
     )}>

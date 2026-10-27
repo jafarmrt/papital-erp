@@ -5,7 +5,7 @@
 export const CRM_ACTIVITY_TYPE_LABELS: Readonly<Record<string, string>> = {
   call: 'تماس تلفنی',
   meeting: 'جلسه',
-  whatsapp: 'پیام / واتساپ',
+  whatsapp: 'پیام / واتس‌اپ',
   email: 'ایمیل',
   quote: 'پیش‌فاکتور',
   note: 'یادداشت',

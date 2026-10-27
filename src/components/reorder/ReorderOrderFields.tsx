@@ -3,8 +3,9 @@ import { SearchableSelect } from '../SearchableSelect';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
 import { REORDER_DIRECT_DOCUMENT_HINT, REORDER_DIRECT_DOCUMENT_LABEL } from '../../lib/reorderAlerts/reorderPurchaseReceipt';
+import { REQUISITION_PRIORITIES, REQUISITION_PRIORITY_LABELS, type RequisitionPriority } from '../../lib/procurement/requisitionFields';
 
-export type ReorderPriority = 'urgent' | 'high' | 'normal' | 'low';
+export type ReorderPriority = RequisitionPriority;
 
 interface ReorderOrderFieldsProps {
   orderTarget: 'requisition' | 'direct_document';
@@ -51,10 +52,7 @@ export function ReorderOrderFields(props: ReorderOrderFieldsProps) {
       <div>
         <label htmlFor={`${fieldId}-priority`} className="block font-bold text-slate-700 mb-1">اولویت نیاز:</label>
         <select id={`${fieldId}-priority`} value={props.priority} onChange={e => props.onPriorityChange(e.target.value as ReorderPriority)} className={`${FIELD} font-bold`}>
-          <option value="urgent">فوری / اضطراری</option>
-          <option value="high">مهم</option>
-          <option value="normal">عادی</option>
-          <option value="low">کم‌اولویت</option>
+          {REQUISITION_PRIORITIES.map(p => <option key={p} value={p}>{REQUISITION_PRIORITY_LABELS[p]}</option>)}
         </select>
       </div>
 

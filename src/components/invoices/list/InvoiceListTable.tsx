@@ -20,7 +20,7 @@ export function InvoiceListTable({ safeDocs, loading, actions, loadError, onRetr
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
       )}
-      <table className="w-full text-xs text-right">
+      <table className="w-full text-xs text-right phone-cards">
         <thead className="bg-slate-100/80 text-slate-700 border-b border-slate-200 sticky top-0 z-0 text-[11px] font-bold">
           <tr>
             <th className="p-3 w-28">شماره سند</th>
@@ -58,7 +58,7 @@ export function InvoiceListTable({ safeDocs, loading, actions, loadError, onRetr
           )}
           {!loading && !loadError && safeDocs.length === 0 && (
             <tr>
-              <td colSpan={10} className="p-12 text-center text-slate-400 text-xs">
+              <td colSpan={10} className="p-12 text-center text-slate-500 text-xs">
                 سندی مطابق شرط‌های جست‌وجو یافت نشد.
               </td>
             </tr>

@@ -28,7 +28,7 @@ async function submitLogin() {
   render(<LoginPage onLogin={() => {}} />);
   const username = await screen.findByPlaceholderText('نام کاربری');
   fireEvent.change(username, { target: { value: 'ali' } });
-  fireEvent.change(screen.getByPlaceholderText('کلمه عبور'), { target: { value: 'wrong-pass' } });
+  fireEvent.change(screen.getByPlaceholderText('رمز عبور'), { target: { value: 'wrong-pass' } });
   fireEvent.submit(username.closest('form')!);
   await waitFor(() => expect((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.some(([u]) => String(u) === '/api/login')).toBe(true));
   return username as HTMLInputElement;

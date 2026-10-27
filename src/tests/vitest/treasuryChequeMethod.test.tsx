@@ -29,6 +29,6 @@ describe('treasury cheque method removed (TD-278)', () => {
     );
     await waitFor(() => expect(screen.getByText('کارت‌خوان')).toBeTruthy());
     expect(screen.queryByText('چک صیادی')).toBeNull();
-    expect(screen.getByText('وجه نقد (صندوق)')).toBeTruthy();
+    expect(screen.getByText('نقدی (صندوق)')).toBeTruthy();
   });
 });

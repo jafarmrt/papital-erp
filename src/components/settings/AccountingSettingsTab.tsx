@@ -121,7 +121,7 @@ export function AccountingSettingsTab({ currentUser, canSeedDefaults = true }: {
             <button
               onClick={handleSeedDefault}
               disabled={isSeeding}
-              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition shadow-sm disabled:opacity-50 cursor-pointer"
+              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition shadow-sm disabled:opacity-50 cursor-pointer"
             >
               <RefreshCw size={14} className={isSeeding ? 'animate-spin' : ''} />
               <span>{isSeeding ? 'در حال استقرار...' : 'همگام‌سازی کدینگ پیش‌فرض'}</span>

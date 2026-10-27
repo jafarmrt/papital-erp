@@ -63,7 +63,7 @@ export const ExcelUploadStep: React.FC<ExcelUploadStepProps> = ({
           <button
             onClick={onDownloadExport}
             disabled={isExporting}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+            className="w-full bg-emerald-700 hover:bg-emerald-800 disabled:bg-emerald-300 text-white font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
           >
             {isExporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
             دریافت خروجی اکسل (.xlsx)

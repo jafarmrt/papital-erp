@@ -10,9 +10,7 @@ import { DialogLayer } from '../../common/DialogLayer';
 import { JalaliDateInput } from '../../common/JalaliDateInput';
 import { getTodayIsoDate } from '../../../utils/dateUtils';
 import { PETTY_CASH_CURRENCY, PETTY_CASH_RIAL_ONLY_MESSAGE } from '../../../lib/treasury/pettyCash';
-
-/** v10.1.32 (D-16): سرفصل پیش‌فرض تنخواه‌گردان */
-const PETTY_CASH_LEDGER_CODE = '1006';
+import { defaultTreasuryLedger, defaultTreasuryLedgerCode, TREASURY_LEDGER_REQUIRED_MESSAGE } from '../../../lib/treasury/treasuryLedgerDefault';
 
 interface BankAccountModalProps {
   isOpen: boolean;
@@ -52,6 +50,9 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
   /** آخرین کد پیشنهادی سرور؛ اگر کاربر تغییرش ندهد کد نهایی هنگام ثبت از شمارنده سرور گرفته می‌شود (v8.0.78، TD-325) */
   const [suggestedCode, setSuggestedCode] = useState('');
   const [showAllAccounts, setShowAllAccounts] = useState(false);
+  /** v11 phase 6.3b (U19): the user picked the ledger, so a change of type or currency keeps it */
+  const [ledgerPickedByUser, setLedgerPickedByUser] = useState(false);
+  const [ledgerError, setLedgerError] = useState('');
 
   // واکشی کد خودکار پیشنهادی برای حساب جدید بر اساس نوع
   const fetchNextCode = useCallback(async (accountType: BankAccountType) => {
@@ -91,6 +92,8 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
       });
       setAutoCodeGenerated(false);
       setShowAllAccounts(false);
+      setLedgerPickedByUser(true);
+      setLedgerError('');
     } else if (isOpen) {
       setFormData({
         code: '',
@@ -108,14 +111,24 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
       });
       setAutoCodeGenerated(false);
       setShowAllAccounts(false);
+      setLedgerPickedByUser(false);
+      setLedgerError('');
       void fetchNextCode('bank');
     }
   }, [editingBank, isOpen, fetchNextCode]);
 
+  // v11 phase 6.3b (U19): a new account takes the standard ledger of its type and currency until the user picks one
+  useEffect(() => {
+    if (!isOpen || editingBank || ledgerPickedByUser) return;
+    // no standard ledger for the new type or currency clears the earlier automatic one instead of keeping a wrong ledger
+    const suggestedId = defaultTreasuryLedger(Array.isArray(accounts) ? accounts : [], formData.type, formData.currency)?.id ?? null;
+    if (suggestedId !== formData.accountId) setFormData(prev => ({ ...prev, accountId: suggestedId }));
+  }, [isOpen, editingBank, ledgerPickedByUser, accounts, formData.type, formData.currency, formData.accountId]);
+
   // هر بار که کاربر نوع حساب را تغییر داد و در حالت ایجاد بود، کد جدید متناسب واکشی شود
   // v10.1.32 (D-16): تنخواه‌گردان ریالی است و سرفصل ۱۰۰۶ را پیش‌فرض می‌گیرد
   const handleTypeChange = (newType: BankAccountType) => {
-    const pettyLedger = (Array.isArray(accounts) ? accounts : []).find(a => String(a.code).trim() === PETTY_CASH_LEDGER_CODE);
+    const pettyLedger = defaultTreasuryLedger(Array.isArray(accounts) ? accounts : [], 'petty_cash', PETTY_CASH_CURRENCY);
     setFormData(prev => newType === 'petty_cash'
       ? { ...prev, type: newType, currency: PETTY_CASH_CURRENCY, accountId: prev.accountId ?? pettyLedger?.id ?? null }
       : { ...prev, type: newType });
@@ -128,6 +141,12 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // only a new balance needs the ledger: an older account with a balance and no ledger can still be renamed (as the server allows)
+    const balanceIsNew = !editingBank || Number(formData.initialBalance) !== Number(editingBank.initialBalance || 0);
+    if (balanceIsNew && Number(formData.initialBalance) !== 0 && !formData.accountId) {
+      setLedgerError(TREASURY_LEDGER_REQUIRED_MESSAGE);
+      return;
+    }
     setIsSaving(true);
     try {
       const serverAssignsCode = !editingBank && autoCodeGenerated && formData.code.trim() === suggestedCode;
@@ -157,7 +176,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
     }
 
     if (formData.type === 'petty_cash') {
-      return c.startsWith(PETTY_CASH_LEDGER_CODE) || (c.startsWith('10') && acc.name.includes('تنخواه'));
+      return c.startsWith(defaultTreasuryLedgerCode('petty_cash', PETTY_CASH_CURRENCY)) || (c.startsWith('10') && acc.name.includes('تنخواه'));
     } else if (formData.type === 'cash') {
       // سرفصل‌های صندوق و تنخواه‌گردان (1001، 1002، 1006) یا هر معینی زیر کل 10 که نام صندوق/نقد داشته باشد
       return c.startsWith('1001') || c.startsWith('1002') || c.startsWith('1006') || 
@@ -182,7 +201,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
             {editingBank ? `ویرایش ${editingBank.title}` : 'تعریف حساب بانکی یا صندوق جدید'}
           </h3>
           {!editingBank && autoCodeGenerated && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
               <Sparkles className="w-3 h-3" />
               کدگذاری خودکار
             </span>
@@ -202,7 +221,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
                     onClick={() => fetchNextCode(formData.type)}
                     disabled={isLoadingCode}
                     title="تولید مجدد کد خودکار"
-                    className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5 cursor-pointer disabled:opacity-50"
+                    className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5 cursor-pointer disabled:opacity-50"
                   >
                     <RefreshCw className={`w-2.5 h-2.5 ${isLoadingCode ? 'animate-spin' : ''}`} />
                     کد جدید
@@ -263,7 +282,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowAllAccounts(!showAllAccounts)}
-                className="text-[10px] text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1 cursor-pointer"
+                className="text-[11px] text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1 cursor-pointer"
                 title="تغییر محدوده نمایش حساب‌ها"
               >
                 <Filter className="w-2.5 h-2.5" />
@@ -273,7 +292,11 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
             <AccountSearchSelect
               accounts={safeAccounts}
               value={formData.accountId || ''}
-              onChange={(val) => setFormData({ ...formData, accountId: val ? Number(val) : null })}
+              onChange={(val) => {
+                setFormData({ ...formData, accountId: val ? Number(val) : null });
+                setLedgerPickedByUser(true);
+                setLedgerError('');
+              }}
               filterFn={treasuryAccountFilter}
               placeholder={
                 formData.type === 'petty_cash'
@@ -285,7 +308,8 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
                   : 'جست‌وجو در سرفصل‌های بانک‌های ریالی/ارزی (کد ۱۰)...'
               }
             />
-            <p className="text-[10px] text-slate-400 mt-1">
+            {ledgerError && <p role="alert" className="text-xs font-bold text-rose-600 dark:text-rose-400 mt-1">{ledgerError}</p>}
+            <p className="text-[11px] text-slate-500 mt-1">
               {showAllAccounts
                 ? 'در حال حاضر همه سرفصل‌های کدینگ نمایش داده می‌شوند.'
                 : `فهرست به سرفصل‌های مرتبط با ${formData.type === 'petty_cash' ? 'تنخواه‌گردان' : formData.type === 'cash' ? 'صندوق و نقد' : formData.type === 'pos' ? 'کارتخوان' : 'بانک'} (کل ۱۰) محدود شده است.`}
@@ -378,9 +402,9 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
               ))}
             </select>
             {formData.type === 'petty_cash' ? (
-              <p className="text-[10px] text-slate-500 mt-1">{PETTY_CASH_RIAL_ONLY_MESSAGE}</p>
+              <p className="text-[11px] text-slate-500 mt-1">{PETTY_CASH_RIAL_ONLY_MESSAGE}</p>
             ) : editingBank && (
-              <p className="text-[10px] text-slate-500 mt-1">ارز حساب پس از نخستین تراکنش، چک یا مانده اول دوره تغییر نمی‌کند.</p>
+              <p className="text-[11px] text-slate-500 mt-1">ارز حساب پس از نخستین تراکنش، چک یا مانده اول دوره تغییر نمی‌کند.</p>
             )}
           </div>
 
@@ -410,7 +434,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
               placeholder="امروز"
               className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
             />
-            <p className="text-[10px] text-slate-500 mt-1">
+            <p className="text-[11px] text-slate-500 mt-1">
               {editingBank?.openingDateLocked
                 ? 'سند افتتاحیهٔ این حساب تأیید شده است و تاریخ آغاز آن دیگر تغییر نمی‌کند.'
                 : editingBank?.openingVoucherIssued

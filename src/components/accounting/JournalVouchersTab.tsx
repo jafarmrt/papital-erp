@@ -146,7 +146,7 @@ export function JournalVouchersTab({
       await onBatchApproveVouchers(selectedDrafts);
       clearSelection();
     } catch (err: any) {
-      toast.error(err?.message || 'خطا در تایید گروهی اسناد پیش‌نویس');
+      toast.error(err?.message || 'خطا در تأیید گروهی اسناد پیش‌نویس');
     } finally {
       setIsBatchOperating(false);
     }
@@ -187,7 +187,7 @@ export function JournalVouchersTab({
       }
       setConfirmAction(null);
     } catch (err: any) {
-      const labels = { finalize: 'قطعی‌سازی', approve: 'تایید', revert_to_draft: 'بازگشت به پیش‌نویس', delete: 'حذف' } as const;
+      const labels = { finalize: 'قطعی‌سازی', approve: 'تأیید', revert_to_draft: 'بازگشت به پیش‌نویس', delete: 'حذف' } as const;
       toast.error(err?.message || `خطا در ${labels[kind]} سند`);
       setConfirmAction(null);
     } finally {
@@ -205,7 +205,7 @@ export function JournalVouchersTab({
       return;
     }
     if (voucher.status === 'approved') {
-      toast.error('اسناد تاییدشده قابل حذف مستقیم نیستند. لطفاً ابتدا سند را به پیش‌نویس برگردانید.');
+      toast.error('اسناد تأییدشده قابل حذف مستقیم نیستند. لطفاً ابتدا سند را به پیش‌نویس برگردانید.');
       return;
     }
     setConfirmAction({ kind: 'delete', voucher });
@@ -246,14 +246,14 @@ export function JournalVouchersTab({
     switch (status) {
       case 'permanent':
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
             <Lock className="w-2.5 h-2.5" />
             <span>دائم و قطعی</span>
           </span>
         );
       case 'draft':
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
             <Clock className="w-2.5 h-2.5" />
             <span>پیش‌نویس</span>
           </span>
@@ -261,9 +261,9 @@ export function JournalVouchersTab({
       case 'approved':
       default:
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
             <FileCheck className="w-2.5 h-2.5" />
-            <span>تایید شده</span>
+            <span>تأیید شده</span>
           </span>
         );
     }
@@ -275,14 +275,15 @@ export function JournalVouchersTab({
   return (
     <div className="space-y-6">
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm">
-        <div>
+      {/* v11 phase 6.3b (U14): on a phone the page title above already names the list, so only the button stays */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-3 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm">
+        <div className="hidden sm:block">
           <div className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
             <h3 className="font-bold text-slate-900 dark:text-white text-lg">دفتر ثبت اسناد حسابداری</h3>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            مشاهده، ثبت دستی، تایید حسابرسی، قطعی‌سازی دفاتر، و صدور اسناد برگشتی و اصلاحی
+            مشاهده، ثبت دستی، تأیید حسابرسی، قطعی‌سازی دفاتر، و صدور اسناد برگشتی و اصلاحی
           </p>
         </div>
 
@@ -317,7 +318,7 @@ export function JournalVouchersTab({
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg shadow-xs transition cursor-pointer disabled:opacity-50"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>تایید حسابداری ({formatPersianNumber(selectedDrafts.length)} سند پیش‌نویس)</span>
+                <span>تأیید حسابداری ({formatPersianNumber(selectedDrafts.length)} سند پیش‌نویس)</span>
               </button>
             )}
 
@@ -325,10 +326,10 @@ export function JournalVouchersTab({
               <button
                 disabled={isBatchOperating}
                 onClick={handleBatchFinalize}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-xs transition cursor-pointer disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg shadow-xs transition cursor-pointer disabled:opacity-50"
               >
                 <Lock className="w-3.5 h-3.5" />
-                <span>قطعی‌سازی دفاتر ({formatPersianNumber(selectedApproved.length)} سند تاییدشده)</span>
+                <span>قطعی‌سازی دفاتر ({formatPersianNumber(selectedApproved.length)} سند تأییدشده)</span>
               </button>
             )}
 
@@ -345,7 +346,7 @@ export function JournalVouchersTab({
       {/* Vouchers Table */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm overflow-visible">
         <div className="overflow-x-auto overflow-y-visible">
-          <table className="w-full text-right border-collapse">
+          <table className="phone-cards w-full text-right border-collapse">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold">
                 <th className="py-3.5 px-3 w-10 text-center">
@@ -371,7 +372,7 @@ export function JournalVouchersTab({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60 text-xs">
               {filteredVouchers.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="text-center py-10 text-slate-400">
+                  <td colSpan={10} className="text-center py-10 text-slate-500">
                     {loading ? 'در حال بارگذاری اسناد...' : 'سندی با این مشخصات یافت نشد'}
                   </td>
                 </tr>
@@ -383,7 +384,7 @@ export function JournalVouchersTab({
                   return (
                     <React.Fragment key={voucher.id}>
                       <tr className={`hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition ${isPermanent ? 'bg-emerald-50/20 dark:bg-emerald-950/10' : ''} ${selectedVoucherIds.includes(voucher.id) ? 'bg-indigo-50/30 dark:bg-indigo-950/20' : ''}`}>
-                        <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                        <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()} data-label="انتخاب">
                           <input
                             type="checkbox"
                             checked={selectedVoucherIds.includes(voucher.id)}
@@ -392,38 +393,42 @@ export function JournalVouchersTab({
                           />
                         </td>
 
-                        <td className="py-3 px-3 text-center">
+                        {/* v11 phase 6.3b review: on a phone too, the only way to the voucher's debit and credit rows */}
+                        <td className="py-3 px-3 text-center" data-label="ردیف‌های سند">
                           <button
+                            type="button"
                             onClick={() => toggleExpand(voucher.id)}
-                            className="p-1 text-slate-400 hover:text-indigo-600 rounded transition cursor-pointer"
+                            aria-expanded={isExpanded}
+                            aria-label={isExpanded ? 'بستن ردیف‌های سند' : 'نمایش ردیف‌های سند'}
+                            className="p-1 text-slate-500 hover:text-indigo-600 rounded transition cursor-pointer max-sm:min-h-11 max-sm:min-w-11 inline-flex items-center justify-center"
                           >
                             {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                           </button>
                         </td>
 
-                        <td className="py-3 px-3 text-center font-mono font-black text-slate-900 dark:text-white">
+                        <td className="py-3 px-3 text-center font-mono font-black text-slate-900 dark:text-white" data-phone="title">
                           #{formatPersianNumber(voucher.voucherNumber)}
                         </td>
 
-                        <td className="py-3 px-3 text-center font-mono text-slate-600 dark:text-slate-300">
+                        <td className="py-3 px-3 text-center font-mono text-slate-600 dark:text-slate-300" data-label="تاریخ">
                           {formatPersianDate(voucher.date)}
                         </td>
 
-                        <td className="py-3 px-3 text-center">
+                        <td className="py-3 px-3 text-center" data-label="وضعیت سند">
                           {statusBadge(voucher.status)}
                         </td>
 
-                        <td className="py-3 px-3">
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${voucherTypeBadge(voucher.voucherType)}`}>
+                        <td className="py-3 px-3" data-label="نوع سند">
+                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${voucherTypeBadge(voucher.voucherType)}`}>
                             {voucherTypeLabel(voucher.voucherType)}
                           </span>
                           {/* v9.0.294 (TD-552): منشأ سند خودکار؛ چنین سندی فقط از منشأ تغییر می‌کند */}
                           {voucherSourceLabel(voucher.sourceKind) && (
-                            <span className="block mt-1 text-[10px] text-slate-500 dark:text-slate-400">منشأ: {voucherSourceLabel(voucher.sourceKind)}</span>
+                            <span className="block mt-1 text-[11px] text-slate-500 dark:text-slate-400">منشأ: {voucherSourceLabel(voucher.sourceKind)}</span>
                           )}
                         </td>
 
-                        <td className="py-3 px-4 font-medium text-slate-800 dark:text-slate-200">
+                        <td className="py-3 px-4 font-medium text-slate-800 dark:text-slate-200" data-label="شرح">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span>{voucher.description}</span>
                             {voucher.attachments && voucher.attachments.length > 0 && (
@@ -437,28 +442,28 @@ export function JournalVouchersTab({
                             )}
                           </div>
                           {voucher.referenceNumber && (
-                            <div className="text-[10px] text-slate-400 mt-0.5">
+                            <div className="text-[11px] text-slate-500 mt-0.5">
                               ارجاع: {voucherReferenceText(voucher.referenceModule, voucher.referenceNumber)}
                             </div>
                           )}
                           {/* v11 phase 6.1b (M3): a manual voucher on a control account shows its reason */}
                           {voucher.controlReason && (
-                            <div className="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5">
+                            <div className="text-[11px] text-amber-700 dark:text-amber-400 mt-0.5">
                               دلیل ثبت روی حساب کنترلی: {voucher.controlReason}
                             </div>
                           )}
                         </td>
 
-                        <td className="py-3 px-4 text-left font-mono font-black text-slate-900 dark:text-white">
+                        <td className="py-3 px-4 text-left font-mono font-black text-slate-900 dark:text-white" data-label="مبلغ کل">
                           {rial.money(voucher.totalDebit, voucher.currency)}
                         </td>
 
-                        <td className="py-3 px-3 text-center text-slate-500 dark:text-slate-400">
+                        <td className="py-3 px-3 text-center text-slate-500 dark:text-slate-400" data-phone="hide">
                           {voucherMakerName(voucher)}
                         </td>
 
                         {/* Decluttered Actions Column (قانون طلایی ۱: خلوت‌سازی دکمه‌ها و منوی کشویی) */}
-                        <td className="py-3 px-4 text-center">
+                        <td className="py-3 px-4 text-center" data-phone="actions">
                           <div className="flex items-center justify-center gap-1.5">
                             {/* چاپ سریع */}
                             <button
@@ -487,7 +492,7 @@ export function JournalVouchersTab({
                                   setOpenMenuVoucherId(openMenuVoucherId === voucher.id ? null : voucher.id);
                                 }}
                                 title="سایر عملیات سند"
-                                className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition cursor-pointer"
+                                className="p-1.5 text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition cursor-pointer"
                               >
                                 <MoreVertical className="w-4 h-4" />
                               </button>
@@ -510,7 +515,7 @@ export function JournalVouchersTab({
                               </div>
                               <table className="w-full text-right border-collapse text-xs">
                                 <thead>
-                                  <tr className="border-b border-slate-200 dark:border-slate-700 text-slate-400 text-[11px]">
+                                  <tr className="border-b border-slate-200 dark:border-slate-700 text-slate-500 text-[11px]">
                                     <th className="py-1 px-2 w-8 text-center">#</th>
                                     <th className="py-1 px-2 w-24 text-center">کد حساب</th>
                                     <th className="py-1 px-2">شرح حساب / تفصیلی</th>
@@ -522,12 +527,12 @@ export function JournalVouchersTab({
                                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                                   {(Array.isArray(voucher.items) ? voucher.items : []).map((item, idx) => (
                                     <tr key={item.id || idx}>
-                                      <td className="py-1.5 px-2 text-center text-slate-400">{formatPersianNumber(idx + 1)}</td>
+                                      <td className="py-1.5 px-2 text-center text-slate-500">{formatPersianNumber(idx + 1)}</td>
                                       <td className="py-1.5 px-2 text-center font-mono font-bold">{formatPersianCode(item.accountCode) || '-'}</td>
                                       <td className="py-1.5 px-2 font-medium">
                                         {item.accountName}
                                         {item.detailedName && (
-                                          <span className="text-[10px] text-slate-400 mr-1.5">({item.detailedName})</span>
+                                          <span className="text-[11px] text-slate-500 mr-1.5">({item.detailedName})</span>
                                         )}
                                       </td>
                                       <td className="py-1.5 px-2 text-slate-600 dark:text-slate-400">{item.description}</td>
@@ -653,7 +658,7 @@ export function JournalVouchersTab({
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                    گردش کار و چرخه تاییدات سند شماره #{formatPersianNumber(workflowTargetVoucher.voucherNumber)}
+                    گردش کار و چرخه تأییدات سند شماره #{formatPersianNumber(workflowTargetVoucher.voucherNumber)}
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                     {workflowTargetVoucher.description}
@@ -663,7 +668,7 @@ export function JournalVouchersTab({
               <button aria-label="بستن"
                 type="button"
                 onClick={() => setWorkflowTargetVoucher(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                className="p-1.5 text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -674,7 +679,7 @@ export function JournalVouchersTab({
               <WorkflowStepperWidget
                 entityType="journal_voucher"
                 entityId={workflowTargetVoucher.id}
-                title="مراحل تایید و گذار سند در کارگاه"
+                title="مراحل تأیید و گذار سند در کارگاه"
                 onStateChange={() => {
                   onRefresh();
                 }}

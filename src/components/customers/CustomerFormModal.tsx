@@ -117,13 +117,13 @@ export function CustomerFormModal({
               <h3 className="font-bold text-sm sm:text-base text-slate-800">
                 {editingId ? 'ویرایش مشخصات طرف حساب' : 'تعریف طرف حساب و شریک تجاری جدید'}
               </h3>
-              <p className="text-[11px] text-slate-400">ثبت اطلاعات تجاری، رسته فعالیت، شماره‌های تماس و حساب بانکی</p>
+              <p className="text-[11px] text-slate-500">ثبت اطلاعات تجاری، رسته فعالیت، شماره‌های تماس و حساب بانکی</p>
             </div>
           </div>
           <button aria-label="بستن" 
             type="button" 
             onClick={onClose} 
-            className="text-slate-400 hover:text-slate-600 rounded-lg p-1.5 hover:bg-slate-100 transition-colors"
+            className="text-slate-500 hover:text-slate-600 rounded-lg p-1.5 hover:bg-slate-100 transition-colors"
           >
             <X size={18} />
           </button>
@@ -151,9 +151,9 @@ export function CustomerFormModal({
                     onChange={() => setForm({ ...form, partyType: 'customer' })} 
                     className="sr-only" 
                   />
-                  <Building2 size={18} className={form.partyType === 'customer' ? 'text-blue-600 mb-1' : 'text-slate-400 mb-1'} />
+                  <Building2 size={18} className={form.partyType === 'customer' ? 'text-blue-600 mb-1' : 'text-slate-500 mb-1'} />
                   <span className="font-bold text-xs">مشتری و خریدار</span>
-                  <span className="text-[10px] text-slate-400 mt-0.5">صدور فاکتور و ارتباط با مشتری</span>
+                  <span className="text-[11px] text-slate-500 mt-0.5">صدور فاکتور و ارتباط با مشتری</span>
                 </label>
 
                 <label 
@@ -171,9 +171,9 @@ export function CustomerFormModal({
                     onChange={() => setForm({ ...form, partyType: 'supplier' })} 
                     className="sr-only" 
                   />
-                  <Truck size={18} className={form.partyType === 'supplier' ? 'text-emerald-600 mb-1' : 'text-slate-400 mb-1'} />
+                  <Truck size={18} className={form.partyType === 'supplier' ? 'text-emerald-600 mb-1' : 'text-slate-500 mb-1'} />
                   <span className="font-bold text-xs">تامین‌کننده متریال</span>
-                  <span className="text-[10px] text-slate-400 mt-0.5">رسید خرید و تسویه</span>
+                  <span className="text-[11px] text-slate-500 mt-0.5">رسید خرید و تسویه</span>
                 </label>
 
                 <label 
@@ -191,9 +191,9 @@ export function CustomerFormModal({
                     onChange={() => setForm({ ...form, partyType: 'both' })} 
                     className="sr-only" 
                   />
-                  <Users size={18} className={form.partyType === 'both' ? 'text-amber-600 mb-1' : 'text-slate-400 mb-1'} />
+                  <Users size={18} className={form.partyType === 'both' ? 'text-amber-600 mb-1' : 'text-slate-500 mb-1'} />
                   <span className="font-bold text-xs">هر دو (دوگانه)</span>
-                  <span className="text-[10px] text-slate-400 mt-0.5">خرید و فروش همزمان</span>
+                  <span className="text-[11px] text-slate-500 mt-0.5">خرید و فروش همزمان</span>
                 </label>
               </div>
             </div>
@@ -255,7 +255,7 @@ export function CustomerFormModal({
                   <UserPlus size={14} className="text-blue-600" />
                   اشخاص رابط و شماره‌های تماس متصل
                 </h4>
-                <span className="text-[10px] text-slate-400">می‌توانید چندین شخص با شماره‌های جداگانه تعریف کنید</span>
+                <span className="text-[11px] text-slate-500">می‌توانید چندین شخص با شماره‌های جداگانه تعریف کنید</span>
               </div>
 
               <div className="space-y-2.5">
@@ -265,7 +265,7 @@ export function CustomerFormModal({
                       <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
                         رابط {formatPersianNumber(index + 1)}
                         {contact.isPrimary && (
-                          <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[9px] px-1.5 py-0.2 rounded-full font-bold flex items-center gap-0.5">
+                          <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] px-1.5 py-0.2 rounded-full font-bold flex items-center gap-0.5">
                             <UserCheck size={10} /> رابط اصلی
                           </span>
                         )}
@@ -296,7 +296,7 @@ export function CustomerFormModal({
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                       <div>
-                        <label htmlFor={`${fieldId}-name-2-${index}`} className="block text-[10px] font-medium mb-1 text-slate-600">نام رابط</label>
+                        <label htmlFor={`${fieldId}-name-2-${index}`} className="block text-[11px] font-medium mb-1 text-slate-600">نام رابط</label>
                         <input id={`${fieldId}-name-2-${index}`} 
                           type="text" 
                           value={contact.name} 
@@ -307,7 +307,7 @@ export function CustomerFormModal({
                       </div>
 
                       <div>
-                        <label htmlFor={`${fieldId}-role-${index}`} className="block text-[10px] font-medium mb-1 text-slate-600">سمت / مسئولیت</label>
+                        <label htmlFor={`${fieldId}-role-${index}`} className="block text-[11px] font-medium mb-1 text-slate-600">سمت / مسئولیت</label>
                         <input id={`${fieldId}-role-${index}`} 
                           type="text"
                           list={`roles-list-${contact.id}`}
@@ -334,7 +334,7 @@ export function CustomerFormModal({
                       </div>
 
                       <div>
-                        <label htmlFor={`contact-email-${contact.id}`} className="block text-[10px] font-medium mb-1 text-slate-600">ایمیل رابط</label>
+                        <label htmlFor={`contact-email-${contact.id}`} className="block text-[11px] font-medium mb-1 text-slate-600">ایمیل رابط</label>
                         <input
                           id={`contact-email-${contact.id}`}
                           type="email"
@@ -345,7 +345,7 @@ export function CustomerFormModal({
                           aria-invalid={emailError(contact.email) ? true : undefined}
                           className={`w-full border rounded-lg px-2.5 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-500 outline-none text-left ${emailError(contact.email) ? 'border-rose-400' : 'border-slate-200'}`}
                         />
-                        {emailError(contact.email) && <p className="mt-1 text-[10px] text-rose-600" role="alert">{emailError(contact.email)}</p>}
+                        {emailError(contact.email) && <p className="mt-1 text-[11px] text-rose-600" role="alert">{emailError(contact.email)}</p>}
                       </div>
                     </div>
                   </div>
@@ -370,7 +370,7 @@ export function CustomerFormModal({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor={`${fieldId}-bank-name`} className="block text-[10px] font-medium mb-1 text-slate-600">نام بانک و شعبه</label>
+                  <label htmlFor={`${fieldId}-bank-name`} className="block text-[11px] font-medium mb-1 text-slate-600">نام بانک و شعبه</label>
                   <input id={`${fieldId}-bank-name`} 
                     type="text" 
                     value={form.bankInfo.bankName} 
@@ -417,7 +417,7 @@ export function CustomerFormModal({
                 </div>
 
                 <div>
-                  <label htmlFor={`${fieldId}-account-number`} className="block text-[10px] font-medium mb-1 text-slate-600">شماره حساب</label>
+                  <label htmlFor={`${fieldId}-account-number`} className="block text-[11px] font-medium mb-1 text-slate-600">شماره حساب</label>
                   <input id={`${fieldId}-account-number`} 
                     type="text" 
                     value={form.bankInfo.accountNumber} 
@@ -436,7 +436,7 @@ export function CustomerFormModal({
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label htmlFor={`${fieldId}-country`} className="block text-[10px] font-medium mb-1 text-slate-600">کشور</label>
+                  <label htmlFor={`${fieldId}-country`} className="block text-[11px] font-medium mb-1 text-slate-600">کشور</label>
                   <select id={`${fieldId}-country`} value={form.country} onChange={e => setForm({...form, country: e.target.value, province: '', city: ''})} className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white">
                     <option value="ایران">ایران</option>
                     <option value="سایر">سایر</option>
@@ -453,11 +453,11 @@ export function CustomerFormModal({
               </div>
 
               <div>
-                <label htmlFor={`${fieldId}-address`} className="block text-[10px] font-medium mb-1 text-slate-600">نشانی کامل پستی</label>
+                <label htmlFor={`${fieldId}-address`} className="block text-[11px] font-medium mb-1 text-slate-600">نشانی کامل پستی</label>
                 <textarea id={`${fieldId}-address`} value={form.address} onChange={e => setForm({...form, address: e.target.value})} className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white" rows={2} placeholder="خیابان، پلاک، طبقه و واحد..." />
               </div>
               <div>
-                <label htmlFor={`${fieldId}-notes`} className="block text-[10px] font-medium mb-1 text-slate-600">یادداشت و شرایط تسویه</label>
+                <label htmlFor={`${fieldId}-notes`} className="block text-[11px] font-medium mb-1 text-slate-600">یادداشت و شرایط تسویه</label>
                 <textarea id={`${fieldId}-notes`} value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white" rows={2} placeholder="نحوه تسویه، مدت اعتبار، توضیحات تکمیلی..." />
               </div>
             </div>

@@ -125,7 +125,7 @@ function SkuSection({ view, canManage, canEnable }: { view: WcShopSyncView; canM
             type="button"
             onClick={() => { void onSwitch(); }}
             disabled={setSkuRename.isPending}
-            className={`${sku.enabled ? 'bg-slate-600 hover:bg-slate-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white font-medium py-1.5 px-3 rounded-lg text-xs disabled:opacity-50`}
+            className={`${sku.enabled ? 'bg-slate-600 hover:bg-slate-700' : 'bg-emerald-700 hover:bg-emerald-800'} text-white font-medium py-1.5 px-3 rounded-lg text-xs disabled:opacity-50`}
           >
             {sku.enabled ? 'خاموش کردن' : 'روشن کردن'}
           </button>

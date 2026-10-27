@@ -112,7 +112,7 @@ export function PieceworkPayslipModal({
                 }}
                 disabled={!!payRefusal || writesWait}
                 title={payRefusal ?? undefined}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 ثبت پرداخت (از خزانه)
               </button>

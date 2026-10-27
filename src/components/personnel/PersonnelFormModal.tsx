@@ -564,7 +564,7 @@ export function PersonnelFormModal({
               ) : (
                 <>
                   <CheckCircle2 size={16} />
-                  <span>{editingId ? 'بروزرسانی اطلاعات' : 'ذخیره پرسنل'}</span>
+                  <span>{editingId ? 'به‌روزرسانی اطلاعات' : 'ذخیره پرسنل'}</span>
                 </>
               )}
             </button>

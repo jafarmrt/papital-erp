@@ -74,7 +74,7 @@ describe('fiscal closing step 4 follows the opening-voucher checkbox (TD-577)', 
     const box = (await screen.findByText('صدور خودکار سند افتتاحیه')).closest('label')!;
     fireEvent.click(box.querySelector('input')!);
     fireEvent.click(await screen.findByText('اجرای قطعی بستن سال مالی ۱۴۰۴'));
-    const dialog = screen.getByText('تایید اجرای عملیات بستن سال مالی ۱۴۰۴').closest('div.fixed') as HTMLElement;
+    const dialog = screen.getByText('تأیید اجرای عملیات بستن سال مالی ۱۴۰۴').closest('div.fixed') as HTMLElement;
     expect(dialog.textContent).not.toContain('صدور سند افتتاحیه سال ۱۴۰۵');
     expect(within(dialog).getByText(new RegExp(NOT_ISSUED))).toBeTruthy();
   });

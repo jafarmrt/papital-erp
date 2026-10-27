@@ -114,11 +114,14 @@ export function statutoryRemittanceDescription(kind: StatutoryRemittanceKind, ja
   return `واریز ${t.subject} فهرست ${jalaliMonthLabel(`${jalaliYear}/${String(jalaliMonth).padStart(2, '0')}`)} به ${t.payee}`;
 }
 
-/** روش پرداخت؛ چک در دفتر چک ثبت می‌شود، نه این‌جا (همان قاعده پرداخت فیش، TD-411) */
+/**
+ * روش پرداخت؛ چک در دفتر چک ثبت می‌شود، نه این‌جا (همان قاعده پرداخت فیش، TD-411).
+ * v11 phase 6.3b (U22): the same words as `PAYMENT_METHOD_LABELS` (treasuryExport.ts, which the server cannot import)
+ */
 export const STATUTORY_REMITTANCE_METHODS = [
   { value: 'bank_transfer', label: 'انتقال بانکی' },
-  { value: 'cash', label: 'نقدی / صندوق' },
-  { value: 'pos', label: 'کارتخوان' },
+  { value: 'cash', label: 'نقدی (صندوق)' },
+  { value: 'pos', label: 'کارت‌خوان' },
 ] as const;
 export type StatutoryRemittanceMethod = typeof STATUTORY_REMITTANCE_METHODS[number]['value'];
 

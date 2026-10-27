@@ -33,7 +33,7 @@ export function CustomerChannelFields({ value, onChange }: CustomerChannelFields
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {fields.map(f => (
           <div key={f.key}>
-            <label htmlFor={`customer-channel-${f.key}`} className="block text-[10px] font-medium mb-1 text-slate-600">{f.label}</label>
+            <label htmlFor={`customer-channel-${f.key}`} className="block text-[11px] font-medium mb-1 text-slate-600">{f.label}</label>
             <input
               id={`customer-channel-${f.key}`}
               type={f.type}
@@ -44,7 +44,7 @@ export function CustomerChannelFields({ value, onChange }: CustomerChannelFields
               aria-invalid={f.error ? true : undefined}
               className={`${INPUT_CLASS} ${f.error ? 'border-rose-400' : 'border-slate-200'}`}
             />
-            {f.error && <p className="mt-1 text-[10px] text-rose-600" role="alert">{f.error}</p>}
+            {f.error && <p className="mt-1 text-[11px] text-rose-600" role="alert">{f.error}</p>}
           </div>
         ))}
       </div>

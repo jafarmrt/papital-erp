@@ -130,7 +130,7 @@ export function StatutoryRemittanceModal({ kind, jalaliYear, jalaliMonth, onClos
           className="px-4 py-2 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">انصراف</button>
         <button type="submit" form={`${id}-form`} disabled={saving || !online || !options || nothing || (unassigned && !acknowledged)}
           title={online ? undefined : OFFLINE_SUBMIT_TITLE}
-          className="px-4 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl disabled:opacity-50">
+          className="px-4 py-2 text-xs font-bold bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl disabled:opacity-50">
           {saving ? 'در حال ثبت...' : 'ثبت پرداخت با سند حسابداری'}
         </button>
       </div>

@@ -17,7 +17,7 @@ import { formatPersianDate, formatPersianPrice, formatPersianNumber, formatPersi
 import { toPersianDigits } from '../../utils/persianNumber';
 import { WorkflowActionConditionList, WorkflowBlockedActions } from './WorkflowActionConditions';
 import { WorkflowInstanceTerminate } from './WorkflowInstanceTerminate';
-import { stepperStepStatus, workflowTakesActions, type StepperStepStatus } from '../../lib/workflow/stepperStepStatus';
+import { stepperStepStatus, stepperVisibleSteps, workflowTakesActions, type StepperStepStatus } from '../../lib/workflow/stepperStepStatus';
 
 const STEP_STATUS_VIEW: Record<Exclude<StepperStepStatus, 'current'>, { label: string; className: string }> = {
   pending: { label: 'در انتظار', className: 'bg-gray-50 text-gray-400 border-gray-200 dark:bg-gray-800 dark:text-gray-500 dark:border-gray-700 opacity-70' },
@@ -79,6 +79,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
   const availableTransitions = wfData?.availableTransitions || [];
   const blockedTransitions = wfData?.blockedTransitions || [];
   const history = wfData?.history || [];
+  const shownStates = stepperVisibleSteps(allStates, currentState, history);
 
   const handleExecuteAction = () => {
     if (!instance || !selectedTransition) return;
@@ -159,7 +160,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
           <div className="mb-4">
             {/* v10.0.101 (TD-1227): گام‌ها در پنجره باریک به سطر بعد می‌روند؛ پیش‌تر گام چهارم بریده و پنجم پنهان می‌شد */}
             <div data-stepper-steps className="flex flex-wrap items-center gap-x-2 gap-y-3 py-2 px-1 border-b border-gray-100 dark:border-gray-700/40 pb-4">
-              {allStates.map((st, idx) => {
+              {shownStates.map((st, idx) => {
                 // v10.0.100 (TD-1221): گام نرسیده فرایند ردشده «نرسیده» است، نه «عبورکرده»
                 const statusType = stepperStepStatus(st, instance.status, currentState, history);
                 const { label: statusLabel, className: statusColorClass } = statusType === 'current'
@@ -190,7 +191,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
                       </span>
                     </div>
 
-                    {idx < allStates.length - 1 && (
+                    {idx < shownStates.length - 1 && (
                       <div className={`h-0.5 w-6 self-center mb-4 ${statusType === 'completed' ? 'bg-emerald-400 dark:bg-emerald-600' : 'bg-gray-200 dark:bg-gray-700'}`} />
                     )}
                   </div>
@@ -280,7 +281,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
                       onClick={() => setSelectedTransition(tr)}
                       className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-all shadow-sm ${
                         tr.actionKey === 'approve' || tr.actionKey === 'qc_pass' || tr.actionKey === 'approve_material'
-                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600'
+                          ? 'bg-emerald-700 hover:bg-emerald-800 text-white border-emerald-600'
                           : tr.actionKey === 'reject' || tr.actionKey === 'qc_fail' || tr.actionKey === 'reject_material'
                           ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-600'
                           : 'bg-white dark:bg-gray-700 hover:bg-indigo-50 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600'

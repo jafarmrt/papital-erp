@@ -42,7 +42,7 @@ export function IncomeStatementView({
           <PeriodFields startDate={startDate} endDate={endDate} onChange={onPeriodChange} />
           <button
             onClick={onApplyIncomeFilter}
-            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition"
+            className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg transition"
           >
             به‌روزرسانی
           </button>

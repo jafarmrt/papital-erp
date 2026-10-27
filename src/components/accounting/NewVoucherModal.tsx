@@ -730,7 +730,7 @@ export function NewVoucherModal({
                 <button
                   type="button"
                   onClick={() => addRow()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition shadow-xs"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg transition shadow-xs"
                   title="کلید میانبر: Alt+N یا Insert"
                 >
                   <Plus className="w-3.5 h-3.5" />

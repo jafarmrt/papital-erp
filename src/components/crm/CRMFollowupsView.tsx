@@ -77,7 +77,7 @@ export function CRMFollowupsView({
                 دفترچه تمام تماس‌ها و اقدامات ({formatPersianNumber(book.total)} مورد)
               </h3>
               <p className="text-[11px] text-slate-500">
-                فهرست تمام تماس‌های تلفنی، جلسات، پیام‌های واتساپ، ایمیل‌ها و یادداشت‌های ثبت شده
+                فهرست تمام تماس‌های تلفنی، جلسات، پیام‌های واتس‌اپ، ایمیل‌ها و یادداشت‌های ثبت شده
               </p>
             </div>
           </div>
@@ -99,7 +99,7 @@ export function CRMFollowupsView({
               { id: 'all', label: 'همه' },
               { id: 'call', label: '📞 تماس' },
               { id: 'meeting', label: '👥 جلسه' },
-              { id: 'whatsapp', label: '💬 واتساپ/پیام' },
+              { id: 'whatsapp', label: '💬 واتس‌اپ/پیام' },
               { id: 'email', label: '✉️ ایمیل' },
               { id: 'quote', label: '📑 پیش‌فاکتور' },
               { id: 'note', label: '📝 یادداشت' },

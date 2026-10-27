@@ -63,7 +63,7 @@ export function ProgressMatrixToolbar({ ticks, canEdit, searchQuery, setSearchQu
                 type="button"
                 onClick={saveChanges}
                 disabled={saving}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs animate-pulse"
+                className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 text-white rounded-xl font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs animate-pulse"
               >
                 <Save className="w-3.5 h-3.5" />
                 <span>{saving ? 'در حال ثبت...' : `ثبت ${toPersianDigits(editCount)} تغییر در سامانه`}</span>
@@ -128,7 +128,7 @@ export function ProgressMatrixToolbar({ ticks, canEdit, searchQuery, setSearchQu
                 type="button"
                 onClick={() => setAllStagesForSelectedSkus('completed')}
                 disabled={saving}
-                className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-default transition-colors"
+                className="px-2 py-0.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-default transition-colors"
               >
                 <CheckCircle2 className="w-3 h-3" />
                 تمام کردن کلیه مراحل

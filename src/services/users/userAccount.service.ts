@@ -89,7 +89,7 @@ export async function updateOwnProfile(req: Request, userId: number, input: Prof
   let passwordChanged = false;
   if (input.new_password) {
     if (!input.current_password) {
-      throw new BadRequestError('جهت تغییر کلمه عبور، وارد کردن کلمه عبور فعلی الزامی است');
+      throw new BadRequestError('جهت تغییر رمز عبور، وارد کردن رمز عبور فعلی الزامی است');
     }
     // v10.0.191 (TD-961): wrong current passwords lock the change progressively, like the login pair
     const lockedFor = passwordChangeLockMinutes(userId);
@@ -98,7 +98,7 @@ export async function updateOwnProfile(req: Request, userId: number, input: Prof
     if (!isMatch) {
       const lockMinutes = recordPasswordChangeFailure(userId);
       if (lockMinutes > 0) throw passwordChangeLockedError(lockMinutes);
-      throw new BadRequestError('کلمه عبور فعلی اشتباه است');
+      throw new BadRequestError('رمز عبور فعلی اشتباه است');
     }
     resetPasswordChangeFailures(userId);
     updateData.password = await hashPassword(input.new_password);
@@ -120,7 +120,7 @@ export async function updateOwnProfile(req: Request, userId: number, input: Prof
       action: 'UPDATE',
       entity: 'پروفایل کاربر',
       entityId: userId,
-      description: `به‌روزرسانی اطلاعات نمایه شخصی ${passwordChanged ? 'و تغییر کلمه عبور' : ''}`,
+      description: `به‌روزرسانی اطلاعات نمایه شخصی ${passwordChanged ? 'و تغییر رمز عبور' : ''}`,
       details: {
         userId,
         username: u.username,
@@ -260,7 +260,7 @@ export async function updateUser(req: Request, targetUserId: number, input: User
         action: 'UPDATE',
         entity: USER_ENTITY,
         entityId: targetUserId,
-        description: `ویرایش مشخصات کاربر شناسه #${targetUserId} (${prevUser.username})${passwordChanged ? ' (شامل بازنشانی کلمه عبور)' : ''}`,
+        description: `ویرایش مشخصات کاربر شناسه #${targetUserId} (${prevUser.username})${passwordChanged ? ' (شامل بازنشانی رمز عبور)' : ''}`,
         details: {
           userId: targetUserId,
           username: prevUser.username,

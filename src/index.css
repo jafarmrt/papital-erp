@@ -216,3 +216,61 @@ pre code,
     }
   }
 }
+
+/* v11 phase 6.3b (U14): on a phone a wide list turns each row into a card, so the amount, the status and the row's main
+   action are on screen without sideways scrolling. The table carries `phone-cards`; each cell names its column in
+   `data-label` (shown before the value), `data-phone="title"` is the card's heading line without a label,
+   `data-phone="hide"` stays only on a wide screen and `data-phone="actions"` closes the card (Vitest phoneCardLists).
+   A card keeps its row's own background and text colour (a selected or voided tint, a list with or without dark styles);
+   its labels and its border take the row's text colour, so a card reads like the row it was in either colour scheme. */
+@media (max-width: 639.98px) {
+  table.phone-cards,
+  table.phone-cards > tbody {
+    display: block;
+    width: 100%;
+  }
+  table.phone-cards > thead {
+    display: none;
+  }
+  table.phone-cards > tbody > tr {
+    display: flex;
+    flex-direction: column;
+    margin: 0.5rem 0;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+    border-radius: 0.75rem;
+  }
+  table.phone-cards > tbody > tr > td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: auto !important;
+    max-width: none !important;
+    padding: 0.375rem 0.25rem !important;
+    text-align: right;
+    border: 0;
+  }
+  table.phone-cards > tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    font-weight: 700;
+    opacity: 0.8;
+  }
+  table.phone-cards > tbody > tr > td[data-phone="title"] {
+    order: -1;
+    justify-content: flex-start;
+    border-bottom: 1px solid var(--color-slate-100);
+  }
+  table.phone-cards > tbody > tr > td[data-phone="hide"] {
+    display: none;
+  }
+  table.phone-cards > tbody > tr > td[data-phone="actions"] {
+    justify-content: flex-end;
+    border-top: 1px solid var(--color-slate-100);
+  }
+  table.phone-cards > tbody > tr > td[colspan] {
+    display: block;
+  }
+}

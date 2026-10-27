@@ -201,7 +201,7 @@ export function ModalFooterActions({
     primary: 'bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold shadow-md shadow-amber-500/20',
     danger: 'bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-md shadow-rose-600/20',
     warning: 'bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-md shadow-amber-600/20',
-    success: 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md shadow-emerald-600/20',
+    success: 'bg-emerald-700 hover:bg-emerald-800 text-white font-bold shadow-md shadow-emerald-600/20',
   };
 
   return (

@@ -5,15 +5,18 @@
  * و نام «کالای سفارشی» ذخیره می‌کرد.
  */
 
-/** اولویت‌های درخواست خرید؛ شمارنده «فوری» میز تدارکات همان `urgent` را می‌شمارد */
+/**
+ * اولویت‌های درخواست خرید؛ شمارنده «فوری» میز تدارکات همان `urgent` را می‌شمارد. v11 phase 6.3b (U22): the same words as
+ * a project's priority («زیاد»، «کم»); procurement said «بالا» and «پایین» and the reorder form «مهم» and «کم‌اولویت».
+ */
 export const REQUISITION_PRIORITIES = ['urgent', 'high', 'normal', 'low'] as const;
 export type RequisitionPriority = typeof REQUISITION_PRIORITIES[number];
 
 export const REQUISITION_PRIORITY_LABELS: Record<RequisitionPriority, string> = {
   urgent: 'فوری',
-  high: 'بالا',
+  high: 'زیاد',
   normal: 'عادی',
-  low: 'پایین',
+  low: 'کم',
 };
 
 /** سقف شمار ردیف‌های یک درخواست خرید */

@@ -36,7 +36,7 @@ export function InvoiceDetailsItemsTable({ selectedDocDetails }: { selectedDocDe
 
               return (
                 <tr key={it.id || idx} className="hover:bg-slate-50">
-                  <td className="p-2.5 text-center font-mono text-slate-400">{formatPersianNumber(idx + 1)}</td>
+                  <td className="p-2.5 text-center font-mono text-slate-500">{formatPersianNumber(idx + 1)}</td>
                   <td className="p-2.5 font-mono text-[11px] text-slate-700" dir="ltr">{formatPersianNumber(it.code || '-')}</td>
                   <td className="p-2.5 font-bold text-slate-800">{it.name || `کالای کد ${formatPersianCode(it.item_id)}`}</td>
                   <td className="p-2.5 text-center font-mono font-bold text-slate-800">{formatPersianNumber(qty)}</td>

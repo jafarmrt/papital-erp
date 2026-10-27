@@ -43,7 +43,9 @@ export function AppLayout({
   }, [pathname, isSidebarCollapsed, toggleSidebar]);
 
   return (
-    <div className="flex bg-slate-50 min-h-screen text-slate-800 font-sans overflow-hidden" dir="rtl">
+    // v11 phase 6.3b (U13): the frame is one screen high and only the page area scrolls, so the menu, the search and the bell
+    // stay in place on a long page (before, the whole window scrolled them away)
+    <div className="flex bg-slate-50 h-dvh text-slate-800 font-sans overflow-hidden print:h-auto print:overflow-visible" dir="rtl">
       <Sidebar
         user={user}
         userPermissions={userPermissions}
@@ -75,7 +77,7 @@ export function AppLayout({
           onUserUpdate={onUserUpdate}
           roleName={userPermissions.roleName}
         />
-        <div className="p-3 pb-24 sm:p-4 sm:pb-24 md:pb-4 lg:p-6 print:p-0 overflow-auto flex-1 print:overflow-visible">
+        <div data-app-scroll className="p-3 pb-24 sm:p-4 sm:pb-24 md:pb-4 lg:p-6 print:p-0 overflow-auto flex-1 print:overflow-visible">
           {children || <Outlet />}
         </div>
       </main>

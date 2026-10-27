@@ -122,7 +122,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
           </h3>
           <button aria-label="بستن"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            className="text-slate-500 hover:text-slate-600 dark:hover:text-slate-200"
           >
             <X size={18} />
           </button>

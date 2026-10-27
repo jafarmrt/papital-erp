@@ -65,7 +65,7 @@ export function AccountingDashboard({
           {canRecordVoucher && (
             <button
               onClick={onOpenNewVoucher}
-              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl transition shadow-lg shadow-emerald-900/30"
+              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white text-sm font-semibold rounded-xl transition shadow-lg shadow-emerald-900/30"
             >
               <PlusCircle className="w-4 h-4" />
               <span>ثبت سند حسابداری جدید</span>

@@ -5,7 +5,7 @@ import { cn } from '../utils';
 import { fetchJson } from '../api';
 import { useClickOutside } from '../hooks/useClickOutside';
 import { normalizeSearchText } from '../lib/search/searchText';
-import { usePickListKeys } from '../hooks/usePickListKeys';
+import { usePickListButton, usePickListKeys } from '../hooks/usePickListKeys';
 import { useDropdownPosition } from '../hooks/useDropdownPosition';
 
 interface Option {
@@ -230,6 +230,9 @@ export function SearchableSelect({
     setIsOpen(true);
   };
 
+  // v11 phase 6.3b (U23): a letter typed on the button goes into the search, which takes the focus as the list opens
+  const { searchRef, onButtonKeyDown } = usePickListButton({ isOpen, open: openList, setSearch, setActiveIndex, onEnter });
+
   return (
     <div className={cn("relative", className)} ref={wrapperRef}>
       <button
@@ -242,15 +245,7 @@ export function SearchableSelect({
         aria-expanded={isOpen}
         disabled={disabled}
         onClick={() => (isOpen ? close(false) : openList())}
-        onKeyDown={(event) => {
-          if (!isOpen && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
-            event.preventDefault();
-            openList();
-          } else if (!isOpen && event.key === 'Enter' && onEnter) {
-            event.preventDefault();
-            onEnter();
-          }
-        }}
+        onKeyDown={onButtonKeyDown}
         className={cn(
           "w-full bg-white border border-slate-200 rounded-xl shadow-2xs text-xs px-3 py-2 flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-800",
           disabled && "bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200",
@@ -275,8 +270,8 @@ export function SearchableSelect({
           <div className="p-2 border-b border-slate-100 flex items-center gap-2 bg-slate-50/90">
             <Search size={14} className="text-slate-400 shrink-0 mr-1" />
             <input
+              ref={searchRef}
               type="text"
-              autoFocus
               role="combobox"
               aria-label="جست‌وجو در فهرست"
               aria-expanded

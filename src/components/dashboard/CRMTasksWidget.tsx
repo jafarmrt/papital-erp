@@ -100,7 +100,7 @@ export function CRMTasksWidget({
             <h2 className="text-sm font-extrabold text-slate-800 flex items-center gap-2">
               <span>پیگیری‌های ارتباط با مشتری و فروش</span>
               {dueTotal > 0 && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white animate-pulse">
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-500 text-white animate-pulse">
                   {toPersianDigits(dueTotal)} نیازمند اقدام
                 </span>
               )}
@@ -135,7 +135,7 @@ export function CRMTasksWidget({
         >
           <Clock size={13} className={activeFilter === 'today_overdue' ? 'text-rose-500' : ''} />
           <span>امروز و معوق</span>
-          <span className="text-[10px] px-1.5 py-0.2 bg-slate-200/80 rounded-full">
+          <span className="text-[11px] px-1.5 py-0.2 bg-slate-200/80 rounded-full">
             {toPersianDigits(dueTotal)}
           </span>
         </button>
@@ -153,7 +153,7 @@ export function CRMTasksWidget({
         >
           <Target size={13} className={activeFilter === 'all_pending' ? 'text-blue-500' : ''} />
           <span>همه پیگیری‌ها</span>
-          <span className="text-[10px] px-1.5 py-0.2 bg-slate-200/80 rounded-full">
+          <span className="text-[11px] px-1.5 py-0.2 bg-slate-200/80 rounded-full">
             {toPersianDigits(openTotal)}
           </span>
         </button>
@@ -171,7 +171,7 @@ export function CRMTasksWidget({
         >
           <Sparkles size={13} className={activeFilter === 'won_deals' ? 'text-emerald-500' : ''} />
           <span>معاملات موفق</span>
-          <span className="text-[10px] px-1.5 py-0.2 bg-slate-200/80 rounded-full">
+          <span className="text-[11px] px-1.5 py-0.2 bg-slate-200/80 rounded-full">
             {toPersianDigits(wonLeads.length)}
           </span>
         </button>
@@ -187,11 +187,11 @@ export function CRMTasksWidget({
             placeholder="جست‌وجو در نام مشتری، عنوان یا اقدام بعدی..."
             className="w-full pl-8 pr-8 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-1 focus:ring-rose-400 text-slate-700"
           />
-          <Search size={13} className="absolute right-2.5 top-2.5 text-slate-400" />
+          <Search size={13} className="absolute right-2.5 top-2.5 text-slate-500" />
           {searchQuery && (
             <button aria-label="پاک کردن جست‌وجو"
               onClick={() => setSearchQuery('')}
-              className="absolute left-2.5 top-2 text-slate-400 hover:text-slate-600"
+              className="absolute left-2.5 top-2 text-slate-500 hover:text-slate-600"
             >
               <X size={13} />
             </button>
@@ -216,15 +216,15 @@ export function CRMTasksWidget({
             <p className="text-[11px] text-emerald-600 mt-1">همه تماس‌ها و پیگیری‌ها به‌موقع انجام شده‌اند. خدا قوت! 🌟</p>
           </div>
         ) : activeFilter === 'all_pending' && pendingFollowups.length === 0 ? (
-          <div className="text-center py-8 text-slate-400 text-xs bg-slate-50 rounded-2xl">
+          <div className="text-center py-8 text-slate-500 text-xs bg-slate-50 rounded-2xl">
             هیچ پیگیری بازی ثبت نشده است.
           </div>
         ) : activeFilter === 'won_deals' && wonLeads.length === 0 ? (
-          <div className="text-center py-8 text-slate-400 text-xs bg-slate-50 rounded-2xl">
+          <div className="text-center py-8 text-slate-500 text-xs bg-slate-50 rounded-2xl">
             هنوز معامله موفقی ثبت نشده است.
           </div>
         ) : displayedItems.length === 0 && searchQuery ? (
-          <div className="text-center py-6 text-slate-400 text-xs bg-slate-50 rounded-2xl">
+          <div className="text-center py-6 text-slate-500 text-xs bg-slate-50 rounded-2xl">
             موردی مطابق با عبارت «{searchQuery}» پیدا نشد.
           </div>
         ) : activeFilter === 'won_deals' ? (
@@ -247,7 +247,7 @@ export function CRMTasksWidget({
                 <span className="text-xs font-black text-emerald-700">
                   {formatPersianPrice(lead.estimatedValue, lead.currency)}
                 </span>
-                <span className="block text-[9px] text-slate-400 mt-0.5">مسئول: {lead.assignedTo || '—'}</span>
+                <span className="block text-[11px] text-slate-500 mt-0.5">مسئول: {lead.assignedTo || '—'}</span>
               </div>
             </div>
           ))
@@ -287,7 +287,7 @@ export function CRMTasksWidget({
                   </div>
 
                   <span
-                    className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold shrink-0 ${
+                    className={`px-2 py-0.5 rounded-lg text-[11px] font-extrabold shrink-0 ${
                       isOverdue
                         ? 'bg-rose-200/80 text-rose-800'
                         : isToday
@@ -299,7 +299,7 @@ export function CRMTasksWidget({
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-200/60">
+                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/60">
                   <span className="truncate">
                     مشتری: {act.customerName || (act as any).leadCustomerName || '—'}
                   </span>

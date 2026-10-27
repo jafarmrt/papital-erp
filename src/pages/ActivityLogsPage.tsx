@@ -178,10 +178,10 @@ export default function ActivityLogsPage() {
           <button
             onClick={() => { void filterOptionsQuery.refetch(); void logsQuery.refetch(); }}
             className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-            title="بروزرسانی داده‌ها"
+            title="به‌روزرسانی داده‌ها"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            بروزرسانی
+            به‌روزرسانی
           </button>
           <button
             onClick={() => { void handleExportExcel(); }}

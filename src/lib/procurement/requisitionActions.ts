@@ -57,6 +57,11 @@ export function requisitionActionsWithoutInstance(status: string, canApprove: bo
 
 /** v11 phase 6.3a (U10): why the split and order buttons are off for the requisition's initiator */
 export const INITIATOR_CANNOT_APPROVE = 'ثبت این درخواست با شما بوده؛ پیش از صدور فاکتور، کس دیگری با حق تأیید باید آن را تأیید کند.';
+/**
+ * v11 phase 6.3b: the short line under the off button of each row of the list; the whole sentence stays in the button's
+ * description and tooltip. A requester with many open requisitions read the long sentence on every row.
+ */
+export const INITIATOR_CANNOT_APPROVE_SHORT = 'تأیید با کس دیگری است';
 
 /** وضعیت ناشناخته «other» است؛ وضعیت‌های قدیمی approved، completed و cancelled را سرور هنوز می‌خواند (TD-326) */
 export type RequisitionStage = 'approval' | 'ordered' | 'received' | 'rejected' | 'consolidated' | 'other';
