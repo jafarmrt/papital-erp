@@ -411,8 +411,9 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         }
 
         // 2. Client A brute-forces (non-existent usernames => no account lockout) and must get throttled
+        const { LOGIN_ADDRESS_MAX_FAILURES } = await import('../../services/auth/loginSecurity.service.js');
         let throttledA = false;
-        for (let i = 0; i < 12; i++) {
+        for (let i = 0; i < LOGIN_ADDRESS_MAX_FAILURES + 2; i++) {
           const res = await request(app)
             .post('/api/auth/login')
             .set('X-Forwarded-For', '198.51.100.66')
@@ -423,7 +424,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
           }
         }
         if (!throttledA) {
-          throw new Error('Client A brute-forcing must be blocked with 429 after 10 failed attempts.');
+          throw new Error(`Client A brute-forcing must be blocked with 429 after ${LOGIN_ADDRESS_MAX_FAILURES} failed attempts.`);
         }
 
         // 3. Client B behind the same proxy must still be able to log in

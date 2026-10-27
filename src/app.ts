@@ -61,6 +61,7 @@ import { orm } from './db/drizzle.js';
 import { sql } from 'drizzle-orm';
 import { BUILD_INFO } from './lib/version.js';
 import { bootDegradedSteps } from './services/system/bootSequence.js';
+import { LOGIN_ADDRESS_MAX_FAILURES } from './services/auth/loginSecurity.service.js';
 import { resolveTrustProxySetting } from './lib/trustProxy.js';
 import { addressLockoutMessage, minutesUntil } from './lib/auth/loginLockout.js';
 
@@ -126,10 +127,12 @@ export async function createApp(): Promise<express.Express> {
       },
     },
     crossOriginResourcePolicy: { policy: "cross-origin" },
+    // v11 phase 6.2 (X19, decision ت۵۶-۸): only this host; other subdomains of the company's domain keep their own choice,
+    // and no preload, which is hard to undo
     hsts: {
       maxAge: 31536000,
-      includeSubDomains: true,
-      preload: true,
+      includeSubDomains: false,
+      preload: false,
     },
     referrerPolicy: { policy: 'no-referrer' },
   });
@@ -224,7 +227,7 @@ export async function createApp(): Promise<express.Express> {
 
   const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 10,
+    max: LOGIN_ADDRESS_MAX_FAILURES,
     standardHeaders: true,
     legacyHeaders: false,
     // v9.0.220 (TD-539): the answer carries locked and the minutes left of this address's window, so the login page
@@ -237,6 +240,8 @@ export async function createApp(): Promise<express.Express> {
     // v7.0.23 (TD-181 / audit P0-5): فقط تلاش‌های ناموفق شمرده می‌شوند — قبلاً ورودهای موفق هم
     // سطل را پر می‌کردند و پشت پراکسی، کل سازمان پس از ۱۰ ورود به مدت ۱۵ دقیقه مسدود می‌شد.
     skipSuccessfulRequests: true,
+    // v11 phase 6.2 (X15): a lock answer (this limiter's or the username + address pair's 429) is not a new failure
+    requestWasSuccessful: (_req, res) => res.statusCode < 400 || res.statusCode === 429,
     // TST-005 Hardening (بازطراحی v7.0.23): کلید محدودیت، آدرس واقعی کلاینت (req.ip) است که Express فقط
     // از پراکسی‌های قابل‌اعتماد TRUST_PROXY استخراج می‌کند؛ X-Forwarded-For جعلی از کلاینت مستقیم اثری ندارد.
     keyGenerator: (req: any) => {

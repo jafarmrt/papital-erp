@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
 import { ValidationError } from '../errors/customErrors.js';
+import { sniffInlineSafeType } from './fileSignature.js';
 
 // Max allowed image size in bytes (3 MB)
 const MAX_IMAGE_SIZE_BYTES = 3 * 1024 * 1024;
@@ -9,6 +10,8 @@ const MAX_IMAGE_SIZE_BYTES = 3 * 1024 * 1024;
 // V3.0.7 (TD-065): SVG از allowlist حذف شد — SVG می‌تواند حاوی اسکریپت باشد و
 // فایل‌های با پیشوند logo عمومی و بدون احراز هویت سرو می‌شوند (وکتور XSS).
 const ALLOWED_MIME_TYPES = new Set(['jpeg', 'jpg', 'png', 'webp', 'gif']);
+
+const IMAGE_EXTENSION_BY_TYPE: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
 
 const IMAGE_TOO_LARGE_MESSAGE = 'حجم تصویر ارسالی بیش از حد مجاز است (حداکثر ۳ مگابایت)';
 const IMAGE_FORMAT_MESSAGE = 'فرمت تصویر نامعتبر است. پسوندهای مجاز: JPG, PNG, WEBP, GIF';
@@ -59,13 +62,16 @@ export const uploadBase64ToStorage = async (base64String: string, type: 'image' 
     throw new ValidationError(IMAGE_FORMAT_MESSAGE, undefined, 'IMAGE_FORMAT_INVALID');
   }
 
-  const ext = mimeSubtype === 'jpeg' ? 'jpg' : mimeSubtype;
   const data = matches[2];
   const buffer = Buffer.from(data, 'base64');
 
   if (buffer.length > MAX_IMAGE_SIZE_BYTES) {
     throw new ValidationError(IMAGE_TOO_LARGE_MESSAGE, undefined, 'IMAGE_TOO_LARGE');
   }
+  // v11 phase 6.2 (X16): the bytes must be an allowed image, and they name the extension; before, the declared
+  // `data:image/<type>` decided, so any bytes were served from /uploads under an image name
+  const ext = IMAGE_EXTENSION_BY_TYPE[sniffInlineSafeType(buffer) ?? ''];
+  if (!ext) throw new ValidationError(IMAGE_FORMAT_MESSAGE, undefined, 'IMAGE_FORMAT_INVALID');
   
   // V1.3.8: پیشوند نام فایل (مثل 'logo') باعث می‌شود فایل در گارد /uploads عمومی و
   // بدون احراز هویت سرو شود — برای لوگوی شرکت که در صفحه ورود (بدون نشست) نمایش داده می‌شود.

@@ -7,7 +7,7 @@ import { invalidateRoleCache } from '../../lib/memoryCache.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../errors/customErrors.js';
 import { ROLE_CODE_PATTERN } from '../../middleware/authorize.js';
 import { isCatalogPermission, isSystemAdminRole, missingRequiredPermissions, withRequiredPermissions } from '../../lib/permissions/permissionCatalog.js';
-import { assertGrantWithinOwn, assertNotOwnRole, grantorPermissions } from './grantBoundary.js';
+import { assertGrantWithinOwn, assertNotOwnRole, assertRemovalWithinOwn, grantorPermissions } from './grantBoundary.js';
 import { WORKSHOP_LONG_SESSION_PERMISSION } from '../../lib/permissions/workshopPermissions.js';
 import { invalidateUserAuthCache } from '../../middleware/auth.js';
 
@@ -107,8 +107,9 @@ export async function updateRole(req: Request, roleId: number, input: RoleUpdate
     const newPermissions: string[] = sent ? withRequiredPermissions(requested) : prevPermissions;
     const addedPermissions = newPermissions.filter(p => !prevPermissions.includes(p));
     const removedPermissions = prevPermissions.filter(p => !newPermissions.includes(p));
-    // v9.0.129 (TD-520، ت۳): افزوده‌ها فقط از مجوزهای ویرایشگر
+    // v9.0.129 (TD-520، ت۳): افزوده‌ها فقط از مجوزهای ویرایشگر؛ v11 phase 6.2 (X5): برداشته‌ها هم
     assertGrantWithinOwn(grantor, addedPermissions);
+    assertRemovalWithinOwn(grantor, removedPermissions);
 
     const updateData: Partial<typeof roles.$inferInsert> = {
       name: input.name || targetRole.name,

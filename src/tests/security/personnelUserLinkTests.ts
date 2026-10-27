@@ -3,7 +3,7 @@ import request from 'supertest';
 import { inArray, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { personnel, pieceworkPayrolls, users } from '../../db/schema.js';
+import { notifications, personnel, pieceworkPayrolls, users } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 
 /**
@@ -128,6 +128,8 @@ export async function runPersonnelUserLinkTests(shouldRun: (id: string, ...extra
   } finally {
     if (payrollIds.length > 0) await orm.delete(pieceworkPayrolls).where(inArray(pieceworkPayrolls.id, payrollIds)).catch(() => undefined);
     if (personnelIds.length > 0) await orm.delete(personnel).where(inArray(personnel.id, personnelIds)).catch(() => undefined);
+    // v11 phase 6.2 (X6): each link writes a notice to the linked account
+    if (userIds.length > 0) await orm.delete(notifications).where(inArray(notifications.userId, userIds)).catch(() => undefined);
     if (userIds.length > 0) await orm.delete(users).where(inArray(users.id, userIds)).catch(() => undefined);
   }
   return results;

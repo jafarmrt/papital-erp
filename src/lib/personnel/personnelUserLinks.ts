@@ -18,3 +18,16 @@ export function usersLinkedToOtherPersonnel(personnelList: readonly PersonnelUse
   }
   return linked;
 }
+
+/**
+ * v11 phase 6.2 (X6): the linked account sees the person's payslips with the full card number («فیش‌های من»), so linking
+ * or unlinking an account is a rights change: it needs «مدیریت کاربران», and a linked person is first saved without an
+ * account before another one is linked. Before, «مدیریت پرسنل» alone moved anyone's payslips to any account.
+ */
+export const PERSONNEL_USER_LINK_PERMISSION = 'users.manage';
+
+export const PERSONNEL_USER_LINK_FORBIDDEN_MESSAGE =
+  'وصل کردن پرسنل به حساب کاربری یا برداشتن آن با کسی است که «مدیریت کاربران» دارد؛ آن حساب فیش‌های حقوق و شماره کارت این پرسنل را می‌بیند.';
+
+export const PERSONNEL_USER_RELINK_MESSAGE =
+  'این پرسنل به حساب کاربری دیگری وصل است؛ نخست «بدون حساب کاربری» را ذخیره کنید، سپس حساب تازه را وصل کنید.';

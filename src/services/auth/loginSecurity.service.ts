@@ -31,6 +31,12 @@ export const MAX_LOCK_MINUTES = 30;
  * this many consecutive failures; below it only the attacking (username + IP) pair is locked.
  */
 export const ACCOUNT_LOCKOUT_THRESHOLD = 50;
+/**
+ * v11 phase 6.2 (X15): failed logins one address may make in 15 minutes (the login limiter in app.ts), whoever the user.
+ * An office shares one public address, so the bucket is wide and the pair and account rules above do the locking; a
+ * lock answer (429) is not counted. Before, 10 failures, the lock answers among them, blocked the whole office.
+ */
+export const LOGIN_ADDRESS_MAX_FAILURES = 30;
 /** After this quiet period since the last failure, a failure streak starts again from zero */
 const STREAK_RESET_AFTER_MS = 24 * 60 * 60 * 1000;
 

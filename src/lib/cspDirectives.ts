@@ -3,8 +3,8 @@
  *
  * In production the app may be framed only by itself, plus the origins listed in `FRAME_ANCESTORS`
  * (comma separated; for the AI Studio preview deployments that also need `EXPOSE_TOKEN_IN_BODY`), and the
- * browser may connect only to itself plus `EXTERNAL_API_ORIGINS`. The session cookie is `SameSite=None`,
- * so a page allowed to frame the app carries the user's session (clickjacking); before this, any page on
+ * browser may connect only to itself plus `EXTERNAL_API_ORIGINS`. The session cookie was `SameSite=None` (`Lax` since
+ * v11 phase 6.2, X11), so a page allowed to frame the app carried the user's session (clickjacking); before this, any page on
  * `*.run.app` or `*.googleusercontent.com` could frame it and `connect-src` allowed every HTTPS origin.
  * Outside production the Google preview hosts and the Vite dev server connections stay allowed.
  */

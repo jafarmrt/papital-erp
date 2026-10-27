@@ -85,6 +85,8 @@ router.get('/attachments/:id', validate(attachmentIdSchema), asyncHandler(async 
   res.setHeader('Content-Length', String(file.size));
   res.setHeader('Content-Disposition', contentDisposition(inline ? 'inline' : 'attachment', name));
   res.setHeader('X-Content-Type-Options', 'nosniff');
+  // v11 phase 6.2 (X11): only the app's own pages load a record's file; the rest of the app stays `cross-origin`
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
   res.setHeader('Cache-Control', 'private, max-age=86400');
   if (mimeType !== 'application/pdf') {
     res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox");
