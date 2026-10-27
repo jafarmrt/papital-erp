@@ -256,7 +256,7 @@ export class DocumentLifecycleService {
           }).where(eq(documents.id, id));
           // v11 phase 6.1t (review of M11): the VAT sent with the finalize does not drop a settled proforma below what
           // settles it (409 `SETTLED_DOCUMENT_BELOW_SETTLED`, as on the edit); the document is held `FOR UPDATE` above
-          if (await documentIsSettled(tx, id)) await assertPayableCoversSettlement(tx, id);
+          if (await documentIsSettled(tx, id)) await assertPayableCoversSettlement(tx, id, 'finalize');
 
           const isSales = targetType === 'invoice' || targetType === 'proforma';
           const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(targetType);

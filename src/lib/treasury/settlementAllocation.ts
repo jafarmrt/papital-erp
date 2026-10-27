@@ -109,11 +109,12 @@ export const SETTLEMENT_DOCUMENT_TYPE_LABELS: Readonly<Record<string, string>> =
 
 /**
  * What a document can still take from this receipt or cheque: its remaining plus what this one already puts on it; a
- * draft no more than what this one already puts on it
+ * draft no more than what this one already puts on it. At the four decimals a part is stored with, half up, as the server
+ * compares it: a payable of 1,500.00015 takes a part of 1,500.0002 (delta review of M11).
  */
 export function settlementRoom(doc: RoomDocument): number {
-  if (!isSettleableStatus(doc.status)) return fin(doc.allocatedHere ?? 0).toNumber();
-  return fin(doc.remaining).add(doc.allocatedHere ?? 0).toNumber();
+  const room = isSettleableStatus(doc.status) ? fin(doc.remaining).add(doc.allocatedHere ?? 0) : fin(doc.allocatedHere ?? 0);
+  return room.round(4).toNumber();
 }
 
 /** The parts the form sends in each mode; a manual part of a document no longer listed, or of zero, is dropped */

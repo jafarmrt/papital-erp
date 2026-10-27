@@ -36,6 +36,11 @@ describe('the default split puts the amount on the oldest documents first', () =
     expect(fillOldestFirst([doc(1, 0, 250), doc(2, 100)], 300)).toEqual([{ documentId: 1, amount: 250 }, { documentId: 2, amount: 50 }]);
   });
 
+  it('fills a remaining of more than four decimals at the four decimals the server stores and compares', () => {
+    expect(fillOldestFirst([doc(1, 1500.00015)], 2_000)).toEqual([{ documentId: 1, amount: 1500.0002 }]);
+    expect(settlementPartsProblem([{ documentId: 1, amount: 1500.0002 }], 2_000, [doc(1, 1500.00015)])).toBeNull();
+  });
+
   it('keeps decimals exact', () => {
     expect(fillOldestFirst([doc(1, 0.1), doc(2, 0.2)], 0.3)).toEqual([{ documentId: 1, amount: 0.1 }, { documentId: 2, amount: 0.2 }]);
   });

@@ -39,14 +39,18 @@ export function assertSettledDocumentIdentity(before: SettledDocumentIdentity, a
   );
 }
 
-/** After the edit the document still covers what settles it and its final returns (409 `SETTLED_DOCUMENT_BELOW_SETTLED`) */
-export async function assertPayableCoversSettlement(tx: DbExecutor, documentId: number): Promise<void> {
+/**
+ * After the edit or finalize the document still covers what settles it and its final returns (409
+ * `SETTLED_DOCUMENT_BELOW_SETTLED`)
+ */
+export async function assertPayableCoversSettlement(tx: DbExecutor, documentId: number, step: 'edit' | 'finalize' = 'edit'): Promise<void> {
   const doc = await readDocumentPayableAndSettled(tx, documentId);
   if (!doc) return;
   const covered = (doc.settled.isNegative() ? fin(0) : doc.settled).add(doc.returned);
   if (doc.payable.add(0.01).greaterThanOrEqual(covered)) return;
   throw new ConflictError(
-    `مبلغ سند «${formatPersianCode(doc.refNumber ?? '')}» پس از این ویرایش (${formatPersianNumber(doc.payable.toNumber())}) از جمع تسویه آن (${formatPersianNumber(covered.toNumber())}) کمتر می‌شود؛ نخست سهم دریافت‌ها و چک‌های روی آن را کم کنید.`,
+    `مبلغ سند «${formatPersianCode(doc.refNumber ?? '')}» ${step === 'finalize' ? 'با این نهایی‌سازی' : 'پس از این ویرایش'} (${formatPersianNumber(doc.payable.toNumber())}) از جمع تسویه آن (${formatPersianNumber(covered.toNumber())}) کمتر می‌شود؛ ` +
+      'نخست سهم دریافت‌ها و چک‌های روی آن را کم کنید، یا دریافتی را که مستقیم به آن وصل است جدا کنید.',
     { payable: doc.payable.toNumber(), settled: covered.toNumber() },
     'SETTLED_DOCUMENT_BELOW_SETTLED',
   );
