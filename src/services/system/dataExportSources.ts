@@ -2,7 +2,7 @@ import { getTableColumns, type SQL } from 'drizzle-orm';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import {
   users, personnel, birthdayGreetings, customers, items, itemCodeHistory, categories, warehouses, itemPrices, itemWarehouseStocks,
-  productionProjects, projectStages, projectProductStageProgress, projectBomAllocations, projectReservationReleases,
+  productionProjects, projectStages, projectProductStageProgress, projectBomAllocations, productionReceiptCosts, projectReservationReleases,
   pendingMaterials, transfers, crmLeads, crmActivities, crmLeadStageHistory, customerTags, customerTagLinks, dailyWorkLogs,
   documents, documentItems, transactions, appSettings, roles,
   accounts, fiscalPeriods, journalVouchers, journalVoucherItems, itemOpeningVoucherItems,
@@ -81,6 +81,7 @@ export const DATA_EXPORT_TABLE_SOURCES: Readonly<Record<string, TableSpecSource>
   project_stages: { table: projectStages, key: ['id'] },
   project_product_stage_progress: { table: projectProductStageProgress, key: ['id'] },
   project_bom_allocations: { table: projectBomAllocations, key: ['id'] },
+  production_receipt_costs: { table: productionReceiptCosts, key: ['documentId'] },
   project_reservation_releases: { table: projectReservationReleases, key: ['id'] },
   pending_materials: { table: pendingMaterials, key: ['id'] },
   project_managers: { table: projectManagers, key: ['id'] },

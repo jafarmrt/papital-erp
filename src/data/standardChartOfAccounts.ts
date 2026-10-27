@@ -129,6 +129,8 @@ export const STANDARD_CHART_OF_ACCOUNTS: InitialAccountItem[] = [
   { code: '6002', name: 'دستمزد مستقیم تولید (کارمزد پرکیسی و قطعه‌کاری)', level: 'subsidiary', parentCode: '60', accountType: 'cost_of_sales', nature: 'debit', isSystem: 1 },
   { code: '6003', name: 'سربار ساخت و هزینه‌های کارگاه (پخت، برق)', level: 'subsidiary', parentCode: '60', accountType: 'cost_of_sales', nature: 'debit', isSystem: 1 },
   { code: '6004', name: 'ضایعات و افت کیفی', level: 'subsidiary', parentCode: '60', accountType: 'cost_of_sales', nature: 'debit', isSystem: 1 },
+  // v11 phase 6.1ث (S2، تصمیم ت۵۲-۳): اختلاف بهای رسید تولید پروژه با کالای در جریان ساخت آن (بهای واردشده با دلیل، گرد کردن)
+  { code: '6005', name: 'اختلاف بهای تولید', level: 'subsidiary', parentCode: '60', accountType: 'cost_of_sales', nature: 'both', isSystem: 1 },
 
   // ==========================================
   // گروه ۷: هزینه‌های عمومی، اداری و توزیع (Operating Expenses)

@@ -24,6 +24,7 @@ import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
 import { salesReturnKardexUnitCosts } from '../documents/salesReturnCost.js';
 import { documentVoucherPartyId } from '../documents/documentParty.js';
 import { kardexInCostByItem } from './productionReceiptCost.js';
+import { projectProductionCreditRows } from './productionWipCredit.js';
 import { documentOutflowCost } from './outflowVoucherCost.js';
 import { balancedCostRows, irrToForeignAmount, rateForRial, rowExchangeRate } from './foreignCostRow.js';
 import { ValidationError, NotFoundError } from '../../errors/customErrors.js';
@@ -627,17 +628,12 @@ export class VoucherSyncService {
         : (await AccountMappingService.getUnassignedConsumptionAccount(tx)) || allAccs.find(a => a.code === '6003');
     if (isProductionDoc) {
       if (productionCreditAcc && matchedProjectId) {
-        voucherItems.push({
-          accountId: productionCreditAcc.id,
-          detailedType: 'project',
-          detailedId: matchedProjectId,
+        // v11 phase 6.1ث (S2, decision ت۵۲-۳): 1402 by what the receipt took under the project lock, the rest on «اختلاف بهای تولید»
+        voucherItems.push(...await projectProductionCreditRows(executor, {
+          documentId: docId, refNumber: doc.refNumber, currency: doc.currency || 'IRR', projectId: matchedProjectId, projectName: matchedProjectName,
           detailedName: matchedProjectName || (doc.buyerName || 'خط تولید / کالای در جریان ساخت'),
-          debit: 0,
-          credit: totalGross,
-          currency: doc.currency || 'IRR',
-          exchangeRate: totalGrossRate,
-          description: `انتقال بهای تمام شده از کالای در جریان ساخت به انبار بابت رسید تولید شماره ${doc.refNumber}${matchedProjectName ? ` (پروژه: ${matchedProjectName})` : ''}`
-        });
+          wipAccount: productionCreditAcc, totalGross, totalGrossRate, strict: isStrict,
+        }));
       } else if (productionCreditAcc) {
         voucherItems.push({
           accountId: productionCreditAcc.id,

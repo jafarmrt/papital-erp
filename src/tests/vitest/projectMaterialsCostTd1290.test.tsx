@@ -5,9 +5,7 @@ import {
   buildMaterialAvailabilityView, materialAvailabilityReportOf, projectMaterialItemIds, rowIsShort,
   type AvailabilityStockItem, type MaterialAvailabilityReport,
 } from '../../lib/projects/materialAvailability';
-import {
-  deliveryCostOutlook, deliveryCostReportOf, projectDeliverySuggestion, suggestedDeliveryUnitCost, type DeliveryCostReport,
-} from '../../lib/projects/deliveryCostSuggestion';
+import { deliveryCostOutlook, deliveryCostReportOf, type DeliveryCostReport } from '../../lib/projects/deliveryCostSuggestion';
 import { issuedMaterialsReportOf } from '../../lib/projects/issuedMaterials';
 
 type FetchOpts = { method?: string; body?: string; signal?: AbortSignal };
@@ -45,8 +43,13 @@ const COST_HEADER = 'بها';
 const COST_TOTAL = 'جمع بهای مواد داده‌شده به پروژه';
 const DELIVER = 'ورود به انبار';
 const PRICE_LABEL = 'بهای واحد:';
-const MULTI_PRODUCT_WARNING = 'پروژهٔ چندمحصولی پیشنهاد خودکار ندارد';
-const RESIDUE_WARNING = 'در کالای در جریان ساخت پروژه می‌ماند';
+const MULTI_PRODUCT_NOTE = 'پروژهٔ چندمحصولی: تا پیش از تحویل آخر';
+const MULTI_COMPLETE_NOTE = 'میان محصولات این ورود پخش می‌شود';
+const QTY_LABEL = 'تعداد تحویلی:';
+const REASON_NOTE = 'هنگام ثبت دلیل خواسته می‌شود';
+const REAL_COST_HINT = 'بهای واقعی: ۸۰۰';
+const COST_REASON = 'دلیل بهای تولید (الزامی):';
+const SEND_WITH_REASON = 'ثبت با این دلیل';
 
 const GLUE: AvailabilityStockItem = { id: 3, code: 'G-1', name: 'glue', unit: 'pcs', current_stock: 8 };
 const BEAD: AvailabilityStockItem = { id: 4, code: 'B-1', name: 'bead', unit: 'pcs', current_stock: 50 };
@@ -205,35 +208,27 @@ const deliveryReport = (over: Partial<DeliveryCostReport> = {}): DeliveryCostRep
 });
 
 // v10.2.3 (TD-1290, finding D2): the unit cost of a project's production receipt was typed by hand, so whatever did not
-// match the project's materials stayed in its work in progress (1402)
-describe('delivery unit cost from the project work in progress (TD-1290 D2)', () => {
-  it('divides the balance over what is left of the plan, or over a larger delivery', () => {
-    expect(suggestedDeliveryUnitCost(8000, 10, 0, 10)).toBe(800);
-    expect(suggestedDeliveryUnitCost(8000, 10, 4, 2)).toBe(1333.3333);
-    expect(suggestedDeliveryUnitCost(8000, 10, 0, 16)).toBe(500);
-    expect(suggestedDeliveryUnitCost(0, 10, 0, 10)).toBeNull();
-    expect(suggestedDeliveryUnitCost(8000, 10, 10, 0)).toBeNull();
+// match the project's materials stayed in its work in progress (1402). v11 phase 6.1ث (decision ت۵۲-۳): the server
+// prices the receipt at the project's real cost, and the tab shows the same figures (`deliveryCostOutlook`)
+describe('delivery cost from the project work in progress (TD-1290 D2, v11 6.1th)', () => {
+  it('shows the real unit cost of a single product and what the delivery takes from the balance', () => {
+    expect(deliveryCostOutlook(deliveryReport(), [{ itemId: 42, quantity: 4, typedUnitCost: null }]))
+      .toMatchObject({ rule: 'share', wipBalance: 8000, credit: 3200, remaining: 4800, unitCosts: [800], reasonNeeded: null, completesPlan: false, multiProduct: false });
+    expect(deliveryCostOutlook(deliveryReport(), [{ itemId: 42, quantity: 10, typedUnitCost: null }]))
+      .toMatchObject({ rule: 'complete', credit: 8000, remaining: 0, completesPlan: true });
+    expect(deliveryCostOutlook(deliveryReport(), [{ itemId: 42, quantity: 4, typedUnitCost: 900 }]))
+      .toMatchObject({ reasonNeeded: 'cost_changed', credit: 3200, variance: 400 });
   });
 
-  it('suggests only for a single product the reader may see the cost of', () => {
-    expect(projectDeliverySuggestion(deliveryReport(), 42, 10)).toBe(800);
-    expect(projectDeliverySuggestion(deliveryReport(), 43, 10)).toBeNull();
-    expect(projectDeliverySuggestion(deliveryReport({ costVisible: false, wipBalance: null }), 42, 10)).toBeNull();
-    const two = deliveryReport({ products: [...deliveryReport().products, { itemId: 43, plannedQty: 5, deliveredQty: 0, weightedAverageCost: 100 }] });
-    expect(projectDeliverySuggestion(two, 42, 10)).toBeNull();
+  it('keeps the costs hidden from a reader without the cost permission', () => {
     expect(deliveryCostReportOf({ costVisible: false, wipBalance: 8000, products: [{ itemId: 42, plannedQty: 10, deliveredQty: 0, weightedAverageCost: 5000 }] }))
       .toMatchObject({ wipBalance: null, products: [{ weightedAverageCost: null }] });
+    expect(deliveryCostOutlook(deliveryReport({ costVisible: false, wipBalance: null }), [])).toBeNull();
   });
 
-  it('tells what the delivery takes from the balance and what is left', () => {
-    expect(deliveryCostOutlook(deliveryReport(), [{ itemId: 42, quantity: 4, unitPrice: 800 }]))
-      .toEqual({ wipBalance: 8000, credit: 3200, remaining: 4800, withoutCost: 0, completesPlan: false, multiProduct: false });
-    // an empty price is the current average cost, as on the server
-    expect(deliveryCostOutlook(deliveryReport(), [{ itemId: 42, quantity: 10, unitPrice: null }]))
-      .toMatchObject({ credit: 50000, remaining: -42000, completesPlan: true });
-    expect(deliveryCostOutlook(deliveryReport({ products: [{ itemId: 42, plannedQty: 10, deliveredQty: 0, weightedAverageCost: null }] }), [{ itemId: 42, quantity: 2, unitPrice: null }]))
-      .toMatchObject({ credit: 0, withoutCost: 1 });
-    expect(deliveryCostOutlook(deliveryReport({ costVisible: false, wipBalance: null }), [])).toBeNull();
+  it('counts a line without any cost of a project without 1402', () => {
+    expect(deliveryCostOutlook(deliveryReport({ wipBalance: 0, products: [{ itemId: 42, plannedQty: 10, deliveredQty: 0, weightedAverageCost: null }] }), [{ itemId: 42, quantity: 2, typedUnitCost: null }]))
+      .toMatchObject({ rule: 'no_wip', credit: 0, withoutCost: 1, reasonNeeded: 'no_wip' });
   });
 });
 
@@ -252,53 +247,66 @@ const deliveryCalls = () => fetchJson.mock.calls.filter(([url]) => url.endsWith(
 const sentLines = (call = 0) => JSON.parse(deliveryCalls()[call][1]?.body ?? '{}').itemsToAdd as Array<{ unitPrice?: number; quantity: number }>;
 const priceInput = async () => (await screen.findByText(PRICE_LABEL)).parentElement?.querySelector('input') as HTMLInputElement;
 
-describe('delivery tab fills the unit cost from the project balance (TD-1290 D2)', () => {
-  it('prefills the suggestion for a single product and posts it', async () => {
-    route = deliveryRoute(deliveryReport());
-    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
-    await waitFor(async () => expect((await priceInput()).value).toBe('۸۰۰'));
-    const panel = screen.getByTestId('project-delivery-cost');
-    expect(panel.textContent).toContain('۸٬۰۰۰');
-    fireEvent.click(screen.getByText(DELIVER));
-    await vi.waitFor(() => expect(deliveryCalls()).toHaveLength(1));
-    expect(sentLines()[0]).toMatchObject({ unitPrice: 800, quantity: 10 });
-    await vi.waitFor(() => expect(fetchJson.mock.calls.filter(([url]) => url === '/projects/1/delivery-cost').length).toBe(3));
-  });
+const costRefusal = () => Object.assign(new Error('cost differs'), { code: 'PRODUCTION_COST_REASON_REQUIRED', details: { kind: 'cost_changed' } });
 
-  it('posts no price when the user clears the suggestion, so the server uses the average cost', async () => {
+describe('delivery tab posts the real cost of the project (TD-1290 D2, v11 6.1th)', () => {
+  it('shows the real unit cost as the hint of the empty field and posts no price', async () => {
     route = deliveryRoute(deliveryReport());
     render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
-    await waitFor(async () => expect((await priceInput()).value).toBe('۸۰۰'));
-    fireEvent.change(await priceInput(), { target: { value: '' } });
+    await waitFor(async () => expect((await priceInput()).placeholder).toBe(REAL_COST_HINT));
     expect((await priceInput()).value).toBe('');
+    expect(screen.getByTestId('project-delivery-cost').textContent).toContain('۸٬۰۰۰');
     fireEvent.click(screen.getByText(DELIVER));
     await vi.waitFor(() => expect(deliveryCalls()).toHaveLength(1));
+    expect(sentLines()[0]).toMatchObject({ quantity: 10 });
     expect(sentLines()[0].unitPrice).toBeUndefined();
   });
 
-  it('warns when a delivery that completes the plan leaves a balance', async () => {
-    route = deliveryRoute(deliveryReport());
+  it('says a typed cost needs a reason, asks it when the server refuses, and resends with it', async () => {
+    let refuse = true;
+    const base = deliveryRoute(deliveryReport());
+    route = (url, opts) => {
+      if (url.endsWith('/add-to-inventory') && refuse) {
+        refuse = false;
+        throw costRefusal();
+      }
+      return base(url, opts);
+    };
     render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
-    await waitFor(async () => expect((await priceInput()).value).toBe('۸۰۰'));
+    await waitFor(async () => expect((await priceInput()).placeholder).toBe(REAL_COST_HINT));
     fireEvent.change(await priceInput(), { target: { value: '700' } });
-    expect((await screen.findByTestId('project-delivery-cost')).textContent).toContain(RESIDUE_WARNING);
+    expect((await screen.findByTestId('project-delivery-cost')).textContent).toContain(REASON_NOTE);
+    fireEvent.click(screen.getByText(DELIVER));
+    const prompt = await screen.findByTestId('production-cost-prompt');
+    fireEvent.change(within(prompt).getByLabelText(COST_REASON), { target: { value: 'scrap reused' } });
+    fireEvent.click(within(prompt).getByText(SEND_WITH_REASON));
+    await vi.waitFor(() => expect(deliveryCalls()).toHaveLength(2));
+    const resent = JSON.parse(deliveryCalls()[1][1]?.body ?? '{}');
+    expect(resent).toMatchObject({ productionCostReason: 'scrap reused', itemsToAdd: [{ unitPrice: 700, quantity: 10 }] });
+    await waitFor(() => expect(screen.queryByTestId('production-cost-prompt')).toBeNull());
   });
 
-  it('suggests nothing for several products and warns instead', async () => {
+  it('explains how several products are priced and leaves their fields empty', async () => {
     const two = deliveryReport({ products: [deliveryReport().products[0], { itemId: 43, plannedQty: 5, deliveredQty: 0, weightedAverageCost: 100 }] });
     route = deliveryRoute(two);
     const p = { ...PROJECT, products: [PROJECT.products?.[0], { id: 'prod-2', item_id: 43, item_code: 'N-2', item_name: 'ring', customer_code: '', quantity: 5, unit: 'pcs', needs_assembly: false }] } as unknown as ProductionProject;
     render(<ProjectStockEntryTab project={p} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
-    expect(await screen.findByText(content => content.includes(MULTI_PRODUCT_WARNING))).toBeTruthy();
+    // the whole plan at once spreads the balance over both products by their average costs
+    expect(await screen.findByText(content => content.includes(MULTI_COMPLETE_NOTE))).toBeTruthy();
     const inputs = screen.getAllByText(PRICE_LABEL).map(label => label.parentElement?.querySelector('input') as HTMLInputElement);
     expect(inputs.map(i => i.value)).toEqual(['', '']);
+    // part of the plan takes the typed or average costs
+    const qty = screen.getAllByText(QTY_LABEL)[1].parentElement?.querySelector('input') as HTMLInputElement;
+    fireEvent.change(qty, { target: { value: '2' } });
+    expect(await screen.findByText(content => content.includes(MULTI_PRODUCT_NOTE))).toBeTruthy();
   });
 
-  it('shows no balance and suggests nothing to a reader without the cost permission', async () => {
+  it('shows no balance and no cost hint to a reader without the cost permission', async () => {
     route = deliveryRoute({ projectId: 1, costVisible: false, wipBalance: null, products: [{ itemId: 42, plannedQty: 10, deliveredQty: 0, weightedAverageCost: null }] });
-    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
+    render(<ProjectStockEntryTab project={PROJECT} itemsList={[]} onUpdate={vi.fn()} />, { wrapper: QueryWrapper });
     await vi.waitFor(() => expect(fetchJson).toHaveBeenCalledWith('/projects/1/delivery-cost', expect.anything()));
     await waitFor(() => expect(screen.queryByTestId('project-delivery-cost')).toBeNull());
     expect((await priceInput()).value).toBe('');
+    expect((await priceInput()).placeholder).not.toContain('۸۰۰');
   });
 });

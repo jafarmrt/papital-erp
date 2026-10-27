@@ -39,6 +39,7 @@ import { assertNameNotOtherKind, hasPricedLine, linkKnownDocumentParty } from '.
 import { lockRequisitionOfOrder, releaseVoidedProcurementOrder } from './procurementOrderVoid.js';
 import { documentVoidVoucherReason } from '../../lib/documents/documentTypeName.js';
 import { idempotentTransaction } from '../../middleware/idempotency.js';
+import { assertProjectWipStaysCovered } from '../accounting/projectDeliveredMaterials.js';
 
 export class DocumentLifecycleService {
   /**
@@ -475,6 +476,12 @@ export class DocumentLifecycleService {
         await postVoidResidueVoucher({
           documentId: id, refNumber: doc.refNumber || String(id), date: await businessTodayIsoDate(), username: deletedByUser,
         }, residues, tx);
+      }
+
+      // v11 phase 6.1ث (decision ت۵۲-۳): a project remittance takes out of the project's 1402 only what its receipts left
+      // there (409 with the receipts once its voucher is voided)
+      if (doc.type === 'remittance' && doc.status === 'final' && doc.projectId) {
+        await assertProjectWipStaysCovered(tx, Number(doc.projectId), 'remittance');
       }
 
       // 5. Audit log — v8.0.77 (TD-324): در همان تراکنش (پیش‌تر اتصال دوم استخر و ردیف ممیزی ماندگار حتی با برگشت ابطال)

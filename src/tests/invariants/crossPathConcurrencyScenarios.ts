@@ -73,7 +73,7 @@ export async function checkDeliveryAndReceiveShareItem(wh: string): Promise<stri
   const requisitionId = await orderedRequisition(item, 4, 300_000, wh);
 
   const outcomes = await raceBehindRowLock<unknown>('items', [item], [
-    () => ProjectService.addProjectToInventory({ projectId, itemsToAdd: [{ itemId: item, quantity: 5, unitPrice: 120_000, location: wh }], currentUser: 'inv' }),
+    () => ProjectService.addProjectToInventory({ projectId, itemsToAdd: [{ itemId: item, quantity: 5, unitPrice: 120_000, location: wh }], productionCostReason: 'cross-path: a project without materials', currentUser: 'inv' }),
     () => ProcurementService.executeWorkflowAction(requisitionId, 'receive_items', ADMIN),
   ]);
   problems.push(...outcomeProblems(['project delivery', 'receive items'], outcomes, () => false));

@@ -141,7 +141,9 @@ const addProjectToInventorySchema = z.object({
     })).min(1, 'حداقل یک محصول برای ورود به انبار الزامی است'),
     markCompleted: z.boolean().optional(),
     // v8.0.72 (TD-327): دلیل تحویل بیش از مقدار برنامه‌ریزی‌شده پروژه
-    overDeliveryReason: z.string().max(500).optional()
+    overDeliveryReason: z.string().max(500).optional(),
+    // v11 phase 6.1ث (decision ت۵۲-۳): the reason of a cost other than the project's real cost
+    productionCostReason: z.string().max(500).optional()
   })),
   params: z.object({
     id: z.string().regex(/^\d+$/, 'شناسه پروژه نامعتبر است')
@@ -598,7 +600,7 @@ router.put('/projects/:id', authorizePermission(...PROJECT_EDIT_PERMISSIONS), id
 // v9.0.454 (TD-923): the delivery is a final production receipt, so it also asks the receipt's warehouse.in
 router.post('/projects/:id/add-to-inventory', authorizePermission(...PROJECT_EDIT_PERMISSIONS), requirePermission(...PROJECT_STOCK_IN_PERMISSIONS), idempotency({ scope: 'project_delivery' }), validate(addProjectToInventorySchema), asyncHandler(async (req, res) => {
   const id = parseInt(String(req.params.id), 10);
-  const { itemsToAdd, markCompleted, overDeliveryReason } = req.body;
+  const { itemsToAdd, markCompleted, overDeliveryReason, productionCostReason } = req.body;
   const currentUser = req.user?.username || 'سیستم';
 
   const result = await ProjectService.addProjectToInventory({
@@ -608,6 +610,7 @@ router.post('/projects/:id/add-to-inventory', authorizePermission(...PROJECT_EDI
     currentUser,
     userId: req.user?.id,
     overDeliveryReason,
+    productionCostReason,
     // TD-943: the production receipt's CREATE row and the project row are written with the delivery's transaction
     auditReq: req
   });
