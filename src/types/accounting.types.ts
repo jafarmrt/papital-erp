@@ -269,6 +269,8 @@ export interface Cheque {
   createdAt?: string | null;
   isDeleted?: number | null;
   is_deleted?: number | null;
+  /** v11 phase 6.1t (M11): what the cheque settles on documents, in parts (0 when it is all on account) */
+  allocatedAmount?: number;
 }
 
 export interface TreasuryTransaction {
@@ -326,6 +328,8 @@ export interface TreasuryTransaction {
   is_deleted?: number | null;
   /** v10.1.32 (D-16): number of expense lines when the row is a petty cash expense statement */
   pettyCashLineCount?: number;
+  /** v11 phase 6.1t (M11): what the receipt or payment settles on documents, in parts (0 when none) */
+  allocatedAmount?: number;
 }
 
 /** v10.1.32 (D-16): one line of a petty cash expense statement (`GET /accounting/treasury/:id/petty-cash-lines`) */
@@ -447,6 +451,8 @@ export interface DetailedPartyLedgerResult {
   items: DetailedPartyLedgerItem[];
   /** v10.0.257 (TD-915 / TD-924، ت۵ الف): ردیف‌های حساب موقت طرف حساب؛ در مانده و جمع گردش بالا نیستند */
   temporaryRows?: import('../lib/accounting/partyTemporaryRows').PartyTemporaryRows;
+  /** v11 phase 6.1t (U1): the party's draft vouchers apart, labelled (absent when the statement already counts them) */
+  draftRows?: import('../lib/accounting/partyDraftRows').PartyDraftRows;
 }
 
 export interface FinancialSummaryStats {

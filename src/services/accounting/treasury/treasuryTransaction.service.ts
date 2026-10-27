@@ -21,6 +21,8 @@ import type { TreasuryTransaction, Account } from '../../../types.js';
 import { NotFoundError, ValidationError, ConflictError, BusinessLogicError } from '../../../errors/customErrors.js';
 import { AttachmentStorageService } from '../../attachments/attachmentStorage.service.js';
 import { exactTreasuryAmount } from './treasuryAmount.js';
+import { assertAllocatableParty, insertAllocations, lockAndCheckAllocationTargets, normalizeAllocations } from './settlementAllocationWrite.js';
+import type { SettlementAllocationInput } from '../../../lib/treasury/settlementAllocation.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { normalizeTreasuryCurrency, sameTreasuryCurrency } from '../../../lib/treasury/treasuryCurrency.js';
 import { reconcileTreasuryRows, type ReconcileParams, type ReconcileResult } from './bankReconciliation.js';
@@ -244,9 +246,15 @@ export class TreasuryTransactionService {
     contraAccountId?: number | null;
     /** v10.0.262 (TD-934): ممیزی ثبت با `tx` همین ثبت */
     audit?: TreasuryAuditActor;
+    /** v11 phase 6.1t (M11): the documents this receipt or payment settles, in parts; never with `documentId` */
+    allocations?: SettlementAllocationInput[];
   }): Promise<TreasuryTransaction> {
     const amount = exactTreasuryAmount(data.amount, 'مبلغ تراکنش');
     if (amount <= 0) throw new ValidationError('مبلغ تراکنش باید بزرگتر از صفر باشد');
+    const parts = normalizeAllocations(data.allocations, amount);
+    if (parts.length > 0 && data.documentId) {
+      throw new ValidationError('دریافت یا پرداخت یا به یک سند وصل می‌شود یا روی چند سند می‌نشیند، نه هر دو.', undefined, 'SETTLEMENT_ALLOCATION_WITH_DOCUMENT');
+    }
     // v8.0.26 (TD-278، تصمیم مالک محصول — گزینه الف): روش «چک» در فرم خزانه پذیرفته نمی‌شود؛ چک فقط از «دفتر چک» ثبت
     // می‌شود. پیش‌تر این روش اسناد دریافتنی/پرداختنی را بدهکار/بستانکار می‌کرد ولی رکورد چکی نمی‌ساخت که روزی وصول،
     // برگشت یا خرج شود، و ثبت همان چک در دفتر چک آن را دوبار به حساب مشتری می‌برد. تراکنش‌های چکی پیشین ابطال‌پذیرند.
@@ -268,7 +276,7 @@ export class TreasuryTransactionService {
     return await idempotentTransaction(async (txEngine) => {
       validateLockOrder([
         { name: 'bankAccount', hierarchyLevel: LockHierarchyLevel.BANK_ACCOUNTS },
-        ...(data.documentId ? [{ name: 'document', hierarchyLevel: LockHierarchyLevel.DOCUMENTS }] : []),
+        ...(data.documentId || parts.length > 0 ? [{ name: 'document', hierarchyLevel: LockHierarchyLevel.DOCUMENTS }] : []),
       ]);
       // سرفصل انتخابی حتی در ثبت بی‌سند سنجیده می‌شود تا ردیف به حساب نامجاز اشاره نکند
       if (party.contraAccountId) await requireChoosableContraAccount(txEngine, party.contraAccountId);
@@ -294,6 +302,13 @@ export class TreasuryTransactionService {
         });
         // v10.0.59 (TD-938، ت۸ الف): بیش از مانده سند وصل نمی‌شود؛ مازاد علی‌الحساب است
         await assertWithinDocumentRemaining(txEngine, { documentId: data.documentId, amount });
+      }
+      // v11 phase 6.1t (M11): each document of the parts is locked after the bank, in id order, and checked like a direct link
+      if (parts.length > 0) {
+        assertAllocatableParty(data.type, partyType);
+        await lockAndCheckAllocationTargets(txEngine, {
+          direction: data.type, partyType, partyId, partyName: partyCurrentName ?? partyName, currency: txCurrency,
+        }, parts);
       }
 
       // V1.4.0: گارد هم‌ارزی ارز، پیش از نرخ تسعیر تا ارز ناهم‌خوان پیام خودش را بگیرد (`postTreasuryRow` هم آن را می‌سنجد)
@@ -373,11 +388,12 @@ export class TreasuryTransactionService {
         }),
         actor: { userId: data.userId, username: data.username },
       });
+      await insertAllocations(txEngine, { treasuryTransactionId: tx.id }, parts, data.userId);
       // v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک؛ ستون attachments فقط فراداده
       tx.attachments = await this.attachTreasuryRowFiles(txEngine, tx.id, data.attachments, data.username);
 
       const created = treasuryRowDto(tx, bank);
-      await auditTreasuryTransactionCreated(txEngine, data.audit, created, { ...created });
+      await auditTreasuryTransactionCreated(txEngine, data.audit, created, { ...created, ...(parts.length > 0 ? { allocations: parts } : {}) });
       return created;
     });
   }

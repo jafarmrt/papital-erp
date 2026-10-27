@@ -19,6 +19,7 @@ import { personnelServerSearchUrl } from '../../../lib/personnel/personnelList';
 import type { BankAccount, Customer, Personnel, FinancialAttachment } from '../../../types';
 import { DecimalInput } from '../../common/DecimalInput';
 import { DialogLayer } from '../../common/DialogLayer';
+import { SettlementAllocationField, useCanSettleOnDocuments, type SettlementFieldState } from './SettlementAllocationField';
 import { PAYMENT_METHOD_LABELS } from '../../../lib/treasury/treasuryExport';
 
 interface TreasuryTransactionModalProps {
@@ -45,6 +46,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
   const fieldId = useId();
   const rial = useMemo(() => rialDisplayOf(appCurrency), [appCurrency]);
   const canSkipVoucher = useHasPermission(NO_VOUCHER_TREASURY_PERMISSION);
+  const canSettleOnDocuments = useCanSettleOnDocuments();
   const [formData, setFormData] = useState({
     type,
     date: '',
@@ -67,6 +69,8 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
   });
 
   const [isSaving, setIsSaving] = useState(false);
+  // v11 phase 6.1t (M11 / U2): the documents a customer receipt or supplier payment settles
+  const [settlement, setSettlement] = useState<SettlementFieldState>({ parts: [], problem: null });
   const [voucherPreview, setVoucherPreview] = useState<TreasuryVoucherPreview | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
@@ -174,6 +178,10 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
       toast.error('سرفصل طرف مقابل را انتخاب کنید.');
       return;
     }
+    if (settlementQuery && settlement.problem) {
+      toast.error(settlement.problem);
+      return;
+    }
     setIsSaving(true);
     try {
       // v8.0.20 (TD-274): ارز تراکنش همان ارز حساب انتخاب‌شده است و تراکنش ارزی نرخ تسعیر می‌فرستد
@@ -185,6 +193,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
         currency: bankCurrency,
         exchangeRate: bankCurrency !== 'IRR' && formData.exchangeRate > 0 ? formData.exchangeRate : undefined,
         createVoucher: canSkipVoucher ? formData.createVoucher : true,
+        allocations: settlementQuery ? settlement.parts : undefined,
       });
       onClose();
     } catch {
@@ -217,6 +226,10 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
   const isForeignBank = (selectedBank?.currency || 'IRR').toUpperCase() !== 'IRR';
   // مبلغ به ارز خود حساب (ریال برای حساب ریالی) وارد و ذخیره می‌شود
   const inputCurrency = isForeignBank ? String(selectedBank?.currency).toUpperCase() : 'IRR';
+  // a receipt from a chosen customer or a payment to a chosen supplier may settle its open documents
+  const settlementQuery = canSettleOnDocuments && formData.partyId && (isReceipt ? formData.partyType === 'customer' : formData.partyType === 'supplier')
+    ? { direction: formData.type, partyType: formData.partyType, partyId: formData.partyId, partyName: formData.partyName, currency: inputCurrency }
+    : null;
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4 backdrop-blur-xs">
@@ -463,6 +476,19 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                 />
               </div>
             </div>
+
+            {settlementQuery && (
+              <SettlementAllocationField
+                key={`${settlementQuery.direction}-${settlementQuery.partyId}-${settlementQuery.currency}`}
+                query={settlementQuery}
+                amount={formData.amount}
+                currency={inputCurrency}
+                appCurrency={appCurrency}
+                partyLabel={isReceipt ? 'مشتری' : 'تامین‌کننده'}
+                onChange={setSettlement}
+                disabled={isSaving}
+              />
+            )}
 
             <div>
               <label htmlFor={`${fieldId}-description`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">

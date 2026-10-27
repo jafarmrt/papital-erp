@@ -19,6 +19,8 @@ import { NO_VOUCHER_TREASURY_PERMISSION } from '../../lib/noVoucherPermission';
 import { toast } from 'react-hot-toast';
 import { 
   formatCurrencyLabel,
+  formatPersianCode,
+  formatPersianDate,
   formatPersianPrice, 
   getTodayJalaliDate, 
   toPersianDigits, 
@@ -32,6 +34,7 @@ import { PAYMENT_METHOD_LABELS, treasuryMethodLabel } from '../../lib/treasury/t
 import { useBankAccountOptionsQuery } from '../../hooks/accounting/useTreasuryQueries';
 import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 import type { BankAccountOption } from '../../types';
+import type { SettlementAllocationView } from '../../lib/treasury/settlementAllocation';
 
 const NO_ACCOUNTS: BankAccountOption[] = [];
 
@@ -70,6 +73,8 @@ interface InvoiceSettlementModalProps {
     remainingAmount?: number;
     settlementStatus?: string;
     settlements?: SettlementItem[];
+    /** v11 phase 6.1t (M11 / U2): parts of receipts and cheques put on this document */
+    allocations?: SettlementAllocationView[];
   } | null;
 }
 
@@ -500,6 +505,31 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
                     </div>
                     <span className="font-bold text-emerald-700">
                       {formatPersianPrice(st.amount, currency)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* v11 phase 6.1t (M11 / U2): receipts and cheques put on this document from the treasury or the cheque book */}
+          {doc.allocations && doc.allocations.length > 0 && (
+            <div className="pt-2 border-t border-slate-100">
+              <span className="text-xs font-bold text-slate-700 mb-2 block flex items-center gap-1">
+                <Clock size={13} className="text-slate-400" />
+                <span>دریافت‌ها و چک‌های نشسته روی این فاکتور ({toPersianDigits(doc.allocations.length)} مورد)</span>
+              </span>
+              <div className="space-y-1.5 max-h-28 overflow-y-auto">
+                {doc.allocations.map((part) => (
+                  <div key={part.id} className="flex items-center justify-between text-[11px] bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200/60">
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <span className="font-mono font-medium">{part.date ? formatPersianDate(part.date) : '—'}</span>
+                      <span>•</span>
+                      <span className="text-slate-500">{part.source === 'cheque' ? 'چک' : 'دریافت یا پرداخت'}</span>
+                      <span className="text-slate-400 font-mono text-[10px]">({formatPersianCode(part.sourceNumber)})</span>
+                    </div>
+                    <span className="font-bold text-emerald-700">
+                      {formatPersianPrice(part.amount, currency)}
                     </span>
                   </div>
                 ))}

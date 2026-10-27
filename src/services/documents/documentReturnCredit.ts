@@ -1,5 +1,5 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import { orm } from '../../db/drizzle.js';
+import type { DbExecutor } from '../../db/drizzle.js';
 import { documents } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import type { FinancialDecimal } from '../../lib/financialDecimal.js';
@@ -10,7 +10,7 @@ import type { FinancialDecimal } from '../../lib/financialDecimal.js';
  * همان مبلغی که سند مرجوعی از حساب مشتری کم می‌کند. مرجوعی پیش‌نویس یا باطل‌شده شمرده نمی‌شود.
  * ارز مرجوعی همان ارز فاکتور است (TD-788)، پس جمع در ارز فاکتور است.
  */
-export async function fetchReturnCredits(docIds: number[]): Promise<Map<number, FinancialDecimal>> {
+export async function fetchReturnCredits(docIds: number[], db: DbExecutor): Promise<Map<number, FinancialDecimal>> {
   const credits = new Map<number, FinancialDecimal>();
   if (docIds.length === 0) return credits;
   // ستون‌ها با نام جدول نوشته می‌شوند: Drizzle در select تک‌جدولی نام جدول را نمی‌نویسد و «id» زیرپرسش به سطر می‌خورد
@@ -19,7 +19,7 @@ export async function fetchReturnCredits(docIds: number[]): Promise<Map<number, 
       FROM document_items di
      WHERE di.document_id = documents.id AND di.is_deleted = 0
   ), 0)::text`;
-  const rows = await orm.select({
+  const rows = await db.select({
     invoiceId: documents.returnOfDocumentId,
     lineNet,
     vatAmount: documents.vatAmount,

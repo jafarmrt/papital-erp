@@ -340,6 +340,32 @@ export const statutoryRemittanceLines = pgTable('statutory_remittance_lines', {
   idx_statutory_remittance_lines_personnel_id: index('idx_statutory_remittance_lines_personnel_id').on(table.personnelId),
 }));
 
+/**
+ * v11 phase 6.1t (M11 / U2, decision ت۵۲-۵): the part of one receipt or payment, or of one cheque, that settles one
+ * document (migration 0003). A part counts in the document's paid amount while its source is live: the treasury row
+ * completed, not deleted and not a reversal; the cheque not deleted, bounced or returned. A replaced part keeps its row
+ * with `is_deleted = 1`.
+ */
+export const settlementAllocations = pgTable('settlement_allocations', {
+  id: serial('id').primaryKey(),
+  documentId: integer('document_id').notNull().references(baseRelations.documentsId),
+  treasuryTransactionId: integer('treasury_transaction_id').references(() => treasuryTransactions.id),
+  chequeId: integer('cheque_id').references(() => cheques.id),
+  amount: moneyNumeric('amount').notNull(),
+  createdById: integer('created_by_id').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  isDeleted: integer('is_deleted').notNull().default(0),
+}, (table) => ({
+  idx_settlement_allocations_document_id: index('idx_settlement_allocations_document_id').on(table.documentId),
+  idx_settlement_allocations_treasury_transaction_id: index('idx_settlement_allocations_treasury_transaction_id').on(table.treasuryTransactionId).where(sql`${table.treasuryTransactionId} IS NOT NULL`),
+  idx_settlement_allocations_cheque_id: index('idx_settlement_allocations_cheque_id').on(table.chequeId).where(sql`${table.chequeId} IS NOT NULL`),
+  idx_settlement_allocations_created_by_id: index('idx_settlement_allocations_created_by_id').on(table.createdById).where(sql`${table.createdById} IS NOT NULL`),
+  uq_settlement_allocations_treasury_document: uniqueIndex('uq_settlement_allocations_treasury_document').on(table.treasuryTransactionId, table.documentId)
+    .where(sql`${table.isDeleted} = 0 AND ${table.treasuryTransactionId} IS NOT NULL`),
+  uq_settlement_allocations_cheque_document: uniqueIndex('uq_settlement_allocations_cheque_document').on(table.chequeId, table.documentId)
+    .where(sql`${table.isDeleted} = 0 AND ${table.chequeId} IS NOT NULL`),
+}));
+
 export const accountingSettings = pgTable('accounting_settings', {
   id: serial('id').primaryKey(),
   key: text('key').notNull().unique(),

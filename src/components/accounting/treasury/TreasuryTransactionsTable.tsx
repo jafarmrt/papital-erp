@@ -14,6 +14,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Unlink,
+  FileCheck2,
 } from 'lucide-react';
 import { formatPersianPrice, formatPersianDate, formatPersianNumber, formatPersianCode } from '../../../utils';
 import { isRialCurrency, rialDisplayOf } from '../../../lib/rialDisplay';
@@ -22,6 +23,7 @@ import { PAYMENT_METHOD_LABELS, treasuryMethodLabel, treasuryPartyTypeLabel, typ
 import type { BankAccount, TreasuryTransaction, FinancialAttachment } from '../../../types';
 import { personnelPurposeLabel } from '../../../lib/treasury/partyPurpose';
 import { canRelinkTreasuryRow } from '../../../lib/treasury/treasuryRelink';
+import { canAllocateTreasuryRow } from '../../../lib/treasury/settlementAllocation';
 
 interface TreasuryTransactionsTableProps {
   transactions: TreasuryTransaction[];
@@ -53,6 +55,8 @@ interface TreasuryTransactionsTableProps {
   onDetachDocument?: (tx: TreasuryTransaction) => void;
   /** v10.0.123 (TD-1122): انتقال دریافت یا پرداخت به سند فعال دیگر همان طرف حساب */
   onRelinkDocument?: (tx: TreasuryTransaction) => void;
+  /** v11 phase 6.1t (M11 / U2): «نشاندن روی فاکتورها» of a customer receipt or supplier payment */
+  onAllocateDocuments?: (tx: TreasuryTransaction) => void;
   /** v10.1.32 (D-16): ردیف‌های صورت‌هزینه تنخواه */
   onViewPettyCashLines?: (tx: TreasuryTransaction) => void;
 }
@@ -85,6 +89,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
   onVoidTransaction,
   onDetachDocument,
   onRelinkDocument,
+  onAllocateDocuments,
   onViewPettyCashLines,
 }) => {
   const rial = useMemo(() => rialDisplayOf(appCurrency), [appCurrency]);
@@ -338,6 +343,11 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                       <span className={isReceipt ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
                         {isReceipt ? '+' : '-'}{isRialCurrency(tx.currency) ? rial.number(tx.amount) : formatPersianPrice(tx.amount, String(tx.currency).trim())}
                       </span>
+                      {!isVoided && (tx.allocatedAmount ?? 0) > 0 && (
+                        <div className="font-sans text-[11px] font-bold text-emerald-700 dark:text-emerald-300 mt-0.5">
+                          روی فاکتورها: {rial.money(tx.allocatedAmount, tx.currency)}
+                        </div>
+                      )}
                     </td>
 
                     {/* Running balance (if single account filtered) */}
@@ -383,7 +393,21 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                               <Unlink size={14} />
                             </button>
                           ) : null}
-                          {onRelinkDocument && canRelinkTreasuryRow({
+                          {onAllocateDocuments && canAllocateTreasuryRow({
+                            type: tx.type, partyType: tx.partyType ?? tx.party_type, status: tx.status,
+                            reversalOfId: tx.reversalOfId ?? tx.reversal_of_id, payrollId: tx.payrollId ?? tx.payroll_id,
+                          }) ? (
+                            <button
+                              onClick={() => onAllocateDocuments(tx)}
+                              title="نشاندن روی فاکتورها"
+                              aria-label="نشاندن روی فاکتورها"
+                              className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg transition cursor-pointer"
+                            >
+                              <FileCheck2 size={14} />
+                            </button>
+                          ) : null}
+                          {/* a row with parts is changed from «نشاندن روی فاکتورها»; the server refuses the move (409) */}
+                          {onRelinkDocument && !((tx.allocatedAmount ?? 0) > 0) && canRelinkTreasuryRow({
                             type: tx.type, partyType: tx.partyType ?? tx.party_type, status: tx.status,
                             reversalOfId: tx.reversalOfId ?? tx.reversal_of_id, payrollId: tx.payrollId ?? tx.payroll_id,
                           }) ? (
