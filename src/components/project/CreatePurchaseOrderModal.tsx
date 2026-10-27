@@ -8,7 +8,7 @@ import { useSupplierSelectOptions } from '../../hooks/useEntitySelectors';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import { useHasAnyPermission } from '../../contexts/AuthContext';
 import {
-  DIRECT_ORDER_PERMISSIONS, draftOrderBody, projectRequisitionBody, supplierPickOptions, type ProjectOrderLine, type RequisitionPriority,
+  DIRECT_ORDER_PERMISSIONS, draftOrderBody, projectRequisitionBody, supplierPickOptions, type PartyRow, type ProjectOrderLine, type RequisitionPriority,
 } from '../../lib/projects/projectPurchaseOrder';
 import { RequisitionHeaderFields } from '../procurement/RequisitionHeaderFields';
 import { ProjectDirectOrderFields } from './ProjectDirectOrderFields';
@@ -59,8 +59,12 @@ export function CreatePurchaseOrderModal({
   const [title, setTitle] = useState(`کسری مواد پروژه ${project.project_code || project.title}`.trim());
   const [isSubmitting, setIsSubmitting] = useState(false);
   // v9.0.416 (TD-745، ت۸ ب): تأمین‌کننده با شناسه و انبار مقصد با کد، هر دو از فهرست
-  const { suppliers } = useSupplierSelectOptions();
+  const { suppliers, serverSearchUrl: supplierSearchUrl } = useSupplierSelectOptions();
   const supplierOptions = useMemo(() => supplierPickOptions(Array.isArray(suppliers) ? suppliers : []), [suppliers]);
+  // v11 phase 6.1ch (C13): a supplier chosen from the server's matches (the cut party list lacks it)
+  const [pickedSupplier, setPickedSupplier] = useState<PartyRow | null>(null);
+  const chosenSupplierOption = supplierOptions.find(o => o.value === supplierId)
+    ?? (pickedSupplier && String(pickedSupplier.id) === supplierId ? supplierPickOptions([pickedSupplier])[0] : undefined);
   const { data: warehouses = [] } = useWarehousesQuery();
   useEffect(() => {
     if (!targetWarehouse && warehouses.length > 0) setTargetWarehouse(warehouses[0].code);
@@ -159,7 +163,7 @@ export function CreatePurchaseOrderModal({
       return;
     }
 
-    const supplier = supplierOptions.find(o => o.value === supplierId)?.supplier;
+    const supplier = chosenSupplierOption?.supplier;
     if (mode === 'direct_document' && !supplier) {
       toast.error('تأمین‌کننده سفارش را از فهرست انتخاب کنید.');
       return;
@@ -312,7 +316,12 @@ export function CreatePurchaseOrderModal({
           ) : (
             <ProjectDirectOrderFields
               supplierId={supplierId}
-              onSupplierChange={setSupplierId}
+              onSupplierChange={(id, picked) => {
+                setSupplierId(id);
+                setPickedSupplier(picked && String(picked.id) === id ? picked : null);
+              }}
+              supplierSearchUrl={supplierSearchUrl}
+              supplierLabel={chosenSupplierOption?.supplier.name}
               supplierOptions={supplierOptions}
               warehouses={warehouses}
               targetWarehouse={targetWarehouse}

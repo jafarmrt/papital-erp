@@ -7,7 +7,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString, storageDateParam } from '../middleware/validate.js';
+import { validate, paramsIdSchema, numericIdString, pickListIdsString, storageDateParam } from '../middleware/validate.js';
 import { customerBulkImportSchema } from './importRows.schemas.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { BadRequestError, NotFoundError } from '../errors/customErrors.js';
@@ -16,6 +16,7 @@ import { CustomerService } from '../services/customer.service.js';
 import { getCustomerAccountCard } from '../services/customers/customerAccountCard.js';
 import { getCustomerSalesDocuments } from '../services/customers/customerDocuments.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { parsePickListIds } from '../lib/permissions/pickListCap.js';
 import { partyRowsForUser } from '../services/customers/partyBankInfoAccess.js';
 import { customerListConditions, listCustomerPicks } from '../services/customers/customerPickList.js';
 import { customerTagNames, setCustomerTags, tagsByCustomer } from '../services/customers/customerTags.service.js';
@@ -219,13 +220,15 @@ const customerPickListValidation = z.object({
     search: z.string().max(200).optional(),
     partyType: z.enum(['all', 'customer', 'supplier', 'both']).optional(),
     limit: z.union([z.string(), z.number()]).optional(),
+    // v11 phase 6.1ch (C13): the rows of chosen or stored parties a form's cut list lacks
+    ids: pickListIdsString.optional(),
   }).optional(),
 });
 
 // v9.0.137 (TD-887، تصمیم ت۱۰ الف): فهرست انتخاب طرف حساب‌ها برای فرم‌های بخش‌های دیگر؛ فهرست کامل بالا فقط با customers.view
 router.get('/customers/options', authorizePermission(...READ_PERMISSIONS.customerOptions), validate(customerPickListValidation), asyncHandler(async (req, res) => {
-  const query = req.query as { search?: string; partyType?: string; limit?: string };
-  res.json({ success: true, data: await listCustomerPicks(req.user, { search: query.search, partyType: query.partyType, limit: parsePickListLimit(query.limit) }) });
+  const { search, partyType, limit, ids } = req.query as { search?: string; partyType?: string; limit?: string; ids?: string };
+  res.json({ success: true, data: await listCustomerPicks(req.user, { search, partyType, limit: parsePickListLimit(limit), ids: parsePickListIds(ids) }) });
 }));
 
 // GET /api/customers/export-excel - Structured Excel export rows

@@ -4,6 +4,7 @@ import type { Customer, Personnel } from '../../types';
 import { ACCOUNTING_LIST_QUERY_OPTIONS, fetchAccountingList, type AccountingListQueryOptions } from './accountingQueryConfig';
 import toast from 'react-hot-toast';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { cappedPickListUrl, takePickList } from '../../lib/permissions/pickListCap';
 import { PERSONNEL_PICK_CAP_TOAST_ID, PERSONNEL_PICK_CAP_TOAST_MS, PERSONNEL_PICK_LIMIT, PERSONNEL_PICK_URL, takePersonnelPick } from '../../lib/personnel/personnelList';
 
 /**
@@ -17,7 +18,8 @@ const PERSONNEL_KEY = QUERY_KEYS.personnel.lookup({ scope: 'accounting-parties',
 export function useAccountingCustomersQuery({ enabled = true }: AccountingListQueryOptions = {}) {
   return useQuery<Customer[]>({
     queryKey: CUSTOMERS_KEY,
-    queryFn: ({ signal }) => fetchAccountingList<Customer>(PICK_LIST_URLS.customers, signal, 'customers'),
+    // v11 phase 6.1ch (C13): at most the cap; the pickers over a cut list also search on the server
+    queryFn: async ({ signal }) => takePickList(await fetchAccountingList<Customer>(cappedPickListUrl(PICK_LIST_URLS.customers), signal, 'customers')),
     ...ACCOUNTING_LIST_QUERY_OPTIONS,
     enabled,
   });

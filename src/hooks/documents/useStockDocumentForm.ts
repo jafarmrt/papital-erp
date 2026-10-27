@@ -16,6 +16,8 @@ import type { StockDocumentReferenceData } from './useStockDocumentReferenceData
 import { personnelById, returnRowsFromInvoice } from '../../lib/documents/stockDocumentParties';
 import { returnInvoiceLookupError, returnInvoiceLookupUrl, type ReturnInvoiceCandidate } from '../../lib/documents/returnInvoiceLookup';
 import { toPersianDigits } from '../../utils/persianNumber';
+import { isCutPickList } from '../../lib/permissions/pickListCap';
+import { fetchPickRows, useMissingPickRows, withPickRows } from '../queries/usePickListRows';
 
 interface ReturnInvoiceLine {
   item_id: number;
@@ -42,7 +44,7 @@ interface ReturnInvoiceDocument {
  */
 export function useStockDocumentForm(currentUser: User, refData: StockDocumentReferenceData) {
   const queryClient = useQueryClient();
-  const { warehouses, personnelList, projectsList, reservedItemsData, itemsList } = refData;
+  const { warehouses, personnelList, projectsList, reservedItemsData, itemsList, itemsReady } = refData;
 
   const [actionType, setActionType] = useState<'in' | 'out'>('in');
   const [docType, setDocType] = useState('receipt');
@@ -123,10 +125,14 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
         setBuyerName(doc.buyer_name || '');
         // v9.0.273 (TD-788، تصمیم ت۱۰ الف): ارز، نرخ و قیمت خالص هر واحد (پس از تخفیف ردیف، میانگین وزنی ردیف‌های یک کالا)
         // از فاکتور؛ همان تابعی که سرور با آن می‌سنجد. پیش‌تر فقط قیمت پیش از تخفیف کپی می‌شد و ارز صفحه (ریال) فرستاده می‌شد
+        // v11 phase 6.1ch (C13): the invoice's items the cut item list lacks are read by id, so their rows show their stock too
+        const returnedIds = doc.items.map(i => Number(i.item_id));
+        const unlisted = isCutPickList(itemsList) ? returnedIds.filter(id => !itemsList.some(it => Number(it.id) === id)) : [];
+        const fetched = unlisted.length > 0 ? await fetchPickRows<Item>(queryClient, 'items', unlisted).catch(() => []) : [];
         const newDocItems: DocItemRow[] = returnRowsFromInvoice(doc.items.map(i => ({
           itemId: Number(i.item_id), quantity: i.quantity, unitPrice: i.unit_price ?? 0, discount: i.discount ?? 0,
           name: i.name, code: i.code, unit: i.unit,
-        })), itemsList);
+        })), withPickRows(itemsList, fetched));
         setCurrency(doc.currency || 'IRR');
         setExchangeRate(doc.currency && doc.currency !== 'IRR' ? Number(doc.exchangeRate) || 0 : 0);
         setDocItems(newDocItems);
@@ -219,6 +225,11 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     );
   }, [selectedProjectId, allGlobalReservations]);
 
+  // v11 phase 6.1ch (C13): the selected project's reserved items the cut item list lacks, read by id, so «add the reserved
+  // items» finds them (with their stock) as it did on the whole list
+  const reservedItemRows = useMissingPickRows<Item>('items', itemsList, selectedProjectReservedItems.map(r => r.itemId), itemsReady);
+  const itemsWithReserved = useMemo(() => withPickRows(itemsList, reservedItemRows.rows), [itemsList, reservedItemRows.rows]);
+
   // Helper to calculate reservation metrics for any item
   const getItemReservationSummary = (it: Item) => itemReservationSummary(allGlobalReservations, it, selectedProjectId, location);
 
@@ -270,6 +281,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     allGlobalReservations,
     totalReservedItemsCount,
     selectedProjectReservedItems,
+    itemsWithReserved,
     getItemReservationSummary,
     totalSum,
     totalQuantitySum,

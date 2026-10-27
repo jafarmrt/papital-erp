@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import { QUERY_KEYS, customerKeys } from '../../lib/queryKeys';
 import { invalidateDomain, invalidatePreset } from '../../lib/queryInvalidation';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { cappedPickListUrl, takePickList } from '../../lib/permissions/pickListCap';
 import { customerAccountCardUrl } from '../../lib/customers/customerAccountCard';
 import { customerDocumentsUrl } from '../../lib/customers/customerDocuments';
 import type { AccountCardReport } from '../../lib/accounting/accountCard';
@@ -19,13 +20,16 @@ interface CustomersResponse {
   totalPages: number;
 }
 
-/** همه طرف حساب‌ها از فهرست انتخاب (فرم پروژه؛ بی یادداشت و نسخه رکورد، TD-887) */
+/**
+ * طرف حساب‌ها از فهرست انتخاب (فرم پروژه؛ بی یادداشت و نسخه رکورد، TD-887). v11 phase 6.1ch (C13): at most the cap; the
+ * pickers over a cut list also search on the server
+ */
 export function useCustomerOptionsQuery(options: { readOnEveryOpening?: boolean; enabled?: boolean } = {}) {
   return useQuery<Customer[]>({
     queryKey: QUERY_KEYS.customers.options({ all: true }),
     queryFn: async ({ signal }) => {
-      const res = await fetchJson(PICK_LIST_URLS.customers, { signal });
-      return Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+      const res = await fetchJson(cappedPickListUrl(PICK_LIST_URLS.customers), { signal });
+      return takePickList<Customer>(Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []));
     },
     staleTime: 60 * 1000,
     enabled: options.enabled ?? true,

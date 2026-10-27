@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, Briefcase, PhoneCall, Clock, Building2, TrendingUp, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -14,7 +14,10 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { CRMLeadDrawer } from '../components/crm/CRMLeadDrawer';
 import { CrmDateRangeBar } from '../components/crm/CrmDateRangeBar';
 import { useCrmDeepLink } from '../hooks/useCrmDeepLink';
-import { DOSSIER_PARTY_MISSING_TEXT, resolveDossierParty } from '../lib/crm/crmDeepLink';
+import { DOSSIER_PARTY_MISSING_TEXT } from '../lib/crm/crmDeepLink';
+import { useDossierPartyFinder } from '../hooks/crm/useDossierParty';
+import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
+import { pickListServerSearchUrl } from '../lib/permissions/pickListCap';
 import { boardCapNotice } from '../lib/crm/crmListPages';
 import { leadProformaState } from '../lib/crm/leadProformaState';
 import { canIssueLeadProforma } from '../lib/crm/leadProformaRule';
@@ -25,6 +28,8 @@ import { useCustomerTagsQuery } from '../hooks/queries/useCustomerTagQueries';
 import { useConvertLeadToCustomerMutation } from '../hooks/queries/useCustomerQueries';
 import { personnelNameOption, personnelServerSearchUrl } from '../lib/personnel/personnelList';
 
+const filterPartyOption = (c: { id: number; name: string }) => ({ value: String(c.id), label: c.name });
+
 export default function CRMPage({ user }: { user: any }) {
   const crm = useCRMData(user);
   const { data: tagOptions = [] } = useCustomerTagsQuery();
@@ -33,21 +38,36 @@ export default function CRMPage({ user }: { user: any }) {
   const [selectedCustomerDossier, setSelectedCustomerDossier] = useState<Customer | null>(null);
 
   // v10.2 package 7 (OBS-R2-24): the dossier of the file's own party, never a made-up party with id 0
+  // v11 phase 6.1ch (C13): a party the cut pick list lacks is read from the server (`useDossierPartyFinder`)
+  const findDossierParty = useDossierPartyFinder(crm.customersList as Customer[]);
   const handleOpenLeadDossier = (lead: CRMLead) => {
-    const party = resolveDossierParty(lead, crm.customersList as Customer[]);
-    if (party) setSelectedCustomerDossier(party);
-    else toast.error(DOSSIER_PARTY_MISSING_TEXT);
+    findDossierParty(lead).then(
+      (party) => {
+        if (party) setSelectedCustomerDossier(party);
+        else toast.error(DOSSIER_PARTY_MISSING_TEXT);
+      },
+      (err: unknown) => toast.error(errorMessageOf(err) || DOSSIER_PARTY_MISSING_TEXT),
+    );
   };
 
   // a party named by a link waits for the party pick list
   const [pendingPartyId, setPendingPartyId] = useState<number | null>(null);
+  const findPendingParty = useEffectEvent((partyId: number, isCancelled: () => boolean) => {
+    const done = (party: Customer | null) => {
+      if (isCancelled()) return;
+      setPendingPartyId(null);
+      if (party) setSelectedCustomerDossier(party);
+      else toast.error('طرف حساب این اقدام پیدا نشد.');
+    };
+    findDossierParty({ customerId: partyId }).then(done, () => done(null));
+  });
   useEffect(() => {
-    if (pendingPartyId === null || !crm.pickListsReady) return;
-    const party = resolveDossierParty({ customerId: pendingPartyId }, crm.customersList as Customer[]);
-    if (party) setSelectedCustomerDossier(party);
-    else toast.error('طرف حساب این اقدام پیدا نشد.');
-    setPendingPartyId(null);
-  }, [pendingPartyId, crm.pickListsReady, crm.customersList]);
+    if (pendingPartyId === null || !crm.pickListsReady) return undefined;
+    // a later link (or leaving the page) drops this one's answer
+    let cancelled = false;
+    findPendingParty(pendingPartyId, () => cancelled);
+    return () => { cancelled = true; };
+  }, [pendingPartyId, crm.pickListsReady]);
 
   useCrmDeepLink({
     openLead: (lead) => crm.openLeadDrawer(lead),
@@ -218,14 +238,19 @@ export default function CRMPage({ user }: { user: any }) {
                 options={(() => {
                   const list = Array.isArray(crm.customersList) ? crm.customersList : [];
                   // v9.0.15 (TD-429): مقدار گزینه شناسه طرف حساب است، نه نام
-                  return [{ value: '', label: 'همه مشتریان' }, ...list.map((c) => ({ value: String(c.id), label: c.name }))];
+                  return [{ value: '', label: 'همه مشتریان' }, ...list.map(filterPartyOption)];
                 })()}
+                // v11 phase 6.1ch (C13): a party list cut at the cap also searches on the server
+                serverSearchUrl={pickListServerSearchUrl(Array.isArray(crm.customersList) ? crm.customersList : [], PICK_LIST_URLS.customers)}
+                mapResultToOption={filterPartyOption}
               />
               {crm.filterCustomer && (
                 <button
                   onClick={() => {
-                    const party = crm.customersList.find((c) => String(c.id) === crm.filterCustomer);
-                    if (party) setSelectedCustomerDossier(party);
+                    findDossierParty({ customerId: Number(crm.filterCustomer) }).then(
+                      (party) => { if (party) setSelectedCustomerDossier(party); },
+                      (err: unknown) => toast.error(errorMessageOf(err) || DOSSIER_PARTY_MISSING_TEXT),
+                    );
                   }}
                   className="p-2 bg-blue-100 hover:bg-blue-200 text-blue-900 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0"
                   title="مشاهده پرونده جامع این مشتری"

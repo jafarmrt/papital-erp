@@ -16,7 +16,8 @@ import {
 } from './projectFormHelpers';
 import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 import { useCustomerOptionsQuery } from '../../hooks/queries/useCustomerQueries';
-import { useProjectItemOptions } from '../../hooks/queries/useProjectWorkspaceQueries';
+import { useProjectFormItemOptions } from '../../hooks/queries/useProjectWorkspaceQueries';
+import { useMissingPickRows, withPickRows } from '../../hooks/queries/usePickListRows';
 import { useSettingsQuery, type SettingItem } from '../../hooks/queries/useSettingsQueries';
 import { managerUserIdsOf } from '../../lib/projects/projectManagers';
 
@@ -45,7 +46,7 @@ export function useProjectForm({
   // 10.3 (ARCH review finding 3, part 16): the pick lists and the presets read through the shared cache, again on each
   // opening; until this opening's answer the lists the page passed in, and the default presets
   const customersRead = useOpeningRead(useCustomerOptionsQuery({ readOnEveryOpening: true, enabled: isOpen }), isOpen);
-  const itemsRead = useOpeningRead(useProjectItemOptions(isOpen, { readOnEveryOpening: true }), isOpen);
+  const itemsRead = useOpeningRead(useProjectFormItemOptions(isOpen), isOpen);
   const settingsRead = useOpeningRead(useSettingsQuery({ readOnEveryOpening: true, enabled: isOpen }), isOpen);
   const [productsList, setProductsList] = useState<ProductRow[]>([]);
   const workflowPresets = workflowPresetsOf(settingsRead.data);
@@ -57,8 +58,21 @@ export function useProjectForm({
   const availablePresets = workflowPresets.filter(
     p => !p.isArchived && p.id !== 'custom' && !p.title?.includes('سفارشی') && p.id !== 'tile_transfer' && p.id !== 'general_assembly'
   );
-  const activeCustomersList: Customer[] = customersRead.data?.length ? customersRead.data : customersList;
-  const activeItemsList: Item[] = itemsRead.data?.length ? itemsRead.data : itemsList;
+  const listedCustomers: Customer[] = customersRead.data?.length ? customersRead.data : customersList;
+  const listedItems: Item[] = itemsRead.data?.length ? itemsRead.data : itemsList;
+  // v11 phase 6.1ch (C13): the lists hold at most the cap. A party or item chosen from the server's matches is kept here,
+  // and the stored customer of an edited project is read by id (its stored name stands in until then), so the saved
+  // customer name never goes empty for a party beyond the cap
+  const [pickedCustomers, setPickedCustomers] = useState<Customer[]>([]);
+  const [pickedItems, setPickedItems] = useState<Item[]>([]);
+  const storedCustomerId = Number(projectToEdit?.customer_id) || null;
+  const storedCustomer = useMissingPickRows<Customer>('customers', listedCustomers, [storedCustomerId], isOpen && customersRead.data !== undefined);
+  const storedCustomerName = String(projectToEdit?.customer_name ?? '').trim();
+  const storedCustomerStub: Customer[] = storedCustomerId && storedCustomerName
+    ? [{ id: storedCustomerId, name: storedCustomerName } as Customer]
+    : [];
+  const activeCustomersList = withPickRows(listedCustomers, [...pickedCustomers, ...storedCustomer.rows, ...storedCustomerStub]);
+  const activeItemsList = withPickRows(listedItems, pickedItems);
 
   const getOptionalStageNames = () => {
     return getOptionalStageNamesForPreset(preset, availablePresets);
@@ -76,6 +90,8 @@ export function useProjectForm({
 
   useEffect(() => {
     if (isOpen) {
+      setPickedCustomers([]);
+      setPickedItems([]);
       if (projectToEdit) {
         setProjectCode(projectToEdit.project_code || '');
         setTitle(projectToEdit.title || '');
@@ -131,7 +147,9 @@ export function useProjectForm({
     setProductsList(prev => [...prev, createInitialProductRow()]);
   };
 
-  const handleUpdateProductRow = (index: number, field: string, value: any) => {
+  /** `picked` is the item's row when it came from the server's matches (a list cut at the cap lacks it) */
+  const handleUpdateProductRow = (index: number, field: string, value: any, picked?: Item) => {
+    if (field === 'item_id' && picked && Number(picked.id) === Number(value)) setPickedItems(prev => withPickRows(prev, [picked]));
     setProductsList(prev => {
       // Prevent selecting the same item multiple times in different rows
       if (field === 'item_id' && value) {
@@ -145,7 +163,7 @@ export function useProjectForm({
       const copy = [...prev];
       const item = { ...copy[index], [field]: value };
       if (field === 'item_id') {
-        const found = activeItemsList.find(i => i.id === Number(value));
+        const found = activeItemsList.find(i => i.id === Number(value)) ?? (picked && Number(picked.id) === Number(value) ? picked : undefined);
         item.item_id = found?.id || null;
         item.item_code = found?.code || '';
         item.item_name = found?.name || '';
@@ -194,10 +212,12 @@ export function useProjectForm({
     });
   };
 
-  const handleCustomerSelect = (custId: number | null) => {
+  /** `picked` is the party's row when it came from the server's matches */
+  const handleCustomerSelect = (custId: number | null, picked?: Customer) => {
     setSelectedCustomerId(custId);
+    if (custId && picked && Number(picked.id) === custId) setPickedCustomers(prev => withPickRows(prev, [picked]));
     if (custId) {
-      const found = activeCustomersList.find(c => c.id === custId);
+      const found = activeCustomersList.find(c => c.id === custId) ?? (picked && Number(picked.id) === custId ? picked : undefined);
       if (found && !title) setTitle(`سفارش تولید - ${found.name}`);
     }
   };

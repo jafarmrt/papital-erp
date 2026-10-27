@@ -11166,6 +11166,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v11 phase 6.3p (U8, C12, U6, U17): one search rule, global search sections, workflow task notices, a proforma from any open lead
   const { runWorkflowPurchaseV11Tests } = await import('../regression/workflowPurchaseV11Tests.js');
   results.push(...await runWorkflowPurchaseV11Tests(shouldRun));
+  // v11 phase 6.1ch (C13): pick lists hold at most the cap; the rows a form lacks are read by id
+  const { runPickListCapV11Tests } = await import('../regression/pickListCapV11Tests.js');
+  results.push(...await runPickListCapV11Tests(shouldRun));
 
   return results;
 }

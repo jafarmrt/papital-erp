@@ -6,11 +6,21 @@ import { DecimalInput } from '../../common/DecimalInput';
 import { DialogLayer } from '../../common/DialogLayer';
 import { RecipientPersonnelField } from '../../workshop/RecipientPersonnelField';
 import type { BomAllocations } from './useBomAllocations';
+import type { AllocationItemOption } from '../../../hooks/queries/useAllocationQueries';
+import { PICK_LIST_URLS } from '../../../lib/permissions/pickLists';
+import { pickListServerSearchUrl } from '../../../lib/permissions/pickListCap';
 
 /**
  * «تخصیص مواد به پروژه»: a raw material from a warehouse to an open project, with who receives it. The form starts
  * afresh on each opening: the first open project and material, quantity 1 and the first active warehouse (TD-751).
  */
+function materialOption(item: AllocationItemOption): { value: number; label: string } {
+  return {
+    value: item.id,
+    label: `${item.name} (${formatPersianCode(item.code)}) - موجودی کل: ${formatPersianNumber(item.currentStock || item.current_stock || 0)} ${item.unit ?? ''}`,
+  };
+}
+
 export function AllocateMaterialDialog({ list, onClose }: { list: BomAllocations; onClose: () => void }) {
   const fieldId = useId();
   const { projectsList, itemsList, warehousesList, allocate } = list;
@@ -98,10 +108,10 @@ export function AllocateMaterialDialog({ list, onClose }: { list: BomAllocations
               id={`${fieldId}-selected-item-id`}
               value={selectedItemId}
               onChange={(value) => setSelectedItemId(value ? Number(value) : '')}
-              options={itemsList.map((item) => ({
-                value: item.id,
-                label: `${item.name} (${formatPersianCode(item.code)}) - موجودی کل: ${formatPersianNumber(item.currentStock || item.current_stock || 0)} ${item.unit ?? ''}`,
-              }))}
+              options={itemsList.map(materialOption)}
+              // v11 phase 6.1ch (C13): a material list cut at the cap also searches the raw materials on the server
+              serverSearchUrl={pickListServerSearchUrl(itemsList, `${PICK_LIST_URLS.items}?type=raw_material`)}
+              mapResultToOption={materialOption}
               placeholder="انتخاب ماده اولیه"
             />
           </div>

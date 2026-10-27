@@ -5,6 +5,7 @@ import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
 import { REORDER_DIRECT_DOCUMENT_HINT, REORDER_DIRECT_DOCUMENT_LABEL } from '../../lib/reorderAlerts/reorderPurchaseReceipt';
 import { type RequisitionPriority } from '../../lib/procurement/requisitionFields';
 import { RequisitionHeaderFields } from '../procurement/RequisitionHeaderFields';
+import { supplierNameOption } from '../../lib/documents/documentPartyKind';
 
 export type ReorderPriority = RequisitionPriority;
 
@@ -17,6 +18,8 @@ interface ReorderOrderFieldsProps {
   supplierName: string;
   onSupplierChange: (value: string) => void;
   supplierOptions: Array<{ value: string; label: string }>;
+  /** v11 phase 6.1ch (C13): the server search of a party list cut at the cap (the option's value is the name) */
+  supplierSearchUrl?: string;
   warehouses: WarehouseItem[];
   warehouseCode: string;
   onWarehouseChange: (code: string) => void;
@@ -68,6 +71,9 @@ export function ReorderOrderFields(props: ReorderOrderFieldsProps) {
           onChange={props.onSupplierChange}
           placeholder="-- انتخاب یا جست‌وجوی طرف‌حساب --"
           options={props.supplierOptions}
+          serverSearchUrl={props.supplierSearchUrl}
+          mapResultToOption={supplierNameOption}
+          valueLabel={props.supplierName || undefined}
           className="w-full"
         />
       </div>

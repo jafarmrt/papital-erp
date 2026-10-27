@@ -7,6 +7,7 @@ import {
   normalizeGroupedDecimalString, toLatinDigits, type DecimalBoundIssue,
 } from '../lib/numericInput.js';
 import { FIELD_LABELS, issueFieldKey, persianIssueMessage } from '../lib/validationMessages.js';
+import { PICK_LIST_IDS_MAX, PICK_LIST_IDS_PATTERN } from '../lib/permissions/pickListCap.js';
 
 
 import { z } from 'zod';
@@ -118,6 +119,11 @@ export const withinPgInt = (v: string) => v.length <= 10 && Number(v) <= PG_INT_
 export const numericIdString = z.string().min(1, 'شناسه الزامی است')
   .regex(/^[1-9]\d*$/, 'شناسه باید عدد صحیح مثبت باشد')
   .refine(v => !/^\d+$/.test(v) || withinPgInt(v), 'شناسه بزرگ‌تر از حد مجاز است');
+
+/** v11 phase 6.1ch (C13): `?ids=` of a pick list, a comma list of up to `PICK_LIST_IDS_MAX` PostgreSQL integer ids */
+export const pickListIdsString = z.string()
+  .regex(PICK_LIST_IDS_PATTERN, `شناسه‌ها باید عدد صحیح مثبت و جداشده با ویرگول باشند (حداکثر ${PICK_LIST_IDS_MAX.toLocaleString('fa-IR')})`)
+  .refine(v => v.split(',').every(withinPgInt), 'شناسه بزرگ‌تر از حد مجاز است');
 
 export const paramsIdSchema = z.object({
   params: z.object({

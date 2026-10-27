@@ -33,7 +33,7 @@ export interface OrderSupplier {
   name: string;
 }
 
-interface PartyRow {
+export interface PartyRow {
   id?: number | null;
   name?: string | null;
   partyType?: string | null;

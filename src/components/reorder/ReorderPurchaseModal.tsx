@@ -6,6 +6,8 @@ import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import type { ReorderModalItem } from '../../lib/reorderAlerts/reorderItems';
 import { supplierNameOptions } from '../../lib/documents/documentPartyKind';
 import { useReorderSuppliersQuery } from '../../hooks/reorderAlerts/useReorderAlertsQueries';
+import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { pickListServerSearchUrl } from '../../lib/permissions/pickListCap';
 import { useReorderPurchaseSubmit, type ReorderPurchaseVariables } from '../../hooks/reorderAlerts/useReorderAlertsMutations';
 import {
   REORDER_DIRECT_RECEIPT_CHOICE, REORDER_DIRECT_RECEIPT_PERMISSION, REORDER_REQUISITION_CHOICE, receiptNeedsDonatedConfirmation,
@@ -79,6 +81,8 @@ export function ReorderPurchaseModal({
 
   // v10.0.98 (TD-1194): فقط تأمین‌کننده یا «هر دو»
   const supplierOptions = useMemo(() => supplierNameOptions(suppliers), [suppliers]);
+  // v11 phase 6.1ch (C13): a party list cut at the cap also searches on the server
+  const supplierSearchUrl = pickListServerSearchUrl(suppliers, `${PICK_LIST_URLS.customers}?partyType=supplier`);
 
   if (!isOpen) return null;
 
@@ -277,6 +281,7 @@ export function ReorderPurchaseModal({
             supplierName={supplierName}
             onSupplierChange={setSupplierName}
             supplierOptions={supplierOptions}
+            supplierSearchUrl={supplierSearchUrl}
             warehouses={warehouses}
             warehouseCode={warehouseCode}
             onWarehouseChange={setTargetWarehouse}

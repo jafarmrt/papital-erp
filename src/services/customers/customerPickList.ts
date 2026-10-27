@@ -1,4 +1,4 @@
-import { and, asc, eq, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { customers } from '../../db/schema.js';
 import { customerHasTagCondition } from './customerTags.service.js';
@@ -52,6 +52,8 @@ export interface PickListQuery {
   partyType?: string;
   /** بی سقف وقتی نیامده یا صفر است */
   limit?: number;
+  /** v11 phase 6.1ch (C13): only these parties (`?ids=`), the chosen or stored ones a form's cut list lacks */
+  ids?: number[];
 }
 
 export async function listCustomerPicks(user: { role?: string } | undefined, query: PickListQuery): Promise<CustomerPick[]> {
@@ -71,7 +73,7 @@ export async function listCustomerPicks(user: { role?: string } | undefined, que
     ...(withBankInfo ? { bankInfo: customers.bankInfo } : {}),
   };
   const base = orm.select(columns).from(customers)
-    .where(customerListConditions(query.search, query.partyType))
+    .where(and(customerListConditions(query.search, query.partyType), query.ids ? inArray(customers.id, query.ids) : undefined))
     .orderBy(asc(customers.name), asc(customers.id))
     .$dynamic();
   const rows = query.limit && query.limit > 0 ? await base.limit(query.limit) : await base;

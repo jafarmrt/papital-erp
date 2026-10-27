@@ -10,6 +10,8 @@ import { useVoucherDetailLoader } from '../../hooks/accounting/useVoucherQueries
 import type { Account, Customer, Personnel, BankAccount, JournalVoucher } from '../../types';
 import { DialogLayer } from '../common/DialogLayer';
 import { personnelServerSearchUrl } from '../../lib/personnel/personnelList';
+import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { pickListServerSearchUrl } from '../../lib/permissions/pickListCap';
 
 interface AccountExplorerTabProps {
   accounts: Account[];
@@ -23,6 +25,11 @@ interface AccountExplorerTabProps {
 type VoucherItemRow = ExplorerLedgerRow;
 
 const explorerPersonnelOption = (p: Personnel) => ({ value: String(p.id), label: `${p.fullName} (${p.jobTitle || 'پرسنل'})` });
+const explorerCustomerOption = (c: Customer) => ({ value: String(c.id), label: `${c.name} ${c.city ? `(${c.city})` : ''}` });
+const explorerSupplierOption = (c: Customer) => ({
+  value: String(c.id),
+  label: `${c.name} ${c.city ? `(${c.city})` : ''} ${c.supplierCategory ? `[${c.supplierCategory}]` : ''}`,
+});
 
 export function AccountExplorerTab({
   accounts = [],
@@ -266,10 +273,10 @@ export function AccountExplorerTab({
                   onChange={(val) => setSelectedDetailedEntityId(val)}
                   className="w-64"
                   placeholder="جست‌وجو یا انتخاب مشتری..."
-                  options={((customerEntities.length > 0 ? customerEntities : customers)).map((c) => ({
-                    value: String(c.id),
-                    label: `${c.name} ${c.city ? `(${c.city})` : ''}`
-                  }))}
+                  options={((customerEntities.length > 0 ? customerEntities : customers)).map(explorerCustomerOption)}
+                  // v11 phase 6.1ch (C13): a party list cut at the cap also searches on the server
+                  serverSearchUrl={pickListServerSearchUrl(customers, `${PICK_LIST_URLS.customers}?partyType=customer`)}
+                  mapResultToOption={explorerCustomerOption}
                 />
               )}
 
@@ -279,10 +286,10 @@ export function AccountExplorerTab({
                   onChange={(val) => setSelectedDetailedEntityId(val)}
                   className="w-64"
                   placeholder="جست‌وجو یا انتخاب تامین‌کننده..."
-                  options={((supplierEntities.length > 0 ? supplierEntities : customers)).map((c) => ({
-                    value: String(c.id),
-                    label: `${c.name} ${c.city ? `(${c.city})` : ''} ${c.supplierCategory ? `[${c.supplierCategory}]` : ''}`
-                  }))}
+                  options={((supplierEntities.length > 0 ? supplierEntities : customers)).map(explorerSupplierOption)}
+                  // v11 phase 6.1ch (C13): a party list cut at the cap also searches on the server
+                  serverSearchUrl={pickListServerSearchUrl(customers, `${PICK_LIST_URLS.customers}?partyType=supplier`)}
+                  mapResultToOption={explorerSupplierOption}
                 />
               )}
 
