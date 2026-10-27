@@ -32,9 +32,9 @@ export function boardCapNotice(count: number): string | null {
 export const isOpenLead = (lead: Pick<CRMLead, 'status'>): boolean => (lead.status || 'active') === 'active';
 
 export function dashboardLeadCapNotice(openCount: number): string | null {
-  return openCount >= CRM_BOARD_LEAD_CAP
-    ? `تقویم فقط سررسید ${toPersianDigits(CRM_BOARD_LEAD_CAP)} پرونده فروش باز را نشان می‌دهد؛ برای دیدن همه، جدول پرونده‌های فروش را باز کنید.`
-    : null;
+  if (openCount < CRM_BOARD_LEAD_CAP) return null;
+  const cap = toPersianDigits(CRM_BOARD_LEAD_CAP);
+  return `تقویم فقط سررسید ${cap} پرونده فروش باز را نشان می‌دهد؛ برای دیدن همه، جدول پرونده‌های فروش را باز کنید.`;
 }
 
 export interface CrmPage<T> {

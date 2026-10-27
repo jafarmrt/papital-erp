@@ -17,6 +17,9 @@ import { brief, codeOf, ok } from './receiptsOnInvoicesV11Tests.js';
  * each case is red on v11.4.0.
  */
 
+/** the activity a final invoice writes on its lead */
+const SOLD_NOTE_TITLE = 'فروش موفق با فاکتور قطعی';
+
 const leadOf = async (id: number) => (await orm.select().from(crmLeads).where(eq(crmLeads.id, id)))[0];
 const historyOf = (id: number) => orm.select().from(crmLeadStageHistory).where(eq(crmLeadStageHistory.leadId, id)).orderBy(crmLeadStageHistory.id);
 
@@ -86,8 +89,8 @@ export async function runSalesCrmV11Tests(shouldRun: ShouldRun): Promise<TestCas
       const won = await leadOf(lead.id);
       if (won.stage !== 'won' || won.status !== 'won') problems.push(`after the final invoice the lead is ${won.stage}/${won.status}, expected won/won`);
       if (!(await historyOf(lead.id)).some(h => h.fromStage === 'proposal' && h.toStage === 'won')) problems.push('no stage history row proposal → won');
-      const notes = await orm.select().from(crmActivities).where(and(eq(crmActivities.leadId, lead.id), eq(crmActivities.title, 'فروش موفق با فاکتور قطعی')));
-      if (notes.length !== 1) problems.push(`expected one «فروش موفق با فاکتور قطعی» activity, got ${notes.length}`);
+      const notes = await orm.select().from(crmActivities).where(and(eq(crmActivities.leadId, lead.id), eq(crmActivities.title, SOLD_NOTE_TITLE)));
+      if (notes.length !== 1) problems.push(`expected one sold-by-invoice activity, got ${notes.length}`);
       const bell = await orm.select().from(notifications).where(eq(notifications.link, `/crm?leadId=${lead.id}`)).orderBy(desc(notifications.id));
       if (bell.length === 0) problems.push('no won notice in the bell of the crm.manage holders');
 
