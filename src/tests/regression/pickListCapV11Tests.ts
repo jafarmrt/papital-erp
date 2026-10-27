@@ -69,6 +69,9 @@ export async function runPickListCapV11Tests(shouldRun: (id: string, ...extra: s
     if (!rowsOf(asCustomer.body).some(r => r.id === kindless.id)) wrong.push(`partyType=customer did not find the party without a kind (${asCustomer.status})`);
     const asSupplier = await get(`/api/customers/options?partyType=supplier&ids=${kindless.id}`);
     if (rowsOf(asSupplier.body).length !== 0) wrong.push('partyType=supplier answered the party without a kind');
+    const exported = await get('/api/customers/export-excel?partyType=customer');
+    const exportedIds = ((exported.body as { rows?: Array<Record<string, unknown>> }).rows ?? []).map(r => Number(r['شناسه']));
+    if (!exportedIds.includes(kindless.id)) wrong.push(`the customers export left out the party without a kind (${exported.status})`);
 
     // 3) items by id: only those, with their stock by warehouse
     const itemsByIds = await get(`/api/items/options?ids=${goods[0].id},${goods[1].id}`);
@@ -94,7 +97,7 @@ export async function runPickListCapV11Tests(shouldRun: (id: string, ...extra: s
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: `limit=1 cut the list; ids answered the 2 live parties of 3 asked, each once (no notes or version); a party without a kind was a customer, not a supplier and the 2 items with their stock; 7 malformed id lists were 400 on both routes; ${PICK_LIST_IDS_MAX} ids were accepted`,
+      details: `limit=1 cut the list; ids answered the 2 live parties of 3 asked, each once (no notes or version); a party without a kind was a customer (list and export), not a supplier and the 2 items with their stock; 7 malformed id lists were 400 on both routes; ${PICK_LIST_IDS_MAX} ids were accepted`,
     }));
   } catch (err) {
     results.push(makeTestCase({

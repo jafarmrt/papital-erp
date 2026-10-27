@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { sql, or, and, eq } from 'drizzle-orm';
+import { sql, and, eq } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { systemNowUtcIso } from '../lib/businessClock.js';
 import { customers } from '../db/schema.js';
@@ -235,19 +235,8 @@ router.get('/customers/options', authorizePermission(...READ_PERMISSIONS.custome
 // GET /api/customers/export-excel - Structured Excel export rows
 router.get('/customers/export-excel', authorizePermission(...READ_PERMISSIONS.customersExport), asyncHandler(async (req, res) => {
   const partyTypeFilter = (req.query.partyType || req.query.type) as string;
-  const conditionsList = [eq(customers.isDeleted, 0)];
-
-  if (partyTypeFilter && partyTypeFilter !== 'all') {
-    if (partyTypeFilter === 'supplier') {
-      conditionsList.push(or(eq(customers.partyType, 'supplier'), eq(customers.partyType, 'both')) as any);
-    } else if (partyTypeFilter === 'customer') {
-      conditionsList.push(or(eq(customers.partyType, 'customer'), eq(customers.partyType, 'both')) as any);
-    } else if (partyTypeFilter === 'both') {
-      conditionsList.push(eq(customers.partyType, 'both') as any);
-    }
-  }
-
-  const list = await orm.select().from(customers).where(and(...conditionsList)).orderBy(customers.id);
+  // v11 phase 6.1ch (C13, review): the list's own kind rule, so a party without a kind is exported with the customers
+  const list = await orm.select().from(customers).where(customerListConditions(undefined, partyTypeFilter)).orderBy(customers.id);
 
   const exportRows = list.map(c => {
     const pType = c.partyType === 'supplier' ? 'تامین‌کننده' : (c.partyType === 'both' ? 'هر دو' : 'مشتری');

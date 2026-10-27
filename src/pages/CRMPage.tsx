@@ -59,14 +59,19 @@ export default function CRMPage({ user }: { user: any }) {
   };
   const handleOpenLeadDossier = (lead: CRMLead) => openDossierOf(findDossierParty(lead), DOSSIER_PARTY_MISSING_TEXT);
 
-  // a party named by a link waits for the party pick list
+  // a party named by a link waits for the party pick list; the link counts as asked when it arrives, so a dossier the
+  // user opens or closes while it waits wins
   const [pendingPartyId, setPendingPartyId] = useState<number | null>(null);
+  const linkRequest = useRef(0);
+  const openLinkedParty = (partyId: number) => {
+    linkRequest.current = ++dossierRequest.current;
+    setPendingPartyId(partyId);
+  };
   const findPendingParty = useEffectEvent((partyId: number, isCancelled: () => boolean) => {
-    const request = ++dossierRequest.current;
     const done = (party: Customer | null) => {
       if (isCancelled()) return;
       setPendingPartyId(null);
-      if (request !== dossierRequest.current) return;
+      if (linkRequest.current !== dossierRequest.current) return;
       if (party) setSelectedCustomerDossier(party);
       else toast.error('طرف حساب این اقدام پیدا نشد.');
     };
@@ -82,7 +87,7 @@ export default function CRMPage({ user }: { user: any }) {
 
   useCrmDeepLink({
     openLead: (lead) => crm.openLeadDrawer(lead),
-    openParty: setPendingPartyId,
+    openParty: openLinkedParty,
     openActivities: () => crm.setActiveTab('activities'),
   });
 

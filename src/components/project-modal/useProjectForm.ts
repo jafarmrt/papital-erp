@@ -61,14 +61,15 @@ export function useProjectForm({
   const listedCustomers: Customer[] = customersRead.data?.length ? customersRead.data : customersList;
   const listedItems: Item[] = itemsRead.data?.length ? itemsRead.data : itemsList;
   // v11 phase 6.1ch (C13): the lists hold at most the cap. A party or item chosen from the server's matches is kept here,
-  // and the stored customer of an edited project is read by id (its stored name stands in while that read runs or if it
-  // fails), so the saved customer name never goes empty for a party beyond the cap
+  // and the stored customer of an edited project is read by id (its stored name stands in until this opening's list and
+  // that read answer, or if the read fails), so the saved customer name never goes empty for a party beyond the cap
   const [pickedCustomers, setPickedCustomers] = useState<Customer[]>([]);
   const [pickedItems, setPickedItems] = useState<Item[]>([]);
   const storedCustomerId = Number(projectToEdit?.customer_id) || null;
   const storedCustomer = useMissingPickRows<Customer>('customers', listedCustomers, [storedCustomerId], isOpen && customersRead.data !== undefined);
   const storedCustomerName = String(projectToEdit?.customer_name ?? '').trim();
-  const storedCustomerStub: Customer[] = storedCustomerId && storedCustomerName && (storedCustomer.loading || storedCustomer.failed)
+  const storedCustomerPending = customersRead.data === undefined || storedCustomer.loading || storedCustomer.failed;
+  const storedCustomerStub: Customer[] = storedCustomerId && storedCustomerName && storedCustomerPending
     ? [{ id: storedCustomerId, name: storedCustomerName } as Customer]
     : [];
   const activeCustomersList = withPickRows(listedCustomers, [...pickedCustomers, ...storedCustomer.rows, ...storedCustomerStub]);
