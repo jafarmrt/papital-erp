@@ -174,7 +174,7 @@ describe('D-04 the item ↔ shop product links panel', () => {
   });
 
   it('#322 note 2: a refresh that would close most links asks with the counts and is sent again with confirmClose only once confirmed', async () => {
-    const asked = new ApiError('بسیاری بسته می‌شود', 'WC_MASS_CLOSE_CONFIRM', 409, { closedCount: 8, liveCount: 10 });
+    const asked = new ApiError('most links would close', 'WC_MASS_CLOSE_CONFIRM', 409, { closedCount: 8, liveCount: 10 });
     const bodies: unknown[] = [];
     vi.mocked(fetchJson).mockImplementation(async (url: string, opts?: { body?: unknown }) => {
       if (url === '/woocommerce/catalog') return report;
