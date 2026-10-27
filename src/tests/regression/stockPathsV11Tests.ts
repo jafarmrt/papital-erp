@@ -105,7 +105,7 @@ export async function runStockPathsV11Tests(shouldRun: ShouldRun): Promise<TestC
       // the migration gives the key to a role holding documents.delete, and leaves the others alone
       const holder = await createTestRole({ permissions: ['documents.view', 'documents.delete'] });
       const reader = await createTestRole({ permissions: ['documents.view'] });
-      const migration = readFileSync('drizzle/0004_stock_document_void.sql', 'utf8');
+      const migration = readFileSync('drizzle/0005_stock_document_void.sql', 'utf8');
       await orm.execute(sql.raw(migration.split('\n').filter(line => !line.startsWith('--')).join('\n')));
       const permsOf = async (id: number) => ((await orm.select({ permissions: roles.permissions }).from(roles).where(eq(roles.id, id)))[0]?.permissions ?? []) as string[];
       if (!(await permsOf(holder.id)).includes('documents.void_stock')) problems.push(`the migration did not give documents.void_stock to a role with documents.delete: ${JSON.stringify(await permsOf(holder.id))}`);

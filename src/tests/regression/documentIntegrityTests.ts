@@ -201,7 +201,7 @@ async function productionReceiptProjectOnlyCase(h: Harness, wrong: string[]): Pr
 
   // 3) the project delivery still issues its production receipt
   const project = running;
-  const delivered = await h.post(`/api/projects/${project}/add-to-inventory`, { itemsToAdd: [{ itemId: product, quantity: 1, unitPrice: 200_000, location: f.wh }] });
+  const delivered = await h.post(`/api/projects/${project}/add-to-inventory`, { itemsToAdd: [{ itemId: product, quantity: 1, unitPrice: 200_000, location: f.wh }], productionCostReason: 'P8D: no project materials' });
   const [issued] = await h.q(`SELECT type, status FROM documents WHERE project_id = $1 AND is_deleted = 0`, [project]);
   if (delivered.status !== 200 || issued?.type !== 'production_receipt' || issued?.status !== 'final' || await f.stock(product) !== 1) {
     wrong.push(`the project delivery answered ${brief(delivered)} with document ${JSON.stringify(issued ?? null)} and stock ${await f.stock(product)}, expected 200, a final production receipt and 1`);

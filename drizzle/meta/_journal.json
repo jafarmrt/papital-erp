@@ -33,8 +33,15 @@
     {
       "idx": 4,
       "version": "7",
+      "when": 1796596800000,
+      "tag": "0004_production_receipt_costs",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
       "when": 1796606800000,
-      "tag": "0004_stock_document_void",
+      "tag": "0005_stock_document_void",
       "breakpoints": true
     }
   ]

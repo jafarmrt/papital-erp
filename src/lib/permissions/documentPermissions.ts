@@ -53,7 +53,7 @@ export const INVOICE_VOID_PERMISSION = 'documents.delete';
 /**
  * v11 phase 6.1j (S7, card t56-7): voiding a stock document, a receipt, production receipt, remittance, waste, transfer
  * or stock count, has its own key. Before, «حذف فاکتور» voided every type, so a sales user allowed to cancel invoices
- * could undo stock counts, transfers and receipts. Migration 0004 gave it to every role that held «حذف فاکتور».
+ * could undo stock counts, transfers and receipts. Migration 0005 gave it to every role that held «حذف فاکتور».
  */
 export const STOCK_DOCUMENT_VOID_PERMISSION = 'documents.void_stock';
 

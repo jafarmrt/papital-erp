@@ -175,7 +175,11 @@ export async function logProjectDelivery(
   tx: DbExecutor,
   actor: ProjectActor,
   project: Pick<ProjectRow, 'id' | 'projectCode'>,
-  delivery: { documentId: number | null; refNumber: string | null; addedCount: number; overDeliveries: unknown[]; overDeliveryReason: string },
+  delivery: {
+    documentId: number | null; refNumber: string | null; addedCount: number; overDeliveries: unknown[]; overDeliveryReason: string;
+    /** v11 phase 6.1ث: how the receipt was priced from the project's 1402, and the reason of a cost other than the real one */
+    cost?: { rule: string; wipBalance: string; wipCredit: string; reason: string };
+  },
 ): Promise<void> {
   const over = delivery.overDeliveries.length > 0;
   await logActivity({
@@ -184,11 +188,12 @@ export async function logProjectDelivery(
     action: 'UPDATE',
     entity: PROJECT_AUDIT_ENTITY,
     entityId: String(project.id),
-    description: `افزایش موجودی انبار بابت تحویل ${toPersianDigits(delivery.addedCount)} قلم محصول از پروژه ${project.projectCode}${delivery.refNumber ? ` با رسید تولید ${delivery.refNumber}` : ''}${over ? ` (تحویل بیش از برنامه با دلیل: ${delivery.overDeliveryReason})` : ''}`,
+    description: `افزایش موجودی انبار بابت تحویل ${toPersianDigits(delivery.addedCount)} قلم محصول از پروژه ${project.projectCode}${delivery.refNumber ? ` با رسید تولید ${delivery.refNumber}` : ''}${over ? ` (تحویل بیش از برنامه با دلیل: ${delivery.overDeliveryReason})` : ''}${delivery.cost?.reason ? ` (بهای تولید با دلیل: ${delivery.cost.reason})` : ''}`,
     details: {
       documentId: delivery.documentId,
       refNumber: delivery.refNumber,
       ...(over ? { overDeliveries: delivery.overDeliveries, overDeliveryReason: delivery.overDeliveryReason } : {}),
+      ...(delivery.cost ? { productionCost: delivery.cost } : {}),
     },
   });
 }

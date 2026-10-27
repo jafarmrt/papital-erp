@@ -1,16 +1,15 @@
 /**
- * v10.2.3 (TD-1290، بستهٔ ۳ نسخهٔ ۱۰.۲، یافتهٔ D2): بهای واحد پیشنهادی رسید تولید پروژه و مانده‌ای که پس از آن در «کالای در
- * جریان ساخت» (۱۴۰۲) پروژه می‌ماند، مشترک میان کارساز و زبانهٔ «ورود به انبار».
+ * v10.2.3 (TD-1290، بستهٔ ۳ نسخهٔ ۱۰.۲، یافتهٔ D2): گزارش بهای «ورود به انبار» پروژه (`GET /projects/:id/delivery-cost`) و نمای
+ * ماندهٔ «کالای در جریان ساخت» (۱۴۰۲) پروژه پیش و پس از یک ورود، مشترک میان زبانهٔ «ورود به انبار» و آزمون‌ها.
  *
- * رسید تولید پروژه ۱۴۰۲ همان پروژه را به مقدار × بهای واحد بستانکار می‌کند؛ بهای واردنشده میانگین موزون بهای جاری محصول است
- * (قاعدهٔ سرور بی‌تغییر). پیش‌تر کاربر عدد را دستی می‌نوشت و اگر با مواد پروژه نمی‌خواند، مانده‌ای در ۱۴۰۲ پروژه می‌ماند. اکنون
- * برای پروژهٔ تک‌محصولی بهای واحد = ماندهٔ ۱۴۰۲ پروژه ÷ مقدار باقی‌ماندهٔ برنامه (یا مقدار همین تحویل اگر بیشتر است) پیشنهاد
- * می‌شود، به چهار رقم اعشار مانند ستون بها؛ کاربر می‌تواند عوضش کند. ماندهٔ ۱۴۰۲ همهٔ سندهای پروژه است، پیش‌نویس هم
- * (`projectWipBalances`): تخصیص مواد و حوالهٔ پروژه منهای تحویل‌های قبلی. دستمزد مانند قبل در آن نمی‌آید.
- * پروژهٔ چندمحصولی پیشنهاد خودکار ندارد؛ مانده و هشدار نشان داده می‌شود.
+ * v11 phase 6.1ث (S2, decision ت۵۲-۳): the receipt's cost is the project's real cost, priced by the server with the rule
+ * of `planDeliveryCost` (`./deliveryCostPlan.ts`); the tab runs the same rule on this report to show each line's unit cost,
+ * what the receipt takes from 1402 and whether it will ask for a reason. Before, the tab suggested a cost and the server
+ * posted whatever was sent.
  */
 
 import { fin } from '../financialDecimal.js';
+import { deliveryLinesValue, planDeliveryCost, postedDeliveryCosts, type DeliveryCostReasonKind, type DeliveryCostRule } from './deliveryCostPlan.js';
 
 export interface DeliveryCostProduct {
   itemId: number;
@@ -30,51 +29,6 @@ export interface DeliveryCostReport {
   wipBalance: number | null;
   products: DeliveryCostProduct[];
 }
-
-/** رقم اعشار بهای واحد، همان مقیاس ستون `unit_price` */
-export const DELIVERY_UNIT_COST_SCALE = 4;
-
-/**
- * بهای واحد پیشنهادی یک محصول: ماندهٔ ۱۴۰۲ ÷ بیشینهٔ (مقدار باقی‌ماندهٔ برنامه، مقدار این تحویل)؛ بی ماندهٔ مثبت یا بی مقدار، null.
- * با مقدار باقی‌مانده، تحویل آخر برنامه ماندهٔ ۱۴۰۲ را می‌بندد و تحویل بیش از برنامه همهٔ مانده را می‌برد.
- */
-export function suggestedDeliveryUnitCost(wipBalance: unknown, plannedQty: unknown, deliveredQty: unknown, deliveryQty: unknown): number | null {
-  const wip = fin(Number(wipBalance) || 0);
-  if (!wip.isPositive()) return null;
-  const remaining = Math.max(0, fin(Number(plannedQty) || 0).subtract(Number(deliveredQty) || 0).toNumber());
-  const divisor = Math.max(remaining, Number(deliveryQty) > 0 ? Number(deliveryQty) : 0);
-  if (!(divisor > 0)) return null;
-  return wip.divide(divisor, DELIVERY_UNIT_COST_SCALE).toNumber();
-}
-
-export interface DeliveryLineCost {
-  quantity: unknown;
-  /** بهای واردشده یا پیشنهادی؛ صفر یا خالی یعنی میانگین موزون بهای جاری */
-  unitPrice: unknown;
-  weightedAverageCost: unknown;
-}
-
-/** آنچه این تحویل از ۱۴۰۲ پروژه برمی‌دارد: Σ مقدار × (بهای واحد، وگرنه میانگین موزون بها)، به ریال */
-export function deliveryWipCredit(lines: readonly DeliveryLineCost[]): { credit: number; withoutCost: number } {
-  let credit = fin(0);
-  let withoutCost = 0;
-  for (const line of lines) {
-    const qty = Number(line.quantity) || 0;
-    if (!(qty > 0)) continue;
-    const entered = Number(line.unitPrice) || 0;
-    const price = entered > 0 ? entered : Number(line.weightedAverageCost) || 0;
-    if (!(price > 0)) {
-      withoutCost += 1;
-      continue;
-    }
-    credit = credit.add(fin(qty).multiply(price));
-  }
-  return { credit: credit.round(DELIVERY_UNIT_COST_SCALE).toNumber(), withoutCost };
-}
-
-/** ماندهٔ ۱۴۰۲ پروژه پس از این تحویل؛ منفی یعنی بیش از مواد پروژه بستانکار می‌شود */
-export const wipAfterDelivery = (wipBalance: unknown, credit: unknown): number =>
-  fin(Number(wipBalance) || 0).subtract(Number(credit) || 0).round(DELIVERY_UNIT_COST_SCALE).toNumber();
 
 const numberOrNull = (v: unknown): number | null => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
 
@@ -104,100 +58,53 @@ export function deliveryCostReportOf(raw: unknown): DeliveryCostReport | null {
   };
 }
 
-/**
- * بهای واحد پیشنهادی یک ردیف «ورود به انبار»: فقط برای پروژهٔ تک‌محصولی، خوانندهٔ مجاز به دیدن بها و همان محصول برنامه؛
- * وگرنه null و ردیف مانند پیش خالی می‌ماند (میانگین موزون بها).
- */
-export function projectDeliverySuggestion(report: DeliveryCostReport | null | undefined, itemId: unknown, deliveryQty: unknown): number | null {
-  if (!report || !report.costVisible || report.products.length !== 1) return null;
-  const [product] = report.products;
-  if (product.itemId !== Number(itemId)) return null;
-  return suggestedDeliveryUnitCost(report.wipBalance, product.plannedQty, product.deliveredQty, deliveryQty);
-}
 
 export interface DeliveryOutlookLine {
   itemId: number;
   quantity: number;
-  /** بهای واردشده یا پیشنهادی؛ null یا صفر یعنی میانگین موزون بهای جاری */
-  unitPrice: number | null;
+  /** the cost the user typed; null or zero is none */
+  typedUnitCost: number | null;
 }
 
 export interface DeliveryCostOutlook {
-  wipBalance: number;
-  /** آنچه این تحویل از ۱۴۰۲ پروژه برمی‌دارد */
-  credit: number;
-  /** ماندهٔ ۱۴۰۲ پس از این تحویل */
-  remaining: number;
-  /** ردیف‌هایی که نه بها دارند نه میانگین موزون بها (کارساز نمی‌پذیرد) */
-  withoutCost: number;
-  /** با این تحویل همهٔ برنامهٔ پروژه تحویل شده است */
-  completesPlan: boolean;
+  rule: DeliveryCostRule;
   multiProduct: boolean;
+  /** with this receipt every product of the plan is delivered */
+  completesPlan: boolean;
+  /** why the server will ask for a reason, or null */
+  reasonNeeded: DeliveryCostReasonKind | null;
+  wipBalance: number;
+  /** what this receipt takes from the project's 1402 */
+  credit: number;
+  /** the project's 1402 after this receipt */
+  remaining: number;
+  /** the unit cost the receipt computes for each line, the line order kept */
+  unitCosts: number[];
+  /** lines that would enter without any cost (none typed and no weighted average cost) */
+  withoutCost: number;
+  /** with the reason, what goes to «اختلاف بهای تولید»: the lines at their typed costs less `credit` */
+  variance: number;
 }
 
-/** نمای ماندهٔ ۱۴۰۲ پیش و پس از این تحویل؛ بی مجوز بها null */
+/** the 1402 outlook of a receipt with these lines; null without the cost figures */
 export function deliveryCostOutlook(report: DeliveryCostReport | null | undefined, lines: readonly DeliveryOutlookLine[]): DeliveryCostOutlook | null {
   if (!report || !report.costVisible || report.wipBalance === null) return null;
   const byId = new Map(report.products.map(p => [p.itemId, p]));
-  const { credit, withoutCost } = deliveryWipCredit(lines.map(l => ({
-    quantity: l.quantity, unitPrice: l.unitPrice, weightedAverageCost: byId.get(l.itemId)?.weightedAverageCost ?? 0,
-  })));
-  const delivering = new Map<number, number>();
-  for (const l of lines) {
-    if (Number(l.quantity) > 0) delivering.set(l.itemId, fin(delivering.get(l.itemId) ?? 0).add(l.quantity).toNumber());
-  }
-  const completesPlan = report.products.length > 0
-    && report.products.every(p => fin(p.deliveredQty).add(delivering.get(p.itemId) ?? 0).toNumber() >= p.plannedQty);
+  const planLines = lines.map(l => ({
+    itemId: l.itemId, quantity: Number(l.quantity) > 0 ? l.quantity : 0, typedUnitCost: l.typedUnitCost, weightedAverageCost: byId.get(l.itemId)?.weightedAverageCost ?? 0,
+  }));
+  const plan = planDeliveryCost(report.wipBalance, report.products.map(p => ({ itemId: p.itemId, plannedQty: p.plannedQty, deliveredQty: p.deliveredQty })), planLines);
+  const posted = postedDeliveryCosts(plan, planLines, true);
   return {
-    wipBalance: report.wipBalance,
-    credit,
-    remaining: wipAfterDelivery(report.wipBalance, credit),
-    withoutCost,
-    completesPlan,
-    multiProduct: report.products.length > 1,
+    rule: plan.rule,
+    multiProduct: plan.multiProduct,
+    completesPlan: plan.completesPlan,
+    reasonNeeded: plan.reasonNeeded,
+    wipBalance: fin(plan.wipBalance).toNumber(),
+    credit: fin(plan.wipCredit).toNumber(),
+    remaining: fin(plan.wipBalance).subtract(plan.wipCredit).toNumber(),
+    unitCosts: plan.unitCosts.map(c => fin(c).toNumber()),
+    withoutCost: planLines.filter((l, i) => Number(l.quantity) > 0 && !fin(posted[i]).isPositive()).length,
+    variance: fin(deliveryLinesValue(planLines, posted)).subtract(plan.wipCredit).toNumber(),
   };
-}
-
-/**
- * v10.2.3 (TD-1290، بازبینی بستهٔ ۳): ماندهٔ ۱۴۰۲ پس از گرد کردن به ریال منفی می‌شود؛ پیشنهاد چهاررقمی (۲۰۰۰ ÷ ۳) ماندهٔ
- * −۰٫۰۰۰۱ می‌دهد که هشدار نمی‌خواهد
- */
-export const wipOverdrawn = (outlook: Pick<DeliveryCostOutlook, 'remaining'>): boolean => fin(outlook.remaining).round(0).isNegative();
-
-/**
- * ماندهٔ ۱۴۰۲ پس از گرد کردن به ریال بیش از صفر است. v10.2.30: گرد کردن نیم از صفر دور می‌شود، مثل سند حسابداری؛
- * `Math.round(-0.5)` صفر منفی بود و برداشت نیم ریال بیش از مانده هشدار نمی‌داد.
- */
-export const wipLeftOver = (outlook: Pick<DeliveryCostOutlook, 'remaining'>): boolean => fin(outlook.remaining).round(0).isPositive();
-
-export interface DeliveryPriceLine {
-  itemId: number;
-  quantity: number;
-  /** بهای واردشدهٔ کاربر؛ undefined یعنی خانه دست نخورده و پیشنهاد به کار می‌رود، صفر یعنی پاک‌شده (میانگین موزون بها) */
-  typedPrice: number | undefined;
-  /** پیشنهادی که خانه نشان می‌داد */
-  shownSuggestion: number | null;
-}
-
-export type DeliveryPriceCheck =
-  /** ماندهٔ ۱۴۰۲ از زمان خواندن صفحه عوض شده و پیشنهاد خانه‌ای دست‌نخورده دیگر همان نیست؛ چیزی فرستاده نمی‌شود */
-  | { kind: 'suggestion_changed' }
-  /** بهای هر ردیف (undefined = میانگین موزون بها) و ماندهٔ ۱۴۰۲ پس از این ورود؛ `overdraws` یعنی مانده منفی می‌شود */
-  | { kind: 'post'; prices: Array<number | undefined>; outlook: DeliveryCostOutlook | null; overdraws: boolean };
-
-/**
- * v10.2.3 (TD-1290، بررسی بستهٔ ۳): بهای ردیف‌های یک ورود به انبار با گزارش تازهٔ ۱۴۰۲ درست پیش از فرستادن. پیشنهاد کهنه (کاربر
- * دیگری در این میان تحویل داده، یا کادر دلیل بیش از برنامه بدنهٔ پیشین را دوباره می‌فرستد) فرستاده نمی‌شود، و وقتی این ورود
- * بیش از ماندهٔ ۱۴۰۲ پروژه بستانکار می‌کند `overdraws` هشدار پیش از ثبت را می‌خواهد. قاعدهٔ ثبت کارساز همان است که بود.
- */
-export function checkDeliveryPrices(fresh: DeliveryCostReport, lines: readonly DeliveryPriceLine[], singleProduct: boolean): DeliveryPriceCheck {
-  const prices: Array<number | undefined> = [];
-  for (const line of lines) {
-    const suggestion = singleProduct ? projectDeliverySuggestion(fresh, line.itemId, line.quantity) : null;
-    if (line.typedPrice === undefined && suggestion !== line.shownSuggestion) return { kind: 'suggestion_changed' };
-    const price = line.typedPrice !== undefined ? line.typedPrice : suggestion;
-    prices.push(price && price > 0 ? Number(price) : undefined);
-  }
-  const outlook = deliveryCostOutlook(fresh, lines.map((l, i) => ({ itemId: l.itemId, quantity: l.quantity, unitPrice: prices[i] ?? null })));
-  return { kind: 'post', prices, outlook, overdraws: !!outlook && outlook.credit > 0 && wipOverdrawn(outlook) };
 }

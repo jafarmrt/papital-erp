@@ -397,6 +397,11 @@ export class AccountMappingService {
     return this.resolveAccount('wasteExpenseAccountCode', tx);
   }
 
+  /** v11 phase 6.1ث (S2، تصمیم ت۵۲-۳): اختلاف بهای رسید تولید پروژه با کالای در جریان ساخت آن */
+  static async getProductionVarianceAccount(tx?: DbExecutor): Promise<Account | null> {
+    return this.resolveAccount('productionVarianceAccountCode', tx);
+  }
+
   /**
    * v10.0.175 (TD-948): بدهکار حواله‌ای که پروژه ندارد (پیش‌فرض ۶۰۰۳ سربار ساخت و هزینه‌های کارگاه)
    */

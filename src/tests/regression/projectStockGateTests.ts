@@ -206,9 +206,9 @@ async function incomingWithoutCostCase(h: Harness, wrong: string[]): Promise<str
   if (projectRes.status !== 201) throw new Error(`setup: project create answered ${brief(projectRes)}`);
   const receiptsOf = async () => Number((await h.q(`SELECT count(*)::int AS n FROM documents WHERE project_id = $1 AND type = 'production_receipt' AND is_deleted = 0`, [projectId]))[0]?.n);
   expectRefused('a project delivery without a price of an item without cost',
-    await h.post(`/api/projects/${projectId}/add-to-inventory`, { itemsToAdd: [{ itemId: product, quantity: 5, location: f.wh }] }));
+    await h.post(`/api/projects/${projectId}/add-to-inventory`, { itemsToAdd: [{ itemId: product, quantity: 5, location: f.wh }], productionCostReason: 'P5: no project materials' }));
   if (await f.stock(product) !== 0 || await receiptsOf() !== 0) wrong.push(`the refused delivery left stock ${await f.stock(product)} and ${await receiptsOf()} production receipts`);
-  const pricedDelivery = await h.post(`/api/projects/${projectId}/add-to-inventory`, { itemsToAdd: [{ itemId: product, quantity: 5, unitPrice: 400_000, location: f.wh }] });
+  const pricedDelivery = await h.post(`/api/projects/${projectId}/add-to-inventory`, { itemsToAdd: [{ itemId: product, quantity: 5, unitPrice: 400_000, location: f.wh }], productionCostReason: 'P5: no project materials' });
   if (pricedDelivery.status !== 200 || await wacOf(h, product) !== 400_000) wrong.push(`a priced project delivery answered ${brief(pricedDelivery)} with WAC ${await wacOf(h, product)}, expected 200 and 400000`);
   return 'zero-cost entry of an item without cost refused on create, finalize, procurement delivery and project delivery; priced and donated lines pass';
 }
@@ -241,7 +241,7 @@ async function warehousePermissionCase(h: Harness, wrong: string[]): Promise<str
   const release = (allocationId: number, s: Awaited<ReturnType<Harness['sessionWith']>>) =>
     h.post(`/api/inventory/allocations/${allocationId}/release`, { reason: 'TD-923' }, s);
   const deliver = (s: Awaited<ReturnType<Harness['sessionWith']>>) =>
-    h.post(`/api/projects/${projectId}/add-to-inventory`, { itemsToAdd: [{ itemId: product, quantity: 5, unitPrice: 400_000, location: f.wh }] }, s);
+    h.post(`/api/projects/${projectId}/add-to-inventory`, { itemsToAdd: [{ itemId: product, quantity: 5, unitPrice: 400_000, location: f.wh }], productionCostReason: 'TD-923: the allocation was released' }, s);
   const expectForbidden = (label: string, res: { status: number; body?: unknown }) => {
     if (res.status !== 403) wrong.push(`${label} answered ${brief(res)}, expected 403`);
   };

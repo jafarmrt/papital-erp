@@ -27,8 +27,6 @@ const DELIVERY_TEXT = {
   overReason: 'مثال: مشتری ۲ عدد اضافه سفارش داد',
   cancel: 'انصراف',
   delivered: 'به انبار تحویل داده شد',
-  overdrawTitle: 'ماندهٔ کالای در جریان ساخت منفی می‌شود',
-  overdrawConfirm: 'ثبت',
 } as const;
 
 // Default codes of the account mapping (src/lib/accounting/accountMappingConcepts.ts)
@@ -38,7 +36,9 @@ const RECEIPT_QTY = 10;
 const RAW_UNIT_COST = 50_000;
 const ALLOCATE_QTY = 4;
 const PLANNED_QTY = 5;
+// v11 phase 6.1ث (decision ت۵۲-۳): the receipt costs the project's real cost, its 1402 over the plan: 4 × 50,000 ÷ 5
 const PRODUCT_UNIT_COST = 40_000;
+const OTHER_UNIT_COST = 45_000;
 
 interface Setup { raw: Json; product: Json; project: Json }
 
@@ -144,27 +144,19 @@ test('allocate raw material to a project and deliver its finished goods to stock
   const [rawStock] = await db('SELECT current_stock::text AS stock FROM items WHERE id = $1', [rawId]);
   expect(Number(rawStock.stock), 'raw material stock after allocation').toBe(RECEIPT_QTY - ALLOCATE_QTY);
 
-  // 2. Delivery above the plan without a reason is refused and the reason prompt opens; its credit
-  // (6 × 40,000) is above the project's 1402 balance (4 × 50,000), so the page asks before posting
+  // 2. Delivery above the plan without a reason is refused and the reason prompt opens
   await openDeliveryTab(page);
   const productCard = page.locator('div.flex', { hasText: String(setup.product.name) })
     .filter({ has: page.getByRole('button', { name: DELIVERY_TEXT.deliver, exact: true }) }).last();
   const [qtyInput, costInput] = [productCard.locator('input[inputmode=decimal]').nth(0), productCard.locator('input[inputmode=decimal]').nth(1)];
   await qtyInput.fill(String(PLANNED_QTY + 1));
-  await costInput.fill(String(PRODUCT_UNIT_COST));
-  const deliver = async (overdraws = false): Promise<{ status: number; body: Json }> => {
+  const deliver = async (): Promise<{ status: number; body: Json }> => {
     const posted = page.waitForResponse(r => r.url().endsWith(`/api/projects/${projectId}/add-to-inventory`) && r.request().method() === 'POST');
     await productCard.getByRole('button', { name: DELIVERY_TEXT.deliver, exact: true }).click();
-    if (overdraws) {
-      // TD-1290: a credit above the project's 1402 balance is confirmed before it is posted
-      const confirm = page.getByRole('dialog', { name: DELIVERY_TEXT.overdrawTitle });
-      await expect(confirm).toBeVisible();
-      await confirm.getByRole('button', { name: DELIVERY_TEXT.overdrawConfirm, exact: true }).click();
-    }
     const response = await posted;
     return { status: response.status(), body: await response.json() as Json };
   };
-  const refused = await deliver(true);
+  const refused = await deliver();
   expect(refused.status, 'over-delivery answer').toBe(422);
   expect(JSON.stringify(refused.body), 'over-delivery code').toContain('OVER_DELIVERY_REASON_REQUIRED');
   const prompt = page.locator('div', { has: page.getByPlaceholder(DELIVERY_TEXT.overReason) }).filter({ hasText: DELIVERY_TEXT.overTitle }).last();
@@ -173,8 +165,18 @@ test('allocate raw material to a project and deliver its finished goods to stock
   const [noReceipt] = await db(`SELECT count(*)::int AS n FROM documents WHERE project_id = $1 AND type = 'production_receipt'`, [projectId]);
   expect(noReceipt.n, 'refused delivery records no receipt').toBe(0);
 
-  // 3. Delivery of the planned quantity: a final production receipt with Kardex in rows and stock
+  // 3. A cost other than the real one is refused without a reason and the cost prompt opens
   await qtyInput.fill(String(PLANNED_QTY));
+  await costInput.fill(String(OTHER_UNIT_COST));
+  const costRefused = await deliver();
+  expect(costRefused.status, 'other cost answer').toBe(422);
+  expect(JSON.stringify(costRefused.body), 'other cost code').toContain('PRODUCTION_COST_REASON_REQUIRED');
+  const costPrompt = page.getByTestId('production-cost-prompt');
+  await expect(costPrompt).toBeVisible();
+  await costPrompt.getByRole('button', { name: DELIVERY_TEXT.cancel }).click();
+
+  // 4. Delivery of the planned quantity at the real cost (an empty cost): a final production receipt with Kardex in rows and stock
+  await costInput.fill('');
   const delivered = await deliver();
   expect(delivered.status, 'delivery answer').toBe(200);
   await expect(page.getByText(DELIVERY_TEXT.delivered)).toBeVisible();
@@ -194,7 +196,7 @@ test('allocate raw material to a project and deliver its finished goods to stock
   const [productStock] = await db('SELECT current_stock::text AS stock FROM items WHERE id = $1', [productId]);
   expect(Number(productStock.stock), 'product stock after delivery').toBe(PLANNED_QTY);
 
-  // 4. Delivery voucher: Dr finished goods / Cr work in progress with the project's detail
+  // 5. Delivery voucher: Dr finished goods / Cr work in progress with the project's detail, which the receipt closes
   const deliveryRows = await voucherRowsOf('source_document_id', receiptId);
   expectBalanced(deliveryRows);
   expect(netByAccount(deliveryRows), 'delivery voucher').toEqual({

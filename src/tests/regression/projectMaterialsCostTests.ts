@@ -148,17 +148,22 @@ async function deliveryCostCase(h: Harness, wrong: string[]): Promise<string> {
   const rem = await h.post('/api/documents', f.doc('remittance', 'final', [{ itemId: material, quantity: 3, unit_price: 0, location: f.wh }], { projectId: project }));
   if (rem.status !== 200) throw new Error(`setup: the project's remittance answered ${brief(rem)}`);
 
-  const { suggestedDeliveryUnitCost } = await import('../../lib/projects/deliveryCostSuggestion.js');
+  // v11 phase 6.1ث: the server prices the receipt with the same rule the tab reads the report with
+  const { planDeliveryCost } = await import('../../lib/projects/deliveryCostPlan.js');
+  const unitCostFor = (b: DeliveryCostBody, p: { plannedQty: number; deliveredQty: number } | undefined, quantity: number) => Number(planDeliveryCost(
+    b.wipBalance, [{ itemId: product, plannedQty: p?.plannedQty ?? 0, deliveredQty: p?.deliveredQty ?? 0 }],
+    [{ itemId: product, quantity, typedUnitCost: null, weightedAverageCost: 0 }],
+  ).unitCosts[0]);
   const first = await h.get(`/api/projects/${project}/delivery-cost`);
   const b1 = first.body as DeliveryCostBody;
   const p1 = b1.products?.find(p => Number(p.itemId) === product);
   if (first.status !== 200 || b1.costVisible !== true || b1.wipBalance !== 8_000 || p1?.plannedQty !== 10 || p1?.deliveredQty !== 0) {
     wrong.push(`before delivery the cost answered ${brief(first)}, expected the balance 8,000 (allocation 5,000 + remittance 3,000, drafts counted), planned 10, delivered 0`);
   }
-  const suggested = suggestedDeliveryUnitCost(b1.wipBalance, p1?.plannedQty, p1?.deliveredQty, 4);
-  if (suggested !== 800) wrong.push(`the suggested unit cost for 4 of 10 is ${suggested}, expected 800 (8,000 ÷ 10 still to deliver)`);
+  const suggested = unitCostFor(b1, p1, 4);
+  if (suggested !== 800) wrong.push(`the real unit cost for 4 of 10 is ${suggested}, expected 800 (8,000 ÷ 10 still to deliver)`);
 
-  // the delivery itself posts what the user sends, as before: 4 × 800 leaves 4,800 in the project's 1402
+  // a typed cost equal to the real one needs no reason: 4 × 800 leaves 4,800 in the project's 1402
   const delivered = await h.post(`/api/projects/${project}/add-to-inventory`, { itemsToAdd: [{ itemId: product, quantity: 4, unitPrice: 800, location: f.wh }] });
   if (delivered.status !== 200) throw new Error(`setup: the delivery answered ${brief(delivered)}`);
   const second = await h.get(`/api/projects/${project}/delivery-cost`);
@@ -167,7 +172,7 @@ async function deliveryCostCase(h: Harness, wrong: string[]): Promise<string> {
   if (b2.wipBalance !== 4_800 || p2?.deliveredQty !== 4 || p2?.weightedAverageCost !== 800) {
     wrong.push(`after delivering 4 at 800 the cost answered ${brief(second)}, expected the balance 4,800, delivered 4 and the product's cost 800`);
   }
-  if (suggestedDeliveryUnitCost(b2.wipBalance, p2?.plannedQty, p2?.deliveredQty, 6) !== 800) wrong.push('the suggestion for the last 6 is not 800, so the last delivery would not close the balance');
+  if (unitCostFor(b2, p2, 6) !== 800) wrong.push('the real unit cost of the last 6 is not 800, so the last delivery would not close the balance');
 
   // a project reader without an item cost key gets the quantities only
   const viewer = await h.sessionWith(['projects.view']);

@@ -27,6 +27,7 @@ import { logBomAllocation, logBomConsumption, logBomRelease } from './bomAllocat
 import { RECIPIENT_INVALID, RECIPIENT_INVALID_MESSAGE, RECIPIENT_TERMINATED_STATUS } from '../../lib/workshop/recipient.js';
 import { toAllocationRecord, type ProjectBomAllocationRecord } from './bomAllocationRecord.js';
 import { idempotentTransaction } from '../../middleware/idempotency.js';
+import { assertProjectWipStaysCovered } from '../accounting/projectDeliveredMaterials.js';
 export { toAllocationRecord, type ProjectBomAllocationRecord };
 export interface BomAllocationItemInput {
   itemId: number;
@@ -417,7 +418,6 @@ export class ProjectBomAllocationService {
       if (alloc.status !== 'allocated') {
         throw new ConflictError(`این تخصیص «${allocationStatusLabel(alloc.status)}» است و فقط تخصیص «${allocationStatusLabel('allocated')}» به انبار آزاد می‌شود.`, { status: alloc.status }, 'ALLOCATION_NOT_OPEN');
       }
-
       const qty = fin(alloc.quantity).toNumber();
       const loc = alloc.sourceLocation || 'main';
 
@@ -465,6 +465,9 @@ export class ProjectBomAllocationService {
           notes: `${reason} (تخصیص شماره ${alloc.id})`,
         });
       }
+
+      // v11 phase 6.1ث (decision ت۵۲-۳): the release takes out of the project's 1402 only what its receipts left there
+      await assertProjectWipStaysCovered(txEngine, alloc.projectId, 'allocation');
 
       // v9.0.452 (TD-918): the project's reservation this allocation deducted comes back to the project (rule of TD-237);
       // an allocation before v9.0.452 deducted none and restores nothing

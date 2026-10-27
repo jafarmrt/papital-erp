@@ -28,6 +28,8 @@ import { assertProjectDeletable } from './projects/projectDeleteGuard.js';
 import { setProjectManagers } from './projects/projectManagers.js';
 import { linkedCustomerName, resolveProjectCustomer } from './projects/projectCustomer.js';
 import { idempotentTransactionOn } from '../middleware/idempotency.js';
+import { priceProjectDelivery, recordProductionReceiptCost, type DeliveryLineInput } from './projects/projectDeliveryPricing.js';
+import { VoucherSyncService } from './accounting/voucherSync.service.js';
 
 export interface CreateProjectInput {
   title: string;
@@ -100,6 +102,8 @@ export interface AddProjectToInventoryInput {
   auditReq?: unknown;
   /** v8.0.72 (TD-327): دلیل تحویل بیش از مقدار برنامه‌ریزی‌شده؛ بی آن تحویل اضافه رد می‌شود */
   overDeliveryReason?: string;
+  /** v11 phase 6.1ث (decision ت۵۲-۳): the reason of a cost other than the project's real cost; without it such a delivery is 422 */
+  productionCostReason?: string;
 }
 
 export interface AddProjectToInventoryResult {
@@ -406,27 +410,20 @@ export class ProjectService {
       const overDeliveryReason = input.overDeliveryReason?.trim() || '';
 
       const projectLabel = proj.projectCode || `پروژه-${id}`;
-      const lines: Array<{ itemId: number; quantity: number; unitPrice: string; location: string }> = [];
+      const requested: DeliveryLineInput[] = [];
       const lineNotes: string[] = [];
 
       for (const [index, entry] of input.itemsToAdd.entries()) {
         // v9.0.381 (TD-741): ردیف بی کالا، با مقدار غیرمثبت یا بهای نامعتبر کل تحویل را با ۴۲۲ رد می‌کند؛ پیش‌تر بی‌صدا کنار
         // گذاشته می‌شد (پاسخ ۲۰۰ «با موفقیت افزوده شدند» با صفر قلم) و بهای نامعتبر به میانگین موزون برمی‌گشت
         const { itemId, qty, unitPrice } = deliveryLine(entry, index);
-        let effectiveUnitPrice: string;
-        if (unitPrice !== null) {
-          effectiveUnitPrice = unitPrice;
-        } else {
-          const [itemRow] = await tx.select({ weightedAverageCost: items.weightedAverageCost }).from(items).where(eq(items.id, itemId));
-          effectiveUnitPrice = itemRow?.weightedAverageCost ? itemRow.weightedAverageCost.toString() : '0';
-        }
-
-        lines.push({ itemId, quantity: qty, unitPrice: effectiveUnitPrice, location: entry.location || '' });
+        requested.push({ itemId, quantity: qty, typedUnitCost: unitPrice, location: entry.location || '' });
         if (entry.notes) lineNotes.push(entry.notes);
       }
 
-      const delivered = await deliveredProjectQuantities(tx, id, [...new Set(lines.map(l => l.itemId))]);
-      const overDeliveries = findOverDeliveries(planned, delivered, lines);
+      // v11 phase 6.1ث: every planned product's delivered quantity, since the plan is complete only when all of them are
+      const delivered = await deliveredProjectQuantities(tx, id, [...planned.keys()]);
+      const overDeliveries = findOverDeliveries(planned, delivered, requested);
       if (overDeliveries.length > 0 && !overDeliveryReason) {
         throw new AppError(
           `تحویل بیش از مقدار برنامه‌ریزی‌شده پروژه «${proj.projectCode}»: ${describeOverDeliveries(overDeliveries)}. برای ثبت، دلیل تحویل بیش از برنامه را وارد کنید.`,
@@ -434,6 +431,15 @@ export class ProjectService {
         );
       }
       if (overDeliveries.length > 0) lineNotes.push(`[تحویل بیش از برنامه: ${overDeliveryReason} — ${describeOverDeliveries(overDeliveries)}]`);
+
+      // v11 phase 6.1ث (S2, decision ت۵۲-۳): the receipt costs the project's real cost, its 1402 read under the project lock;
+      // before, the typed cost or the item's current weighted average cost was posted and 1402 was left over or overdrawn
+      const priced = await priceProjectDelivery(tx, {
+        projectId: id, projectLabel, planned, delivered, lines: requested,
+        reason: input.productionCostReason?.trim() || '',
+      });
+      const lines = priced.lines;
+      if (priced.reason) lineNotes.push(`[بهای تولید با دلیل: ${priced.reason}]`);
 
       let documentId: number | null = null;
       let refNumber: string | null = null;
@@ -450,12 +456,16 @@ export class ProjectService {
           notes: [`تحویل تولید پروژه ${projectLabel}`, ...lineNotes].join(' — '),
           items: lines,
           externalTx: tx,
+          // the voucher is built below, once the receipt's pricing is recorded
+          skipVoucherSync: true,
         }, {
           userId: input.userId,
           // TD-943: the receipt's CREATE row, with this transaction
           createdAudit: { actor: { req: input.auditReq, userId: input.userId, username: currentUser }, note: `با تحویل پروژه ${projectLabel}`, details: { projectCode: proj.projectCode } },
         });
         documentId = created.docId;
+        await recordProductionReceiptCost(tx, documentId, id, priced);
+        await VoucherSyncService.syncPurchaseInvoiceVoucher(documentId, { userId: input.userId, username: currentUser, strict: true }, tx);
         const [doc] = await tx.select({ refNumber: documents.refNumber }).from(documents).where(eq(documents.id, documentId));
         refNumber = doc?.refNumber ?? null;
       }
@@ -467,6 +477,7 @@ export class ProjectService {
 
       await logProjectDelivery(tx, { req: input.auditReq, userId: input.userId, username: currentUser }, proj, {
         documentId, refNumber, addedCount: lines.length, overDeliveries, overDeliveryReason,
+        cost: { rule: priced.plan.rule, wipBalance: priced.plan.wipBalance, wipCredit: priced.plan.wipCredit, reason: priced.reason },
       });
       return { addedCount: lines.length, projectCode: proj.projectCode, documentId, refNumber, overDeliveries };
     });
