@@ -207,3 +207,29 @@ describe('TD-710 the WooCommerce webhook secret is a password field', () => {
     expect(screen.getByText(/سفارش‌ها فقط با این کلید پردازش می‌شوند/)).toBeTruthy();
   });
 });
+
+// v11 phase 6.3p (U18): a holder of woocommerce.view alone (the sales template) no longer lands on the store keys and the
+// webhook secret; the technical sections show only to whoever may change or test them
+describe('U18 WooCommerce technical settings follow the keys that change them', () => {
+  const tabProps = (access: { connection: boolean; shopWarehouse: boolean; sync: boolean }) => ({
+    wcStoreUrl: '', setWcStoreUrl: noop, wcConsumerKey: '', setWcConsumerKey: noop, wcConsumerSecret: '', setWcConsumerSecret: noop,
+    wcWebhookSecret: '', setWcWebhookSecret: noop, wcShopWarehouse: '', setWcShopWarehouse: noop, warehouses: [],
+    handleSaveSettings: noop, isSaving: false, handleTestWcConnection: noop, isTestingWc: false, manualOrderId: '', setManualOrderId: noop,
+    isSyncingManualOrder: false, handleSyncManualOrder: noop, handleSyncAllStocks: noop, isSyncingAllStocks: false, access,
+  });
+
+  it('hides the store address, keys and webhook from a view-only user and says why', () => {
+    mockServer();
+    render(<WooCommerceTab {...tabProps({ connection: false, shopWarehouse: false, sync: false })} />, { wrapper });
+    expect(screen.queryByText(/Consumer Key/)).toBeNull();
+    expect(screen.queryByText(/HMAC SHA-256/)).toBeNull();
+    expect(screen.getByText(/تنظیمات فنی اتصال فروشگاه/)).toBeTruthy();
+  });
+
+  it('shows them to a holder of woocommerce.manage, with the Latin runs isolated', () => {
+    mockServer();
+    const { container } = render(<WooCommerceTab {...tabProps({ connection: false, shopWarehouse: false, sync: true })} />, { wrapper });
+    expect(screen.getAllByText(/Consumer Key/).length).toBeGreaterThan(0);
+    expect([...container.querySelectorAll('bdi')].map(b => b.textContent)).toContain('HMAC SHA-256');
+  });
+});

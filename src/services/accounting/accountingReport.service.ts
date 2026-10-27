@@ -1,11 +1,10 @@
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { accounts, journalVouchers, journalVoucherItems, cheques, bankAccounts, treasuryTransactions, customers, personnel } from '../../db/schema.js';
-import { eq, asc, and, or, sql, like, gte, lte, lt, SQL } from 'drizzle-orm';
+import { eq, asc, and, or, sql, gte, lte, lt, SQL } from 'drizzle-orm';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import { TreasuryService } from './treasury.service.js';
 import { normalizeDateToIso } from '../../lib/businessClock.js';
 import { fin, FinancialMath, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
-import { containsLikePattern } from '../../lib/sqlLike.js';
 import { toStorageDate, isoToJalaliDate } from '../../utils/calendarDate.js';
 import type { 
   TrialBalanceRow, 
@@ -29,6 +28,7 @@ import { accountCardHasFilter, type AccountCardReport } from '../../lib/accounti
 import { JOURNAL_BOOK_MAX_PAGE_SIZE, JOURNAL_BOOK_PAGE_SIZE, type JournalBookReport, type JournalBookRow } from '../../lib/accounting/journalBook.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { currentDetailNames, detailDisplayName, isManualReferenceModule, itemOfOpeningRow, openingVoucherItems, trialBalanceDetailKey, type DetailRef, type StableRef } from './trialBalanceDetail.js';
+import { foldedContains } from '../../lib/search/searchSql.js';
 
 /** ردیف گزارش خلاصه گردش پروژه (GET /accounting/reports/project-summary) */
 export interface ProjectSummaryReportRow {
@@ -645,7 +645,9 @@ export class AccountingReportService {
       periodConditions.push(eq(journalVoucherItems.detailedId, params.detailedId));
     }
     if (params.detailedName) {
-      periodConditions.push(like(journalVoucherItems.detailedName, containsLikePattern(params.detailedName.trim())));
+      // v11 phase 6.3p (U8): one search rule (`foldedContains`)
+      const named = foldedContains([journalVoucherItems.detailedName], params.detailedName);
+      if (named) periodConditions.push(named);
     }
     if (params.party) {
       periodConditions.push(partyDetailedRowsCondition(params.party));
@@ -702,7 +704,7 @@ export class AccountingReportService {
       if (params.accountId) priorConds.push(accountSubtreeCondition(journalVoucherItems.accountId, params.accountId));
       if (params.detailedType && params.detailedType !== 'all') priorConds.push(eq(journalVoucherItems.detailedType, params.detailedType));
       if (params.detailedId) priorConds.push(eq(journalVoucherItems.detailedId, params.detailedId));
-      if (params.detailedName) priorConds.push(like(journalVoucherItems.detailedName, containsLikePattern(params.detailedName.trim())));
+      if (params.detailedName) priorConds.push(foldedContains([journalVoucherItems.detailedName], params.detailedName));
       if (params.party) priorConds.push(partyDetailedRowsCondition(params.party), partyPermanent);
       priorConds.push(currencyCondition);
       if (params.startDate) priorConds.push(lt(journalVouchers.date, params.startDate));

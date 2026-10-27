@@ -15,6 +15,11 @@ vi.mock('../../api', () => ({
   fetchJson: (...args: unknown[]) => fetchJson(...args),
   isAbortError: (err: unknown) => (err as { name?: string } | null)?.name === 'AbortError',
 }));
+// v11 6.3p (U9): the direct receipt is offered with «ثبت ورود کالا (رسید)»
+vi.mock('../../contexts/AuthContext', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../contexts/AuthContext')>()),
+  useHasPermission: () => true,
+}));
 vi.mock('react-hot-toast', () => {
   const t = Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), loading: vi.fn(), dismiss: vi.fn() });
   return { toast: t, default: t };
@@ -131,11 +136,11 @@ describe('ReorderAlertsPage — React Query cache', () => {
     await screen.findByText('سیم نقره');
     const listBefore = callsTo(REORDER_URL);
 
-    fireEvent.click(screen.getByTitle('ثبت سفارش خرید برای این ماده اولیه'));
+    fireEvent.click(screen.getByTitle('ثبت درخواست خرید برای این ماده اولیه'));
     fireEvent.click(await screen.findByRole('button', { name: /ثبت و ارسال درخواست خرید/ }));
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('درخواست خرید PR-12 با موفقیت ثبت شد.'));
     expect(bodyOf('/api/procurement/requisitions', 'POST')).toMatchObject({
-      title: 'سفارش تامین ماده اولیه سیم نقره', priority: 'normal',
+      title: 'درخواست خرید ماده اولیه سیم نقره', priority: 'normal',
       items: [{ itemId: 7, itemCode: 'R-7', requestedQty: 8, unitPriceEstimate: 1000 }],
     });
     // v9.0.314 (TD-688): همان بدنه از قرارداد سرور می‌گذرد (پیش‌تر سرور ساختگی بدنه‌ای را تأیید می‌کرد که سرور واقعی با ۴۰۰ رد می‌کرد)
@@ -146,11 +151,11 @@ describe('ReorderAlertsPage — React Query cache', () => {
 
     // صدور مستقیم رسید قطعی
     await screen.findByText('سیم نقره');
-    fireEvent.click(screen.getByTitle('ثبت سفارش خرید برای این ماده اولیه'));
-    fireEvent.click(await screen.findByText('صدور مستقیم سند انبار / خرید'));
+    fireEvent.click(screen.getByTitle('ثبت درخواست خرید برای این ماده اولیه'));
+    fireEvent.click(await screen.findByText('رسید مستقیم: کالا رسیده است'));
     fireEvent.click(screen.getByText('-- انتخاب یا جست‌وجوی طرف‌حساب --'));
     fireEvent.click(await screen.findByText(/نقره‌سازان/));
-      fireEvent.click(screen.getByRole('button', { name: /ثبت سند خرید انبار/ }));
+      fireEvent.click(screen.getByRole('button', { name: /ثبت رسید قطعی انبار/ }));
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('رسید قطعی ورود کالا به انبار با موفقیت صادر و موجودی افزایش یافت.'));
     expect(bodyOf('/documents', 'POST')).toMatchObject({
       // v8.0.110 (TD-387): قرارداد POST /documents — شماره خودکار، ورود کالا، تأمین‌کننده در buyer_name، فی در unit_price
@@ -174,7 +179,7 @@ describe('ReorderAlertsPage — React Query cache', () => {
 
     const { unmount } = renderPage(newClient());
     await screen.findByText('سیم نقره');
-    fireEvent.click(screen.getByTitle('ثبت سفارش خرید برای این ماده اولیه'));
+    fireEvent.click(screen.getByTitle('ثبت درخواست خرید برای این ماده اولیه'));
     await waitFor(() => expect(signals.has(SUPPLIERS_URL)).toBe(true));
     fireEvent.click(screen.getByRole('button', { name: 'به‌روزرسانی' }));
     await waitFor(() => expect(signals.has(REORDER_URL)).toBe(true));

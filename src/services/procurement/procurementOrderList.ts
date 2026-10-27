@@ -1,11 +1,11 @@
-import { and, desc, eq, ilike, inArray, isNotNull, ne, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { documentItems, documents, items, purchaseRequisitions, warehouses } from '../../db/schema.js';
 import { createLedgerLocationResolver } from '../inventory/warehouseResolver.js';
 import { fin } from '../../lib/financialDecimal.js';
-import { containsLikePattern } from '../../lib/sqlLike.js';
 import { procurementListPage } from '../../lib/procurement/procurementLists.js';
 import type { ProcurementOrder } from '../../types.js';
+import { foldedContains } from '../../lib/search/searchSql.js';
 
 export interface ProcurementOrderListParams {
   /** 'all' | 'draft' | 'pending_delivery' | 'final' | 'delivered' */
@@ -28,16 +28,15 @@ function orderListConditions(params: ProcurementOrderListParams): SQL | undefine
     conditions.push(eq(documents.status, 'final'));
   }
   const search = params.search?.trim();
-  if (search) {
-    const pattern = containsLikePattern(search);
-    conditions.push(or(
-      ilike(documents.refNumber, pattern),
-      ilike(documents.buyerName, pattern),
-      ilike(documents.notes, pattern),
-      ilike(purchaseRequisitions.code, pattern),
-      ilike(purchaseRequisitions.title, pattern),
-    ) as SQL);
-  }
+  // v11 phase 6.3p (U8): one search rule (`foldedContains`)
+  const searched = foldedContains([
+    documents.refNumber,
+    documents.buyerName,
+    documents.notes,
+    purchaseRequisitions.code,
+    purchaseRequisitions.title,
+  ], search);
+  if (searched) conditions.push(searched);
   return and(...conditions);
 }
 

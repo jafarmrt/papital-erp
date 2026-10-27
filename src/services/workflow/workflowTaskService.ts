@@ -64,6 +64,8 @@ export class WorkflowTaskService {
     status?: MyTaskFilter;
     page?: number;
     limit?: number;
+    /** v11 6.3p (U6): only the reader's task on this workflow instance (a task notice's link), whatever page it is on */
+    instanceId?: number;
   }) {
     const userId = params.userId;
     const userRole = (params.userRole || '').trim().toLowerCase();
@@ -74,7 +76,8 @@ export class WorkflowTaskService {
     if (filter === 'completed') return completedTasksOf(userId, page, limit);
 
     const matched = (await WorkflowTaskService.pendingTasksOf(userId, userRole, params.userPermissions))
-      .filter(m => filter === 'overdue' ? m.isOverdue : filter === 'delegated' ? !!m.delegationInfo : true);
+      .filter(m => filter === 'overdue' ? m.isOverdue : filter === 'delegated' ? !!m.delegationInfo : true)
+      .filter(m => !params.instanceId || m.instance.id === params.instanceId);
     const total = matched.length;
     const pagedSlice = matched.slice(offset, offset + limit);
 

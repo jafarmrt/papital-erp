@@ -7,7 +7,11 @@ import type { ReorderModalItem } from '../../lib/reorderAlerts/reorderItems';
 import { supplierNameOptions } from '../../lib/documents/documentPartyKind';
 import { useReorderSuppliersQuery } from '../../hooks/reorderAlerts/useReorderAlertsQueries';
 import { useReorderPurchaseSubmit, type ReorderPurchaseVariables } from '../../hooks/reorderAlerts/useReorderAlertsMutations';
-import { receiptNeedsDonatedConfirmation, reorderPurchaseReceiptPayload, reorderReceiptPriceError } from '../../lib/reorderAlerts/reorderPurchaseReceipt';
+import {
+  REORDER_DIRECT_RECEIPT_CHOICE, REORDER_DIRECT_RECEIPT_PERMISSION, REORDER_REQUISITION_CHOICE, receiptNeedsDonatedConfirmation,
+  reorderPurchaseReceiptPayload, reorderReceiptPriceError,
+} from '../../lib/reorderAlerts/reorderPurchaseReceipt';
+import { useHasPermission } from '../../contexts/AuthContext';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import { ReorderOrderFields, type ReorderPriority as Priority } from './ReorderOrderFields';
 import { confirmAction } from '../ConfirmDialogHost';
@@ -33,6 +37,8 @@ export function ReorderPurchaseModal({
 }: ReorderPurchaseModalProps) {
   const [items, setItems] = useState<ReorderModalItem[]>([]);
   const [orderTarget, setOrderTarget] = useState<'requisition' | 'direct_document'>('requisition');
+  const canReceiveDirect = useHasPermission(REORDER_DIRECT_RECEIPT_PERMISSION);
+  const target = canReceiveDirect ? orderTarget : 'requisition';
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState<Priority>('normal');
   // v9.0.403 (TD-830): ISO, shown with JalaliDateInput
@@ -63,9 +69,9 @@ export function ReorderPurchaseModal({
     })));
 
     const count = selectedItems.length;
-    setTitle(count === 1 
-      ? `سفارش تامین ماده اولیه ${selectedItems[0].name}`
-      : `سفارش خرید کسری مواد اولیه انبار (${formatPersianNumber(count)} قلم)`
+    setTitle(count === 1
+      ? `درخواست خرید ماده اولیه ${selectedItems[0].name}`
+      : `درخواست خرید کسری مواد اولیه انبار (${formatPersianNumber(count)} قلم)`
     );
     setNotes(`تامین کسری نقطه سفارش مواد اولیه از طریق میز کار هشدار انبار`);
     setDonatedConfirmed(false);
@@ -82,7 +88,7 @@ export function ReorderPurchaseModal({
 
   const handleRemoveItem = (id: number) => {
     if (items.length <= 1) {
-      toast.error('حداقل یک قلم کالا در سفارش خرید الزامی است.');
+      toast.error('حداقل یک قلم کالا لازم است.');
       return;
     }
     setItems(prev => prev.filter(it => it.id !== id));
@@ -94,19 +100,23 @@ export function ReorderPurchaseModal({
     e.preventDefault();
 
     if (items.length === 0) {
-      toast.error('هیچ کالایی برای ثبت سفارش انتخاب نشده است.');
+      toast.error('هیچ کالایی انتخاب نشده است.');
+      return;
+    }
+    if (target === 'requisition' && !title.trim()) {
+      toast.error('عنوان درخواست خرید را بنویسید.');
       return;
     }
 
     for (const it of items) {
       if (it.orderQty <= 0) {
-        toast.error(`مقدار سفارش برای «${it.name}» باید بیشتر از صفر باشد.`);
+        toast.error(`مقدار «${it.name}» باید بیشتر از صفر باشد.`);
         return;
       }
     }
 
     let variables: ReorderPurchaseVariables;
-    if (orderTarget === 'requisition') {
+    if (target === 'requisition') {
       // Submit Purchase Requisition to Procurement Workflow
       variables = {
         target: 'requisition',
@@ -129,7 +139,7 @@ export function ReorderPurchaseModal({
     } else {
       // Direct Document (Purchase Order / Receipt)
       if (!supplierName || supplierName.trim() === '') {
-        toast.error('انتخاب تامین‌کننده برای صدور مستقیم سند الزامی است.');
+        toast.error('برای رسید مستقیم تامین‌کننده را انتخاب کنید.');
         return;
       }
       const priceError = reorderReceiptPriceError({ status: docStatus, donatedConfirmed, items });
@@ -170,7 +180,7 @@ export function ReorderPurchaseModal({
         onClose();
       },
       onError: (err) => {
-        toast.error(errorMessageOf(err) || 'خطا در ثبت سفارش خرید');
+        toast.error(errorMessageOf(err) || (variables.target === 'requisition' ? 'خطا در ثبت درخواست خرید' : 'خطا در ثبت رسید مستقیم'));
       },
     });
   };
@@ -187,7 +197,7 @@ export function ReorderPurchaseModal({
             </div>
             <div>
               <h3 className="font-black text-slate-900 text-base flex items-center gap-2">
-                ثبت سفارش خرید مواد اولیه
+                {target === 'requisition' ? 'درخواست خرید مواد اولیه' : 'رسید مستقیم مواد اولیه'}
                 <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 rounded-lg text-xs font-bold font-mono">
                   {formatPersianNumber(items.length)} قلم
                 </span>
@@ -208,53 +218,58 @@ export function ReorderPurchaseModal({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-5">
-          {/* Destination Selector */}
+          {/* v11 phase 6.3p (U9, card ت۵۶-۶): a requisition by default; the direct receipt for goods that already arrived
+              stays, as its own choice, only for a holder of «ثبت ورود کالا (رسید)», the key POST /documents asks of it */}
+          {canReceiveDirect && (
           <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3.5 space-y-2">
-            <label className="block text-xs font-black text-amber-950">
-              مسیر ثبت سفارش:
-            </label>
+            <span className="block text-xs font-black text-amber-950">
+              مسیر تامین:
+            </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setOrderTarget('requisition')}
+                aria-pressed={target === 'requisition'}
                 className={`p-3 rounded-xl border text-right transition-all cursor-pointer ${
-                  orderTarget === 'requisition'
+                  target === 'requisition'
                     ? 'bg-white border-amber-500 ring-2 ring-amber-400/30 shadow-xs'
                     : 'bg-white/60 border-slate-200 hover:bg-white text-slate-600'
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <FileText className={`w-4 h-4 ${orderTarget === 'requisition' ? 'text-amber-600' : 'text-slate-400'}`} />
-                  <span className="text-xs font-bold text-slate-900">ارسال به کارتابل تدارکات (درخواست خرید)</span>
+                  <FileText className={`w-4 h-4 ${target === 'requisition' ? 'text-amber-600' : 'text-slate-400'}`} />
+                  <span className="text-xs font-bold text-slate-900">{REORDER_REQUISITION_CHOICE}</span>
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1 mr-6">
-                  ثبت رسمی در موتور گردش کار تدارکات جهت استعلام قیمت، تایید و تفکیک سفارشات
+                  به کارتابل تدارکات می‌رود: استعلام قیمت، تایید، سفارش خرید به تامین‌کننده و سپس رسید انبار
                 </p>
               </button>
 
               <button
                 type="button"
                 onClick={() => setOrderTarget('direct_document')}
+                aria-pressed={target === 'direct_document'}
                 className={`p-3 rounded-xl border text-right transition-all cursor-pointer ${
-                  orderTarget === 'direct_document'
+                  target === 'direct_document'
                     ? 'bg-white border-amber-500 ring-2 ring-amber-400/30 shadow-xs'
                     : 'bg-white/60 border-slate-200 hover:bg-white text-slate-600'
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <Building2 className={`w-4 h-4 ${orderTarget === 'direct_document' ? 'text-amber-600' : 'text-slate-400'}`} />
-                  <span className="text-xs font-bold text-slate-900">صدور مستقیم سند انبار / خرید</span>
+                  <Building2 className={`w-4 h-4 ${target === 'direct_document' ? 'text-amber-600' : 'text-slate-400'}`} />
+                  <span className="text-xs font-bold text-slate-900">{REORDER_DIRECT_RECEIPT_CHOICE}</span>
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1 mr-6">
-                  ثبت مستقیم رسید قطعی ورود به انبار برای کالایی که همین حالا رسیده، به نام تامین‌کننده مشخص
+                  رسید قطعی ورود به انبار برای کالایی که همین حالا رسیده، به نام تامین‌کننده؛ بی درخواست و تایید تدارکات
                 </p>
               </button>
             </div>
           </div>
+          )}
 
           {/* Form Fields */}
           <ReorderOrderFields
-            orderTarget={orderTarget}
+            orderTarget={target}
             title={title}
             onTitleChange={setTitle}
             priority={priority}
@@ -278,7 +293,7 @@ export function ReorderPurchaseModal({
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs">
               <span className="font-bold text-slate-800">
-                اقلام انتخابی جهت سفارش خرید ({formatPersianNumber(items.length)} قلم کالا):
+                اقلام انتخابی ({formatPersianNumber(items.length)} قلم کالا):
               </span>
               <span className="text-slate-500">
                 مقدار پیشنهادی به طور خودکار بر اساس کسری نقطه سفارش تنظیم گردیده است.
@@ -294,7 +309,7 @@ export function ReorderPurchaseModal({
                     <th className="p-2.5 text-center w-20">موجودی آزاد</th>
                     <th className="p-2.5 text-center w-20">نقطه سفارش</th>
                     <th className="p-2.5 text-center w-20">میزان کسری</th>
-                    <th className="p-2.5 text-center w-28">مقدار سفارش</th>
+                    <th className="p-2.5 text-center w-28">مقدار خرید</th>
                     <th className="p-2.5 text-center w-16">واحد</th>
                     <th className="p-2.5 text-center w-32">قیمت تخمینی (ریال)</th>
                     <th className="p-2.5 text-center w-32">مبلغ کل (ریال)</th>
@@ -362,7 +377,7 @@ export function ReorderPurchaseModal({
           {/* Grand Total Bar */}
           <div className="flex flex-wrap items-center justify-between p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs">
             <div className="flex items-center gap-3">
-              <span className="font-bold text-amber-950">تعداد اقلام سفارش:</span>
+              <span className="font-bold text-amber-950">تعداد اقلام:</span>
               <span className="px-2.5 py-0.5 bg-amber-200 text-amber-950 font-black rounded-lg font-mono">
                 {formatPersianNumber(items.length)} قلم
               </span>
@@ -393,12 +408,12 @@ export function ReorderPurchaseModal({
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  در حال ثبت سفارش...
+                  در حال ثبت...
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="w-4 h-4" />
-                  {orderTarget === 'requisition' ? 'ثبت و ارسال درخواست خرید' : 'ثبت سند خرید انبار'}
+                  {target === 'requisition' ? 'ثبت و ارسال درخواست خرید' : 'ثبت رسید قطعی انبار'}
                 </>
               )}
             </button>

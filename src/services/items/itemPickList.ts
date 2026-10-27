@@ -1,7 +1,7 @@
-import { and, asc, desc, eq, gt, ilike, lte, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, lte, sql, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { items } from '../../db/schema.js';
-import { containsLikePattern } from '../../lib/sqlLike.js';
+import { foldedContains } from '../../lib/search/searchSql.js';
 import type { ItemPick } from '../../lib/permissions/pickLists.js';
 import type { ItemListSort, ItemListStats } from '../../lib/items/itemListSort.js';
 import { can } from '../../middleware/authorize.js';
@@ -24,13 +24,10 @@ export function itemListConditions(
   // v10.1.51 (OBS-R2-62): the gallery pages on the server, over items with a picture and of one category
   if (options.withImage) conditions.push(sql`(coalesce(${items.image}, '') <> '' OR coalesce(${items.thumbnail}, '') <> '')`);
   if (options.category) conditions.push(eq(items.category, options.category));
-  if (search) {
-    const pattern = containsLikePattern(search);
-    // v10.0.218 (OBS-R1-74): فهرست کامل در دسته‌بندی هم جست‌وجو می‌کند، همان که جعبه جست‌وجوی صفحه کالاها می‌گوید
-    const fields = [ilike(items.name, pattern), ilike(items.code, pattern)];
-    if (options.withCategory) fields.push(ilike(items.category, pattern));
-    conditions.push(or(...fields) as SQL);
-  }
+  // v10.0.218 (OBS-R1-74): فهرست کامل در دسته‌بندی هم جست‌وجو می‌کند، همان که جعبه جست‌وجوی صفحه کالاها می‌گوید
+  // v11 phase 6.3p (U8): one search rule (`foldedContains`)
+  const searched = foldedContains(options.withCategory ? [items.name, items.code, items.category] : [items.name, items.code], search);
+  if (searched) conditions.push(searched);
   return and(...conditions) as SQL;
 }
 

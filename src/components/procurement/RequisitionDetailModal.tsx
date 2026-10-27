@@ -82,7 +82,7 @@ export function RequisitionDetailModal({
           await fetchJson(`/api/procurement/orders/${ord.id}/deliver`, { method: 'POST' });
           delivered += 1;
         }
-        toast.success('کلیه فاکتورهای خرید با موفقیت به انبار تحویل گردید و موجودی کاردکس به‌روز شد.');
+        toast.success('کلیه سفارش‌های خرید با موفقیت به انبار تحویل گردید و موجودی کاردکس به‌روز شد.');
         setBulkDeliveryOrders(null);
         onClose();
       } else if (deliveryModalOrder) {
@@ -90,11 +90,11 @@ export function RequisitionDetailModal({
           method: 'POST'
         });
         delivered += 1;
-        toast.success(res.message || 'فاکتور خرید با موفقیت به انبار تحویل و رسید قطعی صادر شد.');
+        toast.success(res.message || 'سفارش خرید با موفقیت به انبار تحویل و رسید قطعی صادر شد.');
         setDeliveryModalOrder(null);
       }
     } catch (err: any) {
-      toast.error(err.message || 'خطا در تحویل فاکتور خرید به انبار');
+      toast.error(err.message || 'خطا در تحویل سفارش خرید به انبار');
     } finally {
       setIsSubmittingDelivery(false);
       if (delivered > 0) void invalidateAfterProcurementChange(queryClient, 'delivery');
@@ -363,10 +363,10 @@ export function RequisitionDetailModal({
               <div className="flex items-center gap-2">
                 <Truck className="w-4 h-4 text-sky-600" />
                 <span className="font-bold text-slate-900 text-xs">
-                  فاکتورهای خرید صادره و وضعیت تحویل انبار ({formatPersianNumber(linkedOrders.length)} فاکتور)
+                  سفارش‌های خرید صادره و وضعیت تحویل انبار ({formatPersianNumber(linkedOrders.length)} سفارش)
                 </span>
               </div>
-              <span className="text-[11px] text-slate-500">تفکیک فاکتور خرید بر اساس هر تامین‌کننده</span>
+              <span className="text-[11px] text-slate-500">تفکیک سفارش خرید بر اساس هر تامین‌کننده</span>
             </div>
 
             {ordersPage.error ? (
@@ -382,13 +382,13 @@ export function RequisitionDetailModal({
             ) : isLoadingOrders ? (
               <div className="p-4 flex items-center justify-center gap-2 text-xs text-slate-500">
                 <Loader2 className="w-4 h-4 animate-spin text-sky-600" />
-                در حال بارگذاری اطلاعات فاکتورهای متناظر...
+                در حال بارگذاری اطلاعات سفارش‌های متناظر...
               </div>
             ) : linkedOrders.length === 0 ? (
               <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-xs text-amber-900">
                   <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>هنوز فاکتور خریدی برای این درخواست صادر نشده است.</span>
+                  <span>هنوز سفارش خریدی برای این درخواست صادر نشده است.</span>
                 </div>
                 {canOrderThis && <button
                   type="button"
@@ -397,7 +397,7 @@ export function RequisitionDetailModal({
                   className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-lg flex items-center gap-1.5 cursor-pointer shrink-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-amber-500"
                 >
                   <ShoppingCart className="w-3.5 h-3.5" />
-                  صدور فاکتور تامین‌کننده
+                  صدور سفارش تامین‌کننده
                 </button>}
               </div>
             ) : (
@@ -419,7 +419,7 @@ export function RequisitionDetailModal({
                         <div className="flex items-center gap-2 flex-wrap">
                           {/* v9.0.351 (TD-701): شماره و تاریخ سفارش از refNumber و date پاسخ سرور */}
                           <span className="font-mono font-bold text-xs text-slate-900">
-                            فاکتور خرید {formatPersianCode(order.refNumber)}
+                            سفارش خرید {formatPersianCode(order.refNumber)}
                           </span>
                           <span className="font-bold text-xs text-slate-700">
                             تامین‌کننده: {order.supplierName}
@@ -559,7 +559,7 @@ export function RequisitionDetailModal({
                     className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-amber-500"
                   >
                     <FileText className="w-4 h-4" />
-                    مشاهده / ثبت فاکتور تامین‌کننده
+                    مشاهده / ثبت سفارش تامین‌کننده
                   </button>}
                 </>
               )}

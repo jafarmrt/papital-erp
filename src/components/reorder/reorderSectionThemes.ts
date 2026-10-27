@@ -50,11 +50,11 @@ export const MATERIALS_THEME: ReorderSectionTheme = {
   title: 'مواد اولیه در آستانه سفارش',
   countBadge: 'bg-amber-100 text-amber-950',
   countSuffix: 'قلم نیازمند خرید',
-  description: 'تامین از طریق ثبت سفارش خرید (تکی یا یکجا) و ارسال به کارتابل تدارکات یا صدور مستقیم سند',
+  description: 'تامین با درخواست خرید (تکی یا یکجا) در کارتابل تدارکات، یا رسید مستقیم برای کالایی که رسیده است',
   costLabel: 'برآورد هزینه تامین:',
   costValue: 'text-amber-800',
   batchButton: 'bg-amber-500 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950',
-  batchLabel: 'ثبت سفارش خرید یکجا',
+  batchLabel: 'ثبت درخواست خرید یکجا',
   batchCounter: 'bg-slate-950 text-white rounded-full text-[10px] font-mono',
   loadingSpinner: 'text-amber-500',
   loadingText: 'در حال بارگیری اقلام مواد اولیه...',
@@ -76,8 +76,8 @@ export const MATERIALS_THEME: ReorderSectionTheme = {
   deficitBadge: 'bg-rose-100 text-rose-800',
   valueText: 'text-amber-800',
   actionButton: 'bg-amber-500 hover:bg-amber-600 text-slate-950',
-  actionTitle: 'ثبت سفارش خرید برای این ماده اولیه',
-  actionLabel: 'ثبت سفارش خرید',
+  actionTitle: 'ثبت درخواست خرید برای این ماده اولیه',
+  actionLabel: 'ثبت درخواست خرید',
 };
 
 export const PRODUCTS_THEME: ReorderSectionTheme = {

@@ -8656,7 +8656,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     } = await import('../../db/schema.js');
     const { WorkflowDefinitionService } = await import('../../services/workflow/workflowDefinitionService.js');
     const { WorkflowTransitionExecutor } = await import('../../services/workflow/workflowTransitionExecutor.js');
-    const { WorkflowSlaReminderService, WORKFLOW_SLA_REMINDER_LINK } = await import('../../services/workflow/workflowSlaReminderService.js');
+    const { WorkflowSlaReminderService } = await import('../../services/workflow/workflowSlaReminderService.js');
+    const { approvalInboxInstanceLink } = await import('../../lib/notifications/notificationNotices.js');
     const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
     const entityType = `reg_td085s_${suffix}`;
     const role = `reg_sla_${suffix}`;
@@ -8697,7 +8698,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       for (const [i, id] of userIds.slice(0, 2).entries()) {
         const mine = sent.filter((n) => n.userId === id);
         if (mine.length !== 1) violations.push(`responsible user ${i + 1}: ${mine.length} notifications (expected 1)`);
-        else if (mine[0].link !== WORKFLOW_SLA_REMINDER_LINK || !mine[0].message.includes('تایید مدیر')) violations.push(`notification text: ${mine[0].message}`);
+        // v11 phase 6.3p (U6): the reminder links to its record in the inbox
+        else if (mine[0].link !== approvalInboxInstanceLink(instance.id) || !mine[0].message.includes('تایید مدیر')) violations.push(`notification ${mine[0].link}: ${mine[0].message}`);
       }
       if (sent.some((n) => n.userId === userIds[2])) violations.push('a user with another role got a notification');
       const tasks = await orm.select().from(workflowTasks).where(eq(workflowTasks.instanceId, instance.id));
@@ -11161,6 +11163,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runReceiptsOnInvoicesV11Tests(shouldRun));
   const { runReceiptsOnInvoicesReviewV11Tests } = await import('../regression/receiptsOnInvoicesReviewV11Tests.js');
   results.push(...await runReceiptsOnInvoicesReviewV11Tests(shouldRun));
+  // v11 phase 6.3p (U8, C12, U6, U17): one search rule, global search sections, workflow task notices, a proforma from any open lead
+  const { runWorkflowPurchaseV11Tests } = await import('../regression/workflowPurchaseV11Tests.js');
+  results.push(...await runWorkflowPurchaseV11Tests(shouldRun));
 
   return results;
 }

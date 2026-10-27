@@ -1,17 +1,16 @@
-import React , { useState, useMemo, useEffect, useId } from 'react';
+import React , { useState, useMemo, useEffect } from 'react';
 import { ShoppingCart, FileText, CheckCircle2, AlertCircle, X, Loader2, Check } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { ProductionProject, PurchaseListItem, Item } from '../../types';
 import { fetchJson } from '../../api';
 import { errorMessageOf, formatPersianPrice, getTodayIsoDate, toPersianDigits, formatPersianCode } from '../../utils';
-import { JalaliDateInput } from '../common/JalaliDateInput';
 import { useSupplierSelectOptions } from '../../hooks/useEntitySelectors';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import { useHasAnyPermission } from '../../contexts/AuthContext';
 import {
   DIRECT_ORDER_PERMISSIONS, draftOrderBody, projectRequisitionBody, supplierPickOptions, type ProjectOrderLine, type RequisitionPriority,
 } from '../../lib/projects/projectPurchaseOrder';
-import { REQUISITION_PRIORITIES, REQUISITION_PRIORITY_LABELS } from '../../lib/procurement/requisitionFields';
+import { RequisitionHeaderFields } from '../procurement/RequisitionHeaderFields';
 import { ProjectDirectOrderFields } from './ProjectDirectOrderFields';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
@@ -48,7 +47,6 @@ export function CreatePurchaseOrderModal({
   warehouseItems,
   onOrderCreated
 }: CreatePurchaseOrderModalProps) {
-  const fieldId = useId();
   const [orderMode, setOrderMode] = useState<'requisition' | 'direct_document'>('requisition');
   const [priority, setPriority] = useState<RequisitionPriority>('normal');
   // v9.0.420 (TD-764): تاریخ نیاز ISO است و با تقویم شمسی انتخاب می‌شود (پیش‌تر متن آزاد با نمونه 1405/01/01)
@@ -58,6 +56,7 @@ export function CreatePurchaseOrderModal({
   const [notes, setNotes] = useState(
     `کسری‌های مواد اولیه پروژه ${project.project_code || project.title}`
   );
+  const [title, setTitle] = useState(`کسری مواد پروژه ${project.project_code || project.title}`.trim());
   const [isSubmitting, setIsSubmitting] = useState(false);
   // v9.0.416 (TD-745، ت۸ ب): تأمین‌کننده با شناسه و انبار مقصد با کد، هر دو از فهرست
   const { suppliers } = useSupplierSelectOptions();
@@ -152,7 +151,11 @@ export function CreatePurchaseOrderModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedRows.length === 0) {
-      toast.error('لطفاً حداقل یک قلم کالای دارای شناسه انبار را برای صدور سفارش انتخاب کنید.');
+      toast.error('لطفاً حداقل یک قلم کالای دارای شناسه انبار را برای خرید انتخاب کنید.');
+      return;
+    }
+    if (mode === 'requisition' && !title.trim()) {
+      toast.error('عنوان درخواست خرید را بنویسید.');
       return;
     }
 
@@ -183,7 +186,7 @@ export function CreatePurchaseOrderModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(projectRequisitionBody(project.id, lines, {
-          title: `${mode === 'direct_document' ? 'سفارش مستقیم' : 'کسری'} مواد پروژه ${projectLabel}`.trim(),
+          title: mode === 'direct_document' ? `سفارش مستقیم مواد پروژه ${projectLabel}`.trim() : title.trim(),
           priority,
           requiredDate: orderDate || getTodayIsoDate(),
           notes: notes.trim(),
@@ -237,7 +240,7 @@ export function CreatePurchaseOrderModal({
             </div>
             <div>
               <h3 className="font-black text-slate-900 text-base flex items-center gap-2">
-                صدور سفارش خرید کسری‌های پروژه
+                خرید کسری‌های پروژه
                 <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 rounded-lg text-xs font-mono font-bold">
                   {formatPersianCode(project.project_code) || project.title}
                 </span>
@@ -290,45 +293,21 @@ export function CreatePurchaseOrderModal({
 
           {/* Settings / Meta based on Mode */}
           {mode === 'requisition' ? (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-amber-50/50 p-4 rounded-xl border border-amber-200 text-xs">
-              <div>
-                <label htmlFor={`${fieldId}-priority`} className="block font-bold text-slate-700 mb-1">اولویت درخواست خرید:</label>
-                <select
-                  id={`${fieldId}-priority`}
-                  value={priority}
-                  onChange={e => setPriority(e.target.value as RequisitionPriority)}
-                  className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                >
-                  {REQUISITION_PRIORITIES.map(p => <option key={p} value={p}>{REQUISITION_PRIORITY_LABELS[p]}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor={`${fieldId}-order-date`} className="block font-bold text-slate-700 mb-1">تاریخ نیاز به کالا:</label>
-                <JalaliDateInput
-                  id={`${fieldId}-order-date`}
-                  value={orderDate}
-                  onChange={setOrderDate}
-                  placeholder="انتخاب تاریخ"
-                  className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-mono focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                />
-              </div>
-
-              <div className="sm:col-span-3">
-                <label htmlFor={`${fieldId}-notes`} className="block font-bold text-slate-700 mb-1">یادداشت و الزامات کیفی/تدارکاتی:</label>
-                <input
-                  id={`${fieldId}-notes`}
-                  type="text"
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                  placeholder="مثال: برند مورد تایید، ضخامت یا عیار مشخص، نیاز به برگ آنالیز آزمایشگاه"
-                  className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                />
-              </div>
-
-              <div className="sm:col-span-3 text-[11px] text-amber-800 bg-amber-100/60 p-2.5 rounded-lg">
-                💡 این درخواست در کارتابل مسئول خرید و تدارکات ثبت شده و پس از استعلام قیمت و تایید مدیر وارد مرحله سفارش‌گذاری و خرید خواهد شد.
-              </div>
+            <div className="space-y-2">
+              {/* v11 phase 6.3p (U9): the same requisition fields and words as the procurement desk and the reorder page */}
+              <RequisitionHeaderFields
+                title={title}
+                onTitleChange={setTitle}
+                priority={priority}
+                onPriorityChange={setPriority}
+                requiredDate={orderDate}
+                onRequiredDateChange={setOrderDate}
+                notes={notes}
+                onNotesChange={setNotes}
+              />
+              <p className="text-[11px] text-amber-800 bg-amber-100/60 p-2.5 rounded-lg">
+                💡 این درخواست در کارتابل مسئول خرید و تدارکات ثبت می‌شود و پس از استعلام قیمت و تایید، سفارش خرید و سپس رسید انبار می‌گیرد.
+              </p>
             </div>
           ) : (
             <ProjectDirectOrderFields
@@ -349,7 +328,7 @@ export function CreatePurchaseOrderModal({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-800 text-sm">اقلام قابل سفارش ({toPersianDigits(orderRows.length)} مورد کسری)</span>
+                <span className="font-bold text-slate-800 text-sm">اقلام کسری ({toPersianDigits(orderRows.length)} مورد کسری)</span>
                 <span className="text-xs text-slate-500">
                   ({toPersianDigits(selectedRows.length)} قلم انتخاب شده)
                 </span>
@@ -477,7 +456,7 @@ export function CreatePurchaseOrderModal({
               </span>
             </div>
             <div className="flex items-center gap-2 text-amber-950">
-              <span className="font-bold">برآورد کل مبلغ سفارش خرید:</span>
+              <span className="font-bold">برآورد کل هزینه خرید:</span>
               <span className="text-sm font-black font-mono text-slate-900">
                 {formatPersianPrice(totalEstimatedCost)}
               </span>

@@ -108,8 +108,8 @@ describe('the edited proforma leaves out its own reservation (TD-1209)', () => {
 // v10.1.9: bulk delivery without an order named a button the window shows only before approval
 describe('bulk delivery without an order names the button the window shows', () => {
   it('points to the order button of an approved requisition', () => {
-    expect(BULK_DELIVERY_NO_ORDERS).toContain('«مشاهده / ثبت فاکتور تامین‌کننده»');
+    expect(BULK_DELIVERY_NO_ORDERS).toContain('«مشاهده / ثبت سفارش تامین‌کننده»');
     expect(BULK_DELIVERY_NO_ORDERS).not.toContain('تفکیک تأمین‌کننده و صدور سفارش خرید');
-    expect(read('components/procurement/RequisitionDetailModal.tsx')).toContain('مشاهده / ثبت فاکتور تامین‌کننده');
+    expect(read('components/procurement/RequisitionDetailModal.tsx')).toContain('مشاهده / ثبت سفارش تامین‌کننده');
   });
 });

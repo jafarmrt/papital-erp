@@ -166,10 +166,10 @@ export function GlobalInventoryControlSection({
                         type="button"
                         onClick={() => handlePurchaseSection(originalIdx)}
                         className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-                        title="صدور سند سفارش خرید برای کسری‌های همین بخش"
+                        title="درخواست خرید برای کسری‌های همین بخش"
                       >
                         <FilePlus className="w-3.5 h-3.5" />
-                        <span>ثبت سفارش خرید ({toPersianDigits(purchaseLineCount)})</span>
+                        <span>ثبت درخواست خرید ({toPersianDigits(purchaseLineCount)})</span>
                       </button>
                     )}
                     {/* Add Material to this Global Section */}

@@ -289,6 +289,21 @@ export function useMyTasksQuery(status = 'pending', page = 1, limit = 50) {
   });
 }
 
+/**
+ * v11 6.3p (U6): the reader's pending task on one workflow instance, for a task notice's link. Read from the server each
+ * time a link opens it (never from the cached inbox page, which may predate the task or not hold it), whatever its page.
+ */
+export function useMyTaskOnInstanceQuery(instanceId: number) {
+  return useQuery({
+    queryKey: ['workflow', 'tasks', 'my-tasks', 'instance', instanceId],
+    queryFn: () => fetchJson(`/workflow/tasks/my-tasks?status=pending&page=1&limit=1&instanceId=${instanceId}`),
+    enabled: instanceId > 0,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
+  });
+}
+
 export function useTaskStatsQuery() {
   return useQuery({
     queryKey: ['workflow', 'tasks', 'stats'],

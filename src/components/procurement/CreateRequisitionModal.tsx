@@ -4,12 +4,10 @@ import { toast } from 'react-hot-toast';
 import { Item } from '../../types';
 import { fetchJson } from '../../api';
 import { formatPersianNumber, formatPersianPrice, getErrorMessage, getTodayIsoDate } from '../../utils';
-import { JalaliDateInput } from '../common/JalaliDateInput';
 import { apiFieldErrors } from '../../lib/apiFieldErrors';
-import {
-  REQUISITION_PRIORITIES, REQUISITION_PRIORITY_LABELS, requisitionFormErrors, type RequisitionPriority,
-} from '../../lib/procurement/requisitionFields';
+import { requisitionFormErrors, type RequisitionPriority } from '../../lib/procurement/requisitionFields';
 import { FieldError, RequisitionItemRowEditor, type NewRequisitionRow } from './RequisitionItemRowEditor';
+import { RequisitionHeaderFields } from './RequisitionHeaderFields';
 import { lineAmount, sumAmounts } from '../../lib/procurement/procurementNumbers';
 import { DialogLayer } from '../common/DialogLayer';
 import { RialEquivalent } from '../common/RialEquivalent';
@@ -155,62 +153,17 @@ export function CreateRequisitionModal({
 
         {/* Form Content */}
         <form onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto p-5 space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
-            <div className="sm:col-span-2">
-              <label htmlFor="requisition-title" className="block font-bold text-slate-700 mb-1">
-                عنوان درخواست خرید <span className="text-rose-500">*</span>:
-              </label>
-              <input
-                id="requisition-title"
-                type="text"
-                placeholder="مثلاً: خرید ورق‌های برنجی و مهره‌های فلزی طرح بهار"
-                value={title}
-                onChange={e => { setTitle(e.target.value); clearError('title'); }}
-                aria-invalid={Boolean(fieldErrors.title)}
-                aria-describedby={fieldErrors.title ? 'requisition-title-error' : undefined}
-                className={`w-full p-2 bg-white border rounded-lg text-slate-800 font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none ${fieldErrors.title ? 'border-rose-500' : 'border-slate-300'}`}
-              />
-              <FieldError id="requisition-title-error" message={fieldErrors.title} />
-            </div>
-
-            <div>
-              <label htmlFor="requisition-priority" className="block font-bold text-slate-700 mb-1">اولویت خرید:</label>
-              <select
-                id="requisition-priority"
-                value={priority}
-                onChange={e => { setPriority(e.target.value as RequisitionPriority); clearError('priority'); }}
-                aria-invalid={Boolean(fieldErrors.priority)}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
-              >
-                {REQUISITION_PRIORITIES.map(p => <option key={p} value={p}>{REQUISITION_PRIORITY_LABELS[p]}</option>)}
-              </select>
-              <FieldError id="requisition-priority-error" message={fieldErrors.priority} />
-            </div>
-
-            <div>
-              <label htmlFor="requisition-required-date" className="block font-bold text-slate-700 mb-1">تاریخ نیاز به کالا:</label>
-              <JalaliDateInput
-                id="requisition-required-date"
-                value={requiredDate}
-                onChange={iso => { setRequiredDate(iso); clearError('requiredDate'); }}
-                placeholder="تاریخ نیاز"
-              />
-              <FieldError id="requisition-required-date-error" message={fieldErrors.requiredDate} />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label htmlFor="requisition-notes" className="block font-bold text-slate-700 mb-1">توضیحات و مشخصات فنی:</label>
-              <input
-                id="requisition-notes"
-                type="text"
-                placeholder="برند، عیار، ابعاد یا ملاحظات بازرسی"
-                value={notes}
-                onChange={e => { setNotes(e.target.value); clearError('notes'); }}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"
-              />
-              <FieldError id="requisition-notes-error" message={fieldErrors.notes} />
-            </div>
-          </div>
+          <RequisitionHeaderFields
+            title={title}
+            onTitleChange={v => { setTitle(v); clearError('title'); }}
+            priority={priority}
+            onPriorityChange={v => { setPriority(v); clearError('priority'); }}
+            requiredDate={requiredDate}
+            onRequiredDateChange={iso => { setRequiredDate(iso); clearError('requiredDate'); }}
+            notes={notes}
+            onNotesChange={v => { setNotes(v); clearError('notes'); }}
+            errors={fieldErrors}
+          />
 
           {/* Items Section */}
           <div className="space-y-3">

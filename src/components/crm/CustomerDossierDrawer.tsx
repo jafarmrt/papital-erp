@@ -286,7 +286,7 @@ export function CustomerDossierDrawer({
                 className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
               >
                 <Plus size={14} />
-                ثبت فرصت فروش جدید
+                ایجاد پرونده فروش جدید
               </button>
             </div>
 

@@ -29,7 +29,7 @@ import { workflowEntityTypeLabel } from '../../lib/workflow/workflowEntityLabels
 import type { RuleExpression } from '../ruleEngine.service.js';
 import { isSystemAdminRole, permissionDefinition } from '../../lib/permissions/permissionCatalog.js';
 import { STOCK_BACKDATE_PERMISSION } from '../../lib/permissions/documentPermissions.js';
-import { notifyWorkflowTasksArrived } from './workflowTaskNotice.js';
+import { closeWorkflowTaskNotices, notifyWorkflowTasksArrived } from './workflowTaskNotice.js';
 import { effectivePermissionKey } from './removedPermissionKeys.js';
 import type { DbTransaction } from '../../db/drizzle.js';
 
@@ -355,6 +355,8 @@ export class WorkflowTransitionExecutor {
         eq(workflowTasks.instanceId, instanceId),
         eq(workflowTasks.status, 'pending')
       ));
+    // v11 phase 6.3p (U6): the prior step's notices close with its tasks, before the new step notifies
+    await closeWorkflowTaskNotices(txExecutor, [instanceId]);
 
     // 2. Fetch state details for SLA dueAt calculation
     const snapshot = snapshotDsl as WorkflowSnapshotDsl | null | undefined;
@@ -836,6 +838,7 @@ export class WorkflowTransitionExecutor {
             eq(workflowTasks.instanceId, instance.id),
             eq(workflowTasks.status, 'pending')
           ));
+        await closeWorkflowTaskNotices(tx, [instance.id]);
       }
 
       await tx.insert(workflowHistoryLogs).values({

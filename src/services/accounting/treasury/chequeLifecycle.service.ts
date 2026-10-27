@@ -1,6 +1,6 @@
 import { orm, type DbExecutor } from '../../../db/drizzle.js';
 import { bankAccounts, cheques, journalVouchers } from '../../../db/schema.js';
-import { eq, ne, desc, asc, and, or, like, gte, lte, isNull, sql } from 'drizzle-orm';
+import { eq, ne, desc, asc, and, or, gte, lte, isNull, sql } from 'drizzle-orm';
 import { ChartOfAccountsService } from '../chartOfAccounts.service.js';
 import { AccountMappingService } from '../accountMapping.service.js';
 import { VoucherService } from '../voucher.service.js';
@@ -12,7 +12,6 @@ import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
 
 import { AttachmentStorageService } from '../../attachments/attachmentStorage.service.js';
-import { containsLikePattern } from '../../../lib/sqlLike.js';
 import { requireStorageDate } from '../../../lib/storageDate.js';
 import { isoToJalaliDate } from '../../../utils/calendarDate.js';
 import { assertNoVoucherAllowed } from './noVoucherTreasury.js';
@@ -33,6 +32,7 @@ import { domainEventBus } from '../../events/domainEventBus.js';
 import { DomainEventType, type ChequeEventPayload } from '../../events/domainEvents.js';
 import { OutboxService } from '../../events/outboxService.js';
 import { idempotentTransaction } from '../../../middleware/idempotency.js';
+import { foldedContains } from '../../../lib/search/searchSql.js';
 
 // v9.0.69: جدول انتقال وضعیت چک در `src/lib/treasury/chequeTransitions.ts` است و مرورگر هم همان را می‌خواند
 export { CHEQUE_TRANSITIONS };
@@ -114,18 +114,9 @@ export class ChequeLifecycleService {
     if (endDate) {
       conditions.push(lte(cheques.dueDate, endDate));
     }
-    if (params.search && params.search.trim()) {
-      const q = containsLikePattern(params.search.trim());
-      conditions.push(
-        or(
-          like(cheques.chequeNumber, q),
-          like(cheques.sayadNumber, q),
-          like(cheques.partyName, q),
-          like(cheques.bankName, q),
-          like(cheques.drawerName, q)
-        )!
-      );
-    }
+    // v11 phase 6.3p (U8): one search rule (`foldedContains`)
+    const searched = foldedContains([cheques.chequeNumber, cheques.sayadNumber, cheques.partyName, cheques.bankName, cheques.drawerName], params.search);
+    if (searched) conditions.push(searched);
 
     const rawList = await orm.select({
       id: cheques.id,

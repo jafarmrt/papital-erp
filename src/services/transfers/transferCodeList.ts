@@ -1,7 +1,7 @@
 import { and, eq, inArray, sql, SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { items, transfers } from '../../db/schema.js';
-import { containsLikePattern } from '../../lib/sqlLike.js';
+import { foldedLike, foldedSearchPattern } from '../../lib/search/searchSql.js';
 import {
   TRANSFER_CODE_PAGE_SIZE, TransferCodeListFilters, TransferCodePage,
 } from '../../lib/transfers/transferCodeList.js';
@@ -106,18 +106,18 @@ export async function listTransferCodes(filters: TransferCodeListFilters): Promi
   const page = Math.max(1, filters.page ?? 1);
   const limit = filters.limit ?? TRANSFER_CODE_PAGE_SIZE;
   const conditions: SQL[] = [];
-  const search = (filters.search ?? '').trim();
-  if (search) {
-    const pattern = containsLikePattern(search);
+  // v11 phase 6.3p (U8): one search rule (`foldedLike`)
+  const pattern = foldedSearchPattern(filters.search);
+  if (pattern) {
     // عنوان پیش‌فرض «ترنسفر کد …» هم جست‌وجو می‌شود، و نام و کد کالاهای متصل، مانند پالایش پیشین صفحه
     conditions.push(sql`(
-      c.code ILIKE ${pattern}
-      OR coalesce(nullif(c.title, ''), 'ترنسفر کد ' || c.code) ILIKE ${pattern}
-      OR coalesce(c.notes, '') ILIKE ${pattern}
+      ${foldedLike(sql`c.code`, pattern)}
+      OR ${foldedLike(sql`coalesce(nullif(c.title, ''), 'ترنسفر کد ' || c.code)`, pattern)}
+      OR ${foldedLike(sql`c.notes`, pattern)}
       OR EXISTS (
         SELECT 1 FROM ${items}
         WHERE ${liveProduct} AND ${itemTransferCodeSql} = c.code
-          AND (${items.name} ILIKE ${pattern} OR ${items.code} ILIKE ${pattern})
+          AND (${foldedLike(items.name, pattern)} OR ${foldedLike(items.code, pattern)})
       )
     )`);
   }

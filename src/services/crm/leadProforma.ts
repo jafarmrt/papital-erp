@@ -5,6 +5,7 @@ import { ValidationError } from '../../errors/customErrors.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { crmTodayActivityDates } from '../../lib/storageDate.js';
 import { recordLeadStageChange } from './crmLeadStageHistory.js';
+import { isClosedLead as isClosedLeadRule } from '../../lib/crm/leadProformaRule.js';
 
 /**
  * پیوند پرونده فروش و پیش‌فاکتور آن («فروش موفق» فقط پس از پیش‌فاکتور، TD-309).
@@ -14,7 +15,7 @@ type Lead = typeof crmLeads.$inferSelect;
 
 /** v10.0.176 (TD-932): پرونده بسته («فروش موفق» یا «از دست رفته»، در مرحله یا وضعیت) */
 export function isClosedLead(lead: Pick<Lead, 'stage' | 'status'>): boolean {
-  return ['won', 'lost'].includes(String(lead.stage)) || ['won', 'lost'].includes(String(lead.status));
+  return isClosedLeadRule(lead);
 }
 
 /**

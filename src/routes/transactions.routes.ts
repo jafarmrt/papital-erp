@@ -4,11 +4,11 @@ import { orm } from '../db/drizzle.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission } from '../middleware/authorize.js';
-import { containsLikePattern } from '../lib/sqlLike.js';
 import { validate, storageDateParam } from '../middleware/validate.js';
 import { transactions, items, users } from '../db/schema.js';
-import { eq, desc, sql, and, gte, lte, or, ilike, type SQL } from 'drizzle-orm';
+import { eq, desc, sql, and, gte, lte, type SQL } from 'drizzle-orm';
 import { parsePagination } from '../lib/pagination.js';
+import { foldedContains } from '../lib/search/searchSql.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -64,17 +64,16 @@ router.get('/transactions', authorizePermission('warehouse.view', 'accounting.vi
     const endCondition = endDate.length <= 10 ? endDate + 'T23:59:59.999Z' : endDate;
     conditions.push(lte(transactions.date, endCondition));
   }
-  if (search && search.trim() !== '') {
-    const s = containsLikePattern(search.trim());
-    conditions.push(or(
-      ilike(items.name, s),
-      ilike(items.code, s),
-      ilike(transactions.documentRef, s),
-      ilike(transactions.notes, s),
-      ilike(transactions.createdBy, s),
-      ilike(users.fullName, s)
-    )!);
-  }
+  // v11 phase 6.3p (U8): one search rule (`foldedContains`)
+  const searched = foldedContains([
+    items.name,
+    items.code,
+    transactions.documentRef,
+    transactions.notes,
+    transactions.createdBy,
+    users.fullName,
+  ], search);
+  if (searched) conditions.push(searched);
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 

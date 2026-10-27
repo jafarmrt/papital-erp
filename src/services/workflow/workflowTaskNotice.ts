@@ -1,8 +1,8 @@
-import { eq } from 'drizzle-orm';
-import type { DbTransaction } from '../../db/drizzle.js';
-import { workflowDefinitions, workflowInstances } from '../../db/schema.js';
+import { and, eq, inArray } from 'drizzle-orm';
+import type { DbExecutor, DbTransaction } from '../../db/drizzle.js';
+import { notifications, workflowDefinitions, workflowInstances } from '../../db/schema.js';
 import { createNotifications } from '../notifications/notificationCreator.js';
-import { APPROVAL_INBOX_LINK, workflowTaskArrivedNotice } from '../../lib/notifications/notificationNotices.js';
+import { approvalInboxInstanceLink, workflowTaskArrivedNotice } from '../../lib/notifications/notificationNotices.js';
 import { workflowEntityTypeLabel } from '../../lib/workflow/workflowEntityLabels.js';
 import { getEntityContext } from './workflowDslParser.js';
 import { WorkflowDelegationService } from './workflowDelegationService.js';
@@ -72,7 +72,20 @@ export async function notifyWorkflowTasksArrived(
     type: 'task',
     title: notice.title,
     message: notice.message,
-    link: APPROVAL_INBOX_LINK,
+    link: approvalInboxInstanceLink(instanceId),
   })));
   return recipients.size;
+}
+
+/**
+ * v11 phase 6.3p (U6): when a step's tasks close (someone acted, the record moved on, or the workflow ended), the step's
+ * notices still unread by the other recipients are marked read. Before, a manager's bell kept «کار تازه در کارتابل» for a
+ * step the keeper and the accountant had done half an hour earlier, so the bell was learned to be ignored. A notice written
+ * before this version links to the inbox without its record and stays as it was.
+ */
+export async function closeWorkflowTaskNotices(tx: DbExecutor, instanceIds: readonly number[]): Promise<void> {
+  if (instanceIds.length === 0) return;
+  await tx.update(notifications)
+    .set({ isRead: 1 })
+    .where(and(inArray(notifications.link, instanceIds.map(approvalInboxInstanceLink)), eq(notifications.isRead, 0)));
 }

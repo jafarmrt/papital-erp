@@ -1,12 +1,12 @@
 import { orm } from '../../db/drizzle.js';
 import { outboxEvents, deadLetterEvents, activityLogs, documents, items, customers, treasuryTransactions, productionProjects } from '../../db/schema.js';
-import { eq, and, desc, or, ilike, inArray, sql } from 'drizzle-orm';
+import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { ValidationError } from '../../errors/customErrors.js';
 import { ruleActionTypeLabel } from '../../lib/events/ruleActionTypes.js';
 import { BaseDomainEvent, AggregateType } from './domainEvents.js';
 import { EventActionEngineService } from './eventActionEngineService.js';
 import { RuleExpression } from '../ruleEngine.service.js';
-import { containsLikePattern } from '../../lib/sqlLike.js';
+import { foldedContains } from '../../lib/search/searchSql.js';
 import { actionRuleView } from './integrationSecrets.js';
 import { timelineAggregateScope } from './timelineAggregates.js';
 
@@ -78,10 +78,9 @@ export class EventSourcingReplayService {
 
   /**
    * Search recent entities of a given aggregate type to populate selector dropdown.
+   * v11 6.3p (U8, review): the codes and names typed here go through the one search fold, as on every other list.
    */
   static async searchAggregates(aggregateType: string, search: string = '', limit: number = 20) {
-    const searchPattern = containsLikePattern(search);
-
     switch (aggregateType) {
       case 'document': {
         const rows = await orm
@@ -93,7 +92,7 @@ export class EventSourcingReplayService {
           })
           .from(documents)
           .where(
-            search ? or(ilike(documents.refNumber, searchPattern), ilike(documents.buyerName, searchPattern)) : undefined
+            foldedContains([documents.refNumber, documents.buyerName], search)
           )
           .orderBy(desc(documents.id))
           .limit(limit);
@@ -114,7 +113,7 @@ export class EventSourcingReplayService {
           })
           .from(customers)
           .where(
-            search ? or(ilike(customers.name, searchPattern), ilike(customers.phone, searchPattern)) : undefined
+            foldedContains([customers.name, customers.phone], search)
           )
           .orderBy(desc(customers.id))
           .limit(limit);
@@ -135,7 +134,7 @@ export class EventSourcingReplayService {
           })
           .from(items)
           .where(
-            search ? or(ilike(items.code, searchPattern), ilike(items.name, searchPattern)) : undefined
+            foldedContains([items.code, items.name], search)
           )
           .orderBy(desc(items.id))
           .limit(limit);
@@ -156,7 +155,7 @@ export class EventSourcingReplayService {
           })
           .from(treasuryTransactions)
           .where(
-            search ? or(ilike(treasuryTransactions.transactionNumber, searchPattern), ilike(treasuryTransactions.partyName, searchPattern)) : undefined
+            foldedContains([treasuryTransactions.transactionNumber, treasuryTransactions.partyName], search)
           )
           .orderBy(desc(treasuryTransactions.id))
           .limit(limit);
@@ -177,7 +176,7 @@ export class EventSourcingReplayService {
           })
           .from(productionProjects)
           .where(
-            search ? or(ilike(productionProjects.projectCode, searchPattern), ilike(productionProjects.title, searchPattern)) : undefined
+            foldedContains([productionProjects.projectCode, productionProjects.title], search)
           )
           .orderBy(desc(productionProjects.id))
           .limit(limit);

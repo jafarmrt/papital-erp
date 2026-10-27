@@ -78,6 +78,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
   access = FULL_ACCESS,
 }) => {
   const fieldId = useId();
+  const showTechnical = access.connection || access.shopWarehouse || access.sync;
   const [copiedWebhook, setCopiedWebhook] = useState(false);
   // v10.0.227 (OBS-PR-17): فهرست سفارش‌ها و گزارش ووکامرس فقط وقتی این زبانه باز می‌شود خوانده می‌شوند
   // 10.3 (ARCH review finding 3, part 13): through the shared cache, again on each opening; a failed read stays in its
@@ -106,159 +107,170 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-xs p-6 max-w-4xl mx-auto space-y-8 font-farsi">
-      {/* SECTION 1: Store Credentials */}
-      <div>
-        <h3 className="font-bold border-b border-slate-200 pb-3 mb-6 text-slate-800 text-base flex items-center gap-2">
-          <FolderTree size={18} className="text-blue-600" />
-          تنظیمات اتصال به فروشگاه ووکامرس (WooCommerce REST API)
-        </h3>
-        <p className="text-sm text-slate-500 mb-6 leading-relaxed">
-          برای اتصال سامانه به فروشگاه وردپرسی، نشانی سایت و کلیدهای دسترسی (Consumer Key و Consumer Secret) را که از مسیر{' '}
-          <strong>ووکامرس &gt; پیکربندی &gt; پیشرفته &gt; واسط برنامه‌نویسی (REST API)</strong> دریافت کرده‌اید وارد کنید.
-        </p>
-
-        {!access.connection && (
-          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">نشانی سایت و کلیدهای دسترسی را فقط مدیر سامانه تغییر می‌دهد.</p>
-        )}
-        <fieldset disabled={!access.connection} className="grid md:grid-cols-2 gap-6 mb-6">
-          <div className="md:col-span-2">
-            <label htmlFor={`${fieldId}-wc-store-url`} className="block text-sm font-medium mb-1 text-slate-700">نشانی سایت</label>
-            <input
-              id={`${fieldId}-wc-store-url`}
-              type="url"
-              value={wcStoreUrl}
-              onChange={(e) => setWcStoreUrl(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 bg-slate-50 border-slate-300 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none text-left"
-              placeholder="https://yoursite.com"
-              dir="ltr"
-            />
-            <p className="text-xs text-slate-500 mt-1">نشانی اصلی سایت، بدون / در انتها.</p>
-          </div>
-
-          <div>
-            <label htmlFor={`${fieldId}-wc-consumer-key`} className="block text-sm font-medium mb-1 text-slate-700">کلید مشتری (Consumer Key)</label>
-            <input
-              id={`${fieldId}-wc-consumer-key`}
-              type="password"
-              value={wcConsumerKey}
-              onChange={(e) => setWcConsumerKey(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 bg-slate-50 border-slate-300 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none font-mono text-left"
-              placeholder="ck_..."
-              dir="ltr"
-            />
-          </div>
-
-          <div>
-            <label htmlFor={`${fieldId}-wc-consumer-secret`} className="block text-sm font-medium mb-1 text-slate-700">رمز مشتری (Consumer Secret)</label>
-            <input
-              id={`${fieldId}-wc-consumer-secret`}
-              type="password"
-              value={wcConsumerSecret}
-              onChange={(e) => setWcConsumerSecret(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 bg-slate-50 border-slate-300 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none font-mono text-left"
-              placeholder="cs_..."
-              dir="ltr"
-            />
-          </div>
-        </fieldset>
-
-        <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 mb-8">
-          {access.sync && (
-          <button
-            onClick={handleTestWcConnection}
-            disabled={isTestingWc || isSaving}
-            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-6 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm border border-slate-200 disabled:opacity-50 flex items-center gap-2"
-          >
-            {isTestingWc ? (
-              <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
-            ) : (
-              <div className="w-4 h-4 flex items-center justify-center">🌐</div>
-            )}
-            آزمایش اتصال به سایت
-          </button>
-          )}
-          {(access.connection || access.shopWarehouse) && (
-          <button
-            onClick={handleSaveSettings}
-            disabled={isSaving || isTestingWc}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm disabled:opacity-50"
-          >
-            {isSaving ? 'در حال ذخیره…' : 'ذخیره تنظیمات ووکامرس'}
-          </button>
-          )}
-        </div>
-      </div>
-
-      {/* SECTION 2: Webhook & Security HMAC */}
-      <div className="bg-blue-50/60 border border-blue-200 rounded-xl p-5 space-y-4">
-        <div className="flex items-center justify-between border-b border-blue-200/80 pb-3">
-          <div className="font-bold text-blue-950 text-sm flex items-center gap-2">
-            <ShoppingBag size={18} className="text-blue-600" />
-            همگام‌سازی دوطرفه خودکار و امنیت وب‌هوک (HMAC SHA-256)
-          </div>
-          <span className="bg-blue-100 text-blue-800 text-[11px] font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1">
-            <ShieldCheck size={12} />
-            امضا و جلوگیری از ثبت دوباره
-          </span>
-        </div>
-
-        <p className="text-xs text-blue-900 leading-relaxed">
-          جهت ثبت خودکار فاکتور فروش و کسر از موجودی انبار به محض خرید مشتری در سایت، نشانی وب‌هوک زیر را در ووکامرس وارد کنید:
-        </p>
-
-        <div className="flex items-center gap-2 bg-white border border-blue-200 rounded-lg p-2">
-          <input
-            type="text"
-            readOnly
-            value={webhookUrl}
-            className="w-full text-xs font-mono text-slate-700 bg-transparent outline-none dir-ltr"
-          />
-          <button
-            onClick={handleCopyWebhook}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors shrink-0 font-medium"
-          >
-            {copiedWebhook ? <Check size={14} /> : <Copy size={14} />}
-            {copiedWebhook ? 'کپی شد' : 'کپی نشانی وب‌هوک'}
-          </button>
-        </div>
-
-        {/* HMAC Secret Config */}
-        <fieldset disabled={!access.connection} className="bg-white/90 border border-blue-200 rounded-lg p-3 space-y-2">
-          <label htmlFor={`${fieldId}-wc-webhook-secret`} className="block text-xs font-bold text-blue-950 flex items-center gap-1.5">
-            <Key size={14} className="text-amber-600" />
-            کلید محرمانه امضای وب‌هوک (Secret)
-          </label>
-          <input
-            id={`${fieldId}-wc-webhook-secret`}
-            type="password"
-            autoComplete="new-password"
-            value={wcWebhookSecret}
-            onChange={(e) => setWcWebhookSecret(e.target.value)}
-            className="w-full border border-slate-300 rounded px-3 py-1.5 text-xs font-mono bg-slate-50 text-left outline-none focus:ring-1 focus:ring-blue-500"
-            placeholder="کد محرمانه‌ای که در ووکامرس برای این وب‌هوک ساخته‌اید"
-            dir="ltr"
-          />
-          <p className="text-[11px] text-slate-500 leading-normal">
-            سفارش‌ها فقط با این کلید پردازش می‌شوند: امضای هر وب‌هوک دریافتی (HMAC SHA-256) با آن بررسی می‌شود.
+      {/* v11 6.3p (U18): the store address, keys and webhook are shown only to whoever may change or test them; a
+          holder of woocommerce.view alone sees the catalog and the order logs */}
+      {showTechnical ? (
+        <>
+        {/* SECTION 1: Store Credentials */}
+        <div>
+          <h3 className="font-bold border-b border-slate-200 pb-3 mb-6 text-slate-800 text-base flex items-center gap-2">
+            <FolderTree size={18} className="text-blue-600" />
+            تنظیمات اتصال به فروشگاه ووکامرس (<bdi>WooCommerce REST API</bdi>)
+          </h3>
+          <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+            برای اتصال سامانه به فروشگاه وردپرسی، نشانی سایت و کلیدهای دسترسی (<bdi>Consumer Key</bdi> و <bdi>Consumer Secret</bdi>) را که از مسیر{' '}
+            <strong>ووکامرس &gt; پیکربندی &gt; پیشرفته &gt; واسط برنامه‌نویسی (REST API)</strong> دریافت کرده‌اید وارد کنید.
           </p>
-        </fieldset>
 
-        <fieldset disabled={!access.shopWarehouse}>
-          <ShopWarehouseSelect value={wcShopWarehouse} onChange={setWcShopWarehouse} warehouses={warehouses} />
-        </fieldset>
+          {!access.connection && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">نشانی سایت و کلیدهای دسترسی را فقط مدیر سامانه تغییر می‌دهد.</p>
+          )}
+          <fieldset disabled={!access.connection} className="grid md:grid-cols-2 gap-6 mb-6">
+            <div className="md:col-span-2">
+              <label htmlFor={`${fieldId}-wc-store-url`} className="block text-sm font-medium mb-1 text-slate-700">نشانی سایت</label>
+              <input
+                id={`${fieldId}-wc-store-url`}
+                type="url"
+                value={wcStoreUrl}
+                onChange={(e) => setWcStoreUrl(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 bg-slate-50 border-slate-300 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none text-left"
+                placeholder="https://yoursite.com"
+                dir="ltr"
+              />
+              <p className="text-xs text-slate-500 mt-1">نشانی اصلی سایت، بدون / در انتها.</p>
+            </div>
 
-        <div className="bg-white/80 rounded-lg p-3 text-xs text-blue-900 space-y-1.5 border border-blue-100">
-          <div className="font-semibold text-blue-950 mb-1">📋 مراحل ثبت وب‌هوک در ووکامرس:</div>
-          <ol className="list-decimal list-inside space-y-1 leading-relaxed text-blue-800">
-            <li>در پیشخوان وردپرس به مسیر <strong>ووکامرس &gt; پیکربندی &gt; پیشرفته &gt; وب‌هوک‌ها (Webhooks)</strong> بروید.</li>
-            <li>روی دکمه <strong>«افزودن وب‌هوک»</strong> کلیک کنید.</li>
-            <li><strong>نام:</strong> دلخواه (مثلاً: <code>همگام‌سازی فاکتور انبار</code>)، <strong>وضعیت:</strong> <code>فعال (Active)</code>.</li>
-            <li><strong>موضوع (Topic):</strong> حتماً <code>سفارش به‌روزرسانی شد (Order Updated)</code> را انتخاب کنید؛ فاکتور فقط پس از پرداخت (وضعیت «در حال انجام» یا «تکمیل‌شده») صادر و با لغو سفارش ابطال می‌شود و این تغییر وضعیت‌ها فقط با این موضوع ارسال می‌شوند. افزودن وب‌هوک جداگانه برای <code>سفارش ایجاد شد</code> اختیاری است.</li>
-            <li><strong>نشانی تحویل (Delivery URL):</strong> نشانی وب‌هوک را که در بالا کپی کردید بچسبانید.</li>
-            <li><strong>کد محرمانه (Secret):</strong> همان کدی را که در کادر بالا وارد کردید بگذارید؛ بدون این کد سفارش‌ها پردازش نمی‌شوند.</li>
-          </ol>
+            <div>
+              <label htmlFor={`${fieldId}-wc-consumer-key`} className="block text-sm font-medium mb-1 text-slate-700">کلید مشتری (<bdi>Consumer Key</bdi>)</label>
+              <input
+                id={`${fieldId}-wc-consumer-key`}
+                type="password"
+                value={wcConsumerKey}
+                onChange={(e) => setWcConsumerKey(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 bg-slate-50 border-slate-300 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none font-mono text-left"
+                placeholder="ck_..."
+                dir="ltr"
+              />
+            </div>
+
+            <div>
+              <label htmlFor={`${fieldId}-wc-consumer-secret`} className="block text-sm font-medium mb-1 text-slate-700">رمز مشتری (<bdi>Consumer Secret</bdi>)</label>
+              <input
+                id={`${fieldId}-wc-consumer-secret`}
+                type="password"
+                value={wcConsumerSecret}
+                onChange={(e) => setWcConsumerSecret(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 bg-slate-50 border-slate-300 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none font-mono text-left"
+                placeholder="cs_..."
+                dir="ltr"
+              />
+            </div>
+          </fieldset>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 mb-8">
+            {access.sync && (
+            <button
+              onClick={handleTestWcConnection}
+              disabled={isTestingWc || isSaving}
+              className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-6 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm border border-slate-200 disabled:opacity-50 flex items-center gap-2"
+            >
+              {isTestingWc ? (
+                <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <div className="w-4 h-4 flex items-center justify-center">🌐</div>
+              )}
+              آزمایش اتصال به سایت
+            </button>
+            )}
+            {(access.connection || access.shopWarehouse) && (
+            <button
+              onClick={handleSaveSettings}
+              disabled={isSaving || isTestingWc}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm disabled:opacity-50"
+            >
+              {isSaving ? 'در حال ذخیره…' : 'ذخیره تنظیمات ووکامرس'}
+            </button>
+            )}
+          </div>
         </div>
-      </div>
+
+        {/* SECTION 2: Webhook & Security HMAC */}
+        <div className="bg-blue-50/60 border border-blue-200 rounded-xl p-5 space-y-4">
+          <div className="flex items-center justify-between border-b border-blue-200/80 pb-3">
+            <div className="font-bold text-blue-950 text-sm flex items-center gap-2">
+              <ShoppingBag size={18} className="text-blue-600" />
+              همگام‌سازی دوطرفه خودکار و امنیت وب‌هوک (<bdi>HMAC SHA-256</bdi>)
+            </div>
+            <span className="bg-blue-100 text-blue-800 text-[11px] font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1">
+              <ShieldCheck size={12} />
+              امضا و جلوگیری از ثبت دوباره
+            </span>
+          </div>
+
+          <p className="text-xs text-blue-900 leading-relaxed">
+            جهت ثبت خودکار فاکتور فروش و کسر از موجودی انبار به محض خرید مشتری در سایت، نشانی وب‌هوک زیر را در ووکامرس وارد کنید:
+          </p>
+
+          <div className="flex items-center gap-2 bg-white border border-blue-200 rounded-lg p-2">
+            <input
+              type="text"
+              readOnly
+              value={webhookUrl}
+              className="w-full text-xs font-mono text-slate-700 bg-transparent outline-none dir-ltr"
+            />
+            <button
+              onClick={handleCopyWebhook}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors shrink-0 font-medium"
+            >
+              {copiedWebhook ? <Check size={14} /> : <Copy size={14} />}
+              {copiedWebhook ? 'کپی شد' : 'کپی نشانی وب‌هوک'}
+            </button>
+          </div>
+
+          {/* HMAC Secret Config */}
+          <fieldset disabled={!access.connection} className="bg-white/90 border border-blue-200 rounded-lg p-3 space-y-2">
+            <label htmlFor={`${fieldId}-wc-webhook-secret`} className="block text-xs font-bold text-blue-950 flex items-center gap-1.5">
+              <Key size={14} className="text-amber-600" />
+              کلید محرمانه امضای وب‌هوک (<bdi>Secret</bdi>)
+            </label>
+            <input
+              id={`${fieldId}-wc-webhook-secret`}
+              type="password"
+              autoComplete="new-password"
+              value={wcWebhookSecret}
+              onChange={(e) => setWcWebhookSecret(e.target.value)}
+              className="w-full border border-slate-300 rounded px-3 py-1.5 text-xs font-mono bg-slate-50 text-left outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="کد محرمانه‌ای که در ووکامرس برای این وب‌هوک ساخته‌اید"
+              dir="ltr"
+            />
+            <p className="text-[11px] text-slate-500 leading-normal">
+              سفارش‌ها فقط با این کلید پردازش می‌شوند: امضای هر وب‌هوک دریافتی (<bdi>HMAC SHA-256</bdi>) با آن بررسی می‌شود.
+            </p>
+          </fieldset>
+
+          <fieldset disabled={!access.shopWarehouse}>
+            <ShopWarehouseSelect value={wcShopWarehouse} onChange={setWcShopWarehouse} warehouses={warehouses} />
+          </fieldset>
+
+          <div className="bg-white/80 rounded-lg p-3 text-xs text-blue-900 space-y-1.5 border border-blue-100">
+            <div className="font-semibold text-blue-950 mb-1">📋 مراحل ثبت وب‌هوک در ووکامرس:</div>
+            <ol className="list-decimal list-inside space-y-1 leading-relaxed text-blue-800">
+              <li>در پیشخوان وردپرس به مسیر <strong>ووکامرس &gt; پیکربندی &gt; پیشرفته &gt; وب‌هوک‌ها (Webhooks)</strong> بروید.</li>
+              <li>روی دکمه <strong>«افزودن وب‌هوک»</strong> کلیک کنید.</li>
+              <li><strong>نام:</strong> دلخواه (مثلاً: <code>همگام‌سازی فاکتور انبار</code>)، <strong>وضعیت:</strong> <code>فعال (Active)</code>.</li>
+              <li><strong>موضوع (Topic):</strong> حتماً <code>سفارش به‌روزرسانی شد (Order Updated)</code> را انتخاب کنید؛ فاکتور فقط پس از پرداخت (وضعیت «در حال انجام» یا «تکمیل‌شده») صادر و با لغو سفارش ابطال می‌شود و این تغییر وضعیت‌ها فقط با این موضوع ارسال می‌شوند. افزودن وب‌هوک جداگانه برای <code>سفارش ایجاد شد</code> اختیاری است.</li>
+              <li><strong>نشانی تحویل (Delivery URL):</strong> نشانی وب‌هوک را که در بالا کپی کردید بچسبانید.</li>
+              <li><strong>کد محرمانه (Secret):</strong> همان کدی را که در کادر بالا وارد کردید بگذارید؛ بدون این کد سفارش‌ها پردازش نمی‌شوند.</li>
+            </ol>
+          </div>
+        </div>
+
+        </>
+      ) : (
+        <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+          تنظیمات فنی اتصال فروشگاه (نشانی سایت، کلیدها و وب‌هوک) فقط برای مدیر سامانه و دارنده «تنظیمات اتصال و همگام‌سازی دستی» است. همگام‌سازی کالاها و سوابق سفارش‌ها در ادامه آمده است.
+        </p>
+      )}
 
       <WcCatalogPanel canManage={access.sync} stockPushRunning={isSyncingAllStocks} />
 

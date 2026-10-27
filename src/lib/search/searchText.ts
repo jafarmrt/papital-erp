@@ -3,9 +3,12 @@
  * «ي»، «ى» و «ك» عربی به «ی» و «ک» فارسی، ارقام فارسی و عربی به لاتین. `SEARCH_FOLD_FROM` / `SEARCH_FOLD_TO` همین نگاشت برای
  * `translate()` در PostgreSQL است، پس متن ذخیره‌شده و متن جست‌وجو یک‌جور سنجیده می‌شوند.
  */
-export const SEARCH_FOLD_FROM = 'يكى۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩';
-export const SEARCH_FOLD_TO = 'یکی01234567890123456789';
+export const SEARCH_FOLD_FROM = 'يكى۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩آأإةۀ\u200c';
+export const SEARCH_FOLD_TO = 'یکی01234567890123456789اااهه ';
 
+// v11 phase 6.3p (U8): «آ», «أ» and «إ» are «ا», «ة» and «ۀ» are «ه» (as the account picker read them) and the zero-width
+// non-joiner is a space, so «ارامش» finds «آرامش» and «می‌خواهم» finds «می خواهم». Both strings keep one character per
+// position (the SQL `translate()` maps them pairwise).
 const FOLD = new Map<string, string>(Array.from(SEARCH_FOLD_FROM).map((ch, i) => [ch, Array.from(SEARCH_FOLD_TO)[i]]));
 
 // PostgreSQL text never holds NUL (SQLSTATE 22021), so a search or filter carrying one drops it here, never in the SQL side
@@ -37,4 +40,25 @@ const COMPACT_FOLD = new Map<string, string>(
 
 export function compactSearchText(value: unknown): string {
   return Array.from(normalizeSearchText(value), ch => COMPACT_FOLD.get(ch) ?? ch).join('').replace(COMPACT_DROP, '');
+}
+
+/**
+ * v11 phase 6.3p (U8): the one test a list filtered in the browser uses for its search box. The search text and every
+ * field go through `normalizeSearchText`, as the server lists do in SQL (`foldedSearchSql`), so «0912…», «۰۹۱۲…», «كريمي»
+ * and «کریمی» find the same rows on every screen. An empty search matches every row.
+ */
+export function searchMatches(search: unknown, ...fields: unknown[]): boolean {
+  const q = normalizeSearchText(search);
+  if (!q) return true;
+  return fields.some(field => normalizeSearchText(field).includes(q));
+}
+
+/**
+ * v11 phase 6.3p (U8, review): `searchMatches` under `compactSearchText`, for a pick list of names written with separators
+ * (the account picker): «ملت جاری» finds «بانک ملت - جاری», as `normalizePersianText` did there before.
+ */
+export function compactSearchMatches(search: unknown, ...fields: unknown[]): boolean {
+  const q = compactSearchText(search);
+  if (!q) return true;
+  return fields.some(field => compactSearchText(field).includes(q));
 }

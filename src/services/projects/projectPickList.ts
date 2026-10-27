@@ -1,8 +1,8 @@
-import { and, desc, eq, ilike, or, type SQL } from 'drizzle-orm';
+import { and, desc, eq, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { productionProjects } from '../../db/schema.js';
-import { containsLikePattern } from '../../lib/sqlLike.js';
 import type { ProjectPick } from '../../lib/permissions/pickLists.js';
+import { foldedContains } from '../../lib/search/searchSql.js';
 
 /**
  * v9.0.139 (TD-889، تصمیم ت۱۰ الف مدل مجوز): فهرست انتخاب پروژه (`GET /projects/options`) برای فرم‌های بخش‌های دیگر
@@ -20,14 +20,13 @@ export interface ProjectPickListQuery {
 export async function listProjectPicks(query: ProjectPickListQuery): Promise<ProjectPick[]> {
   const conditions: SQL[] = [eq(productionProjects.isDeleted, 0)];
   if (query.status && query.status !== 'all') conditions.push(eq(productionProjects.status, query.status));
-  if (query.search) {
-    const pattern = containsLikePattern(query.search);
-    conditions.push(or(
-      ilike(productionProjects.projectCode, pattern),
-      ilike(productionProjects.title, pattern),
-      ilike(productionProjects.customerName, pattern),
-    ) as SQL);
-  }
+  // v11 phase 6.3p (U8): one search rule (`foldedContains`)
+  const searched = foldedContains([
+    productionProjects.projectCode,
+    productionProjects.title,
+    productionProjects.customerName,
+  ], query.search);
+  if (searched) conditions.push(searched);
   const base = orm.select({
     id: productionProjects.id,
     projectCode: productionProjects.projectCode,

@@ -83,16 +83,16 @@ export function RequisitionRow({ req, access, isSelected, onToggleSelect, onView
         <PillBadge variants={REQUISITION_STATUS_BADGES} value={req.status} fallback={REQUISITION_STATUS_FALLBACK} />
       </td>
 
-      <td className="p-3 text-center" data-label="فاکتورهای خرید">
+      <td className="p-3 text-center" data-label="سفارش‌های خرید">
         {ordersCount > 0 ? (
           <div className="flex flex-col items-center gap-1">
             <button
               type="button"
               onClick={onShowOrders}
               className="px-2 py-0.5 bg-sky-50 hover:bg-sky-100 text-sky-800 rounded-md font-bold text-[11px] border border-sky-200 transition-colors cursor-pointer"
-              title="مشاهده فاکتورهای خرید در زبانه فاکتورهای خرید"
+              title="مشاهده سفارش‌های خرید در زبانه سفارش‌های خرید"
             >
-              {formatPersianNumber(ordersCount)} فاکتور خرید
+              {formatPersianNumber(ordersCount)} سفارش خرید
             </button>
             {pendingOrdersCount > 0 ? (
               <span className="text-[10px] text-amber-800 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
@@ -105,7 +105,7 @@ export function RequisitionRow({ req, access, isSelected, onToggleSelect, onView
             )}
           </div>
         ) : (
-          <span className="text-slate-400 text-[11px]">بدون فاکتور</span>
+          <span className="text-slate-400 text-[11px]">بدون سفارش</span>
         )}
       </td>
 
@@ -131,10 +131,10 @@ export function RequisitionRow({ req, access, isSelected, onToggleSelect, onView
                 disabled={req.initiatorCannotApprove === true}
                 aria-describedby={req.initiatorCannotApprove ? `split-blocked-${req.id}` : undefined}
                 className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg flex items-center gap-1 shadow-xs transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-amber-500"
-                title={req.initiatorCannotApprove ? INITIATOR_CANNOT_APPROVE : 'تفکیک تامین‌کنندگان و صدور فاکتور خرید'}
+                title={req.initiatorCannotApprove ? INITIATOR_CANNOT_APPROVE : 'تفکیک تامین‌کنندگان و صدور سفارش خرید'}
               >
                 <ShoppingCart className="w-3.5 h-3.5" />
-                <span>تفکیک و صدور فاکتور</span>
+                <span>تفکیک و صدور سفارش</span>
               </button>
               {req.initiatorCannotApprove && (
                 <>

@@ -2,6 +2,7 @@ import { Search, X, ChevronLeft } from 'lucide-react';
 import { SettingCategoryGroup } from './settingsNavigationConfig';
 import { cn, formatPersianNumber } from '../../utils';
 import { isSystemAdminSettingsTab } from '../../lib/permissions/pageAccess';
+import { searchMatches } from '../../lib/search/searchText';
 
 interface SettingsNavigationSidebarProps {
   groups: SettingCategoryGroup[];
@@ -27,12 +28,7 @@ export function SettingsNavigationSidebar({
     .filter(g => !selectedGroupFilter || g.id === selectedGroupFilter)
     .map(g => {
       if (!searchQuery.trim()) return g;
-      const q = searchQuery.trim().toLowerCase();
-      const matchingTabs = g.tabs.filter(t => 
-        t.label.toLowerCase().includes(q) ||
-        t.shortDesc.toLowerCase().includes(q) ||
-        t.keywords.some(k => k.toLowerCase().includes(q))
-      );
+      const matchingTabs = g.tabs.filter(t => searchMatches(searchQuery, t.label, t.shortDesc, ...t.keywords));
       return {
         ...g,
         tabs: matchingTabs
