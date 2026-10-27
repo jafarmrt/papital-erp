@@ -2,11 +2,11 @@ import { Edit3 } from 'lucide-react';
 import type { InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
 import type { InvoiceListActions } from '../../../hooks/invoices/useInvoiceListActions';
 
-/** TD-080 (بخش ۳): ستون «توضیحات و یادداشت» با ویرایش درجا */
+/** TD-080 (بخش ۳): ستون «توضیحات و یادداشت» با ویرایش درجا؛ v11 phase 6.3b: on a phone (no hover) the edit button shows */
 export function InvoiceRowNotesCell({ doc, actions }: { doc: InvoiceListDocument; actions: InvoiceListActions }) {
   const { access, editingNotesId, setEditingNotesId, tempNotes, setTempNotes, handleUpdateNotes, startEditingNotes } = actions;
   return (
-    <td className="p-3" data-phone="hide">
+    <td className="p-3" data-label="یادداشت">
       {editingNotesId === doc.id ? (
         <div className="flex items-center gap-2">
           <textarea 
@@ -38,8 +38,9 @@ export function InvoiceRowNotesCell({ doc, actions }: { doc: InvoiceListDocument
           {/* v9.0.340 (TD-795): ویرایش توضیحات فقط با مجوز ویرایش سند */}
           {access.editNotes && <button 
             onClick={() => startEditingNotes(doc)} 
-            className="opacity-0 group-hover:opacity-100 text-blue-600 hover:text-blue-800 p-1 cursor-pointer transition-opacity rounded hover:bg-blue-50 shrink-0"
+            className="opacity-0 group-hover:opacity-100 focus:opacity-100 max-sm:opacity-100 max-sm:min-h-11 max-sm:min-w-11 inline-flex items-center justify-center text-blue-600 hover:text-blue-800 p-1 cursor-pointer transition-opacity rounded hover:bg-blue-50 shrink-0"
             title="ویرایش توضیحات"
+            aria-label="ویرایش توضیحات"
           >
             <Edit3 size={13} />
           </button>}

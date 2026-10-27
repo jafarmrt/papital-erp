@@ -220,7 +220,9 @@ pre code,
 /* v11 phase 6.3b (U14): on a phone a wide list turns each row into a card, so the amount, the status and the row's main
    action are on screen without sideways scrolling. The table carries `phone-cards`; each cell names its column in
    `data-label` (shown before the value), `data-phone="title"` is the card's heading line without a label,
-   `data-phone="hide"` stays only on a wide screen and `data-phone="actions"` closes the card (Vitest phoneCardLists). */
+   `data-phone="hide"` stays only on a wide screen and `data-phone="actions"` closes the card (Vitest phoneCardLists).
+   A card keeps its row's own background and text colour (a selected or voided tint, a list with or without dark styles)
+   and its labels take the cell's colour, so a card reads like the row it was in either colour scheme. */
 @media (max-width: 639.98px) {
   table.phone-cards,
   table.phone-cards > tbody {
@@ -237,7 +239,6 @@ pre code,
     padding: 0.25rem 0.5rem;
     border: 1px solid var(--color-slate-200);
     border-radius: 0.75rem;
-    background: #ffffff;
   }
   table.phone-cards > tbody > tr > td {
     display: flex;
@@ -255,7 +256,7 @@ pre code,
     flex-shrink: 0;
     font-size: 0.75rem;
     font-weight: 700;
-    color: var(--color-slate-600);
+    opacity: 0.8;
   }
   table.phone-cards > tbody > tr > td[data-phone="title"] {
     order: -1;
@@ -275,10 +276,6 @@ pre code,
   @media (prefers-color-scheme: dark) {
     table.phone-cards > tbody > tr {
       border-color: var(--color-slate-700);
-      background: var(--color-slate-800);
-    }
-    table.phone-cards > tbody > tr > td[data-label]::before {
-      color: var(--color-slate-300);
     }
   }
 }

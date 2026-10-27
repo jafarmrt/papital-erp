@@ -40,8 +40,8 @@ const EXIT_END_KEYS: ReadonlySet<string> = new Set(['rejected', 'canceled']);
 /**
  * v11 phase 6.3b (U22): the steps the line shows. An end step that leaves the way through (the rejection or cancel end,
  * such as «رد شده / لغو شده») shows only when the process reached it; before, it stood as a pending step ۵ after «تأیید
- * نهایی», and as «تکمیل‌شده» once the document was approved. A design whose end steps carry neither key keeps the first
- * end in order as the way through.
+ * نهایی», and as «تکمیل‌شده» once the document was approved. A design whose end steps carry neither key shows all its
+ * ends as before: which of them is the way through cannot be told from their order.
  */
 export function stepperVisibleSteps<T extends StepRef & { stateType?: string | null; stateKey?: string | null }>(
   steps: readonly T[],
@@ -50,7 +50,6 @@ export function stepperVisibleSteps<T extends StepRef & { stateType?: string | n
 ): T[] {
   const ends = steps.filter(s => s.stateType === 'terminal');
   const exits = new Set(ends.filter(s => EXIT_END_KEYS.has(String(s.stateKey ?? ''))).map(s => s.id));
-  if (exits.size === 0) [...ends].sort((a, b) => a.stepOrder - b.stepOrder).slice(1).forEach(s => exits.add(s.id));
   return steps.filter(s => !exits.has(s.id)
     || currentState?.id === s.id
     || history.some(h => h.toStateId === s.id || h.fromStateId === s.id));

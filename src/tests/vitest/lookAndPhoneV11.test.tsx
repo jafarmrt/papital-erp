@@ -6,7 +6,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { shouldRetryQuery } from '../../lib/queryRetry';
 import { defaultTreasuryLedger, defaultTreasuryLedgerCode } from '../../lib/treasury/treasuryLedgerDefault';
 import { stepperVisibleSteps } from '../../lib/workflow/stepperStepStatus';
-import { ownReservationOf, proformaLineShortages, proformaShortageText } from '../../lib/invoices/proformaLineShortage';
+import { proformaLineShortages, proformaShortageText } from '../../lib/invoices/proformaLineShortage';
 import { addInvoiceLine, type InvoiceDocItem } from '../../lib/invoices/invoiceForm';
 import { APP_SCROLL_ATTRIBUTE, scrollAppToTop } from '../../components/layout/appScroll';
 import { InvoiceLinesList } from '../../components/invoices/create/InvoiceLinesList';
@@ -176,9 +176,9 @@ describe('the workflow line shows an exit end only when reached (U22)', () => {
     expect(ids(stepperVisibleSteps(steps, steps[0], [{ fromStateId: 2, toStateId: 5 }, { fromStateId: 5, toStateId: 1 }]))).toEqual([1, 2, 3, 5]);
   });
 
-  it('keeps the first end in order as the way through when no end carries those keys', () => {
-    const plain = steps.map(s => ({ ...s, stateKey: `s${s.id}` }));
-    expect(ids(stepperVisibleSteps(plain, plain[1], []))).toEqual([1, 2, 3]);
+  it('shows every end of a design whose ends carry neither key (a rejection end listed before the approval)', () => {
+    const plain = [steps[0], steps[1], { ...steps[3], stepOrder: 3, stateKey: 'denied' }, { ...steps[2], stepOrder: 4 }];
+    expect(ids(stepperVisibleSteps(plain, plain[1], []))).toEqual([1, 2, 4, 3]);
   });
 });
 
@@ -190,19 +190,19 @@ describe('a proforma line above the sellable stock says so (U26)', () => {
 
   it('flags a proforma line above what its warehouse can sell, and nothing on a final invoice', () => {
     const lines = [line(item({ current_stock: 5, reserved_stock: 2, stock_W1: 5 }), 10)];
-    expect(proformaLineShortages(lines, proforma, new Map())).toEqual([{ requested: 10, sellable: 3 }]);
-    expect(proformaLineShortages(lines, { ...proforma, status: 'final' }, new Map())).toEqual([null]);
-    expect(proformaLineShortages([line(item({ current_stock: 5, stock_W1: 5 }), 5)], proforma, new Map())).toEqual([null]);
+    expect(proformaLineShortages(lines, proforma)).toEqual([{ requested: 10, sellable: 3 }]);
+    expect(proformaLineShortages(lines, { ...proforma, status: 'final' })).toEqual([null]);
+    expect(proformaLineShortages([line(item({ current_stock: 5, stock_W1: 5 }), 5)], proforma)).toEqual([null]);
   });
 
   it('leaves a line read back from a stored proforma to the save warning', () => {
-    expect(proformaLineShortages([line(item({}), 10)], proforma, new Map())).toEqual([null]);
+    expect(proformaLineShortages([line(item({}), 10)], proforma)).toEqual([null]);
   });
 
-  it('does not count the edited proforma\'s own reservation against it', () => {
-    const lines = [line(item({ current_stock: 5, reserved_stock: 4, stock_W1: 5 }), 4)];
-    expect(proformaLineShortages(lines, proforma, new Map())).toEqual([{ requested: 4, sellable: 1 }]);
-    expect(proformaLineShortages(lines, proforma, ownReservationOf(lines))).toEqual([null]);
+  it('takes the picker\'s reserved figure as it is (the edited proforma\'s own reservation is already left out)', () => {
+    // stock 10, another proforma reserves 6; the picker of the edited proforma reads 6, not 6 + its own 4
+    const lines = [line(item({ current_stock: 10, reserved_stock: 6, stock_W1: 10 }), 7)];
+    expect(proformaLineShortages(lines, proforma)).toEqual([{ requested: 7, sellable: 4 }]);
   });
 
   it('a line added again takes the picker\'s stock figures', () => {
@@ -210,7 +210,7 @@ describe('a proforma line above the sellable stock says so (U26)', () => {
     const merged = addInvoiceLine([stored], line(item({ current_stock: 3, stock_W1: 3 }), 2), 'W1');
     expect(merged).toHaveLength(1);
     expect(merged[0].quantity).toBe(4);
-    expect(proformaLineShortages(merged, proforma, new Map())).toEqual([{ requested: 4, sellable: 3 }]);
+    expect(proformaLineShortages(merged, proforma)).toEqual([{ requested: 4, sellable: 3 }]);
   });
 
   it('the line table shows the note on the short line', () => {

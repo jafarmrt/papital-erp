@@ -120,8 +120,9 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
   // v11 phase 6.3b (U19): a new account takes the standard ledger of its type and currency until the user picks one
   useEffect(() => {
     if (!isOpen || editingBank || ledgerPickedByUser) return;
-    const suggested = defaultTreasuryLedger(Array.isArray(accounts) ? accounts : [], formData.type, formData.currency);
-    if (suggested && suggested.id !== formData.accountId) setFormData(prev => ({ ...prev, accountId: suggested.id }));
+    // no standard ledger for the new type or currency clears the earlier automatic one instead of keeping a wrong ledger
+    const suggestedId = defaultTreasuryLedger(Array.isArray(accounts) ? accounts : [], formData.type, formData.currency)?.id ?? null;
+    if (suggestedId !== formData.accountId) setFormData(prev => ({ ...prev, accountId: suggestedId }));
   }, [isOpen, editingBank, ledgerPickedByUser, accounts, formData.type, formData.currency, formData.accountId]);
 
   // هر بار که کاربر نوع حساب را تغییر داد و در حالت ایجاد بود، کد جدید متناسب واکشی شود
@@ -140,7 +141,9 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (Number(formData.initialBalance) !== 0 && !formData.accountId) {
+    // only a new balance needs the ledger: an older account with a balance and no ledger can still be renamed (as the server allows)
+    const balanceIsNew = !editingBank || Number(formData.initialBalance) !== Number(editingBank.initialBalance || 0);
+    if (balanceIsNew && Number(formData.initialBalance) !== 0 && !formData.accountId) {
       setLedgerError(TREASURY_LEDGER_REQUIRED_MESSAGE);
       return;
     }
