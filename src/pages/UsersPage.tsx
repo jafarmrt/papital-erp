@@ -232,6 +232,7 @@ export default function UsersPage({ currentUser, userPermissions }: UsersPagePro
         <RolesTab
           rolesList={rolesList}
           users={users}
+          grantor={fullGrantor}
           totalCatalogPermsCount={totalCatalogPermsCount}
           onAddRole={() => {
             setEditingRole(null);
