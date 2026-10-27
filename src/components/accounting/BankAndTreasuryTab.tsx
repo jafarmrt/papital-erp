@@ -29,6 +29,7 @@ import { TreasuryTransferModal } from './treasury/TreasuryTransferModal';
 import { TreasuryVoidModal } from './treasury/TreasuryVoidModal';
 import { TreasuryRelinkModal } from './treasury/TreasuryRelinkModal';
 import { SettlementAllocationModal, type SettlementWindowTarget } from './treasury/SettlementAllocationModal';
+import { useCanSettleOnDocuments } from './treasury/SettlementAllocationField';
 import { CashFlowModal } from './treasury/CashFlowModal';
 import { PettyCashExpenseModal } from './treasury/PettyCashExpenseModal';
 import { PettyCashLinesModal } from './treasury/PettyCashLinesModal';
@@ -224,6 +225,7 @@ export function BankAndTreasuryTab({
   const [relinkTarget, setRelinkTarget] = useState<TreasuryTransaction | null>(null);
   // v11 phase 6.1t (M11 / U2): «نشاندن روی فاکتورها» of a recorded receipt or payment
   const [settlementTarget, setSettlementTarget] = useState<SettlementWindowTarget | null>(null);
+  const canSettleOnDocuments = useCanSettleOnDocuments();
 
   // v10.1.32 (D-16): شارژ و برگشت وجه تنخواه همان انتقال وجه است با مقصد یا مبدأ از پیش انتخاب‌شده
   const handlePettyCash = (bank: BankAccount, action: PettyCashAction) => {
@@ -371,10 +373,10 @@ export function BankAndTreasuryTab({
         onVoidTransaction={(tx) => setVoidTarget(tx)}
         onDetachDocument={(tx) => { void handleDetachDocument(tx); }}
         onRelinkDocument={setRelinkTarget}
-        onAllocateDocuments={tx => setSettlementTarget({
+        onAllocateDocuments={canSettleOnDocuments ? tx => setSettlementTarget({
           kind: 'treasury', id: tx.id, number: tx.transactionNumber, amount: Number(tx.amount) || 0, currency: tx.currency || 'IRR',
           partyLabel: tx.type === 'payment' ? 'تامین‌کننده' : 'مشتری', partyName: tx.partyName,
-        })}
+        }) : undefined}
         onViewPettyCashLines={setPettyLinesTarget}
       />
 

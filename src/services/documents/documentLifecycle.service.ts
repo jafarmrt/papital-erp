@@ -26,6 +26,7 @@ import { money } from '../../lib/money.js';
 import { releaseReservationsForDocument, restoreReservationsForDocument } from './projectReservationRelease.js';
 import { assertVoidKeepsStockHistory } from '../inventory/voidStockHistory.js';
 import { assertVoidHasNoReturns, assertVoidHasNoTreasuryRows, recordVoidEvents } from './voidDependents.js';
+import { assertPayableCoversSettlement, documentIsSettled } from './settledDocumentEdit.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { finalizeDayTarget, proformaInvoiceTarget } from './proformaInvoice.js';
 import { recordFinalizeEvent } from './documentFinalizeEvents.js';
@@ -253,6 +254,9 @@ export class DocumentLifecycleService {
             exchangeRate: finalExchangeRate,
             version: nextVersion(doc.version)
           }).where(eq(documents.id, id));
+          // v11 phase 6.1t (review of M11): the VAT sent with the finalize does not drop a settled proforma below what
+          // settles it (409 `SETTLED_DOCUMENT_BELOW_SETTLED`, as on the edit); the document is held `FOR UPDATE` above
+          if (await documentIsSettled(tx, id)) await assertPayableCoversSettlement(tx, id);
 
           const isSales = targetType === 'invoice' || targetType === 'proforma';
           const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(targetType);

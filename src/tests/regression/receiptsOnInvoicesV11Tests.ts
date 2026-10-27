@@ -19,14 +19,14 @@ import { type ShouldRun, inFiscalSandbox, runCase, sandboxAdminClient, sandboxCl
  */
 
 let seq = 0;
-const tagOf = () => `${String(Date.now()).slice(-6)}${++seq}`;
-const brief = (res: request.Response) => `${res.status} ${JSON.stringify(res.body ?? null).slice(0, 260)}`;
-const codeOf = (res: request.Response) => String(res.body?.code ?? res.body?.error?.code ?? '');
-const ok = (res: request.Response) => res.status >= 200 && res.status < 300;
+export const tagOf = () => `${String(Date.now()).slice(-6)}${++seq}`;
+export const brief = (res: request.Response) => `${res.status} ${JSON.stringify(res.body ?? null).slice(0, 260)}`;
+export const codeOf = (res: request.Response) => String(res.body?.code ?? res.body?.error?.code ?? '');
+export const ok = (res: request.Response) => res.status >= 200 && res.status < 300;
 
 // Persian text sent as typed input
 const VOID_REASON = 'ثبت تکراری دریافت';
-const BANK_NAME = 'ملت';
+export const BANK_NAME = 'ملت';
 
 type Admin = Awaited<ReturnType<typeof sandboxAdminClient>>;
 
@@ -43,17 +43,20 @@ async function adminPatch(url: string, body: unknown): Promise<request.Response>
 }
 
 /** A sales world: a customer, a supplier, an item in stock, a funded bank and helpers for documents and money */
-async function world(admin: Admin) {
+export async function world(admin: Admin) {
   const today = await businessTodayIsoDate();
   const main = String(await getDefaultWarehouseCode(orm));
   const item = await createTestItem({ type: 'raw_material', stocks: { [main]: 500 }, weightedAverageCost: 1000 });
   const customer = await createTestCustomer();
   const supplier = await createTestCustomer({ partyType: 'supplier' });
   const bank = await fundedBank();
-  const doc = async (docType: 'invoice' | 'receipt', party: { id: number; name: string }, price: number, status: 'final' | 'draft' | 'proforma' = 'final'): Promise<number> => {
+  const doc = async (
+    docType: 'invoice' | 'receipt', party: { id: number; name: string }, price: number, status: 'final' | 'draft' | 'proforma' = 'final',
+    extra: Record<string, unknown> = {},
+  ): Promise<number> => {
     const res = await admin.post('/api/documents', {
       docType, status, refNumber: 'auto', date: today, location: main, buyer_name: party.name, partyId: party.id,
-      inOut: docType === 'receipt' ? 'in' : 'out', items: [{ itemId: item.id, quantity: 1, unit_price: price }],
+      inOut: docType === 'receipt' ? 'in' : 'out', items: [{ itemId: item.id, quantity: 1, unit_price: price }], ...extra,
     });
     const id = Number(res.body?.docId);
     if (!ok(res) || !id) throw new Error(`setup: a ${status} ${docType} returned ${brief(res)}`);

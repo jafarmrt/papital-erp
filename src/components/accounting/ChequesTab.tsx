@@ -22,7 +22,7 @@ import { personnelPartyName, personnelPartyOption } from '../../lib/treasury/per
 import { personnelServerSearchUrl } from '../../lib/personnel/personnelList';
 import { PartyPurposeFields } from './treasury/PartyPurposeFields';
 import { DialogLayer } from '../common/DialogLayer';
-import { SettlementAllocationField, type SettlementFieldState } from './treasury/SettlementAllocationField';
+import { SettlementAllocationField, useCanSettleOnDocuments, type SettlementFieldState } from './treasury/SettlementAllocationField';
 import { SettlementAllocationModal, type SettlementWindowTarget } from './treasury/SettlementAllocationModal';
 import { canAllocateCheque } from '../../lib/treasury/settlementAllocation';
 
@@ -109,6 +109,7 @@ export function ChequesTab({
   // v11 phase 6.1t (M11 / U2): the documents a new cheque settles, and the window of a recorded one
   const [settlement, setSettlement] = useState<SettlementFieldState>({ parts: [], problem: null });
   const [settlementTarget, setSettlementTarget] = useState<SettlementWindowTarget | null>(null);
+  const canSettleOnDocuments = useCanSettleOnDocuments();
   const [viewingAttachments, setViewingAttachments] = useState<{ title: string; attachments: FinancialAttachment[] } | null>(null);
   const [statusModalCheque, setStatusModalCheque] = useState<Cheque | null>(null);
   const [targetStatus, setTargetStatus] = useState<ChequeStatus>('passed');
@@ -180,7 +181,7 @@ export function ChequesTab({
   }, [statusModalCheque?.id]);
 
   // a cheque received from a chosen customer or paid to a chosen supplier may settle its open documents
-  const newChequeSettlementQuery = newFormData.partyId
+  const newChequeSettlementQuery = canSettleOnDocuments && newFormData.partyId
     && (newFormData.type === 'received' ? newFormData.partyType === 'customer' : newFormData.partyType === 'supplier')
     ? {
       direction: newFormData.type === 'received' ? 'receipt' as const : 'payment' as const,
@@ -679,7 +680,7 @@ export function ChequesTab({
                                 icon: History,
                                 onClick: () => setHistoryModalCheque(c),
                               },
-                              ...(canAllocateCheque(c) ? [{
+                              ...(canSettleOnDocuments && canAllocateCheque(c) ? [{
                                 label: 'نشاندن روی فاکتورها',
                                 icon: FileCheck2,
                                 onClick: () => setSettlementTarget({

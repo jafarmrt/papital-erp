@@ -103,9 +103,15 @@ export function assertAllocatableParty(direction: AllocationDirection, partyType
 /**
  * Under the caller's earlier locks: each document is locked in id order and checked against the source (live, the right
  * side, the same party and currency) and its remaining amount. The caller has already released any old parts of this
- * source, so they do not count against the new ones.
+ * source, so they do not count against the new ones; `kept` is what the source put on each document before (its parts,
+ * or its direct link), so a draft it already settles may keep that part or a smaller one.
  */
-export async function lockAndCheckAllocationTargets(tx: DbExecutor, source: AllocationSourceParty, parts: readonly SettlementAllocationInput[]): Promise<void> {
+export async function lockAndCheckAllocationTargets(
+  tx: DbExecutor,
+  source: AllocationSourceParty,
+  parts: readonly SettlementAllocationInput[],
+  kept: ReadonlyMap<number, DecimalValue> = new Map(),
+): Promise<void> {
   for (const part of parts) {
     await lockSettlementDocument(tx, part.documentId);
     await assertTreasuryDocumentLink(tx, {
@@ -116,21 +122,34 @@ export async function lockAndCheckAllocationTargets(tx: DbExecutor, source: Allo
       partyName: source.partyName,
       currency: source.currency,
     });
-    await assertSettleableDocumentStatus(tx, part.documentId);
-    await assertWithinDocumentRemaining(tx, { documentId: part.documentId, amount: part.amount });
+    await assertSettleableDocumentStatus(tx, part, kept.get(part.documentId));
+    await assertWithinDocumentRemaining(tx, { documentId: part.documentId, amount: part.amount }, { exact: true });
   }
 }
 
-/** A draft is still changed freely, so no part sits on it (422 `SETTLEMENT_DOCUMENT_NOT_ISSUED`) */
-async function assertSettleableDocumentStatus(tx: DbExecutor, documentId: number): Promise<void> {
-  const [doc] = await tx.select({ refNumber: documents.refNumber, status: documents.status }).from(documents).where(eq(documents.id, documentId));
-  if (doc && !SETTLEABLE_DOCUMENT_STATUSES.includes(doc.status ?? '')) {
-    throw new ValidationError(
-      `سند «${formatPersianCode(doc.refNumber ?? documentId)}» پیش‌نویس است؛ دریافت و چک فقط روی فاکتور نهایی یا پیش‌فاکتور می‌نشیند.`,
-      { documentId, status: doc.status },
-      'SETTLEMENT_DOCUMENT_NOT_ISSUED',
-    );
-  }
+/**
+ * A draft is still changed freely, so no new part sits on it (422 `SETTLEMENT_DOCUMENT_NOT_ISSUED`). A draft this source
+ * already settles (a proforma sent back to draft, or an old direct link) keeps its part or a smaller one, so the window
+ * still saves the set it opened on (review of M11).
+ */
+async function assertSettleableDocumentStatus(tx: DbExecutor, part: SettlementAllocationInput, keptAmount: DecimalValue | undefined): Promise<void> {
+  const [doc] = await tx.select({ refNumber: documents.refNumber, status: documents.status }).from(documents).where(eq(documents.id, part.documentId));
+  if (!doc || SETTLEABLE_DOCUMENT_STATUSES.includes(doc.status ?? '')) return;
+  if (keptAmount !== undefined && fin(part.amount).lessThanOrEqual(keptAmount)) return;
+  throw new ValidationError(
+    keptAmount !== undefined
+      ? `سند «${formatPersianCode(doc.refNumber ?? part.documentId)}» پیش‌نویس است؛ سهم کنونی آن می‌ماند یا کم می‌شود اما بیشتر نمی‌شود.`
+      : `سند «${formatPersianCode(doc.refNumber ?? part.documentId)}» پیش‌نویس است؛ دریافت و چک فقط روی فاکتور نهایی یا پیش‌فاکتور می‌نشیند.`,
+    { documentId: part.documentId, status: doc.status, kept: keptAmount === undefined ? null : fin(keptAmount).toNumber() },
+    'SETTLEMENT_DOCUMENT_NOT_ISSUED',
+  );
+}
+
+/** What a source put on each document before a new set replaces it: its live parts, or its direct link */
+function keptAmounts(before: readonly SettlementAllocationView[], direct: { documentId: number | null; amount: DecimalValue } | null): Map<number, DecimalValue> {
+  const kept = new Map<number, DecimalValue>(before.map(p => [p.documentId, p.amount]));
+  if (direct?.documentId) kept.set(direct.documentId, direct.amount);
+  return kept;
 }
 
 export async function insertAllocations(
@@ -282,7 +301,7 @@ async function replaceTreasuryAllocations(
   const partyName = (await resolveTreasuryPartyName(tx, row.partyType || 'other', row.partyId)) ?? row.partyName;
   await lockAndCheckAllocationTargets(tx, {
     direction, partyType: row.partyType || 'other', partyId: row.partyId ?? null, partyName, currency: row.currency || 'IRR',
-  }, parts);
+  }, parts, keptAmounts(before, { documentId: previousDocumentId, amount: row.amount }));
   await insertAllocations(tx, { treasuryTransactionId: row.id }, parts, params.userId);
 
   const after = await sourceAllocationViews(tx, { kind: 'treasury', id: row.id, number: row.transactionNumber, date: String(row.date).slice(0, 10), status: row.method });
@@ -333,7 +352,7 @@ async function replaceChequeAllocations(
   const partyName = (await resolveTreasuryPartyName(tx, partyType, cheque.partyId)) ?? cheque.partyName;
   await lockAndCheckAllocationTargets(tx, {
     direction, partyType, partyId: cheque.partyId ?? null, partyName, currency: cheque.currency || 'IRR',
-  }, parts);
+  }, parts, keptAmounts(before, null));
   await insertAllocations(tx, { chequeId: cheque.id }, parts, params.userId);
 
   const after = await sourceAllocationViews(tx, view);

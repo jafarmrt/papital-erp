@@ -6,8 +6,10 @@ import { formatPersianCode, formatPersianDate } from '../../../utils';
 import { rialDisplayOf } from '../../../lib/rialDisplay';
 import { fin } from '../../../lib/financialDecimal';
 import { useSettlementOptionsQuery, type SettlementOptionsQuery } from '../../../hooks/accounting/useSettlementAllocations';
+import { useHasAnyPermission } from '../../../contexts/AuthContext';
+import { READ_PERMISSIONS } from '../../../lib/recordReadPermissions';
 import {
-  allocationTotal, settlementPartsFor, settlementPartsProblem, settlementRoom, SETTLEMENT_DOCUMENT_TYPE_LABELS,
+  allocationTotal, isSettleableStatus, settlementPartsFor, settlementPartsProblem, settlementRoom, SETTLEMENT_DOCUMENT_TYPE_LABELS,
   type OpenSettlementDocument, type SettlementAllocationInput, type SettlementMode,
 } from '../../../lib/treasury/settlementAllocation';
 
@@ -15,6 +17,9 @@ import {
  * v11 phase 6.1t (M11 / U2, decision ت۵۲-۵): which open documents of the party a receipt, payment or cheque settles.
  * The default puts it on the oldest first; the user may pick documents and amounts, or keep it all on account.
  */
+
+/** Putting a receipt or cheque on invoices needs the documents section too (the server answers 403 without it) */
+export const useCanSettleOnDocuments = () => useHasAnyPermission(READ_PERMISSIONS.documentRecord);
 
 const MODE_LABELS: ReadonlyArray<{ mode: SettlementMode; label: string }> = [
   { mode: 'oldest', label: 'قدیمی‌ترین اول' },
@@ -121,6 +126,9 @@ export const SettlementAllocationList: React.FC<SettlementAllocationListProps> =
                   {SETTLEMENT_DOCUMENT_TYPE_LABELS[doc.type] ?? 'سند'} {formatPersianCode(doc.refNumber)}
                 </span>
                 <span className="text-[10px] text-slate-500">{doc.date ? formatPersianDate(doc.date) : '—'}</span>
+                {!isSettleableStatus(doc.status) && (
+                  <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300">پیش‌نویس: سهم آن بیشتر نمی‌شود</span>
+                )}
                 <span className="text-[10px] text-slate-500">
                   مانده: {rial.money(settlementRoom(doc), currency)}
                 </span>

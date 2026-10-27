@@ -35,13 +35,24 @@ export function registerDocumentRemainingReader(reader: DocumentRemainingReader)
   readDocumentRemaining = reader;
 }
 
-export async function assertWithinDocumentRemaining(tx: DbExecutor, link: { documentId: number; amount: number | string }): Promise<void> {
+/**
+ * `exact` (a part of a receipt or cheque, review of M11): no 0.01 of slack; the part and the remaining compare at the four
+ * decimals a part is stored with, so 1,000,000.0099 no longer settles a remaining of 1,000,000.
+ */
+export async function assertWithinDocumentRemaining(
+  tx: DbExecutor,
+  link: { documentId: number; amount: number | string },
+  options: { exact?: boolean } = {},
+): Promise<void> {
   const doc = await readDocumentRemaining(tx, link.documentId);
   if (!doc) return;
   const { payable, settled, returned } = doc;
   // v11 phase 6.1t (M11 / U1): its final returns come off too, as on the document page and list
   const remaining = payable.subtract(settled.isNegative() ? 0 : settled).subtract(returned);
-  if (fin(link.amount).greaterThan(remaining.add(0.01))) {
+  const over = options.exact
+    ? fin(link.amount).round(4).greaterThan(remaining.round(4))
+    : fin(link.amount).greaterThan(remaining.add(0.01));
+  if (over) {
     const left = remaining.isNegative() ? fin(0) : remaining;
     throw new ValidationError(
       `مبلغ ${formatPersianNumber(fin(link.amount).toNumber())} از مانده سند «${doc.refNumber}» (${formatPersianNumber(left.toNumber())}) بیشتر است؛ حداکثر مانده سند را به آن وصل کنید و مازاد را بی پیوند به سند (علی‌الحساب) ثبت کنید.`,

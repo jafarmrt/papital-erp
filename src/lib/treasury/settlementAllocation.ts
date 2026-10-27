@@ -12,9 +12,17 @@ export const LAPSED_CHEQUE_STATUSES = ['bounced', 'returned'] as const;
 
 /**
  * A part sits only on an issued document: a final one, or a sales proforma (an advance). A draft is still changed freely,
- * so it is neither listed nor accepted (review of M11).
+ * so it is neither listed nor given a new part (review of M11). A draft a receipt or cheque already settles (a proforma
+ * sent back to draft) stays listed for it, and its part may stay or come down but not go up.
  */
 export const SETTLEABLE_DOCUMENT_STATUSES: readonly string[] = ['final', 'proforma'];
+
+/** Whether a document of this status takes a new or a larger part (a status not given counts as issued) */
+export function isSettleableStatus(status: string | null | undefined): boolean {
+  return status === undefined || SETTLEABLE_DOCUMENT_STATUSES.includes(status ?? '');
+}
+
+type RoomDocument = Pick<OpenSettlementDocument, 'remaining' | 'allocatedHere'> & { status?: string };
 
 /** Most parts one receipt or cheque is split into */
 export const MAX_SETTLEMENT_PARTS = 50;
@@ -72,14 +80,14 @@ export interface SourceAllocations {
  * until the amount runs out. What is left of the amount stays on account.
  */
 export function fillOldestFirst(
-  docs: ReadonlyArray<Pick<OpenSettlementDocument, 'id' | 'remaining' | 'allocatedHere'>>,
+  docs: ReadonlyArray<RoomDocument & Pick<OpenSettlementDocument, 'id'>>,
   amount: number,
 ): SettlementAllocationInput[] {
   let left = fin(amount);
   const parts: SettlementAllocationInput[] = [];
   for (const doc of docs) {
     if (!left.isPositive()) break;
-    const room = fin(doc.remaining).add(doc.allocatedHere ?? 0);
+    const room = fin(settlementRoom(doc));
     if (!room.isPositive()) continue;
     const part = left.greaterThan(room) ? room : left;
     parts.push({ documentId: doc.id, amount: part.toNumber() });
@@ -99,15 +107,19 @@ export const SETTLEMENT_DOCUMENT_TYPE_LABELS: Readonly<Record<string, string>> =
   receipt: 'رسید ورود',
 });
 
-/** What a document can still take from this receipt or cheque: its remaining plus what this one already puts on it */
-export function settlementRoom(doc: Pick<OpenSettlementDocument, 'remaining' | 'allocatedHere'>): number {
+/**
+ * What a document can still take from this receipt or cheque: its remaining plus what this one already puts on it; a
+ * draft no more than what this one already puts on it
+ */
+export function settlementRoom(doc: RoomDocument): number {
+  if (!isSettleableStatus(doc.status)) return fin(doc.allocatedHere ?? 0).toNumber();
   return fin(doc.remaining).add(doc.allocatedHere ?? 0).toNumber();
 }
 
 /** The parts the form sends in each mode; a manual part of a document no longer listed, or of zero, is dropped */
 export function settlementPartsFor(
   mode: SettlementMode,
-  docs: ReadonlyArray<Pick<OpenSettlementDocument, 'id' | 'remaining' | 'allocatedHere'>>,
+  docs: ReadonlyArray<RoomDocument & Pick<OpenSettlementDocument, 'id'>>,
   amount: number,
   manual: ReadonlyArray<SettlementAllocationInput>,
 ): SettlementAllocationInput[] {
@@ -124,13 +136,16 @@ export function settlementPartsFor(
 export function settlementPartsProblem(
   parts: ReadonlyArray<SettlementAllocationInput>,
   amount: number,
-  docs: ReadonlyArray<Pick<OpenSettlementDocument, 'id' | 'refNumber' | 'remaining' | 'allocatedHere'>>,
+  docs: ReadonlyArray<RoomDocument & Pick<OpenSettlementDocument, 'id' | 'refNumber'>>,
 ): string | null {
   if (parts.length > MAX_SETTLEMENT_PARTS) return `یک دریافت یا چک روی بیش از ${toPersianDigits(MAX_SETTLEMENT_PARTS)} سند نمی‌نشیند.`;
   if (fin(allocationTotal(parts)).greaterThan(amount || 0)) return 'جمع سهم سندها از مبلغ بیشتر است.';
   for (const part of parts) {
     const doc = docs.find(d => d.id === part.documentId);
-    if (doc && fin(part.amount).greaterThan(settlementRoom(doc))) return `سهم سند «${toPersianDigits(doc.refNumber)}» از مانده آن بیشتر است.`;
+    if (!doc || !fin(part.amount).greaterThan(settlementRoom(doc))) continue;
+    return isSettleableStatus(doc.status)
+      ? `سهم سند «${toPersianDigits(doc.refNumber)}» از مانده آن بیشتر است.`
+      : `سند «${toPersianDigits(doc.refNumber)}» پیش‌نویس است؛ سهم آن می‌ماند یا کم می‌شود اما بیشتر نمی‌شود.`;
   }
   return null;
 }

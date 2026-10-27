@@ -19,7 +19,7 @@ import { personnelServerSearchUrl } from '../../../lib/personnel/personnelList';
 import type { BankAccount, Customer, Personnel, FinancialAttachment } from '../../../types';
 import { DecimalInput } from '../../common/DecimalInput';
 import { DialogLayer } from '../../common/DialogLayer';
-import { SettlementAllocationField, type SettlementFieldState } from './SettlementAllocationField';
+import { SettlementAllocationField, useCanSettleOnDocuments, type SettlementFieldState } from './SettlementAllocationField';
 
 interface TreasuryTransactionModalProps {
   isOpen: boolean;
@@ -45,6 +45,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
   const fieldId = useId();
   const rial = useMemo(() => rialDisplayOf(appCurrency), [appCurrency]);
   const canSkipVoucher = useHasPermission(NO_VOUCHER_TREASURY_PERMISSION);
+  const canSettleOnDocuments = useCanSettleOnDocuments();
   const [formData, setFormData] = useState({
     type,
     date: '',
@@ -225,7 +226,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
   // مبلغ به ارز خود حساب (ریال برای حساب ریالی) وارد و ذخیره می‌شود
   const inputCurrency = isForeignBank ? String(selectedBank?.currency).toUpperCase() : 'IRR';
   // a receipt from a chosen customer or a payment to a chosen supplier may settle its open documents
-  const settlementQuery = formData.partyId && (isReceipt ? formData.partyType === 'customer' : formData.partyType === 'supplier')
+  const settlementQuery = canSettleOnDocuments && formData.partyId && (isReceipt ? formData.partyType === 'customer' : formData.partyType === 'supplier')
     ? { direction: formData.type, partyType: formData.partyType, partyId: formData.partyId, partyName: formData.partyName, currency: inputCurrency }
     : null;
 

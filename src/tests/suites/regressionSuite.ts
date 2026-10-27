@@ -11141,6 +11141,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v11 phase 6.1t: receipts, payments and cheques settle invoices in parts (M11 / U2)
   const { runReceiptsOnInvoicesV11Tests } = await import('../regression/receiptsOnInvoicesV11Tests.js');
   results.push(...await runReceiptsOnInvoicesV11Tests(shouldRun));
+  const { runReceiptsOnInvoicesReviewV11Tests } = await import('../regression/receiptsOnInvoicesReviewV11Tests.js');
+  results.push(...await runReceiptsOnInvoicesReviewV11Tests(shouldRun));
 
   return results;
 }
