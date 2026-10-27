@@ -10685,6 +10685,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runStockPathsV11Tests(shouldRun));
   const { runStockHealthV11Tests } = await import('../regression/stockHealthV11Tests.js');
   results.push(...await runStockHealthV11Tests(shouldRun));
+  // v11 phase 6.1ch: the account card and the Kardex window by page, the stock checks from the day they look at (M13 S11)
+  const { runServerPagingV11Tests } = await import('../regression/serverPagingV11Tests.js');
+  results.push(...await runServerPagingV11Tests(shouldRun));
   const { runItemPriceTests } = await import('../regression/itemPriceTests.js');
   results.push(...await runItemPriceTests(shouldRun));
   const { runItemCategoryTests } = await import('../regression/itemCategoryTests.js');

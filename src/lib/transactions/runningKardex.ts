@@ -146,8 +146,10 @@ interface KardexEnvelope {
 
 const isObject = (value: unknown): value is KardexEnvelope => typeof value === 'object' && value !== null;
 
+const locationsOf = (entries: RunningKardexEntry[]) => [...new Set(entries.map(entry => entry.location ?? '').filter(Boolean))];
+
 const PAGE_OF_ALL = (entries: RunningKardexEntry[]) => ({
-  opening: null, locations: [], total: entries.length, page: 1, limit: Math.max(entries.length, 1),
+  opening: null, locations: locationsOf(entries), total: entries.length, page: 1, limit: Math.max(entries.length, 1),
 });
 
 export function normalizeRunningKardex(res: unknown): RunningKardexData {
@@ -162,7 +164,7 @@ export function normalizeRunningKardex(res: unknown): RunningKardexData {
       summary: res.summary ?? null,
       entries,
       opening: res.opening ?? null,
-      locations: Array.isArray(res.locations) ? res.locations.map(String) : [],
+      locations: Array.isArray(res.locations) ? res.locations.map(String) : locationsOf(entries),
       total: Number(res.total ?? entries.length),
       page: Number(res.page ?? 1),
       limit: Number(res.limit ?? Math.max(entries.length, 1)),
