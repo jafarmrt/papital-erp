@@ -235,18 +235,19 @@ export function useItemForm({
           : buildRawItemCode(rawPrefix, rawNum);
       }
 
-      let calculatedStock = canEnterOpeningStock ? form.current_stock : 0;
-      if (canEnterOpeningStock && Object.keys(form.stocks).length > 0) {
-        calculatedStock = Object.values(form.stocks).reduce((acc: number, val: any) => acc + (Number(val) || 0), 0);
+      // v11 phase 6.1j (S8): the form's stock fields are left out of the fields an edit sends
+      const { card, stocks, current_stock: formStock, ...formFields } = form;
+      let calculatedStock = canEnterOpeningStock ? formStock : 0;
+      if (canEnterOpeningStock && Object.keys(stocks).length > 0) {
+        calculatedStock = Object.values(stocks).reduce((acc: number, val: any) => acc + (Number(val) || 0), 0);
       }
 
-      const { card, ...formFields } = form;
       const payload: Partial<Item> & Record<string, any> = {
         ...formFields,
         ...productCardPayload(card),
         code: finalCode,
         // v11 phase 6.1j (S8): an edit sends no stock; the server refuses opening stock on an edit (422)
-        ...(canEnterOpeningStock ? { current_stock: calculatedStock, stocks: form.stocks } : {}),
+        ...(canEnterOpeningStock ? { current_stock: calculatedStock, stocks } : {}),
         // v9.0.173 (TD-657): وزن خالی null فرستاده می‌شود تا ویرایش وزن را پاک کند (نیامدن فیلد یعنی بی‌تغییر)
         weight: form.weight ? parseCleanNumber(form.weight) : null,
         // V2.0.0: کلید صحیح بک‌اند برای «بهای تمام‌شده اولیه (WAC/خرید)» —

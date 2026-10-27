@@ -19,7 +19,7 @@ export async function assertVoidOutsideClosedYears(tx: DbExecutor, doc: { id: nu
   const years = new Set<number>();
   for (const row of rows) {
     const date = String(row.date ?? '').slice(0, 10);
-    if (date && await FiscalPeriodService.isClosed(date, tx)) years.add(FiscalPeriodService.yearOf(date));
+    if (date && await FiscalPeriodService.isClosedShared(date, tx)) years.add(FiscalPeriodService.yearOf(date));
   }
   if (years.size === 0) return;
 

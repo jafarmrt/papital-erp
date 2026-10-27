@@ -28,6 +28,7 @@ import { assertVoidKeepsStockHistory } from '../inventory/voidStockHistory.js';
 import { assertVoidHasNoReturns, assertVoidHasNoTreasuryRows, recordVoidEvents } from './voidDependents.js';
 import { assertPayableCoversSettlement, documentIsSettled } from './settledDocumentEdit.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
+import { assertTransferVoidKeepsReservations } from '../inventory/transferReservations.js';
 import { finalizeDayTarget, proformaInvoiceTarget } from './proformaInvoice.js';
 import { recordFinalizeEvent } from './documentFinalizeEvents.js';
 import { lockLinkedRequisition, voidLinkedOrder } from './linkedOrderHooks.js';
@@ -364,6 +365,8 @@ export class DocumentLifecycleService {
         .where(and(eq(transactions.documentId, doc.id), eq(transactions.isDeleted, 0)));
       // ردیف کاردکسی که پس از خواندن بالا (پیش از قفل سند) ثبت شده باشد هم پیش از درج معکوس قفل می‌شود (بی‌اثر اگر قفل باشد)
       await lockStockItems(tx, originalTxs.map(t => t.itemId));
+      // v11 phase 6.1j (S4, review): a transfer's void takes the stock back out of the warehouse it went to
+      await assertTransferVoidKeepsReservations(tx, originalTxs.filter(t => t.documentType === 'transfer' && t.type === 'in' && !t.reversalOfId));
 
       await tx.update(transactions).set({ isDeleted: 1 }).where(eq(transactions.documentId, doc.id));
 

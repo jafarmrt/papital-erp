@@ -6,6 +6,9 @@ import { nextVersion } from '../../lib/occHelper.js';
 import { itemIdsWithOpeningVoucher } from './itemOpening.service.js';
 import { OPENING_KARDEX_ROW } from './itemOpeningValue.js';
 import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
+import { LEDGER_ROW_FILTER } from './stockMovementDate.js';
+import { FiscalPeriodService } from '../accounting/fiscalPeriod.service.js';
+import { formatPersianNumber } from '../../utils/persianNumber.js';
 
 /**
  * v11 phase 6.1j (S13): an item whose definition goes through a workflow enters its opening stock when it is defined, and
@@ -13,7 +16,8 @@ import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
  * definition is rejected or canceled instead, the opening never got a voucher, so the stock it entered goes too: its
  * kardex rows are voided and the warehouse stock goes back down. Before, the item kept that stock with no ledger entry.
  * When the item has moved since (any other live kardex row or document line), the stock may already be sold or issued
- * and its value is in the ledger; the rejection is then refused (409 `ITEM_OPENING_IN_USE`).
+ * and its value is in the ledger; the rejection is then refused (409 `ITEM_OPENING_IN_USE`). An opening dated in a
+ * closed fiscal year is not withdrawn either (409 `ITEM_OPENING_IN_CLOSED_YEAR`), as a void there is not (M10).
  */
 export async function withdrawUnapprovedOpening(tx: DbExecutor, itemId: number): Promise<number> {
   const [item] = await tx.select({ id: items.id, name: items.name, code: items.code, version: items.version })
@@ -22,15 +26,34 @@ export async function withdrawUnapprovedOpening(tx: DbExecutor, itemId: number):
   if ((await itemIdsWithOpeningVoucher(tx, [itemId])).has(itemId)) return 0;
 
   const opening = await tx.execute(sql`
-    SELECT t.id, t.quantity::text AS quantity, t.location FROM transactions t
+    SELECT t.id, t.quantity::text AS quantity, t.location, t.date::text AS date FROM transactions t
      WHERE t.item_id = ${itemId} AND ${OPENING_KARDEX_ROW} ORDER BY t.id`);
-  const rows = (opening.rows ?? []) as Array<{ id: number; quantity: string; location: string | null }>;
+  const rows = (opening.rows ?? []) as Array<{ id: number; quantity: string; location: string | null; date: string | null }>;
   if (rows.length === 0) return 0;
 
   const openingIds = rows.map(r => Number(r.id));
-  const [otherRow] = await tx.select({ id: transactions.id }).from(transactions)
-    .where(and(eq(transactions.itemId, itemId), eq(transactions.isDeleted, 0), sql`${transactions.id} NOT IN (${sql.join(openingIds.map(id => sql`${id}`), sql`, `)})`))
-    .limit(1);
+  const closedYears = new Set<number>();
+  for (const row of rows) {
+    const date = String(row.date ?? '').slice(0, 10);
+    if (date && await FiscalPeriodService.isClosedShared(date, tx)) closedYears.add(FiscalPeriodService.yearOf(date));
+  }
+  if (closedYears.size > 0) {
+    const yearList = [...closedYears].sort((a, b) => a - b).map(y => formatPersianNumber(y, 0)).join('، ');
+    throw new ConflictError(
+      `موجودی اول دوره کالای «${item.name}» (${item.code}) در سال مالی ${yearList} ثبت شده که بسته شده است، پس رد تعریف کالا `
+        + 'آن را برنمی‌گرداند. تعریف را تأیید کنید تا سند افتتاحیه صادر شود و موجودی را در سال باز با حواله یا شمارش انبار کم کنید.',
+      { itemId, closedYears: [...closedYears] },
+      'ITEM_OPENING_IN_CLOSED_YEAR',
+    );
+  }
+  // a voided document's rows and their reversals are not a movement (LEDGER_ROW_FILTER), so a voided sale does not
+  // keep the opening in use
+  const other = await tx.execute(sql`
+    SELECT t.id FROM transactions t
+     WHERE t.item_id = ${itemId} AND ${LEDGER_ROW_FILTER}
+       AND t.id NOT IN (${sql.join(openingIds.map(id => sql`${id}`), sql`, `)})
+     LIMIT 1`);
+  const otherRow = other.rows?.[0];
   const [line] = await tx.select({ id: documentItems.id }).from(documentItems)
     .where(and(eq(documentItems.itemId, itemId), eq(documentItems.isDeleted, 0))).limit(1);
   if (otherRow || line) {

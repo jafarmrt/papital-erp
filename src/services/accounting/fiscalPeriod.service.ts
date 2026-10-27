@@ -68,6 +68,19 @@ export class FiscalPeriodService {
     }
   }
 
+  /**
+   * v11 phase 6.1j (review): as `isClosed`, but the year row stays FOR SHARE locked until the transaction ends, as in
+   * `assertOpen`, so the year cannot be closed while a write that read it as open is still running.
+   */
+  static async isClosedShared(date: string, tx: DbExecutor): Promise<boolean> {
+    if (!date) return false;
+    const year = this.yearOf(date);
+    await this.ensureRow(year, tx);
+    const [row] = await tx.select({ status: fiscalPeriods.status }).from(fiscalPeriods)
+      .where(eq(fiscalPeriods.fiscalYear, year)).for('share');
+    return row?.status === 'closed';
+  }
+
   static async isClosed(date: string, tx?: DbExecutor): Promise<boolean> {
     if (!date) return false;
     const year = this.yearOf(date);

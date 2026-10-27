@@ -46,7 +46,7 @@ export async function runStockPathsV11Tests(shouldRun: ShouldRun): Promise<TestC
 
   const transferId = 'reg_transfer_keeps_reservation_v11_6_1j_s4';
   if (shouldRun(transferId, 'v11', 'phase6', 's4', 'transfer', 'reservation', 'inventory')) {
-    await runCase(results, transferId, 'v11 phase 6.1j (S4): a transfer that leaves the source warehouse with less than the sales proformas taking from it reserve is refused (409 TRANSFER_BREAKS_RESERVATION) and moves nothing; a transfer that keeps the reservation goes through', () => inFiscalSandbox(async () => {
+    await runCase(results, transferId, 'v11 phase 6.1j (S4): a transfer that leaves the source warehouse with less than the sales proformas taking from it reserve is refused (409 TRANSFER_BREAKS_RESERVATION) and moves nothing; a transfer that keeps the reservation goes through; voiding a transfer is held to the same rule at its destination', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const today = await businessTodayIsoDate();
@@ -69,8 +69,20 @@ export async function runStockPathsV11Tests(shouldRun: ShouldRun): Promise<TestC
       const afterKept = await stockOf(item.id);
       if (!ok(kept)) problems.push(`a transfer of 2 that keeps the reservation of 8 returned ${brief(kept)}`);
       if (afterKept.byCode[main] !== 8 || afterKept.byCode[other.code] !== 2) problems.push(`after the transfer of 2 the stock is ${JSON.stringify(afterKept.byCode)}, expected 8 / 2`);
+
+      // voiding the transfer moves the 2 back out of the other warehouse, where a proforma now reserves them
+      const fromOther = await admin.post('/api/documents', {
+        docType: 'invoice', status: 'proforma', refNumber: 'auto', date: today, location: other.code, buyer_name: customer.name, partyId: customer.id,
+        inOut: 'out', items: [{ itemId: item.id, quantity: 2, unit_price: 2000, location: other.code }],
+      });
+      if (!ok(fromOther)) throw new Error(`setup: the proforma from the other warehouse returned ${brief(fromOther)}`);
+      const transferDoc = Number(kept.body?.data?.transferDocId);
+      const voided = await admin.del(`/api/documents/${transferDoc}`);
+      const afterVoid = await stockOf(item.id);
+      if (voided.status !== 409 || codeOf(voided) !== 'TRANSFER_BREAKS_RESERVATION') problems.push(`voiding the transfer of 2 with 2 reserved at its destination returned ${brief(voided)}, expected 409 TRANSFER_BREAKS_RESERVATION`);
+      if (afterVoid.byCode[main] !== 8 || afterVoid.byCode[other.code] !== 2) problems.push(`the refused void moved stock: ${JSON.stringify(afterVoid.byCode)}`);
       if (problems.length > 0) throw new Error(problems.join(' | '));
-      return `transfer of 5 → ${refused.status} ${codeOf(refused)}; transfer of 2 → ${kept.status}, stock 8 / 2`;
+      return `transfer of 5 → ${refused.status} ${codeOf(refused)}; transfer of 2 → ${kept.status}, stock 8 / 2; its void with 2 reserved at the destination → ${voided.status} ${codeOf(voided)}`;
     }));
   }
 
@@ -119,7 +131,7 @@ export async function runStockPathsV11Tests(shouldRun: ShouldRun): Promise<TestC
 
   const openingId = 'reg_item_opening_stock_rules_v11_6_1j_s8_s9';
   if (shouldRun(openingId, 'v11', 'phase6', 's8', 's9', 'item', 'opening', 'permissions')) {
-    await runCase(results, openingId, 'v11 phase 6.1j (S8, S9, card t56-5): opening stock in the item form needs warehouse.in (403 ITEM_OPENING_STOCK_NOT_ALLOWED) and a cost (422 ITEM_OPENING_WITHOUT_COST), only when the item is defined; an item edit never takes opening stock (422 ITEM_OPENING_ON_CREATE_ONLY); nothing is written when refused', () => inFiscalSandbox(async () => {
+    await runCase(results, openingId, 'v11 phase 6.1j (S8, S9, card t56-5): opening stock in the item form needs warehouse.in (403 ITEM_OPENING_STOCK_NOT_ALLOWED) and a cost (422 ITEM_OPENING_WITHOUT_COST), only when the item is defined, in the item form and the Excel import; an item edit never takes opening stock (422 ITEM_OPENING_ON_CREATE_ONLY); nothing is written when refused', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const main = String(await getDefaultWarehouseCode(orm));
@@ -139,6 +151,17 @@ export async function runStockPathsV11Tests(shouldRun: ShouldRun): Promise<TestC
       if (refusedKey.status !== 403 || codeOf(refusedKey) !== 'ITEM_OPENING_STOCK_NOT_ALLOWED' || await existsByCode(noKey.code)) problems.push(`opening stock without warehouse.in returned ${brief(refusedKey)}, item written ${await existsByCode(noKey.code)}`);
       const plain = await definer.post('/api/items', body(1000));
       if (!ok(plain)) problems.push(`an item without stock by products.create alone returned ${brief(plain)}`);
+      // the Excel import holds a new item with stock to the same key; the row is not created
+      // a raw material code of the import's pattern (RAW_MATERIAL_CODE_PATTERN)
+      const excelCode = `XL${String(Date.now()).slice(-6)}-12`;
+      const controlCode = `XL${String(Date.now()).slice(-6)}-11`;
+      const excel = await definer.post('/api/items/unified-import', { rows: [
+        { 'کد کالا': controlCode, 'نام محصول': `کالای اکسل ۶.۱ج بی موجودی ${Date.now()}`, 'نوع': 'ماده اولیه', 'میانگین موزون بها': 1000 },
+        { 'کد کالا': excelCode, 'نام محصول': `کالای اکسل ۶.۱ج ${Date.now()}`, 'نوع': 'ماده اولیه', 'میانگین موزون بها': 1000, 'موجودی کل': 5 },
+      ] });
+      if (!(await existsByCode(controlCode)) || await existsByCode(excelCode) || Number(excel.body?.createdCount ?? 0) !== 1) {
+        problems.push(`an Excel file with a new item without stock and one with stock, by a user without warehouse.in, returned ${brief(excel)}; without stock written ${await existsByCode(controlCode)}, with stock written ${await existsByCode(excelCode)}`);
+      }
 
       const zero = body(0, 5);
       const refusedCost = await admin.post('/api/items', zero);
@@ -158,13 +181,13 @@ export async function runStockPathsV11Tests(shouldRun: ShouldRun): Promise<TestC
         if (!ok(rename)) problems.push(`an item edit without stock returned ${brief(rename)}`);
       }
       if (problems.length > 0) throw new Error(problems.join(' | '));
-      return `no receipt key → ${refusedKey.status}; zero cost → ${refusedCost.status}; with both → stock 5; edit with stock → 422`;
+      return `no receipt key → ${refusedKey.status}, Excel row not created; zero cost → ${refusedCost.status}; with both → stock 5; edit with stock → 422`;
     }));
   }
 
   const rejectId = 'reg_item_rejected_opening_withdrawn_v11_6_1j_s13';
   if (shouldRun(rejectId, 'v11', 'phase6', 's13', 'item', 'opening', 'workflow')) {
-    await runCase(results, rejectId, 'v11 phase 6.1j (S13): when an item definition with opening stock is rejected or canceled, the opening that never got a voucher leaves stock and Kardex; when the item moved since, the rejection is refused (409 ITEM_OPENING_IN_USE); approval still issues the opening voucher', () => inFiscalSandbox(async () => {
+    await runCase(results, rejectId, 'v11 phase 6.1j (S13): when an item definition with opening stock is rejected or canceled, the opening that never got a voucher leaves stock and Kardex; when the item moved since, the rejection is refused (409 ITEM_OPENING_IN_USE), but a voided sale is no movement; through the workflow engine too; an opening in a closed year is not withdrawn (409 ITEM_OPENING_IN_CLOSED_YEAR); approval still issues the opening voucher', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const { ItemCatalogService } = await import('../../services/items/itemCatalog.service.js');
       const { issueApprovedItemOpening } = await import('../../services/inventory/itemOpeningWorkflowAction.js');
@@ -198,13 +221,67 @@ export async function runStockPathsV11Tests(shouldRun: ShouldRun): Promise<TestC
       try { await step(moved, 'rejected'); } catch (err) { code = normalizeError(err).code ?? 'error'; }
       if (code !== 'ITEM_OPENING_IN_USE' || (await stockOf(moved)).total !== 3) problems.push(`rejecting an item sold since ended as ${code} with stock ${(await stockOf(moved)).total}`);
 
+      // an opening dated in a closed year stays, as a void there does (M10)
+      const dated = await define('cy');
+      const closedYear = 1395;
+      const closedDate = yearBounds(closedYear).firstDay.replace(/-\d\d$/, '-25');
+      await orm.execute(sql`UPDATE transactions SET date = ${closedDate} WHERE item_id = ${dated}`);
+      await FiscalYearService.executeFiscalYearClosing({ year: closedYear, createOpeningVoucher: true, username: 'reg' });
+      let closedCode = 'accepted';
+      try { await step(dated, 'rejected'); } catch (err) { closedCode = normalizeError(err).code ?? 'error'; }
+      if (closedCode !== 'ITEM_OPENING_IN_CLOSED_YEAR' || (await stockOf(dated)).total !== 4) problems.push(`rejecting an item whose opening is in the closed year ${closedYear} ended as ${closedCode} with stock ${(await stockOf(dated)).total}`);
+
+      // through the workflow engine and the item route: a sale voided since does not keep the opening in use
+      const { WorkflowDefinitionService } = await import('../../services/workflow/workflowDefinitionService.js');
+      const { WorkflowTransitionExecutor } = await import('../../services/workflow/workflowTransitionExecutor.js');
+      const { registerItemOpeningWorkflowAction } = await import('../../services/inventory/itemOpeningWorkflowAction.js');
+      registerItemOpeningWorkflowAction();
+      const saved = await WorkflowDefinitionService.saveWorkflowDefinition({
+        code: `REG_61J_ITEM_${Date.now()}`, title: 'تعریف کالا ۶.۱ج', entityType: 'item', description: 'v11 6.1j S13',
+        states: [
+          { stateKey: 'draft', title: 'پیش‌نویس', stateType: 'initial' },
+          { stateKey: 'approved', title: 'تایید', stateType: 'terminal' },
+          { stateKey: 'rejected', title: 'رد', stateType: 'terminal' },
+        ],
+        transitions: [
+          { fromStateKey: 'draft', toStateKey: 'approved', actionKey: 'approve', title: 'تایید' },
+          { fromStateKey: 'draft', toStateKey: 'rejected', actionKey: 'reject', title: 'رد' },
+        ],
+      });
+      const defId = Number(saved?.definition?.id);
+      await orm.execute(sql`UPDATE workflow_definitions SET is_active = CASE WHEN id = ${defId} THEN 1 ELSE 0 END WHERE entity_type = 'item'`);
+      const routed = await admin.post('/api/items', {
+        type: 'raw_material', code: `W-${String(Date.now()).slice(-6)}eg`, name: `کالای موتور گردش‌کار ${Date.now()}`, unit: 'عدد', category: 'سایر اقلام',
+        weighted_average_cost: 1500, stocks: { [main]: 4 },
+      });
+      const routedId = Number(routed.body?.id);
+      if (!ok(routed) || !routedId) throw new Error(`setup: the item with a workflow returned ${brief(routed)}`);
+      const sale = await stockDoc(admin, { docType: 'invoice', inOut: 'out', date: await businessTodayIsoDate(), location: main, buyer_name: customer.name, partyId: customer.id, items: [{ itemId: routedId, quantity: 1, unit_price: 5000 }] });
+      const voidSale = await admin.del(`/api/documents/${sale}`);
+      if (!ok(voidSale) || (await stockOf(routedId)).total !== 4) throw new Error(`setup: voiding the sale returned ${brief(voidSale)}, stock ${(await stockOf(routedId)).total}`);
+      const [instance] = (await orm.execute(sql`SELECT id FROM workflow_instances WHERE entity_type = 'item' AND entity_id = ${String(routedId)}`)).rows as Array<{ id: number }>;
+      const state = await WorkflowTransitionExecutor.getInstanceByEntity('item', String(routedId), undefined, 'admin', ['*']);
+      const reject = ((state?.availableTransitions || []) as Array<{ id: number; actionKey: string }>).find(t => t.actionKey === 'reject');
+      let engineCode = 'accepted';
+      if (!instance || !reject) {
+        engineCode = `no instance (${instance?.id}) or reject action`;
+      } else {
+        try {
+          await WorkflowTransitionExecutor.executeTransition({ instanceId: Number(instance.id), transitionId: reject.id, userRole: 'admin', userPermissions: ['*'] });
+        } catch (err) { engineCode = normalizeError(err).code ?? 'error'; }
+      }
+      const openingLeft = Number(((await orm.execute(sql`SELECT count(*)::int AS n FROM transactions t WHERE t.item_id = ${routedId} AND t.is_deleted = 0 AND t.document_id IS NULL AND t.reversal_of_id IS NULL`)).rows[0] as { n: number }).n);
+      if (engineCode !== 'accepted' || (await stockOf(routedId)).total !== 0 || openingLeft !== 0) {
+        problems.push(`rejecting through the engine after a voided sale ended as ${engineCode} with stock ${(await stockOf(routedId)).total} and ${openingLeft} opening row(s)`);
+      }
+
       const approved = await define('ap');
       await step(approved, 'approved');
       const vouchers = await orm.select({ id: journalVouchers.id }).from(journalVouchers)
         .where(and(eq(journalVouchers.referenceModule, 'item_opening'), eq(journalVouchers.referenceId, approved), eq(journalVouchers.isDeleted, 0)));
       if ((await stockOf(approved)).total !== 4 || vouchers.length !== 1) problems.push(`approval left stock ${(await stockOf(approved)).total} and ${vouchers.length} opening voucher(s)`);
       if (problems.length > 0) throw new Error(problems.join(' | '));
-      return `rejected and canceled → stock 0, no Kardex; moved item → ${code}; approved → opening voucher`;
+      return `rejected and canceled → stock 0, no Kardex; moved item → ${code}; engine reject after a voided sale → ${engineCode}; opening in a closed year → ${closedCode}; approved → opening voucher`;
     }));
   }
 
@@ -246,10 +323,16 @@ export async function runStockPathsV11Tests(shouldRun: ShouldRun): Promise<TestC
       await orm.update(journalVouchers).set({ status: 'approved' }).where(eq(journalVouchers.sourceDocumentId, receipt));
       await FiscalYearService.executeFiscalYearClosing({ year, createOpeningVoucher: true, username: 'reg' });
       const rowsBefore = await liveKardexRows(item.id);
+      const vouchersOf = async () => JSON.stringify((await orm.execute(sql`
+        SELECT v.id, v.status, v.is_deleted, v.total_debit::text AS debit FROM journal_vouchers v
+         WHERE v.source_document_id = ${receipt} OR v.reference_id IN (SELECT id FROM journal_vouchers WHERE source_document_id = ${receipt})
+         ORDER BY v.id`)).rows);
+      const vouchersBefore = await vouchersOf();
       const res = await admin.del(`/api/documents/${receipt}`);
       const [doc] = (await orm.execute(sql`SELECT is_deleted FROM documents WHERE id = ${receipt}`)).rows as Array<{ is_deleted: number }>;
-      if (res.status !== 409 || codeOf(res) !== 'DOCUMENT_IN_CLOSED_YEAR' || Number(doc.is_deleted) !== 0 || await liveKardexRows(item.id) !== rowsBefore) {
-        throw new Error(`voiding a receipt of the closed year ${year} returned ${brief(res)}; deleted ${doc.is_deleted}, Kardex rows ${rowsBefore} → ${await liveKardexRows(item.id)}`);
+      const vouchersAfter = await vouchersOf();
+      if (res.status !== 409 || codeOf(res) !== 'DOCUMENT_IN_CLOSED_YEAR' || Number(doc.is_deleted) !== 0 || await liveKardexRows(item.id) !== rowsBefore || vouchersAfter !== vouchersBefore) {
+        throw new Error(`voiding a receipt of the closed year ${year} returned ${brief(res)}; deleted ${doc.is_deleted}, Kardex rows ${rowsBefore} → ${await liveKardexRows(item.id)}, vouchers ${vouchersBefore} → ${vouchersAfter}`);
       }
       return `void of a receipt dated ${date} after closing ${year} → ${res.status} ${codeOf(res)}`;
     }));
@@ -257,7 +340,7 @@ export async function runStockPathsV11Tests(shouldRun: ShouldRun): Promise<TestC
 
   const healthId = 'reg_health_small_differences_v11_6_1j_m8_m21';
   if (shouldRun(healthId, 'v11', 'phase6', 'm8', 'm21', 'health', 'voucher', 'inventory')) {
-    await runCase(results, healthId, 'v11 phase 6.1j (M8, M21): the financial health check lists a voucher whose debit and credit differ within the 0.01 tolerance as a warning (an error over it), and a stock vs ledger gap over one rial with the manual voucher that made it; before, both were reported healthy', () => inFiscalSandbox(async () => {
+    await runCase(results, healthId, 'v11 phase 6.1j (M8, M21): the financial health check lists a voucher whose debit and credit differ within the 0.01 tolerance as a warning (an error over it), and a stock vs ledger gap larger than rounding explains with the manual voucher that made it (not a reversed pair); a gap from the 4-decimal WAC stays healthy; before, both were reported healthy', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const acc = await accountIdsByCode('1001', '1401', '4001');
       const testOf = async (id: string) => (await FinancialHealthService.runHealthCheck()).tests.find(t => t.id === id);
@@ -279,14 +362,34 @@ export async function runStockPathsV11Tests(shouldRun: ShouldRun): Promise<TestC
         problems.push(`with one voucher off by 0.03 the check reads ${JSON.stringify({ status: err?.status, metrics: err?.metrics, first: err?.items?.[0]?.id })}, expected error with it first`);
       }
 
+      // the 4-decimal WAC: 100000 at 1 and 3 at 2 average to 1.0000, so the warehouse is worth 100003 and the ledger 100006
+      const admin = await sandboxAdminClient();
+      const main = String(await getDefaultWarehouseCode(orm));
+      const bulk = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
+      const supplier = await createTestCustomer({ partyType: 'supplier' });
+      for (const [quantity, price] of [[100000, 1], [3, 2]]) {
+        const receipt = await stockDoc(admin, { docType: 'receipt', inOut: 'in', date: await businessTodayIsoDate(), location: main, buyer_name: supplier.name, partyId: supplier.id, items: [{ itemId: bulk.id, quantity, unit_price: price }] });
+        await orm.update(journalVouchers).set({ status: 'approved' }).where(eq(journalVouchers.sourceDocumentId, receipt));
+      }
+      const rounded = await testOf('inventory_reconciliation');
+      if (rounded?.status !== 'healthy' || Number(rounded?.metrics?.discrepancy) !== 3) {
+        problems.push(`a 3-rial gap from the 4-decimal WAC reads ${JSON.stringify({ status: rounded?.status, metrics: rounded?.metrics })}, expected healthy`);
+      }
+
+      // a manual posting and its approved reversal cancel out and are not listed
+      const undone = await postApproved('2026-05-03', acc['1401'], acc['1001'], 500, 'M21 posting undone');
+      const reversal = await postApproved('2026-05-03', acc['1001'], acc['1401'], 500, 'M21 reversal');
+      const [undoneRow] = await orm.select({ voucherNumber: journalVouchers.voucherNumber }).from(journalVouchers).where(eq(journalVouchers.id, undone));
+      await orm.update(journalVouchers).set({ referenceId: undone, referenceNumber: `REV-V${undoneRow.voucherNumber}` }).where(eq(journalVouchers.id, reversal));
       const manual = await postApproved('2026-05-03', acc['1401'], acc['1001'], 900, 'M21 manual inventory posting');
       const stock = await testOf('inventory_reconciliation');
-      if (stock?.status === 'healthy' || Number(stock?.metrics?.discrepancy) !== 900 || !stock?.items?.some(i => i.id === 'inv_diff')
-        || !stock?.items?.some(i => i.id === `manual_${manual}` && Number(i.linkId) === manual)) {
+      if (stock?.status === 'healthy' || Number(stock?.metrics?.discrepancy) !== 903 || !stock?.items?.some(i => i.id === 'inv_diff')
+        || !stock?.items?.some(i => i.id === `manual_${manual}` && Number(i.linkId) === manual)
+        || stock?.items?.some(i => i.id === `manual_${undone}` || i.id === `manual_${reversal}`)) {
         problems.push(`a 900-rial manual posting to inventory reads ${JSON.stringify({ status: stock?.status, discrepancy: stock?.metrics?.discrepancy, items: stock?.items?.map(i => i.id) })}`);
       }
       if (problems.length > 0) throw new Error(problems.join(' | '));
-      return `0.004 → ${warn?.status}; 0.03 → ${err?.status}; 900-rial manual posting → ${stock?.status} with the voucher listed`;
+      return `0.004 → ${warn?.status}; 0.03 → ${err?.status}; 3-rial WAC rounding → ${rounded?.status}; 900-rial manual posting → ${stock?.status} with the voucher listed, the reversed pair not`;
     }));
   }
 
