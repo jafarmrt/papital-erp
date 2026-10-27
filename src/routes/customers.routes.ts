@@ -8,6 +8,8 @@ import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString, storageDateParam } from '../middleware/validate.js';
+import { accountCardPageQuery } from './accounting/reports.schemas.js';
+import type { ValidatedQuery } from './accounting/accounting.schemas.js';
 import { customerBulkImportSchema } from './importRows.schemas.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { BadRequestError, NotFoundError } from '../errors/customErrors.js';
@@ -281,14 +283,16 @@ const customerAccountCardValidation = z.object({
     startDate: storageDateParam,
     endDate: storageDateParam,
     currency: z.string().max(10).optional(),
+    ...accountCardPageQuery,
   }).optional(),
 });
 
 // v9.0.4 (TD-416): کارت حساب و مانده طرف حساب با شناسه او (صفحه طرف حساب‌ها و پرونده مشتری)
 router.get('/customers/:id/account-card', authorizePermission(...READ_PERMISSIONS.partyAccountCard), validate(customerAccountCardValidation), asyncHandler(async (req, res) => {
-  const { startDate, endDate, currency } = (req.query as { startDate?: string; endDate?: string; currency?: string }) || {};
-  const data = await getCustomerAccountCard(Number(req.params.id), { startDate, endDate, currency });
-  res.json({ report: data, ...data });
+  const { startDate, endDate, currency, page, limit, export: exportAll } = (req.query as ValidatedQuery<typeof customerAccountCardValidation>) || {};
+  const data = await getCustomerAccountCard(Number(req.params.id), { startDate, endDate, currency, page, limit, exportAll: exportAll === 'true' });
+  // v11 phase 6.1ch (M13): one page of the card, sent once
+  res.json(data);
 }));
 
 const customerDocumentsValidation = z.object({

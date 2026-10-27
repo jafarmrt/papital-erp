@@ -5,6 +5,7 @@ import { fin } from '../../lib/financialDecimal.js';
 import type { Money } from '../../lib/money.js';
 import type { DecimalValue, FinancialDecimal } from '../../lib/financialDecimal.js';
 import { MAX_PAGE_LIMIT } from '../../lib/pagination.js';
+import { groupRowsBy } from '../../lib/groupRows.js';
 import { NotFoundError } from '../../errors/customErrors.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import { transferLocationsByDocument } from '../inventory/transferDocumentLocations.js';
@@ -137,11 +138,14 @@ export class DocumentQueryService {
       allocated = allocatedAmounts(await fetchLiveAllocations(orm, docIds));
     }
 
+    // v11 phase 6.1ch (C7): lines and settlements grouped once; a filter per document made an export quadratic
+    const itemsByDocument = groupRowsBy(allItems, i => i.document_id);
+    const settlementsByDocument = groupRowsBy(treasurySettlements, t => t.documentId);
     const formattedDocs: FormattedDocument[] = docs.map(d => {
-      const dItems = allItems.filter(i => i.document_id === d.id);
+      const dItems = itemsByDocument.get(d.id) ?? [];
       const itemsCount = dItems.length;
       // V3.0.0 Phase 1: وضعیت تسویه فاکتور و تجمیع تراکنش‌های خزانه
-      const docSettlements = treasurySettlements.filter(t => t.documentId === d.id);
+      const docSettlements = settlementsByDocument.get(d.id) ?? [];
       const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(d.type);
       // v7.0.32 (TD-197): مبلغ قابل وصول = جمع خالص اقلام + مالیات ساختاریافته (همان بدهکار مشتری در سند حسابداری)
       // v7.0.68 (P2-6): همه جمع‌ها با Decimal؛ خروجی عدد

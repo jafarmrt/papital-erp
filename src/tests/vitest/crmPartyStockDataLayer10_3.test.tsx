@@ -82,7 +82,7 @@ const readsOf = (prefix: string) => fetchJson.mock.calls.filter(([u]) => u.start
 const noop = () => undefined;
 const toastError = vi.mocked((await import('react-hot-toast')).toast.error);
 const stockItemsKey = [...QUERY_KEYS.items.all, 'options', 'crm-stock'];
-const cardKey = QUERY_KEYS.accounting.report('customer-account-card', { customerId: 7 });
+const cardKey = QUERY_KEYS.accounting.report('customer-account-card', { customerId: 7, page: 1 });
 const earlier = { updatedAt: Date.now() - 60_000 };
 const until = (n: number) => waitFor(() => expect(held).toHaveLength(n));
 

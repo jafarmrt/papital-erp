@@ -48,6 +48,8 @@ interface FinancialReportsTabProps {
   onFetchIncomeStatement: (startDate?: string, endDate?: string, includeClosing?: boolean) => Promise<void>;
   onFetchBalanceSheet: (asOfDate?: string, includeClosing?: boolean) => Promise<void>;
   onFetchLedger: (accountId: number, startDate?: string, endDate?: string) => Promise<void>;
+  /** v11 phase 6.1ch (M13): another page of the card on screen */
+  onLedgerPageChange: (page: number) => Promise<void>;
 }
 
 /** v10.1.10 (D-03): شناسه طرف حساب از نشانی («صورت‌حساب» گزارش سن مطالبات)؛ هر چیز جز عدد صحیح مثبت نادیده گرفته می‌شود */
@@ -67,6 +69,7 @@ export function FinancialReportsTab({
   onFetchIncomeStatement,
   onFetchBalanceSheet,
   onFetchLedger,
+  onLedgerPageChange,
 }: FinancialReportsTabProps) {
   const [searchParams] = useSearchParams();
   const validSubTabs = ['trial_balance', 'party_ledger', 'journal_book', 'income_statement', 'balance_sheet', 'ledger', 'ratios', 'audit', 'automation', 'project'] as const;
@@ -434,6 +437,8 @@ export function FinancialReportsTab({
           setSelectedLedgerAccountId={setSelectedLedgerAccountId}
           onApplyLedgerFilter={handleApplyLedgerFilter}
           onFetchLedger={onFetchLedger}
+          onPageChange={(page) => { void onLedgerPageChange(page); }}
+          loading={loading}
           startDate={startDate}
           endDate={endDate}
         />

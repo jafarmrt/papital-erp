@@ -25,6 +25,8 @@ export interface AccountCardRow extends ForeignAmountOrigin {
   runningBalance: number;
   /** ردیف «مانده ابتدای دوره» (فقط وقتی بازه آغاز دارد و مانده پیشین صفر نیست) */
   isOpening?: boolean;
+  /** v11 phase 6.1ch (M13): the row's place in the whole period from 1 (none on the opening row) */
+  rowNumber?: number;
 }
 
 export interface AccountCardReport {
@@ -39,6 +41,34 @@ export interface AccountCardReport {
   temporaryRows?: PartyTemporaryRows;
   /** v11 phase 6.1t (U1): the party's draft vouchers apart, with the balance they would make (a party card only) */
   draftRows?: PartyDraftRows;
+  /** v11 phase 6.1ch (M13): the rows of the whole period (the opening row not counted) */
+  total: number;
+  page: number;
+  limit: number;
+}
+
+/**
+ * v11 phase 6.1ch (M13): the card is one page of rows (`page`, `limit`); the running balance, the row numbers and the
+ * totals count the whole period, and the opening row comes on the first page. `export=true` answers every row (the CSV
+ * file). Before, the card sent the whole period twice (`{ report, ...report }`): 12 MB for one year of one account.
+ */
+export const ACCOUNT_CARD_PAGE_SIZE = 200;
+export const ACCOUNT_CARD_MAX_PAGE_SIZE = 1000;
+
+/** شمار صفحه‌های کارت (دست‌کم یک) */
+export function accountCardPageCount(report: Pick<AccountCardReport, 'total' | 'limit'> | null | undefined): number {
+  if (!report || !report.limit || report.total <= 0) return 1;
+  return Math.ceil(report.total / report.limit);
+}
+
+/**
+ * the paging keys of a card request: `page` from the second page on (the first page and the page size are the server's
+ * defaults), or `export=true` for every row
+ */
+export function setAccountCardPage(params: URLSearchParams, page = 1, exportAll = false): URLSearchParams {
+  if (exportAll) params.set('export', 'true');
+  else if (page > 1) params.set('page', String(page));
+  return params;
 }
 
 /** ردیف‌های امن کارت (پاسخ ناقص آرایه نمی‌دهد) */

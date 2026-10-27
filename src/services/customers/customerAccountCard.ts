@@ -12,7 +12,7 @@ export type CustomerAccountCard = Awaited<ReturnType<typeof AccountingReportServ
  */
 export async function getCustomerAccountCard(
   customerId: number,
-  range: { startDate?: string; endDate?: string; currency?: string } = {}
+  range: { startDate?: string; endDate?: string; currency?: string; page?: number; limit?: number; exportAll?: boolean } = {}
 ): Promise<CustomerAccountCard> {
   const party = await CustomerService.getById(customerId);
   if (!party) throw new NotFoundError('طرف حساب یافت نشد.');

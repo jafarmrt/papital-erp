@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { warehouses } from '../../db/schema.js';
-import { fin } from '../../lib/financialDecimal.js';
+import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { InsufficientStockError, ValidationError } from '../../errors/customErrors.js';
 import { isoToJalaliDate } from '../../utils/calendarDate.js';
 import { normalizeDateToDbTimestamp } from '../../utils.js';
@@ -45,12 +45,14 @@ export interface StockMovementDateCheck {
   allowBackdate?: boolean;
 }
 
-interface LedgerDayRow extends Record<string, unknown> {
+export interface LedgerDayRow extends Record<string, unknown> {
   id: number;
   type: string;
   quantity: string;
   day: string;
   location: string | null;
+  document_type: string | null;
+  document_ref: string | null;
 }
 
 /** آخرین روز گردش کالا (YYYY-MM-DD) یا null برای کالای بدون گردش */
@@ -63,22 +65,59 @@ export async function lastStockMovementDay(tx: DbExecutor, itemId: number): Prom
   return value ?? null;
 }
 
+interface LedgerOpeningRow extends Record<string, unknown> {
+  location: string | null;
+  balance: string;
+}
+
+/**
+ * v11 phase 6.1ch (S11): one item's Kardex rows in (day, id) order from a day on (`from` 'day') or from the next day on
+ * (`from` 'nextDay'), with each warehouse's balance before them, summed in SQL. A check that walks the ledger reads only
+ * the rows it can change; before, the void guard and the backdated out check read every row of the item (60k rows took
+ * half a second per void). A location that names no warehouse is left out, as the walks leave its rows out.
+ */
+export async function itemLedgerFromDay(
+  tx: DbExecutor,
+  itemId: number,
+  day: string,
+  from: 'day' | 'nextDay',
+  resolve: (raw: unknown) => { id: number } | null,
+): Promise<{ opening: Map<number, FinancialDecimal>; rows: LedgerDayRow[] }> {
+  const boundary = from === 'day' ? sql`${day}::date` : sql`(${day}::date + 1)`;
+  const openingRes = await tx.execute(sql`
+    SELECT t.location,
+           SUM(CASE WHEN t.type IN ('in', 'transfer_in') THEN t.quantity
+                    WHEN t.type IN ('out', 'transfer_out') THEN -t.quantity
+                    ELSE 0 END)::text AS balance
+      FROM transactions t
+     WHERE t.item_id = ${itemId} AND ${LEDGER_ROW_FILTER} AND t.date < ${boundary}
+     GROUP BY t.location`);
+  const opening = new Map<number, FinancialDecimal>();
+  for (const row of (openingRes.rows ?? []) as LedgerOpeningRow[]) {
+    const wh = resolve(row.location);
+    if (wh) opening.set(wh.id, (opening.get(wh.id) ?? fin(0)).add(fin(row.balance)));
+  }
+  const res = await tx.execute(sql`
+    SELECT t.id, t.type, t.quantity::text AS quantity, to_char(t.date, 'YYYY-MM-DD') AS day, t.location,
+           t.document_type, t.document_ref
+      FROM transactions t
+     WHERE t.item_id = ${itemId} AND ${LEDGER_ROW_FILTER} AND t.date >= ${boundary}
+     ORDER BY t.date::date, t.id`);
+  return { opening, rows: (res.rows ?? []) as LedgerDayRow[] };
+}
+
 /**
  * کمترین موجودی یک انبار از روز گردش به بعد، به ترتیب (روز، شناسه)، اگر گردش تازه در پایان همان روز ثبت شود.
  * خروج با تاریخ گذشته فقط وقتی مجاز است که این مقدار از مقدار خروج کمتر نباشد.
  */
 async function minimumStockFromDay(tx: DbExecutor, itemId: number, day: string, warehouseId: number): Promise<number> {
-  const res = await tx.execute(sql`
-    SELECT t.id, t.type, t.quantity::text AS quantity, to_char(t.date, 'YYYY-MM-DD') AS day, t.location
-      FROM transactions t
-     WHERE t.item_id = ${itemId} AND ${LEDGER_ROW_FILTER}
-     ORDER BY t.date::date, t.id`);
-  const rows = (res.rows ?? []) as LedgerDayRow[];
   const allWarehouses = await tx.select({ id: warehouses.id, code: warehouses.code, name: warehouses.name, isActive: warehouses.isActive })
     .from(warehouses);
   const resolve = createLedgerLocationResolver(allWarehouses);
+  // v11 phase 6.1ch (S11): the stock at the end of the day in SQL, then only the later rows
+  const { opening, rows } = await itemLedgerFromDay(tx, itemId, day, 'nextDay', resolve);
 
-  let balance = fin(0);
+  let balance = opening.get(warehouseId) ?? fin(0);
   let minimum: number | null = null;
   for (const row of rows) {
     const wh = resolve(row.location);

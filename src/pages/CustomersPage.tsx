@@ -13,6 +13,8 @@ import { useCRMData } from '../hooks/useCRMData';
 import { useCustomersQuery, useSaveCustomerMutation, useDeleteCustomerMutation } from '../hooks/queries';
 import { customerSaveBody } from '../lib/customers/customerVersion';
 import { useCustomerAccountCardQuery } from '../hooks/queries/useCustomerQueries';
+import { accountCardPageCount } from '../lib/accounting/accountCard';
+import { ListPager } from '../components/common/ListPager';
 import { useOpeningRead } from '../hooks/queries/readOnEveryOpening';
 import { partyTemporaryRowsOf } from '../lib/accounting/partyTemporaryRows';
 import { PartyTemporaryRowsPanel } from '../components/accounting/reports/PartyTemporaryRowsPanel';
@@ -55,7 +57,10 @@ export default function CustomersPage({ user }: { user: User }) {
   // 10.3 (ARCH review finding 3, part 12): the account card is read through the shared cache, again for each party opened,
   // and a voucher, treasury entry or document refreshes it while it is open
   const ledgerPartyId = selectedLedgerCustomer?.id ?? null;
-  const ledgerRead = useOpeningRead(useCustomerAccountCardQuery(ledgerPartyId), ledgerPartyId);
+  // v11 phase 6.1ch (M13): the card is paged on the server; each party opens on its first page
+  const [ledgerPage, setLedgerPage] = useState<{ partyId: number | null; page: number }>({ partyId: null, page: 1 });
+  const ledgerCardPage = ledgerPage.partyId === ledgerPartyId ? ledgerPage.page : 1;
+  const ledgerRead = useOpeningRead(useCustomerAccountCardQuery(ledgerPartyId, ledgerCardPage), ledgerPartyId);
   const ledgerData = ledgerRead.data ?? null;
   const loadingLedger = ledgerPartyId !== null && ledgerRead.data === undefined && !ledgerRead.error;
   const sayLedgerFailed = useEffectEvent(() => { toast.error('خطا در دریافت کارت حساب شخص'); });
@@ -771,7 +776,7 @@ export default function CustomersPage({ user }: { user: User }) {
                       <tbody className="divide-y divide-slate-100 font-mono">
                         {ledgerData.items.map((row: any, i: number) => (
                           <tr key={i} className="hover:bg-slate-50">
-                            <td className="p-2.5 text-center text-slate-500">{formatPersianNumber(i + 1)}</td>
+                            <td className="p-2.5 text-center text-slate-500">{formatPersianNumber(row.rowNumber ?? i + 1)}</td>
                             <td className="p-2.5 text-center text-slate-700">{formatPersianDate(row.date)}</td>
                             <td className="p-2.5 text-center font-bold text-blue-700">#{formatPersianCode(row.voucherNumber)}</td>
                             <td className="p-2.5 text-right font-sans text-slate-800">{row.itemDescription || row.description}</td>
@@ -786,6 +791,8 @@ export default function CustomersPage({ user }: { user: User }) {
                     </table>
                   </div>
                   )}
+                  <ListPager page={ledgerData.page || 1} totalPages={accountCardPageCount(ledgerData)} total={ledgerData.total ?? 0}
+                    limit={ledgerData.limit || 1} onPage={(p) => setLedgerPage({ partyId: ledgerPartyId, page: p })} />
                   <PartyTemporaryRowsPanel rows={ledgerData.temporaryRows} formatAmount={rial.number} />
                 </>
               ) : (

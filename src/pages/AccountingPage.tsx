@@ -77,6 +77,7 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
     fetchIncomeStatement,
     fetchBalanceSheet,
     fetchLedger,
+    goToLedgerPage,
     handleCreateAccount,
     handleUpdateAccount,
     handleDeleteAccount,
@@ -314,6 +315,7 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
               onFetchIncomeStatement={fetchIncomeStatement}
               onFetchBalanceSheet={fetchBalanceSheet}
               onFetchLedger={fetchLedger}
+              onLedgerPageChange={goToLedgerPage}
             />
           )}
 

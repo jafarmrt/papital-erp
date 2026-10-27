@@ -14,7 +14,8 @@ import { serverPayableOf, payableDecimalsOf } from '../../lib/invoices/documentP
 import { salesDocumentKindLabel } from '../../lib/customers/customerDocuments';
 import { useCustomerAccountCardQuery, useCustomerDocumentsQuery, type CustomerSalesDocument } from '../../hooks/queries/useCustomerQueries';
 import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
-import { accountCardRows } from '../../lib/accounting/accountCard';
+import { accountCardPageCount, accountCardRows } from '../../lib/accounting/accountCard';
+import { ListPager } from '../common/ListPager';
 import { documentStatusLabelOf } from '../../lib/invoices/invoiceListDocuments';
 import { sumByCurrency } from '../../lib/crm/leadCurrencyTotals';
 import { CurrencyTotalsLines } from './CurrencyTotals';
@@ -64,7 +65,9 @@ export function CustomerDossierDrawer({
   // read again each time a party's dossier opens; a document, voucher or treasury change refreshes them while it is open
   const partyId = customer?.id ?? null;
   const documentsRead = useOpeningRead(useCustomerDocumentsQuery(partyId), partyId);
-  const accountCardRead = useOpeningRead(useCustomerAccountCardQuery(partyId), partyId);
+  // v11 phase 6.1ch (M13): the card is paged on the server; each party opens on its first page
+  const [cardPage, setCardPage] = useState<{ partyId: number | null; page: number }>({ partyId: null, page: 1 });
+  const accountCardRead = useOpeningRead(useCustomerAccountCardQuery(partyId, cardPage.partyId === partyId ? cardPage.page : 1), partyId);
   const documents = documentsRead.data ?? NO_DOCUMENTS;
   const loadingDocs = partyId !== null && documentsRead.data === undefined && !documentsRead.error;
   const financialReport = accountCardRead.data ?? null;
@@ -554,7 +557,7 @@ export function CustomerDossierDrawer({
                 {/* Ledger Entries Table */}
                 <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
                   <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 font-black text-xs text-slate-700">
-                    ریز گردش ردیف‌های اسناد حسابداری ({formatPersianNumber(ledgerItems.length)} ردیف)
+                    ریز گردش ردیف‌های اسناد حسابداری ({formatPersianNumber(financialReport?.total ?? ledgerItems.length)} ردیف)
                   </div>
                   <div className="overflow-x-auto max-h-[300px] overflow-y-auto custom-scrollbar">
                     <table className="w-full text-xs text-right border-collapse">
@@ -579,7 +582,7 @@ export function CustomerDossierDrawer({
                         ) : (
                           ledgerItems.map((entry: any, idx: number) => (
                             <tr key={entry.id || idx} className="hover:bg-slate-50/80 transition-colors">
-                              <td className="p-2.5 text-slate-400 font-mono text-[11px]">{formatPersianNumber(idx + 1)}</td>
+                              <td className="p-2.5 text-slate-400 font-mono text-[11px]">{formatPersianNumber(entry.rowNumber ?? idx + 1)}</td>
                               <td className="p-2.5 font-mono text-blue-700 font-black">
                                 #{formatPersianCode(entry.voucherNumber) || formatPersianCode(entry.voucherId)}
                               </td>
@@ -607,6 +610,12 @@ export function CustomerDossierDrawer({
                       </tbody>
                     </table>
                   </div>
+                  {financialReport && (
+                    <div className="p-2">
+                      <ListPager page={financialReport.page || 1} totalPages={accountCardPageCount(financialReport)} total={financialReport.total ?? 0}
+                        limit={financialReport.limit || 1} onPage={(p) => setCardPage({ partyId, page: p })} />
+                    </div>
+                  )}
                 </div>
               </div>
             )}

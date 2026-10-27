@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { X, RefreshCw, ArrowDownRight, ArrowUpRight, Download, Search, Layers, ShieldCheck } from 'lucide-react';
 import { downloadSheet } from '../lib/excel/downloadSheet';
 import { formatPersianNumber, formatPersianDate, errorMessageOf, formatPersianCode } from '../utils';
@@ -7,10 +7,17 @@ import { warehouseLabel } from '../lib/inventory/warehouseLabel';
 import { useWarehousesQuery } from '../hooks/queries/useSettingsQueries';
 import { useRialDisplay } from '../hooks/useAppCurrency';
 import { useItemKardexQuery } from '../hooks/queries/useTransactionQueries';
-import { runningKardexEntryLabel, type RunningKardexEntry } from '../lib/transactions/runningKardex';
+import { useDebounce } from '../hooks/useDebounce';
+import { fetchJson } from '../api';
+import {
+  normalizeRunningKardex, runningKardexEntryLabel, runningKardexPageCount, runningKardexUrl,
+  type RunningKardexDirection, type RunningKardexEntry, type RunningKardexQuery,
+} from '../lib/transactions/runningKardex';
 import { toast } from 'react-hot-toast';
 import { EXPORT_FAILED_MESSAGE, kardexExportFileName } from '../lib/inventoryAudit/exportFileNames';
 import { DialogLayer } from './common/DialogLayer';
+import { JalaliDateInput } from './common/JalaliDateInput';
+import { ListPager } from './common/ListPager';
 
 interface RunningKardexModalProps {
   itemId: number;
@@ -25,44 +32,38 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
   const { data: warehouses = [] } = useWarehousesQuery();
   const [search, setSearch] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('all');
-  const [filterType, setFilterType] = useState<'all' | 'in' | 'out'>('all');
+  const [filterType, setFilterType] = useState<RunningKardexDirection>('all');
+  // v11 phase 6.1ch (S11): the range, the filters and the page go to the server, which sends one page of rows
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const debouncedSearch = useDebounce(search.trim());
+  const filters: RunningKardexQuery = {
+    from: fromDate || undefined, to: toDate || undefined, type: filterType, location: selectedLocation, search: debouncedSearch || undefined,
+  };
+  const filtersKey = JSON.stringify(filters);
+  const [pageState, setPageState] = useState<{ key: string; page: number }>({ key: filtersKey, page: 1 });
+  const page = pageState.key === filtersKey ? pageState.page : 1;
 
   // کاردکس کالا با React Query: هر بار باز شدن مودال تازه خوانده می‌شود و بستن مودال/صفحه درخواست را لغو می‌کند
-  const kardexQuery = useItemKardexQuery(itemId, isOpen);
+  const kardexQuery = useItemKardexQuery(itemId, isOpen, { ...filters, page });
   const data = kardexQuery.data ?? null;
-  const loading = kardexQuery.isFetching;
+  // the first read fills the window with a spinner; a later page or filter keeps the rows and says it is updating
+  const loading = kardexQuery.isFetching && !data;
+  const updating = kardexQuery.isFetching && Boolean(data);
   const error = kardexQuery.isError ? (errorMessageOf(kardexQuery.error) || 'خطا در بارگذاری کاردکس کالا') : null;
 
-  const safeEntries = data?.entries ?? NO_ENTRIES;
+  const pageEntries = data?.entries ?? NO_ENTRIES;
+  const firstRowNumber = data ? (data.page - 1) * data.limit + 1 : 1;
+  const uniqueLocations = data?.locations ?? [];
+  const [exporting, setExporting] = useState(false);
 
-  const filteredEntries = useMemo(() => {
-    return safeEntries.filter((entry) => {
-      if (filterType !== 'all' && entry.type !== filterType) return false;
-      if (selectedLocation !== 'all' && entry.location !== selectedLocation) return false;
-      if (search.trim()) {
-        const s = search.trim().toLowerCase();
-        const matchRef = String(entry.documentRef || '').toLowerCase().includes(s);
-        const matchNotes = String(entry.notes || '').toLowerCase().includes(s);
-        const matchDocType = (String(entry.documentType || '').toLowerCase().includes(s) || kardexDocumentTypeLabel(entry.documentType, entry.documentRef).includes(s));
-        const matchUser = String(entry.createdBy || '').toLowerCase().includes(s);
-        if (!matchRef && !matchNotes && !matchDocType && !matchUser) return false;
-      }
-      return true;
-    });
-  }, [safeEntries, filterType, selectedLocation, search]);
-
-  const uniqueLocations = useMemo(() => {
-    const locs = new Set<string>();
-    safeEntries.forEach((e) => {
-      if (e.location) locs.add(e.location);
-    });
-    return Array.from(locs);
-  }, [safeEntries]);
-
+  // خروجی اکسل: همه ردیف‌های منطبق با بازه و پالایه‌ها (`export=true`)، نه فقط صفحه روی صفحه
   const handleExport = async () => {
-    if (!data?.item || !filteredEntries.length) return;
+    if (!data?.item || data.total === 0 || exporting) return;
+    setExporting(true);
     try {
-      const rows = filteredEntries.map((e, idx) => ({
+      const all = normalizeRunningKardex(await fetchJson<unknown>(runningKardexUrl(itemId, filters, true)));
+      const rows = all.entries.map((e, idx) => ({
         'ردیف': idx + 1,
         'تاریخ': formatPersianDate(e.date),
         'نوع تراکنش': e.type === 'in' ? 'ورود به انبار' : 'خروج از انبار',
@@ -85,6 +86,8 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
       await downloadSheet(rows, 'کاردکس کالا', kardexExportFileName(data.item?.code || itemId));
     } catch {
       toast.error(EXPORT_FAILED_MESSAGE);
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -262,15 +265,24 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                       </select>
                     </div>
                   )}
+
+                  {/* v11 phase 6.1ch (S11): the range of days, on the server */}
+                  <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                    <JalaliDateInput value={fromDate} onChange={setFromDate} placeholder="از تاریخ..." containerClassName="inline-block"
+                      className="w-28 px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs text-center outline-none" />
+                    <JalaliDateInput value={toDate} onChange={setToDate} placeholder="تا تاریخ..." containerClassName="inline-block"
+                      className="w-28 px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs text-center outline-none" />
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-500">
-                    نمایش {formatPersianNumber(filteredEntries.length)} از {formatPersianNumber(safeEntries.length)} تراکنش
+                    {formatPersianNumber(data.total)} تراکنش منطبق از {formatPersianNumber(data.summary?.transactionCount ?? 0)} تراکنش
+                    {updating && ' (در حال به‌روزرسانی...)'}
                   </span>
                   <button
                     onClick={() => void handleExport()}
-                    disabled={filteredEntries.length === 0}
+                    disabled={data.total === 0 || exporting}
                     className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
                   >
                     <Download size={14} /> خروجی اکسل
@@ -297,19 +309,32 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredEntries.length === 0 ? (
+                    {data.opening && data.page === 1 && (
+                      <tr className="bg-blue-50/40 font-bold">
+                        <td className="p-3 text-slate-400 font-mono">—</td>
+                        <td className="p-3 text-slate-700 font-mono">{formatPersianDate(data.opening.date)}</td>
+                        <td className="p-3 text-slate-700" colSpan={4}>مانده پیش از بازه</td>
+                        <td className="p-3 text-center font-mono text-blue-900 bg-blue-50/30">{formatPersianNumber(data.opening.runningBalance)}</td>
+                        <td className="p-3 text-center font-mono text-slate-600">-</td>
+                        <td className="p-3 text-center font-mono text-amber-800">
+                          {data.opening.runningWac > 0 ? rial.number(data.opening.runningWac) : '-'}
+                        </td>
+                        <td className="p-3" colSpan={2}>{`ارزش: ${rial.amount(data.opening.runningTotalValue)}`}</td>
+                      </tr>
+                    )}
+                    {pageEntries.length === 0 ? (
                       <tr>
                         <td colSpan={11} className="p-8 text-center text-slate-400">
                           هیچ تراکنشی با پالایش انتخابی یافت نشد.
                         </td>
                       </tr>
                     ) : (
-                      filteredEntries.map((entry, idx) => {
+                      pageEntries.map((entry, idx) => {
                         const isIn = entry.type === 'in';
                         const label = runningKardexEntryLabel(entry);
                         return (
                           <tr key={entry.transactionId || idx} className={`hover:bg-slate-50/60 transition-colors ${entry.isVoided ? 'text-slate-400 bg-slate-50' : ''}`}>
-                            <td className="p-3 text-slate-400 font-mono">{formatPersianNumber(idx + 1)}</td>
+                            <td className="p-3 text-slate-400 font-mono">{formatPersianNumber(firstRowNumber + idx)}</td>
                             <td className="p-3 text-slate-700 font-mono">{formatPersianDate(entry.date)}</td>
                             <td className="p-3">
                               {isIn ? (
@@ -358,6 +383,8 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                   </tbody>
                 </table>
               </div>
+              <ListPager page={data.page} totalPages={runningKardexPageCount(data)} total={data.total} limit={data.limit}
+                onPage={(next) => setPageState({ key: filtersKey, page: next })} disabled={kardexQuery.isFetching} />
             </>
           ) : null}
         </div>

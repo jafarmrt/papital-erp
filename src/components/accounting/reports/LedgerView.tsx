@@ -1,6 +1,7 @@
 import { formatPersianPrice, formatPersianNumber, formatPersianDate, formatPersianCode } from '../../../utils';
 import type { Account, AccountLedgerReport } from '../../../types';
-import { accountCardRows } from '../../../lib/accounting/accountCard';
+import { accountCardPageCount, accountCardRows } from '../../../lib/accounting/accountCard';
+import { ListPager } from '../../common/ListPager';
 
 const LEVEL_LABELS: Record<string, string> = { group: 'گروه', general: 'کل', subsidiary: 'معین', detailed: 'تفصیلی' };
 
@@ -11,6 +12,9 @@ interface LedgerViewProps {
   setSelectedLedgerAccountId: (val: number | '') => void;
   onApplyLedgerFilter: () => void;
   onFetchLedger: (accountId: number, startDate?: string, endDate?: string) => void;
+  /** v11 phase 6.1ch (M13): another page of the card (the server pages it) */
+  onPageChange: (page: number) => void;
+  loading?: boolean;
   startDate?: string;
   endDate?: string;
 }
@@ -22,6 +26,8 @@ export function LedgerView({
   setSelectedLedgerAccountId,
   onApplyLedgerFilter,
   onFetchLedger,
+  onPageChange,
+  loading = false,
   startDate,
   endDate
 }: LedgerViewProps) {
@@ -100,7 +106,7 @@ export function LedgerView({
                   {safeLedgerItems.map((item, idx) => (
                     <tr key={idx} className={`hover:bg-slate-50/70 dark:hover:bg-slate-750 ${item.isOpening ? 'bg-indigo-50/40 dark:bg-indigo-900/20 font-bold' : ''}`}>
                       <td className="py-2 px-3 text-center border-l border-slate-200 dark:border-slate-700 font-mono text-slate-400">
-                        {item.isOpening ? '—' : formatPersianNumber(idx + 1 - openingRows)}
+                        {item.isOpening ? '—' : formatPersianNumber(item.rowNumber ?? idx + 1 - openingRows)}
                       </td>
                       <td className="py-2 px-3 text-center border-l border-slate-200 dark:border-slate-700 font-mono">
                         {formatPersianDate(item.date)}
@@ -150,6 +156,12 @@ export function LedgerView({
             </tbody>
           </table>
         </div>
+        {ledgerReport && (
+          <div className="p-3 no-print">
+            <ListPager page={ledgerReport.page || 1} totalPages={accountCardPageCount(ledgerReport)} total={ledgerReport.total ?? 0}
+              limit={ledgerReport.limit || 1} onPage={onPageChange} disabled={loading} />
+          </div>
+        )}
       </div>
     </div>
   );

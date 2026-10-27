@@ -9,6 +9,7 @@ import type {
 } from '../../types';
 import { reportFromResponse, useOnDemandReport, type OnDemandReportSpec } from './useOnDemandReport';
 import { JOURNAL_BOOK_PAGE_SIZE, type JournalBookReport } from '../../lib/accounting/journalBook';
+import { setAccountCardPage } from '../../lib/accounting/accountCard';
 
 /**
  * گزارش‌های تب «صورت‌ها و گزارش‌های مالی» با React Query: تراز آزمایشی، صورت سود و زیان، ترازنامه، گردش حساب،
@@ -24,7 +25,8 @@ export interface TrialBalanceParams extends ClosingVouchersParam { level: string
 export interface DateRangeParams { startDate?: string; endDate?: string }
 export interface IncomeStatementParams extends DateRangeParams, ClosingVouchersParam {}
 export interface BalanceSheetParams extends ClosingVouchersParam { asOfDate?: string }
-export interface LedgerParams { accountId: number; startDate?: string; endDate?: string }
+/** v11 phase 6.1ch (M13): the card is one page; the page is part of the key */
+export interface LedgerParams { accountId: number; startDate?: string; endDate?: string; page?: number }
 export interface RatiosParams extends ClosingVouchersParam { asOfDate?: string; currency?: string }
 
 function dateRange(params: URLSearchParams, { startDate, endDate }: DateRangeParams): URLSearchParams {
@@ -76,7 +78,7 @@ export const LEDGER_REPORT: OnDemandReportSpec<LedgerParams, AccountLedgerReport
   url: (p) => {
     const params = new URLSearchParams();
     params.append('accountId', String(p.accountId));
-    return `/accounting/reports/ledger?${dateRange(params, p).toString()}`;
+    return `/accounting/reports/ledger?${setAccountCardPage(dateRange(params, p), p.page).toString()}`;
   },
   parse: reportFromResponse<AccountLedgerReport>,
   errorText: 'خطا در دریافت گردش حساب',

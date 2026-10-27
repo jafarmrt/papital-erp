@@ -5,6 +5,10 @@ import { fin, FinancialMath } from '../../lib/financialDecimal.js';
 import { createLedgerLocationResolver } from './warehouseResolver.js';
 import { createKardexReplayer } from './kardexReplay.js';
 import { NotFoundError } from '../../errors/customErrors.js';
+import {
+  RUNNING_KARDEX_MAX_PAGE_SIZE, RUNNING_KARDEX_PAGE_SIZE, runningKardexEntryMatches,
+  type RunningKardexOpening, type RunningKardexQuery,
+} from '../../lib/transactions/runningKardex.js';
 
 export interface RunningKardexEntry {
   transactionId: number;
@@ -179,5 +183,55 @@ export async function buildItemRunningKardex(itemId: number): Promise<RunningKar
       valuation: FinancialMath.multiply(runningBal, defaultWac),
     },
     entries,
+  };
+}
+
+/** v11 phase 6.1ch (S11): one page of the Kardex window (`src/lib/transactions/runningKardex.ts`) */
+export interface RunningKardexPage extends RunningKardexResponse {
+  opening: RunningKardexOpening | null;
+  locations: string[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+/**
+ * v11 phase 6.1ch (S11): the Kardex window's page. The running balances and WAC need the whole ledger in registration
+ * order, so it is replayed here as before, but only the rows of the range (`from`, `to`, by day) that pass the filters
+ * leave the server, a page at a time (`export`: all of them). The range opens with the balance, WAC and value at the end
+ * of the day before `from`; the summary stays the item's whole ledger.
+ */
+export async function buildItemRunningKardexPage(
+  itemId: number,
+  query: RunningKardexQuery & { limit?: number; exportAll?: boolean },
+): Promise<RunningKardexPage> {
+  const full = await buildItemRunningKardex(itemId);
+  const page = Math.max(1, Math.trunc(query.page ?? 1));
+  const limit = Math.min(RUNNING_KARDEX_MAX_PAGE_SIZE, Math.max(1, Math.trunc(query.limit ?? RUNNING_KARDEX_PAGE_SIZE)));
+  const dayOf = (entry: RunningKardexEntry) => entry.date.slice(0, 10);
+
+  let opening: RunningKardexOpening | null = null;
+  if (query.from) {
+    const before = full.entries.filter(entry => dayOf(entry) < query.from!).at(-1);
+    opening = {
+      date: query.from,
+      runningBalance: before?.runningBalance ?? 0,
+      runningWac: before?.runningWac ?? 0,
+      runningTotalValue: before?.runningTotalValue ?? 0,
+    };
+  }
+  const matching = full.entries.filter(entry => (!query.from || dayOf(entry) >= query.from)
+    && (!query.to || dayOf(entry) <= query.to)
+    && runningKardexEntryMatches(entry, query));
+  const locations = [...new Set(full.entries.map(entry => entry.location).filter(Boolean))];
+
+  return {
+    ...full,
+    entries: query.exportAll ? matching : matching.slice((page - 1) * limit, page * limit),
+    opening,
+    locations,
+    total: matching.length,
+    page: query.exportAll ? 1 : page,
+    limit: query.exportAll ? Math.max(matching.length, 1) : limit,
   };
 }

@@ -40,6 +40,12 @@ export function useAccountingReports() {
     await runLedger({ accountId, startDate: startDate || undefined, endDate: endDate || undefined });
   }, [runLedger]);
 
+  // v11 phase 6.1ch (M13): another page of the card last run (its account and dates)
+  const lastLedgerParams = ledger.params;
+  const goToLedgerPage = useCallback(async (page: number) => {
+    if (lastLedgerParams) await runLedger({ ...lastLedgerParams, page });
+  }, [runLedger, lastLedgerParams]);
+
   return {
     reportsLoading: trial.loading || income.loading || balance.loading || ledger.loading,
     trialBalance: trial.data,
@@ -49,6 +55,7 @@ export function useAccountingReports() {
     fetchTrialBalance,
     fetchIncomeStatement,
     fetchBalanceSheet,
-    fetchLedger
+    fetchLedger,
+    goToLedgerPage,
   };
 }

@@ -4,6 +4,7 @@ import { documentItems, documents, items, purchaseRequisitions, warehouses } fro
 import { createLedgerLocationResolver } from '../inventory/warehouseResolver.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
+import { groupRowsBy } from '../../lib/groupRows.js';
 import { procurementListPage } from '../../lib/procurement/procurementLists.js';
 import type { ProcurementOrder } from '../../types.js';
 
@@ -84,8 +85,9 @@ export async function listProcurementOrders(
   }).from(warehouses));
   const warehouseNameOf = (code: string): string => resolveWarehouse(code)?.name || code;
 
+  const linesByOrder = groupRowsBy(lines, line => line.documentId);
   const data = pageRows.map(({ doc, requisitionId, requisitionCode, requisitionProject }): ProcurementOrder => {
-    const docLines = lines.filter(line => line.documentId === doc.id);
+    const docLines = linesByOrder.get(doc.id) ?? [];
     // v7.0.113 (TD-239): جمع مبلغ سفارش خرید با FinancialDecimal؛ خروجی API عددی می‌ماند
     let totalAmount = fin(0);
     const orderItems = docLines.map(line => {
