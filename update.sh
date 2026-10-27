@@ -20,6 +20,8 @@
 #    ./update.sh --rebuild           # build again even when dist/ was built from this very source
 # ============================================================
 set -euo pipefail
+# v11 (phase 5.3): the new build is not writable for other users (the service user among them)
+umask 022
 
 ORIG_ARGS=("$@")
 # v10.2.23 (OBS-R1-22): set when this script runs again as the version the pull or sync just brought in
@@ -97,6 +99,12 @@ UPDATE_STARTED="${UPDATE_RESUME_STARTED:-$(date '+%Y-%m-%d %H:%M:%S')}"
 # shellcheck source=scripts/update-steps.sh
 source scripts/update-steps.sh
 BUILD_DIR=""
+# v11 (phase 5.3, TD-1354): a new install runs the service as its own user, who owns the logs, uploads and backups;
+# root never writes into those folders by path (the user could put a link there), its jobs run as that user
+UPDATE_SERVICE_USER="$(update_service_user "$SERVICE_NAME")"
+as_service_user() {
+  if [ "$(id -u)" -eq 0 ] && [ "$UPDATE_SERVICE_USER" != root ]; then runuser -u "$UPDATE_SERVICE_USER" -- "$@"; else "$@"; fi
+}
 BUILD_SWAPPED=0
 
 # v10.2.23 (OBS-R1-22): one update at a time; two runs would each wipe the other's side folder. The lock is held by
@@ -307,7 +315,8 @@ if [ -z "$UPDATE_RESUME" ] && [ "$NOTHING_NEW" -eq 0 ]; then
     # scripts/backup.sh reads DATABASE_URL from .env and tags the dump as pre-deployment (README: kept 90 days)
     if [ -f scripts/backup.sh ]; then
       # v9.0.183 (TD-605): .env is read literally, as the service reads it (node --env-file); it is never run as shell code
-      BACKUP_KIND=pre-deployment RETENTION_DAYS="${PRE_DEPLOY_RETENTION_DAYS:-90}" bash scripts/backup.sh || die "Database backup failed — aborting update."
+      as_service_user env BACKUP_KIND=pre-deployment RETENTION_DAYS="${PRE_DEPLOY_RETENTION_DAYS:-90}" bash scripts/backup.sh \
+        || die "Database backup failed — aborting update."
       PRE_DEPLOY_DUMP="$(ls -t "${BACKUP_DIR:-/var/backups/erp}"/erp_pre-deployment_*.dump.gz 2>/dev/null | head -1 || true)"
     else
       warn "scripts/backup.sh not found — skipping explicit backup step."
@@ -519,8 +528,9 @@ elif [ "$NOTHING_NEW" -eq 1 ]; then
 fi
 log "[5/6] Restarting service..."
 # v11 (O16): log files an older version wrote readable by every user become private to the service's user and group
-# (the new server writes them so); the folder of an older install was 0755
-if [ -d logs ]; then
+# (the new server writes them so); the folder of an older install was 0755. Only in a folder of root's own: the folder
+# of a service user is that user's (phase 5.3)
+if [ -d logs ] && [ ! -L logs ] && [ -O logs ]; then
   chmod 750 logs 2>/dev/null || true
   find logs -maxdepth 1 -type f ! -name '.*.lock' -perm /o=r -exec chmod o-rwx {} + 2>/dev/null || true
 fi

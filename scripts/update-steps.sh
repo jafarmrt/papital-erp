@@ -448,12 +448,28 @@ update_restore_build_command() {
   echo "{ [ ! -d dist.prev ] || { rm -rf dist && mv dist.prev dist; }; } && { [ ! -d node_modules.prev ] || { rm -rf node_modules && mv node_modules.prev node_modules; }; } && rm -f ${UPDATE_SWAP_MARKER_NAME}"
 }
 
-# v11 (O10): the user the cron jobs run as: the one of the backup line of the cron file, else the owner of <app-dir>
+# v11 (phase 5.3, TD-1354): the user the service runs as: User= of its systemd unit (a unit without one runs as root),
+# root when there is no such unit or the user does not exist. A new install runs the service as its own user
+# (install.sh), a server installed earlier as root.
+update_service_user() {
+  local service="$1" unit_file user=""
+  unit_file="${SYSTEMD_UNIT_DIR:-/etc/systemd/system}/${service}.service"
+  user="$(systemctl show -p User --value "$service" 2>/dev/null || true)"
+  if [ -z "$user" ] && [ -f "$unit_file" ]; then
+    user="$(sed -nE 's/^[[:space:]]*User[[:space:]]*=[[:space:]]*([^[:space:]]+).*/\1/p' "$unit_file" | tail -1)"
+  fi
+  if [ -z "$user" ] || ! id -u "$user" >/dev/null 2>&1; then user=root; fi
+  echo "$user"
+}
+
+# v11 (O10): the user the cron jobs run as: the one of the backup line of the cron file, else the user of the service
+# (phase 5.3), else the owner of <app-dir>
 update_ops_cron_user() {
   local app_dir="$1" cron_file="${CRON_FILE:-/etc/cron.d/papital-erp}" user=""
   if [ -f "$cron_file" ]; then
     user="$(awk '$0 !~ /^#/ && index($0, "/scripts/backup.sh") { print $6; exit }' "$cron_file" 2>/dev/null || true)"
   fi
+  if [ -z "$user" ] && [ -n "${UPDATE_SERVICE_USER:-}" ] && [ "$UPDATE_SERVICE_USER" != root ]; then user="$UPDATE_SERVICE_USER"; fi
   [ -n "$user" ] || user="$(stat -c %U "$app_dir" 2>/dev/null || true)"
   echo "${user:-root}"
 }
