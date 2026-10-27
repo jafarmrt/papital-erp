@@ -135,8 +135,19 @@ export function useProjectDelivery(project: ProductionProject, onUpdate: () => v
     deliveryCost.status === 'ready'
       ? deliveryCostOutlook(deliveryCost.data, targets.map(p => ({ itemId: productItemId(p), quantity: producedQuantities[p.id] ?? 0, typedUnitCost: typed(p) ?? null })))
       : null;
-  /** the unit cost the server computes for this product delivered on its own with an empty cost field; null when hidden */
-  const computedCostOf = (p: ProjectProductItem): number | null => outlookOf([p], () => undefined)?.unitCosts[0] ?? null;
+  const selectedProducts = products.filter(p => selectedIds.has(p.id));
+  // the 1402 outlook of the selected products, else of all (a batch, or the one product), at their typed costs
+  const outlookTargets = selectedProducts.length > 0 ? selectedProducts : products;
+  const costOutlook = outlookOf(outlookTargets, typedCostOf);
+  /**
+   * the unit cost the server computes for this product with an empty cost field; null when hidden. In a batch of several
+   * products that completes the plan it is the product's share of the spread (review of S2), else the product on its own.
+   */
+  const computedCostOf = (p: ProjectProductItem): number | null => {
+    const i = outlookTargets.indexOf(p);
+    if (costOutlook?.multiProduct && costOutlook.rule === 'complete' && i >= 0) return costOutlook.unitCosts[i] ?? null;
+    return outlookOf([p], () => undefined)?.unitCosts[0] ?? null;
+  };
 
   const postDelivery = (body: DeliveryBody) =>
     fetchJson<DeliveryAnswer | null>(`/projects/${project.id}/add-to-inventory`, {
@@ -260,6 +271,12 @@ export function useProjectDelivery(project: ProductionProject, onUpdate: () => v
     setSubmitting(true);
     try {
       const res = await postDelivery(body);
+      // the answer is read as for the first send (review of S2): a body that is not a success is not reported as one
+      if (!accepted(res)) {
+        toast.error(res?.error || 'خطا در ثبت ورود به انبار');
+        refused(pending.body);
+        return;
+      }
       toast.success(`${pending.kind === 'over_delivery' ? 'تحویل بیش از برنامه با دلیل ثبت شد' : 'تحویل با دلیل بهای تولید ثبت شد'}${refNote(res)}`);
       setPendingReason(null);
       setSelectedIds(new Set());
@@ -274,9 +291,6 @@ export function useProjectDelivery(project: ProductionProject, onUpdate: () => v
     }
   };
 
-  const selectedProducts = products.filter(p => selectedIds.has(p.id));
-  // the 1402 outlook of the selected products, else of all (a batch, or the one product), at their typed costs
-  const costOutlook = outlookOf(selectedProducts.length > 0 ? selectedProducts : products, typedCostOf);
   const singlePlan = deliveryCost.data?.products.length === 1 ? deliveryCost.data.products[0] : null;
   const remainingPlanQty = singlePlan ? Math.max(singlePlan.plannedQty - singlePlan.deliveredQty, producedQuantities[products[0]?.id] ?? 0) : null;
   const totalDeliveredQty = products.reduce((sum, p) => sum + (Number(producedQuantities[p.id]) || Number(p.quantity) || 0), 0);

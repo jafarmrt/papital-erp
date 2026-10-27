@@ -52,6 +52,7 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   { table: 'project_stages', group: 'projects' },
   { table: 'project_product_stage_progress', group: 'projects' },
   { table: 'project_bom_allocations', group: 'projects' },
+  { table: 'production_receipt_costs', group: 'projects' },
   { table: 'project_reservation_releases', group: 'projects' },
   { table: 'pending_materials', group: 'projects' },
   { table: 'project_managers', group: 'projects' },

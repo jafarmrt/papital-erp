@@ -153,5 +153,5 @@ export const productionReceiptCosts = pgTable('production_receipt_costs', {
 }, (table) => ({
   idx_production_receipt_costs_project_id: index('idx_production_receipt_costs_project_id').on(table.projectId),
   chk_production_receipt_costs_rule: check('chk_production_receipt_costs_rule', sql`${table.costRule} IN ('share', 'complete', 'entered', 'no_wip')`),
-  chk_production_receipt_costs_wip_credit: check('chk_production_receipt_costs_wip_credit', sql`${table.wipCredit} >= 0`),
+  chk_production_receipt_costs_wip_credit: check('chk_production_receipt_costs_wip_credit', sql`${table.wipCredit} >= 0 OR ${table.wipCredit} = ${table.wipBalance}`),
 }));

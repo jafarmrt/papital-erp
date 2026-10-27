@@ -57,9 +57,19 @@ export function ProjectDeliveryCostPanel({ status, outlook, remainingPlanQty }: 
             <span className="text-sky-700"> (مانده ÷ {formatPersianNumber(remainingPlanQty)} واحد)</span>
           </span>
         )}
-        <span>این ورود برمی‌دارد: <strong className="font-mono">{rial.amount(outlook.credit)}</strong></span>
-        <span>پس از آن می‌ماند: <strong className="font-mono">{rial.amount(outlook.remaining)}</strong></span>
+        {outlook.wipBalance >= 0 && (
+          <>
+            <span>این ورود برمی‌دارد: <strong className="font-mono">{rial.amount(outlook.credit)}</strong></span>
+            <span>پس از آن می‌ماند: <strong className="font-mono">{rial.amount(outlook.remaining)}</strong></span>
+          </>
+        )}
       </div>
+      {outlook.wipBalance < 0 && (
+        <p className="text-[11px] text-amber-800 font-semibold">
+          ماندهٔ کالای در جریان ساخت این پروژه {rial.amount(Math.abs(outlook.wipBalance))} زیر صفر است (رسیدهای تولید پیشین بیش از آن برداشته‌اند)
+          {outlook.credit < 0 ? '؛ این ورود که برنامه را کامل می‌کند آن را صفر می‌کند و اختلاف به حساب «اختلاف بهای تولید» می‌رود.' : '.'}
+        </p>
+      )}
       <p className="text-[11px] text-sky-700">
         بهای رسید تولید همان بهای واقعی پروژه است: تخصیص مواد و حوالهٔ پروژه منهای تحویل‌های پیشین (دستمزد در آن نیست). خانهٔ بهای خالی همین بها را می‌گیرد.
       </p>

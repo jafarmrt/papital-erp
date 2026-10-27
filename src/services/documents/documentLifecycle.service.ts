@@ -38,7 +38,7 @@ import { assertNameNotOtherKind, hasPricedLine, linkKnownDocumentParty } from '.
 import { lockRequisitionOfOrder, releaseVoidedProcurementOrder } from './procurementOrderVoid.js';
 import { documentVoidVoucherReason } from '../../lib/documents/documentTypeName.js';
 import { idempotentTransaction } from '../../middleware/idempotency.js';
-import { assertProjectMaterialsNotDelivered } from '../accounting/projectDeliveredMaterials.js';
+import { assertProjectWipStaysCovered } from '../accounting/projectDeliveredMaterials.js';
 
 export class DocumentLifecycleService {
   /**
@@ -330,10 +330,6 @@ export class DocumentLifecycleService {
       await assertVoidHasNoReturns(tx, { id: doc.id, refNumber: doc.refNumber });
       // v9.0.272 (TD-779، ت۴ الف): و نه سندی که دریافت یا پرداخت زنده خزانه دارد (۴۰۹ با فهرست آن‌ها)
       await assertVoidHasNoTreasuryRows(tx, { id: doc.id, refNumber: doc.refNumber });
-      // v11 phase 6.1ث (decision ت۵۲-۳): nor a project remittance once the project delivered goods (409 with the receipts)
-      if (doc.type === 'remittance' && doc.status === 'final' && doc.projectId) {
-        await assertProjectMaterialsNotDelivered(tx, Number(doc.projectId), 'remittance');
-      }
       // v9.0.337 (TD-785): سند و ردیف‌هایش پیش از ابطال برای تنها ردیف ممیزی ابطال
       const auditBefore = await documentAuditSnapshot(tx, id);
 
@@ -476,6 +472,12 @@ export class DocumentLifecycleService {
         await postVoidResidueVoucher({
           documentId: id, refNumber: doc.refNumber || String(id), date: await businessTodayIsoDate(), username: deletedByUser,
         }, residues, tx);
+      }
+
+      // v11 phase 6.1ث (decision ت۵۲-۳): a project remittance takes out of the project's 1402 only what its receipts left
+      // there (409 with the receipts once its voucher is voided)
+      if (doc.type === 'remittance' && doc.status === 'final' && doc.projectId) {
+        await assertProjectWipStaysCovered(tx, Number(doc.projectId), 'remittance');
       }
 
       // 5. Audit log — v8.0.77 (TD-324): در همان تراکنش (پیش‌تر اتصال دوم استخر و ردیف ممیزی ماندگار حتی با برگشت ابطال)

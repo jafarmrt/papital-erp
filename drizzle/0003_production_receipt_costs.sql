@@ -1,6 +1,6 @@
 -- v11 phase 6.1ث (S2, decision ت۵۲-۳): a project's production receipt costs the project's real cost, its work in progress
 -- (1402). Each receipt records how the server priced it under the project lock: the project's 1402 before it, what it takes
--- from 1402, the rule and the reason of a cost other than the real one. Its voucher credits 1402 with exactly that amount and
+-- from 1402 (below zero only when it closes a 1402 below zero), the rule and the reason of a cost other than the real one. Its voucher credits 1402 with exactly that amount and
 -- posts the difference to the lines' value on the new account 6005 «اختلاف بهای تولید». A receipt recorded before has no row
 -- and keeps its voucher.
 CREATE TABLE IF NOT EXISTS production_receipt_costs (
@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS production_receipt_costs (
     reason text DEFAULT ''::text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT chk_production_receipt_costs_rule CHECK ((cost_rule = ANY (ARRAY['share'::text, 'complete'::text, 'entered'::text, 'no_wip'::text]))),
-    CONSTRAINT chk_production_receipt_costs_wip_credit CHECK ((wip_credit >= (0)::numeric)),
+    CONSTRAINT chk_production_receipt_costs_wip_credit CHECK (((wip_credit >= (0)::numeric) OR (wip_credit = wip_balance))),
     CONSTRAINT fk_production_receipt_costs_document FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
     CONSTRAINT fk_production_receipt_costs_project FOREIGN KEY (project_id) REFERENCES production_projects(id) ON DELETE CASCADE
 );

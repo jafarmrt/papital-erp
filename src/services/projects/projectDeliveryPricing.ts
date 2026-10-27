@@ -3,7 +3,9 @@ import type { DbExecutor } from '../../db/drizzle.js';
 import { items, productionReceiptCosts } from '../../db/schema.js';
 import { AppError } from '../../errors/customErrors.js';
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
-import { deliveryLinesValue, planDeliveryCost, postedDeliveryCosts, type DeliveryCostPlan, type DeliveryPlanLine } from '../../lib/projects/deliveryCostPlan.js';
+import {
+  deliveryLinesValue, planDeliveryCost, postedDeliveryCosts, type DeliveryCostPlan, type DeliveryCostReasonKind, type DeliveryPlanLine,
+} from '../../lib/projects/deliveryCostPlan.js';
 import { formatPersianNumber } from '../../utils/persianNumber.js';
 import { projectWipBalances } from '../accounting/projectWipBalance.js';
 
@@ -22,17 +24,20 @@ export interface PricedDelivery {
   reason: string;
 }
 
-const COST_REASON_MESSAGES = {
-  no_wip: (project: string) =>
-    `کالای در جریان ساخت پروژه «${project}» مانده‌ای ندارد (موادی به پروژه تخصیص یا حواله نشده، یا همه با تحویل‌های پیشین رفته است)، ` +
-    'پس بهای واقعی این تولید صفر است. برای ورود به بهای واردشده یا میانگین موزون بها دلیل را بنویسید؛ این مبلغ به حساب «اختلاف بهای تولید» می‌رود.',
-  cost_changed: (project: string) =>
+const COST_REASON_MESSAGES: Record<DeliveryCostReasonKind, (project: string, plan: DeliveryCostPlan) => string> = {
+  no_wip: (project, plan) =>
+    (fin(plan.wipBalance).isNegative()
+      ? `ماندهٔ کالای در جریان ساخت پروژه «${project}» زیر صفر است (رسیدهای تولید پیشین بیش از آن برداشته‌اند)، `
+      : `کالای در جریان ساخت پروژه «${project}» مانده‌ای ندارد (موادی به پروژه تخصیص یا حواله نشده، یا همه با تحویل‌های پیشین رفته است)، `) +
+    'پس بهای واقعی این تولید صفر است. برای ورود به بهای واردشده یا میانگین موزون بها دلیل را بنویسید؛ این مبلغ به حساب «اختلاف بهای تولید» می‌رود' +
+    (fin(plan.wipCredit).isNegative() ? ' و این ورود که برنامه را کامل می‌کند ماندهٔ زیر صفر را هم با همان حساب می‌بندد.' : '.'),
+  cost_changed: (project) =>
     `بهای واحد واردشده با بهای واقعی تولید پروژه «${project}» (ماندهٔ کالای در جریان ساخت تقسیم بر مقدار باقی‌ماندهٔ برنامه) نمی‌خواند. ` +
     'بها را خالی بگذارید تا بهای واقعی ثبت شود، یا دلیل را بنویسید؛ اختلاف به حساب «اختلاف بهای تولید» می‌رود.',
-  overdraw: (project: string) =>
+  overdraw: (project) =>
     `جمع بهای این ورود بیش از ماندهٔ کالای در جریان ساخت پروژه «${project}» است. ` +
     'بهای ردیف‌ها را کم کنید، یا دلیل را بنویسید؛ بیش از مانده به حساب «اختلاف بهای تولید» می‌رود.',
-} as const;
+};
 
 const amount = (value: string, decimals: number) => formatPersianNumber(fin(value).toNumber(), decimals);
 
@@ -70,7 +75,7 @@ export async function priceProjectDelivery(tx: DbExecutor, input: {
       overdraw: ` (ماندهٔ کالای در جریان ساخت ${amount(plan.wipBalance, 0)} ریال، جمع این ورود ${amount(deliveryLinesValue(planLines, plan.unitCosts), 0)} ریال)`,
     }[plan.reasonNeeded];
     throw new AppError(
-      `${COST_REASON_MESSAGES[plan.reasonNeeded](input.projectLabel)}${figures}`,
+      `${COST_REASON_MESSAGES[plan.reasonNeeded](input.projectLabel, plan)}${figures}`,
       422,
       'PRODUCTION_COST_REASON_REQUIRED',
       {

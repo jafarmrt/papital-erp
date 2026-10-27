@@ -10893,6 +10893,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v11 phase 6.1ث (S2, decision ت۵۲-۳): a production receipt costs the project's real cost; the materials of a delivering project stay
   const { runProductionRealCostTests } = await import('../regression/productionRealCostTests.js');
   results.push(...await runProductionRealCostTests(shouldRun));
+  const { runProductionRealCostReviewTests } = await import('../regression/productionRealCostReviewTests.js');
+  results.push(...await runProductionRealCostReviewTests(shouldRun));
   // Series 10 N-05 PR 3 (v10.0.247+): sections, tags, order, cover, replace and the item picture of the media library
   const { runMediaArrangeTests } = await import('../regression/mediaArrangeTests.js');
   results.push(...await runMediaArrangeTests(shouldRun));

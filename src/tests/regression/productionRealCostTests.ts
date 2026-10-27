@@ -6,7 +6,7 @@ import { runReservationCases } from './stockReservationTests.js';
 /**
  * v11 phase 6.1ث (S2, decision ت۵۲-۳): a project's production receipt costs the project's real cost, its work in progress
  * (1402); a cost other than that needs a reason and the difference goes to «اختلاف بهای تولید» (6005); the receipt that
- * completes the plan closes 1402; and the materials of a project that delivered goods are neither released nor voided.
+ * completes the plan closes 1402; and the materials a delivery took are neither released nor voided.
  * Through the real Express routes with real sessions. Each case is red on the code before the change: the typed cost or
  * the item's weighted average cost was posted, 1402 was left over or overdrawn, and release and void were allowed.
  */
@@ -22,16 +22,16 @@ export async function runProductionRealCostTests(shouldRun: ShouldRun): Promise<
       'v11 6.1th: a project without 1402 delivers at a typed or average cost only with a reason, all of it to 6005',
       ['v11', 'phase6', 'projects', 'delivery', 'wip'], withoutWipCase],
     ['reg_project_materials_delivered_guard_v11_6_1th',
-      'v11 6.1th: a material allocation is not released and a project remittance is not voided while the project has a live production receipt (409 PROJECT_MATERIALS_DELIVERED); after the receipts are voided both are',
+      'v11 6.1th: a material allocation is not released and a project remittance is not voided when that would take the project 1402 below what its receipts left (409 PROJECT_MATERIALS_DELIVERED); a cost no receipt took is still released, and after the receipts are voided all of it is',
       ['v11', 'phase6', 'projects', 'allocation', 'wip'], deliveredGuardCase],
   ]);
 }
 
-const ACCOUNTS = { wip: '1402', finishedGoods: '1403', variance: '6005' } as const;
+export const ACCOUNTS = { wip: '1402', finishedGoods: '1403', variance: '6005' } as const;
 
-interface CostRefusal { code?: string; details?: { kind?: string; rule?: string; unitCosts?: string[]; wipBalance?: string } }
+export interface CostRefusal { code?: string; details?: { kind?: string; rule?: string; unitCosts?: string[]; wipBalance?: string } }
 
-async function project(h: Harness, f: Fixture, products: Array<[number, number]>): Promise<number> {
+export async function project(h: Harness, f: Fixture, products: Array<[number, number]>): Promise<number> {
   const res = await h.post('/api/projects', {
     title: `6.1th cost ${h.tag} ${Math.floor(Math.random() * 1e6)}`, start_date: f.today, end_date: f.today, quantity: 1,
     products: products.map(([itemId, quantity]) => ({ item_id: itemId, item_code: '', item_name: '', quantity, unit: 'عدد' })),
@@ -40,35 +40,35 @@ async function project(h: Harness, f: Fixture, products: Array<[number, number]>
   return Number((res.body as { id?: unknown }).id);
 }
 
-async function allocate(h: Harness, f: Fixture, projectId: number, itemId: number, quantity: number): Promise<number> {
+export async function allocate(h: Harness, f: Fixture, projectId: number, itemId: number, quantity: number): Promise<number> {
   const res = await h.post('/api/inventory/allocations/allocate', { projectId, allocations: [{ itemId, quantity, location: f.wh }] });
   if (res.status !== 200) throw new Error(`setup: the allocation answered ${brief(res)}`);
   const [row] = await h.q(`SELECT id FROM project_bom_allocations WHERE project_id = $1 AND item_id = $2 AND is_deleted = 0 ORDER BY id DESC LIMIT 1`, [projectId, itemId]);
   return Number(row?.id);
 }
 
-type Line = { itemId: number; quantity: number; unitPrice?: number };
+export type Line = { itemId: number; quantity: number; unitPrice?: number };
 
-function deliver(h: Harness, f: Fixture, projectId: number, lines: Line[], productionCostReason?: string) {
+export function deliver(h: Harness, f: Fixture, projectId: number, lines: Line[], productionCostReason?: string) {
   return h.post(`/api/projects/${projectId}/add-to-inventory`, {
     itemsToAdd: lines.map(l => ({ ...l, location: f.wh })), ...(productionCostReason ? { productionCostReason } : {}),
   });
 }
 
-async function delivered(h: Harness, f: Fixture, projectId: number, lines: Line[], productionCostReason?: string): Promise<number> {
+export async function delivered(h: Harness, f: Fixture, projectId: number, lines: Line[], productionCostReason?: string): Promise<number> {
   const res = await deliver(h, f, projectId, lines, productionCostReason);
   if (res.status !== 200) throw new Error(`the delivery of ${JSON.stringify(lines)} answered ${brief(res)}`);
   return Number((res.body as { documentId?: unknown }).documentId);
 }
 
 /** The project's 1402 the delivery tab reads */
-async function wipOf(h: Harness, projectId: number): Promise<number | null> {
+export async function wipOf(h: Harness, projectId: number): Promise<number | null> {
   const res = await h.get(`/api/projects/${projectId}/delivery-cost`);
   return (res.body as { wipBalance?: number | null }).wipBalance ?? null;
 }
 
 /** Net (debit − credit) by account code of a document's live voucher, and whether its 1402 and 6005 rows carry the project */
-async function voucherOf(h: Harness, documentId: number, projectId: number): Promise<{ net: Record<string, number>; balanced: boolean; projectRows: boolean }> {
+export async function voucherOf(h: Harness, documentId: number, projectId: number): Promise<{ net: Record<string, number>; balanced: boolean; projectRows: boolean }> {
   const rows = await h.q(
     `SELECT a.code, i.debit::float8 AS debit, i.credit::float8 AS credit, i.detailed_type AS "detailedType", i.detailed_id AS "detailedId"
        FROM journal_voucher_items i JOIN journal_vouchers v ON v.id = i.voucher_id JOIN accounts a ON a.id = i.account_id
@@ -88,7 +88,7 @@ async function voucherOf(h: Harness, documentId: number, projectId: number): Pro
   return { net, balanced: rows.length > 0 && Math.abs(debit - credit) < 0.01, projectRows };
 }
 
-async function kardexCosts(h: Harness, documentId: number): Promise<Record<number, number>> {
+export async function kardexCosts(h: Harness, documentId: number): Promise<Record<number, number>> {
   const rows = await h.q(
     `SELECT item_id AS "itemId", unit_price::float8 AS cost FROM transactions WHERE document_id = $1 AND is_deleted = 0 AND reversal_of_id IS NULL`, [documentId]);
   return Object.fromEntries(rows.map(r => [Number(r.itemId), Number(r.cost)]));
@@ -99,7 +99,7 @@ async function receiptCount(h: Harness, projectId: number): Promise<number> {
   return Number(row?.n ?? 0);
 }
 
-const sameNet = (actual: Record<string, number>, expected: Record<string, number>) =>
+export const sameNet = (actual: Record<string, number>, expected: Record<string, number>) =>
   JSON.stringify(Object.entries(actual).filter(([, v]) => v !== 0).sort()) === JSON.stringify(Object.entries(expected).sort());
 
 /** A plan of 10 with 8,000 in 1402: 4 without a cost take 3,200; 6 typed at 900 take the last 4,800 and 600 goes to 6005 */
@@ -200,13 +200,22 @@ async function deliveredGuardCase(h: Harness, wrong: string[]): Promise<string> 
   const rem = await h.post('/api/documents', f.doc('remittance', 'final', [{ itemId: material, quantity: 2, unit_price: 0, location: f.wh }], { projectId }));
   if (rem.status !== 200) throw new Error(`setup: the project's remittance answered ${brief(rem)}`);
   const remId = Number((rem.body as { docId?: unknown }).docId);
-  const receipt = await delivered(h, f, projectId, [{ itemId: product, quantity: 2 }]);
+  // 3 of 4 take 3,000 of the 4,000; 1,000 is left
+  const receipt = await delivered(h, f, projectId, [{ itemId: product, quantity: 3 }]);
+  if (await wipOf(h, projectId) !== 1_000) wrong.push(`1402 after 3 of 4 is ${await wipOf(h, projectId)}, expected 1,000`);
 
+  // taking out 2,000 would leave 1402 at −1,000: both refused
   const release = await h.post(`/api/inventory/allocations/${allocationId}/release`, {});
-  if (release.status !== 409 || (release.body as CostRefusal).code !== 'PROJECT_MATERIALS_DELIVERED') wrong.push(`releasing the allocation after a delivery answered ${brief(release)}, expected 409 PROJECT_MATERIALS_DELIVERED`);
+  if (release.status !== 409 || (release.body as CostRefusal).code !== 'PROJECT_MATERIALS_DELIVERED') wrong.push(`releasing the allocation the receipt took answered ${brief(release)}, expected 409 PROJECT_MATERIALS_DELIVERED`);
   const voidRem = await h.del(`/api/documents/${remId}`);
-  if (voidRem.status !== 409 || (voidRem.body as CostRefusal).code !== 'PROJECT_MATERIALS_DELIVERED') wrong.push(`voiding the project remittance after a delivery answered ${brief(voidRem)}, expected 409 PROJECT_MATERIALS_DELIVERED`);
-  if (await wipOf(h, projectId) !== 2_000) wrong.push(`1402 after the refused release and void is ${await wipOf(h, projectId)}, expected 2,000 (4,000 − 2 × 1,000)`);
+  if (voidRem.status !== 409 || (voidRem.body as CostRefusal).code !== 'PROJECT_MATERIALS_DELIVERED') wrong.push(`voiding the remittance the receipt took answered ${brief(voidRem)}, expected 409 PROJECT_MATERIALS_DELIVERED`);
+  if (await wipOf(h, projectId) !== 1_000) wrong.push(`1402 after the refused release and void is ${await wipOf(h, projectId)}, expected 1,000`);
+
+  // an allocation after the delivery is a cost no receipt took: it is released
+  const late = await allocate(h, f, projectId, material, 1);
+  const lateRelease = await h.post(`/api/inventory/allocations/${late}/release`, {});
+  if (lateRelease.status !== 200) wrong.push(`releasing an allocation made after the delivery answered ${brief(lateRelease)}, expected 200`);
+  if (await wipOf(h, projectId) !== 1_000) wrong.push(`1402 after the late allocation was released is ${await wipOf(h, projectId)}, expected 1,000`);
 
   // voiding the receipt brings its share back to 1402, and then the materials go
   const voidReceipt = await h.del(`/api/documents/${receipt}`);
@@ -216,5 +225,5 @@ async function deliveredGuardCase(h: Harness, wrong: string[]): Promise<string> 
   const voided = await h.del(`/api/documents/${remId}`);
   if (voided.status !== 200) wrong.push(`voiding the remittance after the receipt was voided answered ${brief(voided)}, expected 200`);
   if (await wipOf(h, projectId) !== 0) wrong.push(`1402 after the receipt, the allocation and the remittance are undone is ${await wipOf(h, projectId)}, expected 0`);
-  return 'release and void 409 while the receipt lives; 200 after it is voided; 1402 back to zero';
+  return 'release and void 409 when 1402 would go below zero; a late allocation released; all 200 after the receipt is voided; 1402 back to zero';
 }

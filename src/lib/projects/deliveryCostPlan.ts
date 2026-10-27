@@ -7,8 +7,11 @@
  *   so each unit costs the same; the receipt that completes the plan takes all of WIP.
  * - Several products (decision ت۵۹ A): quantities of different products do not add up, so before the plan is complete each
  *   line costs its typed cost, else the product's weighted average cost, and the receipt takes that from WIP. The receipt
- *   that completes the plan takes all of WIP, spread over its lines by those costs (by quantity when none has a cost).
- * - No WIP: there is nothing to take; the lines keep their typed or weighted average cost.
+ *   that completes the plan takes all of WIP, spread over its lines by those costs (by quantity when a line has none, so a
+ *   new product without a cost still enters at its share).
+ * - No WIP: there is nothing to take; the lines keep their typed or weighted average cost. A WIP below zero (receipts of
+ *   before this phase took more than it held) is closed by the receipt that completes the plan: it takes the negative
+ *   balance, so its voucher debits 1402 back to zero against «اختلاف بهای تولید».
  *
  * A cost other than the project's real cost needs a reason (`reasonNeeded`): a typed cost of a single-product receipt that
  * differs from the computed one, a several-product receipt that takes more than WIP, and any receipt of a project without
@@ -63,7 +66,7 @@ export interface DeliveryCostPlan {
   completesPlan: boolean;
   /** the project's WIP before the receipt, in rials */
   wipBalance: string;
-  /** what the receipt takes from WIP, never negative */
+  /** what the receipt takes from WIP; negative only when the receipt that completes the plan closes a WIP below zero */
   wipCredit: string;
   /** the computed unit cost of each line, the line order kept */
   unitCosts: string[];
@@ -102,7 +105,7 @@ export function planDeliveryCost(wipBalance: DecimalValue, products: readonly De
     unitCosts: unitCosts.map(c => c.toString()), changedLines, reasonNeeded,
   });
 
-  if (!wip.isPositive()) return plan('no_wip', fin(0), base, 'no_wip');
+  if (!wip.isPositive()) return plan('no_wip', completesPlan && wip.isNegative() ? wip : fin(0), base, 'no_wip');
 
   if (!multiProduct) {
     const [product] = products;
@@ -122,7 +125,8 @@ export function planDeliveryCost(wipBalance: DecimalValue, products: readonly De
 
   if (completesPlan) {
     const valued = quantities.map((q, i) => q.multiply(base[i]));
-    const weights = sum(valued).isPositive() ? valued : quantities;
+    // a line without any cost has no weight of its own (review of S2): then every line is weighed by its quantity
+    const weights = valued.every((v, i) => v.isPositive() || !quantities[i].isPositive()) ? valued : quantities;
     const totalWeight = sum(weights);
     const unitCosts = lines.map((_, i) => (quantities[i].isPositive() && totalWeight.isPositive()
       ? wip.multiply(weights[i]).divide(totalWeight.multiply(quantities[i]), DELIVERY_COST_SCALE)

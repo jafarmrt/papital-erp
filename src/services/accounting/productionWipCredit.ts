@@ -41,8 +41,10 @@ export interface ProductionCreditInput {
  * credits 1402 with exactly that, so the project's 1402 closes with the receipt that completes its plan, and posts the
  * difference to the lines' value (a cost entered with a reason, a receipt without 1402, rounding of the unit cost) on
  * «اختلاف بهای تولید» (mapping `productionVarianceAccountCode`, default 6005): a credit when the goods enter above what
- * 1402 gave, a debit below. A difference under the voucher tolerance stays on 1402. A receipt recorded before, or one
- * without a rial cost row, credits 1402 with the lines' value as before.
+ * 1402 gave, a debit below. The receipt that completes the plan of a project whose 1402 is below zero debits 1402 back to
+ * zero. A difference under the voucher tolerance stays on 1402, and so does a difference of the unit cost's rounding alone
+ * (no reason was asked) when the install has no variance account (review of S2). A receipt recorded before, or one without
+ * a rial cost row, credits 1402 with the lines' value as before.
  */
 export async function projectProductionCreditRows(executor: DbExecutor, input: ProductionCreditInput): Promise<ProductionCreditRow[]> {
   const projectNote = input.projectName ? ` (پروژه: ${input.projectName})` : '';
@@ -63,13 +65,16 @@ export async function projectProductionCreditRows(executor: DbExecutor, input: P
 
   const varianceAccount = await AccountMappingService.getProductionVarianceAccount(executor);
   if (!varianceAccount) {
-    if (input.strict) {
+    if (input.strict && cost.reason) {
       throw new ValidationError('سرفصل حسابداری «اختلاف بهای تولید» (6005) برای صدور سند رسید تولید پروژه یافت نشد؛ آن را در کدینگ یا نگاشت حساب‌ها تعریف کنید.');
     }
     return asBefore();
   }
   const rows: ProductionCreditRow[] = [];
   if (wipCredit.isPositive()) rows.push(row(input.wipAccount, 0, wipCredit, 1, wipDescription));
+  if (wipCredit.isNegative()) {
+    rows.push(row(input.wipAccount, wipCredit.abs(), 0, 1, `بستن ماندهٔ زیر صفر کالای در جریان ساخت با رسید تولید شماره ${input.refNumber}${projectNote}`));
+  }
   const reasonNote = cost.reason ? ` — ${cost.reason}` : '';
   rows.push(row(
     varianceAccount,

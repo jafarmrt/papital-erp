@@ -47,7 +47,7 @@ describe('one product: a share of 1402 by quantity, the last receipt closes it',
   });
 });
 
-describe('several products (decision ت۵۹ A)', () => {
+describe('several products (decision t59 A)', () => {
   const products = (chairsDelivered: number) => [
     { itemId: CHAIR, plannedQty: 10, deliveredQty: chairsDelivered },
     { itemId: TABLE, plannedQty: 1, deliveredQty: 0 },
@@ -87,6 +87,15 @@ describe('several products (decision ت۵۹ A)', () => {
     const plan = planDeliveryCost(600, products(5), [line(CHAIR, 5), line(TABLE, 1)]);
     expect(plan.unitCosts).toEqual(['100', '100']);
   });
+
+  // review of S2: a new product without any cost no longer enters at zero and is refused
+  it('spreads it by quantity when one line has no cost of its own', () => {
+    const plan = planDeliveryCost(5500, products(0), [line(CHAIR, 10, null, 100), line(TABLE, 1)]);
+    expect(plan.rule).toBe('complete');
+    expect(plan.unitCosts).toEqual(['500', '500']);
+    expect(plan.wipCredit).toBe('5500');
+    expect(plan.reasonNeeded).toBeNull();
+  });
 });
 
 describe('a project without 1402', () => {
@@ -98,6 +107,15 @@ describe('a project without 1402', () => {
       expect(plan.unitCosts).toEqual(['80']);
       expect(plan.reasonNeeded).toBe('no_wip');
     }
+  });
+
+  // review of S2: receipts of before this phase may have left 1402 below zero
+  it('closes a 1402 below zero with the receipt that completes the plan', () => {
+    const plan = planDeliveryCost(-300, [{ itemId: CHAIR, plannedQty: 10, deliveredQty: 8 }], [line(CHAIR, 2, null, 80)]);
+    expect(plan.rule).toBe('no_wip');
+    expect(plan.wipCredit).toBe('-300');
+    expect(plan.unitCosts).toEqual(['80']);
+    expect(plan.reasonNeeded).toBe('no_wip');
   });
 });
 
