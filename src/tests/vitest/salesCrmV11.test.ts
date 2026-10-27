@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { resolveLeadStageStatus, statusOfStage } from '../../services/crm/crmLeadOutcome';
 import { spreadOrderedQuantity } from '../../services/procurement/requisitionOrder';
+import { rebuildOrderRows } from '../../services/procurement/requisitionReceipt';
 import { CRM_BOARD_LEAD_CAP, dashboardLeadCapNotice, isOpenLead } from '../../lib/crm/crmListPages';
 
 /**
@@ -65,6 +66,23 @@ describe('an order spreads over the requisition rows of one item (C9)', () => {
     expect(added([{ requestedQty: 0.3, orderedQty: 0.1 }, { requestedQty: 1, orderedQty: 0 }], '0.5')).toEqual([[0, 0.2], [1, 0.3]]);
     expect(added([{ requestedQty: 5, orderedQty: 5 }], 4)).toEqual([[0, 4]]);
     expect(spreadOrderedQuantity([], 4)).toEqual([]);
+  });
+});
+
+describe('a void or edit of an order rebuilds duplicate rows the same way (C9, review)', () => {
+  const ordered = (orderedQty: number, receivedQty = 0) => ({ itemId: 7, requestedQty: 5, orderedQty, receivedQty, remainingQty: 0, status: 'ordered' });
+  const shape = (rows: ReturnType<typeof rebuildOrderRows>) => rows.map(r => [r.orderedQty, r.receivedQty ?? 0, r.remainingQty, r.status]);
+
+  it('spreads the live orders over the rows and reopens what the void or a lower edit freed', () => {
+    // rows 5 + 5 fully ordered by 6 (draft) and 4 (final); the order of 4 is voided, or edited down, leaving 6
+    expect(shape(rebuildOrderRows([ordered(5), ordered(5)] as never, new Set([7]), [{ itemId: 7, quantity: 6 }], []))).toEqual([[5, 0, 0, 'ordered'], [1, 0, 4, 'pending']]);
+    // both orders final and received; voiding the 4 leaves 6 ordered and received
+    expect(shape(rebuildOrderRows([ordered(5, 5), ordered(5, 5)] as never, new Set([7]), [{ itemId: 7, quantity: 6 }], [{ itemId: 7, quantity: 6 }]))).toEqual([[5, 5, 0, 'received'], [1, 1, 4, 'pending']]);
+  });
+
+  it('keeps a row closed before the rebuild closed', () => {
+    const closed = { ...ordered(2), closed: true };
+    expect(shape(rebuildOrderRows([ordered(5), closed] as never, new Set([7]), [{ itemId: 7, quantity: 6 }], []))).toEqual([[5, 0, 0, 'ordered'], [1, 0, 0, 'ordered']]);
   });
 });
 

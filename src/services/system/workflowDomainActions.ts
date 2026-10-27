@@ -11,7 +11,7 @@ import { registerRequisitionWorkflowAction } from '../procurement/requisitionWor
 import { procurementOrderHooks } from '../procurement/requisitionOrderSync.js';
 import { registerLinkedOrderHooks } from '../documents/linkedOrderHooks.js';
 import { registerLinkedLeadHooks } from '../documents/linkedLeadHooks.js';
-import { lockLeadOfSalesDocument, markLeadWonByInvoice } from '../crm/crmLeadOutcome.js';
+import { leadIdOfSalesDocument, lockLeadOfSalesDocument, markLeadWonByInvoice } from '../crm/crmLeadOutcome.js';
 import { permissionHolderUserIdsWith } from '../notifications/notificationRecipients.js';
 import { registerEntityWorkflowPort } from './entityWorkflowPort.js';
 import { registerScheduleProgressSync } from '../piecework/scheduleProgressSync.js';
@@ -42,6 +42,7 @@ export function registerWorkflowDomainActions(): void {
   // v11 phase 6.4 (C3): finalizing a lead's proforma into an invoice makes the lead a sale (the documents package may not import CRM)
   registerLinkedLeadHooks({
     lockLeadOfDocument: lockLeadOfSalesDocument,
+    leadIdOfDocument: leadIdOfSalesDocument,
     markLeadSold: async (tx, lead, invoice, actorName) => { await markLeadWonByInvoice(tx, lead, invoice, { name: actorName }, permissionHolderUserIdsWith); },
   });
   // v10.0.250 (OBS-R2-02): the accounting, treasury and item cores start and close their entity workflows through this port

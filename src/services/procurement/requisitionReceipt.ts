@@ -88,17 +88,20 @@ export function rebuildOrderRows(
     const itemId = Number(line.itemId);
     if (itemIds.has(itemId)) orderedByItem.set(itemId, (orderedByItem.get(itemId) ?? fin(0)).add(line.quantity ?? 0));
   }
+  // v11 phase 6.4 (C9, review): a row's closure is read before the rebuild; with the lowered quantity the legacy rule
+  // (`ordered` below its request) would read a fully ordered row as closed and freeze it at «ordered» with nothing left
+  const closedBefore = rows.map(row => isClosedRequisitionRow(row));
   const reset = rows.map(row => (itemIds.has(Number(row.itemId)) ? { ...row, orderedQty: 0, receivedQty: 0 } : row));
   for (const [itemId, total] of orderedByItem) {
     const itemRows = reset.filter(row => Number(row.itemId) === itemId);
     for (const { row, added } of spreadOrderedQuantity(itemRows, total.toNumber())) row.orderedQty = added;
   }
   const filled = applyDeliveredLines(reset, received.filter(line => itemIds.has(Number(line.itemId))));
-  return filled.map(row => {
+  return filled.map((row, index) => {
     if (!itemIds.has(Number(row.itemId))) return row;
     const requested = fin(row.requestedQty || 0);
     if (fin(row.receivedQty || 0).greaterThanOrEqual(requested) && requested.isPositive()) return { ...row, remainingQty: 0, status: 'received' };
-    if (isClosedRequisitionRow(row)) return { ...row, remainingQty: 0, status: 'ordered' };
+    if (closedBefore[index]) return { ...row, remainingQty: 0, status: 'ordered' };
     const open = requested.subtract(row.orderedQty || 0);
     return { ...row, remainingQty: open.isPositive() ? open.toNumber() : 0, status: open.isPositive() ? 'pending' : 'ordered' };
   });

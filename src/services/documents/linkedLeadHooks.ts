@@ -1,6 +1,5 @@
-import { and, asc, eq } from 'drizzle-orm';
 import type { DbExecutor, DbTransaction } from '../../db/drizzle.js';
-import { crmLeads } from '../../db/schema.js';
+import type { crmLeads } from '../../db/schema.js';
 import { ConflictError } from '../../errors/customErrors.js';
 
 type Lead = typeof crmLeads.$inferSelect;
@@ -13,6 +12,8 @@ type Lead = typeof crmLeads.$inferSelect;
 export interface LinkedLeadHooks {
   /** the live lead whose proforma is this document, locked before the items and the document (the void's order) */
   lockLeadOfDocument(tx: DbExecutor, documentId: number): Promise<Lead | null>;
+  /** the same lead read again without a lock (its id, or null), by the same rule */
+  leadIdOfDocument(tx: DbExecutor, documentId: number): Promise<number | null>;
   /** the final invoice is the lead's sale: the lead moves to «فروش موفق» in the finalize transaction */
   markLeadSold(tx: DbTransaction, lead: Lead, invoice: { id: number; refNumber: string | null }, actorName: string): Promise<void>;
 }
@@ -36,11 +37,8 @@ export async function lockLinkedLead(tx: DbExecutor, document: { id: number; typ
  */
 export async function assertLinkedLeadUnchanged(tx: DbExecutor, document: { id: number; type: string | null }, locked: Lead | null): Promise<void> {
   if (!hooks || (document.type !== 'proforma' && document.type !== 'invoice')) return;
-  const [now] = await tx.select({ id: crmLeads.id }).from(crmLeads)
-    .where(and(eq(crmLeads.proformaId, document.id), eq(crmLeads.hasProforma, 1), eq(crmLeads.isDeleted, 0)))
-    .orderBy(asc(crmLeads.id))
-    .limit(1);
-  if ((now?.id ?? null) === (locked?.id ?? null)) return;
+  const now = await hooks.leadIdOfDocument(tx, document.id);
+  if (now === (locked?.id ?? null)) return;
   throw new ConflictError('پیوند پرونده فروش این سند همین حالا عوض شد؛ دوباره قطعی کنید.', { documentId: document.id }, 'DOCUMENT_LEAD_LINK_CHANGED');
 }
 

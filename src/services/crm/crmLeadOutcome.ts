@@ -89,12 +89,17 @@ export async function assertSoldLeadStaysWon(executor: DbExecutor, lead: Lead, t
  * v11 phase 6.4 (C3): the lead whose proforma is this document, locked before the items and the document (the same order
  * as the void: lead → items → project → document). Null when no live lead links it.
  */
+const leadOfDocument = (docId: number) => and(eq(crmLeads.proformaId, docId), eq(crmLeads.hasProforma, 1), eq(crmLeads.isDeleted, 0));
+
 export async function lockLeadOfSalesDocument(tx: DbExecutor, docId: number): Promise<Lead | null> {
-  const [lead] = await tx.select().from(crmLeads)
-    .where(and(eq(crmLeads.proformaId, docId), eq(crmLeads.hasProforma, 1), eq(crmLeads.isDeleted, 0)))
-    .orderBy(asc(crmLeads.id))
-    .for('update');
+  const [lead] = await tx.select().from(crmLeads).where(leadOfDocument(docId)).orderBy(asc(crmLeads.id)).for('update');
   return lead ?? null;
+}
+
+/** The same lead's id read again under the document lock, without a lock (`assertLinkedLeadUnchanged`) */
+export async function leadIdOfSalesDocument(tx: DbExecutor, docId: number): Promise<number | null> {
+  const [lead] = await tx.select({ id: crmLeads.id }).from(crmLeads).where(leadOfDocument(docId)).orderBy(asc(crmLeads.id)).limit(1);
+  return lead?.id ?? null;
 }
 
 /**
