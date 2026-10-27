@@ -76,7 +76,7 @@ export async function runStockPathsV11Tests(shouldRun: ShouldRun): Promise<TestC
 
   const voidKeyId = 'reg_stock_document_void_key_v11_6_1j_s7';
   if (shouldRun(voidKeyId, 'v11', 'phase6', 's7', 'permissions', 'documents', 'void')) {
-    await runCase(results, voidKeyId, 'v11 phase 6.1j (S7, card t56-7): voiding a stock document asks «باطل کردن سند انبار» (documents.void_stock) and voiding an invoice keeps «حذف فاکتور» (documents.delete); each key alone is refused the other (403 DOCUMENT_VOID_NOT_ALLOWED, nothing voided); the migration and the role templates give the new key to every role that holds documents.delete', () => inFiscalSandbox(async () => {
+    await runCase(results, voidKeyId, 'v11 phase 6.1j (S7, card t56-7): voiding a stock document asks documents.void_stock and voiding an invoice keeps documents.delete; each key alone is refused the other (403 DOCUMENT_VOID_NOT_ALLOWED, nothing voided); the migration and the role templates give the new key to every role that holds documents.delete', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const today = await businessTodayIsoDate();
@@ -94,13 +94,13 @@ export async function runStockPathsV11Tests(shouldRun: ShouldRun): Promise<TestC
       const r1 = await receipt();
       const i1 = await invoice();
       const refusedReceipt = await invoiceOnly.del(`/api/documents/${r1}`);
-      if (refusedReceipt.status !== 403 || codeOf(refusedReceipt) !== 'DOCUMENT_VOID_NOT_ALLOWED' || !(await isLive(r1))) problems.push(`«حذف فاکتور» alone voiding a receipt returned ${brief(refusedReceipt)}, live ${await isLive(r1)}`);
+      if (refusedReceipt.status !== 403 || codeOf(refusedReceipt) !== 'DOCUMENT_VOID_NOT_ALLOWED' || !(await isLive(r1))) problems.push(`documents.delete alone voiding a receipt returned ${brief(refusedReceipt)}, live ${await isLive(r1)}`);
       const refusedInvoice = await stockOnly.del(`/api/documents/${i1}`);
-      if (refusedInvoice.status !== 403 || codeOf(refusedInvoice) !== 'DOCUMENT_VOID_NOT_ALLOWED' || !(await isLive(i1))) problems.push(`«باطل کردن سند انبار» alone voiding an invoice returned ${brief(refusedInvoice)}, live ${await isLive(i1)}`);
+      if (refusedInvoice.status !== 403 || codeOf(refusedInvoice) !== 'DOCUMENT_VOID_NOT_ALLOWED' || !(await isLive(i1))) problems.push(`documents.void_stock alone voiding an invoice returned ${brief(refusedInvoice)}, live ${await isLive(i1)}`);
       const voidedReceipt = await stockOnly.del(`/api/documents/${r1}`);
-      if (!ok(voidedReceipt) || await isLive(r1)) problems.push(`«باطل کردن سند انبار» voiding a receipt returned ${brief(voidedReceipt)}`);
+      if (!ok(voidedReceipt) || await isLive(r1)) problems.push(`documents.void_stock voiding a receipt returned ${brief(voidedReceipt)}`);
       const voidedInvoice = await invoiceOnly.del(`/api/documents/${i1}`);
-      if (!ok(voidedInvoice) || await isLive(i1)) problems.push(`«حذف فاکتور» voiding an invoice returned ${brief(voidedInvoice)}`);
+      if (!ok(voidedInvoice) || await isLive(i1)) problems.push(`documents.delete voiding an invoice returned ${brief(voidedInvoice)}`);
 
       // the migration gives the key to a role holding documents.delete, and leaves the others alone
       const holder = await createTestRole({ permissions: ['documents.view', 'documents.delete'] });
@@ -113,13 +113,13 @@ export async function runStockPathsV11Tests(shouldRun: ShouldRun): Promise<TestC
       const missing = ROLE_TEMPLATES.filter(t => t.permissions.includes('documents.delete') && !t.permissions.includes('documents.void_stock')).map(t => t.code);
       if (missing.length > 0) problems.push(`role templates with documents.delete and without documents.void_stock: ${missing.join(', ')}`);
       if (problems.length > 0) throw new Error(problems.join(' | '));
-      return `receipt by «حذف فاکتور» → ${refusedReceipt.status}, invoice by «باطل کردن سند انبار» → ${refusedInvoice.status}; each voids its own; migration and templates give the key`;
+      return `receipt by documents.delete → ${refusedReceipt.status}, invoice by documents.void_stock → ${refusedInvoice.status}; each voids its own; migration and templates give the key`;
     }));
   }
 
   const openingId = 'reg_item_opening_stock_rules_v11_6_1j_s8_s9';
   if (shouldRun(openingId, 'v11', 'phase6', 's8', 's9', 'item', 'opening', 'permissions')) {
-    await runCase(results, openingId, 'v11 phase 6.1j (S8, S9, card t56-5): opening stock in the item form needs «ثبت ورود کالا (رسید)» (403 ITEM_OPENING_STOCK_NOT_ALLOWED) and a cost (422 ITEM_OPENING_WITHOUT_COST), only when the item is defined; an item edit never takes opening stock (422 ITEM_OPENING_ON_CREATE_ONLY); nothing is written when refused', () => inFiscalSandbox(async () => {
+    await runCase(results, openingId, 'v11 phase 6.1j (S8, S9, card t56-5): opening stock in the item form needs warehouse.in (403 ITEM_OPENING_STOCK_NOT_ALLOWED) and a cost (422 ITEM_OPENING_WITHOUT_COST), only when the item is defined; an item edit never takes opening stock (422 ITEM_OPENING_ON_CREATE_ONLY); nothing is written when refused', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const main = String(await getDefaultWarehouseCode(orm));
@@ -136,9 +136,9 @@ export async function runStockPathsV11Tests(shouldRun: ShouldRun): Promise<TestC
       const definer = await sandboxClientWith(['products.view', 'products.create', 'products.edit']);
       const noKey = body(1000, 5);
       const refusedKey = await definer.post('/api/items', noKey);
-      if (refusedKey.status !== 403 || codeOf(refusedKey) !== 'ITEM_OPENING_STOCK_NOT_ALLOWED' || await existsByCode(noKey.code)) problems.push(`opening stock without «ثبت ورود کالا» returned ${brief(refusedKey)}, item written ${await existsByCode(noKey.code)}`);
+      if (refusedKey.status !== 403 || codeOf(refusedKey) !== 'ITEM_OPENING_STOCK_NOT_ALLOWED' || await existsByCode(noKey.code)) problems.push(`opening stock without warehouse.in returned ${brief(refusedKey)}, item written ${await existsByCode(noKey.code)}`);
       const plain = await definer.post('/api/items', body(1000));
-      if (!ok(plain)) problems.push(`an item without stock by «تعریف کالا» alone returned ${brief(plain)}`);
+      if (!ok(plain)) problems.push(`an item without stock by products.create alone returned ${brief(plain)}`);
 
       const zero = body(0, 5);
       const refusedCost = await admin.post('/api/items', zero);
