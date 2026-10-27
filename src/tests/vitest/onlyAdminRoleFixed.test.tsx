@@ -37,6 +37,18 @@ describe('only the system admin role is fixed (TD-885)', () => {
   });
 });
 
+// v11 phase 6.2 (X5): a role holding a key the user lacks is not offered for delete; the server refuses it the same way
+describe('role delete stays within the user own keys (X5)', () => {
+  it('offers delete only for a role whose keys the user all holds', () => {
+    const within_: Role = { id: 3, name: 'فروش', code: 'sales', description: '', permissions: ['customers.view'], isSystem: 0 };
+    const beyond: Role = { id: 4, name: 'مالی', code: 'finance', description: '', permissions: ['accounting.view'], isSystem: 0 };
+    render(<RolesTab rolesList={[within_, beyond]} users={[]} totalCatalogPermsCount={10} grantor={['customers.view', 'roles.manage']}
+      onAddRole={() => undefined} onEditRole={() => undefined} onDeleteRole={() => undefined} />);
+    expect(within(card(within_.name)).queryByTitle('حذف نقش')).not.toBeNull();
+    expect(within(card(beyond.name)).queryByTitle('حذف نقش')).toBeNull();
+  });
+});
+
 describe('the system admin role ticks are shown but fixed (TD-886)', () => {
   it('shows every permission ticked and locked and saves only the name and description', async () => {
     fetchJson.mockResolvedValue({ success: true });

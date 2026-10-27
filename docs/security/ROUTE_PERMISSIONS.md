@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 493
+تعداد مسیرها: 495
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -212,6 +212,7 @@
 | GET | `/api/events/timeline/aggregates` | events.view |
 | POST | `/api/events/timeline/simulate-replay` | events.manage |
 | GET | `/api/events/timeline/types` | events.view |
+| ALL | `/api/events/webhook-echo` | public |
 | GET | `/api/events/webhooks` | events.view |
 | POST | `/api/events/webhooks` | events.manage |
 | DELETE | `/api/events/webhooks/:id` | events.manage |
@@ -460,6 +461,7 @@
 | POST | `/api/woocommerce/sync-order-by-id` | woocommerce.manage |
 | GET | `/api/woocommerce/synced-orders` | woocommerce.view |
 | POST | `/api/woocommerce/test-connection` | woocommerce.manage |
+| ALL | `/api/woocommerce/webhook/order` | public |
 | GET | `/api/workflow/analytics/sla` | workflow.manage \| workflow.admin |
 | GET | `/api/workflow/definitions` | workflow.manage \| workflow.admin |
 | POST | `/api/workflow/definitions` | workflow.manage \| workflow.admin |

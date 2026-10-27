@@ -3,7 +3,7 @@ import request from 'supertest';
 import { eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { fileAttachments, transfers, users } from '../../db/schema.js';
+import { documents, fileAttachments, transfers, users } from '../../db/schema.js';
 import { makeDailyLogTestCtx, type DailyLogTestCtx } from './dailyLogAccessTests.js';
 
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
@@ -58,7 +58,6 @@ async function adminRequest() {
     request(app)[method](url).set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken);
 }
 
-const NO_RECORD_ID = 2_147_400_000;
 const isPersian = (text: unknown) => typeof text === 'string' && /[؀-ۿ]/.test(text);
 
 async function streamErrorCase(): Promise<string> {
@@ -67,8 +66,11 @@ async function streamErrorCase(): Promise<string> {
   const caught: unknown[] = [];
   const onUncaught = (err: unknown) => { caught.push(err); };
   process.on('uncaughtException', onUncaught);
+  const { createTestDocument } = await import('../fixtures/factories.js');
+  // v11 phase 6.2 (X20): a file is served only while its owner record is live
+  const { document } = await createTestDocument({ status: 'draft' });
   const png = 'data:image/png;base64,' + Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]).toString('base64');
-  const [att] = await AttachmentStorageService.attachToNewRecord(orm, 'document', NO_RECORD_ID, [{ name: 'p13.png', url: png }], 'p13');
+  const [att] = await AttachmentStorageService.attachToNewRecord(orm, 'document', document.id, [{ name: 'p13.png', url: png }], 'p13');
   const row = await AttachmentStorageService.findActive(String(att.id));
   const absolute = AttachmentStorageService.absolutePath(row!.storagePath);
   const wrong: string[] = [];
@@ -90,6 +92,7 @@ async function streamErrorCase(): Promise<string> {
     process.off('uncaughtException', onUncaught);
     fs.rmSync(absolute, { recursive: true, force: true });
     await orm.delete(fileAttachments).where(eq(fileAttachments.id, String(att.id)));
+    await orm.delete(documents).where(eq(documents.id, document.id));
   }
   if (wrong.length > 0) throw new Error(wrong.join('; '));
   return 'readable file 200 with Content-Length; a directory or a missing file 404; no uncaught exception';

@@ -17,7 +17,7 @@ import {
   withRequiredPermissions,
   withoutPermission,
 } from '../../lib/permissions/permissionCatalog';
-import { canGrantPermission, type GrantorPermissions } from '../../lib/permissions/grantBoundary';
+import { canGrantPermission, keepBeyondGrant, type GrantorPermissions } from '../../lib/permissions/grantBoundary';
 import type { RoleDraft } from '../../lib/permissions/roleTemplates';
 import { DialogLayer } from '../common/DialogLayer';
 
@@ -151,12 +151,20 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
   const grantable = (keys: string[], current: string[]) => keys.filter((k) => current.includes(k) || canGrantPermission(grantor, k));
 
   // v9.0.86 (TD-880): تیک یک مجوز نیازهایش را هم می‌زند و برداشتن آن مجوزهای وابسته را هم برمی‌دارد، همان قاعده‌ای که سرور در ذخیره اعمال می‌کند
+  // v11 phase 6.2 (X5): a removal from a stored role keeps the keys the current user cannot give (`keepBeyondGrant`), as
+  // the server does; a new role (a template draft) drops any of them freely
+  const removalGrantor: GrantorPermissions = isEditing ? grantor : 'all';
   const togglePermission = (permKey: string) => {
     if (isFixedAdmin) return;
+    if (roleForm.permissions.includes(permKey)
+      && keepBeyondGrant(removalGrantor, roleForm.permissions, withoutPermission(roleForm.permissions, permKey)).includes(permKey)) {
+      toast.error('این مجوز را نمی‌توانید بردارید؛ مجوزهایی به آن وابسته‌اند که خودتان ندارید.');
+      return;
+    }
     setRoleForm((prev) => {
       const exists = prev.permissions.includes(permKey);
       if (exists) {
-        return { ...prev, permissions: withoutPermission(prev.permissions, permKey) };
+        return { ...prev, permissions: keepBeyondGrant(removalGrantor, prev.permissions, withoutPermission(prev.permissions, permKey)) };
       } else if (!canGrantPermission(grantor, permKey)) {
         return prev;
       } else {
@@ -169,7 +177,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
     setRoleForm((prev) => {
       const allSelected = categoryPerms.every((k) => prev.permissions.includes(k));
       if (allSelected) {
-        return { ...prev, permissions: categoryPerms.reduce((acc, k) => withoutPermission(acc, k), prev.permissions) };
+        return { ...prev, permissions: keepBeyondGrant(removalGrantor, prev.permissions, categoryPerms.reduce((acc, k) => withoutPermission(acc, k), prev.permissions)) };
       } else {
         return { ...prev, permissions: withRequiredPermissions([...prev.permissions, ...grantable(categoryPerms, prev.permissions)]) };
       }
@@ -185,11 +193,11 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
     const viewKeys = permCatalog.flatMap((c) =>
       c.permissions.filter((p) => p.key.endsWith('.view')).map((p) => p.key)
     );
-    setRoleForm((prev) => ({ ...prev, permissions: grantable(viewKeys, prev.permissions) }));
+    setRoleForm((prev) => ({ ...prev, permissions: keepBeyondGrant(removalGrantor, prev.permissions, grantable(viewKeys, prev.permissions)) }));
   };
 
   const clearAllPermissions = () => {
-    setRoleForm((prev) => ({ ...prev, permissions: [] }));
+    setRoleForm((prev) => ({ ...prev, permissions: keepBeyondGrant(removalGrantor, prev.permissions, []) }));
   };
 
   const toggleCategoryCollapse = (categoryName: string) => {
@@ -381,11 +389,11 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
                       <div className="p-3 grid grid-cols-1 md:grid-cols-2 gap-2.5">
                         {cat.permissions.map((p) => {
                           const isChecked = isFixedAdmin || roleForm.permissions.includes(p.key);
-                          const locked = isFixedAdmin || (!isChecked && !canGrantPermission(grantor, p.key));
+                          const locked = isFixedAdmin || (!canGrantPermission(grantor, p.key) && (!isChecked || isEditing));
                           return (
                             <label
                               key={p.key}
-                              title={isFixedAdmin ? 'مدیر سیستم همیشه این مجوز را دارد' : locked ? 'این مجوز را خودتان ندارید و نمی‌توانید آن را بدهید' : undefined}
+                              title={isFixedAdmin ? 'مدیر سیستم همیشه این مجوز را دارد' : locked ? 'این مجوز را خودتان ندارید و نمی‌توانید آن را بدهید یا بردارید' : undefined}
                               className={`flex items-start gap-2.5 p-2.5 rounded-lg border transition-all ${isFixedAdmin ? 'cursor-default' : locked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} ${
                                 isChecked
                                   ? 'bg-blue-50/80 border-blue-300 text-slate-800 shadow-xs'

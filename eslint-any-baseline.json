@@ -150,7 +150,7 @@
   "src/tests/suites/integrationSuite.ts": 24,
   "src/tests/suites/penetrationSuite.ts": 9,
   "src/tests/suites/regressionSuite.ts": 162,
-  "src/tests/suites/securitySuite.ts": 44,
+  "src/tests/suites/securitySuite.ts": 42,
   "src/tests/suites/unitSuite.ts": 33,
   "src/tests/suites/workflowSuite.ts": 12,
   "src/tests/testRunner.ts": 1,

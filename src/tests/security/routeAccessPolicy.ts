@@ -13,13 +13,16 @@ import { deleteTestRoles } from '../fixtures/roleCleanup.js';
  * و هر یافته (TD-298 تا TD-309) یک آزمون دارد که روی کد پیشین قرمز است.
  */
 
-/** مسیرهای بی‌احراز هویت (ورود، راه‌اندازی، سلامت، متریک با توکن خودش). وب‌هوک ووکامرس با router.all ثبت شده و در جدول نیست. */
+/** مسیرهای بی‌احراز هویت (ورود، راه‌اندازی، سلامت، متریک با توکن خودش). */
 export const PUBLIC_ROUTES = new Set([
   'POST /api/login', 'POST /api/auth/login', 'POST /api/logout', 'POST /api/auth/logout',
   'GET /api/check-setup', 'GET /api/public-settings', 'POST /api/setup',
   'GET /metrics', 'GET /api/metrics',
   'GET /health', 'GET /health/live', 'GET /health/ready', 'GET /health/startup',
   'GET /api/health', 'GET /api/health/live', 'GET /api/health/ready', 'GET /api/health/startup',
+  // v11 phase 6.2 (X14): the `router.all` webhooks, now in the table: the shop's order webhook checks its own signature
+  // and token, and the echo simulator answers 404 in production
+  'ALL /api/woocommerce/webhook/order', 'ALL /api/events/webhook-echo',
 ]);
 
 /**
@@ -67,7 +70,7 @@ export const SYSTEM_ADMIN_ONLY_ROUTES = new Set([
   'GET /api/messenger/bots', 'PUT /api/messenger/bots/:messenger', 'GET /api/messenger/links',
 ]);
 
-const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE', 'ALL']);
 const isViewPermission = (entry: string) => entry.endsWith('.view');
 
 /** تخلف‌های جدول مسیرها از سیاست دسترسی؛ آرایه خالی یعنی سالم */
