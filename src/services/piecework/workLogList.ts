@@ -1,10 +1,10 @@
-import { and, desc, eq, ilike, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, isNull, ne, sql, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { pieceworkLogs, pieceworkTasks, personnel, productionProjects } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
-import { containsLikePattern } from '../../lib/sqlLike.js';
 import type { WorkLogListFilters, WorkLogPage, WorkLogSummary } from '../../lib/piecework/workLogList.js';
+import { foldedContains } from '../../lib/search/searchSql.js';
 
 /**
  * v9.0.330 (TD-811، B12P-08): فهرست کارکرد با فیلتر، صفحه‌بندی و جمع در SQL. پیش‌تر کل جدول با سه join خوانده و در
@@ -27,12 +27,9 @@ function workLogConditions(filters: WorkLogListFilters): SQL[] {
   const endIso = requireStorageDate(filters.endDate, 'تا تاریخ');
   if (startIso) conditions.push(sql`${pieceworkLogs.date} >= ${startIso}::text`);
   if (endIso) conditions.push(sql`${pieceworkLogs.date} <= ${endIso}::text`);
-  const search = String(filters.search ?? '').trim();
-  if (search) {
-    const pattern = containsLikePattern(search);
-    const matches = or(ilike(personnel.fullName, pattern), ilike(pieceworkTasks.title, pattern), ilike(productionProjects.title, pattern));
-    if (matches) conditions.push(matches);
-  }
+  // v11 phase 6.3p (U8): one search rule (`foldedContains`)
+  const matches = foldedContains([personnel.fullName, pieceworkTasks.title, productionProjects.title], filters.search);
+  if (matches) conditions.push(matches);
   return conditions;
 }
 

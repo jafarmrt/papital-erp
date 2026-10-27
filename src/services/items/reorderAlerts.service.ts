@@ -1,8 +1,8 @@
-import { and, asc, eq, gt, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, sql, type SQL } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { documentItems, documents, items } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
-import { containsLikePattern } from '../../lib/sqlLike.js';
+import { foldedContains } from '../../lib/search/searchSql.js';
 import { ItemStockReservationService } from './itemStockReservation.service.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { openRequisitionQuantities } from './reorderOpenRequisitions.js';
@@ -56,13 +56,9 @@ export async function inTransitQuantities(executor: DbExecutor, itemIds: number[
 export async function listReorderAlerts(filters: ReorderAlertFilters, executor: DbExecutor = orm): Promise<ReorderAlertRow[]> {
   const conditions: SQL[] = [eq(items.isDeleted, 0), gt(items.reorderPoint, 0)];
   if (filters.type === 'product' || filters.type === 'raw_material') conditions.push(eq(items.type, filters.type));
-  if (filters.search) {
-    conditions.push(or(
-      ilike(items.name, containsLikePattern(filters.search)),
-      ilike(items.code, containsLikePattern(filters.search)),
-      ilike(items.category, containsLikePattern(filters.search)),
-    )!);
-  }
+  // v11 phase 6.3p (U8): one search rule (`foldedContains`)
+  const searched = foldedContains([items.name, items.code, items.category], filters.search);
+  if (searched) conditions.push(searched);
   const candidates = await executor.select().from(items).where(and(...conditions)).orderBy(asc(items.id));
   const ids = candidates.map(it => it.id);
   // v10.1.34 (TD-1279): the executor may be a transaction's single connection, so its queries run one at a time

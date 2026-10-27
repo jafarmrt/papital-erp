@@ -5,13 +5,13 @@ import { containsLikePattern, startsWithLikePattern } from '../../lib/sqlLike.js
 import { normalizeSearchText } from '../../lib/search/searchText.js';
 import { foldedSearchSql } from '../../lib/search/searchSql.js';
 import { logger } from '../../middleware/logger.js';
-import { phoneMatchKey, phoneMatchKeySql } from '../../lib/search/phoneMatchKey.js';
+import { phoneMatchKeySql, phoneSearchKey } from '../../lib/search/phoneMatchKey.js';
 
 /**
  * جستجوی سراسری چندبخشی (GET /global-search).
  * v7.0.53 (audit P2-10): هر بخش فقط وقتی جستجو می‌شود که کاربر مجوز مشاهده همان بخش را داشته باشد
  * (بررسی مجوز در روت انجام می‌شود و این‌جا فقط پرچم آن می‌رسد)؛ بخش بدون مجوز خالی است، نه خطا.
- * خطای هر بخش فقط لاگ می‌شود و آن بخش خالی برمی‌گردد. نویسه‌های % و _ ورودی escape می‌شوند.
+ * نویسه‌های % و _ ورودی escape می‌شوند. v11 phase 6.3p (C12): بخشی که خطا بدهد در `failedSections` نام برده می‌شود.
  * v9.0.291 (TD-675، B16-11): متن ستون و متن جست‌وجو هر دو با `normalizeSearchText` یکسان می‌شوند (ي/ك/ى عربی و ارقام فارسی
  * و عربی)، و نتیجه به ترتیب «برابر، سپس آغاز با، سپس شامل» و بعد کوتاه‌ترین نام می‌آید. پیش‌تر بی ترتیب بود، پس با پنج نام
  * «علی …» خودِ «علی» در پنج نتیجه نمی‌آمد و «كيان» عربی «کیان» را نمی‌یافت.
@@ -31,20 +31,6 @@ function matchRank(columns: AnyColumn[], q: string): SQL {
   const starts = startsWithLikePattern(q);
   return sql`CASE WHEN ${or(...columns.map(column => sql`${folded(column)} = ${q}`))} THEN 0
     WHEN ${matchesAny(columns, starts)} THEN 1 ELSE 2 END`;
-}
-
-/** OBS-R2-99: the fewest digits a search text needs to be matched as a phone number */
-export const PHONE_SEARCH_MIN_DIGITS = 4;
-
-/**
- * OBS-R2-99: the TD-296 phone key of a search text that looks like a phone number (only digits, spaces, «+», «-», «(»,
- * «)» and at least `PHONE_SEARCH_MIN_DIGITS` digits), without leading zeros so a part of the number matches inside the
- * stored key («0912 741» finds +98 912 741 2032); else null.
- */
-export function phoneSearchKey(q: string): string | null {
-  if (!/^[\d۰-۹٠-٩\s+\-()]+$/.test(q)) return null;
-  const key = phoneMatchKey(q).replace(/^0+/, '');
-  return key.length >= PHONE_SEARCH_MIN_DIGITS ? key : null;
 }
 
 export interface GlobalSearchScope {
@@ -89,133 +75,113 @@ export interface GlobalSearchProject {
   customer_name: string | null;
 }
 
+export type GlobalSearchSection = keyof GlobalSearchScope;
+
 export interface GlobalSearchResult {
   items: GlobalSearchItem[];
   customers: GlobalSearchCustomer[];
   documents: GlobalSearchDocument[];
   projects: GlobalSearchProject[];
+  /**
+   * v11 phase 6.3p (C12): the sections whose query failed. Before, a failed section was only logged and came back empty,
+   * so the user read «nothing found» where the search had not run.
+   */
+  failedSections: GlobalSearchSection[];
+}
+
+/** one section: a section without permission is empty, a failed one is logged and named in `failedSections` */
+async function runSection<T>(
+  section: GlobalSearchSection, allowed: boolean, failed: GlobalSearchSection[], read: () => Promise<T[]>,
+): Promise<T[]> {
+  if (!allowed) return [];
+  try {
+    return await read();
+  } catch (e) {
+    logger.error({ message: `Global search section ${section} failed`, error: e });
+    failed.push(section);
+    return [];
+  }
 }
 
 export class GlobalSearchService {
-  /** `q` is the trimmed, non-empty search text. */
+  /**
+   * `q` is the trimmed, non-empty search text. v11 phase 6.3p (C12): the four sections run at the same time; before, each
+   * waited for the one before it, so the answer took the sum of their times.
+   */
   static async search(q: string, scope: GlobalSearchScope): Promise<GlobalSearchResult> {
     const query = normalizeSearchText(q);
     const searchTerm = containsLikePattern(query);
-
-    // 1. Products & Raw Materials
-    let matchingItems: GlobalSearchItem[] = [];
-    if (scope.items) {
-      try {
-        matchingItems = await orm.select({
-          id: items.id,
-          name: items.name,
-          code: items.code,
-          type: items.type,
-          category: items.category,
-          unit: items.unit,
-          currentStock: items.currentStock,
-          thumbnail: items.thumbnail
-        })
-        .from(items)
-        .where(
-          and(
-            eq(items.isDeleted, 0),
-            matchesAny([items.name, items.code, items.category, items.material, items.color], searchTerm)
-          )
-        )
-        .orderBy(matchRank([items.name, items.code], query), sql`length(${items.name})`, asc(items.id))
-        .limit(10);
-      } catch (e) {
-        logger.error({ message: 'Error fetching search items', error: e });
-      }
-    }
-
-    // 2. Customers (OBS-R2-99: a phone-like text also matches the TD-296 phone key)
-    let matchingCustomers: GlobalSearchCustomer[] = [];
+    // OBS-R2-99: a phone-like text also matches the TD-296 phone key
     const phoneKey = phoneSearchKey(q.trim());
-    if (scope.customers) {
-      try {
-        matchingCustomers = await orm.select({
-          id: customers.id,
-          name: customers.name,
-          city: customers.city,
-          province: customers.province,
-          address: customers.address
-        })
+    const customerMatch = matchesAny([customers.name, customers.city, customers.province, customers.phone], searchTerm);
+    const failedSections: GlobalSearchSection[] = [];
+
+    const [matchingItems, matchingCustomers, matchingDocuments, matchingProjects] = await Promise.all([
+      // 1. Products & Raw Materials
+      runSection<GlobalSearchItem>('items', scope.items, failedSections, () => orm.select({
+        id: items.id,
+        name: items.name,
+        code: items.code,
+        type: items.type,
+        category: items.category,
+        unit: items.unit,
+        currentStock: items.currentStock,
+        thumbnail: items.thumbnail
+      })
+        .from(items)
+        .where(and(eq(items.isDeleted, 0), matchesAny([items.name, items.code, items.category, items.material, items.color], searchTerm)))
+        .orderBy(matchRank([items.name, items.code], query), sql`length(${items.name})`, asc(items.id))
+        .limit(10)),
+      // 2. Customers
+      runSection<GlobalSearchCustomer>('customers', scope.customers, failedSections, () => orm.select({
+        id: customers.id,
+        name: customers.name,
+        city: customers.city,
+        province: customers.province,
+        address: customers.address
+      })
         .from(customers)
-        .where(
-          and(
-            eq(customers.isDeleted, 0),
-            phoneKey
-              ? or(
-                matchesAny([customers.name, customers.city, customers.province, customers.phone], searchTerm),
-                sql`${phoneMatchKeySql(customers.phone)} LIKE ${containsLikePattern(phoneKey)}`,
-              )
-              : matchesAny([customers.name, customers.city, customers.province, customers.phone], searchTerm)
-          )
-        )
+        .where(and(
+          eq(customers.isDeleted, 0),
+          phoneKey ? or(customerMatch, sql`${phoneMatchKeySql(customers.phone)} LIKE ${containsLikePattern(phoneKey)}`) : customerMatch,
+        ))
         .orderBy(matchRank([customers.name], query), sql`length(${customers.name})`, asc(customers.id))
-        .limit(5);
-      } catch (e) {
-        logger.error({ message: 'Error fetching search customers', error: e });
-      }
-    }
-
-    // 3. Documents & Invoices
-    let matchingDocuments: GlobalSearchDocument[] = [];
-    if (scope.documents) {
-      try {
-        matchingDocuments = await orm.select({
-          id: documents.id,
-          ref_number: documents.refNumber,
-          buyer_name: documents.buyerName,
-          type: documents.type,
-          date: documents.date
-        })
+        .limit(5)),
+      // 3. Documents & Invoices
+      runSection<GlobalSearchDocument>('documents', scope.documents, failedSections, () => orm.select({
+        id: documents.id,
+        ref_number: documents.refNumber,
+        buyer_name: documents.buyerName,
+        type: documents.type,
+        date: documents.date
+      })
         .from(documents)
-        .where(
-          and(
-            eq(documents.isDeleted, 0),
-            matchesAny([documents.refNumber, documents.buyerName, documents.notes], searchTerm)
-          )
-        )
+        .where(and(eq(documents.isDeleted, 0), matchesAny([documents.refNumber, documents.buyerName, documents.notes], searchTerm)))
         .orderBy(matchRank([documents.refNumber, documents.buyerName], query), sql`${documents.date} DESC`, asc(documents.id))
-        .limit(5);
-      } catch (e) {
-        logger.error({ message: 'Error fetching search documents', error: e });
-      }
-    }
-
-    // 4. Projects
-    let matchingProjects: GlobalSearchProject[] = [];
-    if (scope.projects) {
-      try {
-        matchingProjects = await orm.select({
-          id: productionProjects.id,
-          project_code: productionProjects.projectCode,
-          title: productionProjects.title,
-          status: productionProjects.status,
-          customer_name: productionProjects.customerName
-        })
+        .limit(5)),
+      // 4. Projects
+      runSection<GlobalSearchProject>('projects', scope.projects, failedSections, () => orm.select({
+        id: productionProjects.id,
+        project_code: productionProjects.projectCode,
+        title: productionProjects.title,
+        status: productionProjects.status,
+        customer_name: productionProjects.customerName
+      })
         .from(productionProjects)
-        .where(
-          and(
-            eq(productionProjects.isDeleted, 0),
-            matchesAny([productionProjects.title, productionProjects.projectCode, productionProjects.customerName], searchTerm)
-          )
-        )
+        .where(and(
+          eq(productionProjects.isDeleted, 0),
+          matchesAny([productionProjects.title, productionProjects.projectCode, productionProjects.customerName], searchTerm),
+        ))
         .orderBy(matchRank([productionProjects.projectCode, productionProjects.title], query), sql`length(${productionProjects.title})`, asc(productionProjects.id))
-        .limit(5);
-      } catch (e) {
-        logger.error({ message: 'Error fetching search projects', error: e });
-      }
-    }
+        .limit(5)),
+    ]);
 
     return {
       items: matchingItems,
       customers: matchingCustomers,
       documents: matchingDocuments,
-      projects: matchingProjects
+      projects: matchingProjects,
+      failedSections,
     };
   }
 }

@@ -4,7 +4,7 @@
  * تا هیچ deref بدون گارد در مودال نماند.
  */
 import { kardexDocumentTypeLabel } from '../documents/documentTypeTitles.js';
-import { normalizeSearchText } from '../search/searchText.js';
+import { searchMatches } from '../search/searchText.js';
 
 export interface RunningKardexItem {
   id?: number;
@@ -123,11 +123,9 @@ export function runningKardexEntryMatches(
 ): boolean {
   if (query.type && query.type !== 'all' && entry.type !== query.type) return false;
   if (query.location && query.location !== 'all' && entry.location !== query.location) return false;
-  const search = normalizeSearchText(query.search);
-  if (!search) return true;
-  return [entry.documentRef, entry.notes, entry.documentType, kardexDocumentTypeLabel(entry.documentType, entry.documentRef), entry.createdBy,
-    runningKardexEntryLabel(entry)]
-    .some(text => normalizeSearchText(text).includes(search));
+  // v11 phase 6.3p (U8): one search rule (`searchMatches`)
+  return searchMatches(query.search, entry.documentRef, entry.notes, entry.documentType,
+    kardexDocumentTypeLabel(entry.documentType, entry.documentRef), entry.createdBy, runningKardexEntryLabel(entry));
 }
 
 /** شمار صفحه‌های کاردکس (دست‌کم یک) */

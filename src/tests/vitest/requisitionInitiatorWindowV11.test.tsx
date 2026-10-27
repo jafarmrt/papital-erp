@@ -26,7 +26,7 @@ import { requisitionActionLabel } from '../../lib/procurement/requisitionFields'
 // mark comes from the window's own read of the requisition.
 
 const SPLIT = 'تفکیک تأمین‌کننده و صدور سفارش خرید';
-const ISSUE = 'صدور فاکتور تامین‌کننده';
+const ISSUE = 'صدور سفارش تامین‌کننده';
 
 const pending = (initiatorCannotApprove: boolean): PurchaseRequisition => ({
   id: 5, code: 'PR-1405-0005', title: 'open requisition', status: 'pending', priority: 'normal', notes: '', totalEstimatedAmount: 3000,

@@ -4,7 +4,7 @@ import { orm } from '../../db/drizzle.js';
 import { items, mediaAssets } from '../../db/schema.js';
 import { ConflictError, NotFoundError } from '../../errors/customErrors.js';
 import { computeAuditDiff, logActivity } from '../../lib/auditLogger.js';
-import { containsLikePattern } from '../../lib/sqlLike.js';
+import { foldedLike, foldedSearchPattern } from '../../lib/search/searchSql.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { assetView, MediaAssetService, type MediaAssetView } from './mediaAsset.service.js';
 import { productCardValues, type ProductCardInput } from './productCardWrite.js';
@@ -70,11 +70,11 @@ const liveAssetsOfItem = sql`${mediaAssets.itemId} = ${items.id} AND ${mediaAsse
 
 function productConditions(f: MediaProductFilters): SQL {
   const conditions: SQL[] = [liveProduct];
-  const search = f.search?.trim();
-  if (search) {
-    const pattern = containsLikePattern(search);
-    conditions.push(sql`(${items.code} ILIKE ${pattern} OR ${items.name} ILIKE ${pattern} OR ${items.transferCode} ILIKE ${pattern}
-      OR EXISTS (SELECT 1 FROM unnest(${items.collections}) AS c(name) WHERE c.name ILIKE ${pattern}))`);
+  // v11 phase 6.3p (U8): one search rule (`foldedLike`)
+  const pattern = foldedSearchPattern(f.search);
+  if (pattern) {
+    conditions.push(sql`(${foldedLike(items.code, pattern)} OR ${foldedLike(items.name, pattern)} OR ${foldedLike(items.transferCode, pattern)}
+      OR EXISTS (SELECT 1 FROM unnest(${items.collections}) AS c(name) WHERE ${foldedLike(sql`c.name`, pattern)}))`);
   }
   if (f.collection?.trim()) {
     const key = f.collection.trim().toLowerCase();

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApprovalInboxPage } from '../../pages/ApprovalInboxPage';
 import { formatPersianPrice } from '../../utils';
@@ -46,7 +47,7 @@ function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <ApprovalInboxPage />
+      <MemoryRouter><ApprovalInboxPage /></MemoryRouter>
     </QueryClientProvider>,
   );
 }

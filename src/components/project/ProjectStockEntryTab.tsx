@@ -7,6 +7,7 @@ import { ProductionCostPrompt } from './delivery/ProductionCostPrompt';
 import { useProjectDelivery } from './delivery/useProjectDelivery';
 import { DeliveryHeader } from './delivery/DeliveryHeader';
 import { DeliveryProductRow } from './delivery/DeliveryProductRow';
+import { searchMatches } from '../../lib/search/searchText';
 
 interface ProjectStockEntryTabProps {
   project: ProductionProject;
@@ -35,13 +36,8 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
   }, [itemsList]);
 
   const filteredProducts = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter(p =>
-      (p.item_name && p.item_name.toLowerCase().includes(q)) ||
-      (p.item_code && p.item_code.toLowerCase().includes(q)) ||
-      (p.customer_code && p.customer_code.toLowerCase().includes(q))
-    );
+    if (!searchQuery.trim()) return products;
+    return products.filter(p => searchMatches(searchQuery, p.item_name, p.item_code, p.customer_code));
   }, [products, searchQuery]);
 
   const toggleSelectAll = () => {

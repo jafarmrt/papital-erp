@@ -37,6 +37,8 @@ const myTasksQuerySchema = z.object({
     page: z.coerce.number().int().min(1).max(100000).default(1),
     // OBS-R2-70: at most MY_TASKS_MAX_LIMIT rows a page (400 above it)
     limit: z.coerce.number().int().min(1).max(MY_TASKS_MAX_LIMIT).default(50),
+    // v11 6.3p (U6): the reader's pending task on one instance, for a task notice's link
+    instanceId: z.coerce.number().int().positive().optional(),
   }).passthrough(),
 });
 
@@ -68,7 +70,8 @@ router.get('/tasks/my-tasks', authorizePermission(...WORKFLOW_INBOX_PERMISSIONS)
     userRole: req.user?.role || '',
     status: query.status,
     page: query.page,
-    limit: query.limit
+    limit: query.limit,
+    instanceId: query.instanceId,
   });
   res.json(result);
 }));

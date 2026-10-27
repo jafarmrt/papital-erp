@@ -5,6 +5,7 @@ import { fetchJson } from '../../api';
 import { errorMessageOf } from '../../utils';
 import { EMPTY_CUSTOM_MATERIAL_FORM, pendingMaterialRequestOf, type CustomMaterialForm } from '../../lib/pendingMaterials/customMaterialRequest';
 import { withAddedWarehouseItem, withLinkedWarehouseItem, type MaterialRowTarget } from './sectionEdits';
+import { searchMatches } from '../../lib/search/searchText';
 
 type SetSections = React.Dispatch<React.SetStateAction<ProjectInventoryControlSectionData[]>>;
 
@@ -126,12 +127,7 @@ export function useMaterialPicker({ projectId, sections, setSections, products, 
     }
 
     if (!warehouseSearchQuery.trim()) return result.slice(0, 30);
-    const q = warehouseSearchQuery.trim().toLowerCase();
-    return result.filter(i =>
-      i.name.toLowerCase().includes(q) ||
-      (i.code && i.code.toLowerCase().includes(q)) ||
-      (i.category && i.category.toLowerCase().includes(q))
-    ).slice(0, 30);
+    return result.filter(i => searchMatches(warehouseSearchQuery, i.name, i.code, i.category)).slice(0, 30);
   }, [warehouseItems, warehouseSearchQuery, currentModalSection]);
 
   return {

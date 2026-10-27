@@ -1,7 +1,6 @@
-import { and, asc, count, desc, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { productionProjects, projectStages } from '../../db/schema.js';
-import { containsLikePattern } from '../../lib/sqlLike.js';
 import {
   PROJECT_LIST_PAGE_SIZE,
   projectStageProgress,
@@ -10,6 +9,7 @@ import {
   type ProjectListStage,
   type ProjectStatusCounts,
 } from '../../lib/projects/projectList.js';
+import { foldedContains } from '../../lib/search/searchSql.js';
 
 /**
  * v9.0.412 (TD-743، B11-09): یک صفحه از فهرست پروژه‌های تولید (`GET /projects`). صافی‌ها، شمارش و صفحه‌بندی در SQL است و
@@ -36,16 +36,15 @@ export async function listProjectPage(query: ProjectListQuery): Promise<ProjectL
   const conditions: SQL[] = [eq(productionProjects.isDeleted, 0)];
   if (query.priority && query.priority !== 'all') conditions.push(eq(projectPrioritySql, query.priority));
   const search = query.search?.trim();
-  if (search) {
-    const pattern = containsLikePattern(search);
-    conditions.push(or(
-      ilike(productionProjects.projectCode, pattern),
-      ilike(productionProjects.title, pattern),
-      ilike(productionProjects.customerName, pattern),
-      ilike(productionProjects.itemName, pattern),
-      ilike(productionProjects.itemCode, pattern),
-    ) as SQL);
-  }
+  // v11 phase 6.3p (U8): one search rule (`foldedContains`)
+  const searched = foldedContains([
+    productionProjects.projectCode,
+    productionProjects.title,
+    productionProjects.customerName,
+    productionProjects.itemName,
+    productionProjects.itemCode,
+  ], search);
+  if (searched) conditions.push(searched);
   const status = query.status && query.status !== 'all' ? query.status : null;
 
   const countRows = await orm

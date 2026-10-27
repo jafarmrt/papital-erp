@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useId } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { CreditCard, Plus, Search, ArrowDownLeft, ArrowUpRight, Trash2, X, History, Download, ShieldCheck, Copy, Edit3, FileCheck2 } from 'lucide-react';
 import { downloadSheet } from '../../lib/excel/downloadSheet';
-import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, getTodayIsoDate, formatPersianDate, errorMessageOf, toStorageDate, isoToJalaliDate, toEnglishDigits, toPersianDigits, formatPersianCode } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, getTodayIsoDate, formatPersianDate, errorMessageOf, toStorageDate, isoToJalaliDate, toPersianDigits, formatPersianCode } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { ActionMenu } from '../ActionMenu';
 import { useAppCurrency, useRialDisplay } from '../../hooks/useAppCurrency';
@@ -25,6 +25,7 @@ import { DialogLayer } from '../common/DialogLayer';
 import { SettlementAllocationField, useCanSettleOnDocuments, type SettlementFieldState } from './treasury/SettlementAllocationField';
 import { SettlementAllocationModal, type SettlementWindowTarget } from './treasury/SettlementAllocationModal';
 import { canAllocateCheque } from '../../lib/treasury/settlementAllocation';
+import { searchMatches } from '../../lib/search/searchText';
 
 interface ChequesTabProps {
   cheques: Cheque[];
@@ -317,12 +318,8 @@ export function ChequesTab({
 
   const filteredCheques = safeCheques.filter(c => {
     // v8.0.108 (TD-385): شماره چک و صیادی با ارقام لاتین ذخیره می‌شوند؛ جست‌وجو با ارقام فارسی هم پیدا می‌کند
-    const numberQuery = toEnglishDigits(searchQuery.trim());
-    const matchSearch = !searchQuery.trim() ||
-      toEnglishDigits(c.chequeNumber).includes(numberQuery) ||
-      (c.sayadNumber && c.sayadNumber.includes(numberQuery)) ||
-      c.partyName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.bankName.toLowerCase().includes(searchQuery.toLowerCase());
+    // v11 phase 6.3p (U8): one search rule (`searchMatches` folds the digits, «ي» and «ك» on both sides)
+    const matchSearch = searchMatches(searchQuery, c.chequeNumber, c.sayadNumber, c.partyName, c.bankName);
     const matchType = selectedTypeFilter === 'all' || c.type === selectedTypeFilter;
     const matchStatus = selectedStatusFilter === 'all' || c.status === selectedStatusFilter;
     // v7.0.133 (TD-232): سررسید میلادی ISO است و فیلتر شمسی انتخاب می‌شود؛ هر دو ISO مقایسه می‌شوند

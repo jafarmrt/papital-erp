@@ -31,8 +31,8 @@ import type { Item, ProductionProject, ProjectInventoryControlSectionData } from
 afterEach(() => { cleanup(); vi.clearAllMocks(); route = () => []; });
 
 // Persian text the screens show (kept in constants: terminal output stays English)
-const SECTION_ORDER_ONE = 'ثبت سفارش خرید (۱)';
-const SECTION_ORDER = 'ثبت سفارش خرید';
+const SECTION_ORDER_ONE = 'ثبت درخواست خرید (۱)';
+const SECTION_ORDER = 'ثبت درخواست خرید';
 const REFINALIZE_HINT = 'برای رزرو آن «تکمیل رزرو» را بزنید';
 const DELIVER = 'ورود به انبار';
 const PRICE_LABEL = 'بهای واحد:';

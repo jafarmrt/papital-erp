@@ -6,6 +6,7 @@ import { formatPersianDate, formatPersianPrice, formatCurrencyLabel } from '../.
 import { PIPELINE_DRAG_TYPE, isFollowupOverdue } from '../../lib/crm/pipelineBoard';
 import { currencyScale } from '../../lib/currencyScale';
 import { leadCurrency } from '../../lib/crm/leadCurrencyTotals';
+import { canIssueLeadProforma } from '../../lib/crm/leadProformaRule';
 
 export interface PipelineCardActions {
   onOpenLeadDrawer: (lead: CRMLead) => void;
@@ -34,7 +35,7 @@ export function CRMPipelineCard({ lead, todayIso, draggable, ...actions }: CRMPi
     { label: 'ثبت تماس یا اقدام', icon: PhoneCall, onClick: () => actions.onOpenActivityModal(lead) },
     { label: 'ویرایش پرونده', icon: Edit3, onClick: () => actions.onOpenLeadModal(lead), variant: 'warning' },
   ];
-  if (actions.onConvertToInvoice && lead.stage === 'proposal') {
+  if (actions.onConvertToInvoice && canIssueLeadProforma(lead)) {
     const convert = actions.onConvertToInvoice;
     menu.unshift({ label: 'صدور پیش‌فاکتور', icon: FileText, onClick: () => convert(lead), variant: 'success' });
   }

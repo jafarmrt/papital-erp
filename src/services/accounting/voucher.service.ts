@@ -1,7 +1,7 @@
 import { maybeStartEntityWorkflow, terminateEntityWorkflows } from '../system/entityWorkflowPort.js';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { accounts, journalVouchers, journalVoucherItems } from '../../db/schema.js';
-import { eq, desc, asc, and, or, sql, ilike, inArray, gte, lte } from 'drizzle-orm';
+import { eq, desc, asc, and, sql, inArray, gte, lte } from 'drizzle-orm';
 import type { JournalVoucher, JournalVoucherItem, FinancialAttachment } from '../../types.js';
 import { VOUCHER_PAGE_MAX, VOUCHER_PAGE_SIZE, type JournalVoucherPage, type VoucherStatusCounts } from '../../lib/accounting/voucherList.js';
 import { updateRequestContext } from '../../lib/requestContext.js';
@@ -12,7 +12,7 @@ import { requireStorageDate } from '../../lib/storageDate.js';
 import { NotFoundError, ValidationError, UnbalancedVoucherError, BusinessLogicError, ConflictError } from '../../errors/customErrors.js';
 import { FiscalPeriodService } from './fiscalPeriod.service.js';
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
-import { containsLikePattern } from '../../lib/sqlLike.js';
+import { foldedContains } from '../../lib/search/searchSql.js';
 import { assertVoucherRowsBalanced, isVoucherBalancedForFinalize, resolveManualVoucherRows } from './voucherRowBalance.js';
 
 // v7.0.49 (audit P2-5): ثابت یگانه تلورانس تراز؛ v7.0.76 به src/lib/voucherBalance.ts منتقل شد تا فرم‌ها هم آن را بخوانند
@@ -97,17 +97,11 @@ export class VoucherService {
     if (params.endDate) {
       conditions.push(lte(journalVouchers.date, params.endDate));
     }
-    if (params.search && params.search.trim()) {
-      const q = containsLikePattern(params.search.trim());
-      conditions.push(
-        or(
-          ilike(journalVouchers.description, q),
-          ilike(journalVouchers.manualVoucherNumber, q),
-          ilike(journalVouchers.referenceNumber, q),
-          sql`CAST(${journalVouchers.voucherNumber} AS TEXT) LIKE ${q}`
-        )!
-      );
-    }
+    // v11 phase 6.3p (U8): one search rule (`foldedContains`)
+    const searched = foldedContains([
+      journalVouchers.description, journalVouchers.manualVoucherNumber, journalVouchers.referenceNumber, sql`CAST(${journalVouchers.voucherNumber} AS TEXT)`,
+    ], params.search);
+    if (searched) conditions.push(searched);
 
     const countRows = await orm.select({ status: journalVouchers.status, count: sql<string>`count(*)::text` })
       .from(journalVouchers)

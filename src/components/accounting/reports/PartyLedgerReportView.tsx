@@ -9,6 +9,7 @@ import { usePartiesQuery, usePartyLedgerReport, type PartyLedgerParams } from '.
 import { JalaliDateInput } from '../../common/JalaliDateInput';
 import { PartyTemporaryRowsPanel } from './PartyTemporaryRowsPanel';
 import { PartyDraftRowsPanel } from './PartyDraftRowsPanel';
+import { searchMatches } from '../../../lib/search/searchText';
 
 type PartyTypeFilter = 'all' | 'customer' | 'supplier' | 'personnel';
 type CurrencyFilter = 'all' | 'IRR' | 'USD' | 'EUR' | 'AED' | 'GBP';
@@ -146,14 +147,7 @@ export function PartyLedgerReportView({
       // Type filter
       if (partyTypeFilter !== 'all' && p.partyType !== partyTypeFilter) return false;
       // Search query
-      if (partySearchQuery.trim()) {
-        const q = partySearchQuery.trim().toLowerCase();
-        const matchName = p.name.toLowerCase().includes(q);
-        const matchPhone = p.phone?.toLowerCase().includes(q);
-        const matchCode = p.code?.toLowerCase().includes(q);
-        if (!matchName && !matchPhone && !matchCode) return false;
-      }
-      return true;
+      return searchMatches(partySearchQuery, p.name, p.phone, p.code);
     });
   }, [parties, partyTypeFilter, partySearchQuery]);
 

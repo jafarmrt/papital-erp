@@ -19,6 +19,7 @@ import { actionPreviewLines } from '../../lib/events/eventSimulationContract';
 import { eventTypeLabel, isSubscribableEventPattern } from '../../lib/events/eventTypeCatalog';
 import { actionLogStatusLabel } from '../../lib/events/actionLogContract';
 import { useHasPermission } from '../../contexts/AuthContext';
+import { searchMatches } from '../../lib/search/searchText';
 
 export function AutoActionsSubTab() {
   const queryClient = useQueryClient();
@@ -173,16 +174,7 @@ export function AutoActionsSubTab() {
     if (statusFilter === 'ACTIVE' && r.isActive !== 1) return false;
     if (statusFilter === 'INACTIVE' && r.isActive === 1) return false;
     if (actionTypeFilter !== 'ALL' && r.actionType !== actionTypeFilter) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      return (
-        r.name?.toLowerCase().includes(q) ||
-        r.description?.toLowerCase().includes(q) ||
-        r.eventType?.toLowerCase().includes(q) ||
-        eventTypeLabel(r.eventType || '').toLowerCase().includes(q)
-      );
-    }
-    return true;
+    return searchMatches(searchQuery, r.name, r.description, r.eventType, eventTypeLabel(r.eventType || ''));
   });
 
   return (

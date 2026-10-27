@@ -10,6 +10,7 @@ import { formatPersianDate, formatPersianNumber } from '../../utils';
 import { useAuth } from '../../contexts/AuthContext';
 import { DelegationForm } from './DelegationForm';
 import { DialogLayer } from '../common/DialogLayer';
+import { searchMatches } from '../../lib/search/searchText';
 
 export function WorkflowDelegationTab() {
   const { data: delegations = [], isLoading } = useDelegationsQuery();
@@ -29,11 +30,7 @@ export function WorkflowDelegationTab() {
   // Filtering
   const filteredDelegations = delegations.filter((item: any) => {
     const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
-    const matchesSearch = 
-      (item.fromUserName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.toUserName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.scope || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.reason || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = searchMatches(searchTerm, item.fromUserName, item.toUserName, item.scope, item.reason);
     return matchesStatus && matchesSearch;
   });
 

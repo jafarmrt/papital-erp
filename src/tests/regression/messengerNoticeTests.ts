@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { workflowTasks } from '../../db/schema.js';
+import { approvalInboxInstanceLink } from '../../lib/notifications/notificationNotices.js';
 import { notifyWorkflowTasksArrived } from '../../services/workflow/workflowTaskNotice.js';
 import { addLog, newTask, newWorker } from '../invariants/payrollScenarios.js';
 import { createHarness, draftSalesDocument } from '../security/workflowTestHarness.js';
@@ -125,7 +126,8 @@ export async function runMessengerNoticeTests(shouldRun: ShouldRun): Promise<Tes
         if (bell.length !== 1) problems.push(`the keeper got ${bell.length} task notices, expected 1`);
         if (!ref || !message.includes(ref)) problems.push(`the notice does not name document ${ref}: ${message}`);
         if (/5000|۵۰۰۰|ریال/.test(message)) problems.push(`the notice carries an amount: ${message}`);
-        if (bell[0]?.link !== '/approval-inbox') problems.push(`the notice links to ${String(bell[0]?.link)}`);
+        // v11 phase 6.3p (U6): the notice opens its own task in the inbox
+        if (bell[0]?.link !== approvalInboxInstanceLink(instanceId)) problems.push(`the notice links to ${String(bell[0]?.link)}`);
         const [job] = await jobsOf(linkId);
         if (payloadOf(job).category !== 'workflow_task' || !String(payloadOf(job).text ?? '').includes(ref)) problems.push(`the keeper's messenger job is missing or wrong: ${JSON.stringify(payloadOf(job)).slice(0, 200)}`);
         if ((await bellOf(seller.userId, TASK_TITLE)).length !== 0) problems.push('the seller who sent the proforma was notified of their own move');

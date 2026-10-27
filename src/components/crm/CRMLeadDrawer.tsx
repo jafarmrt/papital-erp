@@ -15,6 +15,7 @@ import { activityResultLabel } from '../../lib/crm/crmScreenText';
 import { CrmAttachmentsPanel } from './CrmAttachmentsPanel';
 import { useHasPermission } from '../../contexts/AuthContext';
 import type { CrmAttachmentView } from '../../lib/crm/crmAttachments';
+import { canIssueLeadProforma } from '../../lib/crm/leadProformaRule';
 import { normalizeSearchText } from '../../lib/search/searchText';
 
 const NO_ITEMS: Item[] = [];
@@ -237,9 +238,9 @@ export function CRMLeadDrawer({
               <button
                 onClick={() => onOpenActivityModal(selectedLeadDrawer, 'quote')}
                 className="px-2 py-0.5 bg-white hover:bg-amber-50 text-amber-800 border border-slate-200 hover:border-amber-300 rounded-md transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
-                title="ثبت پیش‌فاکتور"
+                title="ثبت ارسال پیش‌فاکتور (فقط یادداشت اقدام؛ صدور پیش‌فاکتور با دکمه «صدور پیش‌فاکتور»)"
               >
-                📑 <span className="text-[10px]">پیش‌فاکتور</span>
+                📑 <span className="text-[10px]">ثبت ارسال پیش‌فاکتور</span>
               </button>
               <button
                 onClick={() => onOpenActivityModal(selectedLeadDrawer, 'note')}
@@ -250,14 +251,14 @@ export function CRMLeadDrawer({
               </button>
             </div>
 
-            {onConvertToInvoice && selectedLeadDrawer.stage === 'proposal' && (
+            {onConvertToInvoice && canIssueLeadProforma(selectedLeadDrawer) && (
               <button
                 onClick={() => onConvertToInvoice(selectedLeadDrawer)}
                 className="px-2 py-0.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-md text-[10px] font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs"
-                title="تبدیل به پیش‌فاکتور رسمی"
+                title="تبدیل به مشتری و صدور پیش‌فاکتور رسمی"
               >
                 <FileText size={11} />
-                صدور فاکتور
+                صدور پیش‌فاکتور
               </button>
             )}
           </div>

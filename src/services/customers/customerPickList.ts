@@ -1,7 +1,9 @@
-import { and, asc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, or, sql, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { customers } from '../../db/schema.js';
 import { customerHasTagCondition } from './customerTags.service.js';
+import { foldedContains } from '../../lib/search/searchSql.js';
+import { phoneMatchKeySql, phoneSearchKey } from '../../lib/search/phoneMatchKey.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import type { CustomerPick } from '../../lib/permissions/pickLists.js';
 import { canSeePartyBankInfo } from './partyBankInfoAccess.js';
@@ -16,19 +18,22 @@ import { canSeePartyBankInfo } from './partyBankInfoAccess.js';
 /** شرط جست‌وجو و نوع طرف حساب، مشترک فهرست کامل و فهرست انتخاب */
 export function customerListConditions(search: string | undefined, partyType: string | undefined, tagId?: number): SQL {
   const conditions: SQL[] = [eq(customers.isDeleted, 0)];
-  if (search) {
-    const pattern = containsLikePattern(search);
-    conditions.push(or(
-      ilike(customers.name, pattern),
-      ilike(customers.phone, pattern),
-      ilike(customers.contactName, pattern),
-      ilike(customers.supplierCategory, pattern),
-      // v10.1.15 (N-02 بخش ۱): وب‌سایت، ایمیل و اینستاگرام هم جست‌وجو می‌شوند (ایمیل افراد رابط در contacts است)
-      ilike(customers.website, pattern),
-      ilike(customers.email, pattern),
-      ilike(customers.instagram, pattern),
-      sql`${customers.contacts}::text ILIKE ${pattern}`,
-    ) as SQL);
+  // v11 phase 6.3p (U8): one search rule (`foldedContains`); before, «0912…» in Latin digits or an Arabic «ي» found nothing here
+  const searched = foldedContains([
+    customers.name,
+    customers.phone,
+    customers.contactName,
+    customers.supplierCategory,
+    // v10.1.15 (N-02 بخش ۱): وب‌سایت، ایمیل و اینستاگرام هم جست‌وجو می‌شوند (ایمیل افراد رابط در contacts است)
+    customers.website,
+    customers.email,
+    customers.instagram,
+    sql`${customers.contacts}::text`,
+  ], search);
+  // a phone typed with spaces, «+98» or «0098» matches the stored number by its TD-296 key, as in global search
+  const phoneKey = phoneSearchKey(String(search ?? '').trim());
+  if (searched) {
+    conditions.push(phoneKey ? or(searched, sql`${phoneMatchKeySql(customers.phone)} LIKE ${containsLikePattern(phoneKey)}`) as SQL : searched);
   }
   if (partyType === 'supplier') {
     conditions.push(or(eq(customers.partyType, 'supplier'), eq(customers.partyType, 'both')) as SQL);

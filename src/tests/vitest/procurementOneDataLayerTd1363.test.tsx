@@ -121,7 +121,7 @@ describe('procurement_one_data_layer_td_1363', () => {
     seedOtherScreens(client);
     render(<Provider client={client}><ProcurementDesk /></Provider>);
     await screen.findAllByText(/درخواست آزمون/);
-    fireEvent.click(screen.getByText('۲. فاکتورهای خرید (در انتظار تحویل انبار)'));
+    fireEvent.click(screen.getByText('۲. سفارش‌های خرید (در انتظار تحویل انبار)'));
     fireEvent.click((await screen.findAllByText('تایید و تحویل به انبار'))[0]);
     fireEvent.click(await screen.findByText('تایید و صدور رسید قطعی انبار'));
     await waitFor(() => expect(deliveries).toEqual([41]));
@@ -133,7 +133,7 @@ describe('procurement_one_data_layer_td_1363', () => {
     seedOtherScreens(client);
     render(<Provider client={client}><ProcurementDesk /></Provider>);
     await screen.findAllByText(/درخواست آزمون/);
-    fireEvent.click(screen.getByText('۲. فاکتورهای خرید (در انتظار تحویل انبار)'));
+    fireEvent.click(screen.getByText('۲. سفارش‌های خرید (در انتظار تحویل انبار)'));
     fireEvent.click((await screen.findAllByText('تایید و تحویل به انبار'))[0]);
     vi.spyOn(toast, 'success').mockImplementationOnce(() => { throw new Error('toast failed'); });
     fireEvent.click(await screen.findByText('تایید و صدور رسید قطعی انبار'));

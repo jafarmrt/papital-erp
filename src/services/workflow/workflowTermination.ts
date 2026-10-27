@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { workflowHistoryLogs, workflowInstances, workflowPendingApprovals, workflowTasks } from '../../db/schema.js';
+import { closeWorkflowTaskNotices } from './workflowTaskNotice.js';
 
 export interface TerminateWorkflowParams {
   entityType: string;
@@ -50,6 +51,8 @@ export async function closeWorkflowInstances(
   await tx.update(workflowTasks)
     .set({ status: 'canceled', completedAt: now })
     .where(and(inArray(workflowTasks.instanceId, ids), eq(workflowTasks.status, 'pending')));
+  // v11 phase 6.3p (U6): the ended workflow's notices close with its tasks
+  await closeWorkflowTaskNotices(tx, ids);
   for (const inst of open) {
     await tx.update(workflowInstances)
       .set({ status: 'TERMINATED', version: (inst.version ?? 1) + 1, updatedAt: now })

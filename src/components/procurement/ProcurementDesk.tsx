@@ -107,7 +107,7 @@ export function ProcurementDesk() {
         method: 'POST'
       });
       delivered = true;
-      toast.success(res.message || 'فاکتور خرید با موفقیت به انبار تحویل و رسید قطعی صادر شد.');
+      toast.success(res.message || 'سفارش خرید با موفقیت به انبار تحویل و رسید قطعی صادر شد.');
       setDeliveryModalOrder(null);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err));
@@ -214,7 +214,7 @@ export function ProcurementDesk() {
           <div className="flex items-center gap-1.5 text-[11px] font-bold bg-slate-100 text-slate-700 px-3 py-1 rounded-xl">
             <span>۱. درخواست خرید</span>
             <span className="text-slate-400">➔</span>
-            <span>۲. فاکتور خرید</span>
+            <span>۲. سفارش خرید</span>
             <span className="text-slate-400">➔</span>
             <span>۳. رسید قطعی انبار</span>
           </div>
@@ -250,7 +250,7 @@ export function ProcurementDesk() {
                 {countText(summary ? summary.pendingCount + summary.underReviewCount + summary.managerApprovalCount : undefined)} در انتظار تایید
               </span>
               <span className="text-blue-700 font-bold flex items-center gap-1">
-                مرز ۱: تفکیک و صدور فاکتور ← 
+                مرز ۱: تفکیک و صدور سفارش ← 
               </span>
             </div>
           </button>
@@ -269,14 +269,14 @@ export function ProcurementDesk() {
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-black text-slate-900 flex items-center gap-2">
                   <span className="w-5 h-5 rounded-full bg-sky-500 text-white flex items-center justify-center text-[11px] font-black">۲</span>
-                  فاکتورهای خرید (در انتظار تحویل انبار)
+                  سفارش‌های خرید (در انتظار تحویل انبار)
                 </span>
                 <span className="text-xl font-black font-mono text-sky-700">
                   {countText(summary?.pendingDeliveryOrdersCount)}
                 </span>
               </div>
               <p className="text-[11px] text-slate-600 leading-relaxed">
-                فاکتورهای تفکیک‌شده تامین‌کنندگان با مشخصات قیمت و تاریخ ارسال (در راه کارگاه)
+                سفارش‌های تفکیک‌شده تامین‌کنندگان با مشخصات قیمت و تاریخ ارسال (در راه کارگاه)
               </p>
             </div>
             <div className="mt-4 pt-2.5 border-t border-slate-200/60 flex items-center justify-between text-[11px]">
@@ -329,7 +329,7 @@ export function ProcurementDesk() {
       <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl">
         {([
           { id: 'requisitions', icon: <FileText className="w-4 h-4 text-amber-600" />, label: '۱. کارتابل درخواست‌های خرید', badge: 'bg-amber-100 text-amber-900', count: summary ? summary.totalRequisitions : requisitionList.total },
-          { id: 'active_orders', icon: <Truck className="w-4 h-4 text-sky-600" />, label: '۲. فاکتورهای خرید (در انتظار تحویل انبار)', badge: 'bg-sky-100 text-sky-900', count: summary?.pendingDeliveryOrdersCount },
+          { id: 'active_orders', icon: <Truck className="w-4 h-4 text-sky-600" />, label: '۲. سفارش‌های خرید (در انتظار تحویل انبار)', badge: 'bg-sky-100 text-sky-900', count: summary?.pendingDeliveryOrdersCount },
           { id: 'delivered_receipts', icon: <PackageCheck className="w-4 h-4 text-emerald-600" />, label: '۳. رسیدهای قطعی انبار (تحویل‌شده)', badge: 'bg-emerald-100 text-emerald-900', count: summary?.deliveredOrdersCount },
         ] as const).map(tab => (
           <button

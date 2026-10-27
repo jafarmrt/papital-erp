@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, KeyboardEvent, ChangeEvent } from 'react';
 import { AtSign, UserCheck } from 'lucide-react';
 import { detectMentionedUserIds, mentionDisplayName, sameIdSet } from '../lib/mentions/mentionDetection';
 import { formatPersianNumber } from '../utils';
+import { searchMatches } from '../lib/search/searchText';
 
 export interface MentionUser {
   id: number;
@@ -78,9 +79,7 @@ export function MentionTextarea({
         (currentUser.username && u.username === currentUser.username));
     if (isSelf) return false;
 
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return true;
-    return name.toLowerCase().includes(q) || uname.toLowerCase().includes(q);
+    return searchMatches(searchQuery, name, uname);
   });
 
   // Check if cursor is after @

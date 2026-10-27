@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Target, Clock, CheckCircle2, ArrowLeft, Sparkles, Search, X } from 'lucide-react';
 import { toPersianDigits, formatPersianPrice, getTodayJalaliDate, isoToJalaliDate } from '../../utils';
 import { CRMLead, CRMActivity } from '../../types';
+import { searchMatches } from '../../lib/search/searchText';
 
 interface CRMTasksWidgetProps {
   leads: CRMLead[];
@@ -53,29 +54,14 @@ export function CRMTasksWidget({
 
   // Search filtration
   const displayedItems = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
     if (activeFilter === 'won_deals') {
-      if (!q) return wonLeads;
-      return wonLeads.filter(
-        (l) =>
-          l.title?.toLowerCase().includes(q) ||
-          l.customerName?.toLowerCase().includes(q) ||
-          l.company?.toLowerCase().includes(q) ||
-          l.assignedTo?.toLowerCase().includes(q)
-      );
+      return wonLeads.filter((l) => searchMatches(searchQuery, l.title, l.customerName, l.company, l.assignedTo));
     }
 
     const baseList = activeFilter === 'today_overdue' ? todayAndOverdueFollowups : pendingFollowups;
-    if (!q) return baseList;
-    return baseList.filter(
-      (act) =>
-        act.title?.toLowerCase().includes(q) ||
-        act.customerName?.toLowerCase().includes(q) ||
-        (act as any).leadCustomerName?.toLowerCase().includes(q) ||
-        act.nextFollowUpTask?.toLowerCase().includes(q) ||
-        act.assignedTo?.toLowerCase().includes(q) ||
-        act.loggedBy?.toLowerCase().includes(q)
-    );
+    return baseList.filter((act) => searchMatches(
+      searchQuery, act.title, act.customerName, (act as any).leadCustomerName, act.nextFollowUpTask, act.assignedTo, act.loggedBy,
+    ));
   }, [activeFilter, wonLeads, todayAndOverdueFollowups, pendingFollowups, searchQuery]);
 
   // v9.0.14 (TD-428): شمارها از سرور؛ فهرست فقط صفحه اول پیگیری‌های باز است

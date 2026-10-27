@@ -44,12 +44,25 @@ interface SearchResultProject {
   customer_name?: string;
 }
 
+type SearchSection = 'items' | 'customers' | 'documents' | 'projects';
+
 interface GlobalSearchResults {
   items: SearchResultItems[];
   customers: SearchResultCustomer[];
   documents: SearchResultDocument[];
   projects: SearchResultProject[];
+  /** v11 phase 6.3p (C12): sections the server could not search; shown, never read as «nothing found» */
+  failedSections: SearchSection[];
 }
+
+const SECTION_LABELS: Record<SearchSection, string> = {
+  items: 'کالاها',
+  customers: 'طرف حساب‌ها',
+  documents: 'اسناد و فاکتورها',
+  projects: 'پروژه‌ها',
+};
+
+const EMPTY_RESULTS: GlobalSearchResults = { items: [], customers: [], documents: [], projects: [], failedSections: [] };
 
 export default function GlobalHeaderSearch() {
   // OBS-R2-91: the header keeps its own text; the shared page filter is set only when a hit opens its list
@@ -58,12 +71,7 @@ export default function GlobalHeaderSearch() {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<GlobalSearchResults>({
-    items: [],
-    customers: [],
-    documents: [],
-    projects: []
-  });
+  const [results, setResults] = useState<GlobalSearchResults>(EMPTY_RESULTS);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -86,7 +94,7 @@ export default function GlobalHeaderSearch() {
   // Fetch quick results when searchQuery changes
   useEffect(() => {
     if (!searchQuery.trim()) {
-      setResults({ items: [], customers: [], documents: [], projects: [] });
+      setResults(EMPTY_RESULTS);
       setLoading(false);
       return;
     }
@@ -103,7 +111,8 @@ export default function GlobalHeaderSearch() {
               items: Array.isArray(res.items) ? res.items : [],
               customers: Array.isArray(res.customers) ? res.customers : [],
               documents: Array.isArray(res.documents) ? res.documents : [],
-              projects: Array.isArray(res.projects) ? res.projects : []
+              projects: Array.isArray(res.projects) ? res.projects : [],
+              failedSections: Array.isArray(res.failedSections) ? res.failedSections.filter(s => s in SECTION_LABELS) : [],
             });
           }
         })
@@ -199,7 +208,12 @@ export default function GlobalHeaderSearch() {
           </div>
 
           <div className="overflow-y-auto p-2 space-y-3 custom-scrollbar flex-1">
-            {!loading && totalResults === 0 && (
+            {!loading && results.failedSections.length > 0 && (
+              <div role="alert" className="mx-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+                جست‌وجو در {results.failedSections.map(s => SECTION_LABELS[s]).join('، ')} انجام نشد. دوباره جست‌وجو کنید.
+              </div>
+            )}
+            {!loading && totalResults === 0 && results.failedSections.length === 0 && (
               <div className="p-8 text-center text-slate-400 text-xs font-medium">
                 هیچ موردی متناسب با جست‌وجوی شما یافت نشد.
               </div>

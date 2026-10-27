@@ -409,7 +409,7 @@ export function SplitOrderModal({
                 </span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                تخصیص اقلام به تامین‌کنندگان، ثبت مقادیر واقعی خرید و صدور فاکتورهای رسمی جهت ورود به انبار
+                تخصیص اقلام به تامین‌کنندگان، ثبت مقادیر واقعی خرید و صدور سفارش‌های خرید جهت ورود به انبار
               </p>
             </div>
           </div>
@@ -459,7 +459,7 @@ export function SplitOrderModal({
                     <th className="p-2.5 text-center w-24">مقدار درخواستی</th>
                     <th className="p-2.5 text-center w-24">سفارش قبلی</th>
                     <th className="p-2.5 text-center w-28 bg-amber-50/60 text-amber-900">
-                      مجموع خرید این فاکتورها
+                      مجموع خرید این سفارش‌ها
                     </th>
                     <th className="p-2.5 text-center w-32 bg-slate-50">
                       مانده از درخواست
@@ -543,7 +543,7 @@ export function SplitOrderModal({
               <div className="flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-amber-600" />
                 <span className="font-bold text-slate-900 text-sm">
-                  بسته‌های خرید تفکیکی بر اساس تامین‌کننده ({formatPersianNumber(packages.length)} فاکتور)
+                  بسته‌های خرید تفکیکی بر اساس تامین‌کننده ({formatPersianNumber(packages.length)} سفارش)
                 </span>
               </div>
               <button
@@ -622,7 +622,7 @@ export function SplitOrderModal({
                       <div className="p-2 bg-amber-50/80 border border-amber-200 rounded-lg flex items-center justify-between">
                         <span className="font-bold text-amber-900 text-xs flex items-center gap-1.5">
                           <FileText className="w-4 h-4 text-amber-600" />
-                          فاکتور خرید تامین‌کننده
+                          سفارش خرید تامین‌کننده
                         </span>
                         <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded font-bold">
                           سفارش رسمی خرید
@@ -850,7 +850,7 @@ export function SplitOrderModal({
           {/* Total Overall Summary */}
           <div className="flex flex-wrap items-center justify-between p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs">
             <div className="flex items-center gap-3">
-              <span className="font-bold text-amber-950">تعداد فاکتورهای تفکیکی صادرشونده:</span>
+              <span className="font-bold text-amber-950">تعداد سفارش‌های تفکیکی صادرشونده:</span>
               <span className="px-2.5 py-0.5 bg-amber-200 text-amber-950 font-black rounded-lg font-mono">
                 {formatPersianNumber(packages.length)} سند خرید
               </span>

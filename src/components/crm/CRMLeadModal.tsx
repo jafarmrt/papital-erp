@@ -63,7 +63,7 @@ export function CRMLeadModal({
         <div className="p-5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
           <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
             <Briefcase className="text-blue-600" size={20} />
-            {editingLead ? 'ویرایش پرونده فروش' : 'ثبت فرصت فروش جدید'}
+            {editingLead ? 'ویرایش پرونده فروش' : 'ایجاد پرونده فروش جدید'}
           </h3>
           <button
             onClick={onCloseLeadModal}

@@ -1,4 +1,4 @@
-import { sql, eq, and, desc, inArray, gte, lte, or, ilike, isNull } from 'drizzle-orm';
+import { sql, eq, and, desc, inArray, gte, lte, isNull } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { documents, documentItems, items, transactions, treasuryTransactions, warehouses } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
@@ -7,7 +7,7 @@ import type { DecimalValue, FinancialDecimal } from '../../lib/financialDecimal.
 import { MAX_PAGE_LIMIT } from '../../lib/pagination.js';
 import { groupRowsBy } from '../../lib/groupRows.js';
 import { NotFoundError } from '../../errors/customErrors.js';
-import { containsLikePattern } from '../../lib/sqlLike.js';
+import { foldedContains } from '../../lib/search/searchSql.js';
 import { transferLocationsByDocument } from '../inventory/transferDocumentLocations.js';
 import { stockCountVariances } from '../inventory/stockCountSheet.js';
 import { createLedgerLocationResolver } from '../inventory/warehouseResolver.js';
@@ -68,17 +68,11 @@ export class DocumentQueryService {
       const endCondition = filter.endDate.length <= 10 ? filter.endDate + 'T23:59:59.999Z' : filter.endDate;
       conditions.push(lte(documents.date, endCondition));
     }
-    if (filter.search && filter.search.trim() !== '') {
-      const s = containsLikePattern(filter.search.trim());
-      conditions.push(or(
-        ilike(documents.refNumber, s),
-        ilike(documents.buyerName, s),
-        ilike(documents.notes, s),
-        ilike(documents.user, s),
-        ilike(documents.buyerPhone, s),
-        ilike(documents.buyerCity, s)
-      )!);
-    }
+    // v11 phase 6.3p (U8): one search rule (`foldedContains`), so a buyer's phone in Latin digits finds the invoice
+    const searched = foldedContains([
+      documents.refNumber, documents.buyerName, documents.notes, documents.user, documents.buyerPhone, documents.buyerCity,
+    ], filter.search);
+    if (searched) conditions.push(searched);
 
     const whereClause = and(...conditions);
 

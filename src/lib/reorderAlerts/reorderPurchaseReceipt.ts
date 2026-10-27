@@ -83,7 +83,17 @@ export function reorderReceiptPriceError(input: {
 /**
  * v10.0.249 (TD-1133، راهنمای نقش‌ها): «صدور مستقیم سند» از هشدار نقطه سفارش فقط رسید قطعی است. گزینه «پیش‌نویس سفارش
  * خرید» رسید پیش‌نویسی می‌ساخت که هیچ صفحه‌ای قطعی‌اش نمی‌کرد و برای همیشه «در راه» می‌ماند؛ سفارش به تأمین‌کننده از
- * «ثبت سفارش خرید» (درخواست خرید تدارکات) است.
+ * «درخواست خرید» تدارکات است.
  */
 export const REORDER_DIRECT_DOCUMENT_LABEL = 'رسید قطعی ورود کالا به انبار (افزایش آنی موجودی)';
-export const REORDER_DIRECT_DOCUMENT_HINT = 'برای کالایی که همین حالا رسیده است. برای سفارش به تأمین‌کننده «ثبت سفارش خرید» را بزنید.';
+export const REORDER_DIRECT_DOCUMENT_HINT = 'برای کالایی که همین حالا رسیده است. برای خرید از تأمین‌کننده «درخواست خرید» را برگزینید.';
+
+/**
+ * v11 phase 6.3p (U9, card ت۵۶-۶): the reorder page's two ways to supply, in the one vocabulary درخواست خرید → سفارش خرید
+ * → رسید انبار. The direct receipt stays a final receipt, as designed, but is its own choice and is offered only with the
+ * key `POST /documents` asks of a receipt (`documentRecordPermission`); before, any user saw it as «صدور مستقیم سند
+ * انبار / خرید» beside the requisition.
+ */
+export const REORDER_REQUISITION_CHOICE = 'درخواست خرید (کارتابل تدارکات)';
+export const REORDER_DIRECT_RECEIPT_CHOICE = 'رسید مستقیم: کالا رسیده است';
+export const REORDER_DIRECT_RECEIPT_PERMISSION = 'warehouse.in';

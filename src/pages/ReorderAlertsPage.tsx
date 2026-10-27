@@ -203,7 +203,7 @@ export default function ReorderAlertsPage(_props: { user: User }) {
         }}
       />
 
-      {/* 2. Raw materials box (ثبت سفارش خرید) */}
+      {/* 2. Raw materials box (ثبت درخواست خرید) */}
       <ReorderItemsSection
         theme={MATERIALS_THEME}
         items={rawMaterialItems}

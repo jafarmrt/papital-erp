@@ -4,6 +4,7 @@ import { AtSign, Clock, User, ArrowLeft, Plus, Tag, Briefcase, MessageSquare, Se
 import { toPersianDigits, formatPersianDate } from '../../utils';
 import { DailyWorkLog, User as UserModel } from '../../types';
 import { idList } from '../../lib/dailyLogs/dailyLogVisibility';
+import { searchMatches } from '../../lib/search/searchText';
 
 interface DailyLogsMentionsWidgetProps {
   user: UserModel;
@@ -38,14 +39,10 @@ export function DailyLogsMentionsWidget({
 
   // Search filter
   const displayedLogs = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return mentionedLogs;
-    return mentionedLogs.filter((log) => {
-      const author = (log.username || (log as any).userName || (log as any).userFullName || '').toLowerCase();
-      const content = (log.content || '').toLowerCase();
-      const project = (log.projectName || '').toLowerCase();
-      return author.includes(q) || content.includes(q) || project.includes(q);
-    });
+    if (!searchQuery.trim()) return mentionedLogs;
+    return mentionedLogs.filter((log) => searchMatches(
+      searchQuery, log.username || (log as any).userName || (log as any).userFullName, log.content, log.projectName,
+    ));
   }, [mentionedLogs, searchQuery]);
 
   const todayHours = Number(stats?.today_hours || 0);
