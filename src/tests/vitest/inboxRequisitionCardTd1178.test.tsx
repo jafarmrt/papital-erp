@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 
 // v10.0.149 (TD-1178): an inbox card names its entity by the entity's own number and shows the requisition priority
 const task = {
@@ -25,13 +26,27 @@ afterEach(cleanup);
 
 describe('inbox requisition card (TD-1178)', () => {
   it('shows the requisition code, not its row id', () => {
-    render(<ApprovalInboxPage />);
+    render(<MemoryRouter><ApprovalInboxPage /></MemoryRouter>);
     expect(screen.getByText(/PR-1405-0006/)).toBeTruthy();
     expect(screen.queryByText(new RegExp(ROW_ID_LABEL))).toBeNull();
   });
   it('shows a normal priority as normal, not medium', () => {
-    render(<ApprovalInboxPage />);
+    render(<MemoryRouter><ApprovalInboxPage /></MemoryRouter>);
     expect(screen.getByText(NORMAL_PRIORITY)).toBeTruthy();
     expect(screen.queryByText(MEDIUM_PRIORITY)).toBeNull();
+  });
+});
+
+// v11 phase 6.3p (U6): a workflow task notice links /approval-inbox?instance=<id>; the inbox opens that task, and says so
+// when the task has already left the inbox (another approver took it or the process closed)
+describe('inbox link to one task (U6)', () => {
+  it('opens the task of the linked instance', () => {
+    render(<MemoryRouter initialEntries={['/approval-inbox?instance=9']}><ApprovalInboxPage /></MemoryRouter>);
+    expect(screen.getByRole('dialog').getAttribute('aria-label')).toContain('requisition approval');
+  });
+  it('says the task is no longer there for another instance', () => {
+    render(<MemoryRouter initialEntries={['/approval-inbox?instance=99']}><ApprovalInboxPage /></MemoryRouter>);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByText(/این کار دیگر در کارتابل شما نیست/)).toBeTruthy();
   });
 });

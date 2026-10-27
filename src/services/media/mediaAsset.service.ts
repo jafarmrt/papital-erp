@@ -1,13 +1,13 @@
 import fs from 'fs';
 import type { Request } from 'express';
 import type { Readable } from 'stream';
-import { and, asc, count, desc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, or, sql, type SQL } from 'drizzle-orm';
 import { orm, type DbExecutor, type DbTransaction } from '../../db/drizzle.js';
 import { items, mediaAssets, mediaSections } from '../../db/schema.js';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { ROW_ADVISORY_LOCK_NAMESPACES } from '../../lib/advisoryLock.js';
-import { containsLikePattern } from '../../lib/sqlLike.js';
+import { foldedLike, foldedSearchPattern } from '../../lib/search/searchSql.js';
 import { serverTimestampToUtcIso } from '../../lib/serverTimestamp.js';
 import { logger } from '../../middleware/logger.js';
 import { errorMessageOf } from '../../utils/index.js';
@@ -286,11 +286,12 @@ export const MediaAssetService = {
     if (filters.tag?.trim()) {
       conditions.push(sql`EXISTS (SELECT 1 FROM unnest(${mediaAssets.tags}) AS t(tag) WHERE lower(t.tag) = ${filters.tag.trim().toLowerCase()})`);
     }
-    if (filters.search?.trim()) {
-      const pattern = containsLikePattern(filters.search.trim());
+    // v11 phase 6.3p (U8): one search rule (`foldedLike`)
+    const pattern = foldedSearchPattern(filters.search);
+    if (pattern) {
       conditions.push(or(
-        ilike(mediaAssets.title, pattern), ilike(mediaAssets.description, pattern), ilike(mediaAssets.originalName, pattern),
-        sql`EXISTS (SELECT 1 FROM unnest(${mediaAssets.tags}) AS t(tag) WHERE t.tag ILIKE ${pattern})`,
+        ...[mediaAssets.title, mediaAssets.description, mediaAssets.originalName].map(column => foldedLike(column, pattern)),
+        sql`EXISTS (SELECT 1 FROM unnest(${mediaAssets.tags}) AS t(tag) WHERE ${foldedLike(sql`t.tag`, pattern)})`,
       )!);
     }
     const where = and(...conditions);

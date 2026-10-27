@@ -5,6 +5,7 @@ import { STAGES } from '../../hooks/useCRMData';
 import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
 import { useClampPage, useCrmLeadPage, useFilterPage } from '../../hooks/useCrmListPages';
 import { CRM_LEAD_PAGE_SIZES } from '../../lib/crm/crmListPages';
+import { canIssueLeadProforma } from '../../lib/crm/leadProformaRule';
 import { CrmPager } from './CrmPager';
 
 interface CRMLeadsTableProps {
@@ -114,7 +115,7 @@ export function CRMLeadsTable({
                     <td className="p-3 text-slate-500">{formatPersianDate(lead.expectedCloseDate)}</td>
                     <td className="p-3">
                       <div className="flex items-center justify-center gap-1">
-                        {onConvertToInvoice && lead.stage === 'proposal' && (
+                        {onConvertToInvoice && canIssueLeadProforma(lead) && (
                           <button
                             onClick={() => onConvertToInvoice(lead)}
                             disabled={convertingLeadId !== null}

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq, desc, and, ilike, sql, gte, lte, or } from 'drizzle-orm';
+import { eq, desc, and, sql, gte, lte, or } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { crmLeads, crmActivities, customers, users, personnel } from '../db/schema.js';
 import { createNotifications } from '../services/notifications/notificationCreator.js';
@@ -15,7 +15,6 @@ import { validate, paramsIdSchema, numericIdString, decimalInput } from '../midd
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { NotFoundError, BadRequestError } from '../errors/customErrors.js';
 import { logger } from '../middleware/logger.js';
-import { containsLikePattern } from '../lib/sqlLike.js';
 import { money } from '../lib/money.js';
 import { linkCustomerForLead, notesWithPartyDifferences } from '../services/crm/crmCustomerLink.js';
 import { getCrmStats } from '../services/crm/crmStats.js';
@@ -37,6 +36,7 @@ import { canSeePartyBankInfo, withoutBankInfo } from '../services/customers/part
 import { permissionHolderUserIds } from '../services/notifications/notificationRecipients.js';
 import { resolveAssignee } from '../services/crm/crmAssignee.js';
 import { activityAuditDetails, activityAuditSnapshot, softDeleteActivity, updateActivity } from '../services/crm/crmActivityEdit.js';
+import { foldedContains } from '../lib/search/searchSql.js';
 
 const WON_LEAD_NOTIFY_PERMISSION = 'crm.manage';
 
@@ -279,18 +279,9 @@ router.get('/crm/leads', authorizePermission('crm.view', 'customers.view', 'cust
     conditions.push(lte(crmLeads.createdAt, endCondition));
   }
 
-  if (search && typeof search === 'string' && search.trim() !== '') {
-    const s = containsLikePattern(search.trim());
-    conditions.push(
-      or(
-        ilike(crmLeads.title, s),
-        ilike(crmLeads.customerName, s),
-        ilike(crmLeads.company, s),
-        ilike(crmLeads.phone, s),
-        ilike(crmLeads.notes, s)
-      )!
-    );
-  }
+  // v11 phase 6.3p (U8): one search rule (`foldedContains`)
+  const searchedLeads = foldedContains([crmLeads.title, crmLeads.customerName, crmLeads.company, crmLeads.phone, crmLeads.notes], search);
+  if (searchedLeads) conditions.push(searchedLeads);
 
   const whereClause = and(...conditions);
 
@@ -770,16 +761,15 @@ router.get('/crm/activities', authorizePermission('crm.view', 'customers.view', 
     conditions.push(await activityPartyCondition(Number(partyId)));
   }
 
-  if (search && typeof search === 'string' && search.trim()) {
-    const s = containsLikePattern(search.trim());
-    conditions.push(or(
-      ilike(crmActivities.title, s),
-      ilike(crmActivities.description, s),
-      ilike(crmActivities.result, s),
-      ilike(crmActivities.loggedBy, s),
-      ilike(crmActivities.nextFollowUpTask, s),
-    )!);
-  }
+  // v11 phase 6.3p (U8): one search rule (`foldedContains`)
+  const searched = foldedContains([
+    crmActivities.title,
+    crmActivities.description,
+    crmActivities.result,
+    crmActivities.loggedBy,
+    crmActivities.nextFollowUpTask,
+  ], search);
+  if (searched) conditions.push(searched);
 
   if (type && typeof type === 'string' && type.trim() && type !== 'all') {
     conditions.push(eq(crmActivities.type, type.trim()));

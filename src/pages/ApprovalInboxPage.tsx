@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   useMyTasksQuery,
   useTaskStatsQuery,
@@ -37,6 +38,7 @@ import PrintDocModal from '../components/approval/PrintDocModal';
 import type { ApprovalDocumentDetails } from '../components/approval/DocumentDetailsPreview';
 import { PHONE_TAP_TARGET } from '../lib/pwa/phoneLayout';
 import { PillBadge, type PillBadgeVariant, type PillBadgeVariants } from '../components/common/PillBadge';
+import { searchMatches } from '../lib/search/searchText';
 
 type DocumentDetails = ApprovalDocumentDetails;
 
@@ -169,14 +171,7 @@ export function ApprovalInboxPage() {
       if (activeTab !== 'all' && tEntityType !== activeTab) {
         return false;
       }
-      if (search.trim()) {
-        const q = search.trim().toLowerCase();
-        const titleMatch = t.title?.toLowerCase().includes(q);
-        const descMatch = t.description?.toLowerCase().includes(q);
-        const entityIdMatch = String(tEntityId).toLowerCase().includes(q);
-        return titleMatch || descMatch || entityIdMatch;
-      }
-      return true;
+      return searchMatches(search, t.title, t.description, tEntityId);
     });
   }, [myTasks, activeTab, search]);
 
@@ -195,6 +190,27 @@ export function ApprovalInboxPage() {
     resetDecision();
     setSelectedTask(null);
   };
+
+  // v11 6.3p (U6): a task notice links to /approval-inbox?instance=<id>; open that task once the list is in
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedInstance = Number(searchParams.get('instance')) || 0;
+  const [linkedTaskGone, setLinkedTaskGone] = useState(false);
+  useEffect(() => {
+    if (!linkedInstance || isTasksLoading) return;
+    const linked = myTasks.find((t) => Number(t?.instanceId || t?.instance?.id) === linkedInstance);
+    if (linked) {
+      setTaskAction('approve');
+      setComment('');
+      setRejectTransitionId(null);
+      setSelectedTask(linked);
+    }
+    setLinkedTaskGone(!linked);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('instance');
+      return next;
+    }, { replace: true });
+  }, [linkedInstance, isTasksLoading, myTasks, setSearchParams]);
 
   const handleExecuteTask = () => {
     if (!selectedTask) return;
@@ -262,6 +278,12 @@ export function ApprovalInboxPage() {
           </button>
         </div>
       </div>
+
+      {linkedTaskGone && (
+        <div role="status" className="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+          این کار دیگر در کارتابل شما نیست؛ کار دیگری آن را انجام داده یا فرایند بسته شده است.
+        </div>
+      )}
 
       {/* Task Summary KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">

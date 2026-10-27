@@ -17,6 +17,7 @@ import { useCrmDeepLink } from '../hooks/useCrmDeepLink';
 import { DOSSIER_PARTY_MISSING_TEXT, resolveDossierParty } from '../lib/crm/crmDeepLink';
 import { boardCapNotice } from '../lib/crm/crmListPages';
 import { leadProformaState } from '../lib/crm/leadProformaState';
+import { canIssueLeadProforma } from '../lib/crm/leadProformaRule';
 import { CRMFunnelReport } from '../components/crm/CRMFunnelReport';
 import { LostReasonDialog } from '../components/crm/LostReasonFields';
 import { CustomerTagFilter } from '../components/customers/CustomerTags';
@@ -65,8 +66,9 @@ export default function CRMPage({ user }: { user: any }) {
       return;
     }
 
-    if (lead.stage !== 'proposal') {
-      toast.error('صدور پیش‌فاکتور تنها برای پرونده‌هایی که در مرحله "پیش‌فاکتور و پیشنهاد" هستند امکان‌پذیر است.');
+    // v11 6.3p (U17): any open lead; the conversion moves it to «پیش‌فاکتور و پیشنهاد»
+    if (!canIssueLeadProforma(lead)) {
+      toast.error('پرونده فروش بسته‌شده («فروش موفق» یا «از دست رفته») پیش‌فاکتور تازه نمی‌گیرد.');
       return;
     }
 

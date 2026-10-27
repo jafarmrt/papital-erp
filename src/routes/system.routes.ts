@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticateToken, AUTH_COOKIE_NAME, getAuthCookieOptions } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission, userHasRoleOrPermission, requireSystemAdmin, can } from '../middleware/authorize.js';
+import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { isSettingReadable, WOOCOMMERCE_SETTING_READ_PERMISSIONS } from '../lib/settings/settingReadScope.js';
 import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog.js';
 import { logger } from '../middleware/logger.js';
@@ -394,21 +395,23 @@ router.post('/system/orphan-uploads', requireSystemAdmin, validate(orphanUploads
 
 // Global Multi-Entity Search Route
 // v7.0.53 (audit P2-10، تصمیم مالک محصول): هر بخش نتیجه فقط برای دارنده مجوز مشاهده همان بخش جستجو و برگردانده
-// می‌شود (کالا: products.view، طرف حساب: customers.view، سند و فاکتور: documents.view، پروژه: projects.view)؛
+// می‌شود (کلیدهای فهرست همان بخش در READ_PERMISSIONS: کالا، طرف حساب، سند و فاکتور، پروژه)؛
 // بخش بدون مجوز خالی است، نه خطا. پیش‌تر هر کاربر واردشده (مثلاً «کاربر ثبت گزارش») همه بخش‌ها را می‌گرفت.
 // نویسه‌های % و _ ورودی هم escape می‌شوند.
 router.get('/global-search', validate(globalSearchQuerySchema), asyncHandler(async (req, res) => {
   try {
     const q = String(req.query.q || '').trim();
     if (!q || q.length < 1) {
-      return res.json({ items: [], customers: [], documents: [], projects: [] });
+      return res.json({ items: [], customers: [], documents: [], projects: [], failedSections: [] });
     }
 
+    // v11 phase 6.3p (C12): each section opens with the keys of its own list (READ_PERMISSIONS); before, search asked
+    // documents.view and products.view only, so a clerk who sees invoices in the list did not find them here
     const [canItems, canCustomers, canDocuments, canProjects] = await Promise.all([
-      userHasRoleOrPermission(req.user, 'products.view'),
-      userHasRoleOrPermission(req.user, 'customers.view'),
-      userHasRoleOrPermission(req.user, 'documents.view'),
-      userHasRoleOrPermission(req.user, 'projects.view')
+      userHasRoleOrPermission(req.user, ...READ_PERMISSIONS.items),
+      userHasRoleOrPermission(req.user, ...READ_PERMISSIONS.customers),
+      userHasRoleOrPermission(req.user, ...READ_PERMISSIONS.documents),
+      userHasRoleOrPermission(req.user, ...READ_PERMISSIONS.projects),
     ]);
 
     const result = await GlobalSearchService.search(q, {

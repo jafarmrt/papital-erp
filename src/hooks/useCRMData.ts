@@ -359,7 +359,7 @@ export function useCRMData(user: any, options: { withLists?: boolean } = {}) {
     if (defaultType === 'meeting') defaultTitle = 'جلسه با مشتری';
     else if (defaultType === 'whatsapp') defaultTitle = 'ارسال پیام / واتس‌اپ';
     else if (defaultType === 'email') defaultTitle = 'ارسال ایمیل';
-    else if (defaultType === 'quote') defaultTitle = 'ارسال پیش‌فاکتور / پیشنهاد';
+    else if (defaultType === 'quote') defaultTitle = 'ثبت ارسال پیش‌فاکتور / پیشنهاد';
     else if (defaultType === 'note') defaultTitle = 'یادداشت جدید';
 
     if (lead) {

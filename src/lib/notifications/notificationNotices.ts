@@ -8,6 +8,14 @@ import { toPersianDigits } from '../../utils/persianNumber.js';
 export const MY_PAYSLIPS_LINK = '/my-payslips';
 export const APPROVAL_INBOX_LINK = '/approval-inbox';
 
+/**
+ * v11 phase 6.3p (U6): a workflow notice links to its own record in the inbox, so the bell opens that task and the notice
+ * can be closed when the step closes (`closeWorkflowTaskNotices`)
+ */
+export function approvalInboxInstanceLink(instanceId: number): string {
+  return `${APPROVAL_INBOX_LINK}?instance=${instanceId}`;
+}
+
 export interface Notice {
   title: string;
   message: string;

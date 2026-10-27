@@ -22,3 +22,17 @@ export function phoneMatchKeySql(column: AnyPgColumn): SQL<string> {
   const digits = sql`regexp_replace(translate(coalesce(${column}, ''), ${PERSIAN_DIGITS + ARABIC_DIGITS}, ${'01234567890123456789'}), '[^0-9]', '', 'g')`;
   return sql<string>`(CASE WHEN length(${digits}) >= 10 THEN right(${digits}, 10) ELSE ${digits} END)`;
 }
+
+/** OBS-R2-99: the fewest digits a search text needs to be matched as a phone number */
+export const PHONE_SEARCH_MIN_DIGITS = 4;
+
+/**
+ * OBS-R2-99: the TD-296 phone key of a search text that looks like a phone number (only digits, spaces, «+», «-», «(»,
+ * «)» and at least `PHONE_SEARCH_MIN_DIGITS` digits), without leading zeros so a part of the number matches inside the
+ * stored key («0912 741» finds +98 912 741 2032); else null.
+ */
+export function phoneSearchKey(q: string): string | null {
+  if (!/^[\d۰-۹٠-٩\s+\-()]+$/.test(q)) return null;
+  const key = phoneMatchKey(q).replace(/^0+/, '');
+  return key.length >= PHONE_SEARCH_MIN_DIGITS ? key : null;
+}

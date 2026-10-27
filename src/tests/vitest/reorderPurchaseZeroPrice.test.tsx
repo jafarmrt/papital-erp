@@ -6,6 +6,12 @@ import { reorderReceiptPriceError } from '../../lib/reorderAlerts/reorderPurchas
 
 const mutate = vi.fn();
 const toastError = vi.hoisted(() => vi.fn());
+// v11 6.3p (U9): the direct receipt is offered with «ثبت ورود کالا (رسید)»
+const receiptKey = vi.hoisted(() => ({ granted: true }));
+vi.mock('../../contexts/AuthContext', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../contexts/AuthContext')>()),
+  useHasPermission: () => receiptKey.granted,
+}));
 vi.mock('react-hot-toast', () => { const toast = { error: toastError, success: vi.fn() }; return { default: toast, toast }; });
 vi.mock('../../hooks/reorderAlerts/useReorderAlertsQueries', () => ({
   useReorderSuppliersQuery: () => [{ id: 3, name: 'تأمین‌کننده الف', partyType: 'supplier' }],
@@ -35,7 +41,7 @@ vi.mock('../../components/common/JalaliDateInput', () => ({
 import { ReorderPurchaseModal } from '../../components/reorder/ReorderPurchaseModal';
 import { getTodayIsoDate } from '../../utils';
 
-afterEach(() => { cleanup(); mutate.mockReset(); toastError.mockReset(); });
+afterEach(() => { cleanup(); mutate.mockReset(); toastError.mockReset(); receiptKey.granted = true; });
 
 const line = (wac: number): ReorderModalItem => ({
   id: 7, name: 'مهره سفید', code: 'R-7', unit: 'عدد', current_stock: 0, reorder_point: 10, deficit: 10,
@@ -44,10 +50,10 @@ const line = (wac: number): ReorderModalItem => ({
 
 function openDirectFinal(item: ReorderModalItem) {
   render(<ReorderPurchaseModal isOpen onClose={vi.fn()} onSuccess={vi.fn()} selectedItems={[item]} />);
-  fireEvent.click(screen.getByText('صدور مستقیم سند انبار / خرید'));
+  fireEvent.click(screen.getByText('رسید مستقیم: کالا رسیده است'));
   fireEvent.change(screen.getByLabelText('supplier'), { target: { value: 'تأمین‌کننده الف' } });
 }
-const submit = () => fireEvent.click(screen.getByText('ثبت سند خرید انبار'));
+const submit = () => fireEvent.click(screen.getByText('ثبت رسید قطعی انبار'));
 const sentPayload = () => (mutate.mock.calls[0][0] as { payload: Record<string, unknown> }).payload;
 
 // v9.0.403 (TD-830، یافته B07-14): رسید نهایی از هشدار نقطه سفارش با بهای صفر برای کالای بی میانگین موزون بها رد می‌شود و
@@ -97,5 +103,28 @@ describe('reorder purchase receipt at price zero, warehouse and date (TD-830)', 
     expect(reorderReceiptPriceError({ status: 'draft', donatedConfirmed: false, items })).toBeNull();
     expect(reorderReceiptPriceError({ status: 'final', donatedConfirmed: false, items: [{ name: 'ب', unitPrice: 10, weighted_average_cost: 0 }] })).toBeNull();
     expect(reorderReceiptPriceError({ status: 'final', donatedConfirmed: true, items })).toContain('میانگین موزون بها ندارد');
+  });
+});
+
+// v11 phase 6.3p (U9, card ت۵۶-۶): the requisition has the procurement desk's fields; the direct receipt is its own choice,
+// offered only with «ثبت ورود کالا (رسید)»
+describe('reorder supply choices (U9)', () => {
+  it('offers only the requisition without the receipt key, with the shared requisition fields', () => {
+    receiptKey.granted = false;
+    render(<ReorderPurchaseModal isOpen onClose={vi.fn()} onSuccess={vi.fn()} selectedItems={[line(1000)]} />);
+    expect(screen.queryByText('رسید مستقیم: کالا رسیده است')).toBeNull();
+    expect(screen.getByText(/عنوان درخواست خرید/)).toBeTruthy();
+    expect(screen.getByText('اولویت خرید:')).toBeTruthy();
+    expect(screen.getByText('تاریخ نیاز به کالا:')).toBeTruthy();
+    fireEvent.click(screen.getByText('ثبت و ارسال درخواست خرید'));
+    expect(mutate.mock.calls[0][0]).toMatchObject({ target: 'requisition', payload: { title: 'درخواست خرید ماده اولیه مهره سفید' } });
+  });
+
+  it('refuses a requisition without a title', () => {
+    render(<ReorderPurchaseModal isOpen onClose={vi.fn()} onSuccess={vi.fn()} selectedItems={[line(1000)]} />);
+    fireEvent.change(screen.getByDisplayValue('درخواست خرید ماده اولیه مهره سفید'), { target: { value: ' ' } });
+    fireEvent.click(screen.getByText('ثبت و ارسال درخواست خرید'));
+    expect(mutate).not.toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalledWith('عنوان درخواست خرید را بنویسید.');
   });
 });

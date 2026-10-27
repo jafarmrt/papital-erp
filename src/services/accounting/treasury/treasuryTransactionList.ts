@@ -1,8 +1,8 @@
 import { orm } from '../../../db/drizzle.js';
 import { accounts, bankAccounts, treasuryTransactions, users } from '../../../db/schema.js';
-import { and, desc, eq, gte, ilike, inArray, lte, ne, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, lte, ne, sql, type SQL } from 'drizzle-orm';
 import { fin } from '../../../lib/financialDecimal.js';
-import { containsLikePattern } from '../../../lib/sqlLike.js';
+import { foldedContains } from '../../../lib/search/searchSql.js';
 import type { TreasuryTransaction } from '../../../types.js';
 
 /** فیلترهای فهرست تراکنش‌های خزانه (همان فیلترهای جدول صفحه خزانه) */
@@ -32,16 +32,11 @@ function listConditions(filters: TreasuryListFilters): SQL[] {
   if (filters.endDate) conditions.push(lte(treasuryTransactions.date, filters.endDate));
   if (filters.method && filters.method !== 'all') conditions.push(eq(treasuryTransactions.method, filters.method));
   const q = filters.q?.trim();
-  if (q) {
-    const pattern = containsLikePattern(q);
-    const match = or(
-      ilike(treasuryTransactions.partyName, pattern),
-      ilike(treasuryTransactions.transactionNumber, pattern),
-      ilike(treasuryTransactions.trackingNumber, pattern),
-      ilike(treasuryTransactions.description, pattern),
-    );
-    if (match) conditions.push(match);
-  }
+  // v11 phase 6.3p (U8): one search rule (`foldedContains`)
+  const match = foldedContains([
+    treasuryTransactions.partyName, treasuryTransactions.transactionNumber, treasuryTransactions.trackingNumber, treasuryTransactions.description,
+  ], q);
+  if (match) conditions.push(match);
   return conditions;
 }
 

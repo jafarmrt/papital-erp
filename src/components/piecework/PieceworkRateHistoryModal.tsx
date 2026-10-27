@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useEffectEvent, useMemo } from 'react';
 import { X, History, TrendingUp, TrendingDown, Clock, User, Search, FileSpreadsheet, RotateCcw, CheckCircle2, Trash2, Filter, RefreshCw } from 'lucide-react';
 import { PieceworkTask, PieceworkTaskRateHistory } from '../../types';
-import { formatPersianPrice, isoToJalaliDate, formatPersianDate, toEnglishDigits, formatPersianNumber, errorMessageOf, formatPersianCode } from '../../utils';
+import { formatPersianPrice, isoToJalaliDate, formatPersianDate, formatPersianNumber, errorMessageOf, formatPersianCode } from '../../utils';
 import { useTaskRateHistoryQuery } from '../../hooks/queries/usePayrollWindowQueries';
 import { toast as hotToast } from 'react-hot-toast';
 import { DialogLayer } from '../common/DialogLayer';
 import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
+import { searchMatches } from '../../lib/search/searchText';
 
 const NO_HISTORY: PieceworkTaskRateHistory[] = [];
 
@@ -57,15 +58,9 @@ export const PieceworkRateHistoryModal: React.FC<PieceworkRateHistoryModalProps>
     }
 
     if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      list = list.filter(
-        item =>
-          item.taskTitle?.toLowerCase().includes(q) ||
-          item.taskCode?.toLowerCase().includes(q) ||
-          item.reason?.toLowerCase().includes(q) ||
-          item.changedByUsername?.toLowerCase().includes(q) ||
-          (item.effectiveDate?.includes(q) || isoToJalaliDate(item.effectiveDate).includes(toEnglishDigits(q)))
-      );
+      list = list.filter(item => searchMatches(
+        searchQuery, item.taskTitle, item.taskCode, item.reason, item.changedByUsername, item.effectiveDate, isoToJalaliDate(item.effectiveDate),
+      ));
     }
 
     return list;

@@ -65,7 +65,7 @@ export function ProcurementOrderList({
         <div className="flex-1 space-y-1">
           <div className="font-bold text-sm">
             {type === 'active' 
-              ? 'مرحله ۲ از ۳: فاکتورهای خرید تامین‌کنندگان (در انتظار وصول و تحویل به انبار)' 
+              ? 'مرحله ۲ از ۳: سفارش‌های خرید تامین‌کنندگان (در انتظار وصول و تحویل به انبار)' 
               : 'مرحله ۳ از ۳: رسیدهای قطعی انبار (خرید تکمیل و وارد کاردکس شده)'}
           </div>
           <p className="leading-relaxed opacity-90">
@@ -82,7 +82,7 @@ export function ProcurementOrderList({
           <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
           <input
             type="text"
-            placeholder="جست‌وجو در شماره فاکتور، نام تامین‌کننده، کد درخواست خرید مرجع، پروژه یا اقلام..."
+            placeholder="جست‌وجو در شماره سفارش، نام تامین‌کننده، کد درخواست خرید مرجع، پروژه یا اقلام..."
             value={searchTerm}
             onChange={e => onSearchChange(e.target.value)}
             className="w-full pl-3 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
@@ -103,18 +103,18 @@ export function ProcurementOrderList({
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         {isLoading ? (
           <div className="p-12 text-center text-slate-500 text-xs">
-            در حال بارگذاری فاکتورهای خرید...
+            در حال بارگذاری سفارش‌های خرید...
           </div>
         ) : error ? (
           <div className="p-12 text-center text-rose-800 text-xs font-bold">
-            فاکتورهای خرید بارگذاری نشد: {error}
+            سفارش‌های خرید بارگذاری نشد: {error}
           </div>
         ) : filteredOrders.length === 0 ? (
           <div className="p-12 text-center text-slate-400 text-xs">
             {searchTerm ? 'هیچ سندی با عبارت جست‌وجو یافت نشد.' : (
               type === 'active' 
-                ? 'هیچ فاکتور خریدی در انتظار تحویل به انبار وجود ندارد. از تب درخواست‌های خرید می‌توانید درخواست‌ها را تفکیک و به فاکتور خرید تبدیل کنید.'
-                : 'هنوز هیچ فاکتوری به انبار تحویل قطعی نشده است.'
+                ? 'هیچ سفارش خریدی در انتظار تحویل به انبار وجود ندارد. از تب درخواست‌های خرید می‌توانید درخواست‌ها را تفکیک و به سفارش خرید تبدیل کنید.'
+                : 'هنوز هیچ سفارشی به انبار تحویل قطعی نشده است.'
             )}
           </div>
         ) : (
@@ -123,12 +123,12 @@ export function ProcurementOrderList({
               <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                 <tr>
                   <th className="p-3 text-center w-12">#</th>
-                  <th className="p-3">شماره و تاریخ فاکتور</th>
+                  <th className="p-3">شماره و تاریخ سفارش</th>
                   <th className="p-3">تامین‌کننده / فروشنده</th>
                   <th className="p-3">درخواست خرید مرجع</th>
                   <th className="p-3">پروژه و انبار مقصد</th>
                   <th className="p-3 text-center">اقلام سفارش</th>
-                  <th className="p-3 text-center">مبلغ کل فاکتور ({rial.label})</th>
+                  <th className="p-3 text-center">مبلغ کل سفارش ({rial.label})</th>
                   <th className="p-3 text-center">وضعیت تحویل</th>
                   <th className="p-3 text-center">عملیات انبار</th>
                 </tr>
@@ -148,7 +148,7 @@ export function ProcurementOrderList({
                         <td className="p-3" data-phone="title">
                           <div className="flex items-center gap-1.5 font-bold text-slate-900">
                             <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                            <span>فاکتور #{formatPersianCode(order.refNumber)}</span>
+                            <span>سفارش #{formatPersianCode(order.refNumber)}</span>
                           </div>
                           <span className="text-[11px] text-slate-400 font-mono block mt-0.5">
                             {order.date ? formatPersianDate(order.date) : '---'}
@@ -251,7 +251,7 @@ export function ProcurementOrderList({
                           <td colSpan={9} className="p-4 border-t border-b border-amber-100">
                             <div className="bg-white rounded-xl border border-slate-200 p-3 space-y-2">
                               <div className="font-bold text-slate-800 text-xs flex items-center justify-between">
-                                <span>ریز اقلام فاکتور خرید #{formatPersianCode(order.refNumber)} ({order.supplierName}):</span>
+                                <span>ریز اقلام سفارش خرید #{formatPersianCode(order.refNumber)} ({order.supplierName}):</span>
                                 <span className="text-slate-400 font-normal">کاربر ثبت‌کننده: {order.user}</span>
                               </div>
                               <div className="overflow-x-auto">

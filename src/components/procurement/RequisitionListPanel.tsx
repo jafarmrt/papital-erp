@@ -143,7 +143,7 @@ export function RequisitionListPanel({
                   <th className="p-3 text-center">تاریخ نیاز</th>
                   <th className="p-3 text-center">برآورد مبلغ ({rial.label})</th>
                   <th className="p-3 text-center">وضعیت گردش کار</th>
-                  <th className="p-3 text-center">فاکتورهای خرید مرتبط</th>
+                  <th className="p-3 text-center">سفارش‌های خرید مرتبط</th>
                   <th className="p-3 text-center">عملیات تدارکات</th>
                 </tr>
               </thead>

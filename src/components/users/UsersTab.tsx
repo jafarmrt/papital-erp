@@ -16,6 +16,7 @@ import { copyToClipboard } from '../../utils/clipboard';
 import { formatPersianNumber } from '../../utils';
 import { isSystemAdminRole, SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog';
 import { roleWithinGrant, type GrantorPermissions } from '../../lib/permissions/grantBoundary';
+import { searchMatches } from '../../lib/search/searchText';
 
 interface UsersTabProps {
   users: User[];
@@ -48,10 +49,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
   // Filtered Users List
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
-      const matchesSearch =
-        !userSearch.trim() ||
-        u.full_name?.toLowerCase().includes(userSearch.toLowerCase()) ||
-        u.username?.toLowerCase().includes(userSearch.toLowerCase());
+      const matchesSearch = searchMatches(userSearch, u.full_name, u.username);
 
       const matchesRole = userRoleFilter === 'ALL' || u.role === userRoleFilter;
       return matchesSearch && matchesRole;

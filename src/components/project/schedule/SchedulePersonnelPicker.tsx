@@ -3,6 +3,7 @@ import { Users, Search, UserCheck, X } from 'lucide-react';
 import { toPersianDigits } from '../../../utils';
 import { DialogLayer } from '../../common/DialogLayer';
 import { personNameOf, type SchedulePerson } from './useScheduleReferenceData';
+import { searchMatches } from '../../../lib/search/searchText';
 
 interface SchedulePersonnelPickerProps {
   personnelList: SchedulePerson[];
@@ -14,13 +15,12 @@ interface SchedulePersonnelPickerProps {
 /** the personnel picker of a plan row, searched by name, job title or personnel code; it starts with an empty search */
 export function SchedulePersonnelPicker({ personnelList, onPick, onClose }: SchedulePersonnelPickerProps) {
   const [personnelSearch, setPersonnelSearch] = useState('');
-  const searchLower = personnelSearch.trim().toLowerCase();
-  const filteredPersonnel = !searchLower ? personnelList : personnelList.filter(p => {
-    const nameStr = (p.fullName || `${p.firstName || p.first_name || ''} ${p.lastName || p.last_name || ''} ${p.name || ''}`).toLowerCase();
-    const jobStr = (p.jobTitle || p.job_title || p.role || '').toLowerCase();
-    const codeStr = (p.personnelCode || p.personnel_code || '').toLowerCase();
-    return nameStr.includes(searchLower) || jobStr.includes(searchLower) || codeStr.includes(searchLower);
-  });
+  const filteredPersonnel = personnelList.filter(p => searchMatches(
+    personnelSearch,
+    p.fullName || `${p.firstName || p.first_name || ''} ${p.lastName || p.last_name || ''} ${p.name || ''}`,
+    p.jobTitle || p.job_title || p.role,
+    p.personnelCode || p.personnel_code,
+  ));
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">

@@ -1,4 +1,4 @@
-import { eq, and, or, desc, ilike, sql, type SQL } from 'drizzle-orm';
+import { eq, and, desc, sql, type SQL } from 'drizzle-orm';
 import type { Request } from 'express';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { pendingMaterials, items, productionProjects } from '../db/schema.js';
@@ -10,12 +10,12 @@ import { ItemCatalogService } from './items/itemCatalog.service.js';
 import { assertApprovableMaterial } from './pendingMaterialCode.js';
 import { WorkflowEngineService } from './workflow/workflowEngineService.js';
 import { terminateOpenWorkflows } from './workflow/workflowTermination.js';
-import { containsLikePattern } from '../lib/sqlLike.js';
 import {
   PENDING_MATERIAL_MAX_PAGE_SIZE, PENDING_MATERIAL_PAGE_SIZE, PENDING_MATERIAL_STATUSES,
   type PendingMaterialListFilters, type PendingMaterialPage, type PendingMaterialStatus,
 } from '../lib/pendingMaterials/pendingMaterialList.js';
 import { idempotentTransaction } from '../middleware/idempotency.js';
+import { foldedContains } from '../lib/search/searchSql.js';
 
 export interface CreatePendingMaterialInput {
   name: string;
@@ -224,14 +224,9 @@ export class PendingMaterialsService {
     const category = filters.category?.trim();
     if (category && category !== 'all') shared.push(eq(pendingMaterials.category, category));
     const search = filters.search?.trim();
-    if (search) {
-      const pattern = containsLikePattern(search);
-      shared.push(or(
-        ilike(pendingMaterials.name, pattern),
-        ilike(pendingMaterials.code, pattern),
-        ilike(pendingMaterials.projectTitle, pattern),
-      )!);
-    }
+    // v11 phase 6.3p (U8): one search rule (`foldedContains`)
+    const searched = foldedContains([pendingMaterials.name, pendingMaterials.code, pendingMaterials.projectTitle], search);
+    if (searched) shared.push(searched);
     const status = filters.status && filters.status !== 'all' ? filters.status : null;
     const where = and(...shared, status ? eq(pendingMaterials.status, status) : undefined);
 

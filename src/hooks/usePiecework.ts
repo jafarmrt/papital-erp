@@ -37,6 +37,7 @@ import {
   exportPieceworkTasksToExcel,
   downloadPieceworkTemplate
 } from '../components/piecework/pieceworkExcelUtils';
+import { searchMatches } from '../lib/search/searchText';
 
 export interface BatchLogRow extends KeyedRow {
   taskId: number | '';
@@ -703,10 +704,7 @@ export function usePiecework() {
     const safeTasks = Array.isArray(tasksList) ? tasksList : [];
     return safeTasks.filter(t => {
       const matchCat = taskCategoryFilter === 'all' || t.category === taskCategoryFilter;
-      const q = taskSearchQuery.trim().toLowerCase();
-      const matchSearch = !q ||
-        (t.title && t.title.toLowerCase().includes(q)) ||
-        (t.category && t.category.toLowerCase().includes(q));
+      const matchSearch = searchMatches(taskSearchQuery, t.title, t.category);
       return matchCat && matchSearch;
     });
   }, [tasksList, taskCategoryFilter, taskSearchQuery]);

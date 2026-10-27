@@ -76,12 +76,12 @@ export const ConfirmWarehouseDeliveryModal: React.FC<ConfirmWarehouseDeliveryMod
             </div>
             <div>
               <h3 className="font-black text-sm">
-                {isBulk ? 'تایید و تحویل تجمیعی فاکتورها به انبار' : 'تایید تحویل فاکتور خرید به انبار'}
+                {isBulk ? 'تایید و تحویل تجمیعی سفارش‌ها به انبار' : 'تایید تحویل سفارش خرید به انبار'}
               </h3>
               <p className="text-[11px] text-emerald-100 mt-0.5">
                 {isBulk 
-                  ? `تحویل همزمان ${formatPersianNumber(bulkOrders.length)} فاکتور خرید تامین‌کننده`
-                  : `فاکتور شماره ${formatPersianCode(order?.refNumber) || 'سفارش'} - صدور رسید قطعی انبار`}
+                  ? `تحویل همزمان ${formatPersianNumber(bulkOrders.length)} سفارش خرید تامین‌کننده`
+                  : `سفارش شماره ${formatPersianCode(order?.refNumber) || 'سفارش'} - صدور رسید قطعی انبار`}
               </p>
             </div>
           </div>
@@ -104,7 +104,7 @@ export const ConfirmWarehouseDeliveryModal: React.FC<ConfirmWarehouseDeliveryMod
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 font-bold text-slate-800">
                   <FileText className="w-4 h-4 text-emerald-600" />
-                  <span>شماره فاکتور:</span>
+                  <span>شماره سفارش:</span>
                   <span className="font-mono text-emerald-700 font-black">{formatPersianCode(order.refNumber)}</span>
                 </div>
                 {order.date && (
@@ -134,7 +134,7 @@ export const ConfirmWarehouseDeliveryModal: React.FC<ConfirmWarehouseDeliveryMod
                   </div>
                 )}
                 <div>
-                  <span className="text-slate-500 block">مبلغ کل فاکتور:</span>
+                  <span className="text-slate-500 block">مبلغ کل سفارش:</span>
                   <span className="font-bold font-mono text-amber-800 text-xs mt-0.5 block">
                     {rial.amount(order.totalAmount || 0)}
                   </span>
@@ -164,8 +164,8 @@ export const ConfirmWarehouseDeliveryModal: React.FC<ConfirmWarehouseDeliveryMod
           {isBulk && bulkOrders && (
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
               <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                <span>فهرست فاکتورهای آماده تحویل:</span>
-                <span className="text-emerald-700">{formatPersianNumber(bulkOrders.length)} فاکتور خرید</span>
+                <span>فهرست سفارش‌های آماده تحویل:</span>
+                <span className="text-emerald-700">{formatPersianNumber(bulkOrders.length)} سفارش خرید</span>
               </div>
               <div className="max-h-32 overflow-y-auto space-y-1 bg-white p-2 rounded-lg border border-slate-100 text-[11px]">
                 {bulkOrders.map(bo => (

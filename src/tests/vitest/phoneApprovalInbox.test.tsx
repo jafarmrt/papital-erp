@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { TaskExecuteModal } from '../../components/approval/TaskExecuteModal';
 import { OFFLINE_SUBMIT_TITLE, PHONE_SHEET_OVERLAY, PHONE_SHEET_PANEL, PHONE_TAP_TARGET } from '../../lib/pwa/phoneLayout';
 
@@ -76,7 +77,7 @@ describe('approvals inbox on a phone (D-11)', () => {
   });
 
   it('opens each task card with a full-width tap target', () => {
-    render(<ApprovalInboxPage />);
+    render(<MemoryRouter><ApprovalInboxPage /></MemoryRouter>);
     const open = screen.getByRole('button', { name: /بررسی و تعیین تکلیف وظیفه/ });
     expect(classesOf(open)).toContain('w-full sm:w-auto');
     expect(classesOf(open)).toContain(PHONE_TAP_TARGET);

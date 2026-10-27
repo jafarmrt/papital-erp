@@ -14,6 +14,7 @@ import { fetchJson } from '../../api';
 import toast from 'react-hot-toast';
 import { DialogLayer } from '../common/DialogLayer';
 import { isIdempotentReplay } from '../../lib/idempotentReplay';
+import { searchMatches } from '../../lib/search/searchText';
 
 interface PieceworkExcelModalProps {
   isOpen: boolean;
@@ -56,15 +57,7 @@ export function PieceworkExcelModal({
   const invalidRows = parsedRows.filter(r => !r.isValid);
   const categoriesDetected = Array.from(new Set(validRows.map(r => r.category).filter(Boolean)));
 
-  const filteredPreviewRows = parsedRows.filter(r => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      r.title.toLowerCase().includes(q) ||
-      r.code.toLowerCase().includes(q) ||
-      r.category.toLowerCase().includes(q)
-    );
-  });
+  const filteredPreviewRows = parsedRows.filter(r => searchMatches(searchQuery, r.title, r.code, r.category));
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

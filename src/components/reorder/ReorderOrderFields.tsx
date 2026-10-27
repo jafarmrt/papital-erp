@@ -3,7 +3,8 @@ import { SearchableSelect } from '../SearchableSelect';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
 import { REORDER_DIRECT_DOCUMENT_HINT, REORDER_DIRECT_DOCUMENT_LABEL } from '../../lib/reorderAlerts/reorderPurchaseReceipt';
-import { REQUISITION_PRIORITIES, REQUISITION_PRIORITY_LABELS, type RequisitionPriority } from '../../lib/procurement/requisitionFields';
+import { type RequisitionPriority } from '../../lib/procurement/requisitionFields';
+import { RequisitionHeaderFields } from '../procurement/RequisitionHeaderFields';
 
 export type ReorderPriority = RequisitionPriority;
 
@@ -39,66 +40,63 @@ const FIELD = 'w-full p-2 bg-white border border-slate-300 rounded-lg text-slate
  */
 export function ReorderOrderFields(props: ReorderOrderFieldsProps) {
   const fieldId = useId();
-  const direct = props.orderTarget === 'direct_document';
+  // v11 phase 6.3p (U9): a requisition has the same fields and words as on the procurement desk
+  if (props.orderTarget === 'requisition') {
+    return (
+      <RequisitionHeaderFields
+        title={props.title}
+        onTitleChange={props.onTitleChange}
+        priority={props.priority}
+        onPriorityChange={props.onPriorityChange}
+        requiredDate={props.date}
+        onRequiredDateChange={props.onDateChange}
+        notes={props.notes}
+        onNotesChange={props.onNotesChange}
+      />
+    );
+  }
+  // the direct receipt: goods that already arrived, a final receipt with no title or priority
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
       <div className="sm:col-span-2">
-        <label htmlFor={`${fieldId}-title`} className="block font-bold text-slate-700 mb-1">
-          عنوان سفارش / درخواست <span className="text-rose-500">*</span>:
+        <label htmlFor={`${fieldId}-supplier-name`} className="block font-bold text-slate-700 mb-1">
+          نام تامین‌کننده / فروشنده <span className="text-rose-500">*</span>:
         </label>
-        <input id={`${fieldId}-title`} type="text" value={props.title} onChange={e => props.onTitleChange(e.target.value)} required className={FIELD} />
+        <SearchableSelect
+          id={`${fieldId}-supplier-name`}
+          value={props.supplierName}
+          onChange={props.onSupplierChange}
+          placeholder="-- انتخاب یا جست‌وجوی طرف‌حساب --"
+          options={props.supplierOptions}
+          className="w-full"
+        />
       </div>
 
+      {/* v10.0.249 (TD-1133): پیش‌نویس رسیدی بود که هیچ صفحه‌ای قطعی‌اش نمی‌کرد؛ خرید از تأمین‌کننده با «درخواست خرید» است */}
       <div>
-        <label htmlFor={`${fieldId}-priority`} className="block font-bold text-slate-700 mb-1">اولویت نیاز:</label>
-        <select id={`${fieldId}-priority`} value={props.priority} onChange={e => props.onPriorityChange(e.target.value as ReorderPriority)} className={`${FIELD} font-bold`}>
-          {REQUISITION_PRIORITIES.map(p => <option key={p} value={p}>{REQUISITION_PRIORITY_LABELS[p]}</option>)}
+        <span className="block font-bold text-slate-700 mb-1">نوع و وضعیت سند:</span>
+        <p className="font-bold text-slate-800">{REORDER_DIRECT_DOCUMENT_LABEL}</p>
+        <p className="text-[11px] text-slate-500 mt-1">{REORDER_DIRECT_DOCUMENT_HINT}</p>
+      </div>
+
+      <div className="sm:col-span-2">
+        <label htmlFor="reorder-warehouse" className="block font-bold text-slate-700 mb-1">انبار مقصد:</label>
+        <select
+          id="reorder-warehouse"
+          value={props.warehouseCode}
+          onChange={e => props.onWarehouseChange(e.target.value)}
+          className={`${FIELD} font-bold`}
+        >
+          {props.warehouses.map(w => <option key={w.id} value={w.code}>{w.name}</option>)}
         </select>
       </div>
 
-      {direct && (
-        <>
-          <div className="sm:col-span-2">
-            <label htmlFor={`${fieldId}-supplier-name`} className="block font-bold text-slate-700 mb-1">
-              نام تامین‌کننده / فروشنده <span className="text-rose-500">*</span>:
-            </label>
-            <SearchableSelect
-              id={`${fieldId}-supplier-name`}
-              value={props.supplierName}
-              onChange={props.onSupplierChange}
-              placeholder="-- انتخاب یا جست‌وجوی طرف‌حساب --"
-              options={props.supplierOptions}
-              className="w-full"
-            />
-          </div>
-
-          {/* v10.0.249 (TD-1133): پیش‌نویس رسیدی بود که هیچ صفحه‌ای قطعی‌اش نمی‌کرد؛ سفارش به تأمین‌کننده با «ثبت سفارش خرید» است */}
-          <div>
-            <span className="block font-bold text-slate-700 mb-1">نوع و وضعیت سند:</span>
-            <p className="font-bold text-slate-800">{REORDER_DIRECT_DOCUMENT_LABEL}</p>
-            <p className="text-[11px] text-slate-500 mt-1">{REORDER_DIRECT_DOCUMENT_HINT}</p>
-          </div>
-
-          <div className="sm:col-span-2">
-            <label htmlFor="reorder-warehouse" className="block font-bold text-slate-700 mb-1">انبار مقصد:</label>
-            <select
-              id="reorder-warehouse"
-              value={props.warehouseCode}
-              onChange={e => props.onWarehouseChange(e.target.value)}
-              className={`${FIELD} font-bold`}
-            >
-              {props.warehouses.map(w => <option key={w.id} value={w.code}>{w.name}</option>)}
-            </select>
-          </div>
-        </>
-      )}
-
       <div>
-        <label htmlFor={`${fieldId}-date`} className="block font-bold text-slate-700 mb-1">{direct ? 'تاریخ سند:' : 'تاریخ نیاز / تحویل:'}</label>
+        <label htmlFor={`${fieldId}-date`} className="block font-bold text-slate-700 mb-1">تاریخ رسید:</label>
         <JalaliDateInput id={`${fieldId}-date`} value={props.date} onChange={props.onDateChange} className={`${FIELD} font-mono text-center`} />
       </div>
 
-      {direct && props.askDonated && (
+      {props.askDonated && (
         <label className="sm:col-span-3 flex items-start gap-2 p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-950 cursor-pointer">
           <input
             type="checkbox"
@@ -114,13 +112,13 @@ export function ReorderOrderFields(props: ReorderOrderFieldsProps) {
       )}
 
       <div className="sm:col-span-3">
-        <label htmlFor={`${fieldId}-notes`} className="block font-bold text-slate-700 mb-1">یادداشت و توضیحات:</label>
+        <label htmlFor={`${fieldId}-notes`} className="block font-bold text-slate-700 mb-1">یادداشت رسید:</label>
         <input
           id={`${fieldId}-notes`}
           type="text"
           value={props.notes}
           onChange={e => props.onNotesChange(e.target.value)}
-          placeholder="توضیحات تکمیلی پیرامون سفارش یا توافقات با تامین‌کننده..."
+          placeholder="توضیحات تکمیلی پیرامون رسید یا توافقات با تامین‌کننده..."
           className={FIELD}
         />
       </div>

@@ -22,7 +22,7 @@ import { RequisitionDetailModal } from '../../components/procurement/Requisition
 // been issued, read them without an abort signal, printed the update date with toLocaleDateString, and the procurement
 // windows were taller than the 90vh the iframe preview allows.
 
-const NO_ORDERS = /هنوز فاکتور خریدی برای این درخواست صادر نشده است/;
+const NO_ORDERS = /هنوز سفارش خریدی برای این درخواست صادر نشده است/;
 const READ_FAILED = /سفارش‌های خرید این درخواست خوانده نشد/;
 const SERVER_DOWN = 'Server unavailable';
 

@@ -1,7 +1,7 @@
-import { and, desc, eq, ilike, inArray, isNotNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, or, sql, type SQL } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { documents, purchaseRequisitions } from '../../db/schema.js';
-import { containsLikePattern } from '../../lib/sqlLike.js';
+import { foldedLike, foldedSearchPattern } from '../../lib/search/searchSql.js';
 import { procurementListPage, requisitionStatusesOf } from '../../lib/procurement/procurementLists.js';
 import type { PurchaseRequisition } from '../../types.js';
 import { consolidatedIntoCodes } from './requisitionConsolidation.js';
@@ -31,15 +31,14 @@ function requisitionListConditions(filter: GetRequisitionsFilter): SQL | undefin
   if (filter.projectId) conditions.push(eq(purchaseRequisitions.projectId, filter.projectId));
   if (filter.priority && filter.priority !== 'all') conditions.push(eq(purchaseRequisitions.priority, filter.priority));
   const search = filter.search?.trim();
-  if (search) {
-    const pattern = containsLikePattern(search);
+  // v11 phase 6.3p (U8): one search rule (`foldedContains`, `foldedLike`)
+  const pattern = foldedSearchPattern(search);
+  if (pattern) {
     conditions.push(or(
-      ilike(purchaseRequisitions.code, pattern),
-      ilike(purchaseRequisitions.title, pattern),
-      ilike(purchaseRequisitions.projectCode, pattern),
-      ilike(purchaseRequisitions.projectName, pattern),
+      ...[purchaseRequisitions.code, purchaseRequisitions.title, purchaseRequisitions.projectCode, purchaseRequisitions.projectName]
+        .map(column => foldedLike(column, pattern)),
       // نام یا کد کالاهای درخواست، همان که جست‌وجوی مرورگر میز روی ۱۰۰ ردیف آخر می‌خواند
-      sql`EXISTS (SELECT 1 FROM ${requisitionRowsSql} AS req_row WHERE req_row->>'itemName' ILIKE ${pattern} OR req_row->>'itemCode' ILIKE ${pattern})`,
+      sql`EXISTS (SELECT 1 FROM ${requisitionRowsSql} AS req_row WHERE ${foldedLike(sql`req_row->>'itemName'`, pattern)} OR ${foldedLike(sql`req_row->>'itemCode'`, pattern)})`,
     ) as SQL);
   }
   return and(...conditions);

@@ -1,9 +1,7 @@
-import { and, count, desc, eq, or, sql, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, sql, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { projectBomAllocations, transactions } from '../../db/schema.js';
-import { foldedSearchSql } from '../../lib/search/searchSql.js';
-import { normalizeSearchText } from '../../lib/search/searchText.js';
-import { containsLikePattern } from '../../lib/sqlLike.js';
+import { foldedContains } from '../../lib/search/searchSql.js';
 import type { BomAllocationStatusCounts } from '../../lib/inventory/bomAllocationList.js';
 import { toAllocationRecord, type ProjectBomAllocationRecord } from './bomAllocationRecord.js';
 
@@ -23,13 +21,9 @@ function baseConditions(filter: BomAllocationFilter): SQL[] {
   const conditions: SQL[] = [eq(projectBomAllocations.isDeleted, 0)];
   if (filter.projectId) conditions.push(eq(projectBomAllocations.projectId, filter.projectId));
   if (filter.itemId) conditions.push(eq(projectBomAllocations.itemId, filter.itemId));
-  const q = normalizeSearchText(filter.search);
-  if (q) {
-    const pattern = containsLikePattern(q);
-    const columns = [projectBomAllocations.projectCode, projectBomAllocations.itemCode, projectBomAllocations.itemName, projectBomAllocations.username];
-    const matches = or(...columns.map(column => sql`${foldedSearchSql(column)} LIKE ${pattern}`));
-    if (matches) conditions.push(matches);
-  }
+  const matches = foldedContains(
+    [projectBomAllocations.projectCode, projectBomAllocations.itemCode, projectBomAllocations.itemName, projectBomAllocations.username], filter.search);
+  if (matches) conditions.push(matches);
   return conditions;
 }
 

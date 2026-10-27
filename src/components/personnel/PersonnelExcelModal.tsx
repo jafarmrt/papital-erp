@@ -9,6 +9,7 @@ import { PERSONNEL_IMPORT_DEFAULTS, parseEmploymentStatusCell, parseGenderCell, 
 import { DialogLayer } from '../common/DialogLayer';
 import { PERSONNEL_LIST_STATE_TEXT, type PersonnelListState } from '../../lib/personnel/personnelList';
 import { downloadSheet, loadXlsx } from '../../lib/excel/downloadSheet';
+import { searchMatches } from '../../lib/search/searchText';
 
 interface PersonnelExcelModalProps {
   isOpen: boolean;
@@ -336,14 +337,7 @@ export function PersonnelExcelModal({
   // Filtered preview rows
   const filteredPreviewRows = useMemo(() => {
     return previewRows.filter((r) => {
-      const q = searchQuery.trim().toLowerCase();
-      const matchesSearch =
-        !q ||
-        r.fullName.toLowerCase().includes(q) ||
-        r.personnelCode.toLowerCase().includes(q) ||
-        r.phone.includes(q) ||
-        r.nationalId.includes(q) ||
-        r.jobTitle.toLowerCase().includes(q);
+      const matchesSearch = searchMatches(searchQuery, r.fullName, r.personnelCode, r.phone, r.nationalId, r.jobTitle);
 
       if (!matchesSearch) return false;
 

@@ -11,6 +11,7 @@ import { runningKardexEntryLabel, type RunningKardexEntry } from '../lib/transac
 import { toast } from 'react-hot-toast';
 import { EXPORT_FAILED_MESSAGE, kardexExportFileName } from '../lib/inventoryAudit/exportFileNames';
 import { DialogLayer } from './common/DialogLayer';
+import { searchMatches } from '../lib/search/searchText';
 
 interface RunningKardexModalProps {
   itemId: number;
@@ -39,15 +40,9 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
     return safeEntries.filter((entry) => {
       if (filterType !== 'all' && entry.type !== filterType) return false;
       if (selectedLocation !== 'all' && entry.location !== selectedLocation) return false;
-      if (search.trim()) {
-        const s = search.trim().toLowerCase();
-        const matchRef = String(entry.documentRef || '').toLowerCase().includes(s);
-        const matchNotes = String(entry.notes || '').toLowerCase().includes(s);
-        const matchDocType = (String(entry.documentType || '').toLowerCase().includes(s) || kardexDocumentTypeLabel(entry.documentType, entry.documentRef).includes(s));
-        const matchUser = String(entry.createdBy || '').toLowerCase().includes(s);
-        if (!matchRef && !matchNotes && !matchDocType && !matchUser) return false;
-      }
-      return true;
+      // v11 phase 6.3p (U8): one search rule (`searchMatches`)
+      return searchMatches(search, entry.documentRef, entry.notes, entry.documentType,
+        kardexDocumentTypeLabel(entry.documentType, entry.documentRef), entry.createdBy);
     });
   }, [safeEntries, filterType, selectedLocation, search]);
 

@@ -1,8 +1,8 @@
-import { and, asc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { crmActivities, crmLeads, customers, personnel, users } from '../../db/schema.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
-import { containsLikePattern } from '../../lib/sqlLike.js';
+import { foldedContains } from '../../lib/search/searchSql.js';
 
 /**
  * v9.0.14 (TD-428، تصمیم مالک محصول ت۵ الف): پیگیری‌های باز از سرور، بی بازه تاریخ اقدام و با صفحه‌بندی. پیش‌تر فهرست
@@ -95,13 +95,17 @@ export async function listFollowups(filter: FollowupFilter) {
   if (filter.ownerUserId) scope.push(await ownFollowupCondition(filter.ownerUserId));
   conditions.push(...scope);
   const q = filter.search?.trim();
-  if (q) {
-    const pattern = containsLikePattern(q);
-    conditions.push(or(
-      ilike(crmActivities.nextFollowUpTask, pattern), ilike(crmActivities.title, pattern), ilike(crmActivities.description, pattern),
-      ilike(crmActivities.loggedBy, pattern), ilike(crmActivities.assignedTo, pattern), ilike(crmLeads.title, pattern), ilike(customers.name, pattern),
-    ));
-  }
+  // v11 phase 6.3p (U8): one search rule (`foldedContains`)
+  const searched = foldedContains([
+    crmActivities.nextFollowUpTask,
+    crmActivities.title,
+    crmActivities.description,
+    crmActivities.loggedBy,
+    crmActivities.assignedTo,
+    crmLeads.title,
+    customers.name,
+  ], q);
+  if (searched) conditions.push(searched);
   const where = and(...conditions);
 
   const [totalRow] = await orm.select({ n: sql<string>`count(*)::text` })

@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ChevronDown, Check, X } from 'lucide-react';
-import { normalizePersianText, toEnglishDigits, formatPersianCode } from '../../utils';
+import { formatPersianCode } from '../../utils';
 
-/** متن جست‌وجوی حساب: «ی» و «ک» یکسان، فاصله و نیم‌فاصله یکی و رقم فارسی و عربی لاتین */
-const accountSearchText = (value: string | null | undefined) => toEnglishDigits(normalizePersianText(value));
 /** review of #406 (U21): the chosen account in the input, with its code in Persian digits like the list below it */
 const accountInputText = (account: { code: string; name: string }) => `${formatPersianCode(account.code)} - ${account.name}`;
 import type { Account } from '../../types';
 import { useClickOutside } from '../../hooks/useClickOutside';
+import { searchMatches } from '../../lib/search/searchText';
 
 interface AccountSearchSelectProps {
   accounts: Account[];
@@ -55,17 +54,11 @@ export function AccountSearchSelect({
   // Filter selectable accounts (primarily subsidiary and detailed, but allow general too)
   // v9.0.194 (TD-571، B03-29): رقم فارسی و عربی هر دو سو لاتین می‌شود؛ پیش‌تر «۱۱۰۱» با صفحه‌کلید فارسی حسابی پیدا نمی‌کرد
   const filteredAccounts = useMemo(() => {
-    const query = accountSearchText(searchQuery);
-    if (!query) {
+    // v11 phase 6.3p (U8): the one search rule of every list (`searchMatches`)
+    if (!searchQuery.trim()) {
       return baseAccounts.slice(0, 100);
     }
-    return baseAccounts.filter(acc => {
-      const matchCode = accountSearchText(acc.code).includes(query);
-      const matchName = accountSearchText(acc.name).includes(query);
-      const matchType = acc.accountType ? accountSearchText(acc.accountType).includes(query) : false;
-      const matchDesc = acc.description ? accountSearchText(acc.description).includes(query) : false;
-      return matchCode || matchName || matchType || matchDesc;
-    }).slice(0, 100);
+    return baseAccounts.filter(acc => searchMatches(searchQuery, acc.code, acc.name, acc.accountType, acc.description)).slice(0, 100);
   }, [baseAccounts, searchQuery]);
 
   useEffect(() => {

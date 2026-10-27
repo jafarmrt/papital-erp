@@ -124,7 +124,7 @@ describe('procurement desk sections and buttons (TD-702)', () => {
     await deskRendered();
     expect(screen.queryAllByText(/PR-۱۴۰۵-۰۰۰۶/).length).toBeGreaterThan(0);
     expect(screen.queryByText('ثبت درخواست خرید جدید')).toBeNull();
-    expect(screen.queryByText('تفکیک و صدور فاکتور')).toBeNull();
+    expect(screen.queryByText('تفکیک و صدور سفارش')).toBeNull();
     expect(screen.queryByTitle('حذف درخواست')).toBeNull();
     expect(screen.queryByText('انتخاب همه')).toBeNull();
   });
@@ -138,7 +138,7 @@ describe('procurement desk sections and buttons (TD-702)', () => {
     expect(screen.queryByText('انتخاب همه')).not.toBeNull();
     expect(screen.queryAllByTitle('حذف درخواست')).toHaveLength(1);
     // ordering an unapproved requisition approves it in the user's name, so it needs an approval permission too (TD-689)
-    expect(screen.queryAllByText('تفکیک و صدور فاکتور')).toHaveLength(1);
+    expect(screen.queryAllByText('تفکیک و صدور سفارش')).toHaveLength(1);
   });
 
   it('the requisition detail offers workflow actions only to approvers', async () => {
@@ -188,14 +188,14 @@ describe('delivery buttons need the stock-in permission (TD-904)', () => {
     for (const key of ['procurement.view', 'procurement.order']) granted.add(key);
     deskApi();
     await deskRendered();
-    screen.getByText('۲. فاکتورهای خرید (در انتظار تحویل انبار)').click();
+    screen.getByText('۲. سفارش‌های خرید (در انتظار تحویل انبار)').click();
     await waitFor(() => expect(screen.queryAllByText(/R-۱۴۰۵-۰۰۰۹/).length).toBeGreaterThan(0));
     expect(screen.queryByText(LIST_DELIVER)).toBeNull();
     expect(screen.queryByText('تکمیل شده')).toBeNull();
     cleanup();
     granted.add(PROCUREMENT_RECEIVE_PERMISSION);
     await deskRendered();
-    screen.getByText('۲. فاکتورهای خرید (در انتظار تحویل انبار)').click();
+    screen.getByText('۲. سفارش‌های خرید (در انتظار تحویل انبار)').click();
     await waitFor(() => expect(screen.queryByText(LIST_DELIVER)).not.toBeNull());
   });
 });
@@ -241,7 +241,7 @@ describe('procurement desk pages and server filters (TD-697)', () => {
       return { success: true, data: [] };
     });
     await deskRendered();
-    expect(screen.queryByText('۲ فاکتور خرید')).not.toBeNull();
+    expect(screen.queryByText('۲ سفارش خرید')).not.toBeNull();
     expect(screen.queryByText('۱ در انتظار تحویل')).not.toBeNull();
   });
 
@@ -250,7 +250,7 @@ describe('procurement desk pages and server filters (TD-697)', () => {
     deskApi();
     await deskRendered();
     expect(requestsTo('/api/procurement/orders')).toHaveLength(0);
-    screen.getByText('۲. فاکتورهای خرید (در انتظار تحویل انبار)').click();
+    screen.getByText('۲. سفارش‌های خرید (در انتظار تحویل انبار)').click();
     await waitFor(() => expect(requestsTo('/api/procurement/orders').some(q => q.get('status') === 'pending_delivery' && q.get('limit') === '20')).toBe(true));
     screen.getByText('۳. رسیدهای قطعی انبار (تحویل‌شده)').click();
     await waitFor(() => expect(requestsTo('/api/procurement/orders').some(q => q.get('status') === 'final')).toBe(true));

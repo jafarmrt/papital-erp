@@ -10,6 +10,7 @@ import { bankNumberCell, phoneCellText } from '../../lib/customers/customerExcel
 import { contactChannelErrors } from '../../lib/customers/contactChannels';
 import { DialogLayer } from '../common/DialogLayer';
 import { loadXlsx } from '../../lib/excel/downloadSheet';
+import { searchMatches } from '../../lib/search/searchText';
 
 interface CustomerExcelModalProps {
   isOpen: boolean;
@@ -454,15 +455,7 @@ export function CustomerExcelModal({
       if (filterMode === 'issues' && r.issues.length === 0) {
         return false;
       }
-      if (searchQuery.trim()) {
-        const q = searchQuery.trim().toLowerCase();
-        const matchesName = r.name.toLowerCase().includes(q);
-        const matchesPhone = r.phone.includes(q);
-        const matchesContact = r.contactName.toLowerCase().includes(q);
-        const matchesCity = r.city.toLowerCase().includes(q);
-        return matchesName || matchesPhone || matchesContact || matchesCity;
-      }
-      return true;
+      return searchMatches(searchQuery, r.name, r.phone, r.contactName, r.city);
     });
   }, [previewRows, filterMode, searchQuery]);
 

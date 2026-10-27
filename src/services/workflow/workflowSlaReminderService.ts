@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { workflowDefinitions, workflowInstances, workflowTasks } from '../../db/schema.js';
 import { createNotifications } from '../notifications/notificationCreator.js';
+import { approvalInboxInstanceLink } from '../../lib/notifications/notificationNotices.js';
 import { ADVISORY_LOCK_KEYS, withAdvisoryLock } from '../../lib/advisoryLock.js';
 import { logger } from '../../middleware/logger.js';
 import { getEntityContext } from './workflowDslParser.js';
@@ -15,7 +16,6 @@ import { workflowTaskRecipients } from './workflowTaskRecipients.js';
  * حتی اگر مرحله چند کار هم‌زمان داشته باشد. sla_reminded_at در همان تراکنش اعلان پر می‌شود.
  */
 
-export const WORKFLOW_SLA_REMINDER_LINK = '/approval-inbox';
 export interface SlaReminderRunResult {
   tasks: number;
   notifications: number;
@@ -74,7 +74,8 @@ export class WorkflowSlaReminderService {
             type: 'system',
             title: 'مهلت کار تاییدی گذشت',
             message,
-            link: WORKFLOW_SLA_REMINDER_LINK,
+            // v11 phase 6.3p (U6): the record's own inbox link, so it closes with the step like the task notice
+            link: approvalInboxInstanceLink(instanceId),
           })));
           sent += recipients.size;
         } else {

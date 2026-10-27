@@ -13,6 +13,7 @@ import {
   TreasuryTxCandidate 
 } from './bankStatementMatcher';
 import { DialogLayer } from '../../common/DialogLayer';
+import { searchMatches } from '../../../lib/search/searchText';
 
 interface BankReconciliationModalProps {
   isOpen: boolean;
@@ -178,14 +179,7 @@ export function BankReconciliationModal({
     }
 
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      result = result.filter(r => 
-        (r.description && r.description.toLowerCase().includes(q)) ||
-        (r.tracking && r.tracking.includes(q)) ||
-        (r.matchedTxNumber && r.matchedTxNumber.toLowerCase().includes(q)) ||
-        (r.matchedTxParty && r.matchedTxParty.toLowerCase().includes(q)) ||
-        String(r.amount).includes(q)
-      );
+      result = result.filter(r => searchMatches(searchQuery, r.description, r.tracking, r.matchedTxNumber, r.matchedTxParty, String(r.amount)));
     }
 
     return result;

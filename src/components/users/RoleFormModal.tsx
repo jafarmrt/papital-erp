@@ -20,6 +20,7 @@ import {
 import { canGrantPermission, keepBeyondGrant, type GrantorPermissions } from '../../lib/permissions/grantBoundary';
 import type { RoleDraft } from '../../lib/permissions/roleTemplates';
 import { DialogLayer } from '../common/DialogLayer';
+import { searchMatches } from '../../lib/search/searchText';
 
 /** عنوان فارسی یک کلید مجوز از کاتالوگ مشترک، وگرنه خود کلید */
 const permissionTitle = (key: string) => permissionDefinition(key)?.title ?? key;
@@ -105,15 +106,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
         if (permCategoryFilter !== 'ALL' && cat.category !== permCategoryFilter) {
           return null;
         }
-        const matchingPerms = cat.permissions.filter((p) => {
-          if (!permSearch.trim()) return true;
-          const q = permSearch.toLowerCase();
-          return (
-            p.title.toLowerCase().includes(q) ||
-            p.key.toLowerCase().includes(q) ||
-            p.description.toLowerCase().includes(q)
-          );
-        });
+        const matchingPerms = cat.permissions.filter((p) => searchMatches(permSearch, p.title, p.key, p.description));
 
         if (matchingPerms.length === 0) return null;
         return {

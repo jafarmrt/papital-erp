@@ -8,6 +8,7 @@ import { PreviewRow, ImportResult } from './types';
 import { validateExcelRows, ParsedExcelItem } from './excelImportValidation';
 import { exportCompleteExcel, downloadExcelTemplate } from './excelExportHelpers';
 import { importFailureMessage } from './importFailureMessage';
+import { searchMatches } from '../../lib/search/searchText';
 
 export function useUnifiedExcelImport({
   typeFilter = '',
@@ -36,10 +37,7 @@ export function useUnifiedExcelImport({
 
   const filteredPreviewRows = useMemo(() => {
     return previewRows.filter(r => {
-      const matchesSearch = !searchQuery || 
-        r.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        r.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.category.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = searchMatches(searchQuery, r.name, r.code, r.category);
 
       if (!matchesSearch) return false;
       if (filterMode === 'issues') {

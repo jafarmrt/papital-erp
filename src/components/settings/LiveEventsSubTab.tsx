@@ -9,6 +9,7 @@ import { EventSimulationPanel } from './EventSimulationPanel';
 import {
   EventIcon, FILTER_SELECT_CLASS, KPI_CARD_CLASS, LIST_NOTE_CLASS, READ_FAILED_CLASS, SEARCH_INPUT_CLASS, TOOLBAR_CLASS, countOf, readFailure,
 } from './eventMonitorShared';
+import { searchMatches } from '../../lib/search/searchText';
 
 const KPI_NOTE_CLASS = 'text-[11px] text-slate-500 mt-1';
 
@@ -30,15 +31,9 @@ export function LiveEventsSubTab({ canManage }: { canManage: boolean }) {
   // the refresh button waits for this visit's first answer, not for every ten-second poll
   const reading = !eventsRead.data && eventsQuery.isFetching;
 
-  const q = searchQuery.toLowerCase();
-  const filteredEvents = !searchQuery ? events : events.filter(e => (
-    (e.eventType || '').toLowerCase().includes(q) ||
-    eventTypeLabel(e.eventType || '').includes(q) ||
-    eventAggregateLabel(e.aggregateType).includes(q) ||
-    (e.aggregateType || '').toLowerCase().includes(q) ||
-    String(e.aggregateId || '').toLowerCase().includes(q) ||
-    (e.metadata?.userName || '').toLowerCase().includes(q) ||
-    JSON.stringify(e.payload || {}).toLowerCase().includes(q)
+  const filteredEvents = events.filter(e => searchMatches(
+    searchQuery, e.eventType, eventTypeLabel(e.eventType || ''), eventAggregateLabel(e.aggregateType), e.aggregateType, e.aggregateId,
+    e.metadata?.userName, JSON.stringify(e.payload || {}),
   ));
 
   return (
