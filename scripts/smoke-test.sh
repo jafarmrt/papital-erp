@@ -45,9 +45,9 @@ STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
   -d '{"id": 900001, "number": "900001", "status": "processing", "line_items": [{"name": "Smoke Probe", "sku": "SMOKE-PROBE-SKU", "quantity": 1}]}')
 echo "$STATUS" | grep -qE "401|403|503" || { echo "  unexpected webhook status: $STATUS (expected 401 unsigned / 403 fail-closed)"; exit 1; }
 
-# 6. Rate limit (loginLimiter: max 10 attempts / 15 min window keyed on the
-#    actual socket peer address — see src/app.ts loginLimiter). Probe 12 times
-#    so the threshold is crossed regardless of bucket state.
+# 6. Rate limit: one username from one address is locked after LOCKOUT_THRESHOLD (5) failed logins, and the address
+#    after LOGIN_ADDRESS_MAX_FAILURES (30) in 15 minutes (src/services/auth/loginSecurity.service.ts). Probe 12 times
+#    with one unknown username so the pair lock answers 429 whatever the state of the address bucket.
 echo "[7/8] Testing rate limit..."
 for i in $(seq 1 12); do
   curl -s -o /dev/null -w "%{http_code}\n" \

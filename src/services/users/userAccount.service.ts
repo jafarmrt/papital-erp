@@ -79,8 +79,10 @@ export async function updateOwnProfile(req: Request, userId: number, input: Prof
       const avatarPath = await uploadBase64ToStorage(input.avatar);
       if (!isStoredAvatarPath(avatarPath)) throw new BadRequestError(AVATAR_INVALID_MESSAGE);
       updateData.avatarUrl = avatarPath;
-    } else {
-      updateData.avatarUrl = input.avatar;
+    } else if (input.avatar !== u.avatarUrl) {
+      // v11 phase 6.2 (X16): a stored path is only the user's own picture kept as it is; before, any image under
+      // /uploads (another user's picture, a product image) could be named as one's avatar
+      throw new BadRequestError(AVATAR_INVALID_MESSAGE);
     }
   }
 
@@ -124,7 +126,7 @@ export async function updateOwnProfile(req: Request, userId: number, input: Prof
         username: u.username,
         fullName: row.fullName,
         passwordChanged,
-        avatarUpdated: Boolean(input.avatar)
+        avatarUpdated: updateData.avatarUrl !== undefined
       }
     });
     return row;

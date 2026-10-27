@@ -4,6 +4,7 @@ import { ATTACHMENT_EXTENSION_BY_MIME, attachmentDownloadName } from '../../lib/
 import fs from 'fs';
 import path from 'path';
 import { getAttachmentsRoot } from '../../lib/storage.js';
+import { sniffInlineSafeType } from '../../lib/fileSignature.js';
 import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import {
@@ -92,7 +93,27 @@ export function decodeDataUrl(dataUrl: string): { mime: string; buffer: Buffer }
     throw new ValidationError('داده پیوست نامعتبر است');
   }
   if (buffer.length > MAX_ATTACHMENT_BYTES) throw new ValidationError('حجم پیوست بیش از ۱۰ مگابایت است');
-  return { mime: MIME_PATTERN.test(declared) ? declared : 'application/octet-stream', buffer };
+  const mime = MIME_PATTERN.test(declared) ? declared : 'application/octet-stream';
+  // v11 phase 6.2 (X16): a file declared as an image or PDF (shown inside the page) is stored so only when its bytes are
+  // one, under the type they prove; else it is a download (`application/octet-stream`)
+  if (INLINE_SAFE_MIME_TYPES.has(mime)) return { mime: sniffInlineSafeType(buffer) ?? 'application/octet-stream', buffer };
+  return { mime, buffer };
+}
+
+type UploaderFields = Pick<FinancialAttachment, 'uploadedAt' | 'uploadedBy'>;
+
+function uploaderFieldsOf(item: Record<string, unknown>): UploaderFields {
+  return {
+    ...(asText(item.uploadedAt) ? { uploadedAt: asText(item.uploadedAt) } : {}),
+    ...(asText(item.uploadedBy) ? { uploadedBy: asText(item.uploadedBy) } : {}),
+  };
+}
+
+function withoutUploaderFields(item: Record<string, unknown>): Record<string, unknown> {
+  const rest = { ...item };
+  delete rest.uploadedAt;
+  delete rest.uploadedBy;
+  return rest;
 }
 
 function fileExtension(mime: string, name: string): string {
@@ -117,7 +138,9 @@ export class AttachmentStorageService {
 
   /**
    * v10.2 package 7: whether the record an attachment belongs to is still live. A sales file or activity that was
-   * deleted (or an activity of a deleted file) keeps its attachment rows, but their files are no longer served; other owners are checked by their routes.
+   * deleted (or an activity of a deleted file) keeps its attachment rows, but their files are no longer served.
+   * v11 phase 6.2 (X20): the same for every owner: a voided document, a deleted voucher, cheque, treasury transaction,
+   * project or payslip no longer serves its files by id (before, only the two sales types were checked).
    */
   static async ownerIsLive(row: { entityType: string; entityId: number }): Promise<boolean> {
     if (row.entityType === 'crm_lead') {
@@ -132,7 +155,11 @@ export class AttachmentStorageService {
         .where(and(eq(crmActivities.id, row.entityId), eq(crmActivities.isDeleted, 0)));
       return Boolean(activity) && (!activity.leadId || activity.leadDeleted === 0);
     }
-    return true;
+    const table = this.isAttachmentEntityType(row.entityType) ? ENTITY_TABLES[row.entityType] : undefined;
+    if (!table) return false;
+    const [owner] = await orm.select({ id: table.id }).from(table)
+      .where(and(eq(table.id, row.entityId), eq(table.isDeleted, 0)));
+    return Boolean(owner);
   }
 
   static async findActive(id: string, executor: DbExecutor = orm) {
@@ -166,11 +193,46 @@ export class AttachmentStorageService {
     return { id, mime, size: buffer.length };
   }
 
+  /** the uploader fields of the record's stored list, by url (`/api/attachments/<id>`, a link, or an inline data URL) */
+  private static async storedUploaders(
+    executor: DbExecutor, entityType: AttachmentEntityType, entityId: number
+  ): Promise<Map<string, UploaderFields>> {
+    const byUrl = new Map<string, UploaderFields>();
+    const table = ENTITY_TABLES[entityType];
+    if (!table) return byUrl;
+    const [row] = await executor.select({ attachments: table.attachments }).from(table).where(eq(table.id, entityId));
+    for (const a of Array.isArray(row?.attachments) ? row.attachments : []) {
+      if (!a || typeof a !== 'object') continue;
+      const item = a as unknown as Record<string, unknown>;
+      if (asText(item.url)) byUrl.set(asText(item.url), uploaderFieldsOf(item));
+      // an item not yet moved to a file may carry its bytes in the legacy `dataUrl` field
+      if (asText(item.dataUrl).startsWith('data:')) byUrl.set(asText(item.dataUrl), uploaderFieldsOf(item));
+    }
+    return byUrl;
+  }
+
+  /** who stored a file of this record and when, from its own row (a stored file the record's list does not carry yet) */
+  private static async fileUploader(executor: DbExecutor, id: string, entityType: AttachmentEntityType, entityId: number): Promise<UploaderFields> {
+    const [row] = await executor.select({ createdBy: fileAttachments.createdBy, createdAt: fileAttachments.createdAt })
+      .from(fileAttachments).where(and(
+        eq(fileAttachments.id, id), eq(fileAttachments.entityType, entityType), eq(fileAttachments.entityId, entityId),
+      ));
+    if (!row) return {};
+    const at = new Date(row.createdAt);
+    return {
+      ...(Number.isNaN(at.getTime()) ? {} : { uploadedAt: at.toISOString() }),
+      ...(row.createdBy ? { uploadedBy: row.createdBy } : {}),
+    };
+  }
+
   /**
    * فهرست پیوست‌های ارسالی برای یک رکورد را آماده ذخیره می‌کند: هر data URL به فایل تبدیل و ثبت می‌شود و
    * فراداده با آدرس /api/attachments/<id> جایش می‌نشیند؛ پیوست‌های ذخیره‌شده قبلی و پیوند http(s) دست نمی‌خورند.
    * فایل‌های این رکورد که دیگر در فهرست نیستند جداشده علامت می‌خورند (فایل روی دیسک می‌ماند).
    * خروجی را فراخواننده در ستون attachments همان رکورد می‌نویسد.
+   * v11 phase 6.2 (X12): who uploaded a file and when are never taken from the request. A new file takes the session user
+   * and the server time; a stored file or link keeps the fields of the record's stored list (else its file row), so the
+   * «بارگذاری توسط» of a financial record cannot name a colleague. The inline migration keeps the record's own fields.
    */
   static async normalizeForRecord(
     executor: DbExecutor, entityType: AttachmentEntityType, entityId: number, input: unknown, actor = '',
@@ -180,6 +242,7 @@ export class AttachmentStorageService {
     const stampUploader = options.stampUploader !== false;
     const list = Array.isArray(input) ? input : [];
     actor = actor || getRequestContext()?.username || '';
+    const priorUploaders = stampUploader ? await this.storedUploaders(executor, entityType, entityId) : null;
     const result: FinancialAttachment[] = [];
     const keptIds: string[] = [];
 
@@ -191,6 +254,9 @@ export class AttachmentStorageService {
       const inlineSource = url.startsWith('data:') ? url : (asText(legacyDataUrl).startsWith('data:') ? asText(legacyDataUrl) : '');
 
       if (inlineSource) {
+        // an inline item the record already holds (not yet moved to a file) keeps its stored uploader; a new one is stamped
+        const prior = priorUploaders?.get(inlineSource);
+        const keepsPrior = prior !== undefined && (prior.uploadedAt !== undefined || prior.uploadedBy !== undefined);
         const stored = await this.storeFile(executor, entityType, entityId, inlineSource, name, actor);
         keptIds.push(stored.id);
         result.push({
@@ -200,8 +266,8 @@ export class AttachmentStorageService {
           url: `${ATTACHMENT_URL_PREFIX}${stored.id}`,
           size: stored.size,
           type: stored.mime,
-          ...(asText(item.uploadedAt) || stampUploader ? { uploadedAt: asText(item.uploadedAt) || systemNowUtcIso() } : {}),
-          ...(asText(item.uploadedBy) || (stampUploader && actor) ? { uploadedBy: asText(item.uploadedBy) || actor } : {}),
+          ...(!stampUploader ? uploaderFieldsOf(item)
+            : keepsPrior ? prior : { uploadedAt: systemNowUtcIso(), ...(actor ? { uploadedBy: actor } : {}) }),
         });
         continue;
       }
@@ -215,7 +281,11 @@ export class AttachmentStorageService {
         // مثلاً javascript: که در پیوند دانلود اجرا می‌شود
         throw new ValidationError(`آدرس پیوست «${name}» نامعتبر است`);
       }
-      result.push({ ...item, id: asText(item.id) || storedId || crypto.randomUUID(), name, url } as FinancialAttachment);
+      const uploader = !priorUploaders ? uploaderFieldsOf(item)
+        : priorUploaders.get(url) ?? (storedId ? await this.fileUploader(executor, storedId, entityType, entityId) : {});
+      result.push({
+        ...withoutUploaderFields(item), ...uploader, id: asText(item.id) || storedId || crypto.randomUUID(), name, url,
+      } as FinancialAttachment);
     }
 
     await executor.update(fileAttachments).set({ isDeleted: 1 }).where(and(

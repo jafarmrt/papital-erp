@@ -25,6 +25,11 @@ export interface NewNotification {
   link?: string;
   senderId?: number | null;
   senderName?: string;
+  /**
+   * v11 phase 6.2 (X6): keep this one in the bell. Its category's fixed messenger sentence would say something else (the
+   * account-link notice is filed under `payslip`, whose sentence is «فیش حقوق شما تأیید شد.»).
+   */
+  bellOnly?: boolean;
 }
 
 /** The delivery event a messenger job carries (the dead letter queue reads its aggregate and payload) */
@@ -72,7 +77,7 @@ export async function createNotifications(tx: DbTransaction, items: readonly New
 
 async function queueMessengerJobs(tx: DbTransaction, allWritten: ReadonlyArray<NewNotification & { id: number }>): Promise<void> {
   // v10.2 package 9: a bell-only category (birthdays and greetings) never goes to the messenger
-  const written = allWritten.filter(n => !isBellOnlyCategory(n.category));
+  const written = allWritten.filter(n => !isBellOnlyCategory(n.category) && !n.bellOnly);
   if (written.length === 0) return;
   const userIds = [...new Set(written.map(n => n.userId))];
   const links = await tx.select({

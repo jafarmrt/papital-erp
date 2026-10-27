@@ -55,15 +55,15 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // Test 2: HttpOnly Cookie Authentication Security Policy
   const t2Start = Date.now();
   try {
-    if (AUTH_COOKIE_OPTIONS.httpOnly && (AUTH_COOKIE_OPTIONS.sameSite === 'none' || (AUTH_COOKIE_OPTIONS.sameSite as any) === 'lax') && AUTH_COOKIE_OPTIONS.secure) {
+    if (AUTH_COOKIE_OPTIONS.httpOnly && AUTH_COOKIE_OPTIONS.sameSite === 'lax' && AUTH_COOKIE_OPTIONS.secure) {
       results.push(makeTestCase({
         id: 'sec_httponly_cookie',
-        name: 'HttpOnly cookie and SameSite=None security rules (SEC-006 & RULE 5)',
+        name: 'HttpOnly cookie and SameSite=Lax security rules (SEC-006, v11 phase 6.2 X11)',
         layer: 'security',
         executionType: 'simulation_logic',
         passed: true,
         durationMs: Date.now() - t2Start,
-        details: 'The token cookie is HttpOnly, Secure: true and SameSite=None, with no client JavaScript access.'
+        details: 'The token cookie is HttpOnly, Secure: true and SameSite=Lax, with no client JavaScript access.'
       }));
     } else {
       throw new Error('Cookie settings do not meet the security rules');
@@ -71,7 +71,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_httponly_cookie',
-      name: 'HttpOnly cookie and SameSite=Lax security rules (SEC-006)',
+      name: 'HttpOnly cookie and SameSite=Lax security rules (SEC-006, v11 phase 6.2 X11)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: false,
@@ -421,12 +421,12 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     }));
   }
 
-  // Test 10: Cookie SameSite None/Lax & CSRF Protection Verification (SEC-006 & RULE 5)
+  // Test 10: Cookie SameSite=Lax & CSRF Protection Verification (SEC-006, v11 phase 6.2 X11)
   const t10Start = Date.now();
   try {
     // 1. Verify Cookie Security options
-    if (AUTH_COOKIE_OPTIONS.sameSite !== 'none' && (AUTH_COOKIE_OPTIONS.sameSite as any) !== 'lax') {
-      throw new Error(`sameSite must be 'none' or 'lax', current value: ${AUTH_COOKIE_OPTIONS.sameSite}`);
+    if (AUTH_COOKIE_OPTIONS.sameSite !== 'lax') {
+      throw new Error(`sameSite must be 'lax', current value: ${String(AUTH_COOKIE_OPTIONS.sameSite)}`);
     }
     if (!AUTH_COOKIE_OPTIONS.httpOnly) {
       throw new Error('The auth cookie must be httpOnly: true');
@@ -994,15 +994,18 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
         throw new Error('A valid token must be accepted');
       }
 
-      // Sub-test 2b: Production environment setup token hardening (S-4)
+      // Sub-test 2b: setup token hardening (S-4; v11 phase 6.2, X18: every environment but test)
       process.env.NODE_ENV = 'production';
-
-      // Missing or default token in production must be flagged
-      const checkInsecureToken = (token: string) => !token || token === 'papital_erp_setup_token_2026' || token.length < 16;
-      const isDefaultInsecure = checkInsecureToken('papital_erp_setup_token_2026');
-      if (!isDefaultInsecure) {
-        throw new Error('The default token must not be accepted in the production environment');
+      const { setupTokenOf, TEST_SETUP_TOKEN } = await import('../../services/auth/setupToken.js');
+      for (const env of ['production', 'development', 'staging', undefined]) {
+        for (const configured of [undefined, '', '   ', TEST_SETUP_TOKEN, 'short_token_15c']) {
+          if (setupTokenOf(configured, env) !== null) {
+            throw new Error(`Setup accepted the token ${JSON.stringify(configured)} with NODE_ENV=${String(env)}`);
+          }
+        }
+        if (setupTokenOf(` ${testSecret} `, env) !== testSecret) throw new Error(`Setup refused a configured 16+ character token with NODE_ENV=${String(env)}`);
       }
+      if (setupTokenOf(undefined, 'test') !== TEST_SETUP_TOKEN) throw new Error('The test environment lost the built-in setup token');
 
       // Sub-test 2c: In production, default password admin123456 must be rejected (S-4)
       const checkWeakPassword = (password: string) => password === 'admin123456' || password.length < 8;
@@ -1026,7 +1029,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t16Start,
-      details: 'X-Setup-Token header validation, race condition prevention with pg_try_advisory_lock(79234), removal of the default password admin123456 and token validation in production are confirmed.'
+      details: 'X-Setup-Token header validation, race condition prevention with pg_try_advisory_lock(79234), removal of the default password admin123456, and refusal of a missing, built-in or short token in every environment but test are confirmed.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
@@ -1401,6 +1404,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // بسته ۱۲، بخش پرسنل (v9.0.24، TD-435): هر کاربر حداکثر به یک پرسنل فعال
   const { runPersonnelUserLinkTests } = await import('../security/personnelUserLinkTests.js');
   results.push(...await runPersonnelUserLinkTests(shouldRunAccess));
+  // v11 phase 6.2 (security, X5 to X20)
+  const { runSecurityHardeningV11Tests } = await import('../security/securityHardeningV11Tests.js');
+  results.push(...await runSecurityHardeningV11Tests(shouldRunAccess));
   // بسته ۱۴ (از v9.0.33، TD-443 به بعد): دسترسی و یکپارچگی موتور گردش‌کار از مسیرهای واقعی
   const { runWorkflowAccessTests } = await import('../security/workflowAccessTests.js');
   results.push(...await runWorkflowAccessTests(shouldRunAccess));

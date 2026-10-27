@@ -41,6 +41,18 @@ export function assertGrantWithinOwn(grantor: GrantorPermissions, keys: readonly
   }
 }
 
+/** v11 phase 6.2 (X5): برداشته‌های نقش هم فقط از مجوزهای واگذارکننده (`keepBeyondGrant`) */
+export function assertRemovalWithinOwn(grantor: GrantorPermissions, keys: readonly string[]): void {
+  const beyond = permissionsBeyond(grantor, keys);
+  if (beyond.length > 0) {
+    throw new ForbiddenError(
+      `فقط مجوزهایی را می‌توانید از نقش بردارید که خودتان دارید؛ این مجوزها را ندارید: ${permissionTitles(beyond)}`,
+      { permissions: beyond },
+      GRANT_BEYOND_OWN_PERMISSIONS,
+    );
+  }
+}
+
 /** نقش خود واگذارکننده (غیرمدیر) ویرایش نمی‌شود */
 export function assertNotOwnRole(actorRole: string | undefined, targetRoleCode: string): void {
   if (!isSystemAdminRole(actorRole) && actorRole && actorRole.toLowerCase() === targetRoleCode.toLowerCase()) {

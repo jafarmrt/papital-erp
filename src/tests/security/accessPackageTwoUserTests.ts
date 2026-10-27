@@ -26,7 +26,7 @@ export async function runAccessPackageTwoUserTests(shouldRun: ShouldRun): Promis
     await runCase(results, {
       id: 'sec_role_grant_boundary_td_520',
       name: 'v9.0.112: a non-admin roles.manage holder neither edits its own role nor grants permissions it does not hold (TD-520)',
-      details: 'a role with only roles.manage: editing its own role (adding accounting.vouchers, users.manage, settings.manage) is 403 OWN_ROLE_CHANGE_REFUSED and nothing changes; a new role or another role gets only keys the holder has (403 GRANT_BEYOND_OWN_PERMISSIONS otherwise); removing keys and renaming another role still work; the system admin is not limited',
+      details: 'a role with only roles.manage: editing its own role (adding accounting.vouchers, users.manage, settings.manage) is 403 OWN_ROLE_CHANGE_REFUSED and nothing changes; a new role or another role gets only keys the holder has (403 GRANT_BEYOND_OWN_PERMISSIONS otherwise); renaming another role and removing a key the holder has still work, removing one it lacks is 403 GRANT_BEYOND_OWN_PERMISSIONS (v11 phase 6.2); the system admin is not limited',
     }, async (h, wrong) => {
       const { createTestRole } = await import('../fixtures/factories.js');
       const prefix = `td520r_${h.tag}`;
@@ -48,13 +48,16 @@ export async function runAccessPackageTwoUserTests(shouldRun: ShouldRun): Promis
         if (within.status !== 200) wrong.push(`creating a role with its own key returned ${within.status}, not 200`);
 
         // 3) another role
-        const other = await createTestRole({ code: `${prefix}_c`, permissions: ['customers.view'] });
-        const grant = await h.put(`/api/roles/${other.id}`, { permissions: ['customers.view', 'accounting.vouchers'] }, manager);
+        const other = await createTestRole({ code: `${prefix}_c`, permissions: ['customers.view', 'roles.manage'] });
+        const grant = await h.put(`/api/roles/${other.id}`, { permissions: ['customers.view', 'roles.manage', 'accounting.vouchers'] }, manager);
         if (grant.status !== 403 || codeOf(grant) !== 'GRANT_BEYOND_OWN_PERMISSIONS') wrong.push(`adding accounting.vouchers to another role returned ${grant.status} ${codeOf(grant)}, not 403 GRANT_BEYOND_OWN_PERMISSIONS`);
         const rename = await h.put(`/api/roles/${other.id}`, { name: `نقش ۵۲۰ ج تازه ${h.tag}` }, manager);
         if (rename.status !== 200) wrong.push(`renaming another role returned ${rename.status}, not 200`);
-        const remove = await h.put(`/api/roles/${other.id}`, { permissions: [] }, manager);
-        if (remove.status !== 200) wrong.push(`removing a key from another role returned ${remove.status}, not 200`);
+        const remove = await h.put(`/api/roles/${other.id}`, { permissions: ['customers.view'] }, manager);
+        if (remove.status !== 200) wrong.push(`removing a key it holds from another role returned ${remove.status}, not 200`);
+        // v11 phase 6.2 (X5): a key the holder lacks stays on the other role
+        const removeBeyond = await h.put(`/api/roles/${other.id}`, { permissions: [] }, manager);
+        if (removeBeyond.status !== 403 || codeOf(removeBeyond) !== 'GRANT_BEYOND_OWN_PERMISSIONS') wrong.push(`removing customers.view, which it lacks, returned ${removeBeyond.status} ${codeOf(removeBeyond)}, not 403 GRANT_BEYOND_OWN_PERMISSIONS`);
         const byAdmin = await h.put(`/api/roles/${other.id}`, { permissions: ['accounting.vouchers'] });
         if (byAdmin.status !== 200) wrong.push(`the system admin adding accounting.vouchers returned ${byAdmin.status}, not 200`);
       } finally {

@@ -67,23 +67,25 @@ export const AUTH_COOKIE_NAME = 'auth_token';
 export const AUTH_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: true,
-  sameSite: 'none' as const, // Required for iframe preview and cross-site subresource authentication
+  sameSite: 'lax' as const, // v11 phase 6.2 (X11): a cross-site request carries no session
   maxAge: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
   path: '/'
 };
 
 /**
  * V1.3.8: کوکی احراز هویت بر اساس پروتکل واقعی درخواست تنظیم می‌شود.
- * - HTTPS (دامنه با SSL / پیش‌نمایش AI Studio): Secure + SameSite=None (پشتیبانی iframe)
- * - HTTP (سرور مجازی قبل از تنظیم دامنه): بدون Secure + SameSite=Lax — چون مرورگرهای
- *   مدرن کوکی Secure را روی HTTP ذخیره نمی‌کنند و ورود/تصاویر از کار می‌افتاد.
+ * - HTTPS (دامنه با SSL): Secure
+ * - HTTP (سرور مجازی قبل از تنظیم دامنه): بدون Secure — چون مرورگرهای مدرن کوکی Secure را روی HTTP ذخیره نمی‌کنند و
+ *   ورود/تصاویر از کار می‌افتاد.
+ * v11 phase 6.2 (X11, decision ت۵۶-۸): `SameSite=Lax` on both, so an image, download or request from another site carries
+ * no session. Before, HTTPS sent `SameSite=None` for a preview inside another site's frame, which is no longer used.
  */
 export const getAuthCookieOptions = (req?: any, lifetimeSeconds: number = DEFAULT_SESSION_SECONDS) => {
   const isHttps = req?.secure === true || req?.headers?.['x-forwarded-proto'] === 'https';
   return {
     httpOnly: true,
     secure: isHttps,
-    sameSite: (isHttps ? 'none' : 'lax') as 'none' | 'lax',
+    sameSite: 'lax' as const,
     maxAge: lifetimeSeconds * 1000,
     path: '/'
   };
@@ -141,6 +143,9 @@ const PUBLIC_WEBHOOK_PATHS = new Set([
 ]);
 
 const isPublicWebhookPath = (path: string): boolean => PUBLIC_WEBHOOK_PATHS.has(path);
+
+/** v11 phase 6.2 (X14): a full path `authenticateToken` lets through without a session (the route table reads it too) */
+export const isAuthExemptPath = (path: string): boolean => PUBLIC_PATHS.has(path) || isPublicWebhookPath(path);
 
 interface CachedUserAuth {
   id: number;

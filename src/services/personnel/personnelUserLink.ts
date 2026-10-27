@@ -1,7 +1,11 @@
+import type { Request } from 'express';
 import { and, asc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
-import { orm, type DbExecutor } from '../../db/drizzle.js';
+import { orm, type DbExecutor, type DbTransaction } from '../../db/drizzle.js';
 import { personnel, users } from '../../db/schema.js';
-import { ConflictError, ValidationError } from '../../errors/customErrors.js';
+import { ConflictError, ForbiddenError, ValidationError } from '../../errors/customErrors.js';
+import { logActivity } from '../../lib/auditLogger.js';
+import { PERSONNEL_USER_LINK_FORBIDDEN_MESSAGE, PERSONNEL_USER_RELINK_MESSAGE } from '../../lib/personnel/personnelUserLinks.js';
+import { createNotifications } from '../notifications/notificationCreator.js';
 import type { HealthCheckTestResult } from '../../types.js';
 
 /**
@@ -45,6 +49,63 @@ export async function resolvePersonnelUserLink(tx: DbExecutor, raw: unknown, per
     .where(and(...conditions)).orderBy(asc(personnel.id)).limit(1);
   if (other) throw new ConflictError(linkTakenMessage(other.fullName));
   return userId;
+}
+
+/**
+ * v11 phase 6.2 (X6): a change of the person's account (`PERSONNEL_USER_LINK_PERMISSION`): without the permission 403
+ * `PERSONNEL_USER_LINK_FORBIDDEN`, and from one account straight to another 409 `PERSONNEL_USER_RELINK_REFUSED`
+ * (the person is first saved without an account). An unchanged link passes.
+ */
+export function assertPersonnelUserLinkChange(before: number | null, after: number | null, mayLink: boolean): void {
+  if (before === after) return;
+  if (!mayLink) throw new ForbiddenError(PERSONNEL_USER_LINK_FORBIDDEN_MESSAGE, { before, after }, 'PERSONNEL_USER_LINK_FORBIDDEN');
+  if (before !== null && after !== null) {
+    throw new ConflictError(PERSONNEL_USER_RELINK_MESSAGE, { before, after }, 'PERSONNEL_USER_RELINK_REFUSED');
+  }
+}
+
+/**
+ * v11 phase 6.2 (X6): in the write's transaction, one audit row «پیوند حساب کاربری … از … به …» and a notice to the account
+ * that gains the person's payslips and to the one that loses them. Before, the change was only a `userId` in the generic
+ * «ویرایش اطلاعات پرسنل» row and the previous owner was not told.
+ */
+export async function recordPersonnelUserLinkChange(tx: DbTransaction, params: {
+  req: Request; personnelId: number; fullName: string; before: number | null; after: number | null;
+}): Promise<void> {
+  const { req, personnelId, fullName, before, after } = params;
+  if (before === after) return;
+  const ids = [before, after].filter((id): id is number => id !== null);
+  const rows = await tx.select({ id: users.id, username: users.username, fullName: users.fullName }).from(users).where(inArray(users.id, ids));
+  const nameOf = (id: number | null) => {
+    if (id === null) return 'بدون حساب';
+    const u = rows.find(r => r.id === id);
+    return u ? `«${u.fullName || u.username}» (${u.username})` : `کاربر ${id}`;
+  };
+  await logActivity({
+    tx,
+    req,
+    action: 'UPDATE',
+    entity: 'پرسنل',
+    entityId: personnelId,
+    description: `پیوند حساب کاربری پرسنل «${fullName}» از ${nameOf(before)} به ${nameOf(after)} تغییر کرد`,
+    details: { personnelId, before: { userId: before }, after: { userId: after } },
+  });
+  const sender = req.user as { id?: number; username?: string } | undefined;
+  // bell only: in the messenger the `payslip` category is the fixed sentence «فیش حقوق شما تأیید شد.»
+  await createNotifications(tx, [
+    ...(after !== null ? [{
+      userId: after, category: 'payslip' as const, type: 'system',
+      title: 'پرونده پرسنلی به حساب شما وصل شد',
+      message: `پرونده پرسنلی «${fullName}» به حساب کاربری شما وصل شد و فیش‌های حقوق آن در «فیش‌های من» دیده می‌شود. اگر این پرونده شما نیست به مدیر خبر دهید.`,
+      senderId: sender?.id ?? null, senderName: sender?.username ?? '', bellOnly: true,
+    }] : []),
+    ...(before !== null ? [{
+      userId: before, category: 'payslip' as const, type: 'system',
+      title: 'پرونده پرسنلی از حساب شما جدا شد',
+      message: `پرونده پرسنلی «${fullName}» از حساب کاربری شما جدا شد و فیش‌های حقوق آن دیگر در «فیش‌های من» نیست.`,
+      senderId: sender?.id ?? null, senderName: sender?.username ?? '', bellOnly: true,
+    }] : []),
+  ]);
 }
 
 /** خطای 23505 روی ایندکس uq_personnel_user_active (Drizzle خطای pg را در `cause` می‌پیچد) */

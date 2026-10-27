@@ -20,6 +20,7 @@ import { DecimalInput } from '../common/DecimalInput';
 import { SALARY_TYPES, SALARY_TYPE_LABELS, salaryTypeOf } from '../../lib/personnel/salaryType';
 import { DialogLayer } from '../common/DialogLayer';
 import { PERSONNEL_LIST_STATE_TEXT, type PersonnelListState } from '../../lib/personnel/personnelList';
+import { personnelUserPickerRule } from '../../lib/personnel/personnelUserLinks';
 
 interface PersonnelFormModalProps {
   isOpen: boolean;
@@ -33,6 +34,10 @@ interface PersonnelFormModalProps {
   linkedUsers?: Map<number, string>;
   /** TD-1321: the user picker waits until the users and the personnel they are linked to have arrived */
   linkedUsersState?: PersonnelListState;
+  /** v11 phase 6.2 (X6): the viewer holds «مدیریت کاربران», which linking and unlinking an account needs */
+  canLinkUser?: boolean;
+  /** v11 phase 6.2 (X6): the account the stored person is linked to ('' for none or a new person) */
+  storedUserId?: string;
   isSaving: boolean;
 }
 
@@ -46,10 +51,14 @@ export function PersonnelFormModal({
   usersList,
   linkedUsers,
   linkedUsersState = 'ready',
+  canLinkUser = false,
+  storedUserId = '',
   isSaving
 }: PersonnelFormModalProps) {
   const fieldId = useId();
   if (!isOpen) return null;
+  const userPicker = personnelUserPickerRule(canLinkUser, storedUserId);
+  const pickerNote = linkedUsersState !== 'ready' ? PERSONNEL_LIST_STATE_TEXT[linkedUsersState] : userPicker.hint;
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
@@ -278,12 +287,12 @@ export function PersonnelFormModal({
                   id={`${fieldId}-user-id`}
                   value={formData.userId}
                   onChange={(e) => setFormData((prev) => ({ ...prev, userId: e.target.value }))}
-                  disabled={linkedUsersState !== 'ready'}
-                  aria-describedby={linkedUsersState !== 'ready' ? `${fieldId}-user-id-state` : undefined}
+                  disabled={linkedUsersState !== 'ready' || userPicker.locked}
+                  aria-describedby={pickerNote ? `${fieldId}-user-id-state` : undefined}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 disabled:opacity-60"
                 >
                   <option value="">-- بدون حساب کاربری در سامانه --</option>
-                  {usersList.map((u) => {
+                  {usersList.filter(u => !userPicker.onlyStored || String(u.id) === storedUserId).map((u) => {
                     const linkedTo = linkedUsers?.get(Number(u.id));
                     return (
                       <option key={u.id} value={u.id} disabled={linkedTo !== undefined}>
@@ -292,8 +301,8 @@ export function PersonnelFormModal({
                     );
                   })}
                 </select>
-                {linkedUsersState !== 'ready' && (
-                  <p id={`${fieldId}-user-id-state`} className="text-[10px] text-slate-500 mt-1">{PERSONNEL_LIST_STATE_TEXT[linkedUsersState]}</p>
+                {pickerNote && (
+                  <p id={`${fieldId}-user-id-state`} className="text-[10px] text-slate-500 mt-1">{pickerNote}</p>
                 )}
               </div>
 

@@ -6,7 +6,7 @@ import { PersonnelTable } from '../components/personnel/PersonnelTable';
 import { PersonnelFormModal } from '../components/personnel/PersonnelFormModal';
 import { PersonnelDetailModal } from '../components/personnel/PersonnelDetailModal';
 import { PersonnelExcelModal } from '../components/personnel/PersonnelExcelModal';
-import { usersLinkedToOtherPersonnel } from '../lib/personnel/personnelUserLinks';
+import { PERSONNEL_USER_LINK_PERMISSION, usersLinkedToOtherPersonnel } from '../lib/personnel/personnelUserLinks';
 import { PERSONNEL_MANAGE_PERMISSION } from '../lib/permissions/personnelPermissions';
 import { useHasPermission } from '../contexts/AuthContext';
 
@@ -14,6 +14,8 @@ export function PersonnelPage() {
   const [showExcelModal, setShowExcelModal] = useState<boolean>(false);
   // OBS-R2-55: every write button asks the key of its API
   const canManage = useHasPermission(PERSONNEL_MANAGE_PERMISSION);
+  // v11 phase 6.2 (X6): linking a person to an account, or unlinking it, is the server's «مدیریت کاربران» rule
+  const canLinkUser = useHasPermission(PERSONNEL_USER_LINK_PERMISSION);
   const {
     personnelList,
     usersList,
@@ -130,6 +132,8 @@ export function PersonnelPage() {
         usersList={usersList}
         linkedUsers={usersLinkedToOtherPersonnel(personnelList, editingId)}
         linkedUsersState={fullListFailed ? 'failed' : (fullListReady && usersReady ? 'ready' : 'loading')}
+        canLinkUser={canLinkUser}
+        storedUserId={editingId === null ? '' : String([selectedPersonnel, ...paginatedPersonnel, ...personnelList].find(p => p?.id === editingId)?.userId ?? '')}
         isSaving={isSaving}
       />
 
