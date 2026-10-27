@@ -1,490 +1,89 @@
-# .github/workflows/ci.yml — Papital ERP GitHub Actions CI/CD Pipeline (v7.0.19 / TD-172: lockfile + Node 22 + blocking audit gate; Node 24 since v10.1.28)
-# Multi-stage CI: lint-and-typecheck (+version-sync) → database-integration-tests → coverage-soft-gate (non-blocking) + e2e-critical-path (Playwright) → client-server-build → docker-build-gate
-# v10.0.192 (product-owner decision t20): the check jobs (lint, database tests, coverage, e2e, build, docker build) all start
-# at once and none waits for another, so a PR result comes after the longest job instead of after the sum of the chain;
-# every job still has to pass. Only the image push (docker-publish) waits for all of them.
-# The database jobs start the runner's own PostgreSQL 16 (scripts/ci-start-postgres.sh), no image pull.
-# TD-471: actions on their Node 24 majors (v7) and runners pinned to a named release, never ubuntu-latest.
-# v11 (phase 5.4, TD-1355): every job runs on ubuntu-26.04, the release a new server gets; scripts/ci-start-postgres.sh
-# installs PostgreSQL 16 from the PostgreSQL apt repository there (the 26.04 image has none), and Playwright knows the
-# release from 1.61 on.
-#
-# Environment & Secrets:
-#   DATABASE_URL: the runner's PostgreSQL 16 (scripts/ci-start-postgres.sh)
-#   JWT_SECRET, ERP_SETUP_TOKEN, METRICS_TOKEN, ERP_SECRETS_KEY: Test credentials
-#   REGISTRY_USER / REGISTRY_TOKEN: Optional container registry credentials
-
-name: CI/CD Pipeline
-
+# Scratch branch only (v11 phase 5.5): rehearses the owner's next update on a simulated root install. Never merged.
+name: CI
 on:
-  push:
-    branches: [main, master, 'release/**']
-  pull_request:
-    branches: [main, master]
   workflow_dispatch:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 jobs:
-  lint-and-typecheck:
-    name: Lint & Type Check
-    runs-on: ubuntu-26.04
-    # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
-    timeout-minutes: 20
+  rehearsal:
+    name: Update Rehearsal On A Root Install (v11.3.0 to this release)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v7
-
-      - name: Setup Node.js 24.x
-        uses: actions/setup-node@v7
         with:
-          node-version: '24'
-          cache: 'npm'
+          fetch-depth: 0
 
-      - name: Verify package-lock.json Presence (TD-129)
+      - name: A Git Remote At v11.3.0 And A Root Clone In /opt/papital-erp
         run: |
-          if [ ! -f package-lock.json ]; then
-            echo "::error::package-lock.json is required for deterministic reproducible CI builds."
-            exit 1
-          fi
+          sudo git config --system --add safe.directory '*'
+          git clone --bare . "$RUNNER_TEMP/remote.git"
+          git -C "$RUNNER_TEMP/remote.git" update-ref refs/heads/master 01fad272dc412631f76aa439e8c722bfeb93ae04
+          git -C "$RUNNER_TEMP/remote.git" symbolic-ref HEAD refs/heads/master
+          sudo git clone --branch master "$RUNNER_TEMP/remote.git" /opt/papital-erp
+          sudo git -C /opt/papital-erp log --oneline -1
 
-      - name: Install Dependencies
-        run: npm ci
-
-      - name: Security Audit Gate (High/Critical CVEs — TD-172)
-        # fail-fast؛ استثناها فقط با ردیف باز در TECH_DEBT.md (scripts/audit-gate.ts)
-        run: npm run audit:gate
-
-      - name: TD-111 Version Sync Gate (fail-fast)
-        run: npm run check:version
-
-      - name: TypeScript Static Type Checking & Linting
-        run: npm run lint
-
-      - name: ESLint Ratchet Gate (v7.0.65 / audit P3-4)
-        # تعداد تخلف هر قاعده نباید از eslint-baseline.json و any هر فایل نباید از eslint-any-baseline.json بیشتر شود (scripts/eslint-ratchet.ts)
-        run: npm run lint:eslint
-
-      # v10.0.152 (I-06, OBS-R1-19, product-owner decision): every tracked shell script passes shellcheck at error level
-      # (shellcheck ships with the Ubuntu runner image; warnings are not gated yet)
-      - name: Shell Script Gate (shellcheck, errors only)
-        run: |
-          shellcheck --version
-          git ls-files -z '*.sh' | xargs -0 shellcheck --severity=error
-
-      - name: Frontend & Unit Tests (Vitest, v7.0.76 / audit P3-6)
-        # فقط تست‌های تازه واحد و فرانت (src/tests/vitest)؛ مجموعه‌های پایگاه‌داده با رانر قبلی در job بعدی
-        run: npm run test:vitest
-
-  test:
-    name: Database & Domain Test Suites
-    runs-on: ubuntu-26.04
-    # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
-    timeout-minutes: 40
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v7
-
-      - name: Setup Node.js 24.x
-        uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-          cache: 'npm'
-
-      - name: Install Dependencies
-        run: npm ci
-
-      # v10.0.192: the runner's own PostgreSQL 16, no service container pulled from a registry
-      - name: Start PostgreSQL 16 (runner)
-        run: bash scripts/ci-start-postgres.sh erp_test
-
-      - name: PostgreSQL 16 client tools (v8.0.84, backup/restore tests run scripts/backup.sh and restore.sh)
-        run: |
-          if ! pg_dump --version 2>/dev/null | grep -qE ' 16\.'; then
-            sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-16
-          fi
-          psql --version && pg_dump --version && pg_restore --version
-          # a newer pg_dump would write a dump the server's version 16 cannot read back
-          for tool in pg_dump pg_restore; do
-            "$tool" --version | grep -qE ' 16\.' || { echo "$tool is not version 16" >&2; exit 1; }
-          done
-
-      - name: Execute Full 21-Suite Test Matrix
-        env:
-          DATABASE_URL: postgresql://postgres:test@localhost:5432/erp_test
-          JWT_SECRET: test-jwt-secret-at-least-32-characters-long-1234
-          ERP_SETUP_TOKEN: test_setup_token_at_least_16_chars_long
-          METRICS_TOKEN: test_metrics_token_for_ci_pipeline_1234
-          ERP_SECRETS_KEY: test-secrets-key-at-least-32-characters-long-1234
-          NODE_ENV: test
-          ERP_ALLOW_TEST_CLEANUP: '1'
-          ERP_TEST_SCHEMA_ISOLATION: '1'
-          PORT: 3000
-        run: npm test
-
-      - name: Publish Test Job Summary
-        if: always()
-        run: |
-          echo "### 🧪 ERP Test Execution Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- **Outcome:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Ref:** \`${{ github.ref }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Database Engine:** PostgreSQL 16 of the runner (scripts/ci-start-postgres.sh)" >> $GITHUB_STEP_SUMMARY
-
-  coverage-gate:
-    name: Code Coverage Hard Gate (TD-129)
-    runs-on: ubuntu-26.04
-    # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
-    timeout-minutes: 45
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v7
-
-      - name: Setup Node.js 24.x
-        uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-          cache: 'npm'
-
-      - name: Install Dependencies
-        run: npm ci
-
-      # v10.0.192: the runner's own PostgreSQL 16, no service container pulled from a registry
-      - name: Start PostgreSQL 16 (runner)
-        run: bash scripts/ci-start-postgres.sh erp_test
-
-      - name: PostgreSQL 16 client tools (v8.0.84, backup/restore tests run scripts/backup.sh and restore.sh)
-        run: |
-          if ! pg_dump --version 2>/dev/null | grep -qE ' 16\.'; then
-            sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-16
-          fi
-          psql --version && pg_dump --version && pg_restore --version
-          # a newer pg_dump would write a dump the server's version 16 cannot read back
-          for tool in pg_dump pg_restore; do
-            "$tool" --version | grep -qE ' 16\.' || { echo "$tool is not version 16" >&2; exit 1; }
-          done
-
-      - name: Execute Test Matrix Under c8 Coverage
-        env:
-          DATABASE_URL: postgresql://postgres:test@localhost:5432/erp_test
-          JWT_SECRET: test-jwt-secret-at-least-32-characters-long-1234
-          ERP_SETUP_TOKEN: test_setup_token_at_least_16_chars_long
-          METRICS_TOKEN: test_metrics_token_for_ci_pipeline_1234
-          ERP_SECRETS_KEY: test-secrets-key-at-least-32-characters-long-1234
-          NODE_ENV: test
-          ERP_ALLOW_TEST_CLEANUP: '1'
-          ERP_TEST_SCHEMA_ISOLATION: '1'
-          PORT: 3000
-        run: npm run test:coverage
-
-      - name: Publish Coverage Report to Step Summary
-        if: always()
-        run: |
-          echo "### 📊 Coverage Report (Hard Gate — V7 Quality Standard)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          if [ -f coverage/coverage-summary.json ]; then
-            node -e "
-              const s = require('./coverage/coverage-summary.json')['total'];
-              const pct = (k) => s[k] ? s[k].pct + '%' : 'n/a';
-              console.log('Lines      : ' + pct('lines'));
-              console.log('Statements : ' + pct('statements'));
-              console.log('Functions  : ' + pct('functions'));
-              console.log('Branches   : ' + pct('branches'));
-            " >> $GITHUB_STEP_SUMMARY
-          else
-            echo "coverage-summary.json not produced — review c8 run logs." >> $GITHUB_STEP_SUMMARY
-          fi
-          echo '```' >> $GITHUB_STEP_SUMMARY
-
-      - name: Upload Coverage Artifacts
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: coverage-${{ github.sha }}
-          path: coverage/
-          retention-days: 7
-
-  build:
-    name: Client & Server Production Build
-    runs-on: ubuntu-26.04
-    # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
-    timeout-minutes: 20
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v7
-
-      - name: Setup Node.js 24.x
-        uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-          cache: 'npm'
-
-      - name: Install Dependencies
-        run: npm ci
-
-      - name: Build Application (Vite Client + CJS Server Bundle + Drizzle Migrations)
-        run: npm run build
-
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: dist-${{ github.sha }}
-          path: dist/
-          retention-days: 7
-
-  e2e:
-    name: End-to-End Critical Path (Playwright, v7.0.77 / audit P3-7)
-    runs-on: ubuntu-26.04
-    # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
-    timeout-minutes: 20
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v7
-
-      - name: Setup Node.js 24.x
-        uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-          cache: 'npm'
-
-      - name: Install Dependencies
-        run: npm ci
-
-      # v10.0.192: the runner's own PostgreSQL 16, no service container pulled from a registry
-      - name: Start PostgreSQL 16 (runner)
-        run: bash scripts/ci-start-postgres.sh erp_e2e
-
-      - name: Build Application (production bundle served to the browser)
-        run: npm run build
-
-      # v10.0.152 (I-06, OT-B-05): the browser comes from the cache keyed by the Playwright version in the lock file;
-      # on a hit only the system libraries are installed, so a slow download no longer holds the job
-      - name: Cache Playwright Browsers
-        id: playwright-cache
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-
-      - name: Install Playwright Chromium
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        timeout-minutes: 10
-        run: npx playwright install --with-deps chromium
-
-      - name: Install Playwright System Libraries (browser from the cache)
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        timeout-minutes: 10
-        run: npx playwright install-deps chromium
-
-      - name: Critical Path, Fresh Install and the Four Business Flows (purchase, production, payroll, treasury)
-        # dist/server.cjs on an empty database; migrations and seed at start, admin from the setup route.
-        # e2e/flows/ (I-02) reads the ledger through E2E_DATABASE_URL; the whole suite runs in about 30 s.
-        env:
-          E2E_DATABASE_URL: postgresql://postgres:test@localhost:5432/erp_e2e
-        run: npm run test:e2e
-
-      # v10.0.152 (I-06): the page snapshot of each failed test goes to the log too, readable without the artifact
-      - name: Print Failed Page Snapshots
-        if: failure()
-        run: find test-results -name error-context.md -exec sh -c 'echo "=== $1"; cat "$1"' _ {} \; 2>/dev/null || true
-
-      - name: Upload Playwright Report
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-report-${{ github.sha }}
-          path: |
-            playwright-report/
-            test-results/
-          retention-days: 7
-
-  docker-gate:
-    name: Docker Container Build Verification
-    runs-on: ubuntu-26.04
-    # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
-    timeout-minutes: 20
-    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v7
-
-      - name: Resolve Application Version
-        run: |
-          APP_VERSION=$(node -p "require('./package.json').version")
-          echo "IMAGE_TAG=v${APP_VERSION}" >> $GITHUB_ENV
-
-      - name: Verify Docker Image Build
-        run: docker build -t papital-erp:${IMAGE_TAG} .
-
-      - name: Runtime Module Resolution Smoke Test (TD-175)
-        # باندل سرور با --packages=external ساخته می‌شود؛ هر پکیجی که در رانتایم require می‌شود
-        # باید در node_modules ایمیج نهایی قابل resolve باشد (جلوگیری از کرش «Cannot find module»).
-        run: |
-          docker run --rm --entrypoint node papital-erp:${IMAGE_TAG} -e "
-            const fs = require('fs');
-            const builtin = new Set(require('module').builtinModules);
-            const src = fs.readFileSync('dist/server.cjs', 'utf8');
-            const mods = [...new Set([...src.matchAll(/require\(\"([^\".][^\"]*)\"\)/g)].map(m => m[1]))]
-              .filter(m => !m.startsWith('node:') && !builtin.has(m.split('/')[0]));
-            const missing = mods.filter(m => { try { require.resolve(m, { paths: ['/app'] }); return false; } catch { return true; } });
-            if (missing.length) { console.error('Missing runtime modules:', missing.join(', ')); process.exit(1); }
-            console.log('All ' + mods.length + ' runtime modules resolvable');
-          "
-
-  # v10.2.24 (OBS-R1-16, OT-A-07): install.sh runs end to end on Ubuntu 26.04, the release a new server gets: fresh
-  # install, a reinstall over the database role of the first one, then the app port bound to 127.0.0.1 as
-  # setup-domain.sh sets it. Since v11 (TD-1355) the other jobs run on ubuntu-26.04 too.
-  linux-install:
-    name: Linux Install (Ubuntu 26.04)
-    runs-on: ubuntu-26.04
-    timeout-minutes: 40
-    # v11 (phase 5.3, TD-1354): installed where the service user can read it, as on a server (/opt/papital-erp)
-    defaults:
-      run:
+      - name: Install v11.3.0 As Root (the owner's layout)
         working-directory: /opt/papital-erp
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v7
-
-      - name: Copy The Source To /opt/papital-erp
-        working-directory: ${{ github.workspace }}
         run: |
-          sudo install -d -o "$(id -un)" /opt/papital-erp
-          cp -a . /opt/papital-erp/
-
-      - name: The Runner Looks Like A New Server (no PostgreSQL)
-        # the image brings its own PostgreSQL; a new server has none, so install.sh takes the path a server takes
-        run: |
-          sudo systemctl stop postgresql 2>/dev/null || true
-          pkgs="$(dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' 'postgresql*' 2>/dev/null | awk '$1 == "ii" { print $2 }')"
-          [ -z "$pkgs" ] || sudo apt-get purge -y $pkgs
-          sudo rm -rf /etc/postgresql /var/lib/postgresql
-
-      - name: Fresh Install (install.sh, local source mode)
-        run: bash install.sh
-
-      - name: PostgreSQL 16 Only
-        run: |
-          pg_lsclusters
-          [ "$(pg_lsclusters -h | awk '{ print $1 }' | sort -u)" = "16" ] || { echo "::error::a cluster other than 16"; exit 1; }
-          pg_dump --version | grep -qE ' 16\.'
-
-      - name: The Service Runs As Its Own User (TD-1354)
-        run: |
-          test "$(systemctl show -p User --value papital-erp)" = papital
-          ps -o user= -p "$(systemctl show -p MainPID --value papital-erp)" | grep -qx papital
-          # the code stays with the installing user: the service cannot change what root runs
-          for f in . dist/server.cjs scripts/backup.sh scripts/nightly-verify.sh update.sh; do
-            if sudo -u papital test -w "$f"; then echo "::error::papital can write $f"; exit 1; fi
-          done
-          test "$(stat -c '%a %G' .env)" = "640 papital"
-          sudo -u papital test -r .env
-          for d in logs public/uploads media-library /var/backups/erp; do
-            test "$(sudo stat -c %U "$d")" = papital || { echo "::error::$d is not owned by papital"; exit 1; }
-          done
-          test "$(stat -c %U /var/lib/papital)" = papital
-          grep -E '^[0-9]+ [0-9]+ \* \* \* papital bash /opt/papital-erp/scripts/backup.sh' /etc/cron.d/papital-erp
-          grep -F 'root bash /opt/papital-erp/scripts/nightly-verify.sh 2>&1 | runuser -u papital -- tee -a /opt/papital-erp/logs/nightly-verify.log' /etc/cron.d/papital-erp
-          systemctl show -p NoNewPrivileges --value papital-erp | grep -qx yes
-          systemctl show -p ProtectSystem --value papital-erp | grep -qx full
-
-      - name: The Daily Backup Runs As The Service User
-        run: |
-          sudo -u papital -H bash scripts/backup.sh
-          sudo -u papital sh -c 'ls -l /var/backups/erp/erp_daily_*.dump.gz && test -f /var/backups/erp/.last_daily_ok'
-
-      - name: The Nightly Check Runs As Root Over The Service User's Folders
-        run: |
-          # FIFOs the service user put in place of the locks of logs/ would hang root when it opened them
-          sudo -u papital rm -f logs/.ops-busy.lock logs/.nightly-verify.lock
-          sudo -u papital mkfifo logs/.ops-busy.lock logs/.nightly-verify.lock
-          sudo timeout 1200 bash scripts/nightly-verify.sh
-          sudo -u papital rm -f logs/.ops-busy.lock logs/.nightly-verify.lock
-          test "$(sudo stat -c %U logs/nightly-verify.json)" = papital
-          sudo test -d /var/lib/papital-erp/nightly-verify-tmp
-          sudo test -f /var/lib/papital-erp/nightly-verify.lock
-          if sudo test -e /var/backups/erp/.nightly-verify-tmp; then echo "::error::root worked in the backup folder of papital"; exit 1; fi
-
-      - name: App Port Answers On Every Address By Default
-        run: |
-          ss -ltnH 'sport = :3000'
-          ss -ltnH 'sport = :3000' | grep -qE '(0\.0\.0\.0|\*|\[::\]):3000'
+          sudo bash install.sh
+          test -z "$(systemctl show -p User --value papital-erp)" || test "$(systemctl show -p User --value papital-erp)" = root
           curl -fsS http://localhost:3000/health/ready
 
-      - name: Running install.sh Again On A Working Install Stops (O9)
-        # v11 (O9): an install that runs is updated with update.sh; the installer stops before it changes anything
+      - name: Make It Look Like The Owner's Server (older cron file, .env without METRICS_TOKEN, one daily backup)
+        working-directory: /opt/papital-erp
         run: |
-          if bash install.sh > "$RUNNER_TEMP/rerun.log" 2>&1; then cat "$RUNNER_TEMP/rerun.log"; echo "::error::install.sh ran again over a working install"; exit 1; fi
-          grep -q 'already installed' "$RUNNER_TEMP/rerun.log"
+          sudo sed -i '/^METRICS_TOKEN=/d' .env
+          printf '%s\n' 'SHELL=/bin/bash' \
+            '15 1 * * * root /opt/papital-erp/scripts/backup.sh >> /opt/papital-erp/logs/backup.log 2>&1' \
+            '*/5 * * * * root /opt/papital-erp/scripts/monitor.sh >> /opt/papital-erp/logs/monitor.log 2>&1' \
+            | sudo tee /etc/cron.d/papital-erp >/dev/null
+          sudo bash scripts/backup.sh
+          sudo ls -l /var/backups/erp
+
+      - name: The Release Arrives On The Remote
+        run: git push "$RUNNER_TEMP/remote.git" HEAD~1:refs/heads/master
+
+      - name: sudo ./update.sh (the old update.sh pulls, then the new one finishes)
+        working-directory: /opt/papital-erp
+        run: |
+          sudo ./update.sh 2>&1 | tee "$RUNNER_TEMP/update1.log"
+          test "${PIPESTATUS[0]}" -eq 0
+          grep -q 'Update finished successfully' "$RUNNER_TEMP/update1.log"
+
+      - name: Still Root, Keys Added, Cron Rewritten With Its Times
+        working-directory: /opt/papital-erp
+        run: |
+          u="$(systemctl show -p User --value papital-erp)"; [ -z "$u" ] || [ "$u" = root ]
+          sudo grep -qE '^METRICS_TOKEN=[0-9a-f]{64}$' .env
+          [ "$(sudo grep -c '^ERP_WEBHOOK_SECRET_TOKEN=' .env)" -le 1 ]
+          sudo cat /etc/cron.d/papital-erp
+          grep -qF '15 1 * * * root bash /opt/papital-erp/scripts/backup.sh >> /opt/papital-erp/logs/backup.log 2>&1' /etc/cron.d/papital-erp
+          grep -qF 'root bash /opt/papital-erp/scripts/nightly-verify.sh >> /opt/papital-erp/logs/nightly-verify.log 2>&1' /etc/cron.d/papital-erp
+          if grep -q runuser /etc/cron.d/papital-erp; then echo "::error::a root install got the service-user cron line"; exit 1; fi
+          test "$(sudo git -C /opt/papital-erp rev-parse HEAD)" = "$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD~1)"
           curl -fsS http://localhost:3000/health/ready
+          sudo stat -c '%U %a %n' .env logs /var/backups/erp
 
-      - name: Reinstall Without .env Over The Existing Database Role
-        # v10.2.28 (#344 review L1): without INSTALL_REUSE_DB=1 the installer refuses a database with tables
+      - name: The Nightly Jobs Run As Before
+        working-directory: /opt/papital-erp
         run: |
-          mv .env .env.first-install
-          # a link the service user put in its uploads folder is never followed by the installer (root)
-          sudo install -d -m 755 /srv/not-papital
-          sudo -u papital rm -rf public/uploads/.attachments
-          sudo -u papital ln -s /srv/not-papital public/uploads/.attachments
-          if bash install.sh; then echo "::error::install.sh reused a database with tables without INSTALL_REUSE_DB=1"; exit 1; fi
-          INSTALL_REUSE_DB=1 bash install.sh
-          curl -fsS http://localhost:3000/health/ready
-          test "$(stat -c '%a %G' .env)" = "640 papital"
-          test "$(stat -c '%U %a' /srv/not-papital)" = "root 755" || { echo "::error::install.sh followed a link of papital"; exit 1; }
-          sudo -u papital rm public/uploads/.attachments
-          sudo -u papital mkdir -m 750 public/uploads/.attachments
+          sudo bash scripts/backup.sh
+          sudo bash scripts/nightly-verify.sh
+          sudo bash scripts/monitor.sh
+          sudo ls -l /var/backups/erp logs
 
-      - name: ERP_LISTEN_HOST Binds The App To 127.0.0.1
+      - name: A Second Update With Nothing New Changes Nothing
+        working-directory: /opt/papital-erp
         run: |
-          echo 'ERP_LISTEN_HOST=127.0.0.1' >> .env
-          sudo systemctl restart papital-erp
-          for _ in $(seq 1 60); do curl -fsS http://127.0.0.1:3000/health/ready >/dev/null 2>&1 && break; sleep 2; done
-          curl -fsS http://127.0.0.1:3000/health/ready
-          ss -ltnH 'sport = :3000'
-          if ss -ltnH 'sport = :3000' | grep -vq '127\.0\.0\.1:3000'; then
-            echo "::error::the app still listens on another address"
-            exit 1
-          fi
+          before="$(systemctl show -p ExecMainStartTimestamp --value papital-erp)"
+          sudo ./update.sh 2>&1 | tee "$RUNNER_TEMP/update2.log"
+          test "${PIPESTATUS[0]}" -eq 0
+          grep -q 'Nothing to update' "$RUNNER_TEMP/update2.log"
+          test "$(systemctl show -p ExecMainStartTimestamp --value papital-erp)" = "$before"
 
-      - name: Service Log On Failure
+      - name: Logs On Failure
         if: failure()
         run: |
           sudo journalctl -u papital-erp -n 200 --no-pager || true
-          sudo tail -n 100 /opt/papital-erp/logs/*.log 2>/dev/null || true
-
-  # v10.0.192: the image is pushed only after every check job passed (the build check above no longer waits for them)
-  docker-publish:
-    name: Push Container Image
-    needs: [lint-and-typecheck, test, coverage-gate, e2e, build, docker-gate, linux-install]
-    runs-on: ubuntu-26.04
-    timeout-minutes: 20
-    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v7
-
-      - name: Resolve Application Version
-        run: |
-          APP_VERSION=$(node -p "require('./package.json').version")
-          echo "IMAGE_TAG=v${APP_VERSION}" >> $GITHUB_ENV
-
-      - name: Push Container Image (Conditional on Registry Secrets)
-        # v7.0.19 (TD-172): کانتکست secrets در شرط if مجاز نیست و کل workflow را نامعتبر می‌کرد؛
-        # بررسی وجود اعتبارنامه‌ها به داخل اسکریپت منتقل شد.
-        env:
-          REGISTRY: ${{ vars.DOCKER_REGISTRY || 'registry.example.com' }}
-          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
-          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
-        run: |
-          if [ -z "${REGISTRY_TOKEN}" ] || [ -z "${REGISTRY_USER}" ]; then
-            echo "Registry credentials not configured — skipping image push."
-            exit 0
-          fi
-          docker build -t papital-erp:${IMAGE_TAG} .
-          echo "${REGISTRY_TOKEN}" | docker login "$REGISTRY" -u "$REGISTRY_USER" --password-stdin
-          docker tag papital-erp:${IMAGE_TAG} "${REGISTRY}/erp:${IMAGE_TAG}"
-          docker push "${REGISTRY}/erp:${IMAGE_TAG}"
+          sudo tail -n 80 /opt/papital-erp/update-*.log 2>/dev/null || true
