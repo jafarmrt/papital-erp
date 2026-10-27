@@ -1,5 +1,6 @@
 import { AlertTriangle, AlertCircle, Box, ShoppingCart } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber } from '../../utils';
+import { formatPersianNumber } from '../../utils';
+import { useShownRial } from '../../contexts/RialDisplayContext';
 
 interface ReorderStatsCardsProps {
   totalAlarms: number;
@@ -11,6 +12,8 @@ interface ReorderStatsCardsProps {
 
 /** کارت‌های خلاصه پایین صفحه نقطه سفارش */
 export function ReorderStatsCards({ totalAlarms, zeroStockCount, materialsCount, productsCount, totalDeficitCost }: ReorderStatsCardsProps) {
+  // v11 phase 6.3 (U3): the estimate in the display unit, with the unit named
+  const rial = useShownRial();
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:grid-cols-4">
       {/* Card 1: Total Alarms */}
@@ -58,7 +61,7 @@ export function ReorderStatsCards({ totalAlarms, zeroStockCount, materialsCount,
         <div>
           <p className="text-xs text-slate-500 font-medium">مجموع ارزش برآوردی کسری</p>
           <p className="text-base font-extrabold text-blue-600 mt-1 font-mono">
-            {formatPersianPrice(totalDeficitCost)}
+            {rial.amount(totalDeficitCost)}
           </p>
         </div>
         <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">

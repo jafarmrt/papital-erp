@@ -5,6 +5,7 @@ import { DecimalInput } from '../../common/DecimalInput';
 import { formatPersianNumber } from '../../../utils';
 import type { PettyCashLineDraft } from '../../../lib/treasury/pettyCash';
 import type { Account } from '../../../types';
+import { RialEquivalent } from '../../common/RialEquivalent';
 
 interface PettyCashLineFieldsProps {
   line: PettyCashLineDraft;
@@ -61,6 +62,7 @@ export const PettyCashLineFields: React.FC<PettyCashLineFieldsProps> = ({
           className={fieldClass}
           placeholder="مثلاً ۲٬۵۰۰٬۰۰۰"
         />
+        <RialEquivalent value={line.amount} />
       </div>
     </div>
     <input

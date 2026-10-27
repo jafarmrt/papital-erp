@@ -6,6 +6,7 @@ import {
 } from '../../lib/payroll/statutoryForm';
 import { useStatutoryPreviewQuery } from '../../hooks/queries/usePayrollWindowQueries';
 import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
+import { RialEquivalent } from '../common/RialEquivalent';
 
 /**
  * v10.0.210 (TD-1087، طرح حقوق §۳.۳ بندهای ۳ و ۴، تصمیم ت۶ الف): بیمه سهم کارگر، سهم کارفرما و مالیات حقوق فرم صدور و ویرایش
@@ -74,6 +75,7 @@ export function PayrollStatutoryFields({ personnelId, startDate, endDate, gross,
               onChange={(e) => onChange({ ...entry, [key]: e.target.value })}
               className={fieldClass}
             />
+            <RialEquivalent value={entry[key]} />
           </div>
         ))}
       </div>

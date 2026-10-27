@@ -12,6 +12,7 @@ import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 import { useSeededForm } from '../../hooks/useSeededForm';
 import { invalidateDomain } from '../../lib/queryInvalidation';
 import { QUERY_KEYS } from '../../lib/queryKeys';
+import { RialEquivalent } from '../common/RialEquivalent';
 
 /**
  * v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۴ تا ت۱۶ الف): روش و نرخ عیدی هر سال جلالی، کنار نرخ‌های بیمه و مالیات. هیچ نرخ
@@ -40,14 +41,14 @@ const EMPTY_FORM: FormState = { method: 'percent_of_work', percent: '', yearlyCa
 const inputClass = 'w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono';
 const clean = (v: string) => normalizeDecimalString(v) || '0';
 
-const FIELDS: Record<EidiMethod, Array<{ key: NumberKey; label: string }>> = {
-  percent_of_work: [{ key: 'percent', label: 'درصد عیدی از کارکرد و حقوق ثابت هر فیش' }, { key: 'yearlyCap', label: 'سقف سالانه عیدی هر نفر (ریال)' }],
+const FIELDS: Record<EidiMethod, Array<{ key: NumberKey; label: string; isRial?: true }>> = {
+  percent_of_work: [{ key: 'percent', label: 'درصد عیدی از کارکرد و حقوق ثابت هر فیش' }, { key: 'yearlyCap', label: 'سقف سالانه عیدی هر نفر (ریال)', isRial: true }],
   labor_law: [
     { key: 'laborDays', label: 'روزهای مزد عیدی' },
     { key: 'laborCapDays', label: 'روزهای سقف به حداقل مزد' },
-    { key: 'minDailyWage', label: 'حداقل مزد روزانه سال (ریال)' },
+    { key: 'minDailyWage', label: 'حداقل مزد روزانه سال (ریال)', isRial: true },
   ],
-  fixed_amount: [{ key: 'fixedAmount', label: 'مبلغ عیدی سال برای یک سال کامل (ریال)' }],
+  fixed_amount: [{ key: 'fixedAmount', label: 'مبلغ عیدی سال برای یک سال کامل (ریال)', isRial: true }],
 };
 
 const HELP: Record<EidiMethod, string> = {
@@ -134,6 +135,7 @@ export function PayrollEidiRatesSection() {
             <div key={f.key}>
               <label className="block text-xs font-bold text-slate-700 mb-1" htmlFor={`eidi-${f.key}`}>{f.label}</label>
               <input id={`eidi-${f.key}`} inputMode="decimal" value={form[f.key]} onChange={(e) => setForm(p => ({ ...p, [f.key]: e.target.value }))} className={inputClass} />
+              {f.isRial && <RialEquivalent value={form[f.key]} />}
             </div>
           ))}
         </div>

@@ -1,5 +1,6 @@
 import { CreditCard } from 'lucide-react';
-import { formatPersianCode, formatPersianDate, formatPersianPrice } from '../../../utils';
+import { useShownRial } from '../../../contexts/RialDisplayContext';
+import { formatPersianCode, formatPersianDate } from '../../../utils';
 import { detailsRemainingOf, detailsSettlementViewOf, type InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
 
 interface InvoiceDetailsSettlementCardProps {
@@ -9,9 +10,10 @@ interface InvoiceDetailsSettlementCardProps {
   canSettle: boolean;
 }
 
-/** TD-080 (بخش ۳): کارت وضعیت تسویه مالی در مودال جزئیات (فقط فاکتور فروش و رسید خرید) */
+/** TD-080 (بخش ۳): کارت وضعیت تسویه مالی در مودال جزئیات (فقط فاکتور فروش و رسید خرید)؛ v11 phase 6.3 (U3): rial in the display unit */
 export function InvoiceDetailsSettlementCard({ selectedDocDetails, setSettlementDoc, canSettle }: InvoiceDetailsSettlementCardProps) {
   const settlementView = detailsSettlementViewOf(selectedDocDetails.settlementStatus);
+  const rial = useShownRial();
   return (
     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
       <div className="flex items-center gap-3">
@@ -26,9 +28,9 @@ export function InvoiceDetailsSettlementCard({ selectedDocDetails, setSettlement
             </span>
           </div>
           <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-3">
-            <span>پرداخت‌شده: <strong className="text-emerald-700 font-mono">{formatPersianPrice(selectedDocDetails.paidAmount || 0, selectedDocDetails.currency)}</strong></span>
+            <span>پرداخت‌شده: <strong className="text-emerald-700 font-mono">{rial.money(selectedDocDetails.paidAmount || 0, selectedDocDetails.currency)}</strong></span>
             <span>•</span>
-            <span>مانده: <strong className="text-amber-700 font-mono">{formatPersianPrice(detailsRemainingOf(selectedDocDetails), selectedDocDetails.currency)}</strong></span>
+            <span>مانده: <strong className="text-amber-700 font-mono">{rial.money(detailsRemainingOf(selectedDocDetails), selectedDocDetails.currency)}</strong></span>
           </div>
           {/* v11 phase 6.1t (M11 / U2): which receipts and cheques settle this document in parts */}
           {selectedDocDetails.allocations && selectedDocDetails.allocations.length > 0 && (
@@ -37,7 +39,7 @@ export function InvoiceDetailsSettlementCard({ selectedDocDetails, setSettlement
                 <li key={part.id} className="text-[10px] text-slate-500">
                   {part.source === 'cheque' ? 'چک' : 'دریافت یا پرداخت'} {formatPersianCode(part.sourceNumber)}
                   {part.date ? ` (${formatPersianDate(part.date)})` : ''}:{' '}
-                  <strong className="text-emerald-700 font-mono">{formatPersianPrice(part.amount, selectedDocDetails.currency)}</strong>
+                  <strong className="text-emerald-700 font-mono">{rial.money(part.amount, selectedDocDetails.currency)}</strong>
                 </li>
               ))}
             </ul>

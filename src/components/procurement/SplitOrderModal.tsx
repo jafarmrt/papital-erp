@@ -13,6 +13,7 @@ import { requisitionRowRemaining } from '../../lib/procurement/requisitionFields
 import { overOrdersFromError } from '../../lib/procurement/overOrderError';
 import { lineAmount, sumAmounts } from '../../lib/procurement/procurementNumbers';
 import { DialogLayer } from '../common/DialogLayer';
+import { RialEquivalent } from '../common/RialEquivalent';
 
 interface SplitOrderModalProps {
   isOpen: boolean;
@@ -582,7 +583,7 @@ export function SplitOrderModal({
 
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-slate-500">
-                        مجموع بسته: <span className="font-mono text-amber-700 font-black text-sm">{formatPersianPrice(packageTotal)}</span>
+                        مجموع بسته: <span className="font-mono text-amber-700 font-black text-sm">{formatPersianPrice(packageTotal, 'IRR')}</span>
                       </span>
 
                       {packages.length > 1 && (
@@ -856,8 +857,9 @@ export function SplitOrderModal({
             </div>
             <div className="flex items-center gap-2">
               <span className="font-bold text-amber-950">مجموع کل مبلغ خرید تدارکات:</span>
-              <span className="text-base font-black font-mono text-slate-900">
-                {formatPersianPrice(grandTotal)}
+              <span className="text-base font-black font-mono text-slate-900 text-left">
+                {formatPersianPrice(grandTotal, 'IRR')}
+                <RialEquivalent value={grandTotal} className="font-sans font-normal" />
               </span>
             </div>
           </div>

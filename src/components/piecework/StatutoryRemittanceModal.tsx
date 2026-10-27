@@ -23,6 +23,7 @@ import {
   statutoryRemittanceTotal, unassignedPaymentsOfError,
   type StatutoryRemittanceDraftLine, type StatutoryRemittanceKind, type StatutoryRemittanceMethod, type StatutoryRemittanceOptions,
 } from '../../lib/treasury/statutoryRemittance';
+import { RialEquivalent } from '../common/RialEquivalent';
 
 interface Props {
   kind: StatutoryRemittanceKind;
@@ -175,6 +176,7 @@ export function StatutoryRemittanceModal({ kind, jalaliYear, jalaliMonth, onClos
           <div>
             <label htmlFor={`${id}-penalty`} className={labelClass}>جریمه دیرکرد به ریال (اختیاری)</label>
             <DecimalInput id={`${id}-penalty`} value={penaltyAmount} min={0} onValueChange={t => { setPenaltyAmount(t); setFormError(''); }} className={`${field} font-mono`} />
+            <RialEquivalent value={penaltyAmount} />
           </div>
           <div>
             <label htmlFor={`${id}-penalty-account`} className={labelClass}>سرفصل جریمه دیرکرد</label>
