@@ -117,8 +117,29 @@ export async function runServerPagingV11Tests(shouldRun: ShouldRun): Promise<Tes
         const res = await admin.get(`${base}&${query}`);
         if (res.status !== 400) problems.push(`${query} answered ${res.status}, expected 400`);
       }
+
+      // a foreign row: the running balance of the all-currency view counts it at its own rate, a USD view in dollars
+      const usdLine = 'M13 card USD';
+      await VoucherService.createJournalVoucher({
+        date: '2025-02-15', voucherType: 'general', status: 'approved', description: usdLine, referenceModule: 'manual',
+        items: [
+          { accountId: ids['1201'], debit: 10, credit: 0, currency: 'USD', exchangeRate: 50_000, detailedType: 'customer', detailedId: party.id, detailedName: party.name, description: usdLine },
+          { accountId: ids['5001'], debit: 0, credit: 500_000, currency: 'IRR', description: usdLine },
+        ],
+      } as Parameters<typeof VoucherService.createJournalVoucher>[0]);
+      const inRials = await card('limit=4&page=2');
+      const inRialsRows = inRials.items.filter(row => !row.isOpening);
+      if (inRials.total !== 8 || JSON.stringify(inRialsRows.map(row => amountOf(row.runningBalance))) !== '[170000,155000,165000,665000]'
+        || amountOf(inRials.finalBalance) !== 665_000 || amountOf(inRials.totalDebit) !== 650_000) {
+        problems.push(`all currencies page 2 of 4: ${JSON.stringify({ total: inRials.total, running: inRialsRows.map(row => row.runningBalance), final: inRials.finalBalance, debit: inRials.totalDebit })}, expected the USD row at 500000 ending at 665000`);
+      }
+      const inDollars = await card('currency=USD&limit=1');
+      const inDollarsRows = inDollars.items.filter(row => !row.isOpening);
+      if (inDollars.total !== 1 || amountOf(inDollarsRows[0]?.runningBalance) !== 10 || amountOf(inDollars.finalBalance) !== 10) {
+        problems.push(`the USD view: ${JSON.stringify({ total: inDollars.total, running: inDollarsRows.map(row => row.runningBalance), final: inDollars.finalBalance })}, expected one row of 10`);
+      }
       if (problems.length > 0) throw new Error(problems.join(' | '));
-      return `3 pages of 3 rows = the export of 7 rows (running 100000 → 165000), opening row on page 1 only; party card page 3 = rows 7 and 8 of 8`;
+      return `3 pages of 3 rows = the export of 7 rows (running 100000 → 165000), opening row on page 1 only; party card page 3 = rows 7 and 8 of 8; a USD row counts 500000 in rials and 10 in dollars`;
     }));
   }
 
