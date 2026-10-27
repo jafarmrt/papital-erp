@@ -58,6 +58,11 @@ export interface SiteCatalog {
    */
   shifted: boolean;
   /**
+   * PR #420 third review SF1: the product list stopped after `WC_MAX_EMPTY_PAGES` empty pages in a row while its count
+   * said more, or was cut at the cap after a short page; every link of a product not read is left as it is
+   */
+  incomplete: boolean;
+  /**
    * v11 phase 6.5 (PR #420 review finding 1): products and variations the shop counted on every page alike but never
    * listed (WooCommerce counts a row it then cannot show the key, and a plugin or a cache can do the same). A gap that does
    * not move cannot be told from a removed product, so a refresh by hand asks before closing the links of products it did
@@ -100,7 +105,15 @@ function stockOf(raw: RawProduct): number | null {
   return raw.stock_quantity === null || raw.stock_quantity === undefined || !Number.isFinite(n) ? null : Math.trunc(n);
 }
 
-interface PagedRows { rows: RawProduct[]; truncated: boolean; unordered: boolean; repeated: boolean; shifted: boolean; missing: number }
+interface PagedRows {
+  rows: RawProduct[]; truncated: boolean; unordered: boolean; repeated: boolean; shifted: boolean; missing: number; incomplete: boolean;
+}
+
+/**
+ * PR #420 third review SF1: empty pages in a row after which a list that its count says goes on is read no further; it is
+ * then `incomplete`, like a list cut at the cap after a short page, and every link of a product not read is kept
+ */
+export const WC_MAX_EMPTY_PAGES = 5;
 
 /**
  * Every page of a list in id order (review H-1: the default date order has no tie-breaker, so a product could be read on
@@ -121,6 +134,8 @@ async function readPages(conn: WcConnection, path: string, fields: string, signa
   let shifted = false;
   let count: number | null = null;
   let pages: number | null = null;
+  let sawShort = false;
+  let emptyInRow = 0;
   for (let page = 1; page <= WC_MAX_CATALOG_PAGES; page++) {
     const answer = await wcListRequest(conn, path, {
       per_page: WC_BATCH_SIZE, page, status: 'any', orderby: 'id', order: 'asc', _fields: fields,
@@ -143,15 +158,23 @@ async function readPages(conn: WcConnection, path: string, fields: string, signa
       rows.push(row);
     }
     // a short or even empty page ends the list only once the count and the shop's page total are reached (PR #420 delta
-    // review S1: a whole page the key may not read comes empty; a shop that caps `per_page` says so in `X-WP-TotalPages`)
-    const more = (count !== null && !shifted && page * WC_BATCH_SIZE < count) || (pages !== null && page < pages);
+    // review S1: a whole page the key may not read comes empty; a shop that caps `per_page` says so in `X-WP-TotalPages`),
+    // and never after every counted row was read (third review N-a: a page total larger than the rows)
+    const unreadCounted = count === null || shifted || rows.length < count;
+    const more = unreadCounted && ((count !== null && !shifted && page * WC_BATCH_SIZE < count) || (pages !== null && page < pages));
+    if (batch.length < WC_BATCH_SIZE) sawShort = true;
+    emptyInRow = batch.length === 0 ? emptyInRow + 1 : 0;
+    if (batch.length < WC_BATCH_SIZE && more && emptyInRow >= WC_MAX_EMPTY_PAGES) {
+      return { rows, truncated: false, unordered, repeated, shifted, missing: 0, incomplete: true };
+    }
     if (batch.length < WC_BATCH_SIZE && !more) {
       if (count !== null && rows.length > count) shifted = true;
       const missing = count !== null && !shifted && !repeated ? Math.max(0, count - rows.length) : 0;
-      return { rows, truncated: false, unordered, repeated, shifted, missing };
+      return { rows, truncated: false, unordered, repeated, shifted, missing, incomplete: false };
     }
   }
-  return { rows, truncated: true, unordered, repeated, shifted, missing: 0 };
+  // third review SF1: a list cut at the cap after a short page may have hidden rows below the largest id read too
+  return { rows, truncated: true, unordered, repeated, shifted, missing: 0, incomplete: sawShort };
 }
 
 /**
@@ -192,7 +215,7 @@ export async function mapLimited<T, R>(
  * linked, so a push never changes how the shop keeps their stock (review M-1 / N-4).
  */
 export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal): Promise<SiteCatalog> {
-  const { rows: products, truncated, unordered, repeated, shifted, missing: productsMissing } =
+  const { rows: products, truncated, unordered, repeated, shifted, missing: productsMissing, incomplete } =
     await readPages(conn, 'products', 'id,name,sku,type,stock_quantity,manage_stock,regular_price', signal);
   const site: SiteProduct[] = [];
   const skipped: WcUnmatchedProduct[] = [];
@@ -237,7 +260,7 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
       missingVariations += list.missing;
     }
     // #322 review note 3: a variation list read in part keeps the links of its own variations, never the whole catalog's
-    if (list.truncated || list.repeated || list.shifted) partialVariationProducts.push(productId);
+    if (list.truncated || list.repeated || list.shifted || list.incomplete) partialVariationProducts.push(productId);
     for (const v of list.rows) {
       const variationId = Number(v.id);
       const vSku = String(v.sku ?? '').trim();
@@ -253,7 +276,7 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
     }
   });
   return {
-    site, skipped, truncated, maxProductId, unordered, repeated, shifted, missing: productsMissing, gapVariationProducts, missingVariations,
+    site, skipped, truncated, maxProductId, unordered, repeated, shifted, incomplete, missing: productsMissing, gapVariationProducts, missingVariations,
     partialVariationProducts,
   };
 }

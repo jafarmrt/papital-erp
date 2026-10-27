@@ -244,3 +244,31 @@ export async function catalogGapCase(h: Harness, wrong: string[]): Promise<strin
     return 'a lasting gap keeps the links until the user confirms';
   });
 }
+
+/**
+ * PR #420 third review SF1: a shop that hides most of a long list sends empty page after empty page; the reading gives up
+ * after `WC_MAX_EMPTY_PAGES` of them instead of reading to the cap, keeps every link it did not read (at night and by
+ * hand alike) and says it may have missed a product
+ */
+export async function catalogEmptyPagesCase(h: Harness, wrong: string[]): Promise<string> {
+  const { refreshCatalogLocked } = await import('../../services/woocommerce/wcCatalog.service.js');
+  const { WC_MAX_EMPTY_PAGES } = await import('../../services/woocommerce/wcCatalogRead.js');
+  const hidden = await newItem(h, 'EMPTYHIDDEN');
+  const products: MockProduct[] = Array.from({ length: 1000 }, (_, i) => ({ id: 3000 + i, sku: i === 30 ? hidden.code : `EP_${h.tag}_${i}` }));
+  return withShop(h, products, async (store) => {
+    await refreshCatalogLocked({});
+    if ((await linksOf(h, [hidden.id])).get(hidden.id)?.product !== 3030) wrong.push('the product was not linked first');
+    store.hiddenFromLists = new Set([3030, ...Array.from({ length: 940 }, (_, i) => 3060 + i)]);
+    store.requests.length = 0;
+    const night = await refreshCatalogLocked({});
+    const reads = store.requests.filter(r => r.startsWith('GET products')).length;
+    if (reads !== 1 + WC_MAX_EMPTY_PAGES) wrong.push(`the reading asked ${reads} pages, expected ${1 + WC_MAX_EMPTY_PAGES}`);
+    if (!(await linksOf(h, [hidden.id])).has(hidden.id) || night.closedCount !== 0 || !night.catalogUnordered) {
+      wrong.push(`a reading given up after empty pages closed a link or kept quiet: ${JSON.stringify(night).slice(0, 240)}`);
+    }
+    const byHand = await h.post('/api/woocommerce/refresh-products', {});
+    if (byHand.status !== 200 || !(await linksOf(h, [hidden.id])).has(hidden.id)) wrong.push(`by hand: ${brief(byHand)}`);
+    store.hiddenFromLists = undefined;
+    return 'a list given up after empty pages keeps its unread links';
+  });
+}

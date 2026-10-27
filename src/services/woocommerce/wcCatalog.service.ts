@@ -145,7 +145,8 @@ export function massCloseMessage(closedCount: number, liveCount: number, missing
 /** Writes the links of one catalog reading (one transaction) and the run row and audit row with it */
 export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor, run: RefreshRun = {}): Promise<WcRefreshSummary> {
   const {
-    site, skipped, truncated, maxProductId, unordered, repeated, shifted, missing, gapVariationProducts, missingVariations, partialVariationProducts,
+    site, skipped, truncated, maxProductId, unordered, repeated, shifted, incomplete, missing, gapVariationProducts, missingVariations,
+    partialVariationProducts,
   } = catalog;
   return orm.transaction(async (tx) => {
     const live = await tx.select().from(wcProductLinks).where(eq(wcProductLinks.isDeleted, 0))
@@ -163,7 +164,9 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor, ru
     // gap in the shop's list that did not move (PR #420 review finding 1) keeps them too, unless the user confirmed closing
     // them or this is a refresh by hand, which asks below; a gap in one variation list keeps only that product's unread
     // variation links (delta review N1)
-    const outOfOrder = repeated || (unordered && truncated);
+    // PR #420 third review SF1: a list given up after empty pages, or cut at the cap after a short page, is kept like one
+    // out of order and says the same
+    const outOfOrder = repeated || (unordered && truncated) || incomplete;
     const gapsKept = run.confirmClose === undefined && !run.askOnGap;
     const gapKeeps = missing > 0 && gapsKept;
     const keepUnread = outOfOrder || shifted || gapKeeps;
