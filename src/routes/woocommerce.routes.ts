@@ -46,9 +46,10 @@ const autoPushSchema = z.object({
   body: z.object({ enabled: z.boolean() }).strict(),
 });
 
-// v11 phase 6.5 (#322 review note 2): a refresh that would close most links runs again only with the user's confirmation
+// v11 phase 6.5 (#322 review note 2): a refresh that would close most links runs again only with the number of closings
+// the user confirmed
 const refreshProductsSchema = z.object({
-  body: z.object({ confirmClose: z.boolean().optional() }).strict().optional(),
+  body: z.object({ confirmClose: z.number().int().min(0).max(1_000_000).optional() }).strict().optional(),
 });
 
 // part C: the price list whose prices go to the shop ('' stops the price push) and the target state of the SKU rename
@@ -246,7 +247,7 @@ router.post('/auto-push', authorizePermission('woocommerce.manage'), idempotency
 
 // «بازخوانی محصولات سایت»: reads the shop's catalog and links each product to the item its SKU finds
 router.post('/refresh-products', authorizePermission('woocommerce.manage'), idempotency({ scope: 'woocommerce' }), validate(refreshProductsSchema), asyncHandler(async (req, res) => {
-  const summary = await refreshWcCatalog({ req }, { confirmClose: req.body?.confirmClose === true });
+  const summary = await refreshWcCatalog({ req }, { confirmClose: req.body?.confirmClose });
   res.json({ success: true, ...summary, message: catalogRefreshMessage(summary) });
 }));
 

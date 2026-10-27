@@ -91,6 +91,11 @@ export interface WcRefreshSummary {
   catalogUnordered: boolean;
   /** v11 phase 6.5: the shop's count of products changed while it was read; links of products not read were left as they are */
   catalogShifted: boolean;
+  /**
+   * PR #420 review finding 1: products the shop counted but did not list, whose unread links this reading kept (a refresh
+   * by hand asks instead, so it is 0 there)
+   */
+  catalogMissing: number;
   /** #322 review note 3: variable products whose variation list was read in part; their unread variations kept their links */
   partialVariationProducts: number;
   /** part C: the nightly re-read's trigger, business day and the differences it found between the shop and the program */
@@ -106,8 +111,13 @@ export interface WcRefreshSummary {
 /** part C: how one refresh was started; the nightly re-read writes no audit row and lists the differences it found */
 export interface RefreshRun {
   nightly?: { businessDay: string };
-  /** #322 review note 2: the user saw how many links this refresh closes and confirmed it */
-  confirmClose?: boolean;
+  /**
+   * #322 review note 2: the user saw that this refresh closes this many links of items left without a product and confirmed
+   * it; a reading that would close more asks again (PR #420 review nit 8)
+   */
+  confirmClose?: number;
+  /** a refresh by hand: a gap in the shop's list (`SiteCatalog.missing`) asks before closing a link it did not read */
+  askOnGap?: boolean;
   /** the regular price the program sends to each item's product (the shop's unit), when a price list goes to the shop */
   wantedPrices?: ReadonlyMap<number, string>;
   siteMoney?: WcSiteMoney;
@@ -118,21 +128,23 @@ export const EMPTY_CATALOG_MESSAGE =
   'سایت هیچ محصولی برنگرداند و پیوند کالاها دست نخورد؛ نشانی سایت، کلیدها و افزونه‌های سایت را بررسی کنید و دوباره بزنید.';
 
 /**
- * #322 review note 2: a refresh that would close the links of at least this many products it did not read, and of more than
- * half the live links, asks first
+ * #322 review note 2: a refresh that would leave at least this many items without a product, and more than half of the
+ * items whose links it compared, asks first (PR #420 review finding 3: an item whose product was read with another SKU, as
+ * from another shop with the same ids, counts as well as one whose product was not read)
  */
 export const WC_MASS_CLOSE_MIN = 5;
 export const WC_MASS_CLOSE_CONFIRM = 'WC_MASS_CLOSE_CONFIRM';
 
-export function massCloseMessage(closedCount: number, liveCount: number): string {
+export function massCloseMessage(closedCount: number, liveCount: number, missing = 0): string {
   const n = formatPersianNumber;
-  return `سایت ${n(closedCount)} محصول از ${n(liveCount)} محصول وصل را نشان نداد و پیوندی بسته نشد. اگر این محصولات واقعاً از سایت `
-    + 'برداشته شده‌اند، در زبانهٔ ووکامرس «بازخوانی محصولات سایت» را بزنید و بستن پیوندها را تأیید کنید؛ وگرنه نشانی سایت و افزونه‌های آن را بررسی کنید.';
+  return `این بازخوانی پیوند ${n(closedCount)} کالا از ${n(liveCount)} کالای وصل را می‌بست و سایت برای آن‌ها محصولی با همان کد نشان نداد؛ پیوندی بسته نشد. `
+    + (missing > 0 ? `سایت ${n(missing)} محصول را در شمار محصولاتش آورد ولی در فهرست نشان نداد. ` : '')
+    + 'اگر این محصولات واقعاً از سایت برداشته شده‌اند، در زبانهٔ ووکامرس «بازخوانی محصولات سایت» را بزنید و بستن پیوندها را تأیید کنید؛ وگرنه نشانی سایت و افزونه‌های آن را بررسی کنید.';
 }
 
 /** Writes the links of one catalog reading (one transaction) and the run row and audit row with it */
 export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor, run: RefreshRun = {}): Promise<WcRefreshSummary> {
-  const { site, skipped, truncated, maxProductId, unordered, repeated, shifted, partialVariationProducts } = catalog;
+  const { site, skipped, truncated, maxProductId, unordered, repeated, shifted, missing, partialVariationProducts } = catalog;
   return orm.transaction(async (tx) => {
     const live = await tx.select().from(wcProductLinks).where(eq(wcProductLinks.isDeleted, 0))
       .orderBy(asc(wcProductLinks.id)).for('update');
@@ -145,9 +157,12 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor, ru
     // the cap may have missed any product, so the link of every product not read is left as it is too, and so it is when the
     // shop's count moved during the reading (v11 phase 6.5, #322 review notes 1 and 4: a product removed from a page already
     // read moves the next pages up and one product is never shown). Any other reading lists every product, so a link of a
-    // product it misses is closed. A variation list read in part keeps the links of its own unread variations (note 3)
+    // product it misses is closed. A variation list read in part keeps the links of its own unread variations (note 3). A
+    // gap in the shop's list that did not move (PR #420 review finding 1) keeps them too, unless the user confirmed closing
+    // them or this is a refresh by hand, which asks below
     const outOfOrder = repeated || (unordered && truncated);
-    const keepUnread = outOfOrder || shifted;
+    const gapKeeps = missing > 0 && run.confirmClose === undefined && !run.askOnGap;
+    const keepUnread = outOfOrder || shifted || gapKeeps;
     const partialParents = new Set(partialVariationProducts);
     const readKeys = new Set([...site, ...skipped].map(p => keyOf(p.productId, p.variationId)));
     const leftAsIs = (l: { wcProductId: number; wcVariationId: number }) => (truncated && l.wcProductId > maxProductId)
@@ -162,7 +177,7 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor, ru
     const keptPairs: KeptLink[] = [];
     const updates: LinkRowUpdate[] = [];
     let closedCount = 0;
-    let unreadClosed = 0;
+    const closedLinks: typeof live = [];
     for (const link of live) {
       if (leftAsIs(link)) continue;
       const key = keyOf(link.wcProductId, link.wcVariationId);
@@ -176,14 +191,21 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor, ru
         } });
       } else {
         closedCount++;
-        if (!readKeys.has(key)) unreadClosed++;
+        closedLinks.push(link);
         updates.push({ id: link.id, values: { isDeleted: 1 } });
       }
     }
-    // #322 review note 2: a reading that would close most links at once (a plugin or a cache hiding products, a wrong
-    // address) changes nothing until the user confirms it; the nightly re-read and the stock push never confirm
-    if (!run.confirmClose && unreadClosed >= WC_MASS_CLOSE_MIN && unreadClosed * 2 > live.length) {
-      throw new ConflictError(massCloseMessage(unreadClosed, live.length), { closedCount: unreadClosed, liveCount: live.length }, WC_MASS_CLOSE_CONFIRM);
+    // #322 review note 2: a reading that would leave most linked items without a product at once (a plugin or a cache
+    // hiding products, a wrong address) changes nothing until the user confirms it, and so does a refresh by hand whose
+    // list had a gap and would close a link it did not read; the nightly re-read and the stock push never confirm
+    const relinked = new Set([...matches.map(m => m.itemId), ...untouched.map(l => l.itemId)]);
+    const lost = closedLinks.filter(l => !relinked.has(l.itemId));
+    const compared = live.length - untouched.length;
+    const mass = lost.length >= WC_MASS_CLOSE_MIN && lost.length * 2 > compared;
+    const gapCloses = missing > 0 && lost.some(l => !readKeys.has(keyOf(l.wcProductId, l.wcVariationId)));
+    if ((mass || gapCloses) && (run.confirmClose === undefined || lost.length > run.confirmClose)) {
+      throw new ConflictError(massCloseMessage(lost.length, compared, missing),
+        { closedCount: lost.length, liveCount: compared, missingCount: missing }, WC_MASS_CLOSE_CONFIRM);
     }
     await updateLinkRows(tx, updates, now);
     const fresh = matches.filter(m => !kept.has(keyOf(m.site.productId, m.site.variationId)));
@@ -205,6 +227,7 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor, ru
       catalogTruncated: truncated,
       catalogUnordered: outOfOrder,
       catalogShifted: shifted,
+      catalogMissing: gapKeeps ? missing : 0,
       partialVariationProducts: partialParents.size,
     };
     if (run.nightly) {
@@ -226,7 +249,8 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor, ru
       details: {
         siteProductCount: summary.siteProductCount, linkedCount, newCount: fresh.length, closedCount,
         unmatchedTotal: unmatched.length, catalogTruncated: truncated, catalogUnordered: outOfOrder, catalogShifted: shifted,
-        partialVariationProducts: partialParents.size, ...(run.confirmClose ? { confirmClose: true } : {}),
+        catalogMissing: missing, partialVariationProducts: partialParents.size,
+        ...(run.confirmClose !== undefined ? { confirmClose: run.confirmClose } : {}),
       },
     });
     return summary;
@@ -291,8 +315,9 @@ export async function refreshCatalogLocked(
   }
 }
 
-export function refreshWcCatalog(actor: WcActor, options: { confirmClose?: boolean } = {}): Promise<WcRefreshSummary> {
-  return withWcSyncLock(() => refreshCatalogLocked(actor, undefined, options.confirmClose ? { run: { confirmClose: true } } : {}));
+/** «بازخوانی محصولات سایت» by hand: it asks before closing the links of products a gap in the shop's list hid */
+export function refreshWcCatalog(actor: WcActor, options: { confirmClose?: number } = {}): Promise<WcRefreshSummary> {
+  return withWcSyncLock(() => refreshCatalogLocked(actor, undefined, { run: { askOnGap: true, confirmClose: options.confirmClose } }));
 }
 
 /** review M-2: a link counts only while its item is live; a link of an item deleted in the program is never pushed */
@@ -365,6 +390,7 @@ export async function getWcCatalogReport(): Promise<WcCatalogReport> {
     catalogTruncated: lastReading?.summary.catalogTruncated === true,
     catalogUnordered: lastReading?.summary.catalogUnordered === true,
     catalogShifted: lastReading?.summary.catalogShifted === true,
+    catalogMissing: Number(lastReading?.summary.catalogMissing) || 0,
     partialVariationProducts: Number(lastReading?.summary.partialVariationProducts) || 0,
     itemsNotOnSite,
     itemsNotOnSiteTotal,

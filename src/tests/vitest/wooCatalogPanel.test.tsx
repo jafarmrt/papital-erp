@@ -12,7 +12,7 @@ import { confirmAction } from '../../components/ConfirmDialogHost';
 import { WcCatalogPanel } from '../../components/settings/WcCatalogPanel';
 import { stockSyncOutcome } from '../../lib/woocommerce/stockSyncOutcome';
 import {
-  WC_UNMATCHED_REASON_LABELS, catalogCapNotice, catalogOrderNotice, catalogRefreshMessage, catalogShiftNotice, massCloseConfirmText,
+  WC_UNMATCHED_REASON_LABELS, catalogCapNotice, catalogOrderNotice, catalogRefreshMessage, catalogMissingNotice, catalogShiftNotice, massCloseConfirmText,
   partialVariationsNotice, trackingEnabledNote, chunked, siteStockQuantity, type WcCatalogReport,
 } from '../../lib/woocommerce/wcCatalog';
 
@@ -49,6 +49,7 @@ const report: WcCatalogReport = {
   catalogTruncated: false,
   catalogUnordered: false,
   catalogShifted: false,
+  catalogMissing: 0,
   partialVariationProducts: 0,
 };
 
@@ -167,13 +168,14 @@ describe('D-04 the item ↔ shop product links panel', () => {
       .toContain(partialVariationsNotice(2));
     expect(partialVariationsNotice(0)).toBe('');
     expect(partialVariationsNotice(2)).toContain('۲ محصول متغیر');
-    serve(undefined, { ...report, catalogShifted: true, partialVariationProducts: 1 });
+    serve(undefined, { ...report, catalogShifted: true, catalogMissing: 2, partialVariationProducts: 1 });
     render(<WcCatalogPanel canManage={false} stockPushRunning={false} />, { wrapper });
     expect(await screen.findByText(catalogShiftNotice())).toBeTruthy();
     expect(screen.getByText(partialVariationsNotice(1))).toBeTruthy();
+    expect(screen.getByText(catalogMissingNotice(2))).toBeTruthy();
   });
 
-  it('#322 note 2: a refresh that would close most links asks with the counts and is sent again with confirmClose only once confirmed', async () => {
+  it('#322 note 2: a refresh that would close most links asks with the counts and is sent again with the confirmed count only once confirmed', async () => {
     const asked = new ApiError('most links would close', 'WC_MASS_CLOSE_CONFIRM', 409, { closedCount: 8, liveCount: 10 });
     const bodies: unknown[] = [];
     vi.mocked(fetchJson).mockImplementation(async (url: string, opts?: { body?: unknown }) => {
@@ -186,8 +188,9 @@ describe('D-04 the item ↔ shop product links panel', () => {
     fireEvent.click(await screen.findByRole('button', { name: REFRESH_BUTTON }));
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('پیام سرور', { duration: 8000 }));
     expect(vi.mocked(confirmAction).mock.calls[0][0]).toMatchObject({ message: massCloseConfirmText({ closedCount: 8, liveCount: 10 }) });
-    expect(massCloseConfirmText({ closedCount: 8, liveCount: 10 })).toContain('۸ محصول از ۱۰');
-    expect(bodies).toEqual([undefined, JSON.stringify({ confirmClose: true })]);
+    expect(massCloseConfirmText({ closedCount: 8, liveCount: 10 })).toContain('۸ کالا از ۱۰');
+    expect(massCloseConfirmText({ closedCount: 8, liveCount: 10, missingCount: 3 })).toContain('۳ محصول');
+    expect(bodies).toEqual([undefined, JSON.stringify({ confirmClose: 8 })]);
 
     // the user cancels: nothing is sent again and no error toast
     cleanup();

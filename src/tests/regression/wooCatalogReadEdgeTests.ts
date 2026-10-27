@@ -87,9 +87,16 @@ export async function massCloseCase(h: Harness, wrong: string[]): Promise<string
     if (quiet !== WC_MASS_CLOSE_CONFIRM) wrong.push(`a refresh without the user's word ended with ${quiet}`);
 
     // a strict body, then the confirmation closes them
-    const odd = await h.post('/api/woocommerce/refresh-products', { confirmClose: true, all: true });
+    const odd = await h.post('/api/woocommerce/refresh-products', { confirmClose: 5, all: true });
     if (odd.status !== 400) wrong.push(`an unknown body field answered ${brief(odd)}`);
-    const confirmed = await h.post('/api/woocommerce/refresh-products', { confirmClose: true });
+    for (const bad of [true, '5', -1, 1.5]) {
+      const res = await h.post('/api/woocommerce/refresh-products', { confirmClose: bad });
+      if (res.status !== 400) wrong.push(`confirmClose ${JSON.stringify(bad)} answered ${brief(res)}`);
+    }
+    // PR #420 review nit 8: a confirmation of fewer closings than the reading makes asks again
+    const fewer = await h.post('/api/woocommerce/refresh-products', { confirmClose: 4 });
+    if (fewer.status !== 409 || (fewer.body as { code?: string }).code !== WC_MASS_CLOSE_CONFIRM) wrong.push(`confirming four of five closings answered ${brief(fewer)}`);
+    const confirmed = await h.post('/api/woocommerce/refresh-products', { confirmClose: 5 });
     if (confirmed.status !== 200 || (confirmed.body as { closedCount?: number }).closedCount !== 5) wrong.push(`the confirmed refresh answered ${brief(confirmed)}`);
     const audit = await h.q(`SELECT details FROM activity_logs WHERE action = 'WC_CATALOG_REFRESH' ORDER BY id DESC LIMIT 1`);
     if (JSON.stringify(audit[0]?.details ?? {}).indexOf('confirmClose') < 0) wrong.push('the audit row does not say the closing was confirmed');
@@ -100,6 +107,17 @@ export async function massCloseCase(h: Harness, wrong: string[]): Promise<string
     products.splice(3);
     const few = await refreshCatalogLocked({});
     if (few.closedCount !== 4) wrong.push(`four closings answered ${JSON.stringify(few).slice(0, 200)}`);
+
+    // PR #420 review finding 3: another shop with the same product ids and other SKUs reads every product and still asks
+    await h.q(`DELETE FROM wc_product_links`);
+    products.splice(0, products.length, ...linked.map((item, i) => ({ id: 10 + i, sku: item.code })));
+    await refreshCatalogLocked({});
+    products.forEach((p, i) => { p.sku = `OTHER_${h.tag}_${i}`; });
+    const other = await h.post('/api/woocommerce/refresh-products', {});
+    if (other.status !== 409 || (other.body as { details?: { closedCount?: number } }).details?.closedCount !== 7) {
+      wrong.push(`a shop whose products all hold other SKUs answered ${brief(other)}`);
+    }
+    if ((await h.q(`SELECT id FROM wc_product_links WHERE is_deleted = 0`)).length !== 7) wrong.push('the other shop closed links without a question');
     return 'most links closed at once only after a question';
   });
 }
@@ -139,5 +157,49 @@ export async function partialVariationsCase(h: Harness, wrong: string[]): Promis
     store.unstableOrder = undefined;
     if (ties.partialVariationProducts !== 1 || ties.catalogUnordered) wrong.push(`variation ties summary ${JSON.stringify(ties).slice(0, 240)}`);
     return 'a variation list read in part keeps only its own unread links';
+  });
+}
+
+/**
+ * PR #420 review findings 1 and 2: a shop that counts a product it never lists (a row the key may not read) sends a short
+ * page in the middle; the reading goes on to the count, the nightly re-read keeps the unread links and says so, and a
+ * refresh by hand asks before closing them, so a product really removed can still be closed
+ */
+export async function catalogGapCase(h: Harness, wrong: string[]): Promise<string> {
+  const { refreshCatalogLocked } = await import('../../services/woocommerce/wcCatalog.service.js');
+  const hiddenItem = await newItem(h, 'GAPHIDDEN');
+  const lateItem = await newItem(h, 'GAPLATE');
+  const products = filler(h.tag);
+  products[20] = { id: 1020, sku: hiddenItem.code };
+  products[230] = { id: 1230, sku: lateItem.code };
+  return withShop(h, products, async (store) => {
+    await refreshCatalogLocked({});
+    const first = await linksOf(h, [hiddenItem.id, lateItem.id]);
+    if (first.get(hiddenItem.id)?.product !== 1020 || first.get(lateItem.id)?.product !== 1230) wrong.push('the products were not linked first');
+
+    // product 1020 is counted but never listed: page 1 comes with 99 rows, and page 3 is still read
+    store.hiddenFromLists = new Set([1020]);
+    const kept = await refreshCatalogLocked({});
+    const links = await linksOf(h, [hiddenItem.id, lateItem.id]);
+    if (links.get(lateItem.id)?.product !== 1230) wrong.push('a short page in the middle ended the reading before page 3');
+    if (kept.siteProductCount !== 249) wrong.push(`the reading read ${kept.siteProductCount} products, expected 249`);
+    if (links.get(hiddenItem.id)?.product !== 1020 || kept.closedCount !== 0) wrong.push('a reading with a gap closed the link of a product it did not read');
+    if (kept.catalogMissing !== 1 || kept.catalogShifted) wrong.push(`gap summary ${JSON.stringify(kept).slice(0, 240)}`);
+    if (((await h.get('/api/woocommerce/catalog')).body as { catalogMissing?: number }).catalogMissing !== 1) wrong.push('the tab does not say the shop listed fewer products than it counted');
+
+    // by hand: the question, then the confirmed closing
+    const asked = await h.post('/api/woocommerce/refresh-products', {});
+    const details = (asked.body as { details?: { closedCount?: number; missingCount?: number } }).details;
+    if (asked.status !== 409 || details?.closedCount !== 1 || details?.missingCount !== 1) wrong.push(`a refresh by hand with a gap answered ${brief(asked)}`);
+    if (!(await linksOf(h, [hiddenItem.id])).has(hiddenItem.id)) wrong.push('the question closed the link');
+    const confirmed = await h.post('/api/woocommerce/refresh-products', { confirmClose: 1 });
+    if (confirmed.status !== 200 || (confirmed.body as { closedCount?: number }).closedCount !== 1) wrong.push(`the confirmed refresh answered ${brief(confirmed)}`);
+    if ((await linksOf(h, [hiddenItem.id])).has(hiddenItem.id)) wrong.push('the confirmed refresh kept the link');
+
+    // a gap with nothing to close asks nothing
+    const quiet = await h.post('/api/woocommerce/refresh-products', {});
+    if (quiet.status !== 200) wrong.push(`a gap with no link to close answered ${brief(quiet)}`);
+    store.hiddenFromLists = undefined;
+    return 'a lasting gap keeps the links until the user confirms';
   });
 }

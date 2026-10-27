@@ -17,21 +17,24 @@ const UNREADABLE = (what: string) => new ValidationError(
   `${what} سایت خوانده نشد و قیمتی فرستاده نشد؛ تنظیمات ارز ووکامرس را بررسی کنید.`, undefined, WC_SHOP_REQUEST_FAILED,
 );
 
-/** WooCommerce lets only a key of a user who manages the shop read its settings */
+/** WooCommerce lets only a key of a user who manages the shop read its settings and its currency */
 export const DECIMALS_FORBIDDEN_MESSAGE =
   'تعداد اعشار قیمت سایت خوانده نشد و قیمتی فرستاده نشد؛ کلید باید از کاربری با نقش مدیر فروشگاه ساخته شده باشد تا تنظیمات اعشار خوانده شود.';
+export const CURRENCY_FORBIDDEN_MESSAGE =
+  'واحد پول سایت خوانده نشد و قیمتی فرستاده نشد؛ کلید باید از کاربری با نقش مدیر فروشگاه ساخته شده باشد تا تنظیمات ارز خوانده شود.';
 
 /**
- * Review nit N-1: `settings/general/*` needs a key of a user with the `manage_woocommerce` capability, while products and
- * orders open for any read/write key. A 401 / 403 there names that, not the client's firewall text; the status is kept, so
- * the run still counts as a shop-level failure and waits before the next try.
+ * Review nit N-1: `settings/general/*` and `data/currencies/*` need a key of a user with the `manage_woocommerce`
+ * capability (PR #420 review finding 4: the currency is read first), while products and orders open for any read/write
+ * key. A 401 / 403 there names that, not the client's firewall text; the status is kept, so the run still counts as a
+ * shop-level failure and waits before the next try.
  */
-async function readDecimalsSetting(conn: WcConnection, signal?: AbortSignal): Promise<unknown> {
+async function readManagerOnly(conn: WcConnection, path: string, forbidden: string, signal?: AbortSignal): Promise<unknown> {
   try {
-    return await wcRequest(conn, 'GET', 'settings/general/woocommerce_price_num_decimals', null, {}, { signal });
+    return await wcRequest(conn, 'GET', path, null, {}, { signal });
   } catch (err) {
     const status = err instanceof ValidationError ? (err.details as { status?: unknown } | undefined)?.status : undefined;
-    if (status === 401 || status === 403) throw new ValidationError(DECIMALS_FORBIDDEN_MESSAGE, { status }, WC_SHOP_REQUEST_FAILED);
+    if (status === 401 || status === 403) throw new ValidationError(forbidden, { status }, WC_SHOP_REQUEST_FAILED);
     throw err;
   }
 }
@@ -41,10 +44,10 @@ export async function readSiteMoney(
 ): Promise<WcSiteMoney> {
   const now = options.now ?? Date.now();
   if (!options.fresh && cached && cached.url === conn.url && now - cached.at < WC_SITE_CURRENCY_TTL_MS) return cached.money;
-  const answer = await wcRequest(conn, 'GET', 'data/currencies/current', null, {}, { signal });
+  const answer = await readManagerOnly(conn, 'data/currencies/current', CURRENCY_FORBIDDEN_MESSAGE, signal);
   const currency = String((answer as { code?: unknown } | null)?.code ?? '').trim().toUpperCase();
   if (!/^[A-Z]{3,5}$/.test(currency)) throw UNREADABLE('واحد پول');
-  const setting = await readDecimalsSetting(conn, signal);
+  const setting = await readManagerOnly(conn, 'settings/general/woocommerce_price_num_decimals', DECIMALS_FORBIDDEN_MESSAGE, signal);
   const decimalsText = String((setting as { value?: unknown } | null)?.value ?? '').trim();
   if (!/^\d{1,2}$/.test(decimalsText)) throw UNREADABLE('تعداد اعشار قیمت');
   const money = { currency, decimals: Number(decimalsText) };

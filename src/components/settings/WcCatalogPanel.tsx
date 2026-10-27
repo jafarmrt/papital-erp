@@ -1,11 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link2, RefreshCw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useRefreshWcCatalogMutation, useWcCatalogQuery } from '../../hooks/queries/useWooCatalogQueries';
 import { ApiError } from '../../api';
 import { confirmAction } from '../ConfirmDialogHost';
 import {
-  catalogCapNotice, catalogOrderNotice, catalogShiftNotice, massCloseConfirmText, partialVariationsNotice, type WcRunView,
+  catalogCapNotice, catalogMissingNotice, catalogOrderNotice, catalogShiftNotice, massCloseConfirmText, massCloseCount,
+  partialVariationsNotice, type WcRunView,
 } from '../../lib/woocommerce/wcCatalog';
 import { formatPersianDateTime, formatPersianNumber, getErrorMessage } from '../../utils';
 import { WcItemList, WcUnmatchedList } from './WcCatalogLists';
@@ -38,6 +39,8 @@ function RunLine({ label, run }: { label: string; run: WcRunView | null }) {
 export function WcCatalogPanel({ canManage, stockPushRunning }: { canManage: boolean; stockPushRunning: boolean }) {
   const catalog = useWcCatalogQuery();
   const refresh = useRefreshWcCatalogMutation();
+  // PR #420 review nit 8: no second refresh while the question is open
+  const [asking, setAsking] = useState(false);
   const { refetch } = catalog;
   // the bulk stock push of the same tab writes the links' push state: read it again when that push ends
   const wasPushing = useRef(stockPushRunning);
@@ -46,18 +49,20 @@ export function WcCatalogPanel({ canManage, stockPushRunning }: { canManage: boo
     wasPushing.current = stockPushRunning;
   }, [stockPushRunning, refetch]);
 
-  const onRefresh = async (confirmClose = false) => {
+  const onRefresh = async (confirmClose?: number) => {
     try {
       const res = await refresh.mutateAsync(confirmClose);
       if (res.success === false) toast.error(res.error || 'محصولات سایت خوانده نشد');
       else toast.success(res.message || 'محصولات سایت خوانده شد', { duration: 8000 });
     } catch (err) {
-      // #322 review note 2: a reading that would close most links at once changed nothing and asks first
-      if (!confirmClose && err instanceof ApiError && err.code === 'WC_MASS_CLOSE_CONFIRM') {
+      // #322 review note 2: a reading that would close most links at once changed nothing and asks first; the number shown
+      // goes back, so a reading that would close more asks again (PR #420 review nit 8)
+      if (err instanceof ApiError && err.code === 'WC_MASS_CLOSE_CONFIRM') {
+        setAsking(true);
         const ok = await confirmAction({
-          title: 'بستن پیوند بیشتر کالاها', message: massCloseConfirmText(err.details), confirmText: 'پیوندها بسته شود', cancelText: 'انصراف',
-        });
-        if (ok) await onRefresh(true);
+          title: 'بستن پیوند کالاها', message: massCloseConfirmText(err.details), confirmText: 'پیوندها بسته شود', cancelText: 'انصراف',
+        }).finally(() => setAsking(false));
+        if (ok) await onRefresh(massCloseCount(err.details));
         return;
       }
       toast.error(getErrorMessage(err) || 'محصولات سایت خوانده نشد', { duration: 12000 });
@@ -76,7 +81,7 @@ export function WcCatalogPanel({ canManage, stockPushRunning }: { canManage: boo
           <button
             type="button"
             onClick={() => { void onRefresh(); }}
-            disabled={refresh.isPending || stockPushRunning}
+            disabled={refresh.isPending || stockPushRunning || asking}
             className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg text-xs flex items-center gap-2 disabled:opacity-50"
           >
             <RefreshCw size={14} className={refresh.isPending ? 'animate-spin' : undefined} />
@@ -109,6 +114,7 @@ export function WcCatalogPanel({ canManage, stockPushRunning }: { canManage: boo
           {report.catalogTruncated && <p className="text-xs text-amber-800">{catalogCapNotice()}</p>}
           {report.catalogUnordered && <p className="text-xs text-amber-800">{catalogOrderNotice()}</p>}
           {report.catalogShifted && <p className="text-xs text-amber-800">{catalogShiftNotice()}</p>}
+          {report.catalogMissing > 0 && <p className="text-xs text-amber-800">{catalogMissingNotice(report.catalogMissing)}</p>}
           {report.partialVariationProducts > 0 && <p className="text-xs text-amber-800">{partialVariationsNotice(report.partialVariationProducts)}</p>}
           <div className="space-y-2">
             <WcItemList

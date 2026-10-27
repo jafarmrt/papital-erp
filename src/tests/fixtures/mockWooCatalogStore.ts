@@ -43,6 +43,11 @@ export interface MockWooCatalogStore {
   beforeOrdersPage?: (page: number) => void;
   /** the orders list sends no `X-WP-Total` (a shop or a cache that strips it); the product and variation lists neither */
   omitTotalHeader?: boolean;
+  /**
+   * PR #420 review finding 1: product ids the shop counts in `X-WP-Total` but leaves out of its pages (WooCommerce drops a
+   * row the key may not read after the query, so its page comes short)
+   */
+  hiddenFromLists?: Set<number>;
   /** v11 phase 6.5: called before a product or variation list page is answered, with its path and page number (a product
    * removed from the shop between two pages) */
   beforeCatalogPage?: (path: string, page: number) => void;
@@ -76,7 +81,7 @@ export interface MockWooCatalogStore {
   currency: string;
   /** review M-A: the price decimals `GET settings/general/woocommerce_price_num_decimals` answers (2, WooCommerce's default) */
   decimals: number | string;
-  /** review nit N-1: the settings read answers this status (a key of a user who does not manage the shop gets 403) */
+  /** review nit N-1: the settings and currency reads answer this status (a key of a user who does not manage the shop gets 403) */
   settingsStatus?: number;
   close(): Promise<void>;
 }
@@ -103,7 +108,8 @@ function page<T>(rows: T[], url: URL, store: MockWooCatalogStore): T[] {
 }
 
 function productPage(products: MockProduct[], url: URL, store: MockWooCatalogStore): MockProduct[] {
-  return page(store.newestFirst ? [...products].sort((a, b) => b.id - a.id) : products, url, store);
+  const rows = page(store.newestFirst ? [...products].sort((a, b) => b.id - a.id) : products, url, store);
+  return store.hiddenFromLists ? rows.filter(p => !store.hiddenFromLists?.has(p.id)) : rows;
 }
 
 type BatchRow = { id: number; stock_quantity?: number; manage_stock?: unknown; regular_price?: unknown; sku?: unknown };
@@ -217,16 +223,17 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
         })));
         return;
       }
+      // review nit N-1 / PR #420 review finding 4: WooCommerce guards its currency data like its settings
+      if (req.method === 'GET' && (path === 'data/currencies/current' || path === 'settings/general/woocommerce_price_num_decimals') && store.settingsStatus) {
+        res.statusCode = store.settingsStatus;
+        send({ code: 'woocommerce_rest_cannot_view', message: 'Sorry, you cannot list resources.' });
+        return;
+      }
       if (req.method === 'GET' && path === 'data/currencies/current') {
         send({ code: store.currency, name: store.currency, symbol: store.currency });
         return;
       }
       if (req.method === 'GET' && path === 'settings/general/woocommerce_price_num_decimals') {
-        if (store.settingsStatus) {
-          res.statusCode = store.settingsStatus;
-          send({ code: 'woocommerce_rest_cannot_view', message: 'Sorry, you cannot list resources.' });
-          return;
-        }
         send({ id: 'woocommerce_price_num_decimals', type: 'number', value: String(store.decimals) });
         return;
       }

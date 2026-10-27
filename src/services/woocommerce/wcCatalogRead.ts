@@ -53,10 +53,17 @@ export interface SiteCatalog {
   repeated: boolean;
   /**
    * v11 phase 6.5 (#322 review notes 1 and 4): the shop's count of products (`X-WP-Total`) changed between two pages, or
-   * differs from the products read: a product removed from a page already read moves the next pages up by one, so a
+   * more rows came than it counted: a product removed from a page already read moves the next pages up by one, so a
    * product may have been skipped, and every link of a product not read is left as it is
    */
   shifted: boolean;
+  /**
+   * v11 phase 6.5 (PR #420 review finding 1): products and variations the shop counted on every page alike but never
+   * listed (WooCommerce counts a row it then cannot show the key, and a plugin or a cache can do the same). A gap that does
+   * not move cannot be told from a removed product, so a refresh by hand asks before closing the links of products it did
+   * not read, and the nightly re-read and the stock push keep them
+   */
+  missing: number;
   /**
    * #322 review note 3: the variable products whose own variation list was not read whole (cut at the cap, a row shown
    * twice, out of order and cut, or its count changed); the links of their variations not read are left as they are
@@ -87,14 +94,16 @@ function stockOf(raw: RawProduct): number | null {
   return raw.stock_quantity === null || raw.stock_quantity === undefined || !Number.isFinite(n) ? null : Math.trunc(n);
 }
 
-interface PagedRows { rows: RawProduct[]; truncated: boolean; unordered: boolean; repeated: boolean; shifted: boolean }
+interface PagedRows { rows: RawProduct[]; truncated: boolean; unordered: boolean; repeated: boolean; shifted: boolean; missing: number }
 
 /**
  * Every page of a list in id order (review H-1: the default date order has no tie-breaker, so a product could be read on
  * two pages and be reported as a duplicate of itself); a row read twice is kept once and marks the list `repeated`
  * (review M-R), a new id not above every id read before marks it `unordered` (review M-C), and a list whose count
- * (`X-WP-Total`) changed between two pages, or that ended with another number of rows than its count, is `shifted`
- * (v11 phase 6.5, #322 review notes 1 and 4; a shop that sends no count is never marked so)
+ * (`X-WP-Total`) changed between two pages, or that ended with more rows than its count, is `shifted`; a count that stayed
+ * the same while fewer rows came is `missing` that many (PR #420 review finding 1; a list that showed a row twice lost rows
+ * to its ties, not to a gap). A short page ends the list only once the count is reached (finding 2: a shop that drops a
+ * row it counted sends a short page in the middle); a shop that sends no count is never marked either way
  */
 async function readPages(conn: WcConnection, path: string, fields: string, signal?: AbortSignal): Promise<PagedRows> {
   const rows: RawProduct[] = [];
@@ -124,12 +133,14 @@ async function readPages(conn: WcConnection, path: string, fields: string, signa
       lastId = Math.max(lastId, id);
       rows.push(row);
     }
-    if (batch.length < WC_BATCH_SIZE) {
-      if (count !== null && rows.length !== count) shifted = true;
-      return { rows, truncated: false, unordered, repeated, shifted };
+    const counted = count !== null && !shifted && page * WC_BATCH_SIZE < count;
+    if (batch.length === 0 || (batch.length < WC_BATCH_SIZE && !counted)) {
+      if (count !== null && rows.length > count) shifted = true;
+      const missing = count !== null && !shifted && !repeated ? Math.max(0, count - rows.length) : 0;
+      return { rows, truncated: false, unordered, repeated, shifted, missing };
     }
   }
-  return { rows, truncated: true, unordered, repeated, shifted };
+  return { rows, truncated: true, unordered, repeated, shifted, missing: 0 };
 }
 
 /**
@@ -170,7 +181,7 @@ export async function mapLimited<T, R>(
  * linked, so a push never changes how the shop keeps their stock (review M-1 / N-4).
  */
 export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal): Promise<SiteCatalog> {
-  const { rows: products, truncated, unordered, repeated, shifted } =
+  const { rows: products, truncated, unordered, repeated, shifted, missing: productsMissing } =
     await readPages(conn, 'products', 'id,name,sku,type,stock_quantity,manage_stock,regular_price', signal);
   const site: SiteProduct[] = [];
   const skipped: WcUnmatchedProduct[] = [];
@@ -206,8 +217,10 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
     signal?.removeEventListener('abort', stopReaders);
   }
   const partialVariationProducts: number[] = [];
+  let missing = productsMissing;
   variable.forEach(({ productId, name, sku }, i) => {
     const list = variationLists[i];
+    missing += list.missing;
     // #322 review note 3: a variation list read in part keeps the links of its own variations, never the whole catalog's
     if (list.truncated || list.repeated || list.shifted) partialVariationProducts.push(productId);
     for (const v of list.rows) {
@@ -224,5 +237,5 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
       });
     }
   });
-  return { site, skipped, truncated, maxProductId, unordered, repeated, shifted, partialVariationProducts };
+  return { site, skipped, truncated, maxProductId, unordered, repeated, shifted, missing, partialVariationProducts };
 }

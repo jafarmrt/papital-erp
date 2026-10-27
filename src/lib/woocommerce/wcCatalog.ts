@@ -82,6 +82,8 @@ export interface WcCatalogReport {
   catalogUnordered: boolean;
   /** v11 phase 6.5: the shop's count of products changed while the last refresh read it, so unread links were kept */
   catalogShifted: boolean;
+  /** PR #420 review finding 1: products the shop counted but did not list in the last reading, whose unread links were kept */
+  catalogMissing: number;
   /** #322 review note 3: variable products whose variation list the last refresh read in part */
   partialVariationProducts: number;
   /** finished products with a code and no live link (only after a refresh) */
@@ -135,6 +137,17 @@ export function catalogShiftNotice(): string {
   return 'تعداد محصولات سایت هنگام بازخوانی تغییر کرد و ممکن است محصولی خوانده نشده باشد؛ پیوند محصولاتی که خوانده نشد دست نخورد. کمی بعد دوباره بازخوانی کنید.';
 }
 
+/**
+ * PR #420 review finding 1: the shop counted products it did not list (the nightly re-read or the stock push kept their
+ * links; a refresh by hand asks before closing them)
+ */
+export function catalogMissingNotice(count: unknown): string {
+  const n = Math.max(0, Math.floor(Number(count) || 0));
+  return n > 0
+    ? `سایت ${formatPersianNumber(n)} محصول را در شمار محصولاتش آورد ولی در فهرست نشان نداد؛ پیوند محصولاتی که خوانده نشد دست نخورد. «بازخوانی محصولات سایت» را بزنید تا بستن آن‌ها پرسیده شود.`
+    : '';
+}
+
 /** #322 review note 3: some variation lists were read in part */
 export function partialVariationsNotice(count: unknown): string {
   const n = Math.max(0, Math.floor(Number(count) || 0));
@@ -143,15 +156,23 @@ export function partialVariationsNotice(count: unknown): string {
 
 /** #322 review note 2: what the refresh asks before closing most links at once */
 export function massCloseConfirmText(details: unknown): string {
-  const d = (details ?? {}) as { closedCount?: unknown; liveCount?: unknown };
+  const d = (details ?? {}) as { closedCount?: unknown; liveCount?: unknown; missingCount?: unknown };
   const n = (v: unknown) => formatPersianNumber(Math.max(0, Math.floor(Number(v) || 0)));
-  return `سایت ${n(d.closedCount)} محصول از ${n(d.liveCount)} محصول وصل را نشان نداد. اگر ادامه دهید پیوند این کالاها بسته می‌شود و `
-    + 'موجودی و قیمت آن‌ها دیگر به سایت نمی‌رود. اگر این محصولات را در سایت برنداشته‌اید، انصراف دهید و نشانی سایت و افزونه‌های آن را بررسی کنید.';
+  const missing = Math.max(0, Math.floor(Number(d.missingCount) || 0));
+  return `سایت برای ${n(d.closedCount)} کالا از ${n(d.liveCount)} کالای وصل محصولی با همان کد نشان نداد. `
+    + (missing > 0 ? `سایت ${n(missing)} محصول را در شمار محصولاتش آورد ولی در فهرست نشان نداد. ` : '')
+    + 'اگر ادامه دهید پیوند این کالاها بسته می‌شود و موجودی و قیمت آن‌ها دیگر به سایت نمی‌رود. '
+    + 'اگر این محصولات را در سایت برنداشته‌اید، انصراف دهید و نشانی سایت و افزونه‌های آن را بررسی کنید.';
+}
+
+/** The number of closings the user confirmed, from the details of the question (`closedCount`) */
+export function massCloseCount(details: unknown): number {
+  return Math.max(0, Math.floor(Number((details as { closedCount?: unknown } | null | undefined)?.closedCount) || 0));
 }
 
 export function catalogRefreshMessage(summary: {
   siteProductCount?: unknown; linkedCount?: unknown; unmatchedTotal?: unknown; catalogTruncated?: unknown; catalogUnordered?: unknown;
-  catalogShifted?: unknown; partialVariationProducts?: unknown;
+  catalogShifted?: unknown; catalogMissing?: unknown; partialVariationProducts?: unknown;
 }): string {
   const n = (v: unknown) => formatPersianNumber(Math.max(0, Math.floor(Number(v) || 0)));
   const unmatched = Number(summary.unmatchedTotal) || 0;
@@ -160,5 +181,6 @@ export function catalogRefreshMessage(summary: {
     + (summary.catalogTruncated === true ? ` ${catalogCapNotice()}` : '')
     + (summary.catalogUnordered === true ? ` ${catalogOrderNotice()}` : '')
     + (summary.catalogShifted === true ? ` ${catalogShiftNotice()}` : '')
+    + (catalogMissingNotice(summary.catalogMissing) ? ` ${catalogMissingNotice(summary.catalogMissing)}` : '')
     + (partialVariationsNotice(summary.partialVariationProducts) ? ` ${partialVariationsNotice(summary.partialVariationProducts)}` : '');
 }

@@ -190,8 +190,9 @@ export async function decimalsReviewCase(h: Harness, wrong: string[]): Promise<s
     const forbidden = await runPricePushOnce(later(40));
     const [refused] = await h.q(`SELECT error_message FROM wc_sync_runs WHERE kind = 'price_push' ORDER BY id DESC LIMIT 1`);
     const refusedText = String(refused?.error_message);
+    // PR #420 review finding 4: the currency is read first and is guarded alike
     if (forbidden.state !== 'failed' || store.pricesSent.get(2) !== '3' || !refusedText.includes(DECIMALS_FORBIDDEN_TEXT)
-      || refusedText.includes('wp-config')) {
+      || !refusedText.includes('واحد پول') || refusedText.includes('wp-config')) {
       wrong.push(`settings refused: run ${forbidden.state}, sent ${store.pricesSent.get(2)}, row ${refusedText}`);
     }
     store.settingsStatus = undefined;

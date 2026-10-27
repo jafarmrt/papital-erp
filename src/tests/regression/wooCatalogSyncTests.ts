@@ -4,7 +4,7 @@ import { runReservationCases } from './stockReservationTests.js';
 import type { MockProduct } from '../fixtures/mockWooCatalogStore.js';
 import { brief, linksOf, newItem, withShop } from './wooCatalogTestKit.js';
 import { deadlineAndCapCase, emptyOrUnorderedCase, removedProductAndDeadlinesCase } from './wooCatalogReviewTests.js';
-import { massCloseCase, partialVariationsCase, shiftedCatalogCase } from './wooCatalogReadEdgeTests.js';
+import { catalogGapCase, massCloseCase, partialVariationsCase, shiftedCatalogCase } from './wooCatalogReadEdgeTests.js';
 import { autoPushBoundedFailuresCase, autoPushChangedTrackedCase, autoPushOpenOrdersCase, autoPushSwitchCase } from './wooAutoPushTests.js';
 import {
   autoPushCapCase, autoPushOrderListMovedCase, autoPushOrderPageEdgeCase, autoPushRefusedBatchCase, autoPushRunPurgeCase, autoPushWebhookAndHourlyCase,
@@ -56,6 +56,9 @@ export async function runWooCatalogSyncTests(shouldRun: ShouldRun): Promise<Test
     ['reg_wc_catalog_partial_variations_v11_6_5',
       'v11 phase 6.5 (#322 review note 3): a variation list read in part keeps the links of its own unread variations, and a product removed from the shop still closes',
       ['v11_6_5', 'd04', 'woocommerce', 'catalog'], partialVariationsCase],
+    ['reg_wc_catalog_gap_asks_v11_6_5',
+      'v11 phase 6.5 (PR #420 review findings 1 and 2): a shop that counts a product it never lists is read to its count, the nightly reading keeps the unread link and says so, and a refresh by hand closes it only after the user confirms',
+      ['v11_6_5', 'd04', 'woocommerce', 'catalog'], catalogGapCase],
     ['reg_wc_auto_push_switch_d04',
       'D-04 part B: the automatic push is off by default, only woocommerce.manage turns it on or off with the target state, with an audit row and a complete connection',
       ['d04', 'woocommerce', 'auto'], autoPushSwitchCase],
