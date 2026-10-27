@@ -34,7 +34,7 @@ import { assertProductionReceiptNotFinalized, stockDirectionOf } from './documen
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
 import { consumesProjectReservation } from '../../lib/transactions/projectIssueTypes.js';
 import { documentAuditSnapshot, type DocumentAuditChange, type DocumentAuditSnapshot, type DocumentVoidAudit } from './documentAudit.js';
-import { assertNameNotOtherKind } from './documentParty.js';
+import { assertNameNotOtherKind, hasPricedLine, linkKnownDocumentParty } from './documentParty.js';
 import { lockRequisitionOfOrder, releaseVoidedProcurementOrder } from './procurementOrderVoid.js';
 import { documentVoidVoucherReason } from '../../lib/documents/documentTypeName.js';
 import { idempotentTransaction } from '../../middleware/idempotency.js';
@@ -140,6 +140,10 @@ export class DocumentLifecycleService {
           const targetType = doc.type === 'proforma' ? 'invoice' : doc.type;
           // v10.0.98 (TD-1194): پیش‌نویس بی شناسه طرف حساب با نام طرف حسابی از نوع دیگر نهایی نمی‌شود
           if (!doc.partyId) await assertNameNotOtherKind(tx, targetType, doc.buyerName);
+          // v11 phase 6.1b (C8, S16): a typed name is linked to its party or refused; a priced purchase needs its supplier
+          doc.partyId = await linkKnownDocumentParty(tx, {
+            id, docType: targetType, partyId: doc.partyId, buyerName: doc.buyerName, pricedLines: hasPricedLine(docLines.map(l => ({ price: l.unitPrice, quantity: l.quantity, discount: l.discount }))),
+          });
           // v8.0.51 / v8.0.119 (TD-317 / TD-410، تصمیم مالک محصول): فاکتورِ حاصل از پیش‌فاکتور شماره بعدی سری فاکتور و
           // تاریخ روز نهایی‌سازی را می‌گیرد؛ شماره و تاریخ پیش‌فاکتور در یادداشت می‌ماند (proformaInvoice.ts)
           // v10.0.107 (TD-910، تصمیم ت۷ الف): هر سند در وضعیت پیش‌فاکتور، چه نوع `proforma` چه `invoice` (پیش‌فاکتوری که دارنده

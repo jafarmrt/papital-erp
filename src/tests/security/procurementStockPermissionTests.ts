@@ -2,6 +2,7 @@ import { TestCaseResult } from '../types.js';
 import { approvedRequisition, fixture, formRow, type Fixture } from '../regression/procurementRequisitionTests.js';
 import { runCase, type Harness, type Row, type Session, type ShouldRun } from './workflowTestHarness.js';
 
+import { testSupplier } from '../fixtures/factories.js';
 /**
  * Phase 5 PR «ب» (procurement and workflow, product-owner decision t3 «الف»): every path that moves stock asks the warehouse
  * permission of the stock document, and a workflow step that moves stock reads the signer's backdate permission like the
@@ -138,7 +139,7 @@ async function backdatedDraft(h: Harness): Promise<{ docId: number; itemId: numb
   const item = await createTestItem({ type: 'product', code: `TD928-${serial}`, name: `کالای تاریخ گذشته ${serial}`, stocks: {}, weightedAverageCost: 0 } as never);
   for (const date of [shift(-7), today]) {
     const receipt = await h.post('/api/documents', {
-      docType: 'receipt', inOut: 'in', status: 'final', refNumber: 'auto', date, buyer_name: `تأمین‌کننده ${h.tag}`, location: wh,
+      docType: 'receipt', inOut: 'in', status: 'final', refNumber: 'auto', date, buyer_name: await testSupplier(`تأمین‌کننده ${h.tag}`), location: wh,
       items: [{ itemId: item.id, quantity: 5, unit_price: 600000 }],
     });
     if (receipt.status >= 300) throw new Error(`receipt dated ${date}: ${receipt.status} ${JSON.stringify(receipt.body).slice(0, 200)}`);

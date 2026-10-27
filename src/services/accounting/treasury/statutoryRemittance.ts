@@ -86,19 +86,17 @@ export async function createStatutoryRemittance(input: CreateStatutoryRemittance
       { name: 'treasuryTransaction', hierarchyLevel: LockHierarchyLevel.TREASURY_TRANSACTIONS },
     ]);
     const account = await remittanceAccount(kind, tx);
-    const penaltyAccount = penalty ? await requireChoosableContraAccount(tx, penalty.accountId) : null;
-    if (penaltyAccount) {
-      // جریمه هزینه است، نه بدهی پرسنل: روی ۳۲۰۴ یا ۳۲۰۶ مانده بی نام پرسنل می‌ساخت. سرفصل هر حساب خزانه را
-      // `requireChoosableContraAccount` پیش‌تر رد کرده است
-      const statutoryIds = new Set<number>();
+    if (penalty) {
+      // جریمه هزینه است، نه بدهی پرسنل: روی ۳۲۰۴ یا ۳۲۰۶ مانده بی نام پرسنل می‌ساخت. پیام خودش را پیش از قاعده عمومی
+      // سرفصل طرف مقابل می‌گیرد، که از v11 phase 6.1b (M6) این دو و هر حساب کنترلی دیگر را هم رد می‌کند
       for (const k of ['insurance', 'tax'] as const) {
         const statutory = await TreasuryTransactionService.payrollStatutoryPayableAccount(k, tx);
-        if (statutory) statutoryIds.add(statutory.id);
-      }
-      if (statutoryIds.has(penaltyAccount.id)) {
-        throw new ValidationError('سرفصل جریمه دیرکرد نمی‌تواند «بیمه پرداختنی» یا «مالیات حقوق پرداختنی» باشد؛ یک حساب هزینه انتخاب کنید.', undefined, 'STATUTORY_REMITTANCE_PENALTY_ACCOUNT_INVALID');
+        if (statutory?.id === penalty.accountId) {
+          throw new ValidationError('سرفصل جریمه دیرکرد نمی‌تواند «بیمه پرداختنی» یا «مالیات حقوق پرداختنی» باشد؛ یک حساب هزینه انتخاب کنید.', undefined, 'STATUTORY_REMITTANCE_PENALTY_ACCOUNT_INVALID');
+        }
       }
     }
+    const penaltyAccount = penalty ? await requireChoosableContraAccount(tx, penalty.accountId) : null;
 
     const bank = await lockTreasuryBank(tx, input.bankAccountId);
     // 10.3 package 4: a rial account saved as «irr» is rial too (`sameTreasuryCurrency`)

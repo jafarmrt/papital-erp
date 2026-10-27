@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { JournalVoucher } from '../../types';
+import type { ControlAccountEntry } from '../../lib/accounting/controlAccounts';
 import { ACCOUNTING_LIST_QUERY_OPTIONS, fetchAccountingList, silentMutationError, type AccountingListQueryOptions } from './accountingQueryConfig';
 import { invalidateAfterVoucherChange } from './accountingInvalidation';
 import { toVoucherPage, voucherListParams, type JournalVoucherPage, type VoucherListFilters } from '../../lib/accounting/voucherList';
@@ -72,6 +73,19 @@ export function useVoucherPageQuery(filters: VoucherListFilters, page: number, l
     ),
     ...ACCOUNTING_LIST_QUERY_OPTIONS,
     placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * v11 phase 6.1b (M3): the control accounts (`GET /accounting/control-accounts`), so the voucher and correction forms
+ * name a row on one before saving; read while such a form is open. The server checks the rows itself.
+ */
+export function useControlAccountsQuery(enabled: boolean) {
+  return useQuery<ControlAccountEntry[]>({
+    queryKey: QUERY_KEYS.accounting.controlAccounts(),
+    queryFn: ({ signal }) => fetchAccountingList<ControlAccountEntry>('/accounting/control-accounts', signal, 'control accounts'),
+    ...ACCOUNTING_LIST_QUERY_OPTIONS,
+    enabled,
   });
 }
 

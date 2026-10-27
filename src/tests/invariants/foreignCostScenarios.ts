@@ -1,7 +1,7 @@
 import { pool } from '../../db/drizzle.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { DocumentService } from '../../services/document.service.js';
-import { createTestItem } from '../fixtures/factories.js';
+import { testSupplier, createTestItem } from '../fixtures/factories.js';
 import type { InvariantScope } from './businessInvariants.js';
 import { invariantProblems, watermarks } from './scenarioHelpers.js';
 
@@ -54,8 +54,9 @@ export async function checkForeignCostRowsExactInIrr(wh: string): Promise<string
   const material = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
   const scope: InvariantScope = { ...mark, itemIds: [product.id, material.id] };
   type Line = { itemId: number; quantity: number; unitPrice: number };
+  const party = await testSupplier('طرف‌حساب آزمون ارزی', 'both');
   const doc = (fields: Record<string, unknown>, lines: Line[], date: string) => DocumentService.createDocument({
-    status: 'final', date, user: 'inv', buyerName: 'طرف‌حساب آزمون ارزی', ...fields, items: lines.map(l => ({ ...l, location: wh })),
+    status: 'final', date, user: 'inv', buyerName: party, ...fields, items: lines.map(l => ({ ...l, location: wh })),
   });
 
   // فروش دلاری یک عدد با WAC ۱۰۰٬۰۰۰ ← بهای تمام‌شده و موجودی دقیقاً ۱۰۰٬۰۰۰ ریال (۰٫۱۶۶۷ دلار)

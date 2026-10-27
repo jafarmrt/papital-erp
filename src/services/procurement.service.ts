@@ -666,7 +666,7 @@ export class ProcurementService {
       for (const group of orderGroups) {
         if (!group.items || group.items.length === 0) continue;
 
-        const supplierName = group.supplierName?.trim() || 'تامین‌کننده تدارکات';
+        const requestedSupplierName = group.supplierName?.trim() || '';
         // v8.0.10 (TD-267): سفارش خرید همیشه سند ورودی (رسید) است؛ «پیش‌فاکتور خرید» رسید با وضعیت پیش‌فاکتور است. پیش‌تر
         // نوع proforma ساخته می‌شد و نهایی‌سازی پیش‌فاکتور آن را فاکتور فروش می‌کرد: کالا از انبار خارج و فروش ثبت می‌شد
         const docType = 'receipt';
@@ -693,7 +693,7 @@ export class ProcurementService {
           partyId: group.supplierId ?? undefined,
           // v10.0.208 (TD-946، تصمیم ت۱۰): سفارش درخواست خرید پروژه به همان پروژه پیوند دارد
           projectId: req.projectId ?? undefined,
-          buyer_name: supplierName,
+          buyer_name: requestedSupplierName,
           notes: docNotes,
           location: warehouseLoc,
           inOut: 'in',
@@ -706,7 +706,21 @@ export class ProcurementService {
         // v9.0.347 (TD-691، ت۲): پیوند سفارش به درخواست در ستون؛ فهرست، خلاصه و تحویل تدارکات فقط همین سندها را می‌بینند
         await tx.update(documents).set({ procurementRequisitionId: req.id }).where(eq(documents.id, createdDocId));
         const [createdDocRecord] = await tx.select().from(documents).where(eq(documents.id, createdDocId));
-        createdDocuments.push(createdDocRecord || { id: createdDocId, refNumber: `DOC-${createdDocId}` });
+        // v11 phase 6.1b (C8, S16): an order goes to a supplier that exists, picked from the list (its id, else its unique
+        // name, as the document resolved it); the whole conversion rolls back otherwise. Before, a name no party had, or the
+        // fallback «تامین‌کننده تدارکات» for none, was ordered and delivered with a payable row on no party.
+        const supplierId = createdDocRecord?.partyId ?? null;
+        if (!supplierId) {
+          throw new ValidationError(
+            requestedSupplierName
+              ? `«${requestedSupplierName}» در فهرست تأمین‌کنندگان نیست؛ تأمین‌کننده را از فهرست برگزینید یا نخست آن را در «طرف حساب‌ها» بسازید.`
+              : 'تأمین‌کننده هر بسته سفارش را از فهرست برگزینید.',
+            undefined,
+            'PROCUREMENT_SUPPLIER_REQUIRED',
+          );
+        }
+        const supplierName = (createdDocRecord.buyerName || requestedSupplierName).trim();
+        createdDocuments.push(createdDocRecord);
 
         // Update matching items in the requisition
         for (const groupItem of group.items) {
@@ -723,7 +737,7 @@ export class ProcurementService {
             targetReqItem.orderedQty = ordQty;
             targetReqItem.remainingQty = Math.max(0, (targetReqItem.requestedQty || 0) - ordQty);
             targetReqItem.targetSupplierName = supplierName;
-            targetReqItem.targetSupplierId = group.supplierId || targetReqItem.targetSupplierId;
+            targetReqItem.targetSupplierId = supplierId;
             targetReqItem.status = targetReqItem.remainingQty <= 0 ? 'ordered' : 'pending';
 
             if (!targetReqItem.linkedDocumentIds) targetReqItem.linkedDocumentIds = [];

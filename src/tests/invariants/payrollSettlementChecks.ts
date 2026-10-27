@@ -6,7 +6,7 @@ import { PayrollPaymentService } from '../../services/accounting/payrollPayment.
 import { TreasuryTransactionService } from '../../services/accounting/treasury/treasuryTransaction.service.js';
 import { DocumentService } from '../../services/document.service.js';
 import { PieceworkPayrollService } from '../../services/piecework/payroll.service.js';
-import { createTestItem } from '../fixtures/factories.js';
+import { testSupplier, createTestItem } from '../fixtures/factories.js';
 import { miscContraAccountId } from '../fixtures/treasuryParty.js';
 import { addLog, fundedBank, newTask, newWorker, personNet, refusalOf } from './payrollScenarios.js';
 
@@ -137,7 +137,7 @@ export async function checkDeductedAdvanceNotVoided(): Promise<string[]> {
  */
 export async function checkSettlementWithinDocumentRemaining(wh: string): Promise<string[]> {
   const problems: string[] = [];
-  const supplier = `تأمین‌کننده TD-938 ${tag('S')}`;
+  const supplier = await testSupplier(`تأمین‌کننده TD-938 ${tag('S')}`);
   const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
   const purchase = await DocumentService.createDocument({
     docType: 'receipt', inOut: 'in', status: 'final', date: '2026-04-01', user: 'inv', buyerName: supplier,

@@ -8,7 +8,7 @@ import { AccountingReportService } from '../../services/accounting/accountingRep
 import { FinancialHealthService } from '../../services/accounting/financialHealth.service.js';
 import { AccountMappingService } from '../../services/accounting/accountMapping.service.js';
 import { DocumentService } from '../../services/document.service.js';
-import { createTestItem, createTestWarehouse } from '../fixtures/factories.js';
+import { testSupplier, createTestItem, createTestWarehouse } from '../fixtures/factories.js';
 import { TestCaseResult } from '../types.js';
 import {
   type ShouldRun, accountIdsByCode, amountOf, assertNoProblems, inFiscalSandbox, postApproved, runCase, sandboxAdminClient,
@@ -125,7 +125,7 @@ export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<Tes
     await runCase(results, postingId, 'v9.0.198: manual, edited and correction voucher rows go only on an active subsidiary or detailed account without an active sub-account (422 VOUCHER_ACCOUNT_NOT_POSTABLE), and the health check lists vouchers already on such accounts (TD-549)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
-      const acc = await accountIdsByCode('7', '14', '70', '1001', '1201', '5001', '7002');
+      const acc = await accountIdsByCode('7', '14', '70', '1001', '5001', '7002');
       const today = await businessTodayIsoDate();
       const base = { date: today, status: 'approved', description: 'TD-549 manual voucher' };
       const pair = (debitAccountId: number, creditAccountId: number, amount: number) => [
@@ -153,10 +153,10 @@ export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<Tes
       if (onDetail.status !== 201) problems.push(`a row on detailed account 700201 answered ${onDetail.status} ${JSON.stringify(onDetail.body).slice(0, 200)}`);
 
       // 4) editing a draft and correcting an approved voucher follow the same rule
-      const draft = await admin.post('/api/accounting/vouchers', { ...base, status: 'draft', items: pair(acc['1201'], acc['5001'], 400_000) });
+      const draft = await admin.post('/api/accounting/vouchers', { ...base, status: 'draft', items: pair(acc['1001'], acc['5001'], 400_000) });
       if (draft.status !== 201) problems.push(`a valid draft answered ${draft.status}`);
       else refused('editing a draft onto 14', await admin.put(`/api/accounting/vouchers/${draft.body.id}`, { ...base, status: 'draft', version: draft.body.version, items: pair(acc['14'], acc['5001'], 400_000) }));
-      const approved = await admin.post('/api/accounting/vouchers', { ...base, items: pair(acc['1201'], acc['5001'], 500_000) });
+      const approved = await admin.post('/api/accounting/vouchers', { ...base, items: pair(acc['1001'], acc['5001'], 500_000) });
       if (approved.status !== 201) problems.push(`a valid approved voucher answered ${approved.status}`);
       else {
         const beforeCorrection = await voucherCount();
@@ -233,7 +233,7 @@ export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<Tes
       const wh = await createTestWarehouse();
       const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
       await DocumentService.createDocument({
-        docType: 'receipt', status: 'final', inOut: 'in', date: await businessTodayIsoDate(), user: 'td550', buyerName: 'td550',
+        docType: 'receipt', status: 'final', inOut: 'in', date: await businessTodayIsoDate(), user: 'td550', buyerName: await testSupplier('td550'),
         location: wh.code, items: [{ itemId: item.id, quantity: 2, unitPrice: 100_000, location: wh.code }],
       }).catch(() => null);
       if (await activeRowsOn(acc['14']) !== 0) problems.push(`the purchase receipt posted ${await activeRowsOn(acc['14'])} rows on general account 14`);

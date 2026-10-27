@@ -1,4 +1,5 @@
 import request from 'supertest';
+import { testSupplier } from '../fixtures/factories.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { pool } from '../../db/drizzle.js';
 import { createHarness, draftSalesDocument, type Harness, type Row, type ShouldRun } from '../security/workflowTestHarness.js';
@@ -60,7 +61,7 @@ async function plainReceipt(h: Harness, f: Fixture, itemId: number, quantity: nu
   const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
   const id = Number(await DocumentService.createDocument({
     docType: 'receipt', status: 'draft', inOut: 'in', date: await businessTodayIsoDate(), user: 'آزمون بسته ۱۰',
-    buyer_name: `تامین‌کننده محرمانه ${h.tag}`, items: [{ itemId, quantity, unit_price: unitPrice, location: f.wh }],
+    buyer_name: await testSupplier(`تامین‌کننده محرمانه ${h.tag}`), items: [{ itemId, quantity, unit_price: unitPrice, location: f.wh }],
   } as never));
   const [row] = await h.q(`SELECT ref_number FROM documents WHERE id = $1`, [id]);
   return { id, refNumber: String(row?.ref_number ?? '') };
@@ -192,7 +193,7 @@ async function doubleSubmitCase(h: Harness, wrong: string[]): Promise<string> {
   const req = await approvedRequisition(h, f, [formRow(x, 10, 1000)]);
   const convertBody = {
     orderGroups: [{
-      supplierName: `تامین‌کننده بسته ۱۰ ${h.tag}`, targetWarehouse: f.wh, docType: 'receipt', status: 'draft',
+      supplierName: await testSupplier(`تامین‌کننده بسته ۱۰ ${h.tag}`), targetWarehouse: f.wh, docType: 'receipt', status: 'draft',
       items: [{ itemId: x.id, quantity: 5, unitPrice: 1000, unit: 'عدد' }],
     }],
   };

@@ -1,4 +1,5 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
+import { testSupplier } from '../fixtures/factories.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { activityLogs, items, itemWarehouseStocks, outboxEvents } from '../../db/schema.js';
@@ -30,7 +31,7 @@ export async function runKardexRebuildQuietTests(shouldRun: (id: string, ...extr
       const it = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
       itemIds.push(it.id);
       await DocumentService.createDocument({
-        docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'td491', buyerName: 'td491',
+        docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'td491', buyerName: await testSupplier('td491'),
         location: main, items: [{ itemId: it.id, quantity: 5 + i, unit_price: 100, location: main }],
       });
     }

@@ -1,4 +1,4 @@
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { money } from '../../lib/money.js';
 import type { DecimalValue } from '../../lib/financialDecimal.js';
 import bcrypt from 'bcryptjs';
@@ -106,6 +106,19 @@ export async function createTestCustomer(overrides: Partial<typeof customers.$in
 }
 
 /**
+ * v11 phase 6.1b (C8, S16): a priced purchase finalizes, and a requisition is ordered, only with a supplier on the list.
+ * A test that names its supplier gets a live supplier party of that name (made once per schema; a party of that name
+ * already there is kept as it is) and the name back, to send as `buyerName` / `buyer_name` / `supplierName`.
+ */
+export async function testSupplier(name: string, partyType: 'supplier' | 'both' = 'supplier', db: DbExecutor = orm): Promise<string> {
+  const trimmed = name.trim();
+  const [found] = await db.select({ id: customers.id }).from(customers)
+    .where(and(eq(customers.isDeleted, 0), sql`lower(btrim(${customers.name})) = lower(${trimmed}::text)`)).limit(1);
+  if (!found) await db.insert(customers).values({ name: trimmed, partyType, phone: '', version: 1, isDeleted: 0 });
+  return name;
+}
+
+/**
  * Item / Inventory Product Factory
  * v7.0.48 (TD-214): ستون items.stocks حذف شد؛ `stocks` فقط ورودی آزمون است (کلید = کد یا نام انبار) و ردیف‌های
  * item_warehouse_stocks را می‌سازد. items.current_stock را تریگر پایگاه‌داده از همان ردیف‌ها حساب می‌کند. بدون
@@ -197,6 +210,8 @@ export async function createTestDocument(
     isDeleted: 0,
     ...docOverrides
   };
+  // v11 phase 6.1b (C8, S16): a purchase document finalizes only with a supplier on the list
+  if (['receipt', 'purchase'].includes(String(docData.type)) && !docData.partyId) await testSupplier(String(docData.buyerName), 'both', db);
 
   const [insertedDoc] = await db.insert(documents).values(docData).returning();
 

@@ -4,7 +4,7 @@ import { fin } from '../../lib/financialDecimal.js';
 import { DocumentService } from '../../services/document.service.js';
 import { ProjectBomAllocationService } from '../../services/inventory/projectBomAllocation.service.js';
 import { getDefaultWarehouseCode } from '../../services/inventory/warehouseResolver.js';
-import { createTestCustomer, createTestItem } from '../fixtures/factories.js';
+import { testSupplier, createTestCustomer, createTestItem } from '../fixtures/factories.js';
 import { TestCaseResult } from '../types.js';
 import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient } from './fiscalClosingTests.js';
 import { type Client, type Row, brief, editProject, newProject, q } from './projectStageIntegrityTests.js';
@@ -115,7 +115,7 @@ export async function runProjectSweepTests(shouldRun: ShouldRun): Promise<TestCa
       const wh = (await getDefaultWarehouseCode(orm)) ?? '';
       const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
       await DocumentService.createDocument({
-        docType: 'receipt', inOut: 'in', status: 'final', date: await businessTodayIsoDate(), user: 'inv',
+        docType: 'receipt', inOut: 'in', status: 'final', date: await businessTodayIsoDate(), user: 'inv', buyerName: await testSupplier('تامین‌کننده آزمون انبار'),
         items: [{ itemId: item.id, quantity: 3, unitPrice: 1234.5678, location: wh }],
       });
       const project = await newProject(api, { stages: ['برش'] });

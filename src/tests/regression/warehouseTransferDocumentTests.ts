@@ -1,4 +1,5 @@
 import request from 'supertest';
+import { testSupplier } from '../fixtures/factories.js';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
@@ -40,7 +41,7 @@ export async function runWarehouseTransferDocumentTests(shouldRun: (id: string, 
     itemIds.push(a.id);
     // opening stock through the Kardex, so the replay below sees the whole history
     await DocumentService.createDocument({
-      docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'td489', buyerName: 'td489',
+      docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'td489', buyerName: await testSupplier('td489'),
       location: main, items: [{ itemId: a.id, quantity: 10, unit_price: 1000, location: main }],
     });
 
@@ -90,7 +91,7 @@ export async function runWarehouseTransferDocumentTests(shouldRun: (id: string, 
 
     // 4) WAC moves after the transfers; voiding the first transfer brings its 4 units back to the source, WAC unchanged
     await DocumentService.createDocument({
-      docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'td489', buyerName: 'td489',
+      docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'td489', buyerName: await testSupplier('td489'),
       location: main, items: [{ itemId: a.id, quantity: 4, unit_price: 2000, location: main }],
     });
     const wacBefore = await wacOf();

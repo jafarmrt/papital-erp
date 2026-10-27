@@ -9,7 +9,7 @@ import { ActivityLogQueryService } from '../../services/system/activityLogQuery.
 import { getErrorMessage } from '../../utils/formatters.js';
 import { isoToJalaliDate, toStorageDate } from '../../utils/calendarDate.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
-import { createTestItem } from '../fixtures/factories.js';
+import { testSupplier, createTestItem } from '../fixtures/factories.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
@@ -154,7 +154,7 @@ export async function checkProformaTakesInvoiceNumber(wh: string): Promise<strin
   const today = await businessTodayIsoDate();
   const item = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
   await DocumentService.createDocument({
-    docType: 'receipt', inOut: 'in', status: 'final', date: '2019-05-01', user: 'inv', buyerName: 'تامین‌کننده آزمون پیش‌فاکتور',
+    docType: 'receipt', inOut: 'in', status: 'final', date: '2019-05-01', user: 'inv', buyerName: await testSupplier('تامین‌کننده آزمون پیش‌فاکتور'),
     items: [{ itemId: item.id, quantity: 5, unitPrice: 1000, location: wh }],
   });
   const invoiceId = await DocumentService.createDocument({
@@ -194,7 +194,7 @@ export async function checkProformaInvoiceTakesFinalizeDate(wh: string): Promise
   const problems: string[] = [];
   const item = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
   await DocumentService.createDocument({
-    docType: 'receipt', inOut: 'in', status: 'final', date: '2019-06-01', user: 'inv', buyerName: 'تامین‌کننده آزمون تاریخ پیش‌فاکتور',
+    docType: 'receipt', inOut: 'in', status: 'final', date: '2019-06-01', user: 'inv', buyerName: await testSupplier('تامین‌کننده آزمون تاریخ پیش‌فاکتور'),
     items: [{ itemId: item.id, quantity: 5, unitPrice: 1000, location: wh }],
   });
   const proformaId = await DocumentService.createDocument({
@@ -301,7 +301,7 @@ export async function checkMovementTrendJalaliMonths(wh: string): Promise<string
   const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
   for (const [date, quantity] of [[lastOfPrevious, 3], [firstDay, 5]] as const) {
     await DocumentService.createDocument({
-      docType: 'receipt', inOut: 'in', status: 'final', date, user: 'inv', buyerName: 'تامین‌کننده آزمون گردش ماهانه',
+      docType: 'receipt', inOut: 'in', status: 'final', date, user: 'inv', buyerName: await testSupplier('تامین‌کننده آزمون گردش ماهانه'),
       items: [{ itemId: item.id, quantity, unitPrice: 1000, location: wh }],
     });
   }

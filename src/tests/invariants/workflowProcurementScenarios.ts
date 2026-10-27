@@ -1,6 +1,6 @@
 import { pool } from '../../db/drizzle.js';
 import { ProcurementService } from '../../services/procurement.service.js';
-import { createTestItem } from '../fixtures/factories.js';
+import { testSupplier, createTestItem } from '../fixtures/factories.js';
 import { itemState } from './scenarioHelpers.js';
 import { WorkflowTransitionExecutor } from '../../services/workflow/workflowTransitionExecutor.js';
 import { legacyRequisitionOrder, refusal, refusalStatus, uniqueTag, wfUser } from './workflowScenarioHelpers.js';
@@ -42,7 +42,7 @@ export async function checkRequisitionActionFollowsWorkflow(): Promise<string[]>
   // v9.0.350 (TD-699، ت۴): «دریافت کالا» فقط ردیف سفارش‌شده را می‌پذیرد
   await ProcurementService.convertToPurchaseOrders({
     requisitionId: id,
-    orderGroups: [{ supplierName: 'تامین‌کننده آزمون گردش‌کار', targetWarehouse: '', status: 'draft', items: [{ itemId: item.id, quantity: 10, unitPrice: 1000 }] }],
+    orderGroups: [{ supplierName: await testSupplier('تامین‌کننده آزمون گردش‌کار'), targetWarehouse: '', status: 'draft', items: [{ itemId: item.id, quantity: 10, unitPrice: 1000 }] }],
   } as Parameters<typeof ProcurementService.convertToPurchaseOrders>[0], ADMIN);
   await ProcurementService.executeWorkflowAction(id, 'receive_items', ADMIN);
   for (const action of ['reopen', 'reject_request', 'approve_request']) {
@@ -55,9 +55,10 @@ export async function checkRequisitionActionFollowsWorkflow(): Promise<string[]>
     }
   }
   // پس از بازگشایی میان‌بر، درخواست دوباره به سفارش تبدیل و کالا دوباره وارد انبار می‌شد
+  const supplier = await testSupplier('تامین‌کننده آزمون گردش‌کار');
   const reorder = await refusal(() => ProcurementService.convertToPurchaseOrders({
     requisitionId: id,
-    orderGroups: [{ supplierName: 'تامین‌کننده آزمون گردش‌کار', targetWarehouse: '', status: 'final', items: [{ itemId: item.id, quantity: 10, unitPrice: 1000 }] }],
+    orderGroups: [{ supplierName: supplier, targetWarehouse: '', status: 'final', items: [{ itemId: item.id, quantity: 10, unitPrice: 1000 }] }],
   } as Parameters<typeof ProcurementService.convertToPurchaseOrders>[0], ADMIN));
   if (!reorder) problems.push('The received requisition was converted to an order again after reopening');
   const { stock } = await itemState(item.id);

@@ -4,7 +4,7 @@ import { accounts } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { AccountMappingService, type ConceptualAccountMappingConfig } from '../../services/accounting/accountMapping.service.js';
 import { DocumentService } from '../../services/document.service.js';
-import { createTestItem } from '../fixtures/factories.js';
+import { testSupplier, createTestItem } from '../fixtures/factories.js';
 import type { InvariantScope } from './businessInvariants.js';
 import { invariantProblems, watermarks } from './scenarioHelpers.js';
 
@@ -62,7 +62,7 @@ export async function checkVouchersFollowAccountMapping(wh: string): Promise<str
     const doc = (fields: Record<string, unknown>, itemId: number, quantity: number, unitPrice: number, date: string) =>
       DocumentService.createDocument({ status: 'final', date, user: 'inv', ...fields, items: [{ itemId, quantity, unitPrice, location: wh }] });
 
-    const receipt = await doc({ docType: 'receipt', inOut: 'in', buyerName: 'تامین‌کننده آزمون نگاشت' }, material.id, 10, 100000, '2026-05-01');
+    const receipt = await doc({ docType: 'receipt', inOut: 'in', buyerName: await testSupplier('تامین‌کننده آزمون نگاشت') }, material.id, 10, 100000, '2026-05-01');
     const production = await doc({ docType: 'production_receipt', inOut: 'in' }, product.id, 5, 200000, '2026-05-01');
     const sale = await doc({ docType: 'invoice', inOut: 'out', buyerName: 'مشتری آزمون نگاشت' }, material.id, 4, 250000, '2026-05-02');
     const salesReturn = await doc({ docType: 'return', inOut: 'in', buyerName: 'مشتری آزمون نگاشت', returnOfDocumentId: sale }, material.id, 1, 250000, '2026-05-03');

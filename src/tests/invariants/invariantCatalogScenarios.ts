@@ -7,7 +7,7 @@ import { TreasuryTransactionService } from '../../services/accounting/treasury/t
 import { FiscalYearService } from '../../services/accounting/fiscalYear.service.js';
 import { VoucherService } from '../../services/accounting/voucher.service.js';
 import { DocumentService } from '../../services/document.service.js';
-import { createTestCustomer, createTestItem } from '../fixtures/factories.js';
+import { testSupplier, createTestCustomer, createTestItem } from '../fixtures/factories.js';
 import { miscContraAccountId } from '../fixtures/treasuryParty.js';
 import { checkBusinessInvariants, checkGuardedReservations, type InvariantId, type InvariantScope } from './businessInvariants.js';
 import { watermarks } from './scenarioHelpers.js';
@@ -47,7 +47,7 @@ async function expectViolations(scope: InvariantScope, when: string, expected?: 
 async function stockedItem(wh: string, date: string, quantity = 20, unitPrice = 100000): Promise<number> {
   const item = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
   await DocumentService.createDocument({
-    docType: 'receipt', inOut: 'in', status: 'final', date, user: 'inv', buyerName: 'ERP-TEST-MARKER I-01 supplier',
+    docType: 'receipt', inOut: 'in', status: 'final', date, user: 'inv', buyerName: await testSupplier('ERP-TEST-MARKER I-01 supplier'),
     items: [{ itemId: item.id, quantity, unitPrice, location: wh }],
   });
   return item.id;

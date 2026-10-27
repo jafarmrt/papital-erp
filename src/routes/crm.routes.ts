@@ -420,7 +420,7 @@ router.post('/crm/leads', authorizePermission('crm.manage'), validate(createCrmL
   const assignee = await resolveAssignee({ name: assignedTo, personnelId: assignedPersonnelId }, tx);
 
   // v9.0.5 (TD-418): پیوند به طرف حساب یا ساخت طرف حساب تازه؛ طرف حساب موجود عوض نمی‌شود و اختلاف به یادداشت می‌رود
-  const party = await linkCustomerForLead({ customerId, customerName, phone, company, title }, tx);
+  const party = await linkCustomerForLead({ customerId, customerName, phone, company, title }, tx, { userId: currentUser?.id, username: currentUser?.username });
 
   const nowIso = systemNowUtcIso();
 
@@ -541,7 +541,7 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
     phone: targetPhone,
     company: targetCompany,
     title: targetTitle,
-  }, tx);
+  }, tx, { userId: req.user?.id, username: req.user?.username });
 
   const nowIso = systemNowUtcIso();
   
@@ -654,7 +654,7 @@ router.post('/crm/leads/:id/convert-to-customer', authorizePermission('crm.manag
       phone: lead.phone,
       company: lead.company,
       title: lead.title,
-    }, tx);
+    }, tx, { userId: currentUser?.id, username: currentUser?.username });
 
     const nowIso = systemNowUtcIso();
     const keepState = isClosedLead(lead);

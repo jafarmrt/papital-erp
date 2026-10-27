@@ -105,15 +105,6 @@ export function unassignedPaymentsOfError(err: unknown): StatutoryUnassignedPaym
   return { amount: String(payments.amount ?? '0'), vouchers: Array.isArray(payments.vouchers) ? payments.vouchers : [] };
 }
 
-/**
- * هشدار فرم خزانه و دفتر چک وقتی سرفصل طرف مقابل «بیمه پرداختنی» یا «مالیات حقوق پرداختنی» است: ثبت رد نمی‌شود، ولی پرداخت
- * از آن‌جا به نام هیچ پرسنلی نمی‌نشیند و پنجره پرداخت فهرست همان ماه را دوباره پیشنهاد می‌کند
- */
-export function statutoryContraWarning(kind: StatutoryRemittanceKind): string {
-  const t = STATUTORY_REMITTANCE_TEXT[kind];
-  return `این سرفصل «${t.account}» است. پرداختی که این‌جا ثبت شود به نام هیچ پرسنلی نمی‌نشیند و مانده هر نفر باز می‌ماند. ${t.subject} پرسنل را با «${t.button}» از دکمه «فهرست بیمه و مالیات» در «فیش‌های حقوقی و تسویه‌ها» بپردازید.`;
-}
-
 /** برچسب تأیید پنجره پرداخت وقتی پرداخت بی نام پرسنل روی حساب هست */
 export const STATUTORY_UNASSIGNED_ACK_LABEL = 'بررسی کردم؛ این پرداخت‌ها برای فهرست این ماه نیست.';
 
