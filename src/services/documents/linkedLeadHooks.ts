@@ -1,5 +1,7 @@
+import { and, asc, eq } from 'drizzle-orm';
 import type { DbExecutor, DbTransaction } from '../../db/drizzle.js';
-import type { crmLeads } from '../../db/schema.js';
+import { crmLeads } from '../../db/schema.js';
+import { ConflictError } from '../../errors/customErrors.js';
 
 type Lead = typeof crmLeads.$inferSelect;
 
@@ -25,6 +27,21 @@ export function registerLinkedLeadHooks(next: LinkedLeadHooks): void {
 export async function lockLinkedLead(tx: DbExecutor, document: { id: number; type: string | null }): Promise<Lead | null> {
   if (!hooks || (document.type !== 'proforma' && document.type !== 'invoice')) return null;
   return hooks.lockLeadOfDocument(tx, document.id);
+}
+
+/**
+ * Under the document lock: the lead that links the document now is the one locked before the items. An edit that moved the
+ * proforma to another lead and committed while this finalize waited would leave that lead out (it was locked by nobody), so
+ * the finalize is refused with a 409 to try again rather than lock a lead out of order (review of v11 phase 6.4).
+ */
+export async function assertLinkedLeadUnchanged(tx: DbExecutor, document: { id: number; type: string | null }, locked: Lead | null): Promise<void> {
+  if (!hooks || (document.type !== 'proforma' && document.type !== 'invoice')) return;
+  const [now] = await tx.select({ id: crmLeads.id }).from(crmLeads)
+    .where(and(eq(crmLeads.proformaId, document.id), eq(crmLeads.hasProforma, 1), eq(crmLeads.isDeleted, 0)))
+    .orderBy(asc(crmLeads.id))
+    .limit(1);
+  if ((now?.id ?? null) === (locked?.id ?? null)) return;
+  throw new ConflictError('پیوند پرونده فروش این سند همین حالا عوض شد؛ دوباره قطعی کنید.', { documentId: document.id }, 'DOCUMENT_LEAD_LINK_CHANGED');
 }
 
 export async function markLinkedLeadSold(tx: DbTransaction, lead: Lead | null, invoice: { id: number; refNumber: string | null }, actorName: string): Promise<void> {

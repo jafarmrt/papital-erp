@@ -38,7 +38,7 @@ import { assertOutflowWithinSellable } from './documentSellableGate.js';
 import { consumesProjectReservation } from '../../lib/transactions/projectIssueTypes.js';
 import { documentAuditSnapshot, type DocumentAuditChange, type DocumentAuditSnapshot, type DocumentVoidAudit } from './documentAudit.js';
 import { assertNameNotOtherKind, hasPricedLine, linkKnownDocumentParty } from './documentParty.js';
-import { lockLinkedLead, markLinkedLeadSold } from './linkedLeadHooks.js';
+import { assertLinkedLeadUnchanged, lockLinkedLead, markLinkedLeadSold } from './linkedLeadHooks.js';
 import { lockRequisitionOfOrder, releaseVoidedProcurementOrder } from './procurementOrderVoid.js';
 import { documentVoidVoucherReason } from '../../lib/documents/documentTypeName.js';
 import { idempotentTransaction } from '../../middleware/idempotency.js';
@@ -140,6 +140,8 @@ export class DocumentLifecycleService {
           }
           // v10.0.184 (TD-921): پیش‌نویس روی پروژه‌ای که پس از آن لغو شد نهایی نمی‌شود
           if (doc.projectId) await assertProjectNotCancelled(tx, Number(doc.projectId), 'سند');
+          // v11 phase 6.4 (C3, review): the lead locked first still links this document
+          await assertLinkedLeadUnchanged(tx, doc, lead);
           auditBefore = await documentAuditSnapshot(tx, id);
 
           const docLines = await tx.select().from(documentItems)

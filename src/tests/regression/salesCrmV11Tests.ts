@@ -4,6 +4,7 @@ import { crmActivities, crmLeadStageHistory, crmLeads, notifications, purchaseRe
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { getDefaultWarehouseCode } from '../../services/inventory/warehouseResolver.js';
 import { ProcurementService } from '../../services/procurement.service.js';
+import { assertLinkedLeadUnchanged, lockLinkedLead } from '../../services/documents/linkedLeadHooks.js';
 import { WorkflowEngineService } from '../../services/workflow/workflowEngineService.js';
 import { createTestCustomer, createTestItem, testSupplier } from '../fixtures/factories.js';
 import { TestCaseResult } from '../types.js';
@@ -108,8 +109,26 @@ export async function runSalesCrmV11Tests(shouldRun: ShouldRun): Promise<TestCas
       const lostAfter = await admin.put(`/api/crm/leads/${lead.id}`, { stage: 'lost', lostReason: 'price' });
       if (!ok(lostAfter) || (await leadOf(lead.id)).stage !== 'lost') problems.push(`lost after the void returned ${brief(lostAfter)}, expected 200`);
 
+      // review: a proforma moved to another lead while the finalize waited is refused with a 409, never left half-sold
+      const [moved] = await orm.insert(crmLeads).values({ title: `پرونده جابه‌جا ${Date.now()}`, stage: 'proposal', status: 'active', hasProforma: 0, isDeleted: 0 }).returning();
+      const [first] = await orm.insert(crmLeads).values({ title: `پرونده نخست ${Date.now()}`, stage: 'proposal', status: 'active', hasProforma: 1, proformaId: docId + 1_000_000, isDeleted: 0 }).returning();
+      const fakeDoc = { id: docId + 1_000_000, type: 'proforma' };
+      const raced = await orm.transaction(async (tx) => {
+        const locked = await lockLinkedLead(tx, fakeDoc);
+        if (locked?.id !== first.id) return `the first lock took ${String(locked?.id)}, expected ${first.id}`;
+        // another transaction links the proforma to a lead with a lower id and commits
+        await orm.update(crmLeads).set({ hasProforma: 1, proformaId: fakeDoc.id }).where(eq(crmLeads.id, moved.id));
+        try {
+          await assertLinkedLeadUnchanged(tx, fakeDoc, locked);
+          return 'the changed link was not noticed';
+        } catch (err) {
+          return (err as { code?: string }).code === 'DOCUMENT_LEAD_LINK_CHANGED' ? null : `unexpected error ${String((err as Error).message)}`;
+        }
+      });
+      if (raced) problems.push(raced);
+
       if (problems.length > 0) throw new Error(problems.join(' | '));
-      return 'the final invoice makes its lead won with history, note and notice; the sold lead stays won until the void';
+      return 'the final invoice makes its lead won with history, note and notice; the sold lead stays won until the void; a lead link changed meanwhile is refused';
     }));
   }
 
@@ -142,7 +161,7 @@ export async function runSalesCrmV11Tests(shouldRun: ShouldRun): Promise<TestCas
 
   const rows = 'reg_requisition_duplicate_item_rows_order_v11_6_4_c9';
   if (shouldRun(rows, 'v11', 'phase6', 'c9', 'procurement', 'requisition')) {
-    await runCase(results, rows, 'v11 phase 6.4 (C9): ordering a requisition with two rows of one item spreads the quantity over both rows in order, so 10 for rows 5 + 5 orders both fully, 7 orders 5 and 2 and the rest 3 orders without an over-order reason; an over-order sits on the last row', () => inFiscalSandbox(async () => {
+    await runCase(results, rows, 'v11 phase 6.4 (C9): ordering a requisition with two rows of one item spreads the quantity over both rows in order, so 10 for rows 5 + 5 orders both fully, 7 orders 5 and 2 and the rest 3 orders without an over-order reason; an over-order sits on the last row; voiding an order rebuilds the rows the same way', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       await WorkflowEngineService.seedDefaultWorkflows();
       const main = String(await getDefaultWarehouseCode(orm));
@@ -180,8 +199,20 @@ export async function runSalesCrmV11Tests(shouldRun: ShouldRun): Promise<TestCas
         problems.push(`after the over-order the rows are ${JSON.stringify(partRows.map(r => [r.orderedQty, (r.overOrders ?? []).length]))}, expected 5/0 and 7/1`);
       }
 
+      // a void rebuilds the rows from the live orders the same way (review: before, the rebuild put it all on the first row)
+      const rebuilt = await ProcurementService.createRequisition({ title: 'درخواست دو ردیف C9 ابطال', items: twoRows as never }, user);
+      await ProcurementService.convertToPurchaseOrders({ requisitionId: rebuilt.id, orderGroups: [group(6)] as never }, user);
+      const second = await ProcurementService.convertToPurchaseOrders({ requisitionId: rebuilt.id, orderGroups: [group(4)] as never }, user);
+      const admin = await sandboxAdminClient();
+      const voided = await admin.del(`/api/documents/${second.createdDocuments[0].id}`);
+      if (!ok(voided)) problems.push(`voiding the second order returned ${brief(voided)}`);
+      const rebuiltRows = await rowsOf(rebuilt.id);
+      if (rebuiltRows[0]?.orderedQty !== 5 || rebuiltRows[1]?.orderedQty !== 1 || rebuiltRows[1]?.remainingQty !== 4 || rebuiltRows[1]?.status !== 'pending') {
+        problems.push(`after voiding the order of 4 the rows are ${JSON.stringify(rebuiltRows.map(r => [r.orderedQty, r.remainingQty, r.status]))}, expected 5/0 and 1/4/pending`);
+      }
+
       if (problems.length > 0) throw new Error(problems.join(' | '));
-      return 'orders spread over the rows of one item; the remaining quantity orders without a reason';
+      return 'orders spread over the rows of one item, also when a void rebuilds them; the remaining quantity orders without a reason';
     }));
   }
 

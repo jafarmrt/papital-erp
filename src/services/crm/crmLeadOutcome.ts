@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import type { DbExecutor, DbTransaction } from '../../db/drizzle.js';
 import { crmActivities, crmLeads, documents } from '../../db/schema.js';
 import { ValidationError } from '../../errors/customErrors.js';
@@ -79,7 +79,7 @@ export async function assertSoldLeadStaysWon(executor: DbExecutor, lead: Lead, t
   const invoice = await leadFinalInvoice(executor, lead);
   if (!invoice) return;
   throw new ValidationError(
-    `پیش‌فاکتور این پرونده به فاکتور قطعی شمارهٔ ${toPersianDigits(invoice.refNumber)} تبدیل شده است؛ پرونده «فروش موفق» می‌ماند. برای تغییر، نخست آن فاکتور را باطل کنید.`,
+    `پیش‌فاکتور این پرونده به فاکتور قطعی شمارهٔ ${toPersianDigits(invoice.refNumber)} تبدیل شده است؛ پرونده فقط به «فروش موفق» می‌رود. برای مرحلهٔ دیگر، نخست آن فاکتور را باطل کنید.`,
     { leadId: lead.id, documentId: invoice.id },
     'CRM_LEAD_SOLD',
   );
@@ -92,6 +92,7 @@ export async function assertSoldLeadStaysWon(executor: DbExecutor, lead: Lead, t
 export async function lockLeadOfSalesDocument(tx: DbExecutor, docId: number): Promise<Lead | null> {
   const [lead] = await tx.select().from(crmLeads)
     .where(and(eq(crmLeads.proformaId, docId), eq(crmLeads.hasProforma, 1), eq(crmLeads.isDeleted, 0)))
+    .orderBy(asc(crmLeads.id))
     .for('update');
   return lead ?? null;
 }

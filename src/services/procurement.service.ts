@@ -729,10 +729,10 @@ export class ProcurementService {
           if (!docIds.includes(createdDocId)) documentIdsByItem.set(Number(groupItem.itemId), [...docIds, createdDocId]);
 
           // v11 phase 6.4 (C9): spread over every row of the item (`spreadOrderedQuantity`); before, the first row took it all
-          const itemRows = updatedItems.filter(r =>
-            (r.itemId && r.itemId === groupItem.itemId) ||
-            (r.itemCode && groupItem.itemCode && r.itemCode === groupItem.itemCode)
-          );
+          // by id, like `findOverOrders` and the rebuild after a void; by code only for a line without an id
+          const itemRows = updatedItems.filter(r => (groupItem.itemId
+            ? Number(r.itemId) === Number(groupItem.itemId)
+            : Boolean(r.itemCode && groupItem.itemCode && r.itemCode === groupItem.itemCode)));
 
           for (const { row: targetReqItem, added } of spreadOrderedQuantity(itemRows, groupItem.quantity)) {
             const ordQty = fin(targetReqItem.orderedQty || 0).add(added).toNumber();
