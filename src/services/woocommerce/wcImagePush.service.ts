@@ -169,7 +169,8 @@ export function runImagePushOnce(now: Date = new Date(), options: FieldRunOption
       const kept = images.slice(1).map(i => Number(i.id)).filter(id => Number.isInteger(id) && id > 0).map(id => ({ id }));
       plan.push({ link, fields: { images: [{ src }, ...kept] }, values });
     }
-    // the images found landed count as sent in this run's row, so a run that only finds them clears the last failure
+    // the images found landed count as sent in this run's row, so a run that only finds them clears the last failure (one
+    // that also fails every send is then partial, not failed; the landed links are no longer due, so the next run tells)
     return outcomeOf(await sendAndRecord('image_push', plan, steps.length, {}, signal, {
       batchSize: WC_IMAGE_BATCH_SIZE,
       landed,

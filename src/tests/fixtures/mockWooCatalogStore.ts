@@ -285,6 +285,8 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
         send({ create: create.map(({ name }) => {
           // WordPress cleans a name of its tags and refuses one left empty
           if (name.replace(/<[^>]*>|[<>]/g, '').trim() === '') return { id: 0, error: { code: 'empty_term_name', message: 'نام برچسب خالی است.', data: { status: 400 } } };
+          // delta review: a name the shop fails to write for another reason (a database error)
+          if (name === 'FAILTAG') return { id: 0, error: { code: 'db_insert_error', message: 'خطای پایگاه داده', data: { status: 500 } } };
           const taken = [...store.tags, ...store.hiddenTags].find(t => t.name.toLowerCase() === name.toLowerCase());
           if (taken) return { id: 0, error: { code: 'term_exists', message: 'برچسب هست.', data: { status: 400, resource_id: taken.id } } };
           const tag = { id: 7000 + store.tags.length, name };

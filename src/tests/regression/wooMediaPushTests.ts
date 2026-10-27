@@ -314,6 +314,13 @@ export async function collectionPushCase(h: Harness, wrong: string[]): Promise<s
     if (!String(refusedLink?.collection_error).includes('<>')) wrong.push(`the refused name was recorded as ${refusedLink?.collection_error}`);
     if (store.tagsSent.has(3) || sorted(products[0].tags) !== sorted([80, 85, silver, 81])) wrong.push(`after a refused name product 1 tags ${JSON.stringify(products[0].tags)}, product 3 sent ${store.tagsSent.has(3)}`);
 
+    // delta review: a tag the shop fails to make for another reason fails the run, sends nothing and claims nothing
+    await setCollections(own.id, ['FAILTAG']);
+    const batchesBeforeFail = store.batchSizes.length;
+    const tagFailed = await runCollectionPushOnce(later(3.5));
+    if (tagFailed.state !== 'failed' || store.batchSizes.length !== batchesBeforeFail) wrong.push(`a tag the shop failed to make ran ${tagFailed.state} with ${store.batchSizes.length - batchesBeforeFail} batches`);
+    if (sorted((await linkMedia(h, own.id))?.sent_tag_ids as number[]) !== '[]') wrong.push('a run that failed to make a tag claimed tags');
+
     // delta review N-1: a row the shop refused was not applied, so the tags claimed for it go back
     await setCollections(own.id, ['Copper']);
     store.rowErrors.add(2);
