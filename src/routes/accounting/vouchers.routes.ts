@@ -3,9 +3,11 @@
  * authenticateToken در src/routes/accounting.routes.ts پیش از این روتر اعمال می‌شود.
  */
 import { Router } from 'express';
-import { authorizePermission } from '../../middleware/authorize.js';
+import { authorizePermission, can } from '../../middleware/authorize.js';
+import { CONTROL_ADJUSTMENT_PERMISSION } from '../../lib/accounting/controlAccounts.js';
 import { RECORD_READ_PERMISSIONS } from '../../lib/recordReadPermissions.js';
 import { AccountingService } from '../../services/accounting.service.js';
+import { AccountMappingService } from '../../services/accounting/accountMapping.service.js';
 import { logActivity, extractClientIp } from '../../lib/auditLogger.js';
 import { validate, paramsIdSchema } from '../../middleware/validate.js';
 import { idempotency } from '../../middleware/idempotency.js';
@@ -53,12 +55,20 @@ router.get('/accounting/vouchers/:id', authorizePermission(...RECORD_READ_PERMIS
   res.json(voucher);
 }));
 
+// v11 phase 6.1b (M3): the control accounts, so the voucher forms say which rows need the permission and a reason
+router.get('/accounting/control-accounts', authorizePermission('accounting.vouchers'), asyncHandler(async (_req, res) => {
+  res.json({ success: true, data: await AccountMappingService.listControlAccounts() });
+}));
+
 router.post('/accounting/vouchers', authorizePermission('accounting.vouchers'), idempotency({ scope: 'accounting_voucher' }), validate(createVoucherSchema), asyncHandler(async (req, res) => {
+  const { controlReason, ...fields } = req.body;
   const voucher = await AccountingService.createJournalVoucher({
-    ...req.body,
+    ...fields,
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
     manualEntry: true, // v9.0.190 (TD-551، ت۷): ارز و نرخ هر ردیف و تراز ریالی سند دستی
+    // v11 phase 6.1b (M3): a row on a control account needs the permission and the reason
+    controlAdjustment: { mayAdjust: await can(req.user, CONTROL_ADJUSTMENT_PERMISSION), reason: controlReason },
   });
   await logActivity({
     userId: req.user?.id,
@@ -76,10 +86,13 @@ router.post('/accounting/vouchers', authorizePermission('accounting.vouchers'), 
 
 router.put('/accounting/vouchers/:id', authorizePermission('accounting.vouchers'), idempotency({ scope: 'accounting_voucher' }), validate(updateVoucherSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const { version, ...changes } = req.body;
+  const { version, controlReason, ...changes } = req.body;
   // v9.0.295 (TD-555، B03-13): پیش از ویرایش خوانده می‌شود؛ ویرایش با نسخه خوانده‌شده فقط همین حالت را تغییر می‌دهد (نسخه دیگر ۴۰۹)
   const before = await AccountingService.getJournalVoucherById(id);
-  const voucher = await AccountingService.updateJournalVoucher(id, { ...changes, manualEntry: true, expectedVersion: version, userId: req.user?.id }); // v9.0.190 (TD-551)
+  const voucher = await AccountingService.updateJournalVoucher(id, {
+    ...changes, manualEntry: true, expectedVersion: version, userId: req.user?.id, // v9.0.190 (TD-551)
+    controlAdjustment: { mayAdjust: await can(req.user, CONTROL_ADJUSTMENT_PERMISSION), reason: controlReason }, // v11 phase 6.1b (M3)
+  });
   await logActivity({
     userId: req.user?.id,
     username: req.user?.username || 'system',
@@ -97,7 +110,7 @@ router.put('/accounting/vouchers/:id', authorizePermission('accounting.vouchers'
 router.delete('/accounting/vouchers/:id', authorizePermission('accounting.vouchers'), idempotency({ scope: 'accounting' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const before = await AccountingService.getJournalVoucherById(id); // v9.0.295 (TD-555): ممیزی حذف کل سند را دارد
-  const result = await AccountingService.deleteJournalVoucher(id);
+  const result = await AccountingService.deleteJournalVoucher(id, { mayAdjustControl: await can(req.user, CONTROL_ADJUSTMENT_PERMISSION) });
   await logActivity({
     userId: req.user?.id,
     username: req.user?.username || 'system',
@@ -122,6 +135,7 @@ router.post('/accounting/vouchers/:id/reverse', authorizePermission('accounting.
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
     manualEntry: true, // v9.0.294 (TD-552، ت۸): سند منشأدار فقط با ابطال منشأ برمی‌گردد
+    mayAdjustControl: await can(req.user, CONTROL_ADJUSTMENT_PERMISSION), // v11 phase 6.1b (M3)
   });
 
   await logActivity({
@@ -153,6 +167,7 @@ router.post('/accounting/vouchers/:id/correct', authorizePermission('accounting.
     newDescription,
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
+    mayAdjustControl: await can(req.user, CONTROL_ADJUSTMENT_PERMISSION), // v11 phase 6.1b (M3)
   });
 
   await logActivity({

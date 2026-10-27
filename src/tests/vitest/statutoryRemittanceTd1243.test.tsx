@@ -15,12 +15,11 @@ vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: (key: string) =
 
 import {
   STATUTORY_REMITTANCE_NOTHING, STATUTORY_REMITTANCE_PERMISSION, STATUTORY_REMITTANCE_TEXT, STATUTORY_UNASSIGNED_ACK_LABEL,
-  statutoryContraWarning, statutoryRemittanceDraftLines, statutoryRemittanceFormError, statutoryRemittancePayload, statutoryRemittanceTotal,
+  statutoryRemittanceDraftLines, statutoryRemittanceFormError, statutoryRemittancePayload, statutoryRemittanceTotal,
   type StatutoryRemittanceOptions, type StatutoryUnassignedPayments,
 } from '../../lib/treasury/statutoryRemittance';
 import { StatutoryRemittanceModal } from '../../components/piecework/StatutoryRemittanceModal';
 import { PayrollStatutoryReportModal } from '../../components/piecework/PayrollStatutoryReportModal';
-import { ContraAccountField } from '../../components/accounting/treasury/ContraAccountField';
 
 /**
  * TD-1243 (product-owner decision t33 «الف»): one treasury payment for a month's insurance or payroll tax list, with a
@@ -62,7 +61,6 @@ function serve(rows: StatutoryRemittanceOptions['rows'], unassigned = NO_UNASSIG
     if (url === '/accounting/treasury/contra-accounts') {
       return { data: [
         { id: 70, code: '7009', name: 'سایر هزینه‌ها', accountType: 'expense' },
-        { id: 32, code: '3204', name: ACCOUNT_NAME, accountType: 'liability', statutoryKind: 'insurance' },
       ] };
     }
     return {};
@@ -185,17 +183,5 @@ describe('remittance window (TD-1243)', () => {
     render(wrap(<PayrollStatutoryReportModal onClose={() => undefined} />));
     expect(await screen.findByRole('button', { name: STATUTORY_REMITTANCE_TEXT.insurance.button })).toBeTruthy();
     expect(screen.getByRole('button', { name: STATUTORY_REMITTANCE_TEXT.tax.button })).toBeTruthy();
-  });
-});
-
-describe('treasury form counter account (TD-1243)', () => {
-  it('warns, without refusing, when the counter account is the insurance payable account', async () => {
-    serve([]);
-    render(wrap(<ContraAccountField value={32} onChange={() => undefined} />));
-    expect(await screen.findByText(statutoryContraWarning('insurance'))).toBeTruthy();
-    cleanup();
-    render(wrap(<ContraAccountField value={70} onChange={() => undefined} />));
-    await waitFor(() => expect(fetchJson).toHaveBeenCalled());
-    expect(screen.queryByText(statutoryContraWarning('insurance'))).toBeNull();
   });
 });

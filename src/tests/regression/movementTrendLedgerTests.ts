@@ -1,4 +1,5 @@
 import { inArray } from 'drizzle-orm';
+import { testSupplier } from '../fixtures/factories.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { items, transactions } from '../../db/schema.js';
@@ -42,8 +43,9 @@ export async function runMovementTrendLedgerTests(shouldRun: (id: string, ...ext
     };
     const before = await totals();
 
+    const supplier = await testSupplier('td492');
     const receipt = (quantity: number) => DocumentService.createDocument({
-      docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'td492', buyerName: 'td492',
+      docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'td492', buyerName: supplier,
       location: main, items: [{ itemId: a.id, quantity, unit_price: 100, location: main }],
     });
     await receipt(10);

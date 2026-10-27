@@ -40,7 +40,8 @@ async function activeReversals(voucherId: number): Promise<number> {
  */
 export async function checkVoucherReversedOnce(): Promise<string[]> {
   const correction = async (voucherId: number) => VoucherService.correctVoucher({
-    voucherId, reason: 'اصلاح مبلغ', date: '2026-04-02', newItems: await voucherLines(900000),
+    // v11 phase 6.1b (M3): cash 1001 may be a treasury account's ledger, a control account; the corrector holds the permission
+    voucherId, reason: 'اصلاح مبلغ', date: '2026-04-02', newItems: await voucherLines(900000), mayAdjustControl: true,
   });
   const reverse = (voucherId: number) => VoucherService.reverseVoucher({ voucherId, date: '2026-04-02', reason: 'ابطال' });
 

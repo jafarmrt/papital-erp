@@ -11,7 +11,7 @@ import { BankAccountService } from '../../services/accounting/treasury/bankAccou
 import { VoucherService } from '../../services/accounting/voucher.service.js';
 import { VoucherSyncService } from '../../services/accounting/voucherSync.service.js';
 import { DocumentService } from '../../services/document.service.js';
-import { createTestItem } from '../fixtures/factories.js';
+import { testSupplier, createTestItem } from '../fixtures/factories.js';
 
 /**
  * v8.0.15 — سناریوی سخت‌گیرانه ردیف‌های حذف‌شده سند حسابداری در گزارش‌ها (TD-270) برای سوئیت business_invariants.
@@ -52,7 +52,7 @@ export async function checkReportsIgnoreDeletedVoucherItems(wh: string): Promise
   const ledgerBefore = await healthMetric('inventory_reconciliation', 'ledgerValuation');
   // رسید خرید ۱۰ × ۱۰۰٬۰۰۰ (بدهکار موجودی مواد ۱٬۰۰۰٬۰۰۰)، همگام‌سازی دوباره سند پیش‌نویس و سپس تأیید
   const receipt = await DocumentService.createDocument({
-    docType: 'receipt', inOut: 'in', status: 'final', date: '2026-06-01', user: 'inv', buyerName: 'تامین‌کننده آزمون TD-270',
+    docType: 'receipt', inOut: 'in', status: 'final', date: '2026-06-01', user: 'inv', buyerName: await testSupplier('تامین‌کننده آزمون TD-270'),
     items: [{ itemId: material.id, quantity: 10, unitPrice: 100000, location: wh }],
   });
   await VoucherSyncService.syncPurchaseInvoiceVoucher(receipt, { strict: true });

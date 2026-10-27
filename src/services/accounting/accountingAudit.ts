@@ -22,6 +22,8 @@ export interface VoucherAuditSnapshot {
   totalDebit: string;
   totalCredit: string;
   version: string;
+  /** v11 phase 6.1b (M3): the reason of the rows on a control account */
+  controlReason: string;
   rows: Array<{
     account: string;
     detailedType: string;
@@ -47,6 +49,7 @@ export function voucherAuditSnapshot(v: JournalVoucher): VoucherAuditSnapshot {
     totalDebit: text(v.totalDebit),
     totalCredit: text(v.totalCredit),
     version: text(v.version),
+    controlReason: text(v.controlReason),
     rows: (Array.isArray(v.items) ? v.items : []).map(item => ({
       account: text(item.accountCode ?? item.accountId),
       detailedType: text(item.detailedType),

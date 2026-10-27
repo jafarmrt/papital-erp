@@ -36,11 +36,18 @@ export default async function globalSetup(): Promise<void> {
       headers,
       data: { type: 'product', name: `گردنبند آزمون ${suffix}`, code: itemCode, unit: 'عدد', category: 'گردنبند' },
     }));
+    // v11 phase 6.1b (C8, S16): a priced purchase receipt finalizes only with a supplier on the party list
+    const supplierName = `تأمین‌کننده آزمون سرتاسری ${suffix}`;
+    const supplier = await ensureOk('supplier', await api.post('/api/customers', {
+      headers,
+      data: { name: supplierName, phone: `0935${String(Date.now()).slice(-7)}`, partyType: 'supplier' },
+    }));
+    const supplierId = Number((supplier.data as Record<string, unknown> | undefined)?.id ?? supplier.id);
     await ensureOk('receipt', await api.post('/api/documents', {
       headers,
       data: {
         docType: 'receipt', inOut: 'in', status: 'final', refNumber: `PW-REC-${suffix}`, date: '1405/07/10',
-        buyerName: 'تأمین‌کننده آزمون سرتاسری', items: [{ itemId: item.id, quantity: 20, unit_price: 400000 }],
+        partyId: supplierId, buyerName: supplierName, items: [{ itemId: item.id, quantity: 20, unit_price: 400000 }],
       },
     }));
     await ensureOk('customer', await api.post('/api/customers', {

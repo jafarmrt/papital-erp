@@ -6,7 +6,7 @@ import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { FiscalPeriodService } from '../../services/accounting/fiscalPeriod.service.js';
 import { getDefaultWarehouseCode } from '../../services/inventory/warehouseResolver.js';
-import { createTestItem, createTestWarehouse } from '../fixtures/factories.js';
+import { testSupplier, createTestItem, createTestWarehouse } from '../fixtures/factories.js';
 import { miscContraAccountId } from '../fixtures/treasuryParty.js';
 import { newTask, newWorker } from '../invariants/payrollScenarios.js';
 import { TestCaseResult } from '../types.js';
@@ -246,11 +246,11 @@ export async function runMoneyUrgentFixesV11Tests(shouldRun: ShouldRun): Promise
       const other = await createTestWarehouse();
       const item = await createTestItem({ type: 'raw_material', stocks: { [main]: 50 }, weightedAverageCost: 1000 });
       refused('a receipt line quantity of Persian 1,2', await api.post('/api/documents', {
-        docType: 'receipt', status: 'draft', refNumber: 'auto', date: today, location: main, buyer_name: 'M4 supplier',
+        docType: 'receipt', status: 'draft', refNumber: 'auto', date: today, location: main, buyer_name: await testSupplier('M4 supplier'),
         items: [{ itemId: item.id, quantity: PERSIAN_QUANTITY, unit_price: 1000 }],
       }));
       refused('a receipt line price of «12,5»', await api.post('/api/documents', {
-        docType: 'receipt', status: 'draft', refNumber: 'auto', date: today, location: main, buyer_name: 'M4 supplier',
+        docType: 'receipt', status: 'draft', refNumber: 'auto', date: today, location: main, buyer_name: await testSupplier('M4 supplier'),
         items: [{ itemId: item.id, quantity: 1, unit_price: '12,5' }],
       }));
       refused('a warehouse transfer of «1,2»', await api.post('/api/inventory/transfer', { itemId: item.id, fromLocation: main, toLocation: other.code, quantity: '1,2', date: today }));

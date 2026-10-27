@@ -9,7 +9,7 @@ import { ChequeLifecycleService } from '../../services/accounting/treasury/chequ
 import { TreasuryTransactionService } from '../../services/accounting/treasury/treasuryTransaction.service.js';
 import { VoucherService } from '../../services/accounting/voucher.service.js';
 import { DocumentService } from '../../services/document.service.js';
-import { createTestItem } from '../fixtures/factories.js';
+import { testSupplier, createTestItem } from '../fixtures/factories.js';
 import { getErrorMessage } from '../../utils/formatters.js';
 
 /**
@@ -127,7 +127,7 @@ export async function checkForeignTreasuryUsesRate(wh: string): Promise<string[]
   // ب) تسویه فاکتور دلاری (نرخ فاکتور ۶۵۰٬۰۰۰) بی نرخ صریح ← همان نرخ فاکتور؛ حساب مشتری به ریال بسته می‌شود
   const buyer = `مشتری تسویه دلاری ${tag('I')}`;
   const product = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
-  await DocumentService.createDocument({ docType: 'receipt', inOut: 'in', status: 'final', date: '2026-04-01', user: 'inv', items: [{ itemId: product.id, quantity: 1, unitPrice: 100000, location: wh }] });
+  await DocumentService.createDocument({ docType: 'receipt', inOut: 'in', status: 'final', date: '2026-04-01', user: 'inv', buyerName: await testSupplier('تامین‌کننده آزمون انبار'), items: [{ itemId: product.id, quantity: 1, unitPrice: 100000, location: wh }] });
   const invoice = await DocumentService.createDocument({
     docType: 'invoice', inOut: 'out', status: 'final', date: '2026-04-02', user: 'inv', buyerName: buyer, currency: 'USD', exchangeRate: 650000,
     items: [{ itemId: product.id, quantity: 1, unitPrice: 2, location: wh }],

@@ -441,6 +441,12 @@ export function JournalVouchersTab({
                               ارجاع: {voucherReferenceText(voucher.referenceModule, voucher.referenceNumber)}
                             </div>
                           )}
+                          {/* v11 phase 6.1b (M3): a manual voucher on a control account shows its reason */}
+                          {voucher.controlReason && (
+                            <div className="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5">
+                              دلیل ثبت روی حساب کنترلی: {voucher.controlReason}
+                            </div>
+                          )}
                         </td>
 
                         <td className="py-3 px-4 text-left font-mono font-black text-slate-900 dark:text-white">

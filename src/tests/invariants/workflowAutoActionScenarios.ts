@@ -6,7 +6,7 @@ import type { BaseDomainEvent } from '../../services/events/domainEvents.js';
 import { getDefaultWarehouseCode } from '../../services/inventory/warehouseResolver.js';
 import { ProcurementService } from '../../services/procurement.service.js';
 import { WorkflowTransitionExecutor } from '../../services/workflow/workflowTransitionExecutor.js';
-import { createTestItem, createTestUser, createTestVoucher, createTestWorkflow } from '../fixtures/factories.js';
+import { testSupplier, createTestItem, createTestUser, createTestVoucher, createTestWorkflow } from '../fixtures/factories.js';
 import { itemState, receive } from './scenarioHelpers.js';
 import { refusal } from './workflowScenarioHelpers.js';
 
@@ -34,10 +34,11 @@ async function requisition(lines: Array<[number, number]>): Promise<number> {
 }
 
 async function draftOrders(requisitionId: number, groups: Array<Array<[number, number]>>): Promise<number[]> {
+  const suppliers = await Promise.all(groups.map((_, i) => testSupplier(`تامین‌کننده آزمون اقدام خودکار ${i + 1}`)));
   const { createdDocuments } = await ProcurementService.convertToPurchaseOrders({
     requisitionId,
     orderGroups: groups.map((lines, i) => ({
-      supplierName: `تامین‌کننده آزمون اقدام خودکار ${i + 1}`, targetWarehouse: '', status: 'draft',
+      supplierName: suppliers[i], targetWarehouse: '', status: 'draft',
       items: lines.map(([itemId, quantity]) => ({ itemId, quantity, unitPrice: 1000 })),
     })),
   } as Parameters<typeof ProcurementService.convertToPurchaseOrders>[0], ADMIN);

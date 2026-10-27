@@ -79,7 +79,7 @@ export function buildStatutoryPaymentsHealthTest(entries: StatutoryPaymentWithou
     count: entries.length,
     message: entries.length === 0
       ? 'همه پرداخت‌های بیمه و مالیات حقوق به نام پرسنل ثبت شده است.'
-      : `${toPersianDigits(String(entries.length))} سند پرداخت بیمه یا مالیات حقوق بی نام پرسنل است. مبلغ هر سند را با سند اصلاحی (بدهکار همان حساب با تفصیلی هر نفر و بستانکار همان حساب بی تفصیلی) به نام پرسنل ببرید.`,
+      : `${toPersianDigits(String(entries.length))} سند پرداخت بیمه یا مالیات حقوق بی نام پرسنل است. مبلغ هر سند را با سند اصلاحی (بدهکار همان حساب با تفصیلی هر نفر و بستانکار همان حساب بی تفصیلی) به نام پرسنل ببرید؛ این حساب کنترلی است و سند اصلاحی را کسی ثبت می‌کند که اجازهٔ «اصلاح حساب کنترلی» دارد، با نوشتن دلیل.`,
     items: entries.map(e => ({
       id: e.voucherId,
       code: toPersianDigits(e.voucherNumber),

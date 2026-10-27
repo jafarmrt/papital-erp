@@ -1,4 +1,5 @@
 import { asc, eq, inArray } from 'drizzle-orm';
+import { testSupplier } from '../fixtures/factories.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { items, transactions } from '../../db/schema.js';
@@ -40,7 +41,7 @@ export async function runKardexBackfillNoRewriteTests(shouldRun: (id: string, ..
 
     // a receipt 10 x 100 moves the live WAC to (5 x 0 + 10 x 100) / 15 = 66.6667
     await DocumentService.createDocument({
-      docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'td488', buyerName: 'td488',
+      docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'td488', buyerName: await testSupplier('td488'),
       location: main, items: [{ itemId: a.id, quantity: 10, unit_price: 100, location: main }],
     });
     const liveWac = Number((await orm.select({ w: items.weightedAverageCost }).from(items).where(eq(items.id, a.id)))[0]?.w);

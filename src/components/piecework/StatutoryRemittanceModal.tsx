@@ -57,9 +57,10 @@ export function StatutoryRemittanceModal({ kind, jalaliYear, jalaliMonth, onClos
   const [lines, setLines] = useState<StatutoryRemittanceDraftLine[]>([]);
   const banksQuery = useBankAccountOptionsQuery();
   const banks = useMemo(() => (banksQuery.data ?? []).filter(b => (b.currency || 'IRR') === 'IRR' && b.hasLedgerAccount), [banksQuery.data]);
-  // جریمه هزینه است: «بیمه پرداختنی» و «مالیات حقوق پرداختنی» سرفصل جریمه نیستند (سرور هم رد می‌کند)
+  // جریمه هزینه است: «بیمه پرداختنی» و «مالیات حقوق پرداختنی» سرفصل جریمه نیستند؛ فهرست سرفصل طرف مقابل حساب‌های کنترلی
+  // (و این دو) را ندارد (v11 phase 6.1b, M6) و سرور هم رد می‌کند
   const contraQuery = useContraAccountsQuery(true);
-  const penaltyAccounts = useMemo(() => (contraQuery.data ?? []).filter(a => !a.statutoryKind), [contraQuery.data]);
+  const penaltyAccounts = useMemo(() => contraQuery.data ?? [], [contraQuery.data]);
   const [bankAccountId, setBankAccountId] = useState('');
   const [date, setDate] = useState(getTodayIsoDate());
   const [method, setMethod] = useState<StatutoryRemittanceMethod>('bank_transfer');

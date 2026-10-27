@@ -18,6 +18,7 @@ import { assertVoucherRowsBalanced, isVoucherBalancedForFinalize, resolveManualV
 // v7.0.49 (audit P2-5): ثابت یگانه تلورانس تراز؛ v7.0.76 به src/lib/voucherBalance.ts منتقل شد تا فرم‌ها هم آن را بخوانند
 import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
 import { assertPostingAccounts } from './postingAccounts.js';
+import { assertManualControlRows, assertMayChangeControlVoucher, resolveManualRowDetails, type ControlAdjustment } from './manualVoucherRows.js';
 import { assertManualVoucherDate } from './manualVoucherDate.js';
 import { isReversalReference } from '../../lib/accounting/voucherSource.js';
 import { assertVoucherWithoutSource, voucherActiveReversals, voucherSourceKinds } from './voucherSource.js';
@@ -297,6 +298,8 @@ export class VoucherService {
     username?: string;
     /** v9.0.190 (TD-551، ت۷): سند دستی از مسیر اسناد؛ فقط مسیر آن را می‌گذارد، هرگز از بدنه درخواست */
     manualEntry?: boolean;
+    /** v11 phase 6.1b (M3): a manual voucher on a control account; the route sets the permission, never the body */
+    controlAdjustment?: ControlAdjustment;
     items: {
       accountId: number;
       detailedType?: 'none' | 'customer' | 'personnel' | 'project' | 'bank_account' | 'other' | 'supplier' | string;
@@ -316,7 +319,7 @@ export class VoucherService {
     // Verify double-entry balance — v7.0.49 (audit P2-5): آستانه واحد VOUCHER_BALANCE_TOLERANCE در ثبت و قطعی‌سازی؛
     // v9.0.190 (TD-551، ت۷): سند چندارزی به ریال و سند دستی با ارز و نرخ قطعی هر ردیف
     const manualRows = data.manualEntry ? resolveManualVoucherRows(data.items, data.currency) : null;
-    const items = manualRows?.rows ?? data.items;
+    const balancedRows = manualRows?.rows ?? data.items;
     const { sumDebit, sumCredit } = manualRows?.totals ?? assertVoucherRowsBalanced(data.items, data.currency);
 
     const executeWork = async (tx: DbExecutor) => {
@@ -330,7 +333,10 @@ export class VoucherService {
       // v11 phase 6.1a (M9): a manual voucher is dated neither after today nor before the books' first fiscal year
       if (data.manualEntry) await assertManualVoucherDate(tx, voucherDate, 'تاریخ سند');
       // v9.0.198 (TD-549، B03-07): ردیف سند دستی فقط روی حساب فعال معین یا تفصیلیِ بی زیرحساب فعال
-      if (data.manualEntry) await assertPostingAccounts(tx, items.map(item => item.accountId));
+      if (data.manualEntry) await assertPostingAccounts(tx, balancedRows.map(item => item.accountId));
+      // v11 phase 6.1b (M3): a control account only with the permission and a reason; each detail a live record of its type
+      const controlReason = data.manualEntry ? await assertManualControlRows(tx, balancedRows, data.controlAdjustment ?? { mayAdjust: false }) : '';
+      const items = data.manualEntry ? await resolveManualRowDetails(tx, balancedRows) : balancedRows;
       // v10.0.27 (TD-965): سند دستی تأییدشده یعنی ثبت‌کننده‌اش آن را تأیید کرده است
       if (data.manualEntry && data.status === 'approved') await assertManualApprovedCreateAllowed(tx, data.userId);
 
@@ -358,6 +364,7 @@ export class VoucherService {
         createdByUsername: data.username || '',
         // حوزه H (TD-308): سندی که با وضعیت «تأییدشده» ساخته می‌شود تأییدکننده‌اش (ثبت‌کننده) را دارد
         approvedById: data.status === 'approved' ? (data.userId || null) : null,
+        controlReason,
       }).returning();
       // v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک؛ ستون attachments فقط فراداده
       voucher.attachments = await AttachmentStorageService.attachToNewRecord(tx, 'journal_voucher', voucher.id, data.attachments, data.username);
@@ -406,6 +413,11 @@ export class VoucherService {
     expectedVersion?: number;
     /** v10.0.27 (TD-965): ویرایشگر؛ ثبت‌کننده سند دستی آن را تأیید نمی‌کند */
     userId?: number;
+    /**
+     * v11 phase 6.1b (M3): the rows sent replace the voucher's rows, under the rule of `createJournalVoucher` over the sent
+     * and the replaced rows; a header edit of a voucher with a control row needs the permission too
+     */
+    controlAdjustment?: ControlAdjustment;
     items?: {
       accountId: number;
       detailedType?: 'none' | 'customer' | 'personnel' | 'project' | 'bank_account' | 'other' | 'supplier' | string;
@@ -448,13 +460,24 @@ export class VoucherService {
 
       let sumDebit = fin(existing.totalDebit);
       let sumCredit = fin(existing.totalCredit);
+      let controlReason: string | undefined;
+      const replacesRows = Boolean(data.items && data.items.length >= 2);
+      // v11 phase 6.1b (M3, review of #407): a header edit of a voucher with a control row is an adjustment too
+      if (data.manualEntry && !replacesRows) await assertMayChangeControlVoucher(tx, id, data.controlAdjustment?.mayAdjust === true);
 
-      if (data.items && data.items.length >= 2) {
+      if (data.items && replacesRows) {
         // v9.0.190 (TD-551، ت۷): ارز ردیف بی ارز، ارز ذخیره‌شده سند است (سرآیند در ویرایش عوض نمی‌شود)
         const manualRows = data.manualEntry ? resolveManualVoucherRows(data.items, existing.currency) : null;
-        const items = manualRows?.rows ?? data.items;
+        const balancedRows = manualRows?.rows ?? data.items;
         ({ sumDebit, sumCredit } = manualRows?.totals ?? assertVoucherRowsBalanced(data.items, existing.currency));
-        if (data.manualEntry) await assertPostingAccounts(tx, items.map(item => item.accountId)); // v9.0.198 (TD-549)
+        if (data.manualEntry) await assertPostingAccounts(tx, balancedRows.map(item => item.accountId)); // v9.0.198 (TD-549)
+        // v11 phase 6.1b (M3): as at registration, over the sent rows and the rows they replace; new rows bring their reason
+        if (data.manualEntry) {
+          const replaced = await tx.select({ accountId: journalVoucherItems.accountId }).from(journalVoucherItems)
+            .where(and(eq(journalVoucherItems.voucherId, id), eq(journalVoucherItems.isDeleted, 0)));
+          controlReason = await assertManualControlRows(tx, balancedRows, data.controlAdjustment ?? { mayAdjust: false }, replaced);
+        }
+        const items = data.manualEntry ? await resolveManualRowDetails(tx, balancedRows) : balancedRows;
 
         // V6.0.21 (TD-157): Soft-delete old items instead of physical hard delete (RULE 09)
         await tx.update(journalVoucherItems).set({ isDeleted: 1 }).where(and(eq(journalVoucherItems.voucherId, id), eq(journalVoucherItems.isDeleted, 0)));
@@ -486,6 +509,7 @@ export class VoucherService {
         ...(data.status ? { status: data.status } : {}),
         ...(data.userId ? { updatedById: data.userId } : {}),
         ...(storedAttachments !== undefined ? { attachments: storedAttachments } : {}),
+        ...(controlReason !== undefined ? { controlReason } : {}),
         totalDebit: money(sumDebit),
         totalCredit: money(sumCredit),
         version: existing.version + 1, // v9.0.295 (TD-555)
@@ -503,7 +527,11 @@ export class VoucherService {
     return this.getJournalVoucherById(id, externalTx);
   }
 
-  static async deleteJournalVoucher(id: number): Promise<{ success: boolean }> {
+  static async deleteJournalVoucher(
+    id: number,
+    /** v11 phase 6.1b (M3): `accounting.control_adjustment`, checked by the route */
+    options: { mayAdjustControl?: boolean } = {},
+  ): Promise<{ success: boolean }> {
     return await idempotentTransaction(async (tx) => {
       const [existing] = await tx.select().from(journalVouchers).where(and(eq(journalVouchers.id, id), eq(journalVouchers.isDeleted, 0))).for('update');
       if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
@@ -515,6 +543,8 @@ export class VoucherService {
       if (existing.status === 'approved') {
         throw new BusinessLogicError('اسناد تاییدشده حسابداری به دلیل اثرگذاری در دفاتر و گزارش‌ها قابل حذف مستقیم نیستند. برای حذف، ابتدا سند را به وضعیت «پیش‌نویس» برگردانید یا در صورت نیاز از «صدور سند برگشتی (ابطال سند)» استفاده کنید.');
       }
+      // v11 phase 6.1b (M3): after the state rules, so a voucher that may not be deleted at all says why
+      await assertMayChangeControlVoucher(tx, id, options.mayAdjustControl === true);
 
       await this.checkFiscalPeriodOpen(existing.date, tx);
 
@@ -631,6 +661,8 @@ export class VoucherService {
       allowYearEndClosing?: boolean;
       /** v9.0.294 (TD-552، ت۸): برگشت از صفحه اسناد حسابداری؛ سند منشأدار فقط با ابطال منشأ برمی‌گردد */
       manualEntry?: boolean;
+      /** v11 phase 6.1b (M3): `accounting.control_adjustment`, checked by the route; read only with `manualEntry` */
+      mayAdjustControl?: boolean;
     }
   ): Promise<JournalVoucher> {
 
@@ -679,6 +711,8 @@ export class VoucherService {
           `برای سند شماره «${original.voucherNumber}» قبلاً سند برگشت به شماره «${otherReversal.voucherNumber}» صادر گردیده است و امکان ابطال مجدد وجود ندارد.`
         );
       }
+      // v11 phase 6.1b (M3): after the state rules, so a voucher that may not be reversed at all says why
+      if (params.manualEntry) await assertMayChangeControlVoucher(tx, original.id, params.mayAdjustControl === true);
 
       const originalItems = await tx.select().from(journalVoucherItems)
         .where(and(
@@ -775,6 +809,11 @@ export class VoucherService {
       newDescription?: string;
       userId?: number;
       username?: string;
+      /**
+       * v11 phase 6.1b (M3): `accounting.control_adjustment`, for the original's control rows the reversal takes off and
+       * the replacement's; the correction's reason is the reason of its control rows
+       */
+      mayAdjustControl?: boolean;
     }
   ): Promise<{ reversalVoucher: JournalVoucher; correctedVoucher: JournalVoucher; message: string }> {
     // 10.3 package 6 (TD-1386, decision t5 A): a refusal of the caller's input is a 422, as the route's schema answers it
@@ -822,6 +861,8 @@ export class VoucherService {
           `برای سند شماره «${original.voucherNumber}» قبلاً سند معکوس اصلاحی به شماره «${existingReversal.voucherNumber}» صادر گردیده است.`
         );
       }
+      // v11 phase 6.1b (M3): after the state rules, so a voucher that may not be corrected at all says why
+      await assertMayChangeControlVoucher(tx, original.id, params.mayAdjustControl === true);
 
       // 1. Create Reversal Voucher
       const revNumber = await this.getNextVoucherNumber(tx);
@@ -877,6 +918,7 @@ export class VoucherService {
         userId: params.userId,
         username: params.username,
         manualEntry: true,
+        controlAdjustment: { mayAdjust: params.mayAdjustControl === true, reason: params.reason },
         items: params.newItems.map(item => ({ ...item, description: item.description?.trim() || corrDesc })),
       }, tx);
 

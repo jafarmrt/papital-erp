@@ -3,7 +3,7 @@ import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { DocumentService } from '../../services/document.service.js';
 import { ProcurementService } from '../../services/procurement.service.js';
 import { getErrorMessage } from '../../utils/formatters.js';
-import { createTestItem } from '../fixtures/factories.js';
+import { testSupplier, createTestItem } from '../fixtures/factories.js';
 import type { InvariantScope } from './businessInvariants.js';
 import { invariantProblems, itemState, receive, watermarks } from './scenarioHelpers.js';
 
@@ -60,7 +60,7 @@ export async function checkProcurementDeliveryIncomingOnly(wh: string): Promise<
   }, USER);
   const { createdDocuments } = await ProcurementService.convertToPurchaseOrders({
     requisitionId: requisition.id,
-    orderGroups: [{ supplierName: 'تامین‌کننده آزمون TD-267', docType: 'proforma', targetWarehouse: wh, items: [{ itemId: item.id, quantity: 4, unitPrice: 90000 }] }],
+    orderGroups: [{ supplierName: await testSupplier('تامین‌کننده آزمون TD-267'), docType: 'proforma', targetWarehouse: wh, items: [{ itemId: item.id, quantity: 4, unitPrice: 90000 }] }],
   }, USER);
   const orderId = Number(createdDocuments[0]?.id);
   const orderRow = await docRow(orderId);
@@ -72,7 +72,7 @@ export async function checkProcurementDeliveryIncomingOnly(wh: string): Promise<
 
   // ج) نهایی‌سازی سند نوع purchase ورود کالاست (همان قاعده ثبت سند)
   const purchaseDraft = await DocumentService.createDocument({
-    docType: 'purchase', status: 'draft', date: await businessTodayIsoDate(), user: 'inv', buyerName: 'تامین‌کننده آزمون TD-267',
+    docType: 'purchase', status: 'draft', date: await businessTodayIsoDate(), user: 'inv', buyerName: await testSupplier('تامین‌کننده آزمون TD-267'),
     items: [{ itemId: item.id, quantity: 2, unitPrice: 95000, location: wh }],
   });
   await DocumentService.finalizeDocument(purchaseDraft, 'inv');
@@ -107,7 +107,7 @@ export async function checkSplitOrderFormAccepted(): Promise<string[]> {
 
   const res = await postSplitOrderForm(req.id, {
     orderGroups: [{
-      supplierName: 'تامین‌کننده آزمون TD-291', targetWarehouse: target.code, docType: 'receipt', status: 'draft', notes: 'بسته ۱',
+      supplierName: await testSupplier('تامین‌کننده آزمون TD-291'), targetWarehouse: target.code, docType: 'receipt', status: 'draft', notes: 'بسته ۱',
       items: [{ itemId: item.id, itemCode: item.code, itemName: item.name, quantity: 5, unitPrice: 1000, unit: 'عدد' }],
     }],
     closeRequisition: true,
@@ -147,7 +147,8 @@ async function requisitionState(requisitionId: number): Promise<{ ordered: numbe
 export async function checkRequisitionOverOrderNeedsReason(wh: string): Promise<string[]> {
   const problems: string[] = [];
   const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
-  const group = (quantity: number, itemId = item.id) => ({ supplierName: 'تامین‌کننده آزمون TD-289', targetWarehouse: wh, items: [{ itemId, quantity, unitPrice: 1000 }] });
+  const supplier = await testSupplier('تامین‌کننده آزمون TD-289');
+  const group = (quantity: number, itemId = item.id) => ({ supplierName: supplier, targetWarehouse: wh, items: [{ itemId, quantity, unitPrice: 1000 }] });
   const convert = (requisitionId: number, groups: unknown[], overOrderReason?: string) =>
     ProcurementService.convertToPurchaseOrders({ requisitionId, orderGroups: groups as never, overOrderReason }, USER);
   const refusal = async (fn: () => Promise<unknown>) => { try { await fn(); return null; } catch (err) { return getErrorMessage(err); } };

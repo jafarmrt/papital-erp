@@ -3,7 +3,7 @@ import { orm } from '../../db/drizzle.js';
 import { items } from '../../db/schema.js';
 import { DocumentService } from '../../services/document.service.js';
 import { getErrorMessage } from '../../utils/formatters.js';
-import { createTestItem } from '../fixtures/factories.js';
+import { testSupplier, createTestItem } from '../fixtures/factories.js';
 import type { InvariantScope } from './businessInvariants.js';
 import { invariantProblems, itemState, receive, watermarks } from './scenarioHelpers.js';
 import { outcomeProblems, raceBehindRowLock, untilQueued } from './concurrencyHarness.js';
@@ -20,9 +20,9 @@ function invoice(lines: Array<[number, number]>, wh: string, date: string, statu
   });
 }
 
-function receipt(lines: Array<[number, number]>, wh: string, date: string): Promise<number> {
+async function receipt(lines: Array<[number, number]>, wh: string, date: string): Promise<number> {
   return DocumentService.createDocument({
-    docType: 'receipt', inOut: 'in', status: 'final', date, user: 'inv', buyerName: 'تامین‌کننده آزمون همزمانی',
+    docType: 'receipt', inOut: 'in', status: 'final', date, user: 'inv', buyerName: await testSupplier('تامین‌کننده آزمون همزمانی'),
     items: lines.map(([itemId, quantity]) => ({ itemId, quantity, unitPrice: 100000, location: wh })),
   });
 }

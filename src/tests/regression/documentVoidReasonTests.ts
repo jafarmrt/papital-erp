@@ -3,7 +3,7 @@ import { orm } from '../../db/drizzle.js';
 import { journalVouchers } from '../../db/schema.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { DocumentService } from '../../services/document.service.js';
-import { createTestItem, createTestWarehouse } from '../fixtures/factories.js';
+import { createTestItem, createTestWarehouse, testSupplier } from '../fixtures/factories.js';
 import { TestCaseResult } from '../types.js';
 import { type ShouldRun, inFiscalSandbox, runCase } from './fiscalClosingTests.js';
 
@@ -23,7 +23,7 @@ export async function runDocumentVoidReasonTests(shouldRun: ShouldRun): Promise<
       const wh = await createTestWarehouse();
       const item = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
       await DocumentService.createDocument({
-        docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'td1241', buyerName: 'td1241 supplier',
+        docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'td1241', buyerName: await testSupplier('td1241 supplier'),
         location: wh.code, items: [{ itemId: item.id, quantity: 5, unitPrice: 100_000, location: wh.code }],
       });
       const invoiceId = await DocumentService.createDocument({

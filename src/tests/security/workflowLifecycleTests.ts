@@ -2,6 +2,7 @@ import { TestCaseResult } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { runCase, type Harness, type Row, type ShouldRun } from './workflowTestHarness.js';
 
+import { testSupplier } from '../fixtures/factories.js';
 /**
  * بسته ۱۴ (گردش کار)، PR ب — چرخه عمر فرایند و کارتابل: کدام سند فرایند می‌گیرد، بستن فرایند با قطعی‌سازی یا ابطال،
  * زبانه‌های کارتابل، تحلیل مهلت انجام و گیرنده یادآوری؛ همه از مسیرهای واقعی Express.
@@ -14,7 +15,7 @@ async function postDocument(h: Harness, body: Record<string, unknown>): Promise<
   const wh = (await getDefaultWarehouseCode(orm)) as string;
   const item = await createTestItem({ type: 'product', stocks: { [wh]: 50 }, weightedAverageCost: 10_000, code: `WF14B-${h.tag}-${Math.floor(Math.random() * 1e6)}` } as never);
   const res = await h.post('/api/documents', {
-    inOut: 'out', refNumber: 'auto', date: await businessTodayIsoDate(), buyer_name: `خریدار ${h.tag}`,
+    inOut: 'out', refNumber: 'auto', date: await businessTodayIsoDate(), buyer_name: await testSupplier(`خریدار ${h.tag}`, 'both'),
     items: [{ itemId: item.id, quantity: 1, unit_price: 20_000, location: wh }],
     ...body,
   });

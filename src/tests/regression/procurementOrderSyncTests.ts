@@ -1,4 +1,5 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
+import { testSupplier } from '../fixtures/factories.js';
 import { createHarness, type Harness, type Row, type ShouldRun } from '../security/workflowTestHarness.js';
 import { approvedRequisition, fixture, formRow, type Fixture } from './procurementRequisitionTests.js';
 
@@ -62,9 +63,10 @@ async function noCurrencyCase(h: Harness, wrong: string[]): Promise<string> {
   const f = await fixture(h);
   const item = await f.item();
   const req = await approvedRequisition(h, f, [formRow(item, 2, 1000)]);
+  const supplier = await testSupplier(`تامین‌کننده ${h.tag}`);
   const group = (extra: Record<string, unknown>, line: Record<string, unknown> = {}) => ({
     orderGroups: [{
-      supplierName: `تامین‌کننده ${h.tag}`, targetWarehouse: f.wh, docType: 'receipt', status: 'draft', ...extra,
+      supplierName: supplier, targetWarehouse: f.wh, docType: 'receipt', status: 'draft', ...extra,
       items: [{ itemId: item.id, quantity: 2, unitPrice: 1000, unit: 'عدد', ...line }],
     }],
   });
@@ -89,7 +91,7 @@ async function deliveryDayCase(h: Harness, wrong: string[]): Promise<string> {
   await h.q(`UPDATE documents SET date = date - interval '3 days' WHERE id = $1`, [docId]);
   // another receipt of the item today
   const other = await h.post('/api/documents', {
-    docType: 'receipt', status: 'final', refNumber: 'auto', date: today, buyer_name: `تامین‌کننده دیگر ${h.tag}`,
+    docType: 'receipt', status: 'final', refNumber: 'auto', date: today, buyer_name: await testSupplier(`تامین‌کننده دیگر ${h.tag}`),
     items: [{ itemId, quantity: 1, unit_price: 1000, location: f.wh }],
   });
   if (other.status !== 200) throw new Error(`setup receipt: ${brief(other)}`);

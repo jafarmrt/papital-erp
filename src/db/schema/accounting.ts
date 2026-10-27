@@ -65,6 +65,8 @@ export const journalVouchers = pgTable('journal_vouchers', {
   approvedById: integer('approved_by_id').references(() => users.id),
   // v10.0.21 (TD-965): who last edited the voucher; the maker (creator or last editor) of a manual voucher does not approve it (migration 0096)
   updatedById: integer('updated_by_id').references(() => users.id),
+  // v11 phase 6.1b (M3): why a manual voucher posts on a control account (`accounting.control_adjustment`, migration 0002)
+  controlReason: text('control_reason').notNull().default(''),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').default(0),

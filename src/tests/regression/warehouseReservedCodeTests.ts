@@ -1,4 +1,5 @@
 import request from 'supertest';
+import { testSupplier } from '../fixtures/factories.js';
 import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
@@ -45,7 +46,7 @@ export async function runWarehouseReservedCodeTests(shouldRun: (id: string, ...e
     const a = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
     itemIds.push(a.id);
     const docId = await DocumentService.createDocument({
-      docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'td482', buyerName: 'td482',
+      docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'td482', buyerName: await testSupplier('td482'),
       location: main, items: [{ itemId: a.id, quantity: 4, unit_price: 100, location: main }],
     });
     await orm.update(transactions).set({ location: '' }).where(eq(transactions.documentId, docId));

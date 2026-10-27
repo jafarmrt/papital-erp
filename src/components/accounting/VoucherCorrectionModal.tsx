@@ -15,6 +15,8 @@ import { JalaliDateInput } from '../common/JalaliDateInput';
 import { postingAccountsOf } from '../../lib/accounting/postingAccount';
 import { DecimalInput } from '../common/DecimalInput';
 import { DialogLayer } from '../common/DialogLayer';
+import { controlAccountRefusalMessage } from '../../lib/accounting/controlAccounts';
+import { ControlAccountNotice, useControlAccountRows } from './vouchers/ControlAccountNotice';
 
 interface VoucherCorrectionModalProps {
   isOpen: boolean;
@@ -107,6 +109,8 @@ export function VoucherCorrectionModal({
   const { totalDebit, totalCredit, difference: balanceDifference, isBalanced } = balance;
   const rowsWithoutRateText = toPersianDigits(balance.rowsWithoutRate.join('، '));
   const totalDecimals = balance.currency === 'IRR' ? 0 : 2;
+  // v11 phase 6.1b (M3): a replacement row on a control account needs «اصلاح حساب کنترلی»; the correction reason is its reason
+  const control = useControlAccountRows(items.map(it => it.accountId), isOpen && !!voucher);
 
   if (!isOpen || !voucher) return null;
 
@@ -172,6 +176,11 @@ export function VoucherCorrectionModal({
         toast.error(`ردیف ${i + 1} دارای مبلغ صفر است`);
         return;
       }
+    }
+
+    if (control.hits.length > 0 && !control.mayAdjust) {
+      toast.error(controlAccountRefusalMessage(control.hits, toPersianDigits), { duration: 8000 });
+      return;
     }
 
     setIsSubmitting(true);
@@ -442,6 +451,8 @@ export function VoucherCorrectionModal({
               </table>
             </div>
           </div>
+
+          <ControlAccountNotice hits={control.hits} mayAdjust={control.mayAdjust} />
 
           {/* Balance Status Banner */}
           <div className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-bold ${

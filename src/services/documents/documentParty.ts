@@ -5,6 +5,8 @@ import { ValidationError } from '../../errors/customErrors.js';
 import type { HealthCheckTestResult } from '../../types.js';
 import { isoToJalaliDate } from '../../utils/calendarDate.js';
 import { DOCUMENT_PARTY_SIDE_LABELS, documentPartySide, partyFitsDocument } from '../../lib/documents/documentPartyKind.js';
+import type { DecimalValue } from '../../lib/financialDecimal.js';
+import { netLineUnitPrice } from './purchaseLineCost.js';
 
 /**
  * v9.0.336 (TD-778، یافته B08-09، تصمیم ت۶ الف بسته ۸): سند فروش و خرید طرف حسابش را با شناسه (`documents.party_id`) نگه
@@ -70,7 +72,8 @@ export async function resolveDocumentParty(tx: DbExecutor, input: {
   const matches = await tx.select({ id: customers.id }).from(customers)
     .where(and(
       eq(customers.isDeleted, 0),
-      sql`btrim(${customers.name}) = ${name}::text`,
+      // v11 phase 6.1b (C8): the trimmed name ignoring case, the key of `uq_customers_name_active`
+      sql`lower(btrim(${customers.name})) = lower(${name}::text)`,
       sql`coalesce(nullif(btrim(${customers.partyType}), ''), 'customer') IN (${side}::text, 'both')`,
     ))
     .orderBy(asc(customers.id))
@@ -98,9 +101,57 @@ export async function assertNameNotOtherKind(tx: DbExecutor, docType: string, bu
   const name = String(buyerName ?? '').trim();
   if (!name || !documentHasParty(docType)) return;
   const rows = await tx.select({ name: customers.name, partyType: customers.partyType }).from(customers)
-    .where(and(eq(customers.isDeleted, 0), sql`btrim(${customers.name}) = ${name}::text`))
+    .where(and(eq(customers.isDeleted, 0), sql`lower(btrim(${customers.name})) = lower(${name}::text)`))
     .limit(2);
   if (rows.length > 0 && !rows.some(r => partyFitsDocument(docType, r.partyType))) throw partyKindMismatch(docType, name);
+}
+
+/**
+ * v11 phase 6.1b (C8): a document line posts an amount when its net unit price after the line discount is above zero, the
+ * amount the purchase voucher credits to the payables (`netLineUnitPrice`)
+ */
+export function hasPricedLine(lines: ReadonlyArray<{ price: DecimalValue | null | undefined; quantity: DecimalValue; discount?: DecimalValue | null }>): boolean {
+  return lines.some(line => netLineUnitPrice(line.price ?? 0, line.quantity, line.discount).isPositive());
+}
+
+/**
+ * v11 phase 6.1b (C8, S16, DEBT_LESSONS #8): when a sales or purchase document is finalized (or registered as final)
+ * without a party id, the trimmed buyer name is linked to the one live party of that name and side
+ * (`resolveDocumentParty`), stored on the document. A purchase posts on the payables only with a supplier that exists: a
+ * name no party has is 422 `DOCUMENT_PARTY_UNKNOWN`, and a priced line with no name 422 `DOCUMENT_SUPPLIER_REQUIRED` (a
+ * free receipt credits the donated goods income, not the payables). A sale whose name no party has stays a walk-in sale
+ * with that name printed and no party (reports.md, the documented rule); the invoice form warns before saving it. A
+ * proforma posts nothing and keeps the old rule. Before, «Supp X» or no supplier was finalized, and its voucher row on 3001
+ * had no party, out of reach of the party card, the aging and payment by party.
+ */
+export async function linkKnownDocumentParty(tx: DbExecutor, doc: {
+  id?: number;
+  docType: string;
+  partyId: number | null | undefined;
+  buyerName: string | null | undefined;
+  pricedLines: boolean;
+}): Promise<number | null> {
+  if (doc.partyId) return Number(doc.partyId);
+  const side = documentPartySide(doc.docType);
+  if (!side || doc.docType === 'proforma') return null;
+  const name = String(doc.buyerName ?? '').trim();
+  if (name) {
+    const { partyId } = await resolveDocumentParty(tx, { docType: doc.docType, partyId: undefined, buyerName: name });
+    if (partyId) {
+      if (doc.id) await tx.update(documents).set({ partyId }).where(eq(documents.id, doc.id));
+      return partyId;
+    }
+    if (side === 'customer') return null;
+    throw new ValidationError(
+      `«${name}» در فهرست طرف حساب‌ها نیست؛ ${DOCUMENT_PARTY_SIDE_LABELS[side]} را از فهرست برگزینید یا نخست آن را در «طرف حساب‌ها» بسازید.`,
+      { buyerName: name },
+      'DOCUMENT_PARTY_UNKNOWN',
+    );
+  }
+  if (side === 'supplier' && doc.pricedLines) {
+    throw new ValidationError('رسید یا فاکتور خرید بی تأمین‌کننده نهایی نمی‌شود؛ تأمین‌کننده را از فهرست برگزینید.', undefined, 'DOCUMENT_SUPPLIER_REQUIRED');
+  }
+  return null;
 }
 
 /** طرف حساب فاکتور مرجع برگشت (بی شناسه: `undefined`، تا برگشت با قاعده نام پیدا شود) */

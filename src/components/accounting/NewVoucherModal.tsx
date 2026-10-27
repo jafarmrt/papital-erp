@@ -19,6 +19,8 @@ import { postingAccountsOf } from '../../lib/accounting/postingAccount';
 import { DialogLayer } from '../common/DialogLayer';
 import { useDialogEscape } from '../../lib/a11y/dialogEscapeStack';
 import { withFreshRowKeys, withoutRowKey, withRowKey, withRowKeys } from '../../lib/rowKey';
+import { CONTROL_REASON_REQUIRED_MESSAGE, controlAccountRefusalMessage } from '../../lib/accounting/controlAccounts';
+import { ControlAccountNotice, useControlAccountRows } from './vouchers/ControlAccountNotice';
 
 interface NewVoucherModalProps {
   isOpen: boolean;
@@ -49,6 +51,9 @@ export function NewVoucherModal({
   const [voucherType, setVoucherType] = useState<string>('general');
   const [manualVoucherNumber, setManualVoucherNumber] = useState('');
   const [description, setDescription] = useState('');
+  // v11 phase 6.1b (M3): the reason of a row on a control account, stored on the voucher
+  const [controlReason, setControlReason] = useState('');
+  const controlReasonRef = useRef<HTMLTextAreaElement>(null);
   const [currency, setCurrency] = useState('IRR');
   // v9.0.191 (TD-564): نرخ ارز سند به ریال؛ ردیف هم‌ارز سند بی نرخ خودش این نرخ را می‌گیرد
   const [headerRate, setHeaderRate] = useState<number | string | ''>('');
@@ -86,12 +91,13 @@ export function NewVoucherModal({
     voucherType,
     manualVoucherNumber,
     description,
+    controlReason,
     currency,
     headerRate,
     attachments,
     // v10.2.4 (TD-1291): کلید ردیف فقط در مرورگر است و در پیش‌نویس ذخیره نمی‌شود
     items: items.map(withoutRowKey)
-  }), [date, voucherType, manualVoucherNumber, description, currency, headerRate, attachments, items]);
+  }), [date, voucherType, manualVoucherNumber, description, controlReason, currency, headerRate, attachments, items]);
 
   const {
     hasServerDraft,
@@ -107,6 +113,7 @@ export function NewVoucherModal({
       if (loaded.voucherType) setVoucherType(manualVoucherFormType(loaded.voucherType));
       if (loaded.manualVoucherNumber) setManualVoucherNumber(loaded.manualVoucherNumber);
       if (loaded.description) setDescription(loaded.description);
+      if (typeof loaded.controlReason === 'string') setControlReason(loaded.controlReason);
       if (loaded.currency) setCurrency(supportedVoucherCurrency(loaded.currency));
       setHeaderRate(loaded.headerRate ?? '');
       if (Array.isArray(loaded.attachments)) setAttachments(loaded.attachments);
@@ -136,6 +143,7 @@ export function NewVoucherModal({
       setVoucherType(manualVoucherFormType(editingVoucher.voucherType));
       setManualVoucherNumber(editingVoucher.manualVoucherNumber || '');
       setDescription(editingVoucher.description || '');
+      setControlReason(editingVoucher.controlReason || '');
       // v9.0.191 (TD-564): ارز و نرخ سند و هر ردیف همان که ذخیره شده می‌ماند (پیش‌تر ویرایش آن‌ها را می‌انداخت)
       const editCurrency = supportedVoucherCurrency(editingVoucher.currency);
       const editHeader = { currency: editCurrency, rate: voucherHeaderRateFromRows(editingVoucher.items, editCurrency) };
@@ -157,6 +165,7 @@ export function NewVoucherModal({
       }
     } else {
       setDescription('');
+      setControlReason('');
       setManualVoucherNumber('');
       setAttachments([]);
       setItems(withRowKeys<VoucherItemDraft>([
@@ -172,6 +181,7 @@ export function NewVoucherModal({
   // v7.0.76 (P3-6): جمع اعشاری دقیق و تلورانس سرور. v9.0.191 (TD-564): با ارز و نرخ هر ردیف؛ سند چندارزی یا چندنرخی به ریال
   const balance = useMemo(() => voucherFormBalance(items, header), [items, header]);
   const { difference, isBalanced } = balance;
+  const control = useControlAccountRows(items.map(it => it.accountId), isOpen);
   const debitSurplus = balance.totalDebit - balance.totalCredit;
   const rowsWithoutRateText = toPersianDigits(balance.rowsWithoutRate.join('، '));
 
@@ -409,6 +419,16 @@ export function NewVoucherModal({
       }
     }
 
+    if (control.hits.length > 0 && !control.mayAdjust) {
+      toast.error(controlAccountRefusalMessage(control.hits, toPersianDigits), { duration: 8000 });
+      return;
+    }
+    if (control.hits.length > 0 && !controlReason.trim()) {
+      toast.error(CONTROL_REASON_REQUIRED_MESSAGE);
+      controlReasonRef.current?.focus();
+      return;
+    }
+
     savingRef.current = true;
     setIsSaving(true);
     try {
@@ -417,6 +437,8 @@ export function NewVoucherModal({
         voucherType,
         manualVoucherNumber,
         description,
+        // the server keeps it only when a row is on a control account
+        ...(controlReason.trim() ? { controlReason: controlReason.trim() } : {}),
         currency,
         attachments,
         // v9.0.191 (TD-564): هر ردیف با ارز و نرخ قطعی خود (ردیف ریالی بی نرخ)
@@ -730,6 +752,12 @@ export function NewVoucherModal({
               handleAutoBalanceRow={handleAutoBalanceRow}
               handleSwapDebitCredit={handleSwapDebitCredit}
               rowRefs={itemRefs}
+            />
+
+            <ControlAccountNotice
+              hits={control.hits}
+              mayAdjust={control.mayAdjust}
+              reason={{ id: `${fieldId}-control-reason`, value: controlReason, onChange: setControlReason, inputRef: controlReasonRef }}
             />
           </div>
 

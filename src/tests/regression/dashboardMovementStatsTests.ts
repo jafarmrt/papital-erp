@@ -1,4 +1,5 @@
 import { inArray } from 'drizzle-orm';
+import { testSupplier } from '../fixtures/factories.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { items } from '../../db/schema.js';
@@ -36,8 +37,9 @@ export async function runDashboardMovementStatsTests(shouldRun: (id: string, ...
     };
     const [a, b, v, d] = [await newItem(), await newItem(), await newItem(), await newItem()];
 
+    const supplier = await testSupplier('td671');
     const receipt = (date: string, lines: Array<{ itemId: number; quantity: number }>) => DocumentService.createDocument({
-      docType: 'receipt', status: 'final', inOut: 'in', date, user: 'td671', buyerName: 'td671', location: main,
+      docType: 'receipt', status: 'final', inOut: 'in', date, user: 'td671', buyerName: supplier, location: main,
       items: lines.map(l => ({ ...l, unit_price: 1, location: main })),
     });
 

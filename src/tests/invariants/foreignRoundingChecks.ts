@@ -3,7 +3,7 @@ import { FiscalYearService } from '../../services/accounting/fiscalYear.service.
 import { VoucherService } from '../../services/accounting/voucher.service.js';
 import { DocumentService } from '../../services/document.service.js';
 import { getErrorMessage } from '../../utils/formatters.js';
-import { createTestCustomer, createTestItem } from '../fixtures/factories.js';
+import { testSupplier, createTestCustomer, createTestItem } from '../fixtures/factories.js';
 import { checkFiscalYearClosings } from './fiscalCloseInvariant.js';
 import { irrAmountSql } from './ledgerRows.js';
 
@@ -13,7 +13,7 @@ const ROUNDING_CLOSING_YEAR = 1378;
 async function stocked(wh: string, type: 'product' | 'raw_material', quantity: number, unitPrice: string): Promise<number> {
   const item = await createTestItem({ type, stocks: {}, weightedAverageCost: 0 });
   await DocumentService.createDocument({
-    docType: 'receipt', inOut: 'in', status: 'final', date: '1999-06-01', user: 'inv', buyerName: 'ERP-TEST-MARKER TD-1030 supplier',
+    docType: 'receipt', inOut: 'in', status: 'final', date: '1999-06-01', user: 'inv', buyerName: await testSupplier('ERP-TEST-MARKER TD-1030 supplier'),
     items: [{ itemId: item.id, quantity, unitPrice, location: wh }],
   });
   return item.id;

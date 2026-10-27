@@ -120,8 +120,6 @@ export interface ContraAccountOption {
   code: string;
   name: string;
   accountType: string;
-  /** v10.1.36 (TD-1243): «بیمه پرداختنی» یا «مالیات حقوق پرداختنی» نگاشت‌شده؛ پرداخت روی آن از فرم خزانه بی نام پرسنل است */
-  statutoryKind?: 'insurance' | 'tax';
 }
 
 export function useContraAccountsQuery(enabled: boolean) {

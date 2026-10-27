@@ -1,4 +1,5 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
+import { testSupplier } from '../fixtures/factories.js';
 import { createHarness, type Harness, type ShouldRun } from '../security/workflowTestHarness.js';
 import { brief, docVersion, fixture } from './documentEntryTests.js';
 import { proformaInvoiceNote } from '../../lib/documents/proformaInvoiceNote.js';
@@ -59,7 +60,7 @@ async function invoiceBalanceLessReturnsCase(h: Harness, wrong: string[]): Promi
   const customer = await createTestCustomer({ name: party });
   // the stock enters through a receipt, so the Kardex holds it and a return can be voided (TD-265 reads the ledger)
   const a = await f.item(0, 400_000);
-  const stockIn = await h.post('/api/documents', f.doc('receipt', 'final', [{ itemId: a, quantity: 10, unit_price: 400_000, location: f.wh }], { buyer_name: `L2 TD-909 supplier ${h.tag}` }));
+  const stockIn = await h.post('/api/documents', f.doc('receipt', 'final', [{ itemId: a, quantity: 10, unit_price: 400_000, location: f.wh }], { buyer_name: await testSupplier(`L2 TD-909 supplier ${h.tag}`) }));
   if (stockIn.status !== 200) throw new Error(`setup: receipt ${brief(stockIn)}`);
 
   const balanceOf = async (id: number): Promise<Balance> => {
