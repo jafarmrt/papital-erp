@@ -11,6 +11,7 @@ export function ItemFormModal(props: ItemFormModalProps) {
 
   const {
     item,
+    canEnterOpeningStock,
     categories,
     form,
     setForm,
@@ -86,7 +87,7 @@ export function ItemFormModal(props: ItemFormModalProps) {
               rawSerialReserved={rawSerialReserved}
             />
 
-            {(!item || Boolean(item.canSetOpeningBalance ?? (item as any).can_set_opening_balance)) && (
+            {canEnterOpeningStock && (
               <ItemWarehouseStockForm
                 warehouses={warehouses}
                 form={form}

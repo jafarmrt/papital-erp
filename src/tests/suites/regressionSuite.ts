@@ -4172,7 +4172,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const created = await ItemCatalogService.createItem({
         type: 'raw_material', name: `کالای منبع واحد P2-1 ${Date.now()}`, code: `P21-${Date.now()}`, unit: 'عدد',
         category: '', weighted_average_cost: 1000, [`stock_${w1.code}`]: 10
-      }, user);
+      }, user, undefined, { canEnterStock: true });
       const itemId = created.insertedId;
       await assertInvariant(itemId, 'item created with opening stock', { [w1.code]: 10 });
 
@@ -4192,21 +4192,29 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       await assertInvariant(itemId, 'sale of 5 units from the source warehouse', { [w1.code]: 1, [w2.code]: 4 });
 
       // ۴) انبارگردانی در انباری که کالا در آن موجودی ندارد (شمارش صفر): پیش‌تر موجودی کل کالا مبنای انحراف بود
-      await DocumentService.createDocument({ docType: 'audit', status: 'final', date: today, user: 'test-agent', location: w3.code, items: [{ itemId, quantity: 0, physical_stock: 0, location: w3.code }] });
+      await DocumentService.createDocument({ docType: 'audit', status: 'final', date: today, user: 'test-agent', location: w3.code, items: [{ itemId, quantity: 0, physical_stock: 0, system_stock: 0, location: w3.code }] });
       await assertInvariant(itemId, 'zero stock count in a warehouse without stock', { [w1.code]: 1, [w2.code]: 4 });
 
       // ۵) بازسازی کاردکس همان مقادیر را نگه دارد
       await KardexWacRecalculatorService.rebuildItemFromLedger(itemId, { user: 'test-agent' });
       await assertInvariant(itemId, 'Kardex rebuild', { [w1.code]: 1, [w2.code]: 4 });
 
-      // ۶) ثبت موجودی افتتاحیه در ویرایش کالا
+      // ۶) v11 phase 6.1j (S8): an item edit no longer takes opening stock (422) and leaves the table empty; a receipt brings it
       const second = await ItemCatalogService.createItem({
         type: 'raw_material', name: `کالای افتتاحیه P2-1 ${Date.now()}`, code: `P21O-${Date.now()}`, unit: 'عدد', category: '', weighted_average_cost: 500
       }, user);
-      await ItemCatalogService.updateItem(second.insertedId, {
-        name: second.item.name, code: second.item.code, unit: 'عدد', category: '', weighted_average_cost: 500, [`stock_${w2.code}`]: 7, version: second.item.version
-      }, user);
-      await assertInvariant(second.insertedId, 'opening stock in an item edit', { [w2.code]: 7 });
+      let editRefused = '';
+      try {
+        await ItemCatalogService.updateItem(second.insertedId, {
+          name: second.item.name, code: second.item.code, unit: 'عدد', category: '', weighted_average_cost: 500, [`stock_${w2.code}`]: 7, version: second.item.version
+        }, user);
+      } catch (e) {
+        editRefused = (e as { errorCode?: string }).errorCode ?? String(e);
+      }
+      if (editRefused !== 'ITEM_OPENING_ON_CREATE_ONLY') throw new Error(`opening stock in an item edit must be refused with ITEM_OPENING_ON_CREATE_ONLY, got ${editRefused || 'success'}`);
+      await assertInvariant(second.insertedId, 'refused opening stock in an item edit', {});
+      await DocumentService.createDocument({ docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'test-agent', buyerName: await testSupplier('تأمین‌کننده آزمون P2-1'), location: w2.code, items: [{ itemId: second.insertedId, quantity: 7, unit_price: 500, location: w2.code }] });
+      await assertInvariant(second.insertedId, 'receipt of 7 units after the refused edit', { [w2.code]: 7 });
 
       results.push(makeTestCase({
         id: 'reg_single_stock_source_p2_1',
@@ -4303,7 +4311,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       }
 
       // کسری انبارگردانی (۵ ← ۳) مجاز است و با بهای صفر ثبت می‌شود، نه قیمت فهرست
-      await DocumentService.createDocument({ docType: 'audit', status: 'final', date: today, user: 'test-agent', location: w1.code, items: [{ itemId: noCost.id, quantity: 0, physical_stock: 3, location: w1.code }] });
+      await DocumentService.createDocument({ docType: 'audit', status: 'final', date: today, user: 'test-agent', location: w1.code, items: [{ itemId: noCost.id, quantity: 0, physical_stock: 3, system_stock: 5, location: w1.code }] });
       const outs = await orm.select({ unitPrice: transactions.unitPrice, quantity: transactions.quantity }).from(transactions)
         .where(and(eq(transactions.itemId, noCost.id), eq(transactions.type, 'out'), eq(transactions.isDeleted, 0)));
       const [after] = await orm.select({ total: items.currentStock }).from(items).where(eq(items.id, noCost.id));
@@ -10672,6 +10680,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v11 phase 3.2 (S1, S3): Excel type change of a stocked item, item delete with an open allocation or a reservation
   const { runStockUrgentFixesTests } = await import('../regression/stockUrgentFixesTests.js');
   results.push(...await runStockUrgentFixesTests(shouldRun));
+  // v11 phase 6.1j: one path for opening stock and the stock details (S4 S7 S8 S9 S13 S17 M8 M10 M21 N1 N3 N4)
+  const { runStockPathsV11Tests } = await import('../regression/stockPathsV11Tests.js');
+  results.push(...await runStockPathsV11Tests(shouldRun));
   const { runItemPriceTests } = await import('../regression/itemPriceTests.js');
   results.push(...await runItemPriceTests(shouldRun));
   const { runItemCategoryTests } = await import('../regression/itemCategoryTests.js');

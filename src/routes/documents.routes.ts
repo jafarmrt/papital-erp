@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission, can, userHasRoleOrPermission } from '../middleware/authorize.js';
 import { permissionDefinition } from '../lib/permissions/permissionCatalog.js';
-import { CRM_LEAD_LINK_PERMISSION, PRODUCTION_RECEIPT_PERMISSION, SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions.js';
+import { CRM_LEAD_LINK_PERMISSION, documentVoidPermission, INVOICE_VOID_PERMISSION, PRODUCTION_RECEIPT_PERMISSION, SALES_FINALIZE_PERMISSION, STOCK_DOCUMENT_VOID_PERMISSION } from '../lib/permissions/documentPermissions.js';
+import { permissionRequiredMessage } from '../lib/permissions/permissionMessages.js';
 import { findFinalDocumentIdByRef } from '../services/documents/documentRefLookup.js';
 import { documentAuditDetails, documentAuditSnapshot, documentLineSummary } from '../services/documents/documentAudit.js';
 import { proformaStockWarnings } from '../services/documents/documentSellableGate.js';
@@ -597,12 +598,17 @@ router.put('/documents/:id/notes', authorizePermission('documents.edit'), idempo
   res.json({ success: true });
 }));
 
-// V10-5.1: enforce documents.delete — مطابق ماتریس سید‌شده (admin همیشه عبور می‌کند)
-router.delete('/documents/:id', authorizePermission('documents.delete'), idempotency({ scope: 'documents' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+// V10-5.1: enforce documents.delete — مطابق ماتریس سید‌شده (admin همیشه عبور می‌کند). v11 phase 6.1j (S7): an invoice,
+// proforma or return asks «حذف فاکتور», a stock document «باطل کردن سند انبار» (`documentVoidPermission`)
+router.delete('/documents/:id', authorizePermission(INVOICE_VOID_PERMISSION, STOCK_DOCUMENT_VOID_PERMISSION), idempotency({ scope: 'documents' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
   const beforeDoc = await DocumentService.getDocumentById(docId);
   if (!beforeDoc) {
     throw new NotFoundError('سند یافت نشد.');
+  }
+  const voidPermission = documentVoidPermission(String(beforeDoc.type));
+  if (!(await can(req.user, voidPermission))) {
+    throw new ForbiddenError(permissionRequiredMessage([voidPermission]), { permissions: [voidPermission] }, 'DOCUMENT_VOID_NOT_ALLOWED');
   }
 
   // فیلد قدیمی `name` در payload توکن‌های فعلی وجود ندارد؛ برای حفظ رفتار fallback نگه داشته شده است

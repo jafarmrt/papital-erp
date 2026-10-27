@@ -47,6 +47,24 @@ export function isSalesDocumentType(docType: string): boolean {
   return SALES_DOCUMENT_TYPES.has(docType);
 }
 
+/** Voiding a sales or purchase invoice, a proforma or a sales return («حذف فاکتور») */
+export const INVOICE_VOID_PERMISSION = 'documents.delete';
+
+/**
+ * v11 phase 6.1j (S7, card t56-7): voiding a stock document, a receipt, production receipt, remittance, waste, transfer
+ * or stock count, has its own key. Before, «حذف فاکتور» voided every type, so a sales user allowed to cancel invoices
+ * could undo stock counts, transfers and receipts. Migration 0004 gave it to every role that held «حذف فاکتور».
+ */
+export const STOCK_DOCUMENT_VOID_PERMISSION = 'documents.void_stock';
+
+/** The types voided with «حذف فاکتور»; every other type is a stock document */
+const INVOICE_VOID_TYPES: ReadonlySet<string> = new Set([...SALES_DOCUMENT_TYPES, 'purchase']);
+
+/** The key `DELETE /documents/:id` asks for a document of this type */
+export function documentVoidPermission(docType: string): string {
+  return INVOICE_VOID_TYPES.has(docType) ? INVOICE_VOID_PERMISSION : STOCK_DOCUMENT_VOID_PERMISSION;
+}
+
 /** مجوزی که ثبت (یا نهایی‌سازی) سندی از این نوع، در این وضعیت و با این جهت گردش کالا می‌خواهد */
 export function documentRecordPermission(docType: string, status: DocumentRecordStatus, direction: DocumentStockDirection): string {
   if (isSalesDocumentType(docType)) return status === 'final' ? SALES_FINALIZE_PERMISSION : 'documents.create';

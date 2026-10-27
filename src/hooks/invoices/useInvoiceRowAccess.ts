@@ -7,6 +7,7 @@ export function useInvoiceRowAccess(): InvoiceRowAccess {
     settle: useHasAnyPermission(INVOICE_ROW_ACTION_PERMISSIONS.settle),
     editNotes: useHasAnyPermission(INVOICE_ROW_ACTION_PERMISSIONS.editNotes),
     void: useHasAnyPermission(INVOICE_ROW_ACTION_PERMISSIONS.void),
+    voidStock: useHasAnyPermission(INVOICE_ROW_ACTION_PERMISSIONS.voidStock),
     workflow: useHasAnyPermission(INVOICE_ROW_ACTION_PERMISSIONS.workflow),
   };
 }

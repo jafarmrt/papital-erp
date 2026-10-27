@@ -80,3 +80,26 @@ describe('new item stock without cost in the preview (TD-1012)', () => {
     expect(validateExcelRows([{ ...base, raw: { ...base.raw, [STOCK_COLUMN]: '۵' } }], [], [existing])[0].hasCellError).toBe(false);
   });
 });
+
+describe('type change of an existing item in the preview (v11 phase 6.1j, N2)', () => {
+  const material = (stock: number) => ({ id: 7, code: 'B-H-105', name: 'مهره', type: 'raw_material', current_stock: stock }) as unknown as Item;
+  const toProduct = row('B-H-105', 'مهره', 'محصول نهایی');
+
+  it('refuses the type change of an item with stock, as the server does', () => {
+    const refused = validateExcelRows([toProduct], [], [material(5)])[0];
+    expect(refused.hasCellError).toBe(true);
+    expect(refused.issues.join(' ')).toContain('موجودی دارد');
+  });
+
+  it('warns on the type change of an item without stock, which the server refuses if the item moved', () => {
+    const warned = validateExcelRows([toProduct], [], [material(0)])[0];
+    expect(warned.hasCellError).toBe(false);
+    expect(warned.hasTypeChange).toBe(true);
+    expect(warned.issues.join(' ')).toContain('گردش انبار');
+  });
+
+  it('says nothing when the type stays or the column is empty', () => {
+    expect(validateExcelRows([row('B-H-105', 'مهره', 'ماده اولیه')], [], [material(5)])[0].issues).toEqual([]);
+    expect(validateExcelRows([row('B-H-105', 'مهره')], [], [material(5)])[0].issues).toEqual([]);
+  });
+});

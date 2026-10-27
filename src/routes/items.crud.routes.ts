@@ -1,8 +1,9 @@
 import { Router } from 'express';
-import { sql, eq, and, inArray } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
-import { items, transactions, documentItems } from '../db/schema.js';
-import { authorizePermission } from '../middleware/authorize.js';
+import { items } from '../db/schema.js';
+import { authorizePermission, can } from '../middleware/authorize.js';
+import { OPENING_STOCK_PERMISSION } from '../lib/permissions/stockActionPermissions.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
@@ -10,7 +11,7 @@ import { consumeNextItemCodeSchema, itemCodeChangeSchema, itemCreateUpdateSchema
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { MAX_PAGE_LIMIT, parsePageNumber, parsePickListLimit } from '../lib/pagination.js';
 import { ItemsService } from '../services/items.service.js';
-import { ItemOpeningService, itemIdsWithOpeningVoucher } from '../services/inventory/itemOpening.service.js';
+import { ItemOpeningService } from '../services/inventory/itemOpening.service.js';
 import { WorkflowEngineService } from '../services/workflow/workflowEngineService.js';
 import { ItemCatalogService } from '../services/items/itemCatalog.service.js';
 import { resolveWarehouseCode } from '../services/inventory/warehouseResolver.js';
@@ -99,30 +100,6 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
   // v7.0.48 (TD-214): نقشه موجودی انبارها (stocks و stock_<کد>) از جدول نرمال؛ شکل پاسخ برای رابط کاربری حفظ شده است
   const listStockMap = await ItemWarehouseStockService.getStocksForItems(orm, fetchedItems.map(it => it.id));
 
-  const itemIds = fetchedItems.map(it => it.id);
-  let txItemSet = new Set<number>();
-  let docItemSet = new Set<number>();
-  let voucherItemSet = new Set<number>();
-
-  if (itemIds.length > 0) {
-    const [txRows, docRows, voucherRows] = await Promise.all([
-      orm.select({ itemId: transactions.itemId })
-        .from(transactions)
-        .where(and(inArray(transactions.itemId, itemIds), eq(transactions.isDeleted, 0)))
-        .groupBy(transactions.itemId),
-      orm.select({ itemId: documentItems.itemId })
-        .from(documentItems)
-        .where(and(inArray(documentItems.itemId, itemIds), eq(documentItems.isDeleted, 0)))
-        .groupBy(documentItems.itemId),
-      // v9.0.206 (TD-663): سند افتتاحیه کالا (سند خودش یا سند ورود اکسل) از جدول کالاهای سند افتتاحیه
-      itemIdsWithOpeningVoucher(orm, itemIds),
-    ]);
-
-    txItemSet = new Set(txRows.map(r => r.itemId));
-    docItemSet = new Set(docRows.map(r => r.itemId));
-    voucherItemSet = voucherRows;
-  }
-
   const rawLocQuery = req.query.location ? String(req.query.location).trim() : (req.query.warehouse ? String(req.query.warehouse).trim() : '');
   let resolvedQueryLoc: string | null = null;
   if (rawLocQuery) {
@@ -149,11 +126,6 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
       ? Math.max(0, Math.min(locStock ?? 0, curStock - reservedStock))
       : Math.max(0, curStock - reservedStock);
 
-    const hasTx = txItemSet.has(it.id);
-    const hasDoc = docItemSet.has(it.id);
-    const hasOpeningVoucher = voucherItemSet.has(it.id);
-    const canSetOpening = curStock <= 0 && !hasTx && !hasDoc && !hasOpeningVoucher;
-
     const obj: Record<string, unknown> = {
       ...it,
       stocks: st,
@@ -164,8 +136,6 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
       available_stock: availableStock,
       location_stock: locStock,
       reservations: resInfo.reservations,
-      canSetOpeningBalance: canSetOpening,
-      can_set_opening_balance: canSetOpening
     };
     for (const k of Object.keys(st)) {
       obj[`stock_${k}`] = Number(st[k]);
@@ -201,7 +171,8 @@ router.post('/items', authorizePermission('products.create'), idempotency({ scop
   // موجودی در کاردکس ثبت می‌شد و دفتر کل تغییری نمی‌کرد.
   const { name, code } = req.body;
   const { created, openingVoucherId } = await idempotentTransaction(async (tx) => {
-    const created = await ItemCatalogService.createItem(req.body, req.user, tx);
+    // v11 phase 6.1j (S8): opening stock asks «ثبت ورود کالا (رسید)» as well as «تعریف کالا»
+    const created = await ItemCatalogService.createItem(req.body, req.user, tx, { canEnterStock: await can(req.user, OPENING_STOCK_PERMISSION) });
     const wfInstance = await WorkflowEngineService.maybeStartWorkflow({
       entityType: 'item',
       entityId: String(created.insertedId),
@@ -282,19 +253,18 @@ router.put('/items/:id', authorizePermission('products.edit'), idempotency({ sco
       size: it.size
     });
     const { diff, hasChanges } = computeAuditDiff(prev, { ...prev, ...result.updateData }, ['image', 'thumbnail', 'updatedAt', 'stocks', 'version']);
-    const openingNote = result.canSetOpening && result.computedStock > 0 ? ` همراه با ثبت موجودی افتتاحیه (${result.computedStock} ${next.unit})` : '';
     await logActivity({
       req,
       tx,
       action: 'UPDATE',
       entity: 'کالا',
       entityId: itemId,
-      description: `ویرایش اطلاعات کالای "${next.name}" (کد: ${next.code})${openingNote}`,
+      description: `ویرایش اطلاعات کالای "${next.name}" (کد: ${next.code})`,
       details: { before: snapshot(prev), after: snapshot(next), changes: diff, hasChanges, version: next.version }
     });
     return result;
   });
-  res.json({ success: true, version: result.item.version, opening_voucher_id: result.openingVoucherId });
+  res.json({ success: true, version: result.item.version });
 }));
 
 // v10.1.9 (D-15, TD-1264): the code (WooCommerce SKU) changes only here, with its own permission, reason and history

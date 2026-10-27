@@ -45,11 +45,13 @@ export async function getStockCountSheetItems(executor: DbClient, rawLocation: u
   }));
 }
 
+const isBlank = (value: unknown) => value === undefined || value === null || String(value).trim() === '';
+
 export interface BookStockLine {
   itemId: number;
   code: string;
   name: string;
-  /** موجودی دفتری که برگه نشان داده و فرستاده است؛ بی مقدار یعنی سنجیده نمی‌شود */
+  /** موجودی دفتری که برگه نشان داده و فرستاده است؛ v11 phase 6.1j (S17): لازم است */
   shown: unknown;
   /** موجودی همین انبار در پایگاه‌داده، زیر قفل کالاها */
   current: number;
@@ -60,10 +62,18 @@ export interface BookStockLine {
  * تا برگه دوباره بارگذاری شود (شمارش با موجودی‌ای سنجیده نشود که کاربر ندیده است).
  */
 export function assertBookStocksUnchanged(lines: BookStockLine[]): void {
-  const changed = lines.filter(l => {
-    if (l.shown === undefined || l.shown === null || String(l.shown).trim() === '') return false;
-    return !fin(l.shown as string | number).round(4).equals(fin(l.current).round(4));
-  });
+  // v11 phase 6.1j (S17): every line carries the book stock its sheet showed; before, a line without it was not compared,
+  // so a count taken earlier in the day posted its variance against a stock that had moved since
+  const unshown = lines.filter(l => isBlank(l.shown));
+  if (unshown.length > 0) {
+    throw new ValidationError(
+      `موجودی دفتری‌ای که برگه انبارگردانی نشان داده همراه این ردیف‌ها نیامده است: ${unshown.map(l => `«${l.name}» (${l.code})`).join('، ')}. `
+        + 'برگه را از صفحه انبارگردانی بارگذاری کنید و شمارش را دوباره بفرستید.',
+      { items: unshown.map(l => ({ itemId: l.itemId, code: l.code })) },
+      'AUDIT_BOOK_STOCK_MISSING',
+    );
+  }
+  const changed = lines.filter(l => !fin(l.shown as string | number).round(4).equals(fin(l.current).round(4)));
   if (changed.length === 0) return;
   const list = changed
     .map(l => `«${l.name}» (${l.code}): برگه ${fin(l.shown as string | number).round(4).toString()}، اکنون ${fin(l.current).round(4).toString()}`)
@@ -86,7 +96,6 @@ export interface StockCountLine {
   physical: unknown;
 }
 
-const isBlank = (value: unknown) => value === undefined || value === null || String(value).trim() === '';
 const lineLabel = (l: Pick<StockCountLine, 'name' | 'code' | 'location'>) => `«${l.name}» (${l.code}) در انبار ${l.location}`;
 
 /**
@@ -101,6 +110,15 @@ export function assertStockCountLines(lines: StockCountLine[]): void {
       `شمارش این کالاها وارد نشده است: ${missing.map(lineLabel).join('؛ ')}. شمارش هر ردیف را بنویسید یا کالای شمارش‌نشده را از سند بردارید.`,
       { items: missing.map(l => ({ itemId: l.itemId, code: l.code, location: l.location })) },
       'AUDIT_COUNT_MISSING',
+    );
+  }
+  // v11 phase 6.1j (S17): a count is zero or more; before, -5 passed and failed later with a stock error
+  const negative = lines.filter(l => fin(l.physical as string | number).isNegative());
+  if (negative.length > 0) {
+    throw new ValidationError(
+      `شمارش انبار کمتر از صفر نمی‌شود: ${negative.map(lineLabel).join('؛ ')}.`,
+      { items: negative.map(l => ({ itemId: l.itemId, code: l.code, location: l.location })) },
+      'AUDIT_COUNT_NEGATIVE',
     );
   }
   const seen = new Set<string>();

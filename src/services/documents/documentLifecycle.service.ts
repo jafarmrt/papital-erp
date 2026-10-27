@@ -32,6 +32,7 @@ import { finalizeDayTarget, proformaInvoiceTarget } from './proformaInvoice.js';
 import { recordFinalizeEvent } from './documentFinalizeEvents.js';
 import { lockLinkedRequisition, voidLinkedOrder } from './linkedOrderHooks.js';
 import { assertProductionReceiptNotFinalized, stockDirectionOf } from './documentRecordRule.js';
+import { assertVoidOutsideClosedYears } from './voidClosedYear.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
 import { consumesProjectReservation } from '../../lib/transactions/projectIssueTypes.js';
 import { documentAuditSnapshot, type DocumentAuditChange, type DocumentAuditSnapshot, type DocumentVoidAudit } from './documentAudit.js';
@@ -329,6 +330,8 @@ export class DocumentLifecycleService {
       // v8.0.6 (TD-265، تصمیم مالک محصول): ابطال سند ورودی‌ای که موجودی‌اش با خروجِ تاریخ‌دار بعدی مصرف شده رد می‌شود
       // (پیش از هر نوشتن)؛ پیش‌تر فقط موجودی لحظه ابطال سنجیده می‌شد و کاردکس به ترتیب تاریخ منفی می‌ماند
       await assertVoidKeepsStockHistory(tx, { id: doc.id, refNumber: doc.refNumber });
+      // v11 phase 6.1j (M10): nor a document with stock movements in a closed fiscal year (409 DOCUMENT_IN_CLOSED_YEAR)
+      await assertVoidOutsideClosedYears(tx, { id: doc.id, refNumber: doc.refNumber, type: doc.type });
       // v9.0.271 (TD-773، ت۴ الف): فاکتوری که برگشت ابطال‌نشده دارد باطل نمی‌شود (۴۰۹ با فهرست برگشت‌ها)
       await assertVoidHasNoReturns(tx, { id: doc.id, refNumber: doc.refNumber });
       // v9.0.272 (TD-779، ت۴ الف): و نه سندی که دریافت یا پرداخت زنده خزانه دارد (۴۰۹ با فهرست آن‌ها)

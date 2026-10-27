@@ -5,7 +5,8 @@ import { businessNowIsoDateTime } from '../../lib/businessClock.js';
 import { fin, FinancialMath, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { nextVersion } from '../../lib/occHelper.js';
-import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { deletedItemError } from '../../lib/items/deletedItem.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
@@ -122,11 +123,7 @@ export class DocumentStockEngine {
     // left on a deleted item before this rule (Dr 7012 at its Kardex cost; health check `item_deleted_with_stock`). Voids
     // (`applyStockReversal`) are not refused here.
     if (itemData.isDeleted === 1 && !(inOut === 'out' && documentType === STOCK_COUNT_DOCUMENT_TYPE)) {
-      throw new ConflictError(
-        `کالای «${itemData.name}» (${itemData.code}) حذف شده است و ورود یا خروج انبار برای آن ثبت نمی‌شود.`,
-        { itemId },
-        'ITEM_DELETED',
-      );
+      throw deletedItemError(itemData, 'ورود یا خروج انبار برای آن ثبت نمی‌شود.');
     }
 
     // v7.0.45 (audit P2-1): موجودی پیش از حرکت از جدول نرمال (منبع حقیقت)، نه از کش JSONB

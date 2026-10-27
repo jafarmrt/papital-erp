@@ -2,10 +2,10 @@ import { orm } from '../../db/drizzle.js';
 import { sql, asc, and, eq, or, like } from 'drizzle-orm';
 import { documents, legacyDateRepairs, refFiscalYearCorrections } from '../../db/schema.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
-import { fin } from '../../lib/financialDecimal.js';
-import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { readInventoryLedgerValues } from './inventoryLedgerValue.js';
+import { buildVoucherBalanceHealthTest, findVoucherBalanceDifferences } from './voucherBalanceHealth.js';
+import { buildInventoryReconciliationHealthTest, findManualInventoryPostings, type WarehouseValuation } from './inventoryReconciliationHealth.js';
 import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './voucherNumberIntegrity.js';
 import { buildNoVoucherTreasuryHealthTest, findTreasuryEntriesWithoutVoucher } from './treasury/noVoucherTreasury.js';
 import { buildLegacyChequePartyHealthTest, findLegacyChequePartyMismatches } from './treasury/chequePartyAccount.js';
@@ -74,7 +74,7 @@ import type {
   HealthCheckIssueItem,
   HealthCheckStatus,
 } from '../../types.js';
-import { formatPersianNumber, formatPersianPrice, toStorageDate, isoToJalaliDate } from '../../utils.js';
+import { formatPersianPrice, toStorageDate, isoToJalaliDate } from '../../utils.js';
 
 /**
  * TD-246 (تصمیم «قید یکتا»): آزمون یکتایی کد عناوین کاری فعال پرکیسی. مهاجرت 0037 ایندکس یکتا را روی داده دارای
@@ -165,6 +165,7 @@ export class FinancialHealthService {
       unnaturalAccountsRes,
       inventoryPhysicalRes,
       inventoryLedgerRes,
+      manualInventoryPostings,
       unlinkedDocsRes,
       abandonedDraftsRes,
       overdueChequesRes,
@@ -182,40 +183,8 @@ export class FinancialHealthService {
           (SELECT COUNT(*)::int FROM items WHERE is_deleted = 0) AS total_items
       `),
 
-      // ب: آزمون تراز اسناد دوبل (Voucher Balance) — v9.0.190 (TD-551، ت۷): سند تک‌ارزی روی مبلغ خام و سند چندارزی به
-      // ریال با قاعده TD-260 (ردیف ارزی × نرخ همان ردیف، گرد به ریال)؛ پیش‌تر «۱۰۰ دلار / ۱۰۰ ریال» تراز شمرده می‌شد
-      orm.execute(sql`
-        WITH rows AS (
-          SELECT vi.voucher_id, vi.debit, vi.credit,
-                 UPPER(COALESCE(NULLIF(vi.currency, ''), NULLIF(v.currency, ''), 'IRR')) AS cur,
-                 COALESCE(NULLIF(vi.exchange_rate, 0), 1) AS rate
-            FROM journal_voucher_items vi
-            JOIN journal_vouchers v ON v.id = vi.voucher_id
-           -- v8.0.15 (TD-270): ردیف‌های حذف نرم‌شده (همگام‌سازی دوباره سند پیش‌نویس) در هیچ آزمونی شمرده نمی‌شوند
-           WHERE vi.is_deleted = 0
-        ), sums AS (
-          SELECT voucher_id,
-                 COUNT(DISTINCT cur) AS currency_count,
-                 SUM(debit) AS raw_debit, SUM(credit) AS raw_credit,
-                 SUM(CASE WHEN cur = 'IRR' THEN debit ELSE ROUND(debit * rate, 0) END) AS irr_debit,
-                 SUM(CASE WHEN cur = 'IRR' THEN credit ELSE ROUND(credit * rate, 0) END) AS irr_credit
-            FROM rows GROUP BY voucher_id
-        ), checked AS (
-          SELECT v.id, v.voucher_number, v.date, v.status, v.description,
-                 COALESCE(CASE WHEN s.currency_count > 1 THEN s.irr_debit ELSE s.raw_debit END, 0) AS calc_debit,
-                 COALESCE(CASE WHEN s.currency_count > 1 THEN s.irr_credit ELSE s.raw_credit END, 0) AS calc_credit
-            FROM journal_vouchers v
-            LEFT JOIN sums s ON s.voucher_id = v.id
-           WHERE v.is_deleted = 0
-        )
-        SELECT id, voucher_number, date, status, description,
-               calc_debit::float AS calc_debit, calc_credit::float AS calc_credit,
-               ABS(calc_debit - calc_credit)::float AS discrepancy
-          FROM checked
-         WHERE ABS(calc_debit - calc_credit) > ${sql.raw(String(VOUCHER_BALANCE_TOLERANCE))}
-         ORDER BY voucher_number DESC
-         LIMIT 50;
-      `),
+      // ب: آزمون تراز اسناد دوبل (Voucher Balance), exact since v11 phase 6.1j (M8)
+      findVoucherBalanceDifferences(),
 
       // ج: آزمون حساب‌های با مانده خلاف ماهیت (Unnatural Balances)
       orm.execute(sql`
@@ -253,6 +222,8 @@ export class FinancialHealthService {
 
       // هـ: مانده دفاتر حسابداری در گروه ۱۴ بی کالای در جریان ساخت، سهم سندهای پیش‌نویس جدا (v10.0.7، TD-964)
       readInventoryLedgerValues(),
+      // v11 phase 6.1j (M21): manual vouchers on the inventory accounts, listed beside a stock vs ledger gap
+      findManualInventoryPostings(),
 
       // و: فاکتورهای نهایی بدون سند دوبل
       orm.execute(sql`
@@ -386,64 +357,9 @@ export class FinancialHealthService {
     // =========================================================================
     // آزمون ۱: تراز اسناد حسابداری (Voucher Balance Integrity)
     // =========================================================================
-    const unbalancedRows = (unbalancedVouchersRes.rows || []) as Array<{
-      id: number;
-      voucher_number: number;
-      date: string;
-      status: string;
-      description: string;
-      calc_debit: number;
-      calc_credit: number;
-      discrepancy: number;
-    }>;
-
-    if (unbalancedRows.length === 0) {
-      tests.push({
-        id: 'vouchers_balance',
-        category: 'vouchers',
-        title: 'تراز و تعادل اسناد دوبل حسابداری',
-        description: 'بررسی عدم وجود سند ناتراز یا اختلاف ریالی بین بدهکار و بستانکار در کلیه اسناد',
-        status: 'healthy',
-        scoreImpact: 0,
-        count: 0,
-        message: 'تمام اسناد ثبت‌شده در سیستم دارای توازن کامل بین جمع بدهکار و بستانکار هستند.',
-        metrics: {
-          totalVouchersChecked: scannedStats.totalVouchers,
-          unbalancedCount: 0,
-        },
-      });
-    } else {
-      const penalty = Math.min(40, unbalancedRows.length * 20);
-      overallScore -= penalty;
-      tests.push({
-        id: 'vouchers_balance',
-        category: 'vouchers',
-        title: 'تراز و تعادل اسناد دوبل حسابداری',
-        description: 'بررسی عدم وجود سند ناتراز یا اختلاف ریالی بین بدهکار و بستانکار در کلیه اسناد',
-        status: 'error',
-        scoreImpact: -penalty,
-        count: unbalancedRows.length,
-        message: `${unbalancedRows.length} سند حسابداری با مغایرت ریالی بین بدهکار و بستانکار شناسایی شد!`,
-        quickFixHint: 'اصلاح آرتیکل‌ها در ویرایش سند جهت برقراری تعادل',
-        quickFixAction: 'open_vouchers',
-        items: unbalancedRows.map(r => ({
-          id: r.id,
-          code: `سند #${r.voucher_number}`,
-          title: r.description || `سند شماره ${r.voucher_number}`,
-          subtitle: `تاریخ: ${jalaliLabel(r.date)} — بدهکار: ${formatPersianPrice(r.calc_debit)} | بستانکار: ${formatPersianPrice(r.calc_credit)}`,
-          amount: r.discrepancy,
-          discrepancy: r.discrepancy,
-          date: r.date,
-          details: `اختلاف ناترازی: ${formatPersianPrice(r.discrepancy)} ریال`,
-          linkType: 'voucher',
-          linkId: r.id,
-        })),
-        metrics: {
-          totalVouchersChecked: scannedStats.totalVouchers,
-          unbalancedCount: unbalancedRows.length,
-        },
-      });
-    }
+    const voucherBalanceTest = buildVoucherBalanceHealthTest(unbalancedVouchersRes, scannedStats.totalVouchers);
+    overallScore += voucherBalanceTest.scoreImpact;
+    tests.push(voucherBalanceTest);
 
     // =========================================================================
     // آزمون ۲: حساب‌های با مانده خلاف ماهیت (Unnatural Balances)
@@ -517,130 +433,10 @@ export class FinancialHealthService {
     // =========================================================================
     // آزمون ۳: انطباق ارزش موجودی انبار با دفاتر حسابداری کالا (Account 14)
     // =========================================================================
-    const physicalData = (inventoryPhysicalRes.rows?.[0] || {}) as {
-      total_items_count?: number;
-      total_physical_valuation?: string;
-      unvalued_stock_count?: number;
-      negative_stock_count?: number;
-    };
-
-    const warehouseValDec = fin(physicalData.total_physical_valuation).round(0);
-    const ledgerValDec = fin(inventoryLedgerRes.posted).round(0);
-    const draftLedgerVal = fin(inventoryLedgerRes.draft).round(0).toNumber();
-    const workInProgressVal = fin(inventoryLedgerRes.workInProgress).round(0).toNumber();
-    const invDiscrepancyDec = warehouseValDec.subtract(ledgerValDec).abs();
-    const warehouseVal = warehouseValDec.toNumber();
-    const ledgerVal = ledgerValDec.toNumber();
-    const unvaluedStockCount = Number(physicalData.unvalued_stock_count) || 0;
-    const negativeStockCount = Number(physicalData.negative_stock_count) || 0;
-    const invDiscrepancy = invDiscrepancyDec.toNumber();
-    const maxVal = Math.max(warehouseVal, ledgerVal, 1);
-    const invDiscrepancyPercent = Number(((invDiscrepancy / maxVal) * 100).toFixed(1));
-
-    const unvaluedNote = unvaluedStockCount > 0
-      ? ` ${formatPersianNumber(unvaluedStockCount)} کالای دارای موجودی هنوز بهای تمام‌شده ندارد و با ارزش صفر شمرده شد.`
-      : '';
-
-    if (invDiscrepancy <= 1000 && negativeStockCount === 0) {
-      tests.push({
-        id: 'inventory_reconciliation',
-        category: 'inventory',
-        title: 'انطباق ریالی موجودی انبار با دفتر کل حسابداری',
-        description: 'بررسی هم‌خوانی ارزش کاردکس و موجودی کالای فیزیکی با سرفصل ۱۴ (موجودی مواد و کالا)، بی حساب کالای در جریان ساخت که بیرون از انبار است',
-        status: 'healthy',
-        scoreImpact: 0,
-        count: 0,
-        message: 'ارزش کاردکس فیزیکی انبار با مانده سرفصل کل ۱۴ حسابداری در تراز کامل قرار دارد.' + unvaluedNote,
-        metrics: {
-          warehouseValuation: warehouseVal,
-          ledgerValuation: ledgerVal,
-          discrepancy: invDiscrepancy,
-          discrepancyPercent: invDiscrepancyPercent,
-          negativeStockCount,
-          unvaluedStockCount,
-          draftLedgerValuation: draftLedgerVal,
-          workInProgressValuation: workInProgressVal,
-        },
-      });
-    } else {
-      let penalty = 0;
-      let status: HealthCheckStatus = 'warning';
-      if (negativeStockCount > 0) {
-        penalty += 10;
-        status = 'error';
-      }
-      if (invDiscrepancyPercent > 5) {
-        penalty += 15;
-      } else if (invDiscrepancyPercent > 1) {
-        penalty += 5;
-      }
-      overallScore -= penalty;
-
-      const itemsList: HealthCheckIssueItem[] = [];
-      if (negativeStockCount > 0) {
-        itemsList.push({
-          id: 'neg_stock',
-          title: 'کالاهای دارای موجودی منفی فیزیکی',
-          subtitle: `${negativeStockCount} قلم کالا دارای موجودی فیزیکی کمتر از صفر هستند که نیازمند انبارگردانی یا ثبت رسید خرید است.`,
-          details: 'موجودی منفی باعث خطا در بهای تمام شده میانگین موزون می‌شود.',
-          linkType: 'item',
-        });
-      }
-      if (unvaluedStockCount > 0) {
-        itemsList.push({
-          id: 'unvalued_stock',
-          title: 'کالاهای دارای موجودی بدون بهای تمام‌شده',
-          subtitle: `${formatPersianNumber(unvaluedStockCount)} قلم کالا موجودی دارند ولی میانگین موزون ندارند و در ارزش انبار صفر شمرده شدند.`,
-          details: 'ارزش انبار فقط به بهای تمام‌شده سنجیده می‌شود، نه قیمت فهرست فروش؛ رسید با قیمت یا بهای اولیه کالا را ثبت کنید.',
-          linkType: 'item',
-        });
-      }
-      if (invDiscrepancy > 1000) {
-        itemsList.push({
-          id: 'inv_diff',
-          title: 'اختلاف ریالی ارزش انبار و مانده دفتر کل کالا',
-          subtitle: `ارزش کاردکس انبار: ${formatPersianPrice(warehouseVal)} ریال | مانده دفتر کل (حساب ۱۴ بی کالای در جریان ساخت): ${formatPersianPrice(ledgerVal)} ریال | کالای در جریان ساخت: ${formatPersianPrice(workInProgressVal)} ریال`,
-          amount: invDiscrepancy,
-          discrepancy: invDiscrepancy,
-          details: `درصد انحراف: ${invDiscrepancyPercent}٪ — علل متداول: فاکتورهای خرید بدون سند دوبل یا ثبت نشدن سند بهای تمام شده کالای فروش‌رفته (COGS).`,
-        });
-      }
-      if (invDiscrepancy > 1000 && draftLedgerVal !== 0) {
-        const gapAfterApproval = warehouseValDec.subtract(ledgerValDec).subtract(fin(draftLedgerVal)).abs().toNumber();
-        itemsList.push({
-          id: 'inv_draft_share',
-          title: 'سهم سندهای حسابداری پیش‌نویس',
-          subtitle: `سندهای پیش‌نویس ${formatPersianPrice(draftLedgerVal)} ریال روی حساب‌های موجودی دارند که تا تأیید در مانده دفتر کل شمرده نمی‌شود.`,
-          amount: Math.abs(draftLedgerVal),
-          details: `با تأیید این سندها اختلاف به ${formatPersianPrice(gapAfterApproval)} ریال می‌رسد.`,
-        });
-      }
-
-      tests.push({
-        id: 'inventory_reconciliation',
-        category: 'inventory',
-        title: 'انطباق ریالی موجودی انبار با دفتر کل حسابداری',
-        description: 'بررسی هم‌خوانی ارزش کاردکس و موجودی کالای فیزیکی با سرفصل ۱۴ (موجودی مواد و کالا)، بی حساب کالای در جریان ساخت که بیرون از انبار است',
-        status,
-        scoreImpact: -penalty,
-        count: (negativeStockCount > 0 ? 1 : 0) + (invDiscrepancy > 1000 ? 1 : 0),
-        message: negativeStockCount > 0
-          ? `${negativeStockCount} کالای دارای موجودی منفی و اختلاف ریالی ${formatPersianPrice(invDiscrepancy)} ریال مشاهده شد.`
-          : `مغایرت ریالی ${formatPersianPrice(invDiscrepancy)} ریالی (${invDiscrepancyPercent}٪) بین ارزش انبار و دفاتر ثبت شده است.`,
-        quickFixHint: 'ثبت اسناد انبارگردانی و صدور اسناد مکانیزه ورود و خروج انبار',
-        items: itemsList,
-        metrics: {
-          warehouseValuation: warehouseVal,
-          ledgerValuation: ledgerVal,
-          discrepancy: invDiscrepancy,
-          discrepancyPercent: invDiscrepancyPercent,
-          negativeStockCount,
-          unvaluedStockCount,
-          draftLedgerValuation: draftLedgerVal,
-          workInProgressValuation: workInProgressVal,
-        },
-      });
-    }
+    const inventoryTest = buildInventoryReconciliationHealthTest(
+      (inventoryPhysicalRes.rows?.[0] || {}) as WarehouseValuation, inventoryLedgerRes, manualInventoryPostings);
+    overallScore += inventoryTest.scoreImpact;
+    tests.push(inventoryTest);
 
     // =========================================================================
     // آزمون ۴: فاکتورهای نهایی فاقد سند دوبل و پیش‌نویس‌های بلاتکلیف

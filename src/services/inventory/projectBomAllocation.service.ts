@@ -16,6 +16,7 @@ import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { withOrderedLocks } from '../../lib/lockOrder.js';
 import { NotFoundError, ConflictError, ValidationError } from '../../errors/customErrors.js';
+import { deletedItemError } from '../../lib/items/deletedItem.js';
 import { assertOutflowWithinSellable } from '../documents/documentSellableGate.js';
 import { releaseReservationsForAllocation, restoreReservationsForAllocation } from '../documents/projectReservationRelease.js';
 
@@ -113,11 +114,12 @@ async function lockActiveItem(txEngine: DbExecutor, itemId: number): Promise<Ite
   const [item] = await txEngine
     .select()
     .from(items)
-    .where(and(eq(items.id, itemId), eq(items.isDeleted, 0)))
+    .where(eq(items.id, itemId))
     .for('no key update'); // v8.0.67 (TD-320): هم‌حالت lockStockItems
   if (!item) {
     throw new NotFoundError(`کالا با شناسه ${itemId} یافت نشد.`);
   }
+  if (item.isDeleted === 1) throw deletedItemError(item); // v11 phase 6.1j (N3)
   return item;
 }
 

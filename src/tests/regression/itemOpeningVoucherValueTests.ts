@@ -47,7 +47,7 @@ export async function runItemOpeningVoucherValueTests(shouldRun: (id: string, ..
       const created = await orm.transaction(tx => ItemCatalogService.createItem({
         type: 'raw_material', name: `td481 ${label} ${s}`, code: `TD481_${label}_${s}`, unit: 'عدد', category: '',
         weighted_average_cost: wac, [`stock_${main}`]: quantity,
-      }, { id: user.id, username: user.username }, tx));
+      }, { id: user.id, username: user.username }, tx, { canEnterStock: true }));
       itemIds.push(created.insertedId);
       return created.insertedId;
     };

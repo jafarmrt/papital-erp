@@ -144,7 +144,7 @@ async function stockCountLinesCase(h: Harness, wrong: string[]): Promise<string>
   if (await f.stock(b) !== 10 || await movements(b) !== 0) wrong.push(`item B is ${await f.stock(b)} with ${await movements(b)} count movements after the refused count, expected 10 and 0`);
 
   // 3) one item counted in two warehouses: each line shows its own warehouse's variance (was: -3 and book 13 on the main line)
-  const both = await count([{ itemId: c, physical_stock: 10, location: f.wh }, { itemId: c, physical_stock: 1, location: second.code }]);
+  const both = await count([{ itemId: c, physical_stock: 10, system_stock: 10, location: f.wh }, { itemId: c, physical_stock: 1, system_stock: 4, location: second.code }]);
   if (both.status !== 200) throw new Error(`setup: the two-warehouse count answered ${brief(both)}`);
   if (await f.stock(c) !== 10 || await f.stock(c, second.code) !== 1) wrong.push(`item C is ${await f.stock(c)} / ${await f.stock(c, second.code)} after the count, expected 10 / 1`);
   const view = await h.get(`/api/documents/${docIdOf(both)}`);
