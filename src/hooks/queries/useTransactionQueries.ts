@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
-import { normalizeRunningKardex, type RunningKardexData } from '../../lib/transactions/runningKardex';
+import { normalizeRunningKardex, runningKardexUrl, type RunningKardexData, type RunningKardexQuery } from '../../lib/transactions/runningKardex';
 import type { Transaction } from '../../types';
 
 /**
@@ -93,13 +93,16 @@ export function useTransactionsQuery(filters: TransactionFilters) {
  * کاردکس تفصیلی یک کالا (GET /inventory/item-kardex/:itemId). مثل قبل هر بار باز شدن مودال از سرور خوانده می‌شود
  * و خطا بی‌درنگ (بدون تلاش مجدد) با پیام فارسی در مودال نمایش داده می‌شود.
  */
-export function useItemKardexQuery(itemId: number, enabled: boolean) {
+export function useItemKardexQuery(itemId: number, enabled: boolean, query: RunningKardexQuery = {}) {
   return useQuery<RunningKardexData>({
-    queryKey: QUERY_KEYS.transactions.itemKardex(itemId),
+    // v11 phase 6.1ch (S11): one page of the range and filters, read from the server; they are part of the key
+    queryKey: [...QUERY_KEYS.transactions.itemKardex(itemId), query],
     enabled: enabled && Boolean(itemId),
     queryFn: async ({ signal }) => normalizeRunningKardex(
-      await fetchJson<unknown>(`/inventory/item-kardex/${itemId}`, { signal }),
+      await fetchJson<unknown>(runningKardexUrl(itemId, query), { signal }),
     ),
+    // another page or filter of the same item keeps its rows on screen until the new page comes; another item never does
+    placeholderData: (previous, previousQuery) => (previousQuery?.queryKey[2] === itemId ? previous : undefined),
     staleTime: FIVE_MINUTES,
     refetchOnMount: 'always',
     refetchOnWindowFocus: false,

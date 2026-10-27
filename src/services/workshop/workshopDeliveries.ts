@@ -6,6 +6,7 @@ import { logActivity } from '../../lib/auditLogger.js';
 import type { MyWorkshopDeliveries, WorkshopDelivery } from '../../lib/workshop/workshopContract.js';
 import { DELIVERY_CONFIRMATION_LABELS, WORKSHOP_ERRORS, WORKSHOP_NOTE_MAX, type DeliveryConfirmationStatus } from '../../lib/workshop/workshopSchedule.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
+import { groupRowsBy } from '../../lib/groupRows.js';
 import { liveUserIds, notifyUsers, permissionHolderIds, requireLinkedPersonnel, type WorkshopActor } from './workshopAccess.js';
 
 /**
@@ -56,6 +57,7 @@ export async function listMyDeliveries(executor: DbExecutor, userId: number): Pr
     ))
     .orderBy(desc(projectBomAllocations.allocatedAt), desc(projectBomAllocations.id)).limit(DELIVERY_LIMIT);
 
+  const linesByDocument = groupRowsBy(lines, l => l.documentId);
   const deliveries: WorkshopDelivery[] = [
     ...docs.map(({ doc, confirmation, projectTitle }) => ({
       kind: 'document' as const,
@@ -63,7 +65,7 @@ export async function listMyDeliveries(executor: DbExecutor, userId: number): Pr
       reference: doc.refNumber,
       date: doc.date,
       projectTitle: projectTitle ?? null,
-      lines: lines.filter(l => l.documentId === doc.id).map(l => ({ itemCode: l.itemCode, itemName: l.itemName, quantity: Number(l.quantity), unit: l.unit })),
+      lines: (linesByDocument.get(doc.id) ?? []).map(l => ({ itemCode: l.itemCode, itemName: l.itemName, quantity: Number(l.quantity), unit: l.unit })),
       confirmation: confirmationView(confirmation ?? undefined),
     })),
     ...allocations.map(({ allocation, confirmation, projectTitle }) => ({

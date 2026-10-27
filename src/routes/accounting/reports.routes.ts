@@ -73,7 +73,7 @@ router.get('/accounting/reports/trial-balance', authorizePermission('accounting.
 }));
 
 const accountCardReportHandler = asyncHandler(async (req, res) => {
-  const { accountId, detailedType, detailedId, detailedName, startDate, endDate, currency } = (req.query as ValidatedQuery<typeof accountCardQuerySchema>) || {};
+  const { accountId, detailedType, detailedId, detailedName, startDate, endDate, currency, page, limit, export: exportAll } = (req.query as ValidatedQuery<typeof accountCardQuerySchema>) || {};
   const data = await AccountingService.getDetailedAccountCard({
     accountId: accountId ? Number(accountId) : undefined,
     detailedType,
@@ -82,8 +82,12 @@ const accountCardReportHandler = asyncHandler(async (req, res) => {
     startDate: startDate as string,
     endDate: endDate as string,
     currency: currency as string,
+    page,
+    limit,
+    exportAll: exportAll === 'true',
   });
-  res.json({ report: data, ...data });
+  // v11 phase 6.1ch (M13): one page, sent once; before, the whole period went twice (`{ report: data, ...data }`)
+  res.json(data);
 });
 // v9.0.225 (TD-547، B03-05، تصمیم ت۵ الف): کارت حساب، گردش، صورت‌حساب و فهرست طرف‌های حساب فقط با کلیدهای منو و صفحه
 // حسابداری؛ پیش‌تر «مشاهده اسناد» و «مشاهده طرف حساب» کل دفتر، حقوق و تلفن پرسنل را می‌خواندند. صفحه مشتری کارت خودش

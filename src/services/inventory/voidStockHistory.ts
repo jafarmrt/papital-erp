@@ -5,7 +5,7 @@ import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { InsufficientStockError } from '../../errors/customErrors.js';
 import { isoToJalaliDate } from '../../utils/calendarDate.js';
 import { createLedgerLocationResolver } from './warehouseResolver.js';
-import { LEDGER_ROW_FILTER } from './stockMovementDate.js';
+import { itemLedgerFromDay, type LedgerDayRow } from './stockMovementDate.js';
 
 /**
  * v8.0.6 (TD-265، تصمیم مالک محصول ۱۲ مهر ۱۴۰۵ — گزینه الف): ابطال سند ورودی (رسید، خرید، رسید تولید، برگشت از فروش،
@@ -32,15 +32,7 @@ const DOCUMENT_TYPE_TITLES: Record<string, string> = {
   production_receipt: 'رسید تولید',
 };
 
-interface LedgerRow extends Record<string, unknown> {
-  id: number;
-  type: string;
-  quantity: string;
-  day: string;
-  location: string | null;
-  document_type: string | null;
-  document_ref: string | null;
-}
+type LedgerRow = LedgerDayRow;
 
 interface WarehouseRef { id: number; code: string }
 
@@ -50,10 +42,15 @@ function signedQuantity(row: LedgerRow): FinancialDecimal {
   return fin(0);
 }
 
-/** نخستین انباری که بدون ردیف‌های سند، به ترتیب (روز، شناسه) منفی می‌شود؛ یا null */
-function firstBrokenWarehouse(rows: LedgerRow[], removedIds: Set<number>, resolve: (raw: unknown) => WarehouseRef | null) {
-  const before = new Map<number, FinancialDecimal>();
-  const after = new Map<number, FinancialDecimal>();
+/**
+ * نخستین انباری که بدون ردیف‌های سند، به ترتیب (روز، شناسه) منفی می‌شود؛ یا null. v11 phase 6.1ch (S11): از مانده هر
+ * انبار پیش از نخستین روز سند آغاز می‌شود، چون پیش از آن روز با سند و بی سند یکی است.
+ */
+function firstBrokenWarehouse(
+  opening: Map<number, FinancialDecimal>, rows: LedgerRow[], removedIds: Set<number>, resolve: (raw: unknown) => WarehouseRef | null,
+) {
+  const before = new Map(opening);
+  const after = new Map(opening);
   const broken = new Map<number, { warehouse: WarehouseRef; day: string; deepest: FinancialDecimal; consumers: LedgerRow[] }>();
   for (const row of rows) {
     const wh = resolve(row.location);
@@ -79,7 +76,10 @@ function firstBrokenWarehouse(rows: LedgerRow[], removedIds: Set<number>, resolv
  * میان بررسی و ابطال رخ ندهد.
  */
 export async function assertVoidKeepsStockHistory(tx: DbExecutor, doc: { id: number; refNumber: string | null }): Promise<void> {
-  const docRows = await tx.select({ id: transactions.id, itemId: transactions.itemId, type: transactions.type })
+  const docRows = await tx.select({
+    id: transactions.id, itemId: transactions.itemId, type: transactions.type,
+    day: sql<string>`to_char(${transactions.date}, 'YYYY-MM-DD')`,
+  })
     .from(transactions)
     .where(and(eq(transactions.documentId, doc.id), eq(transactions.isDeleted, 0), isNull(transactions.reversalOfId)));
   const incomingItemIds = [...new Set(docRows.filter(r => r.type === 'in' || r.type === 'transfer_in').map(r => r.itemId))].sort((a, b) => a - b);
@@ -96,13 +96,10 @@ export async function assertVoidKeepsStockHistory(tx: DbExecutor, doc: { id: num
   const removedIds = new Set(docRows.map(r => r.id));
 
   for (const item of lockedItems) {
-    const res = await tx.execute(sql`
-      SELECT t.id, t.type, t.quantity::text AS quantity, to_char(t.date, 'YYYY-MM-DD') AS day, t.location,
-             t.document_type, t.document_ref
-        FROM transactions t
-       WHERE t.item_id = ${item.id} AND ${LEDGER_ROW_FILTER}
-       ORDER BY t.date::date, t.id`);
-    const broken = firstBrokenWarehouse((res.rows ?? []) as LedgerRow[], removedIds, resolve);
+    // v11 phase 6.1ch (S11): only the item's rows from the document's first day on, after each warehouse's balance before it
+    const firstDay = docRows.filter(r => r.itemId === item.id).map(r => r.day).sort()[0];
+    const { opening, rows } = await itemLedgerFromDay(tx, item.id, firstDay, 'day', resolve);
+    const broken = firstBrokenWarehouse(opening, rows, removedIds, resolve);
     if (!broken) continue;
 
     const listed = broken.consumers.slice(0, MAX_LISTED_DOCUMENTS)

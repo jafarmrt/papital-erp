@@ -77,7 +77,7 @@ const renderPage = (client: QueryClient) => render(pageOf(client));
 describe('the parties page account card reads on each opening (10.3)', () => {
   it('never shows the card an earlier opening left while it reads again', async () => {
     const client = appQueryClient();
-    client.setQueryData(QUERY_KEYS.accounting.report('customer-account-card', { customerId: 7 }), cardOf('cached'), { updatedAt: Date.now() - 60_000 });
+    client.setQueryData(QUERY_KEYS.accounting.report('customer-account-card', { customerId: 7, page: 1 }), cardOf('cached'), { updatedAt: Date.now() - 60_000 });
     holdCard = true;
     renderPage(client);
     fireEvent.click(await screen.findByText(SHOWN.open));

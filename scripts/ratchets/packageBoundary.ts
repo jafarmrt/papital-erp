@@ -15,7 +15,8 @@ import { productionSourceFiles } from '../permission-ratchet';
  * may import each other). The composition roots (`app.ts`, `server.ts`, the workflow domain actions) are left out. The shared kernel
  * (money, numeric input, the domain event bus and outbox, idempotency, storage, and since v11 phase 3.1 the fiscal-year lock,
  * which every treasury, cheque and stock write checks, not only a voucher write, and since v11 phase 6.1j the list of
- * documents that reserve stock and the stock direction of each document type) counts as infrastructure.
+ * documents that reserve stock and the stock direction of each document type, and since v11 phase 6.1ch the title of
+ * each document type) counts as infrastructure.
  * A server file that no rule maps is refused (target: 0 unmapped files).
  * Type-only imports do not count; static, dynamic `import()` and re-exports do.
  */
@@ -37,6 +38,9 @@ const SHARED_KERNEL = [
   // v11 phase 6.1j (M21, review): the stock direction of each document type, a table with no import, which the stock vs
   // ledger health check reads for its incoming types
   'src/lib/documents/documentDirection.ts',
+  // v11 phase 6.1ch (M13): the title of each document type, a table with no import, which the Kardex window's search on
+  // the server matches as the window matched it before
+  'src/lib/documents/documentTypeTitles.ts',
 ];
 
 /** Rank of each package; an import is allowed only towards a lower rank. */
