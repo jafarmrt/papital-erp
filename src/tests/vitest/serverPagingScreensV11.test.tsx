@@ -45,13 +45,33 @@ beforeEach(() => {
 afterEach(() => { cleanup(); fetchJson.mockReset(); });
 
 describe('print of a paged card (M13)', () => {
-  it('prints once the snapshot is on the page and drops it after the print', () => {
-    const { result } = renderHook(() => usePrintSnapshot<number[]>());
-    act(() => result.current[1]([1, 2, 3]));
+  it('prints once the rows are on the page and drops them after the print', async () => {
+    const { result } = renderHook(() => usePrintSnapshot<number[]>('card A'));
+    await act(async () => { await result.current.start(async () => [1, 2, 3]); });
     expect(print).toHaveBeenCalledTimes(1);
-    expect(result.current[0]).toEqual([1, 2, 3]);
+    expect(result.current.data).toEqual([1, 2, 3]);
     act(() => { window.dispatchEvent(new Event('afterprint')); });
-    expect(result.current[0]).toBeNull();
+    expect(result.current.data).toBeNull();
+  });
+
+  it('drops rows whose card left the screen, whether during the load or after a print the browser never ends', async () => {
+    let finish: (rows: number[]) => void = () => undefined;
+    const { result, rerender } = renderHook(({ owner }) => usePrintSnapshot<number[]>(owner), { initialProps: { owner: 'card A' } });
+    let started: Promise<boolean> = Promise.resolve(false);
+    act(() => { started = result.current.start(() => new Promise<number[]>(resolve => { finish = resolve; })); });
+    expect(result.current.loading).toBe(true);
+    rerender({ owner: 'card B' });
+    await act(async () => { finish([1, 2]); await started; });
+    expect(print).not.toHaveBeenCalled();
+    expect(result.current.data).toBeNull();
+
+    await act(async () => { await result.current.start(async () => [3]); });
+    expect(print).toHaveBeenCalledTimes(1);
+    rerender({ owner: 'card C' });
+    expect(result.current.data).toBeNull();
+    rerender({ owner: 'card B' });
+    expect(result.current.data).toBeNull();
+    expect(print).toHaveBeenCalledTimes(1);
   });
 
   it('the ledger tab prints every row of a card of several pages, then shows its page again', async () => {

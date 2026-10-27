@@ -124,8 +124,8 @@ export function AccountExplorerTab({
   const currentLedgerPage = ledgerPage.key === ledgerKey ? ledgerPage.page : 1;
   const { ledger, loading: isLoadingTransactions, hasFilter: hasLedgerFilter } = useExplorerLedgerQuery(ledgerParams, currentLedgerPage);
   // the print holds every row of the selection (`handlePrint`); the screen shows its page
-  const [printRows, setPrintRows] = usePrintSnapshot<VoucherItemRow[]>();
-  const transactions: VoucherItemRow[] = printRows ?? ledger.items;
+  const ledgerPrint = usePrintSnapshot<VoucherItemRow[]>(ledgerKey);
+  const transactions: VoucherItemRow[] = ledgerPrint.data ?? ledger.items;
   const [exportingCsv, setExportingCsv] = useState(false);
   // v10.0.x (TD-1240): ردیف «مانده ابتدای دوره» سند ندارد؛ شماره ردیف‌ها پس از آن از ۱ آغاز می‌شود
   const openingRows = transactions.filter(t => t.isOpening).length;
@@ -177,11 +177,8 @@ export function AccountExplorerTab({
       window.print();
       return;
     }
-    try {
-      setPrintRows(await fetchExplorerLedgerRows(ledgerParams));
-    } catch {
-      toast.error('همه ردیف‌های گردش حساب برای چاپ گرفته نشد؛ دوباره تلاش کنید.');
-    }
+    const printed = await ledgerPrint.start(() => fetchExplorerLedgerRows(ledgerParams)).catch(() => false);
+    if (!printed) toast.error('همه ردیف‌های گردش حساب برای چاپ گرفته نشد؛ دوباره تلاش کنید.');
   };
 
   // Export CSV function; v11 phase 6.1ch (M13): every row of the selection (`export=true`), not only the page on screen
@@ -419,6 +416,7 @@ export function AccountExplorerTab({
 
             <button
               onClick={() => { void handlePrint(); }}
+              disabled={ledgerPrint.loading}
               className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1.5 cursor-pointer"
             >
               <Printer size={14} />
