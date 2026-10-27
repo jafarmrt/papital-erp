@@ -10,6 +10,7 @@ import {
 } from '../../lib/woocommerce/wcMediaPush.js';
 import { requireWcConnection, wcRequest, type WcConnection } from './wcClient.js';
 import { liveLinks, type WcActor } from './wcCatalog.service.js';
+import { mapLimited, WC_VARIATION_READ_CONCURRENCY } from './wcCatalogRead.js';
 import {
   outcomeOf, runField, sendAndRecord, writeSetting, type FieldRunOptions, type FieldRunOutcome, type Planned,
 } from './wcFieldPush.service.js';
@@ -93,19 +94,22 @@ async function currentImages(conn: WcConnection, productIds: number[], signal: A
   return out;
 }
 
-/** The image each of these shop variations shows now, read again so an image that landed is not sent twice */
+/**
+ * The image each of these shop variations shows now, read again so an image that landed is not sent twice; a few parents
+ * at a time, and a parent the shop does not answer leaves its variations out, which are then sent as usual (delta review)
+ */
 async function currentVariationImages(conn: WcConnection, links: Link[], signal: AbortSignal): Promise<Map<number, ShopImage | null>> {
   const byProduct = new Map<number, number[]>();
   for (const l of links) byProduct.set(l.wcProductId, [...(byProduct.get(l.wcProductId) ?? []), l.wcVariationId]);
   const out = new Map<number, ShopImage | null>();
-  for (const [productId, variationIds] of byProduct) {
+  await mapLimited([...byProduct], WC_VARIATION_READ_CONCURRENCY, async ([productId, variationIds]) => {
     const answer = await wcRequest(conn, 'GET', `products/${productId}/variations`, null, {
       include: variationIds.join(','), per_page: variationIds.length, _fields: 'id,image',
-    }, { signal });
+    }, { signal }).catch(() => null);
     for (const row of Array.isArray(answer) ? answer as Array<{ id?: unknown; image?: unknown }> : []) {
       out.set(Number(row.id), row.image && typeof row.image === 'object' ? row.image as ShopImage : null);
     }
-  }
+  });
   return out;
 }
 
@@ -142,7 +146,7 @@ export function runImagePushOnce(now: Date = new Date(), options: FieldRunOption
     const shown = await currentVariationImages(conn, due.filter(d => d.link.wcVariationId > 0).map(d => d.link), signal);
     const plan: Planned[] = [];
     const gone: Planned[] = [];
-    const landed: Array<{ id: number; values: Planned['values'] }> = [];
+    const landed: Planned[] = [];
     for (const { link, cover } of due) {
       const src = signedImageUrl(baseUrl, link.id, cover, now.getTime());
       if (!src) return { state: 'off' };
@@ -151,7 +155,7 @@ export function runImagePushOnce(now: Date = new Date(), options: FieldRunOption
       const current = link.wcVariationId > 0 ? shown.get(link.wcVariationId) : images?.[0];
       if (current && isImageOfCover(current.src, link.id, cover)) {
         const id = imageIdOf(current);
-        landed.push({ id: link.id, values: { ...values, ...(id === null ? {} : { siteImageId: id }) } });
+        landed.push({ link, fields: {}, values: { ...values, ...(id === null ? {} : { siteImageId: id }) } });
         continue;
       }
       if (link.wcVariationId > 0) {
@@ -165,10 +169,10 @@ export function runImagePushOnce(now: Date = new Date(), options: FieldRunOption
       const kept = images.slice(1).map(i => Number(i.id)).filter(id => Number.isInteger(id) && id > 0).map(id => ({ id }));
       plan.push({ link, fields: { images: [{ src }, ...kept] }, values });
     }
-    if (landed.length > 0) await orm.transaction(tx => updateLinkRows(tx, landed, systemNowUtcIso()));
-    if (plan.length === 0 && gone.length === 0) return { state: 'nothing' };
+    // the images found landed count as sent in this run's row, so a run that only finds them clears the last failure
     return outcomeOf(await sendAndRecord('image_push', plan, steps.length, {}, signal, {
       batchSize: WC_IMAGE_BATCH_SIZE,
+      landed,
       refused: gone.map(g => ({ link: g.link, error: GONE })),
       answered: (link, answer) => {
         const id = answeredImageId(answer, link.wcVariationId > 0);

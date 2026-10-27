@@ -5,6 +5,7 @@ import { appSettings, items, mediaAssets, wcProductLinks } from '../../db/schema
 import { derivedSecretKey } from '../../lib/secretBox.js';
 import { mediaFilePath } from '../../lib/media/mediaPaths.js';
 import { NotFoundError } from '../../errors/customErrors.js';
+import { logger } from '../../middleware/logger.js';
 import { isMediaSendOn, WC_IMAGE_LINK_TTL_SECONDS, WC_IMAGE_PUSH_SETTING_KEY } from '../../lib/woocommerce/wcMediaPush.js';
 
 /**
@@ -68,8 +69,10 @@ const notFound = () => new NotFoundError('پیدا نشد');
 export async function resolveShopImage(file: string, nowMs: number = Date.now()): Promise<string> {
   try {
     return await signedFileOf(file, nowMs);
-  } catch {
-    // a database or file error answers the same 404 as every refusal, so nothing tells whether the push is on
+  } catch (err) {
+    // a database or file error answers the same 404 as every refusal, so nothing tells whether the push is on; the log
+    // names the fault only, never the signed file
+    if (!(err instanceof NotFoundError)) logger.warn(`[WooCommerce shop image] answered 404 after a fault: ${err instanceof Error ? err.name : 'unknown error'}`);
     throw notFound();
   }
 }

@@ -139,6 +139,10 @@ export interface SendOptions {
   refused?: Array<{ link: Link; error: string }>;
   /** more values a link takes from its answer row once sent */
   answered?: (link: Link, answer: Record<string, unknown> | undefined) => LinkRowUpdate['values'];
+  /** PR #421 review: links found already in line on the shop (a send whose answer was lost), recorded as sent */
+  landed?: Planned[];
+  /** PR #421 review: more values a link the shop refused takes (the shop surely did not apply the row) */
+  onRefused?: (link: Link) => LinkRowUpdate['values'];
 }
 
 /** Sends what the run planned and records the outcomes on the links and one run row, in one transaction */
@@ -148,8 +152,11 @@ export async function sendAndRecord(
   const conn = await requireWcConnection();
   const sent: Array<FieldOutcome<Link>> = plan.length === 0 ? []
     : await sendLinkFields(conn, plan.map(p => ({ link: p.link, fields: p.fields })), signal, { batchSize: options.batchSize });
-  const outcomes: Array<FieldOutcome<Link>> = [...sent, ...(options.refused ?? []).map(r => ({ link: r.link, error: r.error }))];
-  const valuesOf = new Map(plan.map(p => [p.link.id, p.values]));
+  const landed = options.landed ?? [];
+  const outcomes: Array<FieldOutcome<Link>> = [
+    ...sent, ...landed.map(l => ({ link: l.link, error: '' })), ...(options.refused ?? []).map(r => ({ link: r.link, error: r.error })),
+  ];
+  const valuesOf = new Map([...plan, ...landed].map(p => [p.link.id, p.values]));
   const failed = outcomes.filter(o => o.error);
   const errors = failed.map(o => `${o.link.siteSku || `#${o.link.wcProductId}`}: ${o.error}`);
   const result: FieldRunResult = {
@@ -164,7 +171,8 @@ export async function sendAndRecord(
       if (!o.error) return { id: o.link.id, values: { ...(valuesOf.get(o.link.id) ?? {}), ...(options.answered?.(o.link, o.answer) ?? {}) } };
       // a request that failed for the shop never counts against the product
       const count = o.link[countColumn];
-      return { id: o.link.id, values: { [errorColumn]: o.error, [countColumn]: o.requestFailed ? count : count + 1 } };
+      if (o.requestFailed) return { id: o.link.id, values: { [errorColumn]: o.error, [countColumn]: count } };
+      return { id: o.link.id, values: { ...(options.onRefused?.(o.link) ?? {}), [errorColumn]: o.error, [countColumn]: count + 1 } };
     }), now);
     await tx.insert(wcSyncRuns).values({
       kind, status, startedAt: now, finishedAt: now,

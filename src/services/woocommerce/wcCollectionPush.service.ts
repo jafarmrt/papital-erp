@@ -7,7 +7,8 @@ import { WC_AUTO_MAX_LINK_FAILURES } from '../../lib/woocommerce/wcAutoPush.js';
 import {
   collectionsKey, isMediaSendOn, WC_COLLECTION_MAX_PRODUCTS, WC_COLLECTION_PUSH_SETTING_KEY,
 } from '../../lib/woocommerce/wcMediaPush.js';
-import { requireWcConnection, wcListRequest, wcRequest, type WcConnection } from './wcClient.js';
+import { ValidationError } from '../../errors/customErrors.js';
+import { requireWcConnection, wcListRequest, wcRequest, WC_SHOP_REQUEST_FAILED, type WcConnection } from './wcClient.js';
 import { liveLinks, type WcActor } from './wcCatalog.service.js';
 import {
   outcomeOf, runField, sendAndRecord, writeSetting, type FieldRunOptions, type FieldRunOutcome, type Planned,
@@ -74,9 +75,10 @@ export function tagNameKey(name: unknown): string {
 
 interface ShopTag { id?: unknown; name?: unknown }
 
-/** The shop's tag id for each name, making the tags it does not have; a name the shop would not make is left out */
+/** The shop's tag id for each name, making the tags it does not have; a name WordPress cleans to nothing is left out */
 async function tagIdsFor(conn: WcConnection, names: string[], signal: AbortSignal): Promise<Map<string, number>> {
   const byName = new Map<string, number>();
+  const refused = new Set<string>();
   const keep = (rows: ShopTag[]) => rows.forEach((t) => {
     const id = Number(t.id);
     if (Number.isInteger(id) && id > 0 && !byName.has(tagNameKey(t.name))) byName.set(tagNameKey(t.name), id);
@@ -101,7 +103,13 @@ async function tagIdsFor(conn: WcConnection, names: string[], signal: AbortSigna
       // a tag made meanwhile (or differing only in letters WordPress folds) answers `term_exists` with its id
       const id = Number(row.error ? row.error.data?.resource_id : row.id);
       if (Number.isInteger(id) && id > 0 && part[i] !== undefined) byName.set(tagNameKey(part[i]), id);
+      else if (part[i] !== undefined && row.error?.code === 'empty_term_name') refused.add(tagNameKey(part[i]));
     });
+  }
+  // delta review N-2: only a name WordPress cleans to nothing refuses its products; any other failure fails the run
+  const unknown = wanted.filter(([k]) => !byName.has(k) && !refused.has(k));
+  if (unknown.length > 0) {
+    throw new ValidationError(`سایت برچسب «${unknown[0][1]}» را نساخت و برچسبی فرستاده نشد.`, undefined, WC_SHOP_REQUEST_FAILED);
   }
   return byName;
 }
@@ -145,7 +153,7 @@ export function runCollectionPushOnce(now: Date = new Date(), options: FieldRunO
         gone.push({ link, error: GONE });
         continue;
       }
-      // PR #421 review: a name the shop would not make (one WordPress cleans to nothing) refuses only this product
+      // PR #421 review: a name WordPress cleans to nothing refuses only this product
       const refusedName = names.find(n => !ids.has(tagNameKey(n)));
       if (refusedName !== undefined) {
         gone.push({ link, error: `سایت برچسب «${refusedName.slice(0, 100)}» را نساخت؛ نام کالکشن را اصلاح کنید.` });
@@ -164,7 +172,10 @@ export function runCollectionPushOnce(now: Date = new Date(), options: FieldRunO
     // PR #421 review: the tags about to be added are the program's before the send, so a send whose answer never came back
     // (the shop added them anyway) cannot leave them looking like the shop's own; these ids were not on the product
     if (claims.length > 0) await orm.transaction(tx => updateLinkRows(tx, claims, systemNowUtcIso()));
-    return outcomeOf(await sendAndRecord('collection_push', plan, steps.length, {}, signal, { refused: gone }));
+    // a row the shop refused was surely not applied, so the program's tags go back to what they were before the claim
+    return outcomeOf(await sendAndRecord('collection_push', plan, steps.length, {}, signal, {
+      refused: gone, onRefused: link => ({ sentTagIds: JSON.stringify(sentTagIds(link.sentTagIds)) }),
+    }));
   });
 }
 

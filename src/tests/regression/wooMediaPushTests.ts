@@ -203,14 +203,24 @@ export async function imagePushCase(h: Harness, wrong: string[]): Promise<string
     const sentBefore = store.batchSizes.length;
     const retry = await runImagePushOnce(later(1));
     if (store.batchSizes.length !== sentBefore) wrong.push(`the images that landed were sent again (${retry.state})`);
+    // delta review SF-1: the run that found them records them as sent, so the last run no longer shows the failure
+    if (retry.state !== 'pushed' || retry.result?.syncedCount !== 2) wrong.push(`the run that found the landed images was ${JSON.stringify(retry).slice(0, 200)}`);
+    const [lastRun] = await h.q(`SELECT status FROM wc_sync_runs WHERE kind = 'image_push' ORDER BY id DESC LIMIT 1`);
+    if (lastRun?.status !== 'ok') wrong.push(`the last image run row is ${lastRun?.status}`);
     if (JSON.stringify(products[0].images) !== JSON.stringify([landedProduct, 502])) wrong.push(`the product images became ${JSON.stringify(products[0].images)}`);
     const afterHad = await linkMedia(h, had.id);
     const afterVariation = await linkMedia(h, variation.id);
     if (afterHad?.cover_sent_sha256 !== thirdHad || Number(afterHad?.site_image_id) !== landedProduct) wrong.push(`the landed product image was recorded as ${JSON.stringify(afterHad)}`);
     if (afterVariation?.cover_sent_sha256 !== secondVariation || Number(afterVariation?.site_image_id) !== landedVariation) wrong.push(`the landed variation image was recorded as ${JSON.stringify(afterVariation)}`);
+    // delta review SF-2: a parent whose variations the shop does not answer is sent as before, the run does not fail
+    const thirdVariation = await setCover(h, variation.id);
+    store.statusPaths.set('products/4/variations', 404);
+    const unread = await runImagePushOnce(later(2));
+    store.statusPaths.delete('products/4/variations');
+    if (unread.state !== 'pushed' || (await linkMedia(h, variation.id))?.cover_sent_sha256 !== thirdVariation) wrong.push(`with the variations unread the run was ${JSON.stringify(unread).slice(0, 200)}`);
 
     // turned off, even a valid address is refused
-    const variationFile = `/api/woocommerce/shop-image/${signedImageFile(Number(afterVariation?.id), secondVariation)}`;
+    const variationFile = `/api/woocommerce/shop-image/${signedImageFile(Number(afterVariation?.id), thirdVariation)}`;
     if ((await publicGet(h, pathOf(variationSrc))).status !== 404) wrong.push('the address of a replaced variation cover still answers');
     if ((await publicGet(h, variationFile)).status !== 200) wrong.push('a valid variation address was refused');
     await h.post('/api/woocommerce/image-push', { enabled: false }, manager);
@@ -303,6 +313,14 @@ export async function collectionPushCase(h: Harness, wrong: string[]): Promise<s
     const [refusedLink] = await h.q(`SELECT collection_error FROM wc_product_links WHERE is_deleted = 0 AND item_id = $1`, [bare.id]);
     if (!String(refusedLink?.collection_error).includes('<>')) wrong.push(`the refused name was recorded as ${refusedLink?.collection_error}`);
     if (store.tagsSent.has(3) || sorted(products[0].tags) !== sorted([80, 85, silver, 81])) wrong.push(`after a refused name product 1 tags ${JSON.stringify(products[0].tags)}, product 3 sent ${store.tagsSent.has(3)}`);
+
+    // delta review N-1: a row the shop refused was not applied, so the tags claimed for it go back
+    await setCollections(own.id, ['Copper']);
+    store.rowErrors.add(2);
+    const rowRefused = await runCollectionPushOnce(later(4));
+    store.rowErrors.delete(2);
+    const afterRefusal = (await linkMedia(h, own.id))?.sent_tag_ids;
+    if (sorted(afterRefusal as number[]) !== '[]') wrong.push(`a refused row kept the claimed tags ${JSON.stringify(afterRefusal)} (${rowRefused.state})`);
 
     await h.post('/api/woocommerce/collection-push', { enabled: false }, manager);
     await setCollections(many.id, []);
