@@ -8,6 +8,7 @@ import { PayrollDeductionsField, deductionsNeedDescription } from './PayrollDedu
 import { PayrollStatutoryFields } from './PayrollStatutoryFields';
 import { EMPTY_STATUTORY_ENTRY, statutoryPayloadOf, type PayrollStatutoryEntry } from '../../lib/payroll/statutoryForm';
 import { DecimalInput } from '../common/DecimalInput';
+import { RialEquivalent } from '../common/RialEquivalent';
 import { DialogLayer } from '../common/DialogLayer';
 
 /** v10.0.210 (TD-1087): فیشی که بیمه یا مالیاتش با شرح تغییر کرده، همان مبلغ‌ها و شرح را در فرم نشان می‌دهد */
@@ -84,13 +85,15 @@ export function PayrollDraftEditModal({ payroll, onClose, onSaved }: { payroll: 
             <div>
               <label htmlFor="draft-payroll-bonuses" className="block text-xs font-bold text-slate-700 mb-1">{`پاداش / مزایا (${inputCurLbl})`}</label>
               <DecimalInput id="draft-payroll-bonuses" min="0" value={bonuses} onValueChange={(v) => setBonuses(nonNegative(v))} className={fieldClass} />
+              <RialEquivalent value={bonuses} />
             </div>
             <PayrollStatutoryFields personnelId={payroll.personnelId} startDate={payroll.startDate} endDate={payroll.endDate}
               gross={Number(payroll.totalPieceworkAmount || 0) + Number(payroll.totalFixedAmount || 0) + bonuses} entry={statutory} onChange={setStatutory} />
-            <PayrollDeductionsField amount={deductions} onAmountChange={setDeductions} description={description} onDescriptionChange={setDescription} currencyLabel={inputCurLbl} />
+            <PayrollDeductionsField amount={deductions} onAmountChange={setDeductions} description={description} onDescriptionChange={setDescription} />
             <div>
               <label htmlFor="draft-payroll-advance" className="block text-xs font-bold text-slate-700 mb-1">{`کسر مساعده (${inputCurLbl})`}</label>
               <DecimalInput id="draft-payroll-advance" min="0" value={advance} onValueChange={(v) => setAdvance(nonNegative(v))} className={fieldClass} />
+              <RialEquivalent value={advance} />
             </div>
             <p className="text-[10px] text-slate-500 font-bold leading-5">کارکرد و حقوق ثابت فیش همان صدور می‌ماند؛ خالص و سند پیش‌نویس فیش دوباره ساخته می‌شود.</p>
           </div>

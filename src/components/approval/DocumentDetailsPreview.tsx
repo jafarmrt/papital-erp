@@ -1,7 +1,9 @@
 import { RefreshCw } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, formatPersianCode } from '../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../utils';
+import { useShownRial } from '../../contexts/RialDisplayContext';
+import { docAmountFormatOf } from '../../lib/invoices/invoiceListDocuments';
 import { fin } from '../../lib/financialDecimal';
-import { serverPayableOf, payableDecimalsOf, type PayableAmountFields } from '../../lib/invoices/documentPayable';
+import { serverPayableOf, type PayableAmountFields } from '../../lib/invoices/documentPayable';
 import { lineStockOf, type DocumentLineStock } from '../../lib/documents/documentLineStock';
 
 export interface ApprovalDocumentItemRow {
@@ -52,6 +54,8 @@ interface DocumentDetailsPreviewProps {
  */
 export function DocumentDetailsPreview({ docDetails, isLoadingDoc }: DocumentDetailsPreviewProps) {
   const hasLineStock = (docDetails?.lineStock?.length ?? 0) > 0;
+  // v11 phase 6.3 (U3): a rial document's amounts in the display unit, a foreign one in its currency
+  const amounts = docAmountFormatOf(docDetails?.currency, useShownRial());
   if (isLoadingDoc) {
     return (
       <div className="p-6 text-center text-xs text-gray-500 flex items-center justify-center gap-2">
@@ -69,7 +73,6 @@ export function DocumentDetailsPreview({ docDetails, isLoadingDoc }: DocumentDet
     );
   }
 
-  const decimals = payableDecimalsOf(docDetails);
   return (
     <div className="p-3 space-y-3">
       {/* Buyer & Doc Info Bar */}
@@ -89,7 +92,7 @@ export function DocumentDetailsPreview({ docDetails, isLoadingDoc }: DocumentDet
         <div>
           <div className="text-gray-400 text-[10px]">مبلغ قابل پرداخت:</div>
           <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-            {formatPersianPrice(serverPayableOf(docDetails), docDetails.currency, decimals)}
+            {amounts.number(serverPayableOf(docDetails))} {amounts.label}
           </div>
         </div>
       </div>
@@ -105,8 +108,8 @@ export function DocumentDetailsPreview({ docDetails, isLoadingDoc }: DocumentDet
                 <th className="p-2 text-center">تعداد / مقدار</th>
                 {hasLineStock && <th className="p-2">انبار مبدأ</th>}
                 {hasLineStock && <th className="p-2 text-center">موجودی / قابل فروش</th>}
-                <th className="p-2 text-left">قیمت واحد</th>
-                <th className="p-2 text-left">مبلغ کل سطر</th>
+                <th className="p-2 text-left">قیمت واحد ({amounts.label})</th>
+                <th className="p-2 text-left">مبلغ کل سطر ({amounts.label})</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -127,8 +130,8 @@ export function DocumentDetailsPreview({ docDetails, isLoadingDoc }: DocumentDet
                         {stock ? `${formatPersianNumber(stock.locationStock)} / ${formatPersianNumber(stock.sellable)}` : '—'}
                       </td>
                     )}
-                    <td className="p-2 text-left font-mono text-gray-600 dark:text-gray-300">{formatPersianPrice(linePrice, undefined, decimals)}</td>
-                    <td className="p-2 text-left font-mono font-bold text-gray-800 dark:text-gray-200">{formatPersianPrice(lineTotal, undefined, decimals)}</td>
+                    <td className="p-2 text-left font-mono text-gray-600 dark:text-gray-300">{amounts.number(linePrice)}</td>
+                    <td className="p-2 text-left font-mono font-bold text-gray-800 dark:text-gray-200">{amounts.number(lineTotal)}</td>
                   </tr>
                 );
               })}

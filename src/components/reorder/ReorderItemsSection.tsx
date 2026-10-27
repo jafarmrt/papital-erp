@@ -1,5 +1,6 @@
 import { RefreshCw, CheckCircle2, CheckSquare, Square } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber } from '../../utils';
+import { formatPersianNumber } from '../../utils';
+import { useShownRial } from '../../contexts/RialDisplayContext';
 import type { ReorderItem } from '../../lib/reorderAlerts/reorderItems';
 import type { ReorderSectionTheme } from './reorderSectionThemes';
 import { ReorderItemRow } from './ReorderItemRow';
@@ -27,6 +28,8 @@ export function ReorderItemsSection({
   onToggle, onToggleAll, onBatchAction, onAction, onEditReorderPoint
 }: ReorderItemsSectionProps) {
   const Icon = theme.icon;
+  // v11 phase 6.3 (U3): costs and values in the display unit, the unit named in the summary and the column titles
+  const rial = useShownRial();
 
   return (
     <div className={`bg-white border-2 ${theme.boxBorder} rounded-2xl shadow-xs overflow-hidden`}>
@@ -53,7 +56,7 @@ export function ReorderItemsSection({
 
         <div className="flex items-center gap-3">
           <span className="text-xs font-bold text-slate-600">
-            {theme.costLabel} <span className={`font-mono ${theme.costValue} font-black text-sm`}>{formatPersianPrice(deficitCost)}</span>
+            {theme.costLabel} <span className={`font-mono ${theme.costValue} font-black text-sm`}>{rial.amount(deficitCost)}</span>
           </span>
 
           <button
@@ -113,8 +116,8 @@ export function ReorderItemsSection({
                 <th className="p-3 text-center">درخواست باز</th>
                 <th className="p-3 text-center">نقطه سفارش</th>
                 <th className="p-3 text-center">{theme.deficitHeader}</th>
-                <th className="p-3 text-center">{theme.costHeader}</th>
-                <th className="p-3 text-center">{theme.valueHeader}</th>
+                <th className="p-3 text-center">{theme.costHeader} ({rial.label})</th>
+                <th className="p-3 text-center">{theme.valueHeader} ({rial.label})</th>
                 <th className="p-3 text-center print:hidden">{theme.actionHeader}</th>
               </tr>
             </thead>

@@ -1,8 +1,9 @@
 import type { ReactElement } from 'react';
 import { ArrowDownLeft, ArrowUpRight, CheckCircle2, AlertCircle, CreditCard, Package, RefreshCw, FileText, Factory } from 'lucide-react';
-import { formatPersianNumber, formatPersianCode, formatPersianPrice, formatCurrencyLabel, formatPersianDate } from '../../../utils';
+import { formatPersianNumber, formatPersianCode, formatPersianDate } from '../../../utils';
+import { useShownRial } from '../../../contexts/RialDisplayContext';
 import {
-  amountDecimalsOf, INVOICE_TYPE_BADGES, partyLabelOf, resolveInvoiceRowFigures,
+  docAmountFormatOf, INVOICE_TYPE_BADGES, partyLabelOf, resolveInvoiceRowFigures,
   type InvoiceListDocument, type InvoiceTypeBadgeKind,
 } from '../../../lib/invoices/invoiceListDocuments';
 import type { InvoiceListActions } from '../../../hooks/invoices/useInvoiceListActions';
@@ -27,7 +28,7 @@ export function InvoiceListRow({ doc, actions }: { doc: InvoiceListDocument; act
   const figures = resolveInvoiceRowFigures(doc);
   const { isReceipt, isInvoice, badgeKind, itemsCount, totalQty, totalDocAmount, isCommercial, settlementStatus, remainingAmt } = figures;
   const badge = INVOICE_TYPE_BADGES[badgeKind];
-  const currencyLabel = formatCurrencyLabel(doc.currency);
+  const amounts = docAmountFormatOf(doc.currency, useShownRial());
 
   return (
     <tr className="hover:bg-blue-50/30 transition-colors">
@@ -105,9 +106,9 @@ export function InvoiceListRow({ doc, actions }: { doc: InvoiceListDocument; act
             <strong className={`font-mono text-xs font-black block ${
               isReceipt ? 'text-emerald-800' : isInvoice ? 'text-blue-800' : 'text-slate-800'
             }`}>
-              {formatPersianPrice(totalDocAmount, undefined, amountDecimalsOf(doc.currency))}
+              {amounts.number(totalDocAmount)}
             </strong>
-            <span className="text-[11px] text-slate-500 font-normal">{currencyLabel}</span>
+            <span className="text-[11px] text-slate-500 font-normal">{amounts.label}</span>
           </div>
         ) : (
           <span className="text-slate-500 font-mono text-[11px]">-</span>
@@ -115,7 +116,7 @@ export function InvoiceListRow({ doc, actions }: { doc: InvoiceListDocument; act
       </td>
 
       {/* Settlement Status */}
-      <InvoiceRowSettlementCell isCommercial={isCommercial} settlementStatus={settlementStatus} remainingAmt={remainingAmt} currency={doc.currency} />
+      <InvoiceRowSettlementCell isCommercial={isCommercial} settlementStatus={settlementStatus} remainingAmt={remainingAmt} amounts={amounts} />
 
       {/* Notes (Editable Inline) */}
       <InvoiceRowNotesCell doc={doc} actions={actions} />

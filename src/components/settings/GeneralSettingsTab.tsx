@@ -2,9 +2,10 @@ import { useId } from 'react';
 import { Building2, List, Globe, Landmark } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { compressTo300KB } from '../../utils/imageCompression';
-import { RIAL_DISPLAY_UNITS, RIAL_DISPLAY_UNIT_LABELS } from '../../lib/rialDisplay';
+import { normalizeRialDisplayUnit, RIAL_DISPLAY_UNITS, RIAL_DISPLAY_UNIT_LABELS } from '../../lib/rialDisplay';
 import { DataExportCard } from './DataExportCard';
 import { DecimalInput } from '../common/DecimalInput';
+import { RialEquivalent } from '../common/RialEquivalent';
 
 /** the server's `ALLOWED_TIMEZONES`; v11 phase 6.3a (U21): each shown by its Persian name, not its English zone id */
 const TIMEZONE_OPTIONS = [
@@ -247,6 +248,8 @@ export function GeneralSettingsTab({
                 className="w-full border rounded-lg px-3 py-2 font-mono text-left bg-white border-slate-300 text-sm"
                 dir="ltr"
               />
+              {/* the unit chosen above, saved or not */}
+              <RialEquivalent value={treasuryHighValueThreshold ?? ''} unit={normalizeRialDisplayUnit(currency)} />
               <p className="text-xs text-slate-500 mt-1">رویداد خزانه مبلغ ندارد؛ قانون‌های خودکار با «تراکنش کلان» دریافت یا پرداختی را می‌شناسند که ارزش ریالی آن دست‌کم همین مبلغ باشد.</p>
             </div>
           </div>

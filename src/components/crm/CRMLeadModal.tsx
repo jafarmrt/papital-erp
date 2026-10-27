@@ -12,6 +12,8 @@ import { LostReasonFields } from './LostReasonFields';
 import { DialogLayer } from '../common/DialogLayer';
 import { usePersonnelPickName } from '../../hooks/usePersonnelPickName';
 import { personnelSellerOption, personnelServerSearchUrl } from '../../lib/personnel/personnelList';
+import { RialEquivalent } from '../common/RialEquivalent';
+import { isRialCurrency } from '../../lib/rialDisplay';
 
 interface CRMLeadModalProps {
   isLeadModalOpen: boolean;
@@ -305,6 +307,7 @@ export function CRMLeadModal({
                   {formatPersianPrice(leadForm.estimatedValue)} {formatCurrencyLabel(leadForm.currency)}
                 </p>
               )}
+              {isRialCurrency(leadForm.currency) && <RialEquivalent value={leadForm.estimatedValue} />}
             </div>
 
             <div>

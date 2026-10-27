@@ -162,7 +162,7 @@ describe('CreateInvoicePage — cancelling an edit puts every field back to its 
     fireEvent.click(await screen.findByText(CASH_CUSTOMER_OPTION));
     fireEvent.click(screen.getByText(INVOICE_LINE_TEXT.itemPlaceholder));
     fireEvent.click(await screen.findByText(/^P-۳ - گردنبند نقره/));
-    const inputOf = (label: string) => screen.getByText(label).parentElement!.querySelector('input') as HTMLInputElement;
+    const inputOf = (label: string) => screen.getByLabelText(label) as HTMLInputElement;
     fireEvent.change(inputOf('تعداد'), { target: { value: '2' } });
     fireEvent.change(inputOf('مبلغ واحد (ریال)'), { target: { value: '1000000' } });
     fireEvent.click(screen.getByText(INVOICE_LINE_TEXT.add));

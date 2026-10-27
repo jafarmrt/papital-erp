@@ -1,9 +1,10 @@
-import { formatPersianNumber, formatPersianPrice, formatPersianCode } from '../../../utils';
-import { addLineNet, addLineQuantity, amountDecimalsOf, type InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
+import { formatPersianNumber, formatPersianCode } from '../../../utils';
+import { addLineNet, addLineQuantity, docAmountFormatOf, type InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
+import { useShownRial } from '../../../contexts/RialDisplayContext';
 
-/** TD-080 (بخش ۳): جدول ریز اقلام سند در مودال جزئیات */
+/** TD-080 (بخش ۳): جدول ریز اقلام سند در مودال جزئیات؛ v11 phase 6.3 (U3): amounts of a rial document in the display unit */
 export function InvoiceDetailsItemsTable({ selectedDocDetails }: { selectedDocDetails: InvoiceListDocument }) {
-  const decimals = amountDecimalsOf(selectedDocDetails.currency);
+  const amounts = docAmountFormatOf(selectedDocDetails.currency, useShownRial());
   return (
     <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
       <div className="bg-slate-100 px-4 py-2 font-bold text-slate-700 text-xs border-b border-slate-200 flex justify-between items-center">
@@ -21,9 +22,9 @@ export function InvoiceDetailsItemsTable({ selectedDocDetails }: { selectedDocDe
               <th className="p-2.5">شرح کالا و مشخصات</th>
               <th className="p-2.5 text-center">تعداد</th>
               <th className="p-2.5 text-center">واحد</th>
-              <th className="p-2.5 text-left">قیمت واحد</th>
-              <th className="p-2.5 text-left">تخفیف</th>
-              <th className="p-2.5 text-left">مبلغ کل</th>
+              <th className="p-2.5 text-left">قیمت واحد ({amounts.label})</th>
+              <th className="p-2.5 text-left">تخفیف ({amounts.label})</th>
+              <th className="p-2.5 text-left">مبلغ کل ({amounts.label})</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -41,10 +42,10 @@ export function InvoiceDetailsItemsTable({ selectedDocDetails }: { selectedDocDe
                   <td className="p-2.5 font-bold text-slate-800">{it.name || `کالای کد ${formatPersianCode(it.item_id)}`}</td>
                   <td className="p-2.5 text-center font-mono font-bold text-slate-800">{formatPersianNumber(qty)}</td>
                   <td className="p-2.5 text-center text-slate-600">{it.unit || 'عدد'}</td>
-                  <td className="p-2.5 text-left font-mono font-medium">{formatPersianPrice(price, undefined, decimals)}</td>
-                  <td className="p-2.5 text-left font-mono text-rose-600">{disc > 0 ? formatPersianPrice(disc, undefined, decimals) : '-'}</td>
+                  <td className="p-2.5 text-left font-mono font-medium">{amounts.number(price)}</td>
+                  <td className="p-2.5 text-left font-mono text-rose-600">{disc > 0 ? amounts.number(disc) : '-'}</td>
                   <td className="p-2.5 text-left font-mono font-black text-slate-900 bg-slate-50/50">
-                    {formatPersianPrice(total, undefined, decimals)}
+                    {amounts.number(total)}
                   </td>
                 </tr>
               );

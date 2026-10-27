@@ -12,6 +12,7 @@ import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 import { useSeededForm } from '../../hooks/useSeededForm';
 import { invalidateDomain } from '../../lib/queryInvalidation';
 import { QUERY_KEYS } from '../../lib/queryKeys';
+import { RialEquivalent } from '../common/RialEquivalent';
 
 /**
  * v10.0.210 (TD-1087، طرح حقوق §۳.۳ بند ۱، تصمیم ت۴ الف): «نرخ‌های بیمه و مالیات حقوق» هر سال جلالی. حسابدار اعداد را از
@@ -146,6 +147,7 @@ export function PayrollStatutoryRatesTab() {
           <div>
             <label htmlFor={`${fieldId}-insurance-wage-cap`} className="block text-xs font-bold text-slate-700 mb-1">سقف ماهانه دستمزد مشمول بیمه (ریال)</label>
             <input id={`${fieldId}-insurance-wage-cap`} inputMode="decimal" value={form.insuranceWageCap} placeholder="خالی یعنی بی سقف" onChange={(e) => setForm(p => ({ ...p, insuranceWageCap: e.target.value }))} className={inputClass} />
+            <RialEquivalent value={form.insuranceWageCap} />
           </div>
         </div>
 

@@ -12,6 +12,7 @@ import {
 import { FieldError, RequisitionItemRowEditor, type NewRequisitionRow } from './RequisitionItemRowEditor';
 import { lineAmount, sumAmounts } from '../../lib/procurement/procurementNumbers';
 import { DialogLayer } from '../common/DialogLayer';
+import { RialEquivalent } from '../common/RialEquivalent';
 
 interface CreateRequisitionModalProps {
   isOpen: boolean;
@@ -236,7 +237,7 @@ export function CreateRequisitionModal({
                     <th className="p-2.5 text-center w-20">واحد</th>
                     <th className="p-2.5 text-center w-24">مقدار</th>
                     <th className="p-2.5 text-center w-32">برآورد قیمت واحد (ریال)</th>
-                    <th className="p-2.5 text-center">جمع ردیف</th>
+                    <th className="p-2.5 text-center">جمع ردیف (ریال)</th>
                     <th className="p-2.5 text-center w-12">حذف</th>
                   </tr>
                 </thead>
@@ -260,8 +261,9 @@ export function CreateRequisitionModal({
           {/* Summary Banner */}
           <div className="flex items-center justify-between p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs">
             <span className="font-bold text-amber-900">برآورد کل هزینه خرید:</span>
-            <span className="text-base font-black font-mono text-slate-900">
-              {formatPersianPrice(totalEstimate)}
+            <span className="text-base font-black font-mono text-slate-900 text-left">
+              {formatPersianPrice(totalEstimate, 'IRR')}
+              <RialEquivalent value={totalEstimate} className="font-sans font-normal" />
             </span>
           </div>
 

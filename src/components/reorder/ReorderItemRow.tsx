@@ -1,5 +1,6 @@
 import { CheckSquare, Square, Package } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, formatPersianCode } from '../../utils';
+import { formatPersianNumber, formatPersianCode } from '../../utils';
+import { useShownRial } from '../../contexts/RialDisplayContext';
 import { SafeImage } from '../SafeImage';
 import { freeStockOf, stockPercentOf, type ReorderItem } from '../../lib/reorderAlerts/reorderItems';
 import type { ReorderSectionTheme } from './reorderSectionThemes';
@@ -17,6 +18,7 @@ interface ReorderItemRowProps {
 export function ReorderItemRow({ item, theme, isSelected, onToggle, onAction, onEditReorderPoint }: ReorderItemRowProps) {
   const stockPercent = stockPercentOf(item);
   const ActionIcon = theme.icon;
+  const rial = useShownRial();
 
   return (
     <tr
@@ -93,11 +95,11 @@ export function ReorderItemRow({ item, theme, isSelected, onToggle, onAction, on
       </td>
 
       <td className="p-3 text-center font-mono text-slate-600">
-        {item.weighted_average_cost ? formatPersianPrice(item.weighted_average_cost) : '-'}
+        {item.weighted_average_cost ? rial.number(item.weighted_average_cost) : '-'}
       </td>
 
       <td className={`p-3 text-center font-mono font-bold ${theme.valueText}`}>
-        {item.deficit_value > 0 ? formatPersianPrice(item.deficit_value) : '-'}
+        {item.deficit_value > 0 ? rial.number(item.deficit_value) : '-'}
       </td>
 
       {/* Procurement / Production Action Buttons */}

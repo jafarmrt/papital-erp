@@ -26,7 +26,8 @@ import {
   BookOpen,
   Landmark,
 } from 'lucide-react';
-import { formatPersianDate, formatPersianPrice, formatPersianNumber } from '../utils';
+import { formatPersianDate, formatPersianNumber } from '../utils';
+import { useShownRial } from '../contexts/RialDisplayContext';
 import { useApprovalTaskEntity } from '../hooks/useApprovalTaskEntity';
 import { MyDelegationsButton } from '../components/workflow/MyDelegationsWindow';
 import { INBOX_ENTITY_TABS, workflowEntityTypeLabel } from '../lib/workflow/workflowEntityLabels';
@@ -129,6 +130,7 @@ function ApprovalPriorityBadge({ priority }: { priority?: string }) {
 
 export function ApprovalInboxPage() {
   const [taskStatusFilter, setTaskStatusFilter] = useState<string>('pending');
+  const rial = useShownRial();
   const [activeTab, setActiveTab] = useState<string>('all');
   const [search, setSearch] = useState<string>('');
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null);
@@ -475,7 +477,7 @@ export function ApprovalInboxPage() {
                         {amount > 0 && (
                           <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
                             <Banknote className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                            <span className="truncate">ارزش: <strong className="text-emerald-700 dark:text-emerald-400">{formatPersianPrice(amount, 'IRR')}</strong></span>
+                            <span className="truncate">ارزش: <strong className="text-emerald-700 dark:text-emerald-400">{rial.amount(amount)}</strong></span>
                           </div>
                         )}
 
