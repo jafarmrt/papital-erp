@@ -13,41 +13,63 @@ import type { InventoryLedgerValues } from './inventoryLedgerValue.js';
  *
  * v11 phase 6.1j (M21): a gap of up to 1000 rials was reported healthy, so a manual 900-rial posting to an inventory
  * account went unseen. Now the gap is listed when it is larger than what rounding explains: one rial for rounding both
- * sides (`INVENTORY_RECONCILIATION_TOLERANCE`), plus the most the 4-decimal weighted average cost can have moved the
- * warehouse value (`wacRoundingAllowance`). The approved manual vouchers that post to an inventory account are listed
- * with the gap, since stock moves only through stock documents and a hand posting there is the usual cause of a gap no
- * document explains.
+ * sides (`INVENTORY_RECONCILIATION_TOLERANCE`), plus the most the 4-decimal weighted average cost and the rial rounding of
+ * each foreign-currency voucher row can have moved the two apart (`inventoryRoundingAllowance`). The approved manual vouchers that post to
+ * an inventory account are listed whatever the gap, since stock moves only through stock documents and a hand posting
+ * there is the usual cause of a gap no document explains; on a large history the rounding allowance alone could hide one.
  */
 export const INVENTORY_RECONCILIATION_TOLERANCE = 1;
 
 /** half a unit of the 4th decimal: the most one rounding of a numeric(18,4) cost or amount can be off */
 const HALF_UNIT_4DP = '0.00005';
+/** half a rial: the most one inventory voucher row rounded to the rial can be off its Kardex amount (TD-1030) */
+const HALF_RIAL = '0.5';
 
 /**
  * The most rounding can explain between the warehouse value (stock × WAC) and the ledger, beyond the one rial of
- * `INVENTORY_RECONCILIATION_TOLERANCE`. The WAC is stored with 4 decimals, so each time it is averaged again (an
- * incoming row other than a transfer, or the reversal of a row) the stock on hand after it is valued up to half a unit
- * of the 4th decimal off what the ledger got, and later issues credit inventory at that rounded WAC, so the difference
- * stays. Each Kardex amount and voucher row is rounded to 4 decimals too. The history read is every live Kardex row plus
- * the voided rows that have a live reversal, in date order.
+ * `INVENTORY_RECONCILIATION_TOLERANCE`:
+ * - the WAC is stored with 4 decimals, so each time it is averaged again (an incoming row other than a transfer, or the
+ *   reversal of a row) the stock on hand after it is valued up to half a unit of the 4th decimal off what the ledger got,
+ *   and later issues credit inventory at that rounded WAC, so the difference stays. The WAC is averaged in posting order,
+ *   so the stock on hand is summed in id order over every live Kardex row plus the voided rows that have a live reversal
+ *   (they were on hand until voided); each Kardex amount is rounded to 4 decimals too;
+ * - each inventory row in a foreign currency is its rial value rounded to the rial (TD-1030 in the vouchers, and
+ *   `readInventoryLedgerValues` per row), up to half a rial off; a rial voucher keeps the 4-decimal Kardex amount.
+ * The voided rows are read by id from the reversals (UNION ALL, not OR EXISTS): `reversal_of_id` has no index, and on a
+ * few hundred thousand Kardex rows the OR form scanned the table once per voided row.
  */
-export async function wacRoundingAllowance(): Promise<string> {
+export async function inventoryRoundingAllowance(): Promise<string> {
+  const wip = await AccountMappingService.getWorkInProgressAccount();
   const res = await orm.execute(sql`
     WITH history AS (
-      SELECT t.id, t.item_id, t.date, t.type, t.quantity, t.reversal_of_id, COALESCE(t.document_type, '') AS document_type
+      SELECT t.id, t.item_id, t.type, t.quantity, t.reversal_of_id, COALESCE(t.document_type, '') AS document_type
         FROM transactions t
        WHERE t.is_deleted = 0
-          OR EXISTS (SELECT 1 FROM transactions r WHERE r.reversal_of_id = t.id AND r.is_deleted = 0)
+      UNION ALL
+      SELECT t.id, t.item_id, t.type, t.quantity, t.reversal_of_id, COALESCE(t.document_type, '') AS document_type
+        FROM transactions t
+       WHERE t.is_deleted = 1
+         AND t.id IN (SELECT r.reversal_of_id FROM transactions r WHERE r.is_deleted = 0 AND r.reversal_of_id IS NOT NULL)
     ), running AS (
-      SELECT h.*, SUM(CASE WHEN h.type = 'in' THEN h.quantity ELSE -h.quantity END)
-               OVER (PARTITION BY h.item_id ORDER BY h.date, h.id) AS on_hand_after
+      SELECT h.*, SUM(CASE WHEN h.type IN ('in', 'transfer_in') THEN h.quantity ELSE -h.quantity END)
+               OVER (PARTITION BY h.item_id ORDER BY h.id) AS on_hand_after
         FROM history h
+    ), wac AS (
+      SELECT ${HALF_UNIT_4DP}::numeric * (
+               COALESCE(SUM(GREATEST(on_hand_after, 0)) FILTER (
+                 WHERE document_type <> 'transfer' AND (type = 'in' OR reversal_of_id IS NOT NULL)), 0)
+               + 2 * COUNT(*)) AS allowance
+        FROM running
+    ), rial AS (
+      SELECT ${HALF_RIAL}::numeric * COUNT(*) AS allowance
+        FROM journal_voucher_items vi
+        JOIN journal_vouchers v ON v.id = vi.voucher_id AND v.is_deleted = 0
+        JOIN accounts a ON a.id = vi.account_id AND a.is_deleted = 0
+       WHERE vi.is_deleted = 0 AND v.status IN ('approved', 'permanent')
+         AND UPPER(COALESCE(NULLIF(vi.currency, ''), NULLIF(v.currency, ''), 'IRR')) <> 'IRR'
+         AND a.code LIKE '14%' AND vi.account_id <> ${wip?.id ?? 0}
     )
-    SELECT (${HALF_UNIT_4DP}::numeric * (
-              COALESCE(SUM(GREATEST(on_hand_after, 0)) FILTER (
-                WHERE document_type <> 'transfer' AND (type = 'in' OR reversal_of_id IS NOT NULL)), 0)
-              + 2 * COUNT(*)))::text AS allowance
-      FROM running`);
+    SELECT ((SELECT allowance FROM wac) + (SELECT allowance FROM rial))::text AS allowance`);
   const row = (res.rows?.[0] ?? {}) as { allowance?: string };
   return row.allowance ?? '0';
 }
@@ -113,7 +135,7 @@ export async function findManualInventoryPostings(): Promise<ManualInventoryPost
 
 const TITLE = 'انطباق ریالی موجودی انبار با دفتر کل حسابداری';
 const DESCRIPTION = 'بررسی هم‌خوانی ارزش کاردکس و موجودی کالای فیزیکی با سرفصل ۱۴ (موجودی مواد و کالا)، بی حساب کالای در جریان ساخت که بیرون از انبار است؛ '
-  + 'اختلاف بیش از آنچه گرد کردن دو طرف و میانگین موزون چهاررقم‌اعشاری توضیح می‌دهد گزارش می‌شود';
+  + 'اختلاف بیش از آنچه گرد کردن دو طرف، میانگین موزون چهاررقم‌اعشاری و گرد کردن ریالی ردیف‌های ارزی سند توضیح می‌دهد گزارش می‌شود و سندهای دستی روی حساب موجودی همیشه فهرست می‌شوند';
 
 export function buildInventoryReconciliationHealthTest(
   physical: WarehouseValuation,
@@ -150,12 +172,29 @@ export function buildInventoryReconciliationHealthTest(
     ? ` ${formatPersianNumber(unvaluedStockCount)} کالای دارای موجودی هنوز بهای تمام‌شده ندارد و با ارزش صفر شمرده شد.`
     : '';
 
+  // listed whatever the gap: on a long history the rounding allowance can be larger than a hand posting
+  const manualItems: HealthCheckIssueItem[] = manualPostings.map(posting => ({
+    id: `manual_${posting.id}`,
+    code: `سند #${posting.voucherNumber}`,
+    title: posting.description || `سند شماره ${posting.voucherNumber}`,
+    subtitle: `سند دستی روی حساب موجودی کالا — تاریخ: ${isoToJalaliDate(posting.date) || posting.date} | مبلغ: ${formatPersianPrice(posting.amount, undefined, 4)} ریال`,
+    amount: Math.abs(Number(posting.amount)),
+    date: posting.date,
+    details: 'موجودی کالا فقط با سند انبار جابه‌جا می‌شود؛ این سند مانده دفتر را بی گردش کاردکس عوض کرده است.',
+    linkType: 'voucher',
+    linkId: posting.id,
+  }));
+  const manualNote = manualItems.length > 0
+    ? ` ${formatPersianNumber(manualItems.length)} سند دستی روی حساب موجودی کالا ثبت شده که کاردکس را جابه‌جا نکرده است؛ در فهرست آمده تا بررسی شود.`
+    : '';
+
   if (!hasGap && negativeStockCount === 0) {
     return {
       id: 'inventory_reconciliation', category: 'inventory', title: TITLE, description: DESCRIPTION, status: 'healthy', scoreImpact: 0, count: 0,
       message: (invDiscrepancy > 0
-        ? `اختلاف ${formatPersianPrice(invDiscrepancy)} ریالی ارزش کاردکس انبار و مانده سرفصل کل ۱۴ در حد گرد کردن میانگین موزون (تا ${formatPersianPrice(tolerance)} ریال) است.`
-        : 'ارزش کاردکس فیزیکی انبار با مانده سرفصل کل ۱۴ حسابداری در تراز کامل قرار دارد.') + unvaluedNote,
+        ? `اختلاف ${formatPersianPrice(invDiscrepancy)} ریالی ارزش کاردکس انبار و مانده سرفصل کل ۱۴ در حد گرد کردن میانگین موزون و ریالی سندهای ارزی (تا ${formatPersianPrice(tolerance)} ریال) است.`
+        : 'ارزش کاردکس فیزیکی انبار با مانده سرفصل کل ۱۴ حسابداری در تراز کامل قرار دارد.') + unvaluedNote + manualNote,
+      ...(manualItems.length > 0 ? { items: manualItems } : {}),
       metrics,
     };
   }
@@ -208,21 +247,7 @@ export function buildInventoryReconciliationHealthTest(
       details: `با تأیید این سندها اختلاف به ${formatPersianPrice(gapAfterApproval)} ریال می‌رسد.`,
     });
   }
-  if (hasGap) {
-    for (const posting of manualPostings) {
-      items.push({
-        id: `manual_${posting.id}`,
-        code: `سند #${posting.voucherNumber}`,
-        title: posting.description || `سند شماره ${posting.voucherNumber}`,
-        subtitle: `سند دستی روی حساب موجودی کالا — تاریخ: ${isoToJalaliDate(posting.date) || posting.date} | مبلغ: ${formatPersianPrice(posting.amount, undefined, 4)} ریال`,
-        amount: Math.abs(Number(posting.amount)),
-        date: posting.date,
-        details: 'موجودی کالا فقط با سند انبار جابه‌جا می‌شود؛ این سند مانده دفتر را بی گردش کاردکس عوض کرده است.',
-        linkType: 'voucher',
-        linkId: posting.id,
-      });
-    }
-  }
+  items.push(...manualItems);
 
   return {
     id: 'inventory_reconciliation',

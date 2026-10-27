@@ -5,7 +5,7 @@ import { containsLikePattern } from '../../lib/sqlLike.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { readInventoryLedgerValues } from './inventoryLedgerValue.js';
 import { buildVoucherBalanceHealthTest, findVoucherBalanceDifferences } from './voucherBalanceHealth.js';
-import { buildInventoryReconciliationHealthTest, findManualInventoryPostings, wacRoundingAllowance, type WarehouseValuation } from './inventoryReconciliationHealth.js';
+import { buildInventoryReconciliationHealthTest, findManualInventoryPostings, inventoryRoundingAllowance, type WarehouseValuation } from './inventoryReconciliationHealth.js';
 import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './voucherNumberIntegrity.js';
 import { buildNoVoucherTreasuryHealthTest, findTreasuryEntriesWithoutVoucher } from './treasury/noVoucherTreasury.js';
 import { buildLegacyChequePartyHealthTest, findLegacyChequePartyMismatches } from './treasury/chequePartyAccount.js';
@@ -166,7 +166,7 @@ export class FinancialHealthService {
       inventoryPhysicalRes,
       inventoryLedgerRes,
       manualInventoryPostings,
-      inventoryRoundingAllowance,
+      inventoryRounding,
       unlinkedDocsRes,
       abandonedDraftsRes,
       overdueChequesRes,
@@ -225,7 +225,7 @@ export class FinancialHealthService {
       readInventoryLedgerValues(),
       // v11 phase 6.1j (M21): manual vouchers on the inventory accounts, listed beside a stock vs ledger gap
       findManualInventoryPostings(),
-      wacRoundingAllowance(),
+      inventoryRoundingAllowance(),
 
       // و: فاکتورهای نهایی بدون سند دوبل
       orm.execute(sql`
@@ -436,7 +436,7 @@ export class FinancialHealthService {
     // آزمون ۳: انطباق ارزش موجودی انبار با دفاتر حسابداری کالا (Account 14)
     // =========================================================================
     const inventoryTest = buildInventoryReconciliationHealthTest(
-      (inventoryPhysicalRes.rows?.[0] || {}) as WarehouseValuation, inventoryLedgerRes, manualInventoryPostings, inventoryRoundingAllowance);
+      (inventoryPhysicalRes.rows?.[0] || {}) as WarehouseValuation, inventoryLedgerRes, manualInventoryPostings, inventoryRounding);
     overallScore += inventoryTest.scoreImpact;
     tests.push(inventoryTest);
 

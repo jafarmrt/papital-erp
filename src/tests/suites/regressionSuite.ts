@@ -10683,6 +10683,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v11 phase 6.1j: one path for opening stock and the stock details (S4 S7 S8 S9 S13 S17 M8 M10 M21 N1 N3 N4)
   const { runStockPathsV11Tests } = await import('../regression/stockPathsV11Tests.js');
   results.push(...await runStockPathsV11Tests(shouldRun));
+  const { runStockHealthV11Tests } = await import('../regression/stockHealthV11Tests.js');
+  results.push(...await runStockHealthV11Tests(shouldRun));
   const { runItemPriceTests } = await import('../regression/itemPriceTests.js');
   results.push(...await runItemPriceTests(shouldRun));
   const { runItemCategoryTests } = await import('../regression/itemCategoryTests.js');
