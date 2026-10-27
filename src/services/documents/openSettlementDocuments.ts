@@ -3,7 +3,7 @@ import { orm } from '../../db/drizzle.js';
 import { cheques, customers, settlementAllocations, treasuryTransactions } from '../../db/schema.js';
 import { NotFoundError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
-import type { OpenSettlementDocument } from '../../lib/treasury/settlementAllocation.js';
+import { SETTLEABLE_DOCUMENT_STATUSES, type OpenSettlementDocument } from '../../lib/treasury/settlementAllocation.js';
 import { DocumentQueryService } from './documentQuery.service.js';
 import type { FormattedDocument } from './types.js';
 
@@ -12,7 +12,8 @@ import type { FormattedDocument } from './types.js';
  * then id), with what is left on each by the rule of the document list (`remainingAmount`: payable less settlements and
  * final returns). The rule of a direct link: a receipt settles the customer's sales invoices and proformas, a payment the
  * supplier's purchase documents, of the same currency; the party by id, and a legacy document without one by its exact
- * name. Only reading: the server checks everything again under its locks when the parts are written.
+ * name; a draft is left out (`SETTLEABLE_DOCUMENT_STATUSES`). Only reading: the server checks everything again under its
+ * locks when the parts are written.
  *
  * With a source (the window of a recorded receipt or cheque) the party, side and currency are the source's own, and a
  * document it already settles stays in the list with that amount (`allocatedHere`), also when its remaining is zero.
@@ -97,7 +98,7 @@ export async function listOpenSettlementDocuments(
       remaining: Number(d.remainingAmount) || 0,
       allocatedHere: here.get(d.id) ?? 0,
     }))
-    .filter(d => d.remaining > 0 || d.allocatedHere > 0)
+    .filter(d => (d.remaining > 0 && SETTLEABLE_DOCUMENT_STATUSES.includes(d.status)) || d.allocatedHere > 0)
     .sort((a, b) => (a.date === b.date ? a.id - b.id : a.date < b.date ? -1 : 1))
     // the oldest open documents up to the limit, and every document this source already settles
     .filter((d, i) => i < OPEN_DOCUMENTS_LIMIT || d.allocatedHere > 0);

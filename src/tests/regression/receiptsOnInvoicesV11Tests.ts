@@ -50,13 +50,13 @@ async function world(admin: Admin) {
   const customer = await createTestCustomer();
   const supplier = await createTestCustomer({ partyType: 'supplier' });
   const bank = await fundedBank();
-  const doc = async (docType: 'invoice' | 'receipt', party: { id: number; name: string }, price: number): Promise<number> => {
+  const doc = async (docType: 'invoice' | 'receipt', party: { id: number; name: string }, price: number, status: 'final' | 'draft' | 'proforma' = 'final'): Promise<number> => {
     const res = await admin.post('/api/documents', {
-      docType, status: 'final', refNumber: 'auto', date: today, location: main, buyer_name: party.name, partyId: party.id,
+      docType, status, refNumber: 'auto', date: today, location: main, buyer_name: party.name, partyId: party.id,
       inOut: docType === 'receipt' ? 'in' : 'out', items: [{ itemId: item.id, quantity: 1, unit_price: price }],
     });
     const id = Number(res.body?.docId);
-    if (!ok(res) || !id) throw new Error(`setup: a final ${docType} returned ${brief(res)}`);
+    if (!ok(res) || !id) throw new Error(`setup: a ${status} ${docType} returned ${brief(res)}`);
     return id;
   };
   /** what the document page shows: paid, remaining, status and its parts */
@@ -81,7 +81,12 @@ async function world(admin: Admin) {
       : { partyType: 'supplier', partyId: supplier.id, partyName: supplier.name, bankAccountId: bank }),
     ...extra,
   });
-  return { today, item, customer, supplier, bank, doc, state, receipt, cheque };
+  /** an edit of a draft or proforma through `PUT /documents/:id` with its current version */
+  const editDoc = async (id: number, body: Record<string, unknown>) => {
+    const version = (await admin.get(`/api/documents/${id}`)).body?.version;
+    return admin.put(`/api/documents/${id}`, { version, ...body });
+  };
+  return { today, main, item, customer, supplier, bank, doc, state, receipt, cheque, editDoc };
 }
 
 export async function runReceiptsOnInvoicesV11Tests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
@@ -334,6 +339,79 @@ export async function runReceiptsOnInvoicesV11Tests(shouldRun: ShouldRun): Promi
 
       if (problems.length > 0) throw new Error(problems.join('; '));
       return 'drafts listed apart on the card and the statement with the balance they make; only the receipt approved still shows the debt with drafts; one rule with the statement that counts drafts';
+    }));
+  }
+
+  const guards = 'reg_settlement_review_guards_v11_6_1t_m11';
+  if (shouldRun(guards, 'v11', 'phase6', 'm11', 'treasury', 'cheques', 'documents', 'settlement', 'review')) {
+    await runCase(results, guards, 'v11 phase 6.1t (review of M11): a draft is neither listed nor settled in parts; a proforma or draft a receipt settles keeps its party, currency and cover when edited; a bounced cheque shows nothing on invoices; a cheque without a status still settles; the open invoices follow the reader\'s document scope', () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const w = await world(admin);
+      const other = await createTestCustomer();
+      const draft = await w.doc('invoice', w.customer, 1_000_000, 'draft');
+      const proforma = await w.doc('invoice', w.customer, 1_000_000, 'proforma');
+      const finalInv = await w.doc('invoice', w.customer, 400_000);
+      const legacyInv = await w.doc('invoice', w.customer, 300_000);
+      const line = (price: number) => [{ itemId: w.item.id, quantity: 1, unit_price: price, location: w.main }];
+
+      // 1) a draft is not offered and takes no part; the proforma is offered
+      const options = await admin.get(`/api/documents/settlement-options?direction=receipt&partyType=customer&partyId=${w.customer.id}&currency=IRR`);
+      const listedIds = (Array.isArray(options.body?.data) ? options.body.data as Array<{ id: number }> : []).map(d => d.id);
+      if (listedIds.includes(draft) || !listedIds.includes(proforma)) problems.push(`the open invoices are ${JSON.stringify(listedIds)}: expected the proforma ${proforma} and not the draft ${draft}`);
+      const rowsBefore = await treasuryRows();
+      const onDraft = await w.receipt(500_000, { allocations: [{ documentId: draft, amount: 500_000 }] });
+      if (onDraft.status !== 422 || codeOf(onDraft) !== 'SETTLEMENT_DOCUMENT_NOT_ISSUED') problems.push(`a part on a draft returned ${brief(onDraft)}, expected 422 SETTLEMENT_DOCUMENT_NOT_ISSUED`);
+      if (await treasuryRows() !== rowsBefore) problems.push('the refused receipt on a draft was saved');
+
+      // 2) a proforma settled in part keeps its party, currency and cover
+      const advance = await w.receipt(600_000, { allocations: [{ documentId: proforma, amount: 600_000 }] });
+      if (advance.status !== 201) throw new Error(`setup: an advance on the proforma returned ${brief(advance)}`);
+      const locked = async (label: string, res: request.Response, code: string) => {
+        if (res.status !== 409 || codeOf(res) !== code) problems.push(`${label} returned ${brief(res)}, expected 409 ${code}`);
+      };
+      await locked('moving the settled proforma to another customer', await w.editDoc(proforma, { partyId: other.id, buyer_name: other.name, items: line(1_000_000) }), 'SETTLED_DOCUMENT_IDENTITY_LOCKED');
+      await locked('turning the settled proforma into dollars', await w.editDoc(proforma, { currency: 'USD', exchangeRate: 500_000, items: line(100) }), 'SETTLED_DOCUMENT_IDENTITY_LOCKED');
+      await locked('pricing the settled proforma below its advance', await w.editDoc(proforma, { items: line(100_000) }), 'SETTLED_DOCUMENT_BELOW_SETTLED');
+      const kept = await w.editDoc(proforma, { items: line(800_000) });
+      if (kept.status !== 200) problems.push(`an edit that still covers the advance returned ${brief(kept)}, expected 200`);
+      const pf = await w.state(proforma);
+      if (pf.paid !== 600_000 || pf.remaining !== 200_000) problems.push(`the proforma shows paid ${pf.paid}, left ${pf.remaining}; expected 600000 and 200000`);
+
+      // 3) a draft linked directly (as before) keeps its party too
+      const direct = await w.receipt(300_000, { documentId: draft });
+      if (direct.status !== 201) problems.push(`a receipt linked to the draft returned ${brief(direct)}, expected 201 as before`);
+      else await locked('moving the directly settled draft to another customer', await w.editDoc(draft, { partyId: other.id, buyer_name: other.name, items: line(1_000_000) }), 'SETTLED_DOCUMENT_IDENTITY_LOCKED');
+
+      // 4) a bounced cheque shows nothing on invoices, in the list and in its window
+      const chequeRes = await w.cheque('received', 400_000, { allocations: [{ documentId: finalInv, amount: 400_000 }] });
+      const chequeId = Number(chequeRes.body?.id);
+      if (!ok(chequeRes) || !chequeId) throw new Error(`setup: a cheque with a part returned ${brief(chequeRes)}`);
+      const bounced = await adminPatch(`/api/accounting/cheques/${chequeId}/status`, { status: 'bounced', actionDate: w.today });
+      if (!ok(bounced)) problems.push(`bouncing the cheque returned ${brief(bounced)}`);
+      const list = await admin.get('/api/accounting/cheques?type=all');
+      const row = (Array.isArray(list.body) ? list.body : list.body?.data ?? []).find((c: { id: number }) => Number(c.id) === chequeId);
+      if (fin(row?.allocatedAmount ?? -1).toNumber() !== 0) problems.push(`the bounced cheque shows ${row?.allocatedAmount} on invoices in the list, expected 0`);
+      const window = await admin.get(`/api/accounting/cheques/${chequeId}/allocations`);
+      if (window.status !== 200 || (window.body?.allocations?.length ?? -1) !== 0) problems.push(`the bounced cheque's window reads ${brief(window)}, expected no parts`);
+
+      // 5) a cheque without a status (an imported row) still settles its invoice
+      const legacy = await w.cheque('received', 300_000, { allocations: [{ documentId: legacyInv, amount: 300_000 }] });
+      const legacyId = Number(legacy.body?.id);
+      if (!ok(legacy) || !legacyId) throw new Error(`setup: a cheque on the second invoice returned ${brief(legacy)}`);
+      await orm.execute(sql`UPDATE cheques SET status = NULL WHERE id = ${legacyId}`);
+      const lg = await w.state(legacyInv);
+      if (lg.paid !== 300_000 || lg.remaining !== 0) problems.push(`the invoice of a cheque without a status shows paid ${lg.paid}, left ${lg.remaining}; expected settled`);
+      const twice = await w.receipt(300_000, { allocations: [{ documentId: legacyInv, amount: 300_000 }] });
+      if (twice.status !== 422) problems.push(`a second settlement of that invoice returned ${brief(twice)}, expected 422`);
+
+      // 6) a holder of the cheque book without the documents section is offered no invoice
+      const clerk = await sandboxClientWith(['accounting.cheques']);
+      const peek = await clerk.get(`/api/documents/settlement-options?direction=receipt&partyType=customer&partyId=${w.customer.id}&currency=IRR`);
+      if (peek.status !== 200 || (peek.body?.data?.length ?? -1) !== 0) problems.push(`the cheque clerk without documents read ${brief(peek)}, expected 200 and no document`);
+
+      if (problems.length > 0) throw new Error(problems.join('; '));
+      return 'drafts left out of parts; a settled proforma or draft keeps party, currency and cover; a bounced cheque shows nothing; a cheque without status settles; open invoices follow the document scope';
     }));
   }
 

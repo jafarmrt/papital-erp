@@ -20,7 +20,8 @@ export const liveAllocationCondition = and(
     ),
     and(
       eq(cheques.isDeleted, 0),
-      notInArray(cheques.status, [...LAPSED_CHEQUE_STATUSES]),
+      // a cheque without a status (imported rows) is live, as the window of its parts treats it (review of M11)
+      or(isNull(cheques.status), notInArray(cheques.status, [...LAPSED_CHEQUE_STATUSES])),
     ),
   ),
 );

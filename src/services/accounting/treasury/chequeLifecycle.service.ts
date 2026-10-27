@@ -28,7 +28,7 @@ import { chequePartyPosting, requireChequePartyAccount, resolveChequePartyAccoun
 import { activeChequeVoucherIds, auditChequeDelete, auditChequeStatusChange, type ChequeAuditActor } from './chequeAudit.js';
 import { auditChequeCreated } from './treasuryAudit.js';
 import { assertAllocatableParty, insertAllocations, lockAndCheckAllocationTargets, normalizeAllocations } from './settlementAllocationWrite.js';
-import type { SettlementAllocationInput } from '../../../lib/treasury/settlementAllocation.js';
+import { LAPSED_CHEQUE_STATUSES, type SettlementAllocationInput } from '../../../lib/treasury/settlementAllocation.js';
 import { domainEventBus } from '../../events/domainEventBus.js';
 import { DomainEventType, type ChequeEventPayload } from '../../events/domainEvents.js';
 import { OutboxService } from '../../events/outboxService.js';
@@ -152,8 +152,10 @@ export class ChequeLifecycleService {
       statusHistory: cheques.statusHistory,
       attachments: cheques.attachments,
       createdAt: cheques.createdAt,
-      // v11 phase 6.1t (M11): what the cheque settles on documents in parts
-      allocatedAmount: sql<string>`(SELECT COALESCE(SUM(a.amount), 0)::text FROM settlement_allocations a WHERE a.cheque_id = ${cheques.id} AND a.is_deleted = 0)`,
+      // v11 phase 6.1t (M11): what the cheque settles on documents in parts (a bounced or returned cheque: nothing)
+      allocatedAmount: sql<string>`CASE WHEN COALESCE(${cheques.status}, '') NOT IN (${sql.join(LAPSED_CHEQUE_STATUSES.map(st => sql`${st}`), sql`, `)})
+        THEN (SELECT COALESCE(SUM(a.amount), 0)::text FROM settlement_allocations a WHERE a.cheque_id = ${cheques.id} AND a.is_deleted = 0)
+        ELSE '0' END`,
     })
     .from(cheques)
     .leftJoin(bankAccounts, eq(bankAccounts.id, cheques.bankAccountId))

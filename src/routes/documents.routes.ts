@@ -480,7 +480,10 @@ router.get('/documents/settlement-options', authorizePermission('accounting.trea
         partyName: q.partyName ?? '',
         currency: q.currency || 'IRR',
       });
-  res.json({ success: true, data });
+  // the reader's own document scope applies, as on `GET /documents` (review of M11): a holder of the books without the
+  // documents section sees no invoice here
+  const readable = await readableDocumentTypes(req.user, READ_PERMISSIONS.documentRecord);
+  res.json({ success: true, data: readable === null ? data : data.filter(d => readable.includes(d.type)) });
 }));
 
 router.get('/documents/:id', authorizePermission(...READ_PERMISSIONS.documentRecord, ...READ_PERMISSIONS.stockCountDocuments), validate(paramsDocIdSchema), asyncHandler(async (req, res) => {

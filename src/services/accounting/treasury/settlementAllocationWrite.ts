@@ -7,11 +7,11 @@ import { fin, type DecimalValue } from '../../../lib/financialDecimal.js';
 import { LockHierarchyLevel, validateLockOrder } from '../../../lib/lockOrder.js';
 import { money } from '../../../lib/money.js';
 import {
-  LAPSED_CHEQUE_STATUSES, MAX_SETTLEMENT_PARTS,
+  LAPSED_CHEQUE_STATUSES, MAX_SETTLEMENT_PARTS, SETTLEABLE_DOCUMENT_STATUSES,
   type SettlementAllocationInput, type SettlementAllocationView, type SourceAllocations,
 } from '../../../lib/treasury/settlementAllocation.js';
 import { idempotentTransaction } from '../../../middleware/idempotency.js';
-import { formatPersianNumber } from '../../../utils/persianNumber.js';
+import { formatPersianCode, formatPersianNumber } from '../../../utils/persianNumber.js';
 import type { TreasuryAuditActor } from './treasuryAudit.js';
 import { assertWithinDocumentRemaining, lockSettlementDocument } from './documentRemaining.js';
 import { assertTreasuryDocumentLink, resolveTreasuryPartyName } from './treasuryLinks.js';
@@ -116,7 +116,20 @@ export async function lockAndCheckAllocationTargets(tx: DbExecutor, source: Allo
       partyName: source.partyName,
       currency: source.currency,
     });
+    await assertSettleableDocumentStatus(tx, part.documentId);
     await assertWithinDocumentRemaining(tx, { documentId: part.documentId, amount: part.amount });
+  }
+}
+
+/** A draft is still changed freely, so no part sits on it (422 `SETTLEMENT_DOCUMENT_NOT_ISSUED`) */
+async function assertSettleableDocumentStatus(tx: DbExecutor, documentId: number): Promise<void> {
+  const [doc] = await tx.select({ refNumber: documents.refNumber, status: documents.status }).from(documents).where(eq(documents.id, documentId));
+  if (doc && !SETTLEABLE_DOCUMENT_STATUSES.includes(doc.status ?? '')) {
+    throw new ValidationError(
+      `سند «${formatPersianCode(doc.refNumber ?? documentId)}» پیش‌نویس است؛ دریافت و چک فقط روی فاکتور نهایی یا پیش‌فاکتور می‌نشیند.`,
+      { documentId, status: doc.status },
+      'SETTLEMENT_DOCUMENT_NOT_ISSUED',
+    );
   }
 }
 
@@ -163,7 +176,6 @@ function sourceSummary(kind: 'treasury' | 'cheque', id: number, amount: DecimalV
   return { source: kind, sourceId: id, amount: fin(amount).toNumber(), allocations, unallocated: left.isNegative() ? 0 : left.toNumber() };
 }
 
-/** `GET /accounting/settlement/treasury/:id` and `/cheques/:id`: the parts of one receipt or cheque */
 /** The parts of a recorded receipt or cheque, read now (the window of «نشاندن روی فاکتورها») */
 export function readSourceAllocations(source: { treasuryId: number } | { chequeId: number }): Promise<SourceAllocations & { directDocumentId: number | null }> {
   return readSourceAllocationsIn(orm, source);
@@ -174,12 +186,19 @@ async function readSourceAllocationsIn(tx: DbExecutor, source: { treasuryId: num
     const [row] = await tx.select().from(treasuryTransactions)
       .where(and(eq(treasuryTransactions.id, source.treasuryId), eq(treasuryTransactions.isDeleted, 0)));
     if (!row) throw new NotFoundError('تراکنش خزانه یافت نشد');
-    const views = await sourceAllocationViews(tx, { kind: 'treasury', id: row.id, number: row.transactionNumber, date: String(row.date).slice(0, 10), status: row.method });
+    // a voided row or a reversal settles nothing, whatever parts it kept (review of M11)
+    const live = row.status === 'completed' && row.reversalOfId === null;
+    const views = live
+      ? await sourceAllocationViews(tx, { kind: 'treasury', id: row.id, number: row.transactionNumber, date: String(row.date).slice(0, 10), status: row.method })
+      : [];
     return { ...sourceSummary('treasury', row.id, row.amount, views, row.documentId ?? null), directDocumentId: row.documentId ?? null };
   }
   const [cheque] = await tx.select().from(cheques).where(and(eq(cheques.id, source.chequeId), eq(cheques.isDeleted, 0)));
   if (!cheque) throw new NotFoundError('چک یافت نشد');
-  const views = await sourceAllocationViews(tx, { kind: 'cheque', id: cheque.id, number: cheque.chequeNumber, date: String(cheque.issueDate).slice(0, 10), status: cheque.status ?? '' });
+  // a bounced or returned cheque settles nothing, whatever parts it kept (review of M11)
+  const views = (LAPSED_CHEQUE_STATUSES as readonly string[]).includes(cheque.status ?? '')
+    ? []
+    : await sourceAllocationViews(tx, { kind: 'cheque', id: cheque.id, number: cheque.chequeNumber, date: String(cheque.issueDate).slice(0, 10), status: cheque.status ?? '' });
   return { ...sourceSummary('cheque', cheque.id, cheque.amount, views, null), directDocumentId: null };
 }
 

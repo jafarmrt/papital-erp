@@ -10,6 +10,12 @@ import { canRelinkTreasuryRow } from './treasuryRelink.js';
 /** A cheque in one of these statuses came back to its drawer: its parts no longer settle anything */
 export const LAPSED_CHEQUE_STATUSES = ['bounced', 'returned'] as const;
 
+/**
+ * A part sits only on an issued document: a final one, or a sales proforma (an advance). A draft is still changed freely,
+ * so it is neither listed nor accepted (review of M11).
+ */
+export const SETTLEABLE_DOCUMENT_STATUSES: readonly string[] = ['final', 'proforma'];
+
 /** Most parts one receipt or cheque is split into */
 export const MAX_SETTLEMENT_PARTS = 50;
 
