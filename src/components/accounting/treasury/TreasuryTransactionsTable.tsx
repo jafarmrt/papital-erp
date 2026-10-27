@@ -315,7 +315,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                     </td>
 
                     {/* Description & Attachments */}
-                    <td className="py-3 px-3 max-w-[200px]" data-phone="hide">
+                    <td className="py-3 px-3 max-w-[200px]" data-label="شرح">
                       <div className="truncate text-slate-600 dark:text-slate-300 text-[11px]" title={tx.description || undefined}>
                         {tx.description || '—'}
                       </div>

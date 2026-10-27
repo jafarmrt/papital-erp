@@ -142,6 +142,7 @@ describe('labels', () => {
     expect(detailsTitleOf('remittance', 'proforma')).toBe('پیش‌فاکتور فروش');
     expect(detailsTitleOf('invoice', 'proforma')).toBe('پیش‌فاکتور فروش');
     expect(detailsTitleOf('invoice', 'final')).toBe('صورتحساب فروش کالا');
+    expect(detailsTitleOf('receipt', 'proforma')).toBe('پیش‌فاکتور خرید');
     expect(detailsTypeLabelOf('receipt')).toBe('رسید ورود (خرید کالا)');
     expect(detailsTypeLabelOf('invoice')).toBe('فاکتور فروش');
     expect(detailsTypeLabelOf('waste')).toBe('حواله ضایعات');

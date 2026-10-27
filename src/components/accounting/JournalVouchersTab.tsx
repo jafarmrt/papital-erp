@@ -393,10 +393,14 @@ export function JournalVouchersTab({
                           />
                         </td>
 
-                        <td className="py-3 px-3 text-center" data-phone="hide">
+                        {/* v11 phase 6.3b review: on a phone too, the only way to the voucher's debit and credit rows */}
+                        <td className="py-3 px-3 text-center" data-label="ردیف‌های سند">
                           <button
+                            type="button"
                             onClick={() => toggleExpand(voucher.id)}
-                            className="p-1 text-slate-500 hover:text-indigo-600 rounded transition cursor-pointer"
+                            aria-expanded={isExpanded}
+                            aria-label={isExpanded ? 'بستن ردیف‌های سند' : 'نمایش ردیف‌های سند'}
+                            className="p-1 text-slate-500 hover:text-indigo-600 rounded transition cursor-pointer max-sm:min-h-11 max-sm:min-w-11 inline-flex items-center justify-center"
                           >
                             {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                           </button>
