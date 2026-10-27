@@ -20,7 +20,7 @@ export async function runStockHealthV11Tests(shouldRun: ShouldRun): Promise<Test
 
   const healthId = 'reg_health_small_differences_v11_6_1j_m8_m21';
   if (shouldRun(healthId, 'v11', 'phase6', 'm8', 'm21', 'health', 'voucher', 'inventory')) {
-    await runCase(results, healthId, 'v11 phase 6.1j (M8, M21): the financial health check lists a voucher whose debit and credit differ within the 0.01 tolerance as a warning (an error over it), and a stock vs ledger gap larger than rounding explains with the manual voucher that made it (not a reversed pair); a gap from the 4-decimal WAC or the rial rounding of foreign-currency voucher rows stays healthy, and a manual posting within it is still listed; before, both were reported healthy', () => inFiscalSandbox(async () => {
+    await runCase(results, healthId, 'v11 phase 6.1j (M8, M21): the financial health check lists a voucher whose debit and credit differ within the 0.01 tolerance as a warning (an error over it), and a stock vs ledger gap larger than rounding explains with the manual voucher that made it (not a reversed pair); a gap from the 4-decimal WAC, the rial rounding of foreign-currency voucher rows or of void residues stays healthy, and a manual posting within it is still listed; before, both were reported healthy', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const acc = await accountIdsByCode('1001', '1401', '4001');
       const testOf = async (id: string) => (await FinancialHealthService.runHealthCheck()).tests.find(t => t.id === id);
@@ -42,30 +42,64 @@ export async function runStockHealthV11Tests(shouldRun: ShouldRun): Promise<Test
         problems.push(`with one voucher off by 0.03 the check reads ${JSON.stringify({ status: err?.status, metrics: err?.metrics, first: err?.items?.[0]?.id })}, expected error with it first`);
       }
 
-      // the 4-decimal WAC: 100000 at 1 and 3 at 2 average to 1.0000, so the warehouse is worth 100003 and the ledger 100006
       const admin = await sandboxAdminClient();
+      const today = await businessTodayIsoDate();
       const main = String(await getDefaultWarehouseCode(orm));
       const supplier = await createTestCustomer({ partyType: 'supplier' });
-      const receive = async (itemId: number, quantity: number, price: number, currency: Record<string, unknown> = {}) => {
-        const receipt = await stockDoc(admin, { docType: 'receipt', inOut: 'in', date: await businessTodayIsoDate(), location: main, buyer_name: supplier.name, partyId: supplier.id, items: [{ itemId, quantity, unit_price: price }], ...currency });
-        await orm.update(journalVouchers).set({ status: 'approved' }).where(eq(journalVouchers.sourceDocumentId, receipt));
+      const customer = await createTestCustomer();
+      const approveAll = () => orm.update(journalVouchers).set({ status: 'approved' }).where(eq(journalVouchers.status, 'draft'));
+      const receive = async (itemId: number, quantity: number, price: number, extra: Record<string, unknown> = {}) => {
+        const id = await stockDoc(admin, { docType: 'receipt', inOut: 'in', date: today, location: main, buyer_name: supplier.name, partyId: supplier.id, items: [{ itemId, quantity, unit_price: price }], ...extra });
+        await approveAll();
+        return id;
       };
+      const sell = async (itemId: number, price: number, extra: Record<string, unknown> = {}) => {
+        await stockDoc(admin, { docType: 'invoice', inOut: 'out', date: today, location: main, buyer_name: customer.name, partyId: customer.id, items: [{ itemId, quantity: 1, unit_price: price }], ...extra });
+        await approveAll();
+      };
+      const stepOf = async (label: string, previousTolerance: number) => {
+        const t = await testOf('inventory_reconciliation');
+        const gap = Number(t?.metrics?.discrepancy);
+        if (t?.status !== 'healthy' || !(gap > previousTolerance)) {
+          problems.push(`${label} reads ${JSON.stringify({ status: t?.status, metrics: t?.metrics })}, expected healthy with a gap over ${previousTolerance} (what the allowance explained without it)`);
+        }
+        return { gap, tolerance: Number(t?.metrics?.roundingTolerance) };
+      };
+
+      // TD-1030: a large dollar row's 4-decimal rate cannot land on its exact Kardex rials; 100,000,000,011 rials sold at
+      // 600,000 credits inventory 166,666.6667 USD at 599,999.9999, worth 100,000,000,003, so 8 rials stay in the ledger
+      const large = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
+      await receive(large.id, 1, 100_000_000_011);
+      await sell(large.id, 200_000, { currency: 'USD', exchangeRate: 600_000 });
+      const afterLarge = await stepOf('a large dollar sale', 2);
+
+      // TD-1147: 1 at 100 and 1 at 300.9 average to 200.45; after a sale, voiding the first receipt leaves 100.45, of which
+      // the residue voucher posts 100, so six such voids leave the ledger 2.7 rials over an empty stock
+      for (let i = 0; i < 6; i++) {
+        const voided = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
+        const first = await receive(voided.id, 1, 100);
+        await receive(voided.id, 1, 300.9);
+        await sell(voided.id, 500);
+        const voidRes = await admin.del(`/api/documents/${first}`);
+        if (voidRes.status >= 300) throw new Error(`setup: voiding a receipt returned ${voidRes.status} ${JSON.stringify(voidRes.body).slice(0, 200)}`);
+        await approveAll();
+      }
+      const afterResidue = await stepOf('six void residues rounded to the rial', afterLarge.tolerance);
+
+      // the 4-decimal WAC: 100000 at 1 and 3 at 2 average to 1.0000, so the warehouse is worth 100003 and the ledger 100006
       const bulk = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
       await receive(bulk.id, 100000, 1);
       await receive(bulk.id, 3, 2);
       const rounded = await testOf('inventory_reconciliation');
-      if (rounded?.status !== 'healthy' || Number(rounded?.metrics?.discrepancy) !== 3) {
-        problems.push(`a 3-rial gap from the 4-decimal WAC reads ${JSON.stringify({ status: rounded?.status, metrics: rounded?.metrics })}, expected healthy`);
+      if (rounded?.status !== 'healthy' || Number(rounded?.metrics?.discrepancy) !== afterResidue.gap + 3) {
+        problems.push(`a 3-rial gap from the 4-decimal WAC reads ${JSON.stringify({ status: rounded?.status, metrics: rounded?.metrics })}, expected healthy with ${afterResidue.gap + 3}`);
       }
       // TD-1030: the inventory row of a dollar receipt is its rial value rounded to the rial, 1001 for 1 USD at 1000.55, so 30
-      // receipts leave the ledger 13.5 rials over the Kardex; more than the WAC allowance alone (12) explains
+      // receipts leave the ledger 13.5 rials more over the Kardex, more than the allowance before them explains
       const fractional = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
       for (let i = 0; i < 30; i++) await receive(fractional.id, 1, 1, { currency: 'USD', exchangeRate: 1000.55 });
-      const rialRounded = await testOf('inventory_reconciliation');
-      const base = Number(rialRounded?.metrics?.discrepancy);
-      if (rialRounded?.status !== 'healthy' || !(base > 12) || base > Number(rialRounded?.metrics?.roundingTolerance)) {
-        problems.push(`30 receipts rounded to the rial read ${JSON.stringify({ status: rialRounded?.status, metrics: rialRounded?.metrics })}, expected healthy with a gap over 12`);
-      }
+      const rialRounded = await stepOf('30 dollar receipts rounded to the rial', Number(rounded?.metrics?.roundingTolerance));
+      const base = rialRounded.gap;
 
       // a manual posting within the rounding allowance is listed, though the check stays healthy
       const smallPosting = await postApproved('2026-05-03', acc['1401'], acc['1001'], 6, 'M21 small manual inventory posting');
@@ -87,7 +121,7 @@ export async function runStockHealthV11Tests(shouldRun: ShouldRun): Promise<Test
         problems.push(`a 900-rial manual posting to inventory reads ${JSON.stringify({ status: stock?.status, discrepancy: stock?.metrics?.discrepancy, items: stock?.items?.map(i => i.id) })}`);
       }
       if (problems.length > 0) throw new Error(problems.join(' | '));
-      return `0.004 → ${warn?.status}; 0.03 → ${err?.status}; 3-rial WAC rounding → ${rounded?.status}; ${base}-rial rial rounding → ${rialRounded?.status}; 6-rial manual posting → ${listed?.status} and listed; 900-rial manual posting → ${stock?.status} with both vouchers listed, the reversed pair not`;
+      return `0.004 → ${warn?.status}; 0.03 → ${err?.status}; 3-rial WAC rounding → ${rounded?.status}; ${afterLarge.gap}-rial large dollar sale, ${afterResidue.gap}-rial void residues and ${base}-rial rial rounding → healthy; 6-rial manual posting → ${listed?.status} and listed; 900-rial manual posting → ${stock?.status} with both vouchers listed, the reversed pair not`;
     }));
   }
 

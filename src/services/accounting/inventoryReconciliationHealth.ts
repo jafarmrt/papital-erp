@@ -22,7 +22,7 @@ export const INVENTORY_RECONCILIATION_TOLERANCE = 1;
 
 /** half a unit of the 4th decimal: the most one rounding of a numeric(18,4) cost or amount can be off */
 const HALF_UNIT_4DP = '0.00005';
-/** half a rial: the most one inventory voucher row rounded to the rial can be off its Kardex amount (TD-1030) */
+/** half a rial: the most one amount rounded to the rial can be off (TD-1030 foreign rows, TD-1147 void residues) */
 const HALF_RIAL = '0.5';
 
 /**
@@ -33,8 +33,12 @@ const HALF_RIAL = '0.5';
  *   and later issues credit inventory at that rounded WAC, so the difference stays. The WAC is averaged in posting order,
  *   so the stock on hand is summed in id order over every live Kardex row plus the voided rows that have a live reversal
  *   (they were on hand until voided); each Kardex amount is rounded to 4 decimals too;
- * - each inventory row in a foreign currency is its rial value rounded to the rial (TD-1030 in the vouchers, and
- *   `readInventoryLedgerValues` per row), up to half a rial off; a rial voucher keeps the 4-decimal Kardex amount.
+ * - each inventory row in a foreign currency is worth its amount × its 4-decimal rate rounded to the rial (TD-1030 in
+ *   the vouchers, and `readInventoryLedgerValues` per row): half a rial, plus half a unit of the rate's 4th decimal on
+ *   the amount, since a large row's rate cannot always land on its exact Kardex rials (`rateForRial`);
+ * - the residue voucher of a voided receipt (TD-1147, `postVoidResidueVoucher`) is rounded to the rial and skipped under
+ *   half a rial, so each live reversal of an incoming row may leave half a rial in the ledger.
+ * Other rial vouchers keep the 4-decimal Kardex amount.
  * The voided rows are read by id from the reversals (UNION ALL, not OR EXISTS): `reversal_of_id` has no index, and on a
  * few hundred thousand Kardex rows the OR form scanned the table once per voided row.
  */
@@ -61,15 +65,20 @@ export async function inventoryRoundingAllowance(): Promise<string> {
                + 2 * COUNT(*)) AS allowance
         FROM running
     ), rial AS (
-      SELECT ${HALF_RIAL}::numeric * COUNT(*) AS allowance
+      SELECT COALESCE(SUM(${HALF_RIAL}::numeric + ${HALF_UNIT_4DP}::numeric * ABS(vi.debit - vi.credit)), 0) AS allowance
         FROM journal_voucher_items vi
         JOIN journal_vouchers v ON v.id = vi.voucher_id AND v.is_deleted = 0
         JOIN accounts a ON a.id = vi.account_id AND a.is_deleted = 0
        WHERE vi.is_deleted = 0 AND v.status IN ('approved', 'permanent')
          AND UPPER(COALESCE(NULLIF(vi.currency, ''), NULLIF(v.currency, ''), 'IRR')) <> 'IRR'
          AND a.code LIKE '14%' AND vi.account_id <> ${wip?.id ?? 0}
+    ), residue AS (
+      SELECT ${HALF_RIAL}::numeric * COUNT(*) AS allowance
+        FROM transactions r
+        JOIN transactions o ON o.id = r.reversal_of_id
+       WHERE r.is_deleted = 0 AND o.type = 'in' AND COALESCE(o.document_type, '') <> 'transfer'
     )
-    SELECT ((SELECT allowance FROM wac) + (SELECT allowance FROM rial))::text AS allowance`);
+    SELECT ((SELECT allowance FROM wac) + (SELECT allowance FROM rial) + (SELECT allowance FROM residue))::text AS allowance`);
   const row = (res.rows?.[0] ?? {}) as { allowance?: string };
   return row.allowance ?? '0';
 }
