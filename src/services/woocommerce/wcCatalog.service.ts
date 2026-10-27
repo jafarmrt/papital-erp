@@ -164,7 +164,7 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor, ru
     // gap in the shop's list that did not move (PR #420 review finding 1) keeps them too, unless the user confirmed closing
     // them or this is a refresh by hand, which asks below; a gap in one variation list keeps only that product's unread
     // variation links (delta review N1)
-    // PR #420 third review SF1: a list given up after empty pages, or cut at the cap after a short page, is kept like one
+    // PR #420 third review SF1: a list cut at the cap after a short page is kept like one
     // out of order and says the same
     const outOfOrder = repeated || (unordered && truncated) || incomplete;
     const gapsKept = run.confirmClose === undefined && !run.askOnGap;
