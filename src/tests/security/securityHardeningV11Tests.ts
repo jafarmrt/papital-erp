@@ -78,7 +78,7 @@ export async function runSecurityHardeningV11Tests(shouldRun: ShouldRun): Promis
     await runCase(results, {
       id: 'sec_attachment_hardening_v11_6_2',
       name: 'v11 phase 6.2: a record file names its real uploader and type, is same-origin, and is gone with its deleted record (X11, X12, X16, X20)',
-      details: 'A draft voucher saved with a client uploadedBy «Someone Else» and a 2020 date stores the session user and the server time; an edit sending a forged uploader for the stored file keeps the stored one; HTML bytes declared image/png are stored as application/octet-stream and download as an attachment; the file answer has CORP same-origin; after the voucher is deleted its file is 404 (before, only sales files and activities were checked)',
+      details: 'A draft voucher saved with a client uploadedBy «Someone Else» and a 2020 date stores the session user and the server time; an edit sending a forged uploader for the stored file keeps the stored one, and so does an inline file of an older record (not yet moved to a file) sent back with a forged uploader; HTML bytes declared image/png are stored as application/octet-stream and download as an attachment; the file answer has CORP same-origin; after the voucher is deleted its file is 404 (before, only sales files and activities were checked)',
     }, async (h, wrong) => {
       const { VoucherService } = await import('../../services/accounting/voucher.service.js');
       const voucherId = await draftVoucherWith(h, [
@@ -93,10 +93,18 @@ export async function runSecurityHardeningV11Tests(shouldRun: ShouldRun): Promis
         if (!String(png?.uploadedAt ?? '').startsWith(new Date().toISOString().slice(0, 4))) wrong.push(`a new file was stored with the client time «${String(png?.uploadedAt)}»`);
         if (fake?.type !== 'application/octet-stream') wrong.push(`HTML bytes declared image/png were stored as «${String(fake?.type)}»`);
 
-        await VoucherService.updateJournalVoucher(voucherId, { attachments: [{ ...png, uploadedBy: 'Someone Else' }, fake] } as never);
-        const kept = (await storedAttachments(voucherId)).find(a => a.name === 'receipt.png');
+        // an older record still holding an inline file (the migration to files never ran on it)
+        const inline = { id: 'x12inline', name: 'old.png', url: dataUrl('image/png', PNG_BYTES), uploadedBy: 'Old Uploader', uploadedAt: '2020-02-02T00:00:00.000Z' };
+        await orm.update(journalVouchers).set({ attachments: [...list, inline] as never }).where(eq(journalVouchers.id, voucherId));
+        await VoucherService.updateJournalVoucher(voucherId, { attachments: [{ ...png, uploadedBy: 'Someone Else' }, fake, { ...inline, uploadedBy: 'Someone Else' }] } as never);
+        const afterEdit = await storedAttachments(voucherId);
+        const kept = afterEdit.find(a => a.name === 'receipt.png');
         if (kept?.uploadedBy !== `uploader_${h.tag}` || kept?.uploadedAt !== png?.uploadedAt) {
           wrong.push(`an edit changed the stored uploader to «${String(kept?.uploadedBy)}» at «${String(kept?.uploadedAt)}»`);
+        }
+        const old = afterEdit.find(a => a.name === 'old.png');
+        if (old?.uploadedBy !== 'Old Uploader' || old?.uploadedAt !== inline.uploadedAt || !String(old?.url ?? '').startsWith('/api/attachments/')) {
+          wrong.push(`an edit sending back an inline file stored it as ${String(old?.url).slice(0, 20)} by «${String(old?.uploadedBy)}» at «${String(old?.uploadedAt)}», not by its original uploader`);
         }
 
         const pngRes = await h.get(String(png?.url));
@@ -204,27 +212,41 @@ export async function runSecurityHardeningV11Tests(shouldRun: ShouldRun): Promis
   if (shouldRun('sec_login_lock_answers_not_counted_v11_6_2', 'security', 'x15', 'login', 'v11_6_2')) {
     await runCase(results, {
       id: 'sec_login_lock_answers_not_counted_v11_6_2',
-      name: 'v11 phase 6.2: one user\'s locked login does not close the login for others behind the same address (X15)',
-      details: 'From one address, one user fails 5 times (the pair locks) and retries 15 times more (429); another user then logs in from the same address with 200. Before, the lock answers counted against the 10-failure address bucket, so the office was locked out for 15 minutes',
+      name: 'v11 phase 6.2: one user\'s locked login does not close the login for others behind the same address, and every checked password counts (X15)',
+      details: 'From one address, one user fails 5 times (the pair locks) and retries until the attempts pass the 30-failure address bucket; another user then logs in from the same address with 200. From another address, 30 wrong passwords over 6 user names (each fifth one answers 429 as it starts the pair lock) fill the bucket, so the next login is the address limiter\'s 429. Before, the lock answers counted against a 10-failure bucket and the office was locked out for 15 minutes',
     }, async (h, wrong) => {
       const { createTestUser, TEST_PASSWORD } = await import('../fixtures/factories.js');
       const { resetLoginRateLimiter } = await import('../../app.js');
-      const { resetFailedAttempts } = await import('../../services/auth/loginSecurity.service.js');
+      const { LOCKOUT_THRESHOLD, LOGIN_ADDRESS_MAX_FAILURES, resetFailedAttempts, resetPhantomLockouts } = await import('../../services/auth/loginSecurity.service.js');
       const office = '198.51.100.150';
+      const sprayer = '198.51.100.151';
       const forgetful = await createTestUser({ role: 'daily_logger' });
       const colleague = await createTestUser({ role: 'daily_logger' });
-      const login = (username: string, password: string) => request(h.app as never).post('/api/auth/login')
-        .set('X-Forwarded-For', office).send({ username, password });
+      const login = (ip: string, username: string, password: string) => request(h.app as never).post('/api/auth/login')
+        .set('X-Forwarded-For', ip).send({ username, password });
       resetLoginRateLimiter();
+      resetPhantomLockouts();
       try {
+        // 1) answers refused by the pair lock before any password check do not fill the address bucket
         const statuses: number[] = [];
-        for (let i = 0; i < 20; i++) statuses.push((await login(forgetful.username, 'wrong-password-x15')).status);
-        if (!statuses.includes(429)) wrong.push(`twenty wrong passwords never locked the pair: ${statuses.join(',')}`);
-        const other = await login(colleague.username, TEST_PASSWORD);
+        for (let i = 0; i < LOGIN_ADDRESS_MAX_FAILURES + 5; i++) statuses.push((await login(office, forgetful.username, 'wrong-password-x15')).status);
+        if (!statuses.includes(429)) wrong.push(`${statuses.length} wrong passwords never locked the pair: ${statuses.join(',')}`);
+        const other = await login(office, colleague.username, TEST_PASSWORD);
         if (other.status !== 200) wrong.push(`a colleague behind the same address got ${other.status} after one user's lock (${statuses.join(',')})`);
+
+        // 2) a wrong password that starts a pair lock (429) still counts: 30 checked failures fill the bucket
+        const spray: number[] = [];
+        for (let i = 0; i < LOGIN_ADDRESS_MAX_FAILURES; i++) {
+          spray.push((await login(sprayer, `x15_spray_${Math.floor(i / LOCKOUT_THRESHOLD)}_${h.tag}`, 'wrong-password-x15')).status);
+        }
+        const next = await login(sprayer, `x15_spray_next_${h.tag}`, 'wrong-password-x15');
+        if (next.status !== 429 || next.body?.locked !== true) {
+          wrong.push(`after ${LOGIN_ADDRESS_MAX_FAILURES} checked wrong passwords (${spray.join(',')}) the next login answered ${next.status} ${JSON.stringify(next.body)}, not the address limiter's 429`);
+        }
       } finally {
         await resetFailedAttempts(forgetful.id, { username: forgetful.username, ip: office }).catch(() => undefined);
         await orm.delete(users).where(inArray(users.id, [forgetful.id, colleague.id])).catch(() => undefined);
+        resetPhantomLockouts();
         resetLoginRateLimiter();
       }
     });
@@ -234,7 +256,7 @@ export async function runSecurityHardeningV11Tests(shouldRun: ShouldRun): Promis
     await runCase(results, {
       id: 'sec_role_removal_within_own_v11_6_2',
       name: 'v11 phase 6.2: a role administrator removes from a role only permissions they hold (X5)',
-      details: 'A holder of roles.manage and documents.view empties a role that also has accounting.view: 403 GRANT_BEYOND_OWN_PERMISSIONS and the role keeps both; removing only documents.view goes through; before, any permission could be removed',
+      details: 'A holder of roles.manage and documents.view empties a role that also has accounting.view: 403 GRANT_BEYOND_OWN_PERMISSIONS and the role keeps both; removing only documents.view goes through; deleting the role (it still has accounting.view) is 403 too and the role stays; before, any permission could be removed',
     }, async (h, wrong) => {
       const { createTestRole } = await import('../fixtures/factories.js');
       const { deleteTestRoles } = await import('../fixtures/roleCleanup.js');
@@ -251,6 +273,9 @@ export async function runSecurityHardeningV11Tests(shouldRun: ShouldRun): Promis
         if (own.status !== 200 || after.includes('documents.view') || !after.includes('accounting.view')) {
           wrong.push(`removing only the editor's own permission returned ${own.status} and left ${JSON.stringify(after)}`);
         }
+        const deleted = await h.del(`/api/roles/${target.id}`, manager);
+        if (deleted.status !== 403 || deleted.body?.code !== 'GRANT_BEYOND_OWN_PERMISSIONS') wrong.push(`deleting a role with a permission the editor lacks returned ${deleted.status} ${String(deleted.body?.code)}`);
+        if ((await h.q('SELECT 1 FROM roles WHERE id = $1', [target.id])).length === 0) wrong.push('the refused delete removed the role');
       } finally {
         await deleteTestRoles(inArray(roles.id, [target.id])).catch(() => undefined);
       }

@@ -19,6 +19,7 @@ import {
   resetFailedAttempts,
   verifyPasswordConstantWork,
   loginLockedError,
+  markPasswordNotChecked,
   GENERIC_LOGIN_FAILURE_MESSAGE
 } from '../services/auth/loginSecurity.service.js';
 import { notSyntheticTestUsername, isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/syntheticUsers.js';
@@ -192,6 +193,8 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
   //    applies equally to unknown usernames
   const lockout = await checkAccountLockout(tUsername, clientIp);
   if (lockout.isLocked) {
+    // v11 phase 6.2 (X15): refused before any password check, so the address limiter does not count it
+    markPasswordNotChecked(res);
     const minutes = lockout.remainingMinutes || 1;
     logger.warn(`[Login Rejected] Account ${tUsername} is locked for ${minutes} more minute(s)`);
     await logActivity({

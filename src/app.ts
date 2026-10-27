@@ -61,7 +61,7 @@ import { orm } from './db/drizzle.js';
 import { sql } from 'drizzle-orm';
 import { BUILD_INFO } from './lib/version.js';
 import { bootDegradedSteps } from './services/system/bootSequence.js';
-import { LOGIN_ADDRESS_MAX_FAILURES } from './services/auth/loginSecurity.service.js';
+import { LOGIN_ADDRESS_MAX_FAILURES, markPasswordNotChecked, passwordWasNotChecked } from './services/auth/loginSecurity.service.js';
 import { resolveTrustProxySetting } from './lib/trustProxy.js';
 import { addressLockoutMessage, minutesUntil } from './lib/auth/loginLockout.js';
 
@@ -235,13 +235,15 @@ export async function createApp(): Promise<express.Express> {
     handler: (req, res) => {
       logger.warn(`[Login Brute Force] IP ${req.ip} blocked after failed attempts`);
       const remainingMinutes = minutesUntil((req as express.Request & { rateLimit?: { resetTime?: Date } }).rateLimit?.resetTime);
+      markPasswordNotChecked(res);
       res.status(429).json({ error: addressLockoutMessage(remainingMinutes), locked: true, remainingMinutes });
     },
     // v7.0.23 (TD-181 / audit P0-5): فقط تلاش‌های ناموفق شمرده می‌شوند — قبلاً ورودهای موفق هم
     // سطل را پر می‌کردند و پشت پراکسی، کل سازمان پس از ۱۰ ورود به مدت ۱۵ دقیقه مسدود می‌شد.
     skipSuccessfulRequests: true,
-    // v11 phase 6.2 (X15): a lock answer (this limiter's or the username + address pair's 429) is not a new failure
-    requestWasSuccessful: (_req, res) => res.statusCode < 400 || res.statusCode === 429,
+    // v11 phase 6.2 (X15): an answer that checked no password (this limiter's own, or a lock that refused the login before
+    // the password check) is not a new failure; a wrong password that starts or renews a lock still counts
+    requestWasSuccessful: (_req, res) => res.statusCode < 400 || passwordWasNotChecked(res),
     // TST-005 Hardening (بازطراحی v7.0.23): کلید محدودیت، آدرس واقعی کلاینت (req.ip) است که Express فقط
     // از پراکسی‌های قابل‌اعتماد TRUST_PROXY استخراج می‌کند؛ X-Forwarded-For جعلی از کلاینت مستقیم اثری ندارد.
     keyGenerator: (req: any) => {

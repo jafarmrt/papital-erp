@@ -31,3 +31,18 @@ export const PERSONNEL_USER_LINK_FORBIDDEN_MESSAGE =
 
 export const PERSONNEL_USER_RELINK_MESSAGE =
   'این پرسنل به حساب کاربری دیگری وصل است؛ نخست «بدون حساب کاربری» را ذخیره کنید، سپس حساب تازه را وصل کنید.';
+
+export const PERSONNEL_USER_LINK_LOCKED_HINT = 'وصل کردن یا برداشتن حساب کاربری با کسی است که «مدیریت کاربران» دارد.';
+export const PERSONNEL_USER_RELINK_HINT = 'برای وصل به حساب دیگر، نخست «بدون حساب کاربری» را ذخیره کنید.';
+
+/**
+ * v11 phase 6.2 (X6, review): the form's account picker follows the server's rule. Without «مدیریت کاربران» it stays on the
+ * stored account; with it, a linked person offers only its own account and «بدون حساب» (no direct move to another one).
+ */
+export function personnelUserPickerRule(canLink: boolean, storedUserId: string): {
+  locked: boolean; onlyStored: boolean; hint: string | null;
+} {
+  if (!canLink) return { locked: true, onlyStored: true, hint: PERSONNEL_USER_LINK_LOCKED_HINT };
+  if (storedUserId) return { locked: false, onlyStored: true, hint: PERSONNEL_USER_RELINK_HINT };
+  return { locked: false, onlyStored: false, hint: null };
+}

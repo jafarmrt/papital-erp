@@ -193,7 +193,7 @@ export class AttachmentStorageService {
     return { id, mime, size: buffer.length };
   }
 
-  /** the uploader fields of the record's stored list, by url (`/api/attachments/<id>` or a link) */
+  /** the uploader fields of the record's stored list, by url (`/api/attachments/<id>`, a link, or an inline data URL) */
   private static async storedUploaders(
     executor: DbExecutor, entityType: AttachmentEntityType, entityId: number
   ): Promise<Map<string, UploaderFields>> {
@@ -202,15 +202,21 @@ export class AttachmentStorageService {
     if (!table) return byUrl;
     const [row] = await executor.select({ attachments: table.attachments }).from(table).where(eq(table.id, entityId));
     for (const a of Array.isArray(row?.attachments) ? row.attachments : []) {
-      if (a && typeof a === 'object' && asText(a.url)) byUrl.set(asText(a.url), uploaderFieldsOf(a as unknown as Record<string, unknown>));
+      if (!a || typeof a !== 'object') continue;
+      const item = a as unknown as Record<string, unknown>;
+      if (asText(item.url)) byUrl.set(asText(item.url), uploaderFieldsOf(item));
+      // an item not yet moved to a file may carry its bytes in the legacy `dataUrl` field
+      if (asText(item.dataUrl).startsWith('data:')) byUrl.set(asText(item.dataUrl), uploaderFieldsOf(item));
     }
     return byUrl;
   }
 
-  /** who stored a file and when, from its own row (a stored file the record's list does not carry yet) */
-  private static async fileUploader(executor: DbExecutor, id: string): Promise<UploaderFields> {
+  /** who stored a file of this record and when, from its own row (a stored file the record's list does not carry yet) */
+  private static async fileUploader(executor: DbExecutor, id: string, entityType: AttachmentEntityType, entityId: number): Promise<UploaderFields> {
     const [row] = await executor.select({ createdBy: fileAttachments.createdBy, createdAt: fileAttachments.createdAt })
-      .from(fileAttachments).where(eq(fileAttachments.id, id));
+      .from(fileAttachments).where(and(
+        eq(fileAttachments.id, id), eq(fileAttachments.entityType, entityType), eq(fileAttachments.entityId, entityId),
+      ));
     if (!row) return {};
     const at = new Date(row.createdAt);
     return {
@@ -248,6 +254,9 @@ export class AttachmentStorageService {
       const inlineSource = url.startsWith('data:') ? url : (asText(legacyDataUrl).startsWith('data:') ? asText(legacyDataUrl) : '');
 
       if (inlineSource) {
+        // an inline item the record already holds (not yet moved to a file) keeps its stored uploader; a new one is stamped
+        const prior = priorUploaders?.get(inlineSource);
+        const keepsPrior = prior !== undefined && (prior.uploadedAt !== undefined || prior.uploadedBy !== undefined);
         const stored = await this.storeFile(executor, entityType, entityId, inlineSource, name, actor);
         keptIds.push(stored.id);
         result.push({
@@ -257,7 +266,8 @@ export class AttachmentStorageService {
           url: `${ATTACHMENT_URL_PREFIX}${stored.id}`,
           size: stored.size,
           type: stored.mime,
-          ...(stampUploader ? { uploadedAt: systemNowUtcIso(), ...(actor ? { uploadedBy: actor } : {}) } : uploaderFieldsOf(item)),
+          ...(!stampUploader ? uploaderFieldsOf(item)
+            : keepsPrior ? prior : { uploadedAt: systemNowUtcIso(), ...(actor ? { uploadedBy: actor } : {}) }),
         });
         continue;
       }
@@ -272,7 +282,7 @@ export class AttachmentStorageService {
         throw new ValidationError(`آدرس پیوست «${name}» نامعتبر است`);
       }
       const uploader = !priorUploaders ? uploaderFieldsOf(item)
-        : priorUploaders.get(url) ?? (storedId ? await this.fileUploader(executor, storedId) : {});
+        : priorUploaders.get(url) ?? (storedId ? await this.fileUploader(executor, storedId, entityType, entityId) : {});
       result.push({
         ...withoutUploaderFields(item), ...uploader, id: asText(item.id) || storedId || crypto.randomUUID(), name, url,
       } as FinancialAttachment);
