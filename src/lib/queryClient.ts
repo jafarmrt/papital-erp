@@ -2,27 +2,13 @@ import { QueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { SUBMISSION_REPLAYED_EVENT } from './idempotentReplay';
 import { QUERY_DEFAULTS } from './queryDefaults';
+import { shouldRetryQuery } from './queryRetry';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       ...QUERY_DEFAULTS,
-      retry: (failureCount, error: any) => {
-        // Do not retry 401 or 403 authorization / authentication errors
-        const status = error?.status || error?.statusCode;
-        if (
-          status === 401 ||
-          status === 403 ||
-          error?.code === 'UNAUTHORIZED' ||
-          error?.code === 'FORBIDDEN' ||
-          error?.message?.includes('401') ||
-          error?.message?.includes('403') ||
-          error?.message?.includes('غیرمجاز')
-        ) {
-          return false;
-        }
-        return failureCount < 3;
-      },
+      retry: shouldRetryQuery,
     },
     mutations: {
       onError: (error: any) => {

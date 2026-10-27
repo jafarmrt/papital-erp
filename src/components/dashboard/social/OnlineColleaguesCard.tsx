@@ -22,7 +22,7 @@ export function OnlineColleaguesCard({ colleagues, loading }: { colleagues: Pres
         </div>
       </header>
       {loading && colleagues.length === 0 ? (
-        <p className="text-xs text-slate-400">در حال بارگذاری…</p>
+        <p className="text-xs text-slate-500">در حال بارگذاری…</p>
       ) : colleagues.length === 0 ? (
         <p className="text-xs text-slate-500">هنوز همکار دیگری امروز نیامده است.</p>
       ) : (

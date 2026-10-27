@@ -196,7 +196,7 @@ export class ProcurementService {
 
     const priority = input.priority ?? 'normal';
     if (!(REQUISITION_PRIORITIES as readonly string[]).includes(priority)) {
-      throw new ValidationError('اولویت درخواست خرید یکی از «فوری»، «بالا»، «عادی» یا «پایین» است.');
+      throw new ValidationError('اولویت درخواست خرید یکی از «فوری»، «زیاد»، «عادی» یا «کم» است.');
     }
 
     // v9.0.314 (TD-688): ردیف‌ها و پروژه با یک قاعده برای ثبت و ویرایش؛ مقدار جمع برآورد با FinancialDecimal (AGENTS §1.8)
@@ -307,7 +307,7 @@ export class ProcurementService {
     user: { id?: number; username?: string }
   ): Promise<PurchaseRequisition> {
     if (updates.priority !== undefined && !(REQUISITION_PRIORITIES as readonly string[]).includes(updates.priority)) {
-      throw new ValidationError('اولویت درخواست خرید یکی از «فوری»، «بالا»، «عادی» یا «پایین» است.');
+      throw new ValidationError('اولویت درخواست خرید یکی از «فوری»، «زیاد»، «عادی» یا «کم» است.');
     }
     if (updates.title !== undefined && !updates.title.trim()) {
       throw new ValidationError('عنوان درخواست خرید را وارد کنید.');

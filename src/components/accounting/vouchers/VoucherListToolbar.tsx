@@ -36,7 +36,7 @@ const STATUS_TABS: StatusTab[] = [
     idleCount: 'bg-amber-200/70 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200',
   },
   {
-    key: 'approved', label: 'تایید شده (حسابرسی‌شده)', icon: <FileCheck className="w-3.5 h-3.5" />,
+    key: 'approved', label: 'تأیید شده (حسابرسی‌شده)', icon: <FileCheck className="w-3.5 h-3.5" />,
     active: 'bg-blue-600 text-white shadow-xs',
     idle: 'text-blue-800 dark:text-blue-300 hover:bg-blue-100/60 dark:hover:bg-blue-950/40',
     activeCount: 'bg-white/20 text-white font-bold',

@@ -19,6 +19,7 @@ import { personnelServerSearchUrl } from '../../../lib/personnel/personnelList';
 import type { BankAccount, Customer, Personnel, FinancialAttachment } from '../../../types';
 import { DecimalInput } from '../../common/DecimalInput';
 import { DialogLayer } from '../../common/DialogLayer';
+import { PAYMENT_METHOD_LABELS } from '../../../lib/treasury/treasuryExport';
 
 interface TreasuryTransactionModalProps {
   isOpen: boolean;
@@ -247,7 +248,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
           <button aria-label="بستن"
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700 transition cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700 transition cursor-pointer"
           >
             <X size={18} />
           </button>
@@ -281,9 +282,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                   onChange={e => setFormData({ ...formData, method: e.target.value as any })}
                   className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
                 >
-                  <option value="bank_transfer">حواله / پایا / ساتنا</option>
-                  <option value="pos">کارتخوان (POS)</option>
-                  <option value="cash">نقدی / صندوق</option>
+                  {(['bank_transfer', 'pos', 'cash'] as const).map(m => <option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>)}
                 </select>
               </div>
             </div>
@@ -308,7 +307,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                 ))}
               </select>
               {bankWithoutLedger && (
-                <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 mt-1 leading-5">
+                <p className="text-[11px] font-bold text-amber-700 dark:text-amber-300 mt-1 leading-5">
                   ⚠️ این حساب به چارت حساب‌ها متصل نیست و ثبت دریافت یا پرداخت با آن ممکن نیست. از ویرایش حساب، «اتصال به حساب معین» را تکمیل کنید.
                 </p>
               )}
@@ -444,7 +443,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                 />
                 {/* Overdraft warning */}
                 {!isReceipt && selectedBank && formData.amount > Number(selectedBank.currentBalance) && (
-                  <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 mt-1">
+                  <p className="text-[11px] font-bold text-amber-700 dark:text-amber-300 mt-1">
                     ⚠️ مبلغ بیشتر از مانده «{selectedBank.title}» ({rial.money(selectedBank.currentBalance, selectedBank.currency)}) است — ثبت با خطا مواجه خواهد شد.
                   </p>
                 )}
@@ -514,10 +513,10 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                     <ShieldCheck size={13} />
                     پیش‌نمایش سند حسابداری (همان چیزی که صادر می‌شود)
                   </span>
-                  {isPreviewLoading && <span className="text-[10px] text-slate-400">در حال محاسبه...</span>}
+                  {isPreviewLoading && <span className="text-[11px] text-slate-500">در حال محاسبه...</span>}
                 </div>
                 {voucherPreview?.debit && voucherPreview?.credit ? (
-                  <table className="w-full text-[10px] border-collapse">
+                  <table className="w-full text-[11px] border-collapse">
                     <thead>
                       <tr className="text-indigo-700 dark:text-indigo-300 border-b border-indigo-200 dark:border-indigo-800">
                         <th className="py-1 text-right">شرح</th>
@@ -542,12 +541,12 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                     </tbody>
                   </table>
                 ) : !isPreviewLoading ? (
-                  <p className="text-[10px] font-bold text-slate-400">برای مشاهده پیش‌نمایش، مبلغ را وارد کنید.</p>
+                  <p className="text-[11px] font-bold text-slate-500">برای مشاهده پیش‌نمایش، مبلغ را وارد کنید.</p>
                 ) : null}
                 {voucherPreview && voucherPreview.warnings.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {voucherPreview.warnings.map((w, i) => (
-                      <p key={i} className="text-[10px] font-bold text-amber-700 dark:text-amber-300 leading-5">⚠️ {w}</p>
+                      <p key={i} className="text-[11px] font-bold text-amber-700 dark:text-amber-300 leading-5">⚠️ {w}</p>
                     ))}
                   </div>
                 )}

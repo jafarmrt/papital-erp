@@ -415,7 +415,7 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
                             <>
                               <button
                                 onClick={() => handleOpenApproveModal(item)}
-                                className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1 transition-all shadow-xs cursor-pointer"
+                                className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs flex items-center gap-1 transition-all shadow-xs cursor-pointer"
                                 title="مرور، ویرایش و تأیید ثبت در انبار"
                               >
                                 <Check className="w-3.5 h-3.5" />
@@ -611,7 +611,7 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
                   <button
                     type="submit"
                     disabled={isSubmitting || !!approveCodeError}
-                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                    className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
                   >
                     <Check className="w-4 h-4" />
                     <span>تأیید و افزودن به انبار</span>

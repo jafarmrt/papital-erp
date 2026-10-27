@@ -4,6 +4,7 @@ import { printLineAmounts } from '../../../lib/invoices/invoicePrintTotals';
 import type { InvoiceDocItem } from '../../../lib/invoices/invoiceForm';
 import type { WarehouseItem } from '../../../hooks/queries/useSettingsQueries';
 import { usePhoneWidth } from '../../../lib/pwa/usePhoneWidth';
+import { proformaShortageText, type ProformaLineShortage } from '../../../lib/invoices/proformaLineShortage';
 
 interface InvoiceLinesListProps {
   lines: InvoiceDocItem[];
@@ -11,6 +12,8 @@ interface InvoiceLinesListProps {
   amountDecimals: number;
   warehouses: WarehouseItem[];
   onRemove: (index: number) => void;
+  /** v11 phase 6.3b (U26): per line, a sales proforma line above the sellable stock of its warehouse */
+  shortages?: readonly (ProformaLineShortage | null)[];
 }
 
 /** متن‌هایی که آزمون‌ها می‌خوانند */
@@ -18,6 +21,15 @@ export const INVOICE_LINES_TEXT = {
   empty: 'هنوز کالایی به فاکتور افزوده نشده است.',
   remove: 'حذف ردیف',
 } as const;
+
+function ShortageNote({ shortage, unit }: { shortage: ProformaLineShortage | null | undefined; unit: string }) {
+  if (!shortage) return null;
+  return (
+    <span data-testid="line-stock-shortage" className="block mt-1 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+      {proformaShortageText(shortage, unit)}
+    </span>
+  );
+}
 
 function lineWarehouseName(line: InvoiceDocItem, warehouses: WarehouseItem[]): string | null {
   if (!line.location) return null;
@@ -28,7 +40,7 @@ function lineWarehouseName(line: InvoiceDocItem, warehouses: WarehouseItem[]): s
  * v10.2.4 (گزینه «ج»): ردیف‌های فاکتور. روی رایانه جدول (با پیمایش افقی در پهنای کم)، روی گوشی یک کارت برای هر ردیف
  * (`usePhoneWidth`: فقط یکی از دو چیدمان ساخته می‌شود).
  */
-export function InvoiceLinesList({ lines, currency, amountDecimals, warehouses, onRemove }: InvoiceLinesListProps) {
+export function InvoiceLinesList({ lines, currency, amountDecimals, warehouses, onRemove, shortages }: InvoiceLinesListProps) {
   const isPhone = usePhoneWidth();
   const cur = formatCurrencyLabel(currency);
   const price = (n: number) => formatPersianPrice(n, undefined, amountDecimals);
@@ -48,6 +60,7 @@ export function InvoiceLinesList({ lines, currency, amountDecimals, warehouses, 
                   <p className="font-bold text-sm text-slate-800 break-words">{d.item.name}</p>
                   <p className="text-[11px] text-slate-500 font-mono" dir="ltr">{formatPersianCode(d.item.code)}</p>
                   {wh && <p className="text-[11px] text-slate-500">انبار: {wh}</p>}
+                  <ShortageNote shortage={shortages?.[i]} unit={d.item.unit} />
                 </div>
                 <button aria-label={INVOICE_LINES_TEXT.remove} type="button" onClick={() => onRemove(i)}
                   className="shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center text-rose-600 bg-rose-50 rounded-xl">
@@ -96,6 +109,7 @@ export function InvoiceLinesList({ lines, currency, amountDecimals, warehouses, 
                 <td className="p-3 font-bold text-slate-800">
                   {d.item.name}
                   {wh && <span className="block text-[11px] font-normal text-slate-500">انبار: {wh}</span>}
+                  <ShortageNote shortage={shortages?.[i]} unit={d.item.unit} />
                 </td>
                 <td className="p-3 text-center">
                   <span className="font-bold">{formatPersianNumber(d.quantity)}</span> <span className="text-slate-500 text-xs">{d.item.unit}</span>

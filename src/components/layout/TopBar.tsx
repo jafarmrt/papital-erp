@@ -49,7 +49,7 @@ export function TopBar({
             )}
           </div>
           <div className="text-right hidden md:block">
-            <p className="text-[11px] text-slate-400 font-semibold">{roleTitle}</p>
+            <p className="text-[11px] text-slate-500 font-semibold">{roleTitle}</p>
             <p className="text-xs font-bold text-slate-800 group-hover:text-blue-600 transition-colors">
               {user.full_name || user.username}
             </p>

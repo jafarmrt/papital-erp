@@ -246,9 +246,15 @@ export function partyLabelOf(doc: InvoiceListDocument, figures: Pick<InvoiceRowF
   return isReceipt ? `تامین‌کننده: ${doc.buyer_name}` : isInvoice || isProforma ? `مشتری: ${doc.buyer_name}` : doc.buyer_name;
 }
 
-/** عنوان سربرگ مودال جزئیات سند */
-export function detailsTitleOf(type: string | undefined): string {
-  return type === 'receipt' ? 'رسید ورود و فاکتور خرید' : type === 'invoice' ? 'صورتحساب فروش کالا' : 'جزئیات سند انبارداری';
+/**
+ * عنوان سربرگ مودال جزئیات سند. v11 phase 6.3b (U22): a sales proforma (its status or its type) was titled «جزئیات سند
+ * انبارداری», or «صورتحساب فروش کالا» when its type was already the invoice.
+ */
+export function detailsTitleOf(type: string | undefined, status?: string | null): string {
+  // a purchase proforma is a receipt in status proforma (TD-267), never a sales proforma
+  if (type === 'receipt') return status === 'proforma' ? 'پیش‌فاکتور خرید' : 'رسید ورود و فاکتور خرید';
+  if (status === 'proforma' || type === 'proforma') return 'پیش‌فاکتور فروش';
+  return type === 'invoice' ? 'صورتحساب فروش کالا' : 'جزئیات سند انبارداری';
 }
 
 /**

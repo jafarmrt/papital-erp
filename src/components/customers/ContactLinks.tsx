@@ -6,7 +6,7 @@ import { instagramUrl, mailtoLink, normalizeWebsite, telLink, websiteError, what
  * («صفحه»). پیوندی که مقدارش خالی یا نادرست است نشان داده نمی‌شود.
  */
 
-const LINK_CLASS = 'inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-600 hover:bg-slate-50 hover:text-blue-700';
+const LINK_CLASS = 'inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-bold text-slate-600 hover:bg-slate-50 hover:text-blue-700';
 
 export function PhoneLinks({ phone }: { phone: string | null | undefined }) {
   const tel = telLink(phone);

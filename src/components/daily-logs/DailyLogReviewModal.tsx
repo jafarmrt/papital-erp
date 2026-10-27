@@ -89,7 +89,7 @@ export function DailyLogReviewModal({
               type="button"
               disabled={isSubmittingReview}
               onClick={onSaveReview}
-              className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs flex items-center gap-1 cursor-pointer"
+              className="px-4 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-xs flex items-center gap-1 cursor-pointer"
             >
               <Send className="w-3.5 h-3.5" />
               {isSubmittingReview ? 'در حال ثبت...' : 'ثبت و ارسال اعلان به نویسنده'}

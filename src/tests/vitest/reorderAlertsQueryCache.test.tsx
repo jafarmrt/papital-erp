@@ -106,7 +106,7 @@ describe('ReorderAlertsPage — React Query cache', () => {
     fireEvent.change(input, { target: { value: '12' } });
     fireEvent.click(screen.getByRole('button', { name: 'ذخیره تغییرات' }));
 
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('نقطه سفارش با موفقیت بروزرسانی شد.'));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('نقطه سفارش با موفقیت به‌روزرسانی شد.'));
     // همان PUT صفحه پیشین: کل قلم با نقطه سفارش تازه
     expect(bodyOf('/items/7', 'PUT')).toEqual({ ...wire, reorder_point: 12 });
     expectInvalidated(client, otherPages, true);
@@ -176,7 +176,7 @@ describe('ReorderAlertsPage — React Query cache', () => {
     await screen.findByText('سیم نقره');
     fireEvent.click(screen.getByTitle('ثبت سفارش خرید برای این ماده اولیه'));
     await waitFor(() => expect(signals.has(SUPPLIERS_URL)).toBe(true));
-    fireEvent.click(screen.getByRole('button', { name: 'بروزرسانی' }));
+    fireEvent.click(screen.getByRole('button', { name: 'به‌روزرسانی' }));
     await waitFor(() => expect(signals.has(REORDER_URL)).toBe(true));
 
     unmount();

@@ -385,7 +385,7 @@ export default function CustomersPage({ user }: { user: User }) {
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Users size={14} className={activeTab === 'all' ? 'text-blue-600' : 'text-slate-400'} />
+            <Users size={14} className={activeTab === 'all' ? 'text-blue-600' : 'text-slate-500'} />
             <span>همه اشخاص و طرف‌ها</span>
           </button>
 
@@ -397,7 +397,7 @@ export default function CustomersPage({ user }: { user: User }) {
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Building2 size={14} className={activeTab === 'customer' ? 'text-blue-600' : 'text-slate-400'} />
+            <Building2 size={14} className={activeTab === 'customer' ? 'text-blue-600' : 'text-slate-500'} />
             <span>مشتریان و خریداران</span>
           </button>
 
@@ -409,7 +409,7 @@ export default function CustomersPage({ user }: { user: User }) {
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Truck size={14} className={activeTab === 'supplier' ? 'text-emerald-600' : 'text-slate-400'} />
+            <Truck size={14} className={activeTab === 'supplier' ? 'text-emerald-600' : 'text-slate-500'} />
             <span>تامین‌کنندگان متریال</span>
           </button>
         </div>
@@ -418,7 +418,7 @@ export default function CustomersPage({ user }: { user: User }) {
 
         {/* Search Field */}
         <div className="relative w-full max-w-sm">
-          <Search className="absolute right-3 top-2.5 text-slate-400" size={16} />
+          <Search className="absolute right-3 top-2.5 text-slate-500" size={16} />
           <input 
             type="text" 
             placeholder="جست‌وجو نام حساب، رسته تامین، رابط، تلفن..."
@@ -436,10 +436,10 @@ export default function CustomersPage({ user }: { user: User }) {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
         )}
-        <table className="w-full text-xs text-right">
+        <table className="phone-cards w-full text-xs text-right">
           <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 sticky top-0 text-center z-0">
             <tr>
-              <th className="p-3 w-12 text-slate-400 font-medium">ردیف</th>
+              <th className="p-3 w-12 text-slate-500 font-medium">ردیف</th>
               <th className="p-3 font-bold text-right text-slate-700">نام طرف حساب / شرکت</th>
               <th className="p-3 font-bold text-center text-slate-700 w-28">نقش و رسته</th>
               <th className="p-3 font-bold text-right text-slate-700">اشخاص رابط و سمت‌ها</th>
@@ -458,10 +458,10 @@ export default function CustomersPage({ user }: { user: User }) {
 
               return (
                 <tr key={c.id} className="hover:bg-blue-50/20 transition-colors">
-                  <td className="p-3 text-slate-400 text-center font-mono">{formatPersianNumber(((page - 1) * 50) + idx + 1)}</td>
+                  <td className="p-3 text-slate-500 text-center font-mono" data-phone="hide">{formatPersianNumber(((page - 1) * 50) + idx + 1)}</td>
                   
                   {/* Name and Quick Details */}
-                  <td className="p-3 font-bold text-slate-800 text-right">
+                  <td className="p-3 font-bold text-slate-800 text-right" data-phone="title">
                     <div className="flex items-center gap-2">
                       {pType === 'supplier' ? (
                         <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center shrink-0">
@@ -491,7 +491,7 @@ export default function CustomersPage({ user }: { user: User }) {
                           {c.name}
                         </button>
                         {sCat && (
-                          <span className="text-[10px] text-slate-500 font-normal truncate max-w-[200px]" title={sCat}>
+                          <span className="text-[11px] text-slate-500 font-normal truncate max-w-[200px]" title={sCat}>
                             {sCat}
                           </span>
                         )}
@@ -502,43 +502,43 @@ export default function CustomersPage({ user }: { user: User }) {
                   </td>
 
                   {/* Party Role Badge */}
-                  <td className="p-3 text-center">
+                  <td className="p-3 text-center" data-label="نقش">
                     {pType === 'supplier' ? (
-                      <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-200/80 px-2 py-0.5 rounded-md text-[10px] font-bold">
+                      <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-200/80 px-2 py-0.5 rounded-md text-[11px] font-bold">
                         <Truck size={11} /> تامین‌کننده
                       </span>
                     ) : pType === 'both' ? (
-                      <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200/80 px-2 py-0.5 rounded-md text-[10px] font-bold">
+                      <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200/80 px-2 py-0.5 rounded-md text-[11px] font-bold">
                         مشتری و تامین‌کننده
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-800 border border-blue-200/80 px-2 py-0.5 rounded-md text-[10px] font-bold">
+                      <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-800 border border-blue-200/80 px-2 py-0.5 rounded-md text-[11px] font-bold">
                         <Building2 size={11} /> مشتری
                       </span>
                     )}
                   </td>
 
                   {/* Contacts */}
-                  <td className="p-3 text-slate-700 text-right">
+                  <td className="p-3 text-slate-700 text-right" data-label="اشخاص رابط">
                     {hasContacts ? (
                       <div className="flex flex-col gap-1">
                         {contactsList.slice(0, 2).map((contact, i) => (
                           <div key={i} className="flex items-center gap-1.5">
                             <span className="font-medium text-slate-800">{contact.name || 'بدون نام'}</span>
                             {contact.role && (
-                              <span className="bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded text-[10px] shrink-0 font-normal">
+                              <span className="bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded text-[11px] shrink-0 font-normal">
                                 {contact.role}
                               </span>
                             )}
                             {contact.isPrimary && (
-                              <span className="bg-emerald-50 text-emerald-700 border border-emerald-200/60 px-1 py-0.2 rounded text-[9px] shrink-0">
+                              <span className="bg-emerald-50 text-emerald-700 border border-emerald-200/60 px-1 py-0.2 rounded text-[11px] shrink-0">
                                 اصلی
                               </span>
                             )}
                           </div>
                         ))}
                         {contactsList.length > 2 && (
-                          <span className="text-[10px] text-slate-400 font-mono">
+                          <span className="text-[11px] text-slate-500 font-mono">
                             + {formatPersianNumber(contactsList.length - 2)} رابط دیگر
                           </span>
                         )}
@@ -549,12 +549,12 @@ export default function CustomersPage({ user }: { user: User }) {
                   </td>
 
                   {/* Phone numbers */}
-                  <td className="p-3 text-slate-700 text-right">
+                  <td className="p-3 text-slate-700 text-right" data-label="تماس">
                     {hasContacts ? (
                       <div className="flex flex-col gap-1 font-mono">
                         {contactsList.slice(0, 2).map((contact, i) => (
                           <div key={i} className="flex flex-wrap items-center gap-1 text-[11px]">
-                            <Phone size={11} className="text-slate-400 shrink-0" />
+                            <Phone size={11} className="text-slate-500 shrink-0" />
                             <span dir="ltr" className="text-slate-800 font-semibold">{contact.phone ? formatPersianPhone(contact.phone) : '-'}</span>
                             <PhoneLinks phone={contact.phone} />
                           </div>
@@ -568,23 +568,23 @@ export default function CustomersPage({ user }: { user: User }) {
                   </td>
 
                   {/* Location */}
-                  <td className="p-3 text-slate-600 text-center">
+                  <td className="p-3 text-slate-600 text-center" data-phone="hide">
                     {c.country === 'ایران' ? [c.province, c.city].filter(Boolean).join(' - ') || '-' : c.country || '-'}
                   </td>
 
                   {/* Address & Notes */}
-                  <td className="p-3 text-slate-600 text-right max-w-xs">
+                  <td className="p-3 text-slate-600 text-right max-w-xs" data-phone="hide">
                     <p className="truncate text-slate-700" title={c.address}>{c.address || '-'}</p>
-                    {c.notes && <p className="text-[10px] text-slate-400 truncate mt-0.5" title={c.notes}>{c.notes}</p>}
+                    {c.notes && <p className="text-[11px] text-slate-500 truncate mt-0.5" title={c.notes}>{c.notes}</p>}
                   </td>
 
                   {/* Operations */}
-                  <td className="p-3 text-center">
+                  <td className="p-3 text-center" data-phone="actions">
                     <div className="flex items-center justify-center gap-1">
                       {/* Financial Card Button */}
                       <button
                         onClick={() => handleOpenLedger(c)}
-                        className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 rounded-lg transition-colors flex items-center gap-1 text-[10px] font-bold cursor-pointer"
+                        className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold cursor-pointer"
                         title="مشاهده کارت حساب و تراز مالی تفصیلی این شخص در دفاتر حسابداری"
                       >
                         <FileText size={12} />
@@ -595,7 +595,7 @@ export default function CustomersPage({ user }: { user: User }) {
                       {(pType === 'customer' || pType === 'both') && (
                         <button 
                           onClick={() => setSelectedDossierCustomer(c)} 
-                          className="p-1.5 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200/80 rounded-lg transition-colors flex items-center gap-1 text-[10px] font-bold cursor-pointer" 
+                          className="p-1.5 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200/80 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold cursor-pointer" 
                           title="مشاهده پرونده جامع و فرصت‌های فروش"
                         >
                           <Briefcase size={12} />
@@ -624,7 +624,7 @@ export default function CustomersPage({ user }: { user: User }) {
                   <div className="flex flex-col items-center justify-center gap-2">
                     <Users size={32} className="text-slate-300" />
                     <p className="font-bold text-sm text-slate-600">هیچ طرف حسابی در این دسته‌بندی یافت نشد.</p>
-                    <p className="text-xs text-slate-400">می‌توانید با استفاده از دکمه «ثبت طرف حساب جدید» شخص مورد نظر را اضافه کنید.</p>
+                    <p className="text-xs text-slate-500">می‌توانید با استفاده از دکمه «ثبت طرف حساب جدید» شخص مورد نظر را اضافه کنید.</p>
                   </div>
                 </td>
               </tr>
@@ -694,7 +694,7 @@ export default function CustomersPage({ user }: { user: User }) {
                   <h3 className="font-bold text-sm sm:text-base text-slate-800">
                     کارت حساب و تراز تفصیلی: {selectedLedgerCustomer.name}
                   </h3>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[11px] text-slate-500">
                     سوابق اسناد حسابداری خرید، فاکتورها و پرداخت‌های تسویه ثبت شده
                   </p>
                 </div>
@@ -702,7 +702,7 @@ export default function CustomersPage({ user }: { user: User }) {
               <button aria-label="بستن" 
                 type="button" 
                 onClick={() => setSelectedLedgerCustomer(null)} 
-                className="text-slate-400 hover:text-slate-600 rounded-lg p-1.5 hover:bg-slate-100 transition-colors"
+                className="text-slate-500 hover:text-slate-600 rounded-lg p-1.5 hover:bg-slate-100 transition-colors"
               >
                 <X size={18} />
               </button>
@@ -710,7 +710,7 @@ export default function CustomersPage({ user }: { user: User }) {
 
             <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4 text-xs">
               {loadingLedger ? (
-                <div className="p-12 flex flex-col items-center justify-center gap-2 text-slate-400">
+                <div className="p-12 flex flex-col items-center justify-center gap-2 text-slate-500">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
                   <span>در حال محاسبه تراز و بارگذاری اسناد حسابداری...</span>
                 </div>
@@ -763,7 +763,7 @@ export default function CustomersPage({ user }: { user: User }) {
                       <tbody className="divide-y divide-slate-100 font-mono">
                         {ledgerData.items.map((row: any, i: number) => (
                           <tr key={i} className="hover:bg-slate-50">
-                            <td className="p-2.5 text-center text-slate-400">{formatPersianNumber(i + 1)}</td>
+                            <td className="p-2.5 text-center text-slate-500">{formatPersianNumber(i + 1)}</td>
                             <td className="p-2.5 text-center text-slate-700">{formatPersianDate(row.date)}</td>
                             <td className="p-2.5 text-center font-bold text-blue-700">#{formatPersianCode(row.voucherNumber)}</td>
                             <td className="p-2.5 text-right font-sans text-slate-800">{row.itemDescription || row.description}</td>
@@ -782,7 +782,7 @@ export default function CustomersPage({ user }: { user: User }) {
               ) : (
                 <div className="p-10 text-center text-slate-500 border border-dashed border-slate-200 rounded-xl">
                   <p className="font-bold text-sm text-slate-600">هنوز هیچ تراکنش یا سند حسابداری برای این شخص ثبت نشده است.</p>
-                  <p className="text-xs text-slate-400 mt-1">با ثبت رسید خرید کالا یا فاکتور فروش، اسناد حسابداری به صورت خودکار در این کارت نمایش می‌یابند.</p>
+                  <p className="text-xs text-slate-500 mt-1">با ثبت رسید خرید کالا یا فاکتور فروش، اسناد حسابداری به صورت خودکار در این کارت نمایش می‌یابند.</p>
                 </div>
               )}
             </div>

@@ -691,8 +691,8 @@ export function FiscalYearClosingTab({ onPrintVoucher }: FiscalYearClosingTabPro
             </h3>
             <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
               {createOpeningVoucher
-                ? 'با تایید این مرحله، کلیه اسناد اختتامیه و افتتاحیه صادر شده و حساب‌های موقت بسته خواهند شد.'
-                : 'با تایید این مرحله، اسناد اختتامیه صادر شده و حساب‌های موقت بسته خواهند شد؛ سند افتتاحیه صادر نمی‌شود.'}
+                ? 'با تأیید این مرحله، کلیه اسناد اختتامیه و افتتاحیه صادر شده و حساب‌های موقت بسته خواهند شد.'
+                : 'با تأیید این مرحله، اسناد اختتامیه صادر شده و حساب‌های موقت بسته خواهند شد؛ سند افتتاحیه صادر نمی‌شود.'}
               {' '}پس از بستن، هیچ سندی در این سال ثبت نمی‌شود و فقط آخرین سال بسته با «بازگشایی سال مالی» دوباره باز می‌شود؛ پیش از اجرا اسناد نهایی را بازبینی کنید.
             </p>
           </div>
@@ -726,7 +726,7 @@ export function FiscalYearClosingTab({ onPrintVoucher }: FiscalYearClosingTabPro
               </div>
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  تایید اجرای عملیات بستن سال مالی {toPersianDigits(selectedYear)}
+                  تأیید اجرای عملیات بستن سال مالی {toPersianDigits(selectedYear)}
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   اقدامات زیر به صورت خودکار در سامانه ثبت خواهند شد:
@@ -783,7 +783,7 @@ export function FiscalYearClosingTab({ onPrintVoucher }: FiscalYearClosingTabPro
                 ) : (
                   <>
                     <Lock className="w-4 h-4" />
-                    تایید و بستن قطعی سال مالی
+                    تأیید و بستن قطعی سال مالی
                   </>
                 )}
               </button>

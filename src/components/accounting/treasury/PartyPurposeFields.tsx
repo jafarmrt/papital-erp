@@ -34,10 +34,10 @@ export const PartyPurposeFields: React.FC<PartyPurposeFieldsProps> = ({ partyTyp
           className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-bold"
         >
           <option value="">انتخاب کنید...</option>
-          {offerSettlement && <option value="settlement">تسویه حقوق و دستمزد → «حقوق پرداختنی»</option>}
-          <option value="advance">مساعده / وام → «مساعده و وام پرسنل»</option>
-          {!isReceipt && <option value="deductions">واریز کسورات حقوق → «سایر کسورات حقوق پرداختنی»</option>}
-          <option value="other">سایر → سرفصلی که انتخاب می‌کنید</option>
+          {offerSettlement && <option value="settlement">تسویه حقوق و دستمزد ← «حقوق پرداختنی»</option>}
+          <option value="advance">مساعده / وام ← «مساعده و وام پرسنل»</option>
+          {!isReceipt && <option value="deductions">واریز کسورات حقوق ← «سایر کسورات حقوق پرداختنی»</option>}
+          <option value="other">سایر ← سرفصلی که انتخاب می‌کنید</option>
         </select>
         {!offerSettlement && <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{SALARY_SETTLEMENT_VIA_PAYSLIP_MESSAGE}</p>}
       </div>

@@ -64,7 +64,7 @@ export function DataExportCard() {
           <a
             href={dataExportUrl(choice)}
             download
-            className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-md w-full sm:w-auto inline-flex"
+            className="px-5 py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-md w-full sm:w-auto inline-flex"
           >
             <Download size={18} /> دانلود خروجی داده‌ها
           </a>

@@ -131,7 +131,7 @@ export function InteractiveJalaliCalendar({ events = [], onSelectDate, onEventCl
                 <span>{monthName}</span>
                 <span className="text-slate-500 font-normal">{toPersianDigits(currentYear)}</span>
               </h2>
-              <p className="text-[10px] text-slate-400">تقویم کاری و سررسید وظایف</p>
+              <p className="text-[11px] text-slate-500">تقویم کاری و سررسید وظایف</p>
             </div>
           </div>
 
@@ -162,7 +162,7 @@ export function InteractiveJalaliCalendar({ events = [], onSelectDate, onEventCl
         </div>
 
         {/* Days of week header */}
-        <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-slate-400 mb-1.5">
+        <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-slate-500 mb-1.5">
           {WEEKDAY_NAMES.map((w, idx) => (
             <div key={idx} className={`py-1 ${idx === 6 ? 'text-rose-400 font-extrabold' : ''}`}>
               {w}
@@ -230,16 +230,16 @@ export function InteractiveJalaliCalendar({ events = [], onSelectDate, onEventCl
       <div className="mt-4 pt-3 border-t border-slate-100">
         <div className="flex items-center justify-between mb-2">
           <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
-            <Clock size={12} className="text-slate-400" />
+            <Clock size={12} className="text-slate-500" />
             رویدادهای {toPersianDigits(selectedDateStr)}:
           </span>
-          <span className="text-[10px] text-slate-400">
+          <span className="text-[11px] text-slate-500">
             {toPersianDigits(selectedDayEvents.length)} مورد
           </span>
         </div>
 
         {selectedDayEvents.length === 0 ? (
-          <div className="text-center py-3 text-slate-400 text-xs bg-slate-50/70 rounded-xl">
+          <div className="text-center py-3 text-slate-500 text-xs bg-slate-50/70 rounded-xl">
             هیچ رویداد یا پیگیری برای این روز ثبت نشده است.
           </div>
         ) : (
@@ -259,12 +259,12 @@ export function InteractiveJalaliCalendar({ events = [], onSelectDate, onEventCl
                   <div className="truncate">
                     <p className="font-bold text-slate-800 truncate">{ev.title}</p>
                     {ev.customerName && (
-                      <p className="text-[10px] text-slate-500 truncate">مشتری: {ev.customerName}</p>
+                      <p className="text-[11px] text-slate-500 truncate">مشتری: {ev.customerName}</p>
                     )}
                   </div>
                 </div>
 
-                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600 shrink-0 font-medium">
+                <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600 shrink-0 font-medium">
                   {ev.type === 'crm_followup' ? 'پیگیری' : 'کار'}
                 </span>
               </div>

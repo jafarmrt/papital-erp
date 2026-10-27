@@ -1,7 +1,7 @@
 import { Lock, AlertTriangle, Trash2, Package, ShoppingCart, Edit3 } from 'lucide-react';
 import { formatCurrencyLabel, formatPersianNumber, formatPersianPrice, formatPersianCode } from '../../utils';
 import { Item } from '../../types';
-import { STOCK_VOUCHER_DRAFT_NOTE, stockInLabels } from '../../lib/documents/stockInLabels';
+import { STOCK_OUT_EMPTY_HINT, STOCK_VOUCHER_DRAFT_NOTE, stockInLabels } from '../../lib/documents/stockInLabels';
 import { DecimalInput } from '../common/DecimalInput';
 
 export interface DocItemRow {
@@ -56,7 +56,7 @@ export function DocItemsTable({
       <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-200 rounded-2xl space-y-2">
         <Package className="w-8 h-8 text-slate-400 mx-auto" />
         <p className="text-xs font-bold text-slate-600">هنوز هیچ کالایی به جدول اقلام این سند اضافه نشده است.</p>
-        <p className="text-[11px] text-slate-400">{labels.emptyHint}</p>
+        <p className="text-[11px] text-slate-500">{actionType === 'out' ? STOCK_OUT_EMPTY_HINT : labels.emptyHint}</p>
       </div>
     );
   }

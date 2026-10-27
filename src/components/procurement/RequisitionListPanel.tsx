@@ -133,7 +133,7 @@ export function RequisitionListPanel({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs text-right">
+            <table className="phone-cards w-full text-xs text-right">
               <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                 <tr>
                   {access.canManage && <th className="p-3 text-center w-12">انتخاب</th>}

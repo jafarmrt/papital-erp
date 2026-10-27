@@ -52,7 +52,7 @@ export function ItemsTable({
             <div className="animate-spin rounded-full h-9 w-9 border-3 border-blue-600 border-t-transparent shadow-md"></div>
           </div>
         )}
-        <table className="w-full text-xs text-right border-collapse">
+        <table className="phone-cards w-full text-xs text-right border-collapse">
           <thead className="bg-slate-100/80 text-slate-700 border-b border-slate-200 sticky top-0 text-xs font-bold z-0 backdrop-blur-xs">
             <tr>
               <th className="p-3 w-16 text-center">تصویر</th>
@@ -88,7 +88,7 @@ export function ItemsTable({
 
               return (
                 <tr key={`item-row-${item.id || idx}-${idx}`} className="hover:bg-blue-50/30 transition-colors group">
-                  <td className="p-3 text-center">
+                  <td className="p-3 text-center" data-phone="hide">
                     {item.thumbnail ? (
                       <SafeImage
                         src={item.thumbnail}
@@ -97,24 +97,24 @@ export function ItemsTable({
                         className="w-9 h-9 object-cover rounded-lg shadow-sm border border-slate-200 m-auto cursor-pointer group-hover:scale-105 transition-all"
                       />
                     ) : (
-                      <span className="text-[10px] text-slate-400 font-mono">#{formatPersianNumber(idx + 1)}</span>
+                      <span className="text-[11px] text-slate-500 font-mono">#{formatPersianNumber(idx + 1)}</span>
                     )}
                   </td>
-                  <td className="p-3 text-slate-600 font-medium">
+                  <td className="p-3 text-slate-600 font-medium" data-label="دسته‌بندی">
                     {item.category ? (
-                       <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200">{item.category}</span>
+                       <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200">{item.category}</span>
                     ) : <span className="text-slate-300">-</span>}
                   </td>
-                  <td className="p-3 font-mono font-bold text-slate-700 dir-ltr text-right">{formatPersianCode(item.code)}</td>
-                  <td className="p-3 font-bold text-slate-900">{item.name}</td>
+                  <td className="p-3 font-mono font-bold text-slate-700 dir-ltr text-right" data-label="کد">{formatPersianCode(item.code)}</td>
+                  <td className="p-3 font-bold text-slate-900" data-phone="title">{item.name}</td>
                   
-                  <td className="p-3 text-slate-600 text-xs text-right">
+                  <td className="p-3 text-slate-600 text-xs text-right" data-phone="hide">
                     <div className="flex flex-col gap-1">
                       {item.color && (
                         <div className="flex items-center gap-1 flex-wrap">
-                          <span className="text-slate-400 text-[10px]">🎨 رنگ:</span>
+                          <span className="text-slate-500 text-[11px]">🎨 رنگ:</span>
                           {parseMultiValue(item.color).map((c: string, cIdx: number) => (
-                            <span key={cIdx} className="bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded-md text-[10px] font-bold">
+                            <span key={cIdx} className="bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded-md text-[11px] font-bold">
                               {c}
                             </span>
                           ))}
@@ -122,9 +122,9 @@ export function ItemsTable({
                       )}
                       {item.material && (
                         <div className="flex items-center gap-1 flex-wrap">
-                          <span className="text-slate-400 text-[10px]">💠 جنس:</span>
+                          <span className="text-slate-500 text-[11px]">💠 جنس:</span>
                           {parseMultiValue(item.material).map((m: string, mIdx: number) => (
-                            <span key={mIdx} className="bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded-md text-[10px] font-bold">
+                            <span key={mIdx} className="bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded-md text-[11px] font-bold">
                               {m}
                             </span>
                           ))}
@@ -137,7 +137,7 @@ export function ItemsTable({
                   </td>
 
                   {/* Multi-Location inventory break-up */}
-                  <td className="p-3 text-center">
+                  <td className="p-3 text-center" data-phone="hide">
                     <div className="flex flex-wrap justify-center items-center gap-1.5">
                       {warehouses.map(w => {
                         const val = (item as any)[`stock_${w.code}`] || 0;
@@ -146,7 +146,7 @@ export function ItemsTable({
                         else if (w.code === 'workshop') badgeColor = "bg-orange-50 text-orange-700 border-orange-200";
                         else if (w.code === 'showroom') badgeColor = "bg-emerald-50 text-emerald-700 border-emerald-200";
                         return (
-                          <span key={w.code} className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold border ${badgeColor}`} title={w.name}>
+                          <span key={w.code} className={`px-2 py-0.5 rounded-md font-mono text-[11px] font-bold border ${badgeColor}`} title={w.name}>
                             {w.name}: {formatPersianNumber(val)}
                           </span>
                         );
@@ -155,10 +155,10 @@ export function ItemsTable({
                   </td>
 
                   {/* Reorder Point limit */}
-                  <td className="p-3 text-center font-mono font-medium text-slate-600">
+                  <td className="p-3 text-center font-mono font-medium text-slate-600" data-phone="hide">
                     {rPoint > 0 ? (
                       <span className={cn(
-                        "px-2.5 py-0.5 rounded-full font-bold text-[10px]",
+                        "px-2.5 py-0.5 rounded-full font-bold text-[11px]",
                         isUnderReorder ? "bg-red-100 text-red-700 border border-red-200" : "bg-slate-100 text-slate-700 border border-slate-200"
                       )}>
                         {formatPersianNumber(rPoint)}
@@ -167,7 +167,7 @@ export function ItemsTable({
                   </td>
 
                   {/* Weighted average cost, always in IRR (O11) */}
-                  <td className="p-3 text-center font-mono font-bold text-slate-800">
+                  <td className="p-3 text-center font-mono font-bold text-slate-800" data-label="میانگین موزون بها">
                     {avgCost > 0 ? (
                       <span className="bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg text-[11px]" title="میانگین موزون بهای هر واحد، به ریال">
                         {formatPersianPrice(avgCost, 'IRR')}
@@ -176,7 +176,7 @@ export function ItemsTable({
                   </td>
 
                   {/* Final Totals */}
-                  <td className="p-3 text-center font-bold">
+                  <td className="p-3 text-center font-bold" data-label="موجودی">
                     <div className="flex flex-col items-center gap-1">
                       <span className={cn(
                         "text-xs px-2.5 py-0.5 rounded-lg border font-mono font-bold",
@@ -187,7 +187,7 @@ export function ItemsTable({
 
                       {((item as any).reserved_stock || 0) > 0 && (
                         <span 
-                          className="text-[10px] bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md border border-amber-300 font-bold flex items-center gap-1"
+                          className="text-[11px] bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md border border-amber-300 font-bold flex items-center gap-1"
                           title={`رزرو شده در پروژه‌ها: ${((item as any).reservations || []).map((r: any) => `${formatPersianCode(r.projectCode)} (${formatPersianNumber(r.reservedQty)} ${r.unit})`).join('، ')}`}
                         >
                           <Lock size={10} className="text-amber-700" />
@@ -197,7 +197,7 @@ export function ItemsTable({
 
                       {((item as any).reserved_stock || 0) > 0 && (
                         <span 
-                          className="text-[10px] bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-md border border-emerald-300 font-bold flex items-center gap-1"
+                          className="text-[11px] bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-md border border-emerald-300 font-bold flex items-center gap-1"
                           title="موجودی آزاد و قابل تخصیص"
                         >
                           <CheckCircle2 size={10} className="text-emerald-700" />
@@ -207,11 +207,11 @@ export function ItemsTable({
                     </div>
                   </td>
 
-                  <td className="p-3 text-slate-600 font-medium">{item.unit}</td>
+                  <td className="p-3 text-slate-600 font-medium" data-label="واحد">{item.unit}</td>
                   
                   {/* Soft Delete & Operations Control */}
                   {hasActions && (
-                    <td className="p-3 text-center">
+                    <td className="p-3 text-center" data-phone="actions">
                       <div className="flex justify-center items-center gap-1.5">
                         {onEditItem && <button
                           onClick={() => onEditItem(item)}
@@ -252,7 +252,7 @@ export function ItemsTable({
             })}
             {!loading && sortedItems.length === 0 && (
               <tr>
-                <td colSpan={hasActions ? 11 : 10} className="p-12 text-center text-slate-400 font-medium">هیچ کالایی برای نمایش یافت نشد.</td>
+                <td colSpan={hasActions ? 11 : 10} className="p-12 text-center text-slate-500 font-medium">هیچ کالایی برای نمایش یافت نشد.</td>
               </tr>
             )}
           </tbody>

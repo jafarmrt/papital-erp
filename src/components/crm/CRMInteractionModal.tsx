@@ -163,7 +163,7 @@ export function CRMInteractionModal({
                   {[
                     { id: 'call', label: 'تماس تلفنی', icon: PhoneCall },
                     { id: 'meeting', label: 'جلسه', icon: Video },
-                    { id: 'whatsapp', label: 'واتساپ/پیام', icon: MessageSquare },
+                    { id: 'whatsapp', label: 'واتس‌اپ/پیام', icon: MessageSquare },
                     { id: 'email', label: 'ایمیل', icon: Mail },
                     { id: 'quote', label: 'پیش‌فاکتور', icon: FileText },
                     { id: 'note', label: 'یادداشت', icon: FileText },
@@ -393,7 +393,7 @@ export function CRMInteractionModal({
                 <button
                   type="submit"
                   disabled={isSubmittingFollowupResult}
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-all shadow-md shadow-emerald-600/20 disabled:opacity-50 cursor-pointer"
+                  className="px-5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl font-bold transition-all shadow-md shadow-emerald-600/20 disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmittingFollowupResult ? 'در حال ثبت...' : 'ثبت و تکمیل پیگیری'}
                 </button>

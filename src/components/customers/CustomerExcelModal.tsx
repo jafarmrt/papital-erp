@@ -494,7 +494,7 @@ export function CustomerExcelModal({
           <button aria-label="بستن"
             type="button"
             onClick={handleClose}
-            className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-xl transition-colors cursor-pointer"
+            className="w-9 h-9 flex items-center justify-center text-slate-500 hover:text-slate-600 hover:bg-slate-200/50 rounded-xl transition-colors cursor-pointer"
           >
             <X size={18} />
           </button>
@@ -654,7 +654,7 @@ export function CustomerExcelModal({
                   >
                     <span>موارد دارای هشدار</span>
                     {summaryStats.withIssues > 0 && (
-                      <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 text-[10px] flex items-center justify-center font-bold">
+                      <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 text-[11px] flex items-center justify-center font-bold">
                         {formatPersianNumber(summaryStats.withIssues)}
                       </span>
                     )}
@@ -669,7 +669,7 @@ export function CustomerExcelModal({
                     placeholder="جست‌وجو در سطرهای پیش‌نمایش..."
                     className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-hidden"
                   />
-                  <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
+                  <Search size={14} className="absolute left-2.5 top-2.5 text-slate-500" />
                 </div>
               </div>
 
@@ -692,7 +692,7 @@ export function CustomerExcelModal({
                     <tbody className="divide-y divide-slate-100">
                       {filteredPreviewRows.length === 0 ? (
                         <tr>
-                          <td colSpan={8} className="py-8 text-center text-slate-400 text-xs">
+                          <td colSpan={8} className="py-8 text-center text-slate-500 text-xs">
                             سطری مطابق فیلتر جاری یافت نشد.
                           </td>
                         </tr>
@@ -701,7 +701,7 @@ export function CustomerExcelModal({
                           const hasErrors = r.issues.length > 0;
                           return (
                             <tr key={`row-${r.index}`} className={`hover:bg-slate-50/80 transition-colors ${hasErrors ? 'bg-rose-50/30' : ''}`}>
-                              <td className="py-2 px-3 text-center text-slate-400 font-mono">
+                              <td className="py-2 px-3 text-center text-slate-500 font-mono">
                                 {formatPersianNumber(r.index)}
                               </td>
                               <td className="py-2 px-3">
@@ -821,7 +821,7 @@ export function CustomerExcelModal({
               >
                 انصراف و بستن
               </button>
-              <span className="text-[11px] text-slate-400">یک فایل اکسل جهت شروع انتخاب کنید</span>
+              <span className="text-[11px] text-slate-500">یک فایل اکسل جهت شروع انتخاب کنید</span>
             </>
           )}
 
@@ -840,7 +840,7 @@ export function CustomerExcelModal({
                 type="button"
                 disabled={isImporting || summaryStats.toCreate + summaryStats.toUpdate === 0}
                 onClick={handleConfirmImport}
-                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-50"
               >
                 {isImporting ? (
                   <>

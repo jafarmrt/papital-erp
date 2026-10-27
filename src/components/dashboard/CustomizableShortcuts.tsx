@@ -306,14 +306,14 @@ export function CustomizableShortcuts({ user, userPermissions }: CustomizableSho
                 <div className={`w-9 h-9 rounded-xl bg-white/90 shadow-2xs flex items-center justify-center ${shortcut.color}`}>
                   <IconComp size={18} />
                 </div>
-                <ArrowUpRight size={14} className="text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <ArrowUpRight size={14} className="text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
 
               <div>
                 <h3 className="font-extrabold text-xs text-slate-800 line-clamp-1 group-hover:text-blue-600 transition-colors">
                   {shortcut.title}
                 </h3>
-                <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">
+                <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
                   {shortcut.description}
                 </p>
               </div>
@@ -339,7 +339,7 @@ export function CustomizableShortcuts({ user, userPermissions }: CustomizableSho
               </div>
               <button aria-label="بستن"
                 onClick={() => setIsCustomizeOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl"
+                className="p-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl"
               >
                 <X size={18} />
               </button>
@@ -366,7 +366,7 @@ export function CustomizableShortcuts({ user, userPermissions }: CustomizableSho
                       </div>
                       <div className="truncate">
                         <p className="text-xs font-bold truncate">{s.title}</p>
-                        <p className="text-[10px] text-slate-500 truncate">{s.description}</p>
+                        <p className="text-[11px] text-slate-500 truncate">{s.description}</p>
                       </div>
                     </div>
 

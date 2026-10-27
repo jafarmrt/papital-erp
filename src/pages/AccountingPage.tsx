@@ -155,7 +155,8 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
             <span>به‌روزرسانی</span>
           </button>
 
-          {hasPerm('accounting.vouchers') && (
+          {/* v11 phase 6.3b (U14): the vouchers tab has its own «ثبت سند حسابداری جدید» in its header */}
+          {hasPerm('accounting.vouchers') && currentTab !== 'vouchers' && (
             <button
               onClick={() => {
                 setEditingVoucher(null);

@@ -263,7 +263,7 @@ export function BankAndTreasuryTab({
             <Building2 className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
             بانک، صندوق و خزانه‌داری
           </h2>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             مدیریت جامع حساب‌های بانکی، صندوق نقد کارگاه، دستگاه‌های کارتخوان و جریان وجوه نقد با تطبیق با دفاتر حسابداری لحظه‌ای
           </p>
         </div>
@@ -306,7 +306,7 @@ export function BankAndTreasuryTab({
 
           <button
             onClick={() => { setTxModalType('receipt'); setIsTxModalOpen(true); }}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-sm transition cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-600 rounded-xl shadow-sm transition cursor-pointer"
           >
             <ArrowDownLeft size={14} />
             ثبت رسید دریافت

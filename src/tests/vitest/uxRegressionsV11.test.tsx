@@ -10,7 +10,7 @@ import { DialogLayer } from '../../components/common/DialogLayer';
 import { JalaliDateInput } from '../../components/common/JalaliDateInput';
 import { NotFoundPage } from '../../components/NotFoundPage';
 import { RequisitionRow } from '../../components/procurement/RequisitionRow';
-import { requisitionActionsWithoutInstance } from '../../lib/procurement/requisitionActions';
+import { requisitionActionsWithoutInstance, INITIATOR_CANNOT_APPROVE_SHORT } from '../../lib/procurement/requisitionActions';
 import type { PurchaseRequisition } from '../../types';
 import type { ProcurementAccess } from '../../hooks/procurement/useProcurementAccess';
 import { InventoryAuditHeader } from '../../components/inventory/InventoryAuditHeader';
@@ -100,7 +100,9 @@ describe('v11 phase 6.3a (U10): the initiator sees the split button off with the
     row({ ...open, initiatorCannotApprove: true }, onSplit);
     const button = screen.getByText(SPLIT).closest('button');
     expect(button?.disabled).toBe(true);
-    expect(screen.getByText(SPLIT_REASON)).toBeTruthy();
+    // v11 phase 6.3b: the whole sentence describes the button for a screen reader; the row shows a short line
+    expect(screen.getByText(SPLIT_REASON).className).toContain('sr-only');
+    expect(screen.getByText(INITIATOR_CANNOT_APPROVE_SHORT)).toBeTruthy();
     expect(button?.getAttribute('aria-describedby')).toBe('split-blocked-6');
     fireEvent.click(button as HTMLButtonElement);
     expect(onSplit).not.toHaveBeenCalled();

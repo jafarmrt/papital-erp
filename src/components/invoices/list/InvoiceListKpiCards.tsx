@@ -10,7 +10,7 @@ export function InvoiceListKpiCards({ summaryMetrics }: { summaryMetrics: Invoic
       {/* Sales Invoices Card */}
       <div className="bg-white border border-blue-100 rounded-2xl p-4 shadow-2xs flex items-center justify-between">
         <div>
-          <span className="text-[11px] text-slate-500 font-bold block mb-1">کل فاکتورهای فروش (این صفحه)</span>
+          <span className="text-[11px] text-slate-500 font-bold block mb-1">جمع فاکتورهای فروش همین صفحه</span>
           <div className="text-base font-black text-blue-900 font-mono">
             {Object.entries(summaryMetrics.salesTotals).map(([cur, val]: [string, number]) => (
               <div key={cur}>
@@ -18,7 +18,7 @@ export function InvoiceListKpiCards({ summaryMetrics }: { summaryMetrics: Invoic
               </div>
             ))}
           </div>
-          <span className="text-[10px] text-blue-600 font-medium mt-0.5 block">
+          <span className="text-[11px] text-blue-600 font-medium mt-0.5 block">
             {formatPersianNumber(summaryMetrics.salesCount)} فاکتور فروش نهایی
           </span>
         </div>
@@ -38,7 +38,7 @@ export function InvoiceListKpiCards({ summaryMetrics }: { summaryMetrics: Invoic
               </div>
             ))}
           </div>
-          <span className="text-[10px] text-emerald-700 font-medium mt-0.5 block">
+          <span className="text-[11px] text-emerald-700 font-medium mt-0.5 block">
             {formatPersianNumber(summaryMetrics.purchaseCount)} رسید خرید ثبت‌شده
           </span>
         </div>
@@ -58,7 +58,7 @@ export function InvoiceListKpiCards({ summaryMetrics }: { summaryMetrics: Invoic
               </div>
             ))}
           </div>
-          <span className="text-[10px] text-amber-700 font-medium mt-0.5 block">
+          <span className="text-[11px] text-amber-700 font-medium mt-0.5 block">
             {formatPersianNumber(summaryMetrics.proformaCount)} پیش‌فاکتور در جریان
           </span>
         </div>
@@ -74,7 +74,7 @@ export function InvoiceListKpiCards({ summaryMetrics }: { summaryMetrics: Invoic
           <div className="text-base font-black text-purple-950 font-mono">
             {formatPersianNumber(summaryMetrics.otherCount)} <span className="text-xs font-normal text-slate-500">سند</span>
           </div>
-          <span className="text-[10px] text-purple-600 font-medium mt-0.5 block">
+          <span className="text-[11px] text-purple-600 font-medium mt-0.5 block">
             مصرف در پروژه، مرجوعی و ضایعات
           </span>
         </div>
