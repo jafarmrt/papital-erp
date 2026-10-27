@@ -38,6 +38,7 @@ G  scripts/check-version-sync.ts
 4  src/hooks/accounting/useChequeQueries.ts
 4  src/hooks/accounting/useTreasuryQueries.ts
 4  src/hooks/accounting/usePettyCashQueries.ts
+4  src/hooks/accounting/useSettlementAllocations.ts
 4  src/lib/noVoucherPermission.ts
 # ۱۲ پرداخت حقوق درون پوشه حسابداری؛ رمز پرسنل درون system
 12 src/services/accounting/payrollPayment*.ts

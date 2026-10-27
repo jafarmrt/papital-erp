@@ -7,6 +7,7 @@ import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType, type InvoiceEventPayload } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
 import { documentEventAmounts } from './documentEventAmount.js';
+import { fetchLiveAllocations } from './documentAllocations.js';
 import { formatCurrencyLabel } from '../../utils/formatters.js';
 
 /**
@@ -91,13 +92,24 @@ export function treasuryRowsListText(rows: ReadonlyArray<Pick<VoidDependentTreas
     .join('، ');
 }
 
+/**
+ * v11 phase 6.1t (M11): a live part of a receipt, payment or cheque put on this document with others holds the void too;
+ * the way out is the same window that made it («نشاندن روی فاکتورها» of the treasury row or the cheque).
+ */
 export async function assertVoidHasNoTreasuryRows(tx: DbExecutor, doc: { id: number; refNumber: string | null }): Promise<void> {
   const rows = await liveTreasuryRowsOf(tx, doc.id);
-  if (rows.length === 0) return;
-  const listed = treasuryRowsListText(rows);
+  const parts = await fetchLiveAllocations(tx, [doc.id]);
+  if (rows.length === 0 && parts.length === 0) return;
+  const listed = [
+    ...(rows.length > 0 ? [treasuryRowsListText(rows)] : []),
+    ...parts.map(p => `سهم ${p.source === 'cheque' ? 'چک' : 'تراکنش'} «${p.sourceNumber}» (${formatPersianNumber(p.amount, 4)})`),
+  ].join('، ');
   throw new ConflictError(
-    `سند «${doc.refNumber || doc.id}» دریافت یا پرداخت خزانه دارد و باطل نمی‌شود: ${listed}. اول هر کدام را در خزانه «علی‌الحساب» کنید، به سند دیگری وصل کنید یا باطل کنید.`,
-    { treasuryRows: rows.map(r => ({ ...r, amount: Number(r.amount) || 0 })) },
+    `سند «${doc.refNumber || doc.id}» دریافت یا پرداخت خزانه دارد و باطل نمی‌شود: ${listed}. اول هر کدام را در خزانه «علی‌الحساب» کنید، به سند دیگری وصل کنید یا باطل کنید؛ سهم دریافت یا چک را از «نشاندن روی فاکتورها» همان ردیف بردارید.`,
+    {
+      treasuryRows: rows.map(r => ({ ...r, amount: Number(r.amount) || 0 })),
+      allocations: parts.map(p => ({ id: p.id, source: p.source, sourceId: p.sourceId, sourceNumber: p.sourceNumber, amount: p.amount })),
+    },
     'DOCUMENT_HAS_TREASURY_ROWS',
   );
 }

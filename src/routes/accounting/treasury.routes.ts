@@ -4,13 +4,15 @@
  */
 import { Router } from 'express';
 import type { z } from 'zod';
-import { authorizePermission, userHasRoleOrPermission } from '../../middleware/authorize.js';
+import { authorizePermission, can, userHasRoleOrPermission } from '../../middleware/authorize.js';
+import { ForbiddenError } from '../../errors/customErrors.js';
 import { READ_PERMISSIONS, RECORD_READ_PERMISSIONS } from '../../lib/recordReadPermissions.js';
 import { AccountingService } from '../../services/accounting.service.js';
 import { NO_VOUCHER_TREASURY_PERMISSION } from '../../services/accounting/treasury/noVoucherTreasury.js';
 import { getBankAccountOptions } from '../../services/accounting/treasury/bankAccountOptions.js';
 import { relinkTreasuryDocument } from '../../services/accounting/treasury/treasuryDocumentRelink.js';
 import { listTreasuryRelinkOptions } from '../../services/accounting/treasury/treasuryRelinkOptions.js';
+import { readSourceAllocations, replaceSourceAllocations } from '../../services/accounting/treasury/settlementAllocationWrite.js';
 import { choosableContraAccounts } from '../../services/accounting/treasury/partyContraAccount.js';
 import { listReconcilableCheques } from '../../services/accounting/treasury/bankReconciliation.js';
 import { createPettyCashExpense, listPettyCashExpenseLines, pettyCashExpenseAccounts } from '../../services/accounting/treasury/pettyCashExpense.service.js';
@@ -33,6 +35,8 @@ import {
   voidTreasuryTxSchema,
   relinkTreasuryDocumentSchema,
   treasuryRelinkOptionsSchema,
+  sourceAllocationsSchema,
+  replaceSourceAllocationsSchema,
   chequesQuerySchema,
   createChequeSchema,
   updateChequeStatusSchema,
@@ -42,6 +46,18 @@ import { pettyCashExpenseSchema, pettyCashLinesSchema } from './pettyCash.schema
 import { statutoryRemittanceOptionsSchema, statutoryRemittanceSchema } from './statutoryRemittance.schemas.js';
 
 const router = Router();
+
+/**
+ * v11 phase 6.1t (review of M11): putting a receipt or cheque on invoices reads and settles documents, so it needs the
+ * documents section as well, as the list of open documents does. Before, a holder of the cheque book alone settled any
+ * invoice by its id and read its number, buyer and remaining amount from the errors.
+ */
+async function assertSettlementDocumentsReadable(user: { role?: string } | undefined): Promise<void> {
+  if (await can(user, ...READ_PERMISSIONS.documentRecord)) return;
+  throw new ForbiddenError('نشاندن دریافت و چک روی فاکتورها مجوز بخش اسناد را هم می‌خواهد.', undefined, 'SETTLEMENT_DOCUMENTS_NOT_READABLE');
+}
+
+const sendsAllocations = (body: { allocations?: unknown } | undefined) => Array.isArray(body?.allocations) && body.allocations.length > 0;
 
 // ==========================================
 // 4. BANK ACCOUNTS & TREASURY
@@ -142,6 +158,7 @@ router.get('/accounting/treasury', authorizePermission(...RECORD_READ_PERMISSION
 
 // V1.4.0: Idempotency — retry همین درخواست هرگز دوبار وجه ثبت نمی‌کند
 router.post('/accounting/treasury', authorizePermission('accounting.treasury'), idempotency({ scope: 'treasury' }), validate(createTreasuryTxSchema), asyncHandler(async (req, res) => {
+  if (sendsAllocations(req.body)) await assertSettlementDocumentsReadable(req.user);
   const tx = await AccountingService.createTreasuryTransaction({
     ...req.body,
     // v8.0.118 (TD-409): «بدون سند حسابداری» فقط با مجوز جدا؛ از جلسه کاربر سنجیده می‌شود، نه بدنه درخواست
@@ -268,6 +285,23 @@ router.put('/accounting/treasury/:id/document', authorizePermission('accounting.
   res.json(result);
 }));
 
+// v11 phase 6.1t (M11 / U2, decision ت۵۲-۵): the documents a recorded receipt or payment settles, in parts
+router.get('/accounting/treasury/:id/allocations', authorizePermission('accounting.treasury'), validate(sourceAllocationsSchema), asyncHandler(async (req, res) => {
+  await assertSettlementDocumentsReadable(req.user);
+  res.json(await readSourceAllocations({ treasuryId: Number(req.params.id) }));
+}));
+
+router.put('/accounting/treasury/:id/allocations', authorizePermission('accounting.treasury'), idempotency({ scope: 'accounting' }), validate(replaceSourceAllocationsSchema), asyncHandler(async (req, res) => {
+  await assertSettlementDocumentsReadable(req.user);
+  res.json(await replaceSourceAllocations({
+    source: { treasuryId: Number(req.params.id) },
+    allocations: req.body.allocations,
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+    audit: { req, userFullName: req.user?.fullName },
+  }));
+}));
+
 // ==========================================
 // 5. CHEQUES (دفتر چک صیادی)
 // ==========================================
@@ -285,6 +319,7 @@ router.get('/accounting/cheques', authorizePermission(...RECORD_READ_PERMISSIONS
 }));
 
 router.post('/accounting/cheques', authorizePermission('accounting.cheques'), idempotency({ scope: 'cheques' }), validate(createChequeSchema), asyncHandler(async (req, res) => {
+  if (sendsAllocations(req.body)) await assertSettlementDocumentsReadable(req.user);
   const chq = await AccountingService.createCheque({
     ...req.body,
     // v8.0.118 (TD-409): «بدون سند حسابداری» فقط با مجوز جدا؛ از جلسه کاربر سنجیده می‌شود، نه بدنه درخواست
@@ -315,6 +350,23 @@ const updateChequeStatusHandler = asyncHandler(async (req, res) => {
 });
 router.put('/accounting/cheques/:id/status', authorizePermission('accounting.cheques'), idempotency({ scope: 'cheques' }), validate(updateChequeStatusSchema), updateChequeStatusHandler);
 router.patch('/accounting/cheques/:id/status', authorizePermission('accounting.cheques'), idempotency({ scope: 'cheques' }), validate(updateChequeStatusSchema), updateChequeStatusHandler);
+
+// v11 phase 6.1t (M11): the documents a cheque settles, in parts
+router.get('/accounting/cheques/:id/allocations', authorizePermission('accounting.cheques'), validate(sourceAllocationsSchema), asyncHandler(async (req, res) => {
+  await assertSettlementDocumentsReadable(req.user);
+  res.json(await readSourceAllocations({ chequeId: Number(req.params.id) }));
+}));
+
+router.put('/accounting/cheques/:id/allocations', authorizePermission('accounting.cheques'), idempotency({ scope: 'cheques' }), validate(replaceSourceAllocationsSchema), asyncHandler(async (req, res) => {
+  await assertSettlementDocumentsReadable(req.user);
+  res.json(await replaceSourceAllocations({
+    source: { chequeId: Number(req.params.id) },
+    allocations: req.body.allocations,
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+    audit: { req, userFullName: req.user?.fullName },
+  }));
+}));
 
 router.delete('/accounting/cheques/:id', authorizePermission('accounting.cheques'), idempotency({ scope: 'accounting' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);

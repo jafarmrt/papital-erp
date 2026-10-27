@@ -10,6 +10,7 @@ import { documentTypeTitle } from '../documents/documentTypeTitles';
 import { isRialCurrency, type RialDisplay } from '../rialDisplay';
 import { formatPersianPrice } from '../../utils/persianNumber';
 import { formatCurrencyLabel } from '../../utils/formatters';
+import type { SettlementAllocationView } from '../treasury/settlementAllocation';
 
 /** یک ردیف کالا در سند (پاسخ GET /documents/:id یا لیست) */
 export interface InvoiceListLine {
@@ -51,6 +52,8 @@ export interface InvoiceListDocument {
   paidAmount?: number;
   remainingAmount?: number;
   settlementStatus?: string;
+  /** v11 phase 6.1t (M11 / U2): parts of receipts, payments and cheques on this document (the document page only) */
+  allocations?: SettlementAllocationView[];
 }
 
 /** پاسخ صفحه‌بندی‌شده GET /documents */

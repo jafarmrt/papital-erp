@@ -82,6 +82,11 @@ function selectTransactions() {
     createdAt: treasuryTransactions.createdAt,
     // v10.1.32 (D-16): a petty cash expense statement shows its lines from the table
     pettyCashLineCount: sql<number>`(SELECT count(*)::int FROM petty_cash_expense_lines l WHERE l.treasury_transaction_id = ${treasuryTransactions.id})`,
+    // v11 phase 6.1t (M11): what the row settles on documents in parts (the table offers the window and hides the move)
+    // what the row puts on documents while it settles anything (a voided row or a reversal: nothing)
+    allocatedAmount: sql<string>`CASE WHEN ${treasuryTransactions.status} = 'completed' AND ${treasuryTransactions.reversalOfId} IS NULL
+      THEN (SELECT COALESCE(SUM(a.amount), 0)::text FROM settlement_allocations a WHERE a.treasury_transaction_id = ${treasuryTransactions.id} AND a.is_deleted = 0)
+      ELSE '0' END`,
   })
   .from(treasuryTransactions)
   .leftJoin(bankAccounts, eq(bankAccounts.id, treasuryTransactions.bankAccountId))
@@ -97,6 +102,7 @@ function toTreasuryTransactionDto(t: TransactionRow): TreasuryTransaction {
     amount: t.amount.toNumber(), // قرارداد API: مبلغ عدد (P2-6)
     exchangeRate: t.exchangeRate?.toNumber() ?? null,
     pettyCashLineCount: Number(t.pettyCashLineCount) || 0,
+    allocatedAmount: fin(t.allocatedAmount ?? 0).toNumber(),
     type: t.type as 'receipt' | 'payment',
     method: t.method as TreasuryTransaction['method'],
     partyType: t.partyType as TreasuryTransaction['partyType'],

@@ -115,6 +115,9 @@ export const QUERY_KEYS = {
     contraAccounts: () => ['accounting', 'treasury', 'contra-accounts'] as const,
     controlAccounts: () => ['accounting', 'control-accounts'] as const,
     treasuryRelinkOptions: (id: number) => ['accounting', 'treasury', 'relink-options', id] as const,
+    /** v11 phase 6.1t (M11): the documents a receipt or cheque can settle, and the parts of a recorded one */
+    settlementOptions: (query: object | null) => ['accounting', 'treasury', 'settlement-options', query ?? {}] as const,
+    sourceAllocations: (kind: string, id: number) => ['accounting', 'treasury', 'source-allocations', kind, id] as const,
     // v10.1.32 (D-16): حساب‌های هزینه صورت‌هزینه تنخواه و ردیف‌های یک صورت‌هزینه
     pettyCashExpenseAccounts: () => ['accounting', 'treasury', 'petty-cash-expense-accounts'] as const,
     pettyCashLines: (id: number) => ['accounting', 'treasury', 'petty-cash-lines', id] as const,
