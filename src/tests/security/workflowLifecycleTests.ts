@@ -37,7 +37,7 @@ export async function runWorkflowLifecycleTests(shouldRun: ShouldRun): Promise<T
     await runCase(results, {
       id: 'sec_workflow_document_auto_start_td_446',
       name: 'v9.0.39: only a draft or proforma sales document enters the approval workflow, in its create transaction; v11 phase 6.1p: a document with a running or rejected instance is finalized only from the inbox (TD-446, C2)',
-      details: 'A final receipt and invoice and a draft receipt get no instance; a proforma and a draft invoice get one; a direct finalize of the draft invoice is 409 DOCUMENT_IN_WORKFLOW naming the step from the instance snapshot and leaves the document, the instance and its tasks alone; a rejected proforma is refused the same way; once an admin closes the instance the direct finalize goes through',
+      details: 'A final receipt and invoice and a draft receipt get no instance; a proforma and a draft invoice get one; a direct finalize of the draft invoice is 409 DOCUMENT_IN_WORKFLOW naming the step from the instance snapshot and leaves the document, the instance and its tasks alone; a rejected proforma is refused the same way, and so is one whose older instance runs again under a newer closed one; a proforma rejected in a design with no way back finalizes, and a repeated finalize of a final document is 200; once an admin closes the instance the direct finalize goes through',
     }, async (h, wrong) => {
       for (const [label, body] of [
         ['رسید قطعی', { docType: 'receipt', inOut: 'in', status: 'final' }],
@@ -85,7 +85,35 @@ export async function runWorkflowLifecycleTests(shouldRun: ShouldRun): Promise<T
       const walked = await h.walk(Number(proformaInstance?.id), ['submit_to_warehouse', 'reject'], h.admin);
       const [rejected] = await instancesOf(h, 'document', proformaId);
       if (walked.some(status => status !== 200) || rejected?.status !== 'REJECTED') wrong.push(`Sending and rejecting the proforma returned ${walked.join(',')} and left the instance ${String(rejected?.status)}, not REJECTED`);
-      else await expectRefused('the rejected proforma', proformaId, rejected.id);
+      else {
+        await expectRefused('the rejected proforma', proformaId, rejected.id);
+        // any running instance counts, not only the latest: a legacy second start closed by an admin, then the first
+        // reopened (before, the latest-instance rule let this finalize through with its tasks pending)
+        await h.q(`INSERT INTO workflow_instances (workflow_definition_id, definition_version, entity_type, entity_id, current_state_id, status, snapshot_dsl)
+          SELECT workflow_definition_id, definition_version, entity_type, entity_id, current_state_id, 'TERMINATED', snapshot_dsl FROM workflow_instances WHERE id = $1`, [rejected.id]);
+        const reopened = await h.walk(Number(rejected.id), ['reopen'], h.admin);
+        if (reopened[0] !== 200) wrong.push(`Reopening the rejected proforma returned ${reopened.join(',')}`);
+        else await expectRefused('the proforma whose older instance runs again under a newer closed one', proformaId, rejected.id);
+      }
+
+      // a rejection in a design with no way back ends the workflow: the document is not trapped, and once final a repeated
+      // finalize stays an idempotent 200 even after the way back exists again
+      const deadEndId = await postDocument(h, { docType: 'invoice', status: 'proforma' });
+      const [deadEnd] = await instancesOf(h, 'document', deadEndId);
+      const deadWalk = await h.walk(Number(deadEnd?.id), ['submit_to_warehouse', 'reject'], h.admin);
+      const [deadRow] = await h.q(`SELECT snapshot_dsl, current_state_id FROM workflow_instances WHERE id = $1`, [deadEnd?.id]);
+      const snapshot = deadRow?.snapshot_dsl as { transitions?: Row[] } | null;
+      if (deadWalk.some(status => status !== 200) || !Array.isArray(snapshot?.transitions)) {
+        wrong.push(`Rejecting the second proforma returned ${deadWalk.join(',')} or left no snapshot transitions`);
+      } else {
+        const noWayBack = { ...snapshot, transitions: snapshot.transitions.filter(t => t.fromStateId !== deadRow.current_state_id) };
+        await h.q(`UPDATE workflow_instances SET snapshot_dsl = $2::jsonb WHERE id = $1`, [deadEnd.id, JSON.stringify(noWayBack)]);
+        const deadFin = await h.put(`/api/documents/${deadEndId}/finalize`, {});
+        if (deadFin.status !== 200) wrong.push(`Finalizing a proforma rejected with no way back returned ${deadFin.status}: ${JSON.stringify(deadFin.body).slice(0, 160)}`);
+        await h.q(`UPDATE workflow_instances SET snapshot_dsl = $2::jsonb WHERE id = $1`, [deadEnd.id, JSON.stringify(snapshot)]);
+        const again = await h.put(`/api/documents/${deadEndId}/finalize`, {});
+        if (again.status !== 200) wrong.push(`Finalizing the final proforma again returned ${again.status}: ${JSON.stringify(again.body).slice(0, 160)}`);
+      }
 
       // an instance an admin closed leaves the direct finalize as before
       const closed = await h.post(`/api/workflow/instances/${running?.id}/terminate`, { reason: 'TD-446 test: finalize the invoice directly' });

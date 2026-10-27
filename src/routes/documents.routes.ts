@@ -485,9 +485,10 @@ router.put('/documents/:id/finalize', authorizePermission('documents.finalize', 
   const allowBackdate = await userHasRoleOrPermission(req.user, BACKDATE_PERMISSION);
   // v11 phase 6.1p (C2, ت۵۲-۴): a document in its approval workflow is finalized only from the inbox (409
   // DOCUMENT_IN_WORKFLOW). Before (v9.0.39, TD-446), finalizing here closed the running instance and skipped its steps.
+  // A document already final stays an idempotent 200 (finalizeDocument changes nothing).
   const documentLabel = `${docTypeTitles[beforeDoc.status === 'proforma' ? 'proforma' : storedType] ?? 'سند'} «${beforeDoc.refNumber || docId}»`;
   await idempotentTransaction(async (tx) => {
-    await assertDocumentWorkflowClosed(tx, docId, documentLabel);
+    if (beforeDoc.status !== 'final') await assertDocumentWorkflowClosed(tx, docId, documentLabel);
     const change = await DocumentService.finalizeDocument(docId, user, tx, {
       vatAmount: !isNaN(Number(parsedVatAmount)) ? parsedVatAmount : undefined,
       vatPercent: !isNaN(Number(parsedVatPercent)) ? parsedVatPercent : undefined,
