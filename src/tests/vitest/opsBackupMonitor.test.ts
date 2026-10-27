@@ -49,8 +49,9 @@ describe('ops_cron_installed_td_1020: install.sh schedules the daily backup and 
 
   it('install.sh runs it and makes the private backup directory; the old cron hint is gone from backup.sh', () => {
     const install = read('install.sh');
-    expect(install).toContain('bash scripts/install-ops-cron.sh "$(id -un)"');
-    expect(install).toMatch(/install -d -m 700 -o "\$\(id -un\)"/);
+    // v11 phase 5.3: as the service user, who owns the backups
+    expect(install).toContain('bash scripts/install-ops-cron.sh "$SERVICE_USER"');
+    expect(install).toMatch(/install -d -m 700 -o "\$SERVICE_USER"/);
     expect(read('scripts/backup.sh')).not.toContain('/etc/cron.d/papital-erp-backup');
   });
 });

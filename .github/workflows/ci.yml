@@ -342,12 +342,72 @@ jobs:
     name: Linux Install (Ubuntu 26.04)
     runs-on: ubuntu-26.04
     timeout-minutes: 40
+    # v11 (phase 5.3, TD-1354): installed where the service user can read it, as on a server (/opt/papital-erp)
+    defaults:
+      run:
+        working-directory: /opt/papital-erp
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v7
 
+      - name: Copy The Source To /opt/papital-erp
+        working-directory: ${{ github.workspace }}
+        run: |
+          sudo install -d -o "$(id -un)" /opt/papital-erp
+          cp -a . /opt/papital-erp/
+
+      - name: The Runner Looks Like A New Server (no PostgreSQL)
+        # the image brings its own PostgreSQL; a new server has none, so install.sh takes the path a server takes
+        run: |
+          sudo systemctl stop postgresql 2>/dev/null || true
+          pkgs="$(dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' 'postgresql*' 2>/dev/null | awk '$1 == "ii" { print $2 }')"
+          [ -z "$pkgs" ] || sudo apt-get purge -y $pkgs
+          sudo rm -rf /etc/postgresql /var/lib/postgresql
+
       - name: Fresh Install (install.sh, local source mode)
         run: bash install.sh
+
+      - name: PostgreSQL 16 Only
+        run: |
+          pg_lsclusters
+          [ "$(pg_lsclusters -h | awk '{ print $1 }' | sort -u)" = "16" ] || { echo "::error::a cluster other than 16"; exit 1; }
+          pg_dump --version | grep -qE ' 16\.'
+
+      - name: The Service Runs As Its Own User (TD-1354)
+        run: |
+          test "$(systemctl show -p User --value papital-erp)" = papital
+          ps -o user= -p "$(systemctl show -p MainPID --value papital-erp)" | grep -qx papital
+          # the code stays with the installing user: the service cannot change what root runs
+          for f in . dist/server.cjs scripts/backup.sh scripts/nightly-verify.sh update.sh; do
+            if sudo -u papital test -w "$f"; then echo "::error::papital can write $f"; exit 1; fi
+          done
+          test "$(stat -c '%a %G' .env)" = "640 papital"
+          sudo -u papital test -r .env
+          for d in logs public/uploads media-library /var/backups/erp; do
+            test "$(sudo stat -c %U "$d")" = papital || { echo "::error::$d is not owned by papital"; exit 1; }
+          done
+          test "$(stat -c %U /var/lib/papital)" = papital
+          grep -E '^[0-9]+ [0-9]+ \* \* \* papital bash /opt/papital-erp/scripts/backup.sh' /etc/cron.d/papital-erp
+          grep -F 'root bash /opt/papital-erp/scripts/nightly-verify.sh 2>&1 | runuser -u papital -- tee -a /opt/papital-erp/logs/nightly-verify.log' /etc/cron.d/papital-erp
+          systemctl show -p NoNewPrivileges --value papital-erp | grep -qx yes
+          systemctl show -p ProtectSystem --value papital-erp | grep -qx full
+
+      - name: The Daily Backup Runs As The Service User
+        run: |
+          sudo -u papital -H bash scripts/backup.sh
+          sudo -u papital sh -c 'ls -l /var/backups/erp/erp_daily_*.dump.gz && test -f /var/backups/erp/.last_daily_ok'
+
+      - name: The Nightly Check Runs As Root Over The Service User's Folders
+        run: |
+          # FIFOs the service user put in place of the locks of logs/ would hang root when it opened them
+          sudo -u papital rm -f logs/.ops-busy.lock logs/.nightly-verify.lock
+          sudo -u papital mkfifo logs/.ops-busy.lock logs/.nightly-verify.lock
+          sudo timeout 1200 bash scripts/nightly-verify.sh
+          sudo -u papital rm -f logs/.ops-busy.lock logs/.nightly-verify.lock
+          test "$(sudo stat -c %U logs/nightly-verify.json)" = papital
+          sudo test -d /var/lib/papital-erp/nightly-verify-tmp
+          sudo test -f /var/lib/papital-erp/nightly-verify.lock
+          if sudo test -e /var/backups/erp/.nightly-verify-tmp; then echo "::error::root worked in the backup folder of papital"; exit 1; fi
 
       - name: App Port Answers On Every Address By Default
         run: |
@@ -358,17 +418,25 @@ jobs:
       - name: Running install.sh Again On A Working Install Stops (O9)
         # v11 (O9): an install that runs is updated with update.sh; the installer stops before it changes anything
         run: |
-          if bash install.sh > rerun.log 2>&1; then cat rerun.log; echo "::error::install.sh ran again over a working install"; exit 1; fi
-          grep -q 'already installed' rerun.log
+          if bash install.sh > "$RUNNER_TEMP/rerun.log" 2>&1; then cat "$RUNNER_TEMP/rerun.log"; echo "::error::install.sh ran again over a working install"; exit 1; fi
+          grep -q 'already installed' "$RUNNER_TEMP/rerun.log"
           curl -fsS http://localhost:3000/health/ready
 
       - name: Reinstall Without .env Over The Existing Database Role
         # v10.2.28 (#344 review L1): without INSTALL_REUSE_DB=1 the installer refuses a database with tables
         run: |
           mv .env .env.first-install
+          # a link the service user put in its uploads folder is never followed by the installer (root)
+          sudo install -d -m 755 /srv/not-papital
+          sudo -u papital rm -rf public/uploads/.attachments
+          sudo -u papital ln -s /srv/not-papital public/uploads/.attachments
           if bash install.sh; then echo "::error::install.sh reused a database with tables without INSTALL_REUSE_DB=1"; exit 1; fi
           INSTALL_REUSE_DB=1 bash install.sh
           curl -fsS http://localhost:3000/health/ready
+          test "$(stat -c '%a %G' .env)" = "640 papital"
+          test "$(stat -c '%U %a' /srv/not-papital)" = "root 755" || { echo "::error::install.sh followed a link of papital"; exit 1; }
+          sudo -u papital rm public/uploads/.attachments
+          sudo -u papital mkdir -m 750 public/uploads/.attachments
 
       - name: ERP_LISTEN_HOST Binds The App To 127.0.0.1
         run: |
@@ -384,7 +452,9 @@ jobs:
 
       - name: Service Log On Failure
         if: failure()
-        run: sudo journalctl -u papital-erp -n 200 --no-pager || true
+        run: |
+          sudo journalctl -u papital-erp -n 200 --no-pager || true
+          sudo tail -n 100 /opt/papital-erp/logs/*.log 2>/dev/null || true
 
   # v10.0.192: the image is pushed only after every check job passed (the build check above no longer waits for them)
   docker-publish:

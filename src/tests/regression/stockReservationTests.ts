@@ -1,6 +1,7 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { createHarness, type Harness, type ShouldRun } from '../security/workflowTestHarness.js';
 import { brief, fixture, type Fixture } from './documentEntryTests.js';
+import { closeDocumentWorkflow } from '../fixtures/documentWorkflow.js';
 
 /**
  * Package 7 (inventory planning), PR A: which documents and projects reserve stock, how much a project reserves and how
@@ -303,6 +304,7 @@ async function freeStockAtFinalizeCase(h: Harness, wrong: string[]): Promise<str
   const finP = await finalize(pp, secB);
   const shortP = shortagesOf(finP.body);
   if ((await reservedOf(b)).project !== 4 || shortP[0]?.shortQty !== 6) wrong.push(`with a proforma of 6 the project reserves ${(await reservedOf(b)).project} and stores ${JSON.stringify(shortP)}, expected 4 reserved and 6 short`);
+  await closeDocumentWorkflow(docIdOf(proforma));
   const finProforma = await h.put(`/api/documents/${docIdOf(proforma)}/finalize`, {});
   if (finProforma.status !== 200) wrong.push(`finalizing the earlier proforma answered ${brief(finProforma)}, expected 200`);
 
