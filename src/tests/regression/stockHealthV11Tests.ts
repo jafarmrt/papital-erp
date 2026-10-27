@@ -1,6 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { journalVoucherItems, journalVouchers, transactions } from '../../db/schema.js';
+import { documents, items, journalVoucherItems, journalVouchers, transactions } from '../../db/schema.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { money } from '../../lib/money.js';
 import { FinancialHealthService } from '../../services/accounting/financialHealth.service.js';
@@ -167,20 +167,24 @@ export async function runStockHealthV11Tests(shouldRun: ShouldRun): Promise<Test
 
         // a legacy void that leaves stock re-averages the WAC from its lines, with no Kardex row to bound it by: after
         // 1,000,000 at 1, voiding 1 at 51.0001 and then 1 at 51.0002 moves the WAC to 1.0002, 200 rials over the ledger;
-        // the gap is reported, with those documents listed
+        // the gap is reported, with those documents listed. The second is an old `purchase` (no longer recorded), which the
+        // direction table calls incoming: its void takes the unit back out (before, it was reversed as an issue)
         const bulk = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
         await receive(bulk.id, 1_000_000, 1);
         const legacyIds: number[] = [];
-        for (const price of [51.0001, 51.0002]) {
+        for (const [price, type] of [[51.0001, 'receipt'], [51.0002, 'purchase']] as const) {
           const id = await receive(bulk.id, 1, price);
+          await orm.update(documents).set({ type }).where(eq(documents.id, id));
           await voidAsLegacy(id);
           legacyIds.push(id);
         }
+        const [bulkAfter] = await orm.select({ stock: items.currentStock }).from(items).where(eq(items.id, bulk.id));
+        if (Number(bulkAfter?.stock) !== 1_000_000) problems.push(`after voiding a legacy receipt and a legacy purchase the stock is ${bulkAfter?.stock}, expected 1000000`);
         const drift = await testOf();
         if (drift?.status !== 'warning' || !legacyIds.every(id => drift.items?.some(i => i.id === `legacy_${id}` && Number(i.linkId) === id))) {
           problems.push(`two re-averaging legacy voids read ${JSON.stringify({ status: drift?.status, metrics: drift?.metrics, items: drift?.items?.map(i => i.id) })}, expected a warning listing both`);
         }
-        return `${residues}; re-averaging legacy voids: ${drift?.status}, gap ${drift?.metrics?.discrepancy}, ${drift?.metrics?.legacyStockDocumentCount} legacy documents listed`;
+        return `${residues}; re-averaging legacy voids: ${drift?.status}, gap ${drift?.metrics?.discrepancy}, ${drift?.metrics?.legacyStockDocumentsListed} legacy documents listed`;
       });
 
       // TD-1030: 103,500,060,145.5 rials sold in dollars at 600,000 is 172,500.1002 USD at 600,000.0002, worth

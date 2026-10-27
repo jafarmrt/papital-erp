@@ -131,7 +131,6 @@
     "src/errors/customErrors.ts": 1,
     "src/lib/accounting/voucherCurrencyBalance.ts": 1,
     "src/lib/documents/stockReservations.ts": 1,
-    "src/lib/permissions/documentPermissions.ts": 1,
     "src/lib/piecework/workLogList.ts": 1,
     "src/routes/accounting.routes.ts": 1,
     "src/routes/accounting/reports.routes.ts": 1,

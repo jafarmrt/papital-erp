@@ -422,7 +422,9 @@ export class DocumentLifecycleService {
             }
           }
         } else if (doc.type !== 'audit') {
-          const docDirection: 'in' | 'out' = (doc.type === 'receipt' || doc.type === 'production_receipt' || doc.type === 'return') ? 'in' : 'out';
+          // v11 phase 6.1j (review): the direction of the type's own table, so a legacy `purchase` goes back out; before, only
+          // receipts, production receipts and returns were incoming here and voiding a purchase raised the stock
+          const docDirection = stockDirectionOf(doc.type);
           for (const item of docLines) {
             const targetLoc = (item.location || '').trim() || defaultWh;
             residues.push(await DocumentStockEngine.applyStockReversal(tx, {

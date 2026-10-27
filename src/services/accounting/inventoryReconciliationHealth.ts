@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
+import { DOCUMENT_STOCK_DIRECTIONS } from '../../lib/documents/documentDirection.js';
 import { fin } from '../../lib/financialDecimal.js';
 import type { HealthCheckIssueItem, HealthCheckStatus, HealthCheckTestResult } from '../../types.js';
 import { isoToJalaliDate } from '../../utils/calendarDate.js';
@@ -19,6 +20,10 @@ import type { InventoryLedgerValues } from './inventoryLedgerValue.js';
  * there is the usual cause of a gap no document explains; on a large history the rounding allowance alone could hide one.
  */
 export const INVENTORY_RECONCILIATION_TOLERANCE = 1;
+
+/** the incoming document types (receipt, purchase, production receipt, return), from the one direction table */
+const INCOMING_TYPES = sql.join(
+  Object.entries(DOCUMENT_STOCK_DIRECTIONS).filter(([, direction]) => direction === 'in').map(([type]) => sql`${type}`), sql`, `);
 
 /** half a unit of the 4th decimal: the most one rounding of a numeric(18,4) cost or amount can be off */
 const HALF_UNIT_4DP = '0.00005';
@@ -87,7 +92,7 @@ export async function inventoryRoundingAllowance(): Promise<string> {
     ), legacy AS (
       SELECT 2 * ${HALF_RIAL}::numeric * COUNT(*) AS allowance
         FROM documents d
-       WHERE d.is_deleted = 1 AND d.status = 'final' AND d.type IN ('receipt', 'production_receipt', 'return')
+       WHERE d.is_deleted = 1 AND d.status = 'final' AND d.type IN (${INCOMING_TYPES})
          AND NOT EXISTS (SELECT 1 FROM transactions t WHERE t.document_id = d.id AND t.is_deleted = 0)
     )
     SELECT ((SELECT allowance FROM wac) + (SELECT allowance FROM rial) + (SELECT allowance FROM residue)
@@ -173,7 +178,7 @@ export async function findLegacyStockDocuments(): Promise<LegacyStockDocument[]>
   const res = await orm.execute(sql`
     SELECT d.id, COALESCE(d.ref_number, '') AS ref_number, d.type, d.date::text AS date, d.is_deleted
       FROM documents d
-     WHERE d.status = 'final' AND d.type IN ('receipt', 'production_receipt', 'return')
+     WHERE d.status = 'final' AND d.type IN (${INCOMING_TYPES})
        AND EXISTS (SELECT 1 FROM document_items di WHERE di.document_id = d.id)
        AND NOT EXISTS (SELECT 1 FROM transactions t WHERE t.document_id = d.id AND t.is_deleted = 0)
      ORDER BY d.date DESC, d.id DESC
@@ -224,7 +229,7 @@ export function buildInventoryReconciliationHealthTest(
     workInProgressValuation: workInProgressVal,
     manualInventoryPostingCount: manualPostings.length,
     roundingTolerance: tolerance,
-    ...(hasGap ? { legacyStockDocumentCount: legacyDocuments.length } : {}),
+    ...(hasGap ? { legacyStockDocumentsListed: legacyDocuments.length } : {}),
   };
   const unvaluedNote = unvaluedStockCount > 0
     ? ` ${formatPersianNumber(unvaluedStockCount)} کالای دارای موجودی هنوز بهای تمام‌شده ندارد و با ارزش صفر شمرده شد.`
@@ -327,10 +332,10 @@ export function buildInventoryReconciliationHealthTest(
     status,
     scoreImpact: -penalty,
     count: (negativeStockCount > 0 ? 1 : 0) + (hasGap ? 1 : 0),
-    message: negativeStockCount > 0
+    message: (negativeStockCount > 0
       ? `${negativeStockCount} کالای دارای موجودی منفی و اختلاف ریالی ${formatPersianPrice(invDiscrepancy)} ریال مشاهده شد.`
-      : `مغایرت ریالی ${formatPersianPrice(invDiscrepancy)} ریالی (${invDiscrepancyPercent}٪) بین ارزش انبار و دفاتر ثبت شده است.`
-        + (hasGap && legacyDocuments.length > 0 ? ` ${formatPersianNumber(legacyDocuments.length)} سند ورودی قدیمی بی ردیف کاردکس هم در فهرست آمده است.` : ''),
+      : `مغایرت ریالی ${formatPersianPrice(invDiscrepancy)} ریالی (${invDiscrepancyPercent}٪) بین ارزش انبار و دفاتر ثبت شده است.`)
+      + (hasGap && legacyDocuments.length > 0 ? ` ${formatPersianNumber(legacyDocuments.length)} سند ورودی قدیمی بی ردیف کاردکس هم در فهرست آمده است.` : ''),
     quickFixHint: 'ثبت اسناد انبارگردانی و صدور اسناد مکانیزه ورود و خروج انبار',
     items,
     metrics,
