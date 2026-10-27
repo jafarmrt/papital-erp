@@ -22,6 +22,7 @@ import { recordedSalesType } from '../lib/documents/recordedSalesType';
 import { useInvoiceBuyer } from '../hooks/invoices/useInvoiceBuyer';
 import { useInvoiceSave } from '../hooks/invoices/useInvoiceSave';
 import { getSellableStock } from '../lib/stockAvailability';
+import { proformaLineShortages } from '../lib/invoices/proformaLineShortage';
 import { computeInvoiceTotals } from '../lib/invoiceTotals';
 import { serviceChargeInputOf } from '../lib/invoices/serviceChargeInput';
 import { InvoiceServiceChargeField } from '../components/invoices/create/InvoiceServiceChargeField';
@@ -34,6 +35,7 @@ import { exchangeRateError } from '../components/documents/ExchangeRateField';
 import { useHasPermission } from '../contexts/AuthContext';
 import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog';
 import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions';
+import { scrollAppToTop } from '../components/layout/appScroll';
 
 // v10.2.4 (گزینه «ج»): فرم در بخش‌های سرتیتردار components/invoices/create؛ این صفحه وضعیت فرم و ثبت را نگه می‌دارد
 export default function CreateInvoicePage({ user: currentUser }: { user: User }) {
@@ -187,7 +189,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
         setDocItems(located.lines);
       }
       toast.success(`پیش‌فاکتور شماره ${formatPersianCode(p.ref_number)} جهت ویرایش بارگذاری شد.`);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollAppToTop();
     } catch (err) {
       if (isCancelledError(err)) return;
       toast.error('خطا در دریافت اطلاعات پیش‌فاکتور جهت ویرایش');
@@ -504,7 +506,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
               quantity={quantity} onQuantityChange={setQuantity} unitPrice={unitPrice} onUnitPriceChange={setUnitPrice}
               discount={discount} onDiscountChange={setDiscount} onAdd={handleAddItem}
             />
-            <InvoiceLinesList lines={docItems} currency={currency} amountDecimals={amountDecimals} warehouses={warehouses} onRemove={handleRemove} />
+            <InvoiceLinesList lines={docItems} currency={currency} amountDecimals={amountDecimals} warehouses={warehouses} onRemove={handleRemove}
+              shortages={proformaLineShortages(docItems, { docType, status, headerLocation: location })} />
           </InvoiceFormSection>
 
           {docItems.length > 0 && (

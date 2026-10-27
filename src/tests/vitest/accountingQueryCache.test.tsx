@@ -271,7 +271,7 @@ describe('AccountingPage — reads are abortable and race-free', () => {
     expect(signalOf(u => u.startsWith(PREVIEW_PREFIX))).toBeInstanceOf(AbortSignal);
     const previewCalls = getCalls(u => u.startsWith(PREVIEW_PREFIX)).length;
     fireEvent.click(runButton);
-    const confirm = screen.getByRole('button', { name: /تایید و بستن قطعی سال مالی/ }) as HTMLButtonElement;
+    const confirm = screen.getByRole('button', { name: /تأیید و بستن قطعی سال مالی/ }) as HTMLButtonElement;
     fireEvent.click(confirm);
     await waitFor(() => expect(confirm.disabled).toBe(true));
     fireEvent.click(confirm);

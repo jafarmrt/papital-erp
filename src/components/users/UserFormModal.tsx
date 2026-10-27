@@ -236,8 +236,8 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
           <div>
             <label htmlFor={`${fieldId}-password`} className="block text-sm font-medium mb-1 text-slate-700">
               {isEditing
-                ? 'کلمه عبور جدید (در صورت تمایل به تغییر)'
-                : 'کلمه عبور ورود'}
+                ? 'رمز عبور جدید (در صورت تمایل به تغییر)'
+                : 'رمز عبور ورود'}
             </label>
             <input
               id={`${fieldId}-password`}

@@ -32,14 +32,14 @@ export function InvoiceListRow({ doc, actions }: { doc: InvoiceListDocument; act
   return (
     <tr className="hover:bg-blue-50/30 transition-colors">
       {/* Ref Number */}
-      <td className="p-3">
+      <td className="p-3" data-phone="title">
         <span className="font-mono font-black text-slate-800 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200 inline-block text-[11px]">
           {formatPersianCode(doc.ref_number)}
         </span>
       </td>
 
       {/* Doc Type Badge */}
-      <td className="p-3 whitespace-nowrap">
+      <td className="p-3 whitespace-nowrap" data-label="نوع سند">
         <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] ${badge.bg}`}>
           {TYPE_BADGE_ICONS[badgeKind]}
           <span>{badge.label}</span>
@@ -47,59 +47,59 @@ export function InvoiceListRow({ doc, actions }: { doc: InvoiceListDocument; act
       </td>
 
       {/* Status */}
-      <td className="p-3 whitespace-nowrap">
+      <td className="p-3 whitespace-nowrap" data-label="وضعیت">
         {doc.status === 'proforma' ? (
-          <span className="bg-amber-100 text-amber-900 border border-amber-200 px-2 py-0.5 rounded-full text-[10px] font-bold">
+          <span className="bg-amber-100 text-amber-900 border border-amber-200 px-2 py-0.5 rounded-full text-[11px] font-bold">
             پیش‌فاکتور
           </span>
         ) : doc.status === 'draft' ? (
-          <span className="bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded-full text-[10px] font-bold">
+          <span className="bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded-full text-[11px] font-bold">
             پیش‌نویس
           </span>
         ) : (
-          <span className="bg-emerald-100 text-emerald-900 border border-emerald-200 px-2 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1">
+          <span className="bg-emerald-100 text-emerald-900 border border-emerald-200 px-2 py-0.5 rounded-full text-[11px] font-bold inline-flex items-center gap-1">
             <CheckCircle2 size={10} /> نهایی
           </span>
         )}
       </td>
 
       {/* Date */}
-      <td className="p-3 font-mono text-slate-600 font-medium whitespace-nowrap" dir="ltr">
+      <td className="p-3 font-mono text-slate-600 font-medium whitespace-nowrap" dir="ltr" data-label="تاریخ">
         {formatPersianDate(doc.date)}
       </td>
 
       {/* Party Name */}
-      <td className="p-3">
+      <td className="p-3" data-label="طرف حساب">
         {doc.buyer_name ? (
           <div>
             <span className="font-bold text-slate-800 block text-xs">
               {partyLabelOf(doc, figures)}
             </span>
             {(doc.buyer_phone || doc.buyer_city) && (
-              <span className="text-[10px] text-slate-500 font-mono">
+              <span className="text-[11px] text-slate-500 font-mono">
                 {[doc.buyer_city, doc.buyer_phone].filter(Boolean).join(' - ')}
               </span>
             )}
           </div>
         ) : (
-          <span className="text-slate-400 font-medium">-</span>
+          <span className="text-slate-500 font-medium">-</span>
         )}
       </td>
 
       {/* Quantity & Items Count */}
-      <td className="p-3 text-center whitespace-nowrap">
+      <td className="p-3 text-center whitespace-nowrap" data-phone="hide">
         <div className="inline-block bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
           <span className="font-bold text-slate-800 block font-mono text-xs">
             {formatPersianNumber(itemsCount)} ردیف
           </span>
-          <span className="text-[10px] text-slate-500 block font-mono">
+          <span className="text-[11px] text-slate-500 block font-mono">
             {formatPersianNumber(totalQty)} واحد
           </span>
         </div>
       </td>
 
       {/* Total Value / Amount */}
-      <td className="p-3 whitespace-nowrap">
+      <td className="p-3 whitespace-nowrap" data-label="مبلغ سند">
         {totalDocAmount > 0 ? (
           <div>
             <strong className={`font-mono text-xs font-black block ${
@@ -107,10 +107,10 @@ export function InvoiceListRow({ doc, actions }: { doc: InvoiceListDocument; act
             }`}>
               {formatPersianPrice(totalDocAmount, undefined, amountDecimalsOf(doc.currency))}
             </strong>
-            <span className="text-[10px] text-slate-500 font-normal">{currencyLabel}</span>
+            <span className="text-[11px] text-slate-500 font-normal">{currencyLabel}</span>
           </div>
         ) : (
-          <span className="text-slate-400 font-mono text-[11px]">-</span>
+          <span className="text-slate-500 font-mono text-[11px]">-</span>
         )}
       </td>
 

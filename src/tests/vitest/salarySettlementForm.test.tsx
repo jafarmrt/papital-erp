@@ -5,7 +5,7 @@ import { isSalarySettlementPayment } from '../../lib/treasury/partyPurpose';
 
 afterEach(cleanup);
 
-const SETTLEMENT_OPTION = 'تسویه حقوق و دستمزد → «حقوق پرداختنی»';
+const SETTLEMENT_OPTION = 'تسویه حقوق و دستمزد ← «حقوق پرداختنی»';
 
 const fields = (isReceipt: boolean) => render(
   <PartyPurposeFields partyType="personnel" purpose="" contraAccountId={null} isReceipt={isReceipt} settlementViaPayslipOnly onChange={() => undefined} />,

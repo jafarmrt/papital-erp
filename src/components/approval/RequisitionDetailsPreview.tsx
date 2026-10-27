@@ -5,9 +5,9 @@ import { PillBadge, type PillBadgeVariant, type PillBadgeVariants } from '../com
 
 // v7.0.86 (TD-108): نشان اولویت و وضعیت ساده‌شده درخواست خرید در صندوق تایید
 const PREVIEW_PRIORITY_BADGES: PillBadgeVariants = {
-  urgent: { label: 'فوری / اضطراری', icon: AlertTriangle, iconClassName: 'w-3 h-3', className: 'px-2 py-0.5 bg-rose-500 text-white font-black rounded text-[10px] flex items-center gap-1 animate-pulse' },
-  high: { label: 'اولویت بالا', className: 'px-2 py-0.5 bg-amber-500 text-slate-950 font-bold rounded text-[10px]' },
-  low: { label: 'اولویت پایین', className: 'px-2 py-0.5 bg-slate-200 dark:bg-gray-700 text-slate-700 dark:text-gray-300 font-bold rounded text-[10px]' },
+  urgent: { label: 'اولویت فوری', icon: AlertTriangle, iconClassName: 'w-3 h-3', className: 'px-2 py-0.5 bg-rose-500 text-white font-black rounded text-[10px] flex items-center gap-1 animate-pulse' },
+  high: { label: 'اولویت زیاد', className: 'px-2 py-0.5 bg-amber-500 text-slate-950 font-bold rounded text-[10px]' },
+  low: { label: 'اولویت کم', className: 'px-2 py-0.5 bg-slate-200 dark:bg-gray-700 text-slate-700 dark:text-gray-300 font-bold rounded text-[10px]' },
 };
 const PREVIEW_PRIORITY_FALLBACK: PillBadgeVariant = { label: 'اولویت عادی', className: 'px-2 py-0.5 bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 font-bold rounded text-[10px]' };
 

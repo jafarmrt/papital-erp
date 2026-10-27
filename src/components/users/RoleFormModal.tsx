@@ -135,7 +135,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
           id: editingRole.id,
           body: isFixedAdmin ? { name: roleForm.name, description: roleForm.description } : roleForm,
         });
-        toast.success('نقش و ماتریس دسترسی با موفقیت بروزرسانی شد');
+        toast.success('نقش و ماتریس دسترسی با موفقیت به‌روزرسانی شد');
       } else {
         await saveRoleMutation.mutateAsync({ id: null, body: roleForm });
         toast.success('نقش جدید با موفقیت ایجاد شد');

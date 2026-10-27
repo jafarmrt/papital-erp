@@ -256,7 +256,7 @@ export function PartyLedgerReportView({
             <button
               onClick={handleExportExcel}
               disabled={!reportData || !reportData.items?.length}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition disabled:opacity-40 shadow-sm"
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition disabled:opacity-40 shadow-sm"
             >
               <Download className="w-3.5 h-3.5" />
               <span>خروجی اکسل</span>
@@ -774,11 +774,11 @@ export function PartyLedgerReportView({
             {/* Official Signatures Block for Print */}
             <div className="grid grid-cols-2 gap-8 pt-8 border-t border-slate-200 dark:border-slate-700 mt-6 text-center text-xs">
               <div className="space-y-12">
-                <span className="font-bold text-slate-700 dark:text-slate-300">امضا و تایید صادرکننده صورت‌حساب (امور مالی):</span>
+                <span className="font-bold text-slate-700 dark:text-slate-300">امضا و تأیید صادرکننده صورت‌حساب (امور مالی):</span>
                 <div className="border-b border-dashed border-slate-300 dark:border-slate-600 w-48 mx-auto" />
               </div>
               <div className="space-y-12">
-                <span className="font-bold text-slate-700 dark:text-slate-300">امضا و تایید صحت مانده توسط طرف‌حساب:</span>
+                <span className="font-bold text-slate-700 dark:text-slate-300">امضا و تأیید صحت مانده توسط طرف‌حساب:</span>
                 <div className="border-b border-dashed border-slate-300 dark:border-slate-600 w-48 mx-auto" />
               </div>
             </div>

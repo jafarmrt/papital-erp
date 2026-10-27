@@ -97,7 +97,7 @@ describe('voucher list is paged and filtered on the server (TD-565)', () => {
     fireEvent.click(screen.getByTitle('صفحه بعد'));
     await screen.findByText('سند آزمون 22');
     fireEvent.click(rowCheckbox('سند آزمون 22'));
-    fireEvent.click(screen.getByText(/تایید حسابداری/));
+    fireEvent.click(screen.getByText(/تأیید حسابداری/));
     await waitFor(() => expect(onBatchApproveVouchers).toHaveBeenCalledTimes(1));
     expect([...(onBatchApproveVouchers.mock.calls[0] as unknown as [number[]])[0]].sort((a, b) => a - b)).toEqual([3, 22]);
   });

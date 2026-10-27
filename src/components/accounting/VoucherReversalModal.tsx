@@ -76,7 +76,7 @@ export function VoucherReversalModal({
         <div className="flex items-start gap-3 p-3.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-xl text-xs text-amber-900 dark:text-amber-200">
           <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
           <div className="leading-relaxed">
-            <span className="font-bold">حفظ سلامت دفاتر مالی:</span> بر اساس استانداردهای رسمی حسابداری، اسناد تاییدشده برای پیشگیری از ناهماهنگی دفاتر، مستقیماً حذف نمی‌شوند؛ بلکه با صدور یک سند برگشتی متوازن، ردیف‌های بدهکار و بستانکار خنثی شده و سند اصلی بدون ایجاد مغایرت، ابطال می‌گردد.
+            <span className="font-bold">حفظ سلامت دفاتر مالی:</span> بر اساس استانداردهای رسمی حسابداری، اسناد تأییدشده برای پیشگیری از ناهماهنگی دفاتر، مستقیماً حذف نمی‌شوند؛ بلکه با صدور یک سند برگشتی متوازن، ردیف‌های بدهکار و بستانکار خنثی شده و سند اصلی بدون ایجاد مغایرت، ابطال می‌گردد.
           </div>
         </div>
 
@@ -164,8 +164,8 @@ export function VoucherReversalModal({
                 <thead>
                   <tr className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[11px] border-b border-slate-200 dark:border-slate-700">
                     <th className="py-2 px-2.5">عنوان حساب</th>
-                    <th className="py-2 px-2.5 text-left text-rose-600 dark:text-rose-400">بدهکار قبلی → بستانکار جدید</th>
-                    <th className="py-2 px-2.5 text-left text-emerald-600 dark:text-emerald-400">بستانکار قبلی → بدهکار جدید</th>
+                    <th className="py-2 px-2.5 text-left text-rose-600 dark:text-rose-400">بدهکار قبلی ← بستانکار جدید</th>
+                    <th className="py-2 px-2.5 text-left text-emerald-600 dark:text-emerald-400">بستانکار قبلی ← بدهکار جدید</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -215,7 +215,7 @@ export function VoucherReversalModal({
               className="flex items-center gap-1.5 px-5 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition shadow-md shadow-amber-900/20 cursor-pointer"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>{isSubmitting ? 'در حال ثبت سند برگشتی...' : 'تایید و صدور سند برگشتی (ابطال سند)'}</span>
+              <span>{isSubmitting ? 'در حال ثبت سند برگشتی...' : 'تأیید و صدور سند برگشتی (ابطال سند)'}</span>
             </button>
           </div>
         </form>

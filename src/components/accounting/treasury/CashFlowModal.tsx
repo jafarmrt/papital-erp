@@ -49,7 +49,7 @@ export const CashFlowModal: React.FC<CashFlowModalProps> = ({
           </h3>
           <button aria-label="بستن"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            className="text-slate-500 hover:text-slate-600 dark:hover:text-slate-200"
           >
             <X size={18} />
           </button>
@@ -85,7 +85,7 @@ export const CashFlowModal: React.FC<CashFlowModalProps> = ({
         </div>
 
         {isLoading ? (
-          <div className="py-12 text-center text-xs text-slate-400">در حال محاسبه و تجمیع داده‌های جریان نقد...</div>
+          <div className="py-12 text-center text-xs text-slate-500">در حال محاسبه و تجمیع داده‌های جریان نقد...</div>
         ) : report ? (
           <div className="space-y-4">
             {/* KPI Cards */}
@@ -157,7 +157,7 @@ export const CashFlowModal: React.FC<CashFlowModalProps> = ({
             )}
           </div>
         ) : (
-          <div className="py-8 text-center text-xs text-slate-400">اطلاعاتی برای نمایش وجود ندارد.</div>
+          <div className="py-8 text-center text-xs text-slate-500">اطلاعاتی برای نمایش وجود ندارد.</div>
         )}
 
         <div className="flex justify-end mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">

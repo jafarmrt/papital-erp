@@ -80,7 +80,7 @@ export function ManualPurchaseList({
             <button
               type="button"
               onClick={() => setIsCreateOrderModalOpen(true)}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-98"
+              className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-98"
               title="ثبت سند پیش‌نویس سفارش خرید یا پیش‌فاکتور برای کسری‌های این پروژه"
             >
               <FilePlus className="w-4 h-4 text-emerald-100" />
@@ -126,7 +126,7 @@ export function ManualPurchaseList({
             href="/invoices"
             target="_blank"
             rel="noreferrer"
-            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-lg flex items-center gap-1 transition-colors shrink-0 shadow-2xs"
+            className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] rounded-lg flex items-center gap-1 transition-colors shrink-0 shadow-2xs"
           >
             <span>مشاهده در فاکتورها</span>
             <ExternalLink className="w-3.5 h-3.5" />

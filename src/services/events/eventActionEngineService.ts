@@ -493,7 +493,7 @@ export class EventActionEngineService {
             targetPermission: 'warehouse.view',
             titleTemplate: 'هشدار کسری موجودی کالا',
             messageTemplate: 'موجودی کالای {{payload.itemName}} (کد {{payload.itemCode}}) در انبار {{payload.warehouseLocation}} به {{payload.currentStock}} واحد کاهش یافته است.',
-            linkTemplate: '/items',
+            linkTemplate: '/products',
             notifType: 'system'
           },
           isActive: 1
@@ -510,7 +510,7 @@ export class EventActionEngineService {
             targetRole: SYSTEM_ADMIN_ROLE,
             titleTemplate: 'درخواست تایید فرآیند جدید',
             messageTemplate: 'فرآیند {{payload.workflowCode}} برای {{payload.entityType}} شماره {{payload.entityId}} وارد مرحله تایید شد.',
-            linkTemplate: '/workflow-inbox',
+            linkTemplate: '/approval-inbox',
             notifType: 'system'
           },
           isActive: 1

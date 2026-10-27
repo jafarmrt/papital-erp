@@ -261,7 +261,7 @@ router.post(
         action: 'UPDATE',
         entity: 'انبارداری و موجودی',
         entityId: String(itemId),
-        description: `بازسازی و تطبیق کاردکس کالای شناسه ${itemId} (موجودی قبل: ${singleResult.beforeStock} -> موجودی بعد: ${singleResult.afterStock})`,
+        description: `بازسازی و تطبیق کاردکس کالای شناسه ${itemId} (موجودی قبل: ${singleResult.beforeStock} ← موجودی بعد: ${singleResult.afterStock})`,
         details: singleResult
       });
 

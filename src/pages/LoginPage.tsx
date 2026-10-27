@@ -179,7 +179,7 @@ export default function LoginPage({ onLogin, notice }: LoginPageProps) {
                 disabled={isLocked}
                 className="w-full pr-10 pl-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-400" 
                 dir="ltr"
-                placeholder="کلمه عبور"
+                placeholder="رمز عبور"
               />
               <button
                 type="button"

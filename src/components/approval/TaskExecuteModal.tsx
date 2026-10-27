@@ -195,14 +195,15 @@ export function TaskExecuteModal({
           <div>
             <label htmlFor={`${fieldId}-comment`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1">
               <MessageSquare className="w-3.5 h-3.5 text-indigo-500" />
-              {/* v10.0.148 (TD-1179): رد بی دلیل ثبت نمی‌شود؛ برچسب دیگر «اختیاری» نمی‌گوید */}
-              {taskAction === 'reject' ? 'دلیل رد (الزامی):' : 'دستور / توضیحات مدیر (اختیاری):'}
+              {/* v10.0.148 (TD-1179): رد بی دلیل ثبت نمی‌شود؛ برچسب دیگر «اختیاری» نمی‌گوید. v11 phase 6.3b (U22): «مدیر» went;
+                  the one who signs is not always a manager (the sales clerk signs the proforma's first step) */}
+              {taskAction === 'reject' ? 'دلیل رد (الزامی):' : 'دستور / توضیحات (اختیاری):'}
             </label>
             <textarea
               id={`${fieldId}-comment`}
               value={comment}
               onChange={(e) => onCommentChange(e.target.value)}
-              placeholder={isRequisition ? "دستور خرید یا تامین‌کننده مدنظر و دلایل تایید/رد..." : "توضیحات تایید کالا، بررسی موجودی، یا دلیل رد را در اینجا درج کنید..."}
+              placeholder={isRequisition ? "دستور خرید یا تامین‌کننده مدنظر و دلایل تأیید یا رد..." : "توضیحات تأیید کالا، بررسی موجودی، یا دلیل رد را در اینجا درج کنید..."}
               className="w-full text-sm sm:text-xs p-2.5 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               rows={3}
             />

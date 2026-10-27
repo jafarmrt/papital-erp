@@ -64,7 +64,7 @@ export function DailyLogsMentionsWidget({
             <h2 className="text-sm font-extrabold text-slate-800 flex items-center gap-2">
               <span>اشاره‌ها و ارجاعات کار روزانه</span>
               {mentionedLogs.length > 0 && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-600 text-white">
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-600 text-white">
                   {toPersianDigits(mentionedLogs.length)} ارجاع
                 </span>
               )}
@@ -89,7 +89,7 @@ export function DailyLogsMentionsWidget({
             <Clock size={14} className="text-blue-600" />
             <span>کارکرد ثبت‌شده امروز شما:</span>
             <span className="text-blue-700 font-extrabold">{toPersianDigits(todayHours)} ساعت</span>
-            <span className="text-[10px] text-slate-400 font-normal">از ۸ ساعت استاندارد</span>
+            <span className="text-[11px] text-slate-500 font-normal">از ۸ ساعت استاندارد</span>
           </div>
 
           {/* Progress Bar */}
@@ -122,11 +122,11 @@ export function DailyLogsMentionsWidget({
             placeholder="جست‌وجو در متن گزارش، همکار یا پروژه..."
             className="w-full pl-8 pr-8 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 text-slate-700"
           />
-          <Search size={13} className="absolute right-2.5 top-2.5 text-slate-400" />
+          <Search size={13} className="absolute right-2.5 top-2.5 text-slate-500" />
           {searchQuery && (
             <button aria-label="پاک کردن جست‌وجو"
               onClick={() => setSearchQuery('')}
-              className="absolute left-2.5 top-2 text-slate-400 hover:text-slate-600"
+              className="absolute left-2.5 top-2 text-slate-500 hover:text-slate-600"
             >
               <X size={13} />
             </button>
@@ -144,16 +144,16 @@ export function DailyLogsMentionsWidget({
           </div>
         ) : mentionedLogs.length === 0 ? (
           <div className="text-center py-7 px-4 bg-slate-50/70 border border-slate-100 rounded-2xl">
-            <div className="w-10 h-10 mx-auto rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-2">
+            <div className="w-10 h-10 mx-auto rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mb-2">
               <MessageSquare size={18} />
             </div>
             <p className="text-xs font-bold text-slate-700">هیچ اشاره تازه‌ای ندارید</p>
-            <p className="text-[11px] text-slate-400 mt-1">
+            <p className="text-[11px] text-slate-500 mt-1">
               وقتی همکاران در ثبت کارهای روزانه از نام کاربری شما استفاده کنند، اینجا نمایش داده می‌شود.
             </p>
           </div>
         ) : displayedLogs.length === 0 && searchQuery ? (
-          <div className="text-center py-6 text-slate-400 text-xs bg-slate-50 rounded-2xl">
+          <div className="text-center py-6 text-slate-500 text-xs bg-slate-50 rounded-2xl">
             موردی مطابق با «{searchQuery}» در اشاره‌ها پیدا نشد.
           </div>
         ) : (
@@ -169,7 +169,7 @@ export function DailyLogsMentionsWidget({
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold shrink-0">
+                    <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[11px] font-bold shrink-0">
                       <User size={12} />
                     </div>
                     <span className="font-bold text-xs text-slate-800 truncate">
@@ -177,7 +177,7 @@ export function DailyLogsMentionsWidget({
                     </span>
                   </div>
 
-                  <span className="text-[10px] text-slate-400 font-medium shrink-0">
+                  <span className="text-[11px] text-slate-500 font-medium shrink-0">
                     📅 {formatPersianDate(logDate)}
                   </span>
                 </div>
@@ -189,7 +189,7 @@ export function DailyLogsMentionsWidget({
                 {/* Tags and Projects */}
                 <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-100">
                   {log.projectName && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-100">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-medium bg-purple-50 text-purple-700 border border-purple-100">
                       <Briefcase size={10} />
                       {log.projectName}
                     </span>
@@ -198,7 +198,7 @@ export function DailyLogsMentionsWidget({
                     log.tags.slice(0, 3).map((tag, idx) => (
                       <span
                         key={idx}
-                        className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-lg text-[10px] font-medium bg-slate-200/70 text-slate-700"
+                        className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-lg text-[11px] font-medium bg-slate-200/70 text-slate-700"
                       >
                         <Tag size={9} />
                         {tag}

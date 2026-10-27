@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type Dispatch, type KeyboardEvent, type SetStateAction } from 'react';
 
 /**
  * Keyboard of a pick list (v10.2.27, TD-1325, OBS-R2-93), used by `SearchableSelect`: the arrow keys move the active
@@ -17,6 +17,15 @@ export function nextEnabledOption(options: readonly PickListOption[], from: numb
     if (!options[index]?.disabled) return index;
   }
   return -1;
+}
+
+/**
+ * v11 phase 6.3b (U23): the letter a key types, or '' for a key that types none (Space presses the button, so it is none
+ * here). A letter typed on the picker's button opens the list with that letter in the search: a fast typist or a barcode
+ * scanner lost or reordered the first letter while the search box was still mounting.
+ */
+export function typedLetterOf(event: { key: string; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean }): string {
+  return event.key.length === 1 && event.key !== ' ' && !event.ctrlKey && !event.metaKey && !event.altKey ? event.key : '';
 }
 
 export function usePickListKeys<T extends PickListOption>({ isOpen, options, onPick, onClose }: {
@@ -62,4 +71,45 @@ export function usePickListKeys<T extends PickListOption>({ isOpen, options, onP
     activeDescendant: activeIndex >= 0 && options[activeIndex] ? optionId(activeIndex) : undefined,
     onKeyDown,
   };
+}
+
+/**
+ * The keys of a pick list's closed or open button and the focus of its search box (`SearchableSelect`): ArrowDown and
+ * ArrowUp open the list, Enter runs `onEnter` on a closed list, and (v11 phase 6.3b, U23) a letter opens the list with
+ * that letter in the search, or adds it to the search of an open list whose button still has the focus. The search box
+ * takes the focus in the same commit that shows it, with the caret after what the opening letter put there, so the next
+ * key lands in it; before, a fast typist's «پارسیان» became «ارسیانپ».
+ */
+export function usePickListButton({ isOpen, open, setSearch, setActiveIndex, onEnter }: {
+  isOpen: boolean;
+  open: () => void;
+  setSearch: Dispatch<SetStateAction<string>>;
+  setActiveIndex: (index: number) => void;
+  onEnter?: () => void;
+}) {
+  const searchRef = useRef<HTMLInputElement>(null);
+  useLayoutEffect(() => {
+    const input = searchRef.current;
+    if (!isOpen || !input) return;
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }, [isOpen]);
+
+  const onButtonKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const letter = typedLetterOf(event);
+    if (letter) {
+      event.preventDefault();
+      if (!isOpen) open();
+      setSearch(current => (isOpen ? current : '') + letter);
+      setActiveIndex(0);
+      searchRef.current?.focus();
+    } else if (!isOpen && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+      event.preventDefault();
+      open();
+    } else if (!isOpen && event.key === 'Enter' && onEnter) {
+      event.preventDefault();
+      onEnter();
+    }
+  };
+  return { searchRef, onButtonKeyDown };
 }

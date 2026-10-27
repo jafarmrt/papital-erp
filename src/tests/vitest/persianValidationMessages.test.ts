@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import type { Request, Response } from 'express';
 import { validate } from '../../middleware/validate';
+import { UNLABELLED_FIELD } from '../../lib/validationMessages';
 
 async function messageFor(schema: z.ZodType, input: { body?: unknown; query?: unknown; params?: unknown }): Promise<{ status: number; message: string; issues: string[] }> {
   const req = { body: input.body ?? {}, query: input.query ?? {}, params: input.params ?? {} } as unknown as Request;
@@ -55,7 +56,7 @@ describe('TD-529 Persian validation messages', () => {
     expect(short.issues).toEqual(['رمز عبور باید دست‌کم ۶ نویسه باشد']);
   });
 
-  it('no message has Latin text except a raw untranslated field name', async () => {
+  it('no message has Latin text, an unlabelled field included', async () => {
     const r = await messageFor(mixed, { body: {
       quantity: -1, price: 5000, status: 'open', email: 'not-mail', items: [], amount: true, discountCode: 5, notes: 'longer text', extra: 1,
     } });
@@ -65,7 +66,9 @@ describe('TD-529 Persian validation messages', () => {
     expect(latinOutsideFieldNames(r.message)).toEqual([]);
     expect(r.issues).toContain('مقدار / تعداد باید بیشتر از ۰ باشد');
     expect(r.issues).toContain('یکی از گزینه‌های مجاز را برای وضعیت انتخاب کنید');
-    expect(r.issues).toContain('«discountCode» باید متن باشد');
+    // v11 phase 6.3b: an unlabelled field no longer shows its raw key
+    expect(r.issues).toContain(`${UNLABELLED_FIELD} باید متن باشد`);
+    expect(r.message).not.toContain('discountCode');
   });
 
   it('a message written by the schema itself is kept', async () => {

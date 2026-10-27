@@ -223,9 +223,9 @@ export function CRMLeadDrawer({
               <button
                 onClick={() => onOpenActivityModal(selectedLeadDrawer, 'whatsapp')}
                 className="px-2 py-0.5 bg-white hover:bg-emerald-50 text-emerald-700 border border-slate-200 hover:border-emerald-300 rounded-md transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
-                title="ثبت واتساپ"
+                title="ثبت واتس‌اپ"
               >
-                💬 <span className="text-[10px]">واتساپ</span>
+                💬 <span className="text-[10px]">واتس‌اپ</span>
               </button>
               <button
                 onClick={() => onOpenActivityModal(selectedLeadDrawer, 'email')}
@@ -253,7 +253,7 @@ export function CRMLeadDrawer({
             {onConvertToInvoice && selectedLeadDrawer.stage === 'proposal' && (
               <button
                 onClick={() => onConvertToInvoice(selectedLeadDrawer)}
-                className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-[10px] font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs"
+                className="px-2 py-0.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-md text-[10px] font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs"
                 title="تبدیل به پیش‌فاکتور رسمی"
               >
                 <FileText size={11} />

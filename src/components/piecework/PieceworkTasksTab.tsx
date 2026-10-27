@@ -212,7 +212,7 @@ export function PieceworkTasksTab({
                 {canManageTasks && (
                   <button
                     onClick={onOpenExcelModal}
-                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl text-xs font-black transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                    className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 active:scale-98 text-white rounded-xl text-xs font-black transition-all shadow-md flex items-center gap-2 cursor-pointer"
                   >
                     <Upload size={16} />
                     <span>بارگذاری از طریق فایل اکسل</span>

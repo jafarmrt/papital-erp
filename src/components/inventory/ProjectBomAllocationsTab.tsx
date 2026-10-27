@@ -88,7 +88,7 @@ export function ProjectBomAllocationsTab(_props: ProjectBomAllocationsTabProps) 
           <button
             onClick={() => void exportExcel()}
             disabled={exporting}
-            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
+            className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
           >
             <Download size={15} />
             <span>خروجی اکسل</span>

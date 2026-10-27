@@ -253,7 +253,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
             <li>در پیشخوان وردپرس به مسیر <strong>ووکامرس &gt; پیکربندی &gt; پیشرفته &gt; وب‌هوک‌ها (Webhooks)</strong> بروید.</li>
             <li>روی دکمه <strong>«افزودن وب‌هوک»</strong> کلیک کنید.</li>
             <li><strong>نام:</strong> دلخواه (مثلاً: <code>همگام‌سازی فاکتور انبار</code>)، <strong>وضعیت:</strong> <code>فعال (Active)</code>.</li>
-            <li><strong>موضوع (Topic):</strong> حتماً <code>سفارش بروزرسانی شد (Order Updated)</code> را انتخاب کنید؛ فاکتور فقط پس از پرداخت (وضعیت «در حال انجام» یا «تکمیل‌شده») صادر و با لغو سفارش ابطال می‌شود و این تغییر وضعیت‌ها فقط با این موضوع ارسال می‌شوند. افزودن وب‌هوک جداگانه برای <code>سفارش ایجاد شد</code> اختیاری است.</li>
+            <li><strong>موضوع (Topic):</strong> حتماً <code>سفارش به‌روزرسانی شد (Order Updated)</code> را انتخاب کنید؛ فاکتور فقط پس از پرداخت (وضعیت «در حال انجام» یا «تکمیل‌شده») صادر و با لغو سفارش ابطال می‌شود و این تغییر وضعیت‌ها فقط با این موضوع ارسال می‌شوند. افزودن وب‌هوک جداگانه برای <code>سفارش ایجاد شد</code> اختیاری است.</li>
             <li><strong>نشانی تحویل (Delivery URL):</strong> نشانی وب‌هوک را که در بالا کپی کردید بچسبانید.</li>
             <li><strong>کد محرمانه (Secret):</strong> همان کدی را که در کادر بالا وارد کردید بگذارید؛ بدون این کد سفارش‌ها پردازش نمی‌شوند.</li>
           </ol>
@@ -280,7 +280,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
           <button
             onClick={handleSyncAllStocks}
             disabled={isSyncingAllStocks || isSaving}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 px-4 rounded-lg text-xs shadow-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-medium py-2.5 px-4 rounded-lg text-xs shadow-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {isSyncingAllStocks ? (
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -370,7 +370,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
                   <th className="p-3 font-semibold">وضعیت پردازش</th>
                   <th className="p-3 font-semibold">نام خریدار</th>
                   <th className="p-3 font-semibold">فاکتور صادرشده در سامانه</th>
-                  <th className="p-3 font-semibold">زمان بروزرسانی</th>
+                  <th className="p-3 font-semibold">زمان به‌روزرسانی</th>
                   <th className="p-3 font-semibold">جزئیات / خطا</th>
                 </tr>
               </thead>

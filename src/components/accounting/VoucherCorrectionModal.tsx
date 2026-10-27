@@ -247,7 +247,7 @@ export function VoucherCorrectionModal({
           <div className="flex items-start gap-3 p-3.5 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 rounded-xl text-xs text-blue-900 dark:text-blue-200">
             <AlertTriangle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
             <div className="leading-relaxed">
-              <span className="font-bold">فرایند استاندارد اصلاح اسناد حسابداری:</span> در حسابداری حرفه‌ای، اسناد تاییدشده هرگز دستکاری یا بازنویسی مستقیم نمی‌شوند؛ با تایید این فرم:
+              <span className="font-bold">فرایند استاندارد اصلاح اسناد حسابداری:</span> در حسابداری حرفه‌ای، اسناد تأییدشده هرگز دستکاری یا بازنویسی مستقیم نمی‌شوند؛ با تأیید این فرم:
               <ul className="list-disc list-inside mt-1 space-y-0.5 text-[11px] opacity-90">
                 <li>یک سند برگشتی خودکار صادر شده تا اثر مالی سند قبلی را در دفاتر کل خنثی سازد.</li>
                 <li>سند اصلاحی جدید با ردیف‌های زیر و ارجاع مستقیم به سند مبدا پیش‌نویس ثبت می‌شود و مانند هر سند دستی، پس از تأیید در دفاتر می‌آید.</li>
@@ -498,7 +498,7 @@ export function VoucherCorrectionModal({
               className="flex items-center gap-1.5 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition shadow-md shadow-blue-900/20 cursor-pointer"
             >
               <Save className="w-4 h-4" />
-              <span>{isSubmitting ? 'در حال صدور سند معکوس و اصلاحیه...' : 'تایید و صدور اسناد اصلاحی'}</span>
+              <span>{isSubmitting ? 'در حال صدور سند معکوس و اصلاحیه...' : 'تأیید و صدور اسناد اصلاحی'}</span>
             </button>
           </div>
         </form>

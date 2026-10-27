@@ -12,7 +12,7 @@ export function CustomerTagChips({ tags }: { tags: ReadonlyArray<{ id: number; n
   return (
     <ul className="flex flex-wrap gap-1 mt-1" aria-label="برچسب‌ها">
       {tags.map((t) => (
-        <li key={t.id} data-customer-tag={t.id} className={`px-1.5 py-0.5 rounded-md border text-[10px] font-bold ${tagColorClass(t.color)}`}>
+        <li key={t.id} data-customer-tag={t.id} className={`px-1.5 py-0.5 rounded-md border text-[11px] font-bold ${tagColorClass(t.color)}`}>
           {t.name}
         </li>
       ))}
@@ -34,7 +34,7 @@ export function CustomerTagFilter({ tags, value, onChange, id = 'customer-tag-fi
   if (tags.length === 0) return null;
   return (
     <label htmlFor={id} className={`flex items-center gap-1.5 text-xs text-slate-600 ${className}`}>
-      <Tag size={14} className="text-slate-400 shrink-0" />
+      <Tag size={14} className="text-slate-500 shrink-0" />
       <span className="sr-only">برچسب</span>
       <select
         id={id}

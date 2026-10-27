@@ -254,12 +254,16 @@ export function lineLocationOf(line: Pick<InvoiceDocItem, 'location'>, headerLoc
   return line.location || headerLocation;
 }
 
-/** افزودن ردیف: کالای تکراری در همان انبار به مقدار ردیف موجود اضافه می‌شود، در انبار دیگر ردیف تازه است */
+/**
+ * افزودن ردیف: کالای تکراری در همان انبار به مقدار ردیف موجود اضافه می‌شود، در انبار دیگر ردیف تازه است. v11 phase 6.3b
+ * (U26): the merged line takes the picker's item, which carries today's stock figures, over one read back from the
+ * stored proforma, which carries none
+ */
 export function addInvoiceLine(lines: InvoiceDocItem[], line: InvoiceDocItem, headerLocation: string): InvoiceDocItem[] {
   const target = lineLocationOf(line, headerLocation);
   const index = lines.findIndex(p => p.item.id === line.item.id && lineLocationOf(p, headerLocation) === target);
   if (index < 0) return [...lines, line];
-  return lines.map((p, i) => (i === index ? { ...p, quantity: p.quantity + line.quantity } : p));
+  return lines.map((p, i) => (i === index ? { ...p, item: { ...p.item, ...line.item }, quantity: p.quantity + line.quantity } : p));
 }
 
 /**

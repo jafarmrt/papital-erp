@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useId } from 'react';
+import React, { useState, useEffect, useEffectEvent, useRef, useId } from 'react';
 import { 
   User as UserIcon, Lock, Camera, Check, X, Eye, EyeOff, ShieldCheck, KeyRound, 
   UploadCloud, AlertCircle, RefreshCw, MessageCircle, PartyPopper, MonitorSmartphone
@@ -49,19 +49,22 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
   // v9.0.219 (TD-523، ت۵ الف): با رمز موقت فقط برگه تغییر رمز است؛ نه ×، نه «انصراف» و نه برگه مشخصات، فقط «خروج»
   const requiresPasswordReset = mustChangePassword(user);
 
-  useEffect(() => {
-    if (isOpen) {
-      setFullName(user.full_name || '');
-      setAvatarPreview(user.avatar_url || '');
-      setIsNewAvatarSelected(false);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      if (requiresPasswordReset) {
-        setActiveTab('password');
-      }
+  // v11 phase 6.3b: the form is filled when the window opens, from the user of that render; a new `user` object while it is
+  // open (a refreshed session) no longer clears the typed name and passwords
+  const fillForm = useEffectEvent(() => {
+    setFullName(user.full_name || '');
+    setAvatarPreview(user.avatar_url || '');
+    setIsNewAvatarSelected(false);
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    if (requiresPasswordReset) {
+      setActiveTab('password');
     }
-  }, [isOpen, user, requiresPasswordReset]);
+  });
+  useEffect(() => {
+    if (isOpen) fillForm();
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -136,12 +139,12 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
     if (saving) return;
 
     if (!currentPassword) {
-      toast.error('وارد کردن کلمه عبور فعلی الزامی است');
+      toast.error('وارد کردن رمز عبور فعلی الزامی است');
       return;
     }
 
     if (!newPassword) {
-      toast.error('وارد کردن کلمه عبور جدید الزامی است');
+      toast.error('وارد کردن رمز عبور جدید الزامی است');
       return;
     }
 
@@ -153,7 +156,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
     }
 
     if (newPassword !== confirmPassword) {
-      toast.error('کلمه عبور جدید و تکرار آن یکسان نیستند');
+      toast.error('رمز عبور جدید و تکرار آن یکسان نیستند');
       return;
     }
 
@@ -176,10 +179,10 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
         if (res.user) onUserUpdate(res.user);
         onClose();
       } else {
-        toast.error(res?.error || 'خطا در تغییر کلمه عبور');
+        toast.error(res?.error || 'خطا در تغییر رمز عبور');
       }
     } catch (err) {
-      toast.error(errorMessageOf(err) || 'خطا در تغییر کلمه عبور');
+      toast.error(errorMessageOf(err) || 'خطا در تغییر رمز عبور');
     } finally {
       setSaving(false);
     }
@@ -198,7 +201,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
               </div>
               <div>
                 <h2 className="text-lg font-bold">تنظیمات حساب کاربری</h2>
-                <p className="text-xs text-slate-400">ویرایش مشخصات، تصویر نمایه، کلمه عبور، پیام‌رسان، پیشخوان گروهی و دستگاه‌ها</p>
+                <p className="text-xs text-slate-400">ویرایش مشخصات، تصویر نمایه، رمز عبور، پیام‌رسان، پیشخوان گروهی و دستگاه‌ها</p>
               </div>
             </div>
             {!requiresPasswordReset && (
@@ -235,7 +238,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
               }`}
             >
               <KeyRound className="w-4 h-4" />
-              تغییر کلمه عبور
+              تغییر رمز عبور
             </button>
             <button
               onClick={() => setActiveTab('messenger')}
@@ -413,9 +416,9 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
                 <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5 text-rose-900 animate-pulse">
                   <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                   <div className="leading-relaxed">
-                    <p className="font-bold">کلمه عبور شما موقت است</p>
+                    <p className="font-bold">رمز عبور شما موقت است</p>
                     <p className="text-[11px] text-rose-800 mt-0.5">
-                      این کلمه عبور را مدیر سامانه گذاشته است. تا کلمه عبور تازه‌ای نگذارید، بخش‌های دیگر سامانه باز نمی‌شوند.
+                      این رمز عبور را مدیر سامانه گذاشته است. تا رمز عبور تازه‌ای نگذارید، بخش‌های دیگر سامانه باز نمی‌شوند.
                     </p>
                   </div>
                 </div>
@@ -425,21 +428,21 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
                   <div className="leading-relaxed">
                     <p className="font-bold">امنیت حساب کاربری</p>
                     <p className="text-[11px] text-amber-800 mt-0.5">
-                      پس از تغییر موفق کلمه عبور، تغییرات بلافاصله در تمام سیستم اعمال می‌گردد.
+                      پس از تغییر موفق رمز عبور، تغییرات بلافاصله در تمام سیستم اعمال می‌گردد.
                     </p>
                   </div>
                 </div>
               )}
 
               <div>
-                <label htmlFor={`${fieldId}-current-password`} className="block text-slate-700 font-bold mb-1">کلمه عبور فعلی:</label>
+                <label htmlFor={`${fieldId}-current-password`} className="block text-slate-700 font-bold mb-1">رمز عبور فعلی:</label>
                 <div className="relative">
                   <input
                     id={`${fieldId}-current-password`}
                     type={showCurrentPassword ? 'text' : 'password'}
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="کلمه عبور فعلی خود را وارد کنید..."
+                    placeholder="رمز عبور فعلی خود را وارد کنید..."
                     className="w-full pr-3.5 pl-10 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-left ltr"
                   />
                   <button
@@ -453,7 +456,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
               </div>
 
               <div>
-                <label htmlFor={`${fieldId}-new-password`} className="block text-slate-700 font-bold mb-1">کلمه عبور جدید:</label>
+                <label htmlFor={`${fieldId}-new-password`} className="block text-slate-700 font-bold mb-1">رمز عبور جدید:</label>
                 <div className="relative">
                   <input
                     id={`${fieldId}-new-password`}
@@ -474,13 +477,13 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
               </div>
 
               <div>
-                <label htmlFor={`${fieldId}-confirm-password`} className="block text-slate-700 font-bold mb-1">تکرار کلمه عبور جدید:</label>
+                <label htmlFor={`${fieldId}-confirm-password`} className="block text-slate-700 font-bold mb-1">تکرار رمز عبور جدید:</label>
                 <input
                   id={`${fieldId}-confirm-password`}
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="تکرار کلمه عبور جدید..."
+                  placeholder="تکرار رمز عبور جدید..."
                   className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-left ltr"
                 />
               </div>
@@ -514,12 +517,12 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
                   {saving ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      در حال بروزرسانی...
+                      در حال به‌روزرسانی...
                     </>
                   ) : (
                     <>
                       <Lock className="w-4 h-4" />
-                      تغییر کلمه عبور
+                      تغییر رمز عبور
                     </>
                   )}
                 </button>

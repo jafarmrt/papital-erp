@@ -33,3 +33,24 @@ export function stepperStepStatus(
 export function workflowTakesActions(instanceStatus: string): boolean {
   return instanceStatus === 'IN_PROGRESS' || instanceStatus === 'REJECTED';
 }
+
+/** The end steps that leave the way through (`workflowEndOutcome` on the server: «rejected» and «canceled») */
+const EXIT_END_KEYS: ReadonlySet<string> = new Set(['rejected', 'canceled']);
+
+/**
+ * v11 phase 6.3b (U22): the steps the line shows. An end step that leaves the way through (the rejection or cancel end,
+ * such as «رد شده / لغو شده») shows only when the process reached it; before, it stood as a pending step ۵ after «تأیید
+ * نهایی», and as «تکمیل‌شده» once the document was approved. A design whose end steps carry neither key shows all its
+ * ends as before: which of them is the way through cannot be told from their order.
+ */
+export function stepperVisibleSteps<T extends StepRef & { stateType?: string | null; stateKey?: string | null }>(
+  steps: readonly T[],
+  currentState: StepRef | null | undefined,
+  history: ReadonlyArray<HistoryRef>,
+): T[] {
+  const ends = steps.filter(s => s.stateType === 'terminal');
+  const exits = new Set(ends.filter(s => EXIT_END_KEYS.has(String(s.stateKey ?? ''))).map(s => s.id));
+  return steps.filter(s => !exits.has(s.id)
+    || currentState?.id === s.id
+    || history.some(h => h.toStateId === s.id || h.fromStateId === s.id));
+}

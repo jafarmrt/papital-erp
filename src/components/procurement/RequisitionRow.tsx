@@ -4,7 +4,7 @@ import { formatPersianDate, formatPersianNumber, formatPersianCode } from '../..
 import { PillBadge } from '../common/PillBadge';
 import { REQUISITION_PRIORITY_BADGES, REQUISITION_PRIORITY_FALLBACK, REQUISITION_STATUS_BADGES, REQUISITION_STATUS_FALLBACK } from './requisitionBadges';
 import { canConsolidateRequisition, canDeleteRequisition, canOrderRequisition } from '../../lib/procurement/requisitionFields';
-import { INITIATOR_CANNOT_APPROVE } from '../../lib/procurement/requisitionActions';
+import { INITIATOR_CANNOT_APPROVE, INITIATOR_CANNOT_APPROVE_SHORT } from '../../lib/procurement/requisitionActions';
 import type { ProcurementAccess } from '../../hooks/procurement/useProcurementAccess';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 
@@ -33,7 +33,7 @@ export function RequisitionRow({ req, access, isSelected, onToggleSelect, onView
   return (
     <tr className={`hover:bg-slate-50/70 transition-colors ${isSelected ? 'bg-amber-50/40' : ''}`}>
       {access.canManage && (
-        <td className="p-3 text-center">
+        <td className="p-3 text-center" data-label="انتخاب">
           <input
             type="checkbox"
             checked={isSelected}
@@ -45,7 +45,7 @@ export function RequisitionRow({ req, access, isSelected, onToggleSelect, onView
         </td>
       )}
 
-      <td className="p-3">
+      <td className="p-3" data-phone="title">
         <div className="flex items-center gap-2 mb-1">
           <span className="font-mono font-black text-slate-900 text-sm">{formatPersianCode(req.code)}</span>
           <PillBadge variants={REQUISITION_PRIORITY_BADGES} value={req.priority} fallback={REQUISITION_PRIORITY_FALLBACK} />
@@ -53,7 +53,7 @@ export function RequisitionRow({ req, access, isSelected, onToggleSelect, onView
         <span className="text-[11px] text-slate-400">ثبت: {req.requestedByName || 'نامشخص'}</span>
       </td>
 
-      <td className="p-3">
+      <td className="p-3" data-label="عنوان و پروژه">
         <div className="font-bold text-slate-900 mb-0.5">{req.title}</div>
         {req.projectName ? (
           <div className="flex items-center gap-1 text-[11px] text-blue-700">
@@ -65,25 +65,25 @@ export function RequisitionRow({ req, access, isSelected, onToggleSelect, onView
         )}
       </td>
 
-      <td className="p-3 text-center">
+      <td className="p-3 text-center" data-phone="hide">
         <span className="px-2.5 py-1 bg-slate-100 text-slate-800 rounded-lg font-bold">
           {formatPersianNumber(itemsCount)} قلم
         </span>
       </td>
 
-      <td className="p-3 text-center font-bold text-slate-700">
+      <td className="p-3 text-center font-bold text-slate-700" data-label="تاریخ نیاز">
         {req.requiredDate ? formatPersianDate(req.requiredDate) : '---'}
       </td>
 
-      <td className="p-3 text-center font-black text-amber-800">
+      <td className="p-3 text-center font-black text-amber-800" data-label="برآورد مبلغ">
         {rial.number(req.totalEstimatedAmount || 0)}
       </td>
 
-      <td className="p-3 text-center">
+      <td className="p-3 text-center" data-label="وضعیت گردش کار">
         <PillBadge variants={REQUISITION_STATUS_BADGES} value={req.status} fallback={REQUISITION_STATUS_FALLBACK} />
       </td>
 
-      <td className="p-3 text-center">
+      <td className="p-3 text-center" data-label="فاکتورهای خرید">
         {ordersCount > 0 ? (
           <div className="flex flex-col items-center gap-1">
             <button
@@ -109,7 +109,7 @@ export function RequisitionRow({ req, access, isSelected, onToggleSelect, onView
         )}
       </td>
 
-      <td className="p-3 text-center">
+      <td className="p-3 text-center" data-phone="actions">
         <div className="flex items-center justify-center gap-1.5">
           <button
             type="button"
@@ -137,9 +137,10 @@ export function RequisitionRow({ req, access, isSelected, onToggleSelect, onView
                 <span>تفکیک و صدور فاکتور</span>
               </button>
               {req.initiatorCannotApprove && (
-                <span id={`split-blocked-${req.id}`} className="text-[10px] text-slate-600 max-w-[11rem] leading-snug">
-                  {INITIATOR_CANNOT_APPROVE}
-                </span>
+                <>
+                  <span id={`split-blocked-${req.id}`} className="sr-only">{INITIATOR_CANNOT_APPROVE}</span>
+                  <span aria-hidden="true" className="text-[11px] text-slate-600 leading-snug">{INITIATOR_CANNOT_APPROVE_SHORT}</span>
+                </>
               )}
             </div>
           )}

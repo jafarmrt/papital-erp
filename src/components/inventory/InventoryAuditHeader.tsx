@@ -4,12 +4,14 @@ import { useHasAnyPermission } from '../../contexts/AuthContext';
 import { READ_PERMISSIONS } from '../../lib/recordReadPermissions';
 import { BOM_ALLOCATIONS_TAB_LABEL } from '../../lib/projects/allocationLabels';
 import { formatPersianNumber } from '../../utils';
-import { ActionMenu } from '../ActionMenu';
+import { ActionMenu, type ActionMenuItem } from '../ActionMenu';
+import { usePhoneWidth } from '../../lib/pwa/usePhoneWidth';
 
 /**
  * سربرگ صفحه انبارگردانی: عنوان، دکمه حواله انتقال، منوی سه‌نقطه (بازسازی موجودی) و زبانه‌ها. v11 phase 6.3a (U24): شمارش،
  * زبانه پیش‌فرض صفحه، نخستین زبانه است و بازسازی موجودی که کار نگهداری است در منوی سه‌نقطه می‌آید (AGENTS §6.8)؛ زبانه‌ها
  * در گوشی به سطر بعد می‌روند. پیش‌تر نخستین و پررنگ‌ترین دکمه صفحه شمارش در گوشی «بازسازی موجودی» بود و زبانه چهارم بریده می‌شد.
+ * v11 phase 6.3b: on a phone the transfer is in the same menu too, so counting (the first tab) leads the page.
  */
 
 const TABS: Array<{ id: InventoryAuditTab; label: string; icon: LucideIcon }> = [
@@ -19,6 +21,8 @@ const TABS: Array<{ id: InventoryAuditTab; label: string; icon: LucideIcon }> = 
   { id: 'transfers', label: 'حواله‌های انتقال', icon: ArrowLeftRight },
   { id: 'bom_allocations', label: BOM_ALLOCATIONS_TAB_LABEL, icon: Boxes },
 ];
+
+const TRANSFER_LABEL = 'ثبت حواله انتقال انبار';
 
 interface InventoryAuditHeaderProps {
   activeTab: InventoryAuditTab;
@@ -35,6 +39,11 @@ export const useCanSeeBomAllocations = () => useHasAnyPermission(READ_PERMISSION
 export function InventoryAuditHeader({ activeTab, onTabChange, discrepancyItems, onOpenRebuild, onOpenTransfer }: InventoryAuditHeaderProps) {
   const canSeeAllocations = useCanSeeBomAllocations();
   const tabs = TABS.filter(tab => tab.id !== 'bom_allocations' || canSeeAllocations);
+  const isPhone = usePhoneWidth();
+  const tools: ActionMenuItem[] = [
+    ...(isPhone && onOpenTransfer ? [{ label: TRANSFER_LABEL, icon: ArrowLeftRight, onClick: onOpenTransfer }] : []),
+    ...(onOpenRebuild ? [{ label: 'بازسازی موجودی از روی کاردکس', icon: RotateCcw, onClick: onOpenRebuild, variant: 'warning' as const }] : []),
+  ];
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
@@ -53,23 +62,18 @@ export function InventoryAuditHeader({ activeTab, onTabChange, discrepancyItems,
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {onOpenTransfer && (
+          {onOpenTransfer && !isPhone && (
           <button
             type="button"
             onClick={onOpenTransfer}
             className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
           >
             <ArrowLeftRight size={15} />
-            <span>ثبت حواله انتقال انبار</span>
+            <span>{TRANSFER_LABEL}</span>
           </button>
           )}
 
-          {onOpenRebuild && (
-            <ActionMenu
-              title="ابزارهای موجودی"
-              items={[{ label: 'بازسازی موجودی از روی کاردکس', icon: RotateCcw, onClick: onOpenRebuild, variant: 'warning' }]}
-            />
-          )}
+          <ActionMenu title="ابزارهای موجودی" items={tools} />
         </div>
       </div>
 

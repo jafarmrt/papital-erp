@@ -250,7 +250,7 @@ export function ProcurementDesk() {
                 {countText(summary ? summary.pendingCount + summary.underReviewCount + summary.managerApprovalCount : undefined)} در انتظار تایید
               </span>
               <span className="text-blue-700 font-bold flex items-center gap-1">
-                مرز ۱: تفکیک و صدور فاکتور ➔
+                مرز ۱: تفکیک و صدور فاکتور ← 
               </span>
             </div>
           </button>
@@ -284,7 +284,7 @@ export function ProcurementDesk() {
                 آماده تایید رسید انبار
               </span>
               <span className="text-emerald-700 font-bold flex items-center gap-1">
-                مرز ۲: تحویل به انبار ➔
+                مرز ۲: تحویل به انبار ← 
               </span>
             </div>
           </button>

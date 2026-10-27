@@ -41,11 +41,11 @@ export function VoucherPrimaryActionCell({ status, makerOfVoucher = false, inWor
     return (
       <button
         onClick={onApprove}
-        title="تایید حسابداری سند و انتقال به دفاتر رسمی"
+        title="تأیید حسابداری سند و انتقال به دفاتر رسمی"
         className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-900/60 rounded-lg border border-blue-200 dark:border-blue-800 transition cursor-pointer shadow-xs"
       >
         <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
-        <span>تایید سند</span>
+        <span>تأیید سند</span>
       </button>
     );
   }

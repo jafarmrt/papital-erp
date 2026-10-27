@@ -53,6 +53,12 @@ export function stockInLabels(docType: string | null | undefined): StockInLabels
   return PURCHASE_LABELS;
 }
 
+/**
+ * v11 phase 6.3b (U22): the empty item table of an issue (حواله خروج). It took the purchase receipt's hint and asked for a
+ * purchase price an issue has no field for.
+ */
+export const STOCK_OUT_EMPTY_HINT = 'کالاهای حواله را از کادر بالا جست‌وجو کنید، تعداد را وارد کنید و دکمه افزودن را بزنید.';
+
 /** یادداشت فرم رسید تولید بی پروژه: کجا برای محصول پروژه، بهای واحد و سند حسابداری */
 export const PRODUCTION_RECEIPT_NOTE =
   'محصول پروژه از زبانه «۵. ورود به انبار» همان پروژه وارد انبار می‌شود. بهای واحد فقط بهای مواد است، بی دستمزد؛ اگر خالی بماند، ' +

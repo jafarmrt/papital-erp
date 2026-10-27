@@ -80,7 +80,7 @@ export function SalesSummaryWidget() {
                 <span className="block text-base font-black font-mono text-slate-900 dark:text-white">{amount(data.receivables.total)}</span>
                 <span className="block text-[11px] text-rose-700 dark:text-rose-300">بالای ۹۰ روز: {amount(data.receivables.over90)}</span>
               </span>
-              <ArrowLeft className="w-4 h-4 text-slate-400 shrink-0" aria-hidden />
+              <ArrowLeft className="w-4 h-4 text-slate-500 shrink-0" aria-hidden />
             </button>
           )}
           {data.sales && data.sales.unconvertedDocuments > 0 && (

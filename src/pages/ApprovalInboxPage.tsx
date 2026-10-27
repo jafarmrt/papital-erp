@@ -102,11 +102,11 @@ const INBOX_TAB_ICONS: Readonly<Record<string, typeof FileText>> = {
 };
 
 const APPROVAL_PRIORITY_BASE = 'px-2 py-0.5 rounded-md text-[10px] font-bold border';
-const approvalCritical: PillBadgeVariant = { label: 'اولویت بسیار بالا', className: `${APPROVAL_PRIORITY_BASE} bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800` };
-const approvalHigh: PillBadgeVariant = { label: 'اولویت بالا', className: `${APPROVAL_PRIORITY_BASE} bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200 dark:border-rose-800` };
+const approvalCritical: PillBadgeVariant = { label: 'اولویت خیلی زیاد', className: `${APPROVAL_PRIORITY_BASE} bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800` };
+const approvalHigh: PillBadgeVariant = { label: 'اولویت زیاد', className: `${APPROVAL_PRIORITY_BASE} bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200 dark:border-rose-800` };
 const approvalUrgent: PillBadgeVariant = { label: 'اولویت فوری', className: `${APPROVAL_PRIORITY_BASE} bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800` };
 const approvalNormal: PillBadgeVariant = { label: 'اولویت عادی', className: `${APPROVAL_PRIORITY_BASE} bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-300 border-sky-200 dark:border-sky-800` };
-const approvalLow: PillBadgeVariant = { label: 'اولویت پایین', className: `${APPROVAL_PRIORITY_BASE} bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700` };
+const approvalLow: PillBadgeVariant = { label: 'اولویت کم', className: `${APPROVAL_PRIORITY_BASE} bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700` };
 const APPROVAL_PRIORITY_BADGES: PillBadgeVariants = {
   critical: approvalCritical, 'خیلی زیاد': approvalCritical,
   high: approvalHigh, 'بالا': approvalHigh, 'زیاد': approvalHigh,

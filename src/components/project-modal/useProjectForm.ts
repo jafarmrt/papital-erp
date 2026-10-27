@@ -249,7 +249,7 @@ export function useProjectForm({
       });
 
       if (res && (res.id || res.success)) {
-        toast.success(projectToEdit ? 'پروژه با موفقیت بروزرسانی شد' : 'پروژه تولید جدید با موفقیت ثبت شد');
+        toast.success(projectToEdit ? 'پروژه با موفقیت به‌روزرسانی شد' : 'پروژه تولید جدید با موفقیت ثبت شد');
         onSuccess();
         onClose();
       } else {

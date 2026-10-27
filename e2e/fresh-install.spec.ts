@@ -38,7 +38,7 @@ test('a fresh install has only the system admin role, and a role made from a tem
 
   await page.goto('/');
   await page.getByPlaceholder('نام کاربری').fill(E2E_ADMIN.username);
-  await page.getByPlaceholder('کلمه عبور').fill(E2E_ADMIN.password);
+  await page.getByPlaceholder('رمز عبور').fill(E2E_ADMIN.password);
   await page.getByRole('button', { name: 'ورود به سامانه' }).click();
   await expect(page.getByTitle('خروج از حساب در همین دستگاه')).toBeVisible();
 

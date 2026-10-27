@@ -16,7 +16,7 @@ const PURGEABLE_SECTIONS_TEXT = Object.values(PURGEABLE_AUDIT_ENTITY_LABELS).joi
 
 /** OBS-R1-36: the integrity card when the check could not be read */
 export const INTEGRITY_UNKNOWN = 'نامعلوم';
-export const INTEGRITY_FAILED_MESSAGE = 'وضعیت سجل رویدادها خوانده نشد؛ دکمه «بروزرسانی وضعیت» را بزنید.';
+export const INTEGRITY_FAILED_MESSAGE = 'وضعیت سجل رویدادها خوانده نشد؛ دکمه «به‌روزرسانی وضعیت» را بزنید.';
 
 interface SystemOperationsTabProps {
   onOpenClearModal: () => void;
@@ -61,7 +61,7 @@ export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabPro
             className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 border border-slate-200 px-3 py-1.5 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isCheckingIntegrity ? 'animate-spin' : ''}`} />
-            <span>بروزرسانی وضعیت</span>
+            <span>به‌روزرسانی وضعیت</span>
           </button>
         </div>
 

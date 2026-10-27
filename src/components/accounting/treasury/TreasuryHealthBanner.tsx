@@ -69,7 +69,7 @@ export const TreasuryHealthBanner: React.FC<TreasuryHealthBannerProps> = React.m
                     : 'وضعیت سلامت ریالی: انطباق ۱۰۰٪ کامل خزانه‌داری با دفاتر حسابداری'}
               </h4>
               <span
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
                   isHealthy
                     ? 'bg-emerald-200/60 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300'
                     : 'bg-amber-200/60 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300'
@@ -82,7 +82,7 @@ export const TreasuryHealthBanner: React.FC<TreasuryHealthBannerProps> = React.m
               {waitsForApproval
                 ? 'اختلاف این حساب‌ها فقط از سند حسابداری پیش‌نویس دریافت یا پرداخت است و با تأیید سند برطرف می‌شود.'
                 : isHealthy
-                ? 'تمامی مانده‌های صندوق‌ها و بانک‌ها مستقیماً با مجموع گردش اسناد حسابداری تاییدشده تراز هستند.'
+                ? 'تمامی مانده‌های صندوق‌ها و بانک‌ها مستقیماً با مجموع گردش اسناد حسابداری تأییدشده تراز هستند.'
                 : 'مغایرت معمولاً از این‌هاست: سند حسابداری دریافت یا پرداخت هنوز پیش‌نویس است و تا تأیید در دفاتر شمرده نمی‌شود؛ تراکنشی بی سند حسابداری ثبت شده؛ یا مانده اولیه در سند افتتاحیه نیامده است.'}
             </p>
           </div>
@@ -90,20 +90,20 @@ export const TreasuryHealthBanner: React.FC<TreasuryHealthBannerProps> = React.m
 
         <div className="flex flex-wrap items-center gap-4 text-xs font-mono">
           <div className="bg-white/80 dark:bg-slate-800/80 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700">
-            <span className="text-slate-400 block text-[10px]">مجموع مانده دفاتر حسابداری:</span>
+            <span className="text-slate-500 block text-[11px]">مجموع مانده دفاتر حسابداری:</span>
             <span className="font-bold text-slate-800 dark:text-slate-200">
               {rial.amount(totalLedgerBalance)}
             </span>
           </div>
           <div className="bg-white/80 dark:bg-slate-800/80 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700">
-            <span className="text-slate-400 block text-[10px]">مجموع گردش خزانه‌داری:</span>
+            <span className="text-slate-500 block text-[11px]">مجموع گردش خزانه‌داری:</span>
             <span className="font-bold text-slate-800 dark:text-slate-200">
               {rial.amount(totalTreasuryBalance)}
             </span>
           </div>
           {totalDiscrepancy > 0 && (
             <div className="bg-rose-100/80 dark:bg-rose-900/40 px-3 py-2 rounded-xl border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300">
-              <span className="block text-[10px]">میزان مغایرت کل:</span>
+              <span className="block text-[11px]">میزان مغایرت کل:</span>
               <span className="font-bold">{rial.amount(totalDiscrepancy)}</span>
             </div>
           )}

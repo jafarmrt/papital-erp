@@ -165,7 +165,7 @@ export function GlobalInventoryControlSection({
                       <button
                         type="button"
                         onClick={() => handlePurchaseSection(originalIdx)}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                        className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
                         title="صدور سند سفارش خرید برای کسری‌های همین بخش"
                       >
                         <FilePlus className="w-3.5 h-3.5" />

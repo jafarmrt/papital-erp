@@ -114,7 +114,7 @@ export const WorkflowSlaAnalyticsTab: React.FC = () => {
             onClick={() => refetch()}
             className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
           >
-            بروزرسانی داده‌ها
+            به‌روزرسانی داده‌ها
           </button>
         </div>
 
