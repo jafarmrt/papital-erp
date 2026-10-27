@@ -88,10 +88,26 @@ CALL_LIMIT=120
 TSX="$APP_DIR/node_modules/.bin/tsx"
 [ -x "$TSX" ] || fail "$TSX not found — install the dependencies (npm ci --include=dev)"
 
+# v11 (phase 5.3, TD-1354): a folder of root's own for what root keeps (the lock, the temporary files): made in /var/lib,
+# where only root writes; a folder of that name that root does not own is never used
+root_state_dir() {
+  if [ -L "$1" ] || { [ -e "$1" ] && [ ! -O "$1" ]; }; then fail "$1 is a link or not owned by root; remove it or set its path"; fi
+  [ -d "$1" ] || install -d -m 700 "$1"
+}
+
 # one run at a time
 LOCK_FILE="$APP_DIR/logs/.nightly-verify.lock"
 mkdir -p "$(dirname "$LOCK_FILE")" "$(dirname "$REPORT")"
-exec 9>"$LOCK_FILE"
+# v11 (phase 5.3, TD-1354): logs/ belongs to the service user, which could put a link or a FIFO there (opening a FIFO
+# waits forever); root keeps its lock in a folder of its own then
+if [ "$(id -u)" -eq 0 ] && [ ! -O "$(dirname "$LOCK_FILE")" ]; then
+  LOCK_FILE="${NIGHTLY_VERIFY_ROOT_LOCK:-/var/lib/papital-erp/nightly-verify.lock}"
+  root_state_dir "$(dirname "$LOCK_FILE")"
+fi
+# made only when nothing of that name exists (noclobber: O_EXCL) and opened for reading, so no file is ever truncated
+( set -C; : > "$LOCK_FILE" ) 2>/dev/null || true
+[ -f "$LOCK_FILE" ] && [ ! -L "$LOCK_FILE" ] || fail "the lock $LOCK_FILE is a link or not a plain file"
+exec 9<"$LOCK_FILE"
 if ! flock -n 9; then
   if [ "${1:-}" = "--accept-baseline" ]; then
     log "NOT ACCEPTED: a nightly check is still running; run --accept-baseline again after it finishes"
@@ -101,16 +117,35 @@ if ! flock -n 9; then
   exit 0
 fi
 
-# the report belongs to the owner of the log directory (the service user), so the app can read it
-report_owner() {
-  [ "$(id -u)" -eq 0 ] || return 0
-  [ -f "$REPORT" ] && chown "$(stat -c %U "$(dirname "$REPORT")")" "$REPORT" 2>/dev/null || true
+# v11 (phase 5.3, TD-1354): the check reads and writes its report in a private copy (REPORT_WORK, in WORK_DIR); the
+# report in logs/ is read only when it is a plain file and written back as the owner of logs/ (the service user, which
+# the app reads it as), so root never reads or writes through a link the service user put there
+REPORT_OWNER="$(stat -c %U "$(dirname "$REPORT")" 2>/dev/null || echo root)"
+as_report_owner() {
+  if [ "$(id -u)" -eq 0 ] && [ "$REPORT_OWNER" != "root" ] && command -v runuser >/dev/null 2>&1; then
+    runuser -u "$REPORT_OWNER" -- "$@"
+  else
+    "$@"
+  fi
+}
+report_in() {
+  # shellcheck disable=SC2016
+  as_report_owner sh -c '[ -f "$1" ] && [ ! -L "$1" ] && head -c 16777216 -- "$1"' report "$REPORT" > "$REPORT_WORK" 2>/dev/null || true
+}
+report_out() {
+  [ -s "$REPORT_WORK" ] || return 0
+  # shellcheck disable=SC2016
+  as_report_owner sh -c 'cat > "$1.tmp" && chmod 644 "$1.tmp" && mv -f "$1.tmp" "$1"' report "$REPORT" < "$REPORT_WORK" \
+    || log "WARNING: the report could not be written to $REPORT"
 }
 
 if [ "${1:-}" = "--accept-baseline" ]; then
   rc=0
-  (cd "$APP_DIR" && "$TSX" scripts/nightly-verify.ts --report "$REPORT" --accept-baseline) || rc=$?
-  report_owner
+  REPORT_WORK="$(mktemp)"
+  report_in
+  (cd "$APP_DIR" && "$TSX" scripts/nightly-verify.ts --report "$REPORT_WORK" --accept-baseline) || rc=$?
+  report_out
+  rm -f "$REPORT_WORK"
   exit "$rc"
 fi
 if ops_busy_now "$APP_DIR"; then
@@ -120,11 +155,20 @@ fi
 
 # ---------- temporary files on the backup disk ----------
 # only restore.sh gets TMPDIR: a long path there breaks the socket tsx opens in it
-TMP_ROOT="$BACKUP_DIR/.nightly-verify-tmp"
+TMP_ROOT="${NIGHTLY_VERIFY_TMP:-$BACKUP_DIR/.nightly-verify-tmp}"
+# v11 (phase 5.3, TD-1354): root never works in a folder of the service user (it could swap a folder there for a link);
+# its files then go to a folder of root's own
+if [ -z "${NIGHTLY_VERIFY_TMP:-}" ] && [ "$(id -u)" -eq 0 ] && [ ! -O "$BACKUP_DIR" ]; then
+  TMP_ROOT="${NIGHTLY_VERIFY_ROOT_TMP:-/var/lib/papital-erp/nightly-verify-tmp}"
+  root_state_dir "$(dirname "$TMP_ROOT")"
+  root_state_dir "$TMP_ROOT"
+fi
 mkdir -p "$TMP_ROOT"
 chmod 700 "$TMP_ROOT"
 find "$TMP_ROOT" -mindepth 1 -maxdepth 1 -mmin +720 -exec rm -rf {} + 2>/dev/null || true
 WORK_DIR="$(mktemp -d -p "$TMP_ROOT")"
+REPORT_WORK="$WORK_DIR/nightly-verify.json"
+report_in
 
 # ---------- passwords through a PGPASSFILE, never on a command line ----------
 PGPASSFILE="$WORK_DIR/pgpass"
@@ -247,11 +291,11 @@ BACKUP_AT=""
 # a night that could not be checked: written as a failed report, then exit 1
 night_failed() {
   local reason="$1" detail="${2:-}"
-  local args=(scripts/nightly-verify.ts --report "$REPORT" --backup "$BACKUP_FILE" --failed "$reason")
+  local args=(scripts/nightly-verify.ts --report "$REPORT_WORK" --backup "$BACKUP_FILE" --failed "$reason")
   [ -z "$BACKUP_AT" ] || args+=(--backup-at "$BACKUP_AT")
   [ -z "$detail" ] || args+=(--detail "$detail")
   (cd "$APP_DIR" && LOG_DIR="$WORK_DIR/logs" "$TSX" "${args[@]}") || true
-  report_owner
+  report_out
   fail "$reason${detail:+: $detail}"
 }
 
@@ -282,6 +326,10 @@ else
   if ! [[ "$stamp" =~ ^[0-9]+$ ]] || ! [[ "$name" =~ ^erp_daily_[0-9_]+$ ]] || [ ! -f "$BACKUP_DIR/$name.dump.gz" ]; then
     night_failed no_dump "no finished daily backup named by $MARKER"
   fi
+  # v11 (phase 5.3, TD-1354): backup.sh writes plain files; root does not read a file of another user's folder by a link
+  if [ -L "$MARKER" ] || [ -L "$BACKUP_DIR/$name.dump.gz" ]; then
+    night_failed no_dump "$MARKER or the dump it names is a link, not a file backup.sh wrote"
+  fi
   BACKUP_FILE="$BACKUP_DIR/$name.dump.gz"
   BACKUP_AT="$stamp"
   # the nightly run checks a recent backup; a dump named by hand may be of any age
@@ -290,7 +338,7 @@ else
   fi
   # the same dump the previous night checked: last night's backup did not finish (a run again the same morning is fine)
   # shellcheck disable=SC2016 # the $ is JavaScript run by node, not the shell
-  PREVIOUS="$(node -e 'try { const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(`${r.backupFile || ""} ${Math.floor(Date.parse(r.finishedAt) / 1000) || 0}`); } catch { /* no report */ }' "$REPORT" 2>/dev/null || true)"
+  PREVIOUS="$(node -e 'try { const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(`${r.backupFile || ""} ${Math.floor(Date.parse(r.finishedAt) / 1000) || 0}`); } catch { /* no report */ }' "$REPORT_WORK" 2>/dev/null || true)"
   read -r previous_file previous_at <<< "${PREVIOUS:-}" || true
   if [ "${previous_file:-}" = "$name.dump.gz" ] && [[ "${previous_at:-}" =~ ^[0-9]+$ ]] && [ $((NOW - previous_at)) -gt $((12 * 3600)) ]; then
     night_failed no_new_backup "$name.dump.gz was already checked by the previous night"
@@ -394,9 +442,9 @@ log "[2/2] Checking the accounts and stock on the copy"
 export LOG_DIR="$WORK_DIR/logs"
 DATABASE_URL="$(url_for_db "$DRILL_DB" "$FULL_DATABASE_URL")"
 cd "$APP_DIR"
-run_timed "${LOW_PRIORITY[@]}" "$TSX" scripts/nightly-verify.ts --report "$REPORT" --backup "$BACKUP_FILE" --backup-at "$BACKUP_AT"
+run_timed "${LOW_PRIORITY[@]}" "$TSX" scripts/nightly-verify.ts --report "$REPORT_WORK" --backup "$BACKUP_FILE" --backup-at "$BACKUP_AT"
 CHECK_RC=$CHILD_RC
 timed_out "$CHECK_RC" && night_failed timeout "the check did not finish within $TIMEOUT_SECONDS seconds"
-report_owner
+report_out
 [ "$CHECK_RC" -eq 0 ] || fail "see above; the system health page shows the same result"
 log "SUCCESS: the latest backup restores and its accounts and stock are not worse than the last healthy night"

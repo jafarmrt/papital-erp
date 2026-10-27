@@ -72,6 +72,13 @@ mkdir -p "$LOG_DIR"
 # the jobs run as RUN_USER; the log directory must be writable by it (it already is when install.sh made it)
 if [ "$(id -u)" -eq 0 ] && [ "$RUN_USER" != "root" ]; then chown "$RUN_USER" "$LOG_DIR" 2>/dev/null || true; fi
 
+# v11 (phase 5.3, TD-1354): the nightly check runs as root, and its output goes to a log in the folder of RUN_USER, who
+# could put a link there; the log is written by RUN_USER, never opened by root
+NIGHTLY_LOG_TO=">> ${LOG_DIR}/nightly-verify.log 2>&1"
+if [ "$RUN_USER" != "root" ]; then
+  NIGHTLY_LOG_TO="2>&1 | runuser -u ${RUN_USER} -- tee -a ${LOG_DIR}/nightly-verify.log >/dev/null"
+fi
+
 TMP_FILE="$(mktemp)"
 trap 'rm -f "$TMP_FILE"' EXIT
 # v11 (O3): each job runs through bash, so a script whose executable bit a zip archive dropped still runs (a cron job of
@@ -82,7 +89,7 @@ SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ${BACKUP_MINUTE} ${BACKUP_HOUR} * * * ${RUN_USER} bash ${APP_DIR}/scripts/backup.sh >> ${LOG_DIR}/backup.log 2>&1
 */5 * * * * ${RUN_USER} bash ${APP_DIR}/scripts/monitor.sh >> ${LOG_DIR}/monitor.log 2>&1
-${NIGHTLY_VERIFY_MINUTE} ${NIGHTLY_VERIFY_HOUR} * * * root bash ${APP_DIR}/scripts/nightly-verify.sh >> ${LOG_DIR}/nightly-verify.log 2>&1
+${NIGHTLY_VERIFY_MINUTE} ${NIGHTLY_VERIFY_HOUR} * * * root bash ${APP_DIR}/scripts/nightly-verify.sh ${NIGHTLY_LOG_TO}
 ${MEDIA_OFFSITE_MINUTE} ${MEDIA_OFFSITE_HOUR} * * * ${RUN_USER} bash ${APP_DIR}/scripts/backup-media-offsite.sh >> ${LOG_DIR}/media-offsite.log 2>&1
 CRON
 # cron ignores files in /etc/cron.d that are writable by others or not owned by root
