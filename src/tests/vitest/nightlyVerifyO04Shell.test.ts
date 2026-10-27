@@ -179,6 +179,44 @@ exit 0`);
     fs.rmSync(f.dir, { recursive: true, force: true });
   }, 30_000);
 
+  it('v11 phase 5.3: a marker or dump that is a link is a failed night that restores nothing', () => {
+    for (const which of ['marker', 'dump'] as const) {
+      const f = fakeApp();
+      const file = which === 'marker' ? path.join(f.backups, '.last_daily_ok') : path.join(f.backups, `erp_daily_${f.stamp}.dump.gz`);
+      fs.renameSync(file, `${file}.real`);
+      fs.symlinkSync(`${file}.real`, file);
+      const run = spawnSync('bash', [f.script], { encoding: 'utf8', env: f.env });
+      expect(run.status, run.stdout + run.stderr).toBe(1);
+      expect(f.log()).toContain('--failed no_dump');
+      expect(f.log()).not.toContain('restore DATABASE_URL');
+      fs.rmSync(f.dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it.runIf(process.getuid?.() === 0)('v11 phase 5.3: root keeps its files out of the folders of the service user and writes the report as that user', () => {
+    const f = fakeApp({ previousReport: report() });
+    const rootTmp = path.join(f.dir, 'root-tmp', 'nightly-verify-tmp');
+    // the service user (nobody here) owns the backups and logs/, as on a new install; the code stays root's
+    fs.chmodSync(f.dir, 0o755);
+    // FIFOs in place of the locks of logs/ would hang root when it opened them
+    for (const lock of ['.nightly-verify.lock', '.ops-busy.lock']) spawnSync('mkfifo', [path.join(f.app, 'logs', lock)]);
+    for (const d of [f.backups, path.join(f.app, 'logs')]) {
+      spawnSync('chown', ['-R', 'nobody', d]);
+    }
+    const rootLock = path.join(f.dir, 'root-lock', 'nightly-verify.lock');
+    const run = spawnSync('bash', [f.script], { encoding: 'utf8', timeout: 60_000, env: { ...f.env, NIGHTLY_VERIFY_ROOT_TMP: rootTmp, NIGHTLY_VERIFY_ROOT_LOCK: rootLock } });
+    expect(run.status, run.stdout + run.stderr).toBe(0);
+    expect(fs.statSync(rootLock).uid).toBe(0);
+    expect((fs.statSync(path.dirname(rootLock)).mode & 0o777).toString(8)).toBe('700');
+    expect(f.log()).toContain(`--report ${rootTmp}/`);
+    expect(fs.existsSync(path.join(f.backups, '.nightly-verify-tmp'))).toBe(false);
+    expect(fs.statSync(rootTmp).uid).toBe(0);
+    expect((fs.statSync(rootTmp).mode & 0o777).toString(8)).toBe('700');
+    const written = path.join(f.app, 'logs/nightly-verify.json');
+    expect(fs.statSync(written).uid).toBe(65534);
+    fs.rmSync(f.dir, { recursive: true, force: true });
+  }, 90_000);
+
   it('no finished backup, an old backup or too little room is a failed night that restores nothing', () => {
     const none = fakeApp({ markerAgeHours: null });
     expect(spawnSync('bash', [none.script], { encoding: 'utf8', env: none.env }).status).toBe(1);
