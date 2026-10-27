@@ -13,7 +13,7 @@ test('login, issue a final sales invoice and see its journal voucher', async ({ 
   // ۱. ورود
   await page.goto('/');
   await page.getByPlaceholder('نام کاربری').fill(E2E_ADMIN.username);
-  await page.getByPlaceholder('کلمه عبور').fill(E2E_ADMIN.password);
+  await page.getByPlaceholder('رمز عبور').fill(E2E_ADMIN.password);
   await page.getByRole('button', { name: 'ورود به سامانه' }).click();
   await expect(page.getByTitle('خروج از حساب در همین دستگاه')).toBeVisible();
 

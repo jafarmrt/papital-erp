@@ -35,7 +35,7 @@ export function InvoiceDetailsModal({ selectedDocDetails, setSelectedDocDetails,
             <div>
               <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
                 <span>
-                  {detailsTitleOf(selectedDocDetails.type)}
+                  {detailsTitleOf(selectedDocDetails.type, selectedDocDetails.status)}
                 </span>
                 <span className="font-mono text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
                   شماره: {formatPersianCode(selectedDocDetails.ref_number)}

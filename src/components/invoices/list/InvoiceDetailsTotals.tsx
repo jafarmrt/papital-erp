@@ -18,7 +18,7 @@ export function InvoiceDetailsTotals({ selectedDocDetails }: { selectedDocDetail
           <DollarSign size={22} />
         </div>
         <div>
-          <span className="text-[11px] text-slate-400 block font-medium">جمع کل ارزش نهایی سند:</span>
+          <span className="text-[11px] text-slate-300 block font-medium">جمع کل ارزش نهایی سند:</span>
           <strong className="text-base font-black text-white font-mono">
             {formatPersianPrice(documentPayableOf(selectedDocDetails), undefined, decimals)} {formatCurrencyLabel(selectedDocDetails.currency)}
           </strong>
@@ -27,20 +27,20 @@ export function InvoiceDetailsTotals({ selectedDocDetails }: { selectedDocDetail
 
       <div className="flex items-center gap-4 text-xs">
         <div className="text-right">
-          <span className="text-[10px] text-slate-400 block">جمع ناخالص:</span>
+          <span className="text-[11px] text-slate-300 block">جمع ناخالص:</span>
           <span className="font-mono text-slate-200 font-bold">
             {formatPersianPrice((selectedDocDetails.items || []).reduce(addLineGross, 0), undefined, decimals)}
           </span>
         </div>
         <div className="text-right">
-          <span className="text-[10px] text-slate-400 block">مجموع تخفیف:</span>
+          <span className="text-[11px] text-slate-300 block">مجموع تخفیف:</span>
           <span className="font-mono text-rose-400 font-bold">
             {formatPersianPrice((selectedDocDetails.items || []).reduce(addLineDiscount, 0), undefined, decimals)}
           </span>
         </div>
         {serviceChargeAmount > 0 && (
           <div className="text-right">
-            <span className="text-[10px] text-slate-400 block">هزینه ارسال و خدمات:</span>
+            <span className="text-[11px] text-slate-300 block">هزینه ارسال و خدمات:</span>
             <span className="font-mono text-sky-300 font-bold">
               {formatPersianPrice(serviceChargeAmount, undefined, decimals)}
             </span>
@@ -48,7 +48,7 @@ export function InvoiceDetailsTotals({ selectedDocDetails }: { selectedDocDetail
         )}
         {vatAmount > 0 && (
           <div className="text-right">
-            <span className="text-[10px] text-slate-400 block">مالیات بر ارزش افزوده:</span>
+            <span className="text-[11px] text-slate-300 block">مالیات بر ارزش افزوده:</span>
             <span className="font-mono text-amber-300 font-bold">
               {formatPersianPrice(vatAmount, undefined, decimals)}
             </span>

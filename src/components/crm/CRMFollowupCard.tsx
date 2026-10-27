@@ -35,7 +35,7 @@ export function CRMFollowupCard({ act, leads = [], onToggleFollowup, onEditActiv
           className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
             act.isFollowUpCompleted
               ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-              : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-2xs'
+              : 'bg-emerald-700 hover:bg-emerald-600 text-white shadow-2xs'
           }`}
         >
           <Check size={14} />

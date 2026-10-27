@@ -511,7 +511,7 @@ export function PersonnelExcelModal({
                     type="button"
                     onClick={handleDownloadExport}
                     disabled={isExporting}
-                    className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="w-full py-2.5 px-4 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     {isExporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
                     <span>{isExporting ? 'در حال ایجاد فایل...' : 'دانلود خروجی اکسل پرسنل (.xlsx)'}</span>
@@ -850,7 +850,7 @@ export function PersonnelExcelModal({
                   type="button"
                   onClick={handleConfirmImport}
                   disabled={isImporting || importableRows.length === 0}
-                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {isImporting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
                   <span>{isImporting ? 'در حال ثبت پرسنل...' : `تایید و ثبت نهایی (${formatPersianNumber(importableRows.length)} پرسنل)`}</span>

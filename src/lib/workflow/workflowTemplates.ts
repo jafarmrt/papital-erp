@@ -86,7 +86,7 @@ export const BANK_ACCOUNT_WORKFLOW_TEMPLATE: WorkflowTemplate = {
 export const PURCHASE_REQUISITION_WORKFLOW_TEMPLATE: WorkflowTemplate = {
   id: 'purchase_requisition',
   code: 'PURCHASE_REQUISITION_WORKFLOW',
-  title: 'گردش کار تدارکات و خرید کارگاه (بررسی و تایید -> در حال خرید -> تحویل انبار)',
+  title: 'گردش کار تدارکات و خرید کارگاه (بررسی و تایید ← در حال خرید ← تحویل انبار)',
   entityType: 'purchase_requisition',
   description: 'فرآیند ساده‌سازی شده خرید و تدارکات کارگاه شامل ۳ گام عملیاتی: ۱. در انتظار بررسی و تایید، ۲. تایید شده (در حال خرید)، ۳. خرید و تحویل انبار شده',
   states: [
@@ -111,9 +111,9 @@ export const PURCHASE_REQUISITION_WORKFLOW_TEMPLATE: WorkflowTemplate = {
 export const JOURNAL_VOUCHER_WORKFLOW_TEMPLATE: WorkflowTemplate = {
   id: 'journal_voucher',
   code: 'JOURNAL_VOUCHER_WORKFLOW',
-  title: 'گردش کار تایید اسناد حسابداری کارگاه (پیش‌نویس -> تایید و ثبت دفاتر -> قطعی‌سازی)',
+  title: 'گردش کار تایید اسناد حسابداری کارگاه (پیش‌نویس ← تایید و ثبت دفاتر ← قطعی‌سازی)',
   entityType: 'journal_voucher',
-  description: 'فرآیند سبک و متناسب کارگاه جهت تایید اسناد حسابداری: ثبت پیش‌نویس توسط کاربران/سامانه -> بررسی و تایید واحد حسابداری -> قطعی‌سازی دفاتر رسمی',
+  description: 'فرآیند سبک و متناسب کارگاه جهت تایید اسناد حسابداری: ثبت پیش‌نویس توسط کاربران/سامانه ← بررسی و تایید واحد حسابداری ← قطعی‌سازی دفاتر رسمی',
   states: [
     { stateKey: 'draft', title: 'پیش‌نویس سند', stateType: 'initial', color: 'slate', stepOrder: 1, slaHours: 24, positionX: 100, positionY: 160 },
     { stateKey: 'approved', title: 'تایید و ثبت دفاتر رسمی', stateType: 'intermediate', color: 'blue', stepOrder: 2, slaHours: 48, positionX: 450, positionY: 160 },

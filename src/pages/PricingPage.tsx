@@ -30,6 +30,7 @@ import { priceSaveUpdates, type PriceFieldEdit } from '../lib/items/priceInput';
 import { ITEM_WAC_COLUMN, priceExportCells } from '../lib/items/excelPriceColumns';
 import { priceMarginPercent } from '../lib/items/priceMargin';
 import { PRICING_PAGE_SIZE, pricingPageUrl, type PricingPage, type PricingPageQuery, type PricingPagePrice } from '../lib/items/pricingPage';
+import { DECIMAL_INPUT_MAX_SCALE, DECIMAL_INPUT_MAX_WHOLE_DIGITS } from '../lib/numericInput';
 
 export default function PricingPage() {
   // v9.0.209 (O14): ورود سریع، فیلدهای قیمت و ذخیره فقط با مجوز مسیرهای ذخیره قیمت سرور، نه نقش «viewer»
@@ -319,7 +320,8 @@ export default function PricingPage() {
         // v9.0.176 (TD-657): قیمت صفر، منفی یا نامعتبر و ارز ناشناخته فرستاده نمی‌شوند و گزارش می‌شوند
         if (invalidCells.length > 0) {
           const sample = invalidCells.slice(0, 3).map(c => `${formatPersianCode(c.code)} «${c.title}»: ${c.value} ${c.currency}`).join('، ');
-          toast.error(`${formatPersianNumber(invalidCells.length)} قیمت عدد بزرگ‌تر از صفر یا ارز پشتیبانی‌شده نداشت و ثبت نشد: ${sample}`);
+          // v11 phase 6.3b: the message names the bound of a price (14 whole digits, 4 decimals, v11 phase 6.1a)
+          toast.error(`${formatPersianNumber(invalidCells.length)} قیمت عدد بزرگ‌تر از صفر (حداکثر ${formatPersianNumber(DECIMAL_INPUT_MAX_WHOLE_DIGITS)} رقم صحیح و ${formatPersianNumber(DECIMAL_INPUT_MAX_SCALE)} رقم اعشار) یا ارز پشتیبانی‌شده نداشت و ثبت نشد: ${sample}`);
         }
 
         if (updates.length === 0) {
@@ -469,7 +471,7 @@ export default function PricingPage() {
             {/* Unified Excel Button */}
             <button
               onClick={() => setShowExcelModal(true)}
-              className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 shadow-md shadow-emerald-600/20 active:scale-95 cursor-pointer"
+              className="text-xs bg-emerald-700 hover:bg-emerald-600 text-white font-bold px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 shadow-md shadow-emerald-600/20 active:scale-95 cursor-pointer"
               title="مدیریت پیشرفته اکسل، ورود و خروجی قیمت‌ها و محصولات"
             >
               <FileSpreadsheet size={16} />
@@ -551,7 +553,7 @@ export default function PricingPage() {
             <button
               onClick={handleSaveAllLocalEdits}
               disabled={isSavingAll}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 animate-bounce"
+              className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 animate-bounce"
             >
               {isSavingAll ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
               ذخیره یکجای {formatPersianNumber(totalLocalEditsCount)} تغییر

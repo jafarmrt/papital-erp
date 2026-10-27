@@ -398,7 +398,7 @@ export function AccountExplorerTab({
 
             <button
               onClick={handleExportCSV}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+              className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
             >
               <Download size={14} />
               <span className="hidden sm:inline">خروجی اکسل</span>
@@ -532,7 +532,7 @@ export function AccountExplorerTab({
                 </div>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-700/60">
                   <span>ماهیت: {gen.nature === 'debit' ? 'بدهکار' : gen.nature === 'credit' ? 'بستانکار' : 'دوگانه'}</span>
-                  <span className="text-indigo-600 font-medium">مشاهده معین‌ها ➔</span>
+                  <span className="text-indigo-600 font-medium">مشاهده معین‌ها ← </span>
                 </div>
               </div>
             ))}
@@ -555,7 +555,7 @@ export function AccountExplorerTab({
                 </div>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-700/60">
                   <span>سطح: معین</span>
-                  <span className="text-emerald-600 font-bold">مشاهده کاردکس گردش ➔</span>
+                  <span className="text-emerald-600 font-bold">مشاهده کاردکس گردش ← </span>
                 </div>
               </div>
             ))}
@@ -726,7 +726,7 @@ export function AccountExplorerTab({
                     سند حسابداری شماره {formatPersianNumber(selectedVoucherModal.voucherNumber)}
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    تاریخ ثبت: {formatPersianDate(selectedVoucherModal.date)} | وضعیت: {selectedVoucherModal.status === 'permanent' ? 'دائمی' : 'تاییدشده'}
+                    تاریخ ثبت: {formatPersianDate(selectedVoucherModal.date)} | وضعیت: {selectedVoucherModal.status === 'permanent' ? 'دائمی' : 'تأییدشده'}
                   </p>
                 </div>
               </div>

@@ -18,7 +18,7 @@ import {
 import { formatPersianPrice, formatPersianDate, formatPersianNumber, formatPersianCode } from '../../../utils';
 import { isRialCurrency, rialDisplayOf } from '../../../lib/rialDisplay';
 import { JalaliDateInput } from '../../common/JalaliDateInput';
-import { treasuryMethodLabel, treasuryPartyTypeLabel } from '../../../lib/treasury/treasuryExport';
+import { PAYMENT_METHOD_LABELS, treasuryMethodLabel, treasuryPartyTypeLabel, type PaymentMethodKey } from '../../../lib/treasury/treasuryExport';
 import type { BankAccount, TreasuryTransaction, FinancialAttachment } from '../../../types';
 import { personnelPurposeLabel } from '../../../lib/treasury/partyPurpose';
 import { canRelinkTreasuryRow } from '../../../lib/treasury/treasuryRelink';
@@ -101,7 +101,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
             <h3 className="font-bold text-slate-900 dark:text-white text-base">
               گردش اسناد دریافت و پرداخت خزانه‌داری
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5">
               نمایش {formatPersianNumber(pagedTransactions.length)} از {formatPersianNumber(totalFilteredCount)} تراکنش منطبق با فیلترها
             </p>
           </div>
@@ -119,7 +119,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 pt-2">
           {/* Search input */}
           <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-4 h-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="جست‌وجو در طرف حساب، شماره، شرح..."
@@ -147,10 +147,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
             className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded-xl outline-none"
           >
             <option value="all">همه روش‌های پرداخت</option>
-            <option value="bank_transfer">حواله / پایا / ساتنا</option>
-            <option value="pos">کارتخوان (POS)</option>
-            <option value="cash">نقدی / صندوق</option>
-            <option value="cheque">چک</option>
+            {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethodKey[]).map(m => <option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>)}
           </select>
 
           {/* Account filter */}
@@ -169,7 +166,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
 
           {/* Jalali Date Range */}
           <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded-xl px-2 py-1">
-            <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <Calendar className="w-3.5 h-3.5 text-slate-500 shrink-0" />
             <JalaliDateInput
               value={dateFromFilter}
               onChange={iso => { setDateFromFilter(iso); setTxPage(1); }}
@@ -178,7 +175,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
               className="w-full bg-transparent text-[11px] outline-none text-center"
               containerClassName="w-full"
             />
-            <span className="text-slate-400 text-xs">تا</span>
+            <span className="text-slate-500 text-xs">تا</span>
             <JalaliDateInput
               value={dateToFilter}
               onChange={iso => { setDateToFilter(iso); setTxPage(1); }}
@@ -191,7 +188,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
               <button
                 onClick={() => { setDateFromFilter(''); setDateToFilter(''); setTxPage(1); }}
                 title="پاکسازی تاریخ"
-                className="text-slate-400 hover:text-rose-500 p-1"
+                className="text-slate-500 hover:text-rose-500 p-1"
               >
                 <X size={12} />
               </button>
@@ -202,7 +199,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
 
       {/* Transactions Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-xs text-right">
+        <table className="w-full text-xs text-right phone-cards">
           <thead className="bg-slate-50/80 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
             <tr>
               <th className="py-3 px-3 text-center">#</th>
@@ -224,7 +221,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
             {pagedTransactions.length === 0 ? (
               <tr>
-                <td colSpan={txAccountFilter !== 'all' ? 12 : 11} className="py-12 text-center text-slate-400 text-xs">
+                <td colSpan={txAccountFilter !== 'all' ? 12 : 11} className="py-12 text-center text-slate-500 text-xs">
                   هیچ تراکنشی منطبق با فیلترهای جاری یافت نشد.
                 </td>
               </tr>
@@ -241,17 +238,17 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                       isVoided ? 'opacity-60 bg-rose-50/20 dark:bg-rose-950/10' : ''
                     }`}
                   >
-                    <td className="py-3 px-3 text-center text-slate-400 font-mono text-[11px]">
+                    <td className="py-3 px-3 text-center text-slate-500 font-mono text-[11px]" data-phone="hide">
                       {formatPersianNumber((txPage - 1) * pageSize + idx + 1)}
                     </td>
 
                     {/* Receipt / Tx Number */}
-                    <td className="py-3 px-3 font-mono font-bold text-slate-800 dark:text-slate-200">
+                    <td className="py-3 px-3 font-mono font-bold text-slate-800 dark:text-slate-200" data-phone="title">
                       <div className="flex items-center gap-1">
                         <span>{tx.transactionNumber}</span>
                         <button
                           onClick={() => onCopy(tx.transactionNumber, `tx-${tx.id}`)}
-                          className="text-slate-400 hover:text-indigo-600 cursor-pointer"
+                          className="text-slate-500 hover:text-indigo-600 cursor-pointer"
                           title="کپی شماره تراکنش"
                         >
                           {copiedId === `tx-${tx.id}` ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
@@ -260,15 +257,15 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                     </td>
 
                     {/* Date */}
-                    <td className="py-3 px-3 font-mono text-slate-600 dark:text-slate-300">
+                    <td className="py-3 px-3 font-mono text-slate-600 dark:text-slate-300" data-label="تاریخ">
                       {formatPersianDate(tx.date)}
                     </td>
 
                     {/* Type & Void Status */}
-                    <td className="py-3 px-3">
+                    <td className="py-3 px-3" data-label="نوع">
                       <div className="flex items-center gap-1.5">
                         <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${
                             isReceipt
                               ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
                               : 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300'
@@ -278,7 +275,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                           {isReceipt ? 'دریافت' : 'پرداخت'}
                         </span>
                         {isVoided && (
-                          <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-rose-200 dark:bg-rose-900/60 text-rose-800 dark:text-rose-200">
+                          <span className="px-1.5 py-0.5 text-[11px] font-bold rounded bg-rose-200 dark:bg-rose-900/60 text-rose-800 dark:text-rose-200">
                             ابطال‌شده
                           </span>
                         )}
@@ -286,11 +283,11 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                     </td>
 
                     {/* Party */}
-                    <td className="py-3 px-3">
+                    <td className="py-3 px-3" data-label="طرف حساب">
                       <div className="font-semibold text-slate-800 dark:text-slate-200">
                         {tx.partyName || '—'}
                       </div>
-                      <div className="text-[10px] text-slate-400">
+                      <div className="text-[11px] text-slate-500">
                         {treasuryPartyTypeLabel(tx.partyType)}
                         {tx.purpose && <span className="mr-1">({personnelPurposeLabel(tx.purpose)})</span>}
                         {tx.contraAccountName && <span className="mr-1">← {tx.contraAccountName}</span>}
@@ -299,7 +296,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                         <button
                           type="button"
                           onClick={() => onViewPettyCashLines(tx)}
-                          className="mt-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300 hover:underline cursor-pointer"
+                          className="mt-0.5 text-[11px] font-bold text-amber-700 dark:text-amber-300 hover:underline cursor-pointer"
                         >
                           {`ردیف‌های صورت‌هزینه (${formatPersianNumber(tx.pettyCashLineCount ?? 0)})`}
                         </button>
@@ -307,18 +304,18 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                     </td>
 
                     {/* Method & Bank */}
-                    <td className="py-3 px-3">
+                    <td className="py-3 px-3" data-label="روش و حساب">
                       <div className="text-slate-800 dark:text-slate-200 font-medium">
                         {tx.bankAccountTitle || '—'}
                       </div>
-                      <div className="text-[10px] text-slate-400 font-mono">
+                      <div className="text-[11px] text-slate-500 font-mono">
                         {treasuryMethodLabel(tx.method)}
                         {tx.trackingNumber && ` • پیگیری: ${tx.trackingNumber}`}
                       </div>
                     </td>
 
                     {/* Description & Attachments */}
-                    <td className="py-3 px-3 max-w-[200px]">
+                    <td className="py-3 px-3 max-w-[200px]" data-phone="hide">
                       <div className="truncate text-slate-600 dark:text-slate-300 text-[11px]" title={tx.description || undefined}>
                         {tx.description || '—'}
                       </div>
@@ -328,7 +325,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                             title: `پیوست‌های سند ${tx.transactionNumber}`,
                             attachments: tx.attachments as FinancialAttachment[],
                           })}
-                          className="inline-flex items-center gap-1 text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline mt-0.5 font-bold cursor-pointer"
+                          className="inline-flex items-center gap-1 text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline mt-0.5 font-bold cursor-pointer"
                         >
                           <Paperclip size={10} />
                           {formatPersianNumber(tx.attachments.length)} فایل پیوست
@@ -337,7 +334,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                     </td>
 
                     {/* Amount */}
-                    <td className="py-3 px-3 text-left font-mono font-bold">
+                    <td className="py-3 px-3 text-left font-mono font-bold" data-label="مبلغ">
                       <span className={isReceipt ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
                         {isReceipt ? '+' : '-'}{isRialCurrency(tx.currency) ? rial.number(tx.amount) : formatPersianPrice(tx.amount, String(tx.currency).trim())}
                       </span>
@@ -345,7 +342,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
 
                     {/* Running balance (if single account filtered) */}
                     {txAccountFilter !== 'all' && (
-                      <td className="py-3 px-3 text-left font-mono font-bold text-slate-700 dark:text-slate-200">
+                      <td className="py-3 px-3 text-left font-mono font-bold text-slate-700 dark:text-slate-200" data-label="مانده جاری">
                         {runningBal !== undefined ? (
                           <span className={runningBal >= 0 ? 'text-slate-800 dark:text-slate-200' : 'text-rose-500'}>
                             {rial.money(runningBal, tx.currency)}
@@ -355,24 +352,24 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                     )}
 
                     {/* Accounting Voucher */}
-                    <td className="py-3 px-3 text-center">
+                    <td className="py-3 px-3 text-center" data-label="سند حسابداری">
                       {tx.voucherId ? (
-                        <span className="inline-block px-2 py-0.5 text-[10px] font-mono font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 rounded border border-indigo-200 dark:border-indigo-800/50">
+                        <span className="inline-block px-2 py-0.5 text-[11px] font-mono font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 rounded border border-indigo-200 dark:border-indigo-800/50">
                           سند #{formatPersianCode(tx.voucherId)}
                         </span>
                       ) : (
-                        <span className="text-[10px] text-slate-400">—</span>
+                        <span className="text-[11px] text-slate-500">—</span>
                       )}
                     </td>
 
                     {/* Creator */}
-                    <td className="py-3 px-3 text-center text-slate-500 text-[11px]">
+                    <td className="py-3 px-3 text-center text-slate-500 text-[11px]" data-phone="hide">
                       {tx.creatorName || 'سیستم'}
                     </td>
 
                     {/* Actions */}
                     {/* v9.0.67 (TD-499، ت۱): ردیف معکوس (ابطال تراکنش دیگر) دکمه ابطال ندارد؛ سرور هم آن را رد می‌کند */}
-                    <td className="py-3 px-3 text-center">
+                    <td className="py-3 px-3 text-center" data-phone="actions">
                       {!isVoided && !(tx.reversalOfId ?? tx.reversal_of_id) ? (
                         <div className="inline-flex items-center gap-1">
                           {/* v9.0.272 (TD-779): دریافت یا پرداخت وصل به سند «علی‌الحساب» می‌شود تا سند باطل‌شدنی شود */}
@@ -381,7 +378,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                               onClick={() => onDetachDocument(tx)}
                               title="جدا کردن از سند (علی‌الحساب)"
                               aria-label="جدا کردن از سند (علی‌الحساب)"
-                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg transition cursor-pointer"
+                              className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg transition cursor-pointer"
                             >
                               <Unlink size={14} />
                             </button>
@@ -394,7 +391,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                               onClick={() => onRelinkDocument(tx)}
                               title="انتقال به سند دیگر"
                               aria-label="انتقال به سند دیگر"
-                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg transition cursor-pointer"
+                              className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg transition cursor-pointer"
                             >
                               <Link2 size={14} />
                             </button>
@@ -402,13 +399,13 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                           <button
                             onClick={() => onVoidTransaction(tx)}
                             title="ابطال تراکنش و ثبت سند معکوس"
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition cursor-pointer"
+                            className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition cursor-pointer"
                           >
                             <AlertTriangle size={14} />
                           </button>
                         </div>
                       ) : (
-                        <span className="text-[10px] text-slate-400 font-mono">—</span>
+                        <span className="text-[11px] text-slate-500 font-mono">—</span>
                       )}
                     </td>
                   </tr>

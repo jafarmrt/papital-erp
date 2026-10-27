@@ -20,7 +20,7 @@ afterEach(() => { cleanup(); fetchJson.mockReset(); viewer.current = null; });
 
 const MAKER_NAME = 'مریم احمدی';
 const REFERENCE_TEXT = 'ارجاع: چک (CHQ-1)';
-const APPROVE_LABEL = 'تایید سند';
+const APPROVE_LABEL = 'تأیید سند';
 const WAITING_LABEL = 'در انتظار تأیید دیگری';
 
 function renderTab() {

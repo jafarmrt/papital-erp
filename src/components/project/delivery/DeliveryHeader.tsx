@@ -96,7 +96,7 @@ function BatchDeliveryButton({ delivery }: { delivery: ProjectDelivery }) {
         type="button"
         onClick={() => void handleBatchAddToInventory(selectedProducts)}
         disabled={batchSubmitting || submitting || costPending}
-        className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+        className="px-3.5 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
       >
         {batchSubmitting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
         <span>تحویل {toPersianDigits(selectedIds.size)} کالای انتخاب‌شده به انبار</span>

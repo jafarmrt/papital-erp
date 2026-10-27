@@ -327,7 +327,7 @@ export class WorkflowDefinitionService {
       if (await missing('DOC_APPROVAL_WORKFLOW')) {
         await this.saveWorkflowDefinition({
           code: 'DOC_APPROVAL_WORKFLOW',
-          title: 'چرخه تایید سه‌مرحله‌ای اسناد و فاکتورها (فروش -> انبار -> مالی)',
+          title: 'چرخه تایید سه‌مرحله‌ای اسناد و فاکتورها (فروش ← انبار ← مالی)',
           entityType: 'document',
           description: 'گردش کار تایید سه‌مرحله‌ای اسناد فروش و پیش‌فاکتورها شامل بررسی پیش‌نویس، تایید تحویل انبار و تاییدیه مالی',
           version: 1,

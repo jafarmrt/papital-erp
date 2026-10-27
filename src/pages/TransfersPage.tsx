@@ -215,7 +215,7 @@ export default function TransfersPage({ user }: { user?: User }) {
             {designAccess.canSave && (
             <button
               onClick={openCreateModal}
-              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-md shadow-emerald-600/30 active:scale-95 cursor-pointer"
+              className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-md shadow-emerald-600/30 active:scale-95 cursor-pointer"
             >
               <Plus size={16} />
               ثبت طرح ترنسفر جدید
@@ -226,7 +226,7 @@ export default function TransfersPage({ user }: { user?: User }) {
               className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-md shadow-blue-600/30 active:scale-95 cursor-pointer"
             >
               <RefreshCw size={16} className={loading || isFetching ? "animate-spin" : ""} />
-              بروزرسانی داده‌ها
+              به‌روزرسانی داده‌ها
             </button>
           </div>
         </div>
@@ -345,7 +345,7 @@ export default function TransfersPage({ user }: { user?: User }) {
             {designAccess.canSave && (
             <button
               onClick={openCreateModal}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-xs cursor-pointer"
+              className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-xs cursor-pointer"
             >
               <Plus size={15} />
               ثبت طرح ترنسفر جدید

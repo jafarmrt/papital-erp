@@ -122,10 +122,10 @@ export default function ReorderAlertsPage(_props: { user: User }) {
     updateReorderPoint.mutate({ item: editingItem, reorderPoint: val }, {
       onSuccess: () => {
         setEditingItem(null);
-        toast.success('نقطه سفارش با موفقیت بروزرسانی شد.');
+        toast.success('نقطه سفارش با موفقیت به‌روزرسانی شد.');
       },
       onError: (err) => {
-        toast.error(errorMessageOf(err) || 'خطا در بروزرسانی نقطه سفارش');
+        toast.error(errorMessageOf(err) || 'خطا در به‌روزرسانی نقطه سفارش');
       },
     });
   };
@@ -168,7 +168,7 @@ export default function ReorderAlertsPage(_props: { user: User }) {
               className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-md shadow-blue-600/30 active:scale-95 cursor-pointer"
             >
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-              بروزرسانی
+              به‌روزرسانی
             </button>
           </div>
         </div>

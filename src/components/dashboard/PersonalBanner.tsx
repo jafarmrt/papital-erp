@@ -184,10 +184,10 @@ export function PersonalBanner({ user }: PersonalBannerProps) {
             <button
               onClick={handleNextPrinciple}
               title="اصل بعدی تجارت عادلانه"
-              className="flex items-center gap-1 p-2 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-colors shrink-0 border border-slate-200/60 bg-white"
+              className="flex items-center gap-1 p-2 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-colors shrink-0 border border-slate-200/60 bg-white"
             >
               <RefreshCw size={13} className="hover:rotate-180 transition-transform duration-500" />
-              <span className="text-[10px] font-bold hidden sm:inline text-slate-500">اصل بعدی</span>
+              <span className="text-[11px] font-bold hidden sm:inline text-slate-500">اصل بعدی</span>
             </button>
           </div>
         </div>

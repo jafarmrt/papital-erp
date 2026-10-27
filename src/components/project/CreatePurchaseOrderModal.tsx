@@ -11,6 +11,7 @@ import { useHasAnyPermission } from '../../contexts/AuthContext';
 import {
   DIRECT_ORDER_PERMISSIONS, draftOrderBody, projectRequisitionBody, supplierPickOptions, type ProjectOrderLine, type RequisitionPriority,
 } from '../../lib/projects/projectPurchaseOrder';
+import { REQUISITION_PRIORITIES, REQUISITION_PRIORITY_LABELS } from '../../lib/procurement/requisitionFields';
 import { ProjectDirectOrderFields } from './ProjectDirectOrderFields';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
@@ -295,13 +296,10 @@ export function CreatePurchaseOrderModal({
                 <select
                   id={`${fieldId}-priority`}
                   value={priority}
-                  onChange={e => setPriority(e.target.value as any)}
+                  onChange={e => setPriority(e.target.value as RequisitionPriority)}
                   className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
                 >
-                  <option value="normal">عادی</option>
-                  <option value="high">بالا</option>
-                  <option value="urgent">فوری / اضطراری</option>
-                  <option value="low">پایین</option>
+                  {REQUISITION_PRIORITIES.map(p => <option key={p} value={p}>{REQUISITION_PRIORITY_LABELS[p]}</option>)}
                 </select>
               </div>
 

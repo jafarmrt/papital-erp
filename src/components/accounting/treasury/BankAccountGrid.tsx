@@ -46,13 +46,13 @@ export const BankAccountGrid: React.FC<BankAccountGridProps> = React.memo(({
       <button
         type="button"
         onClick={onNewAccount}
-        className="border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition bg-slate-50/40 dark:bg-slate-800/40 hover:bg-indigo-50/20 dark:hover:bg-indigo-950/20 group cursor-pointer min-h-[180px]"
+        className="border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition bg-slate-50/40 dark:bg-slate-800/40 hover:bg-indigo-50/20 dark:hover:bg-indigo-950/20 group cursor-pointer min-h-[180px]"
       >
         <div className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-700 shadow-sm flex items-center justify-center group-hover:scale-110 transition border border-slate-200 dark:border-slate-600">
-          <Plus className="w-6 h-6 text-slate-400 group-hover:text-indigo-600" />
+          <Plus className="w-6 h-6 text-slate-500 group-hover:text-indigo-600" />
         </div>
         <span className="font-bold text-sm text-slate-600 dark:text-slate-300">تعریف حساب / صندوق جدید</span>
-        <span className="text-xs text-slate-400">بانک، صندوق نقد، کارتخوان یا تنخواه‌گردان</span>
+        <span className="text-xs text-slate-500">بانک، صندوق نقد، کارتخوان یا تنخواه‌گردان</span>
       </button>
     </div>
   );

@@ -5,14 +5,21 @@ import { formatPersianDate } from '../../utils';
  * v9.0.106 (TD-515، B04-19): برچسب فارسی روش و نوع طرف تراکنش خزانه، یکی برای جدول و خروجی اکسل. پیش‌تر اکسل
  * `customer` و `bank_transfer` خام را می‌نوشت.
  */
+/**
+ * v11 phase 6.3b (U22): one name for each way money moves, on the invoice's quick settlement, the treasury form, filter
+ * and list, the export and the payroll payment. Before, the same method read «انتقال بانکی»، «حواله / پایا / ساتنا» and
+ * «حواله»; «کارت‌خوان» and «کارتخوان (POS)»; «وجه نقد (صندوق)»، «نقدی / صندوق» and «نقدی».
+ */
+export const PAYMENT_METHOD_LABELS = {
+  bank_transfer: 'انتقال بانکی',
+  pos: 'کارت‌خوان',
+  cash: 'نقدی (صندوق)',
+  cheque: 'چک',
+} as const;
+export type PaymentMethodKey = keyof typeof PAYMENT_METHOD_LABELS;
+
 export function treasuryMethodLabel(method: string | null | undefined): string {
-  switch (method) {
-    case 'bank_transfer': return 'حواله / پایا';
-    case 'pos': return 'کارتخوان';
-    case 'cash': return 'نقدی';
-    case 'cheque': return 'چک';
-    default: return 'نامشخص';
-  }
+  return (PAYMENT_METHOD_LABELS as Record<string, string>)[String(method ?? '')] ?? 'نامشخص';
 }
 
 export function treasuryPartyTypeLabel(partyType: string | null | undefined): string {

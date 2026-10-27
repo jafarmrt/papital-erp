@@ -7,7 +7,7 @@ import { z } from 'zod';
  * که خود اسکیما نوشته باشد همیشه بر این نقشه مقدم است.
  */
 
-/** نام فارسی فیلدها؛ فیلد بی‌برچسب با نام خامش در «» نشان داده می‌شود (واژه‌ها فارسی، بی نویسه‌نویسی انگلیسی) */
+/** نام فارسی فیلدها؛ فیلد بی‌برچسب «یکی از خانه‌های فرم» است (`UNLABELLED_FIELD`؛ واژه‌ها فارسی، بی نویسه‌نویسی انگلیسی) */
 export const FIELD_LABELS: Record<string, string> = {
   // v11 phase 6.1a (review 6 of #403): the review state a daily-log review form opened
   opened_status: 'بازخورد گزارش کار',
@@ -179,11 +179,17 @@ export function issueFieldKey(path: ReadonlyArray<PropertyKey> | undefined): str
   return parts.length > 0 ? parts[parts.length - 1] : null;
 }
 
+/**
+ * v11 phase 6.3b: a field without a Persian label is «یکی از خانه‌های فرم»; before, the message held its raw key
+ * (««discountCode» باید متن باشد»). The key stays in the response's `details.issues[].path` for the developer.
+ */
+export const UNLABELLED_FIELD = 'یکی از خانه‌های فرم';
+
 /** برچسب فارسی فیلد یک مسیر */
 export function fieldLabel(path: ReadonlyArray<PropertyKey> | undefined): string {
   const key = issueFieldKey(path);
   if (key === null) return 'ورودی';
-  return FIELD_LABELS[key] ?? `«${key}»`;
+  return FIELD_LABELS[key] ?? UNLABELLED_FIELD;
 }
 
 const faFallback = z.locales.fa().localeError;

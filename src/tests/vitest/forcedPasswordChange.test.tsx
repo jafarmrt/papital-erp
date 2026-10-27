@@ -128,7 +128,7 @@ describe('temporary password (TD-523)', () => {
     await act(async () => { await new Promise(r => setTimeout(r, 50)); });
     expect(calls.map(c => pathOf(c.url)).filter(path => !PASSWORD_RESET_ALLOWED_PATHS.has(path))).toEqual([]);
     expect(document.querySelector('aside')).toBeNull();
-    expect(screen.getByText('کلمه عبور شما موقت است')).toBeTruthy();
+    expect(screen.getByText('رمز عبور شما موقت است')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: LOGOUT_THIS_DEVICE }));
     await waitForStep(() => expect(calls.some(c => c.url === '/api/auth/logout' && c.method === 'POST')).toBe(true));

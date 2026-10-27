@@ -40,7 +40,7 @@ export function WcAutoPushPanel({ view, canManage }: { view: WcAutoPushView; can
             type="button"
             onClick={() => { void onSwitch(); }}
             disabled={setAutoPush.isPending}
-            className={`${view.enabled ? 'bg-slate-600 hover:bg-slate-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white font-medium py-1.5 px-3 rounded-lg text-xs disabled:opacity-50`}
+            className={`${view.enabled ? 'bg-slate-600 hover:bg-slate-700' : 'bg-emerald-700 hover:bg-emerald-800'} text-white font-medium py-1.5 px-3 rounded-lg text-xs disabled:opacity-50`}
           >
             {view.enabled ? 'خاموش کردن' : 'روشن کردن'}
           </button>

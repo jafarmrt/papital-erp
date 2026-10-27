@@ -1,5 +1,5 @@
 import React from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Hammer, Loader2 } from 'lucide-react';
 import { WorkshopTaskList } from '../components/workshop/WorkshopTaskList';
 import { WorkshopDeliveryList } from '../components/workshop/WorkshopDeliveryList';
@@ -11,6 +11,7 @@ import { PHONE_TAP_TARGET } from '../lib/pwa/phoneLayout';
 import {
   highlightedRowKey, WORKSHOP_TAB_LABELS, workshopTabOf, workshopTabPath, workshopTabsFor, type WorkshopTab,
 } from '../lib/workshop/workshopView';
+import { WORKSHOP_ERRORS } from '../lib/workshop/workshopSchedule';
 import { getErrorMessage } from '../utils/formatters';
 import { formatPersianNumber } from '../utils/persianNumber';
 
@@ -29,6 +30,7 @@ export default function WorkshopPage(): React.ReactElement {
   const deliveries = useMyWorkshopDeliveriesQuery(tab === 'deliveries');
   const review = useWorkshopReviewQuery(tab === 'review');
   const reviewCount = Array.isArray(review.data) ? review.data.length : 0;
+  const mayOpenPersonnel = useHasPermission('personnel.manage');
 
   return (
     <div className="max-w-3xl mx-auto space-y-4 pb-24 md:pb-12 font-farsi text-right">
@@ -56,20 +58,59 @@ export default function WorkshopPage(): React.ReactElement {
       )}
 
       {tab === 'tasks' && (
-        <QueryState loading={tasks.isLoading} error={tasks.error}>
-          {tasks.data && <WorkshopTaskList data={tasks.data} highlighted={highlightedRowKey(search)} />}
-        </QueryState>
+        isPersonnelNotLinked(tasks.error) ? (
+          <NotLinkedNotice mayOpenPersonnel={mayOpenPersonnel} reviewPath={tabs.includes('review') ? workshopTabPath('review') : null} />
+        ) : (
+          <QueryState loading={tasks.isLoading} error={tasks.error}>
+            {tasks.data && <WorkshopTaskList data={tasks.data} highlighted={highlightedRowKey(search)} />}
+          </QueryState>
+        )
       )}
       {tab === 'deliveries' && (
-        <QueryState loading={deliveries.isLoading} error={deliveries.error}>
-          {deliveries.data && <WorkshopDeliveryList data={deliveries.data} />}
-        </QueryState>
+        isPersonnelNotLinked(deliveries.error) ? (
+          <NotLinkedNotice mayOpenPersonnel={mayOpenPersonnel} reviewPath={tabs.includes('review') ? workshopTabPath('review') : null} />
+        ) : (
+          <QueryState loading={deliveries.isLoading} error={deliveries.error}>
+            {deliveries.data && <WorkshopDeliveryList data={deliveries.data} />}
+          </QueryState>
+        )
       )}
       {tab === 'review' && (
         <QueryState loading={review.isLoading} error={review.error}>
           <WorkshopReviewList items={review.data ?? []} />
         </QueryState>
       )}
+    </div>
+  );
+}
+
+const isPersonnelNotLinked = (error: unknown) => (error as { code?: unknown } | null)?.code === WORKSHOP_ERRORS.personnelNotLinked.code;
+
+/**
+ * v11 phase 6.3b (U20): an account without a personnel record has no tasks of its own. Instead of the server's «از مدیر
+ * سامانه بخواهید» (shown to the admin too), the page offers what the user can do: open the personnel records to link one,
+ * or the report review for a project manager.
+ */
+function NotLinkedNotice({ mayOpenPersonnel, reviewPath }: { mayOpenPersonnel: boolean; reviewPath: string | null }): React.ReactElement {
+  return (
+    <div role="status" className="text-sm bg-amber-50 text-amber-900 border border-amber-200 rounded-xl p-4 space-y-3">
+      <p>
+        {mayOpenPersonnel
+          ? 'حساب شما به پرونده پرسنلی وصل نیست؛ کارهای کارگاه از پرونده پرسنلی خوانده می‌شود. پرونده خودتان را در صفحه پرسنل به حساب‌تان وصل کنید.'
+          : WORKSHOP_ERRORS.personnelNotLinked.message}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {mayOpenPersonnel && (
+          <Link to="/personnel" className={`${PHONE_TAP_TARGET} inline-flex items-center px-3 py-2 rounded-lg bg-amber-700 hover:bg-amber-800 text-white font-bold`}>
+            صفحه پرسنل
+          </Link>
+        )}
+        {reviewPath && (
+          <Link to={reviewPath} className={`${PHONE_TAP_TARGET} inline-flex items-center px-3 py-2 rounded-lg border border-amber-300 text-amber-900 font-bold`}>
+            {WORKSHOP_TAB_LABELS.review}
+          </Link>
+        )}
+      </div>
     </div>
   );
 }

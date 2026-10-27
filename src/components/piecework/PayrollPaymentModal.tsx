@@ -10,6 +10,7 @@ import { JalaliDateInput } from '../common/JalaliDateInput';
 import { DecimalInput } from '../common/DecimalInput';
 import { DialogLayer } from '../common/DialogLayer';
 import { isPayrollBankCurrency } from '../../lib/payroll/payrollCurrency';
+import { PAYMENT_METHOD_LABELS } from '../../lib/treasury/treasuryExport';
 import { useBankAccountOptionsQuery } from '../../hooks/accounting/useTreasuryQueries';
 import { usePayrollPaymentsQuery, type PayrollPaymentRowData } from '../../hooks/queries/usePayrollWindowQueries';
 import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
@@ -32,9 +33,9 @@ interface PayrollPaymentModalProps {
 }
 
 const METHOD_OPTIONS = [
-  { value: 'bank_transfer', label: 'انتقال بانکی' },
-  { value: 'cash', label: 'نقدی / صندوق' },
-  { value: 'pos', label: 'کارتخوان' }
+  { value: 'bank_transfer', label: PAYMENT_METHOD_LABELS.bank_transfer },
+  { value: 'cash', label: PAYMENT_METHOD_LABELS.cash },
+  { value: 'pos', label: PAYMENT_METHOD_LABELS.pos }
   // v8.0.120 (TD-411، تصمیم مالک محصول): روش «چک» حذف شد؛ چکی در دفتر چک ثبت نمی‌شد و بانک همان روز بستانکار می‌شد
 ] as const;
 
@@ -348,7 +349,7 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
               <button
                 type="submit"
                 disabled={isSaving || !bankAccountId || payAmount <= 0 || payAmount > remainingPayable}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold disabled:opacity-50 text-xs shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+                className="px-5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl font-bold disabled:opacity-50 text-xs shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
               >
                 {isSaving ? 'در حال ثبت...' : isFullSettlement ? 'ثبت تسویه کامل' : 'ثبت پرداخت مرحله‌ای'}
               </button>

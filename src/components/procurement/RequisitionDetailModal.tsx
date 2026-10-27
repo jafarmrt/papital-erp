@@ -518,7 +518,7 @@ export function RequisitionDetailModal({
                   onClick={() => handleWorkflowAction(action.actionKey)}
                   className={action.tone === 'reject'
                     ? 'px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl flex items-center gap-1.5 border border-rose-200 transition-all cursor-pointer disabled:opacity-50'
-                    : 'px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50'}
+                    : 'px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50'}
                 >
                   {action.tone === 'reject' ? <Ban className="w-4 h-4" /> : <Check className="w-4 h-4" />}
                   {action.label}

@@ -12,7 +12,7 @@ const BASE_URL = `http://localhost:${Number(process.env.E2E_PORT || 3100)}`;
 
 export const LOGIN_TEXT = {
   username: 'نام کاربری',
-  password: 'کلمه عبور',
+  password: 'رمز عبور',
   submit: 'ورود به سامانه',
   signedInTitle: 'خروج از حساب در همین دستگاه',
 } as const;

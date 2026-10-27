@@ -37,7 +37,7 @@ export function InvoiceRowActions({ doc, isCommercial, settlementStatus, actions
     });
   }
   return (
-    <td className="p-3 text-center whitespace-nowrap">
+    <td className="p-3 text-center whitespace-nowrap" data-phone="actions">
       <div className="flex items-center justify-center gap-1">
         {isCommercial && doc.status === 'final' && access.settle && (
           <button 
@@ -45,12 +45,12 @@ export function InvoiceRowActions({ doc, isCommercial, settlementStatus, actions
             className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1 font-bold ${
               settlementStatus === 'fully_paid'
                 ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/60'
-                : 'text-white bg-emerald-600 hover:bg-emerald-700 shadow-2xs'
+                : 'text-white bg-emerald-700 hover:bg-emerald-800 shadow-2xs'
             }`}
             title={settlementStatus === 'fully_paid' ? 'مشاهده سوابق تسویه' : 'تسویه سریع فاکتور'}
           >
             <CreditCard size={13} />
-            <span className="text-[10px]">
+            <span className="text-[11px]">
               {settlementStatus === 'fully_paid' ? 'تسویه‌شده' : 'تسویه سریع'}
             </span>
           </button>

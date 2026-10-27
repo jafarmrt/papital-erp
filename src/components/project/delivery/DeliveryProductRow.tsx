@@ -111,7 +111,7 @@ export function DeliveryProductRow({ product: p, index: idx, projectItemId, cata
             onClick={() => void handleAddToInventory(p)}
             disabled={submitting || batchSubmitting || costPending}
             title={costPending ? 'در حال خواندن ماندهٔ کالای در جریان ساخت پروژه…' : undefined}
-            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 transition-all shadow-2xs hover:shadow disabled:opacity-50 shrink-0 cursor-pointer"
+            className="px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-1 transition-all shadow-2xs hover:shadow disabled:opacity-50 shrink-0 cursor-pointer"
           >
             {submitting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
             <span>ورود به انبار</span>

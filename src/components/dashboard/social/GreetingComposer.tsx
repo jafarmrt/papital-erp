@@ -114,7 +114,7 @@ export function GreetingComposer({ birthday }: { birthday: ColleagueBirthday }) 
           <span>{mine?.message ? 'ویرایش پیام' : 'فرستادن'}</span>
         </button>
       </form>
-      <p className={`text-[11px] ${tooLong ? 'text-rose-600' : 'text-slate-400'}`}>
+      <p className={`text-[11px] ${tooLong ? 'text-rose-600' : 'text-slate-500'}`}>
         {formatPersianNumber(messageLength)} از {formatPersianNumber(GREETING_MESSAGE_MAX)} نویسه
       </p>
       {error && <p className="text-xs text-rose-600" role="alert">{error}</p>}

@@ -47,7 +47,7 @@ describe('treasury form and export wording (TD-515)', () => {
       { id: 1, transactionNumber: 'REC-000001', type: 'receipt', status: 'completed', date: '2026-10-07', partyType: 'customer', method: 'bank_transfer', partyName: 'مشتری', amount: 1_000_000 },
       { id: 2, transactionNumber: 'PAY-000002', type: 'payment', status: 'completed', date: '2026-10-07', partyType: 'personnel', method: 'pos', partyName: 'کارگر', amount: 300_000 },
     ] as unknown as TreasuryTransaction[]);
-    expect(rows.map(r => [r['نوع طرف'], r['روش پرداخت']])).toEqual([['مشتری', 'حواله / پایا'], ['پرسنل', 'کارتخوان']]);
+    expect(rows.map(r => [r['نوع طرف'], r['روش پرداخت']])).toEqual([['مشتری', 'انتقال بانکی'], ['پرسنل', 'کارت‌خوان']]);
     expect(treasuryExportFileName('1405/07/15')).toBe('گردش-خزانه-1405-07-15.xlsx');
   });
 });

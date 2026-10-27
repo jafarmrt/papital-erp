@@ -26,7 +26,7 @@ export function IranAddressFields({ id, province, city, onChange }: IranAddressF
   return (
     <>
       <div>
-        <label htmlFor={`${id}-province`} className="block text-[10px] font-medium mb-1 text-slate-600">استان</label>
+        <label htmlFor={`${id}-province`} className="block text-[11px] font-medium mb-1 text-slate-600">استان</label>
         <SearchableSelect
           id={`${id}-province`}
           options={PROVINCE_OPTIONS}
@@ -38,7 +38,7 @@ export function IranAddressFields({ id, province, city, onChange }: IranAddressF
         />
       </div>
       <div>
-        <label htmlFor={`${id}-city`} className="block text-[10px] font-medium mb-1 text-slate-600">شهر</label>
+        <label htmlFor={`${id}-city`} className="block text-[11px] font-medium mb-1 text-slate-600">شهر</label>
         <SearchableSelect
           id={`${id}-city`}
           options={cityOptions}

@@ -30,9 +30,11 @@ const LETTER = '[\\u0621-\\u064A\\u067E\\u0686\\u0698\\u06A9\\u06AF\\u06CC]';
  * «نمی‌باشد» (written «کنید» / «است» / «نیست»).
  * v10.1.63 (OBS-PR-16, decision ت۴۰ item 16): also «کانبان» everywhere (written «نمای ستونی» or «تخته»).
  * v10.3.6 (owner rule, 10.3 package 2): also «کارساز» (written «سرور»); «خودکارسازی» is a longer word and stays.
+ * v11 phase 6.3b (U22, evaluation finding F22): also «بروزرسانی» (written «به‌روزرسانی»), «واتساپ» (written «واتس‌اپ») and
+ * «کلمه عبور» (written «رمز عبور»), which the same flow wrote both ways.
  */
 export const FORBIDDEN = new RegExp(
-  `(?<!${LETTER})((?:سیستم|کاتالوگ|فیلتر|دوبل|جستجو|کانبان|کارساز)(?:‌?(?:هایی|های|ها)|ی)?|نمایید|ن?می‌باشد)(?!${LETTER})`,
+  `(?<!${LETTER})((?:سیستم|کاتالوگ|فیلتر|دوبل|جستجو|کانبان|کارساز)(?:‌?(?:هایی|های|ها)|ی)?|نمایید|ن?می‌باشد|بروز[ ‌]?رسانی|واتساپ|کلمه[ ‌]عبور)(?!${LETTER})`,
 );
 
 export type Baseline = Record<string, number>;

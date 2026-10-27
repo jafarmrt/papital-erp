@@ -365,7 +365,7 @@ export function DeadLetterQueueSubTab() {
             <button
               onClick={handleBatchReplay}
               disabled={isBatchReplaying}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm transition-all disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl shadow-sm transition-all disabled:opacity-50"
             >
               <RotateCcw className={`w-3.5 h-3.5 ${isBatchReplaying ? 'animate-spin' : ''}`} />
               <span>بازپخش {formatPersianNumber(selectedIds.length)} مورد</span>

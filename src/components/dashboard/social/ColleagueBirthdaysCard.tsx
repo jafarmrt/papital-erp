@@ -67,7 +67,7 @@ export function ColleagueBirthdaysCard({ birthdays, loading }: { birthdays: Coll
         </div>
       </header>
       {loading && birthdays.length === 0 ? (
-        <p className="text-xs text-slate-400">در حال بارگذاری…</p>
+        <p className="text-xs text-slate-500">در حال بارگذاری…</p>
       ) : birthdays.length === 0 ? (
         <p className="text-xs text-slate-500">در این روزها تولد هیچ همکاری نیست.</p>
       ) : (

@@ -80,9 +80,11 @@ export function ActionMenu({
           setIsOpen((prev) => !prev);
         }}
         title={title}
+        aria-label={title}
         className={
+          // v11 phase 6.3b: a finger-sized trigger (44px) on a phone, the compact one on a wide screen
           buttonClassName ||
-          'p-1.5 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center'
+          'p-1.5 max-sm:min-h-11 max-sm:min-w-11 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center'
         }
         aria-expanded={isOpen}
       >

@@ -28,6 +28,7 @@ import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { accountCurrencyOf, defaultSettlementAccountId, settlementAccountsFor, halfRemainingAmount } from '../../lib/invoices/settlementAccounts';
 import { settlementDefaultDescription } from '../../lib/invoices/settlementDescription';
 import { DialogLayer } from '../common/DialogLayer';
+import { PAYMENT_METHOD_LABELS, treasuryMethodLabel } from '../../lib/treasury/treasuryExport';
 import { useBankAccountOptionsQuery } from '../../hooks/accounting/useTreasuryQueries';
 import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 import type { BankAccountOption } from '../../types';
@@ -343,7 +344,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
                 }`}
               >
                 <CreditCard size={18} className={method === 'pos' ? 'text-emerald-600 mb-1' : 'text-slate-400 mb-1'} />
-                <span>کارت‌خوان</span>
+                <span>{PAYMENT_METHOD_LABELS.pos}</span>
               </button>
 
               <button
@@ -356,7 +357,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
                 }`}
               >
                 <Building2 size={18} className={method === 'bank_transfer' ? 'text-emerald-600 mb-1' : 'text-slate-400 mb-1'} />
-                <span>انتقال بانکی</span>
+                <span>{PAYMENT_METHOD_LABELS.bank_transfer}</span>
               </button>
 
               <button
@@ -369,7 +370,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
                 }`}
               >
                 <Banknote size={18} className={method === 'cash' ? 'text-emerald-600 mb-1' : 'text-slate-400 mb-1'} />
-                <span>وجه نقد (صندوق)</span>
+                <span>{PAYMENT_METHOD_LABELS.cash}</span>
               </button>
 
             </div>
@@ -491,7 +492,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
                       <span className="font-mono font-medium">{toPersianDigits(st.date)}</span>
                       <span>•</span>
                       <span className="text-slate-500">
-                        {st.method === 'pos' ? 'کارت‌خوان' : st.method === 'cash' ? 'نقدی' : st.method === 'cheque' ? 'چک' : 'حواله'}
+                        {treasuryMethodLabel(st.method)}
                       </span>
                       {st.trackingNumber && (
                         <span className="text-slate-400 font-mono text-[10px]">({st.trackingNumber})</span>
@@ -522,7 +523,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
             type="button"
             onClick={handleSubmit}
             disabled={isSubmitting || parsedAmount <= 0 || !selectedAccountId}
-            className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:hover:bg-emerald-600 rounded-xl shadow-sm hover:shadow transition-all flex items-center gap-2"
+            className="px-5 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 disabled:hover:bg-emerald-600 rounded-xl shadow-sm hover:shadow transition-all flex items-center gap-2"
           >
             {isSubmitting ? (
               <>

@@ -119,7 +119,7 @@ export function ProcurementOrderList({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs text-right">
+            <table className="phone-cards w-full text-xs text-right">
               <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                 <tr>
                   <th className="p-3 text-center w-12">#</th>
@@ -141,11 +141,11 @@ export function ProcurementOrderList({
                   return (
                     <React.Fragment key={order.id}>
                       <tr className={`hover:bg-slate-50/70 transition-colors ${isExpanded ? 'bg-amber-50/30' : ''}`}>
-                        <td className="p-3 text-center font-mono text-slate-400">
+                        <td className="p-3 text-center font-mono text-slate-400" data-phone="hide">
                           {formatPersianNumber((page - 1) * pageSize + idx + 1)}
                         </td>
 
-                        <td className="p-3">
+                        <td className="p-3" data-phone="title">
                           <div className="flex items-center gap-1.5 font-bold text-slate-900">
                             <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                             <span>فاکتور #{formatPersianCode(order.refNumber)}</span>
@@ -155,7 +155,7 @@ export function ProcurementOrderList({
                           </span>
                         </td>
 
-                        <td className="p-3">
+                        <td className="p-3" data-label="تامین‌کننده">
                           <div className="font-bold text-slate-900 flex items-center gap-1">
                             <Building2 className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                             <span>{order.supplierName}</span>
@@ -167,7 +167,7 @@ export function ProcurementOrderList({
                           )}
                         </td>
 
-                        <td className="p-3">
+                        <td className="p-3" data-label="درخواست خرید">
                           {order.requisitionCode ? (
                             <button
                               type="button"
@@ -182,7 +182,7 @@ export function ProcurementOrderList({
                           )}
                         </td>
 
-                        <td className="p-3">
+                        <td className="p-3" data-phone="hide">
                           <div className="font-bold text-slate-800">
                             {order.projectName || 'خرید عمومی سازمان'}
                           </div>
@@ -191,7 +191,7 @@ export function ProcurementOrderList({
                           </span>
                         </td>
 
-                        <td className="p-3 text-center">
+                        <td className="p-3 text-center" data-label="اقلام سفارش">
                           <button
                             type="button"
                             onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
@@ -203,11 +203,11 @@ export function ProcurementOrderList({
                           </button>
                         </td>
 
-                        <td className="p-3 text-center font-mono font-black text-amber-800">
+                        <td className="p-3 text-center font-mono font-black text-amber-800" data-label="مبلغ کل">
                           {rial.number(order.totalAmount)}
                         </td>
 
-                        <td className="p-3 text-center">
+                        <td className="p-3 text-center" data-label="وضعیت تحویل">
                           {order.status === 'final' ? (
                             <span className="px-2.5 py-1 bg-emerald-100 text-emerald-900 font-bold rounded-lg text-[11px] inline-flex items-center gap-1">
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
@@ -221,13 +221,13 @@ export function ProcurementOrderList({
                           )}
                         </td>
 
-                        <td className="p-3 text-center">
+                        <td className="p-3 text-center" data-phone="actions">
                           {order.status !== 'final' && onDeliverOrder ? (
                             <button
                               type="button"
                               disabled={isDelivering}
                               onClick={() => onDeliverOrder(order.id)}
-                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer mx-auto disabled:opacity-50"
+                              className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer mx-auto disabled:opacity-50"
                               title="تایید رسید کالا و ثبت در کاردکس انبار"
                             >
                               <PackageCheck className="w-4 h-4" />

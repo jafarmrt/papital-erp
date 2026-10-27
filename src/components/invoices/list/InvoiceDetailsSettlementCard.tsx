@@ -21,7 +21,7 @@ export function InvoiceDetailsSettlementCard({ selectedDocDetails, setSettlement
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-slate-800">وضعیت تسویه مالی:</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${settlementView.badgeClass}`}>
+            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${settlementView.badgeClass}`}>
               {settlementView.label}
             </span>
           </div>
@@ -37,7 +37,7 @@ export function InvoiceDetailsSettlementCard({ selectedDocDetails, setSettlement
         <button
           type="button"
           onClick={() => setSettlementDoc(selectedDocDetails)}
-          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-2xs hover:shadow-xs flex items-center gap-1.5 shrink-0"
+          className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all shadow-2xs hover:shadow-xs flex items-center gap-1.5 shrink-0"
         >
           <CreditCard size={14} />
           <span>{selectedDocDetails.settlementStatus === 'fully_paid' ? 'مشاهده / ثبت تراکنش جدید' : 'تسویه سریع فاکتور'}</span>

@@ -90,11 +90,11 @@ export const BankAccountCard: React.FC<BankAccountCardProps> = React.memo(({
                 <h4 className="font-bold text-slate-900 dark:text-white text-sm">
                   {bank.title}
                 </h4>
-                <span className="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-700/60 px-1.5 py-0.5 rounded">
+                <span className="text-[11px] font-mono text-slate-500 bg-slate-100 dark:bg-slate-700/60 px-1.5 py-0.5 rounded">
                   {formatPersianCode(bank.code)}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <p className="text-[11px] text-slate-500 mt-0.5">
                 {bank.bankName ? `${bank.bankName} ${bank.branch ? `(${bank.branch})` : ''}` : (bank.type === 'cash' ? 'صندوق نقد' : isPettyCash ? 'تنخواه‌گردان' : 'دستگاه کارتخوان')}
               </p>
             </div>
@@ -207,13 +207,13 @@ export const BankAccountCard: React.FC<BankAccountCardProps> = React.memo(({
         {/* Sub-Ledger & Treasury Breakdown */}
         <div className="grid grid-cols-2 gap-2 my-2 text-[11px]">
           <div className="p-2 bg-slate-50/70 dark:bg-slate-700/20 rounded-lg">
-            <span className="text-slate-400 block text-[10px]">مانده اسناد حسابداری:</span>
+            <span className="text-slate-500 block text-[11px]">مانده اسناد حسابداری:</span>
             <span className="font-bold text-slate-700 dark:text-slate-200 font-mono">
               {bankNumber(bank.ledgerBalance ?? bank.currentBalance ?? 0)}
             </span>
           </div>
           <div className="p-2 bg-slate-50/70 dark:bg-slate-700/20 rounded-lg">
-            <span className="text-slate-400 block text-[10px]">گردش خزانه‌داری:</span>
+            <span className="text-slate-500 block text-[11px]">گردش خزانه‌داری:</span>
             <span className="font-bold text-slate-700 dark:text-slate-200 font-mono">
               {bankNumber(bank.treasuryBalance ?? bank.currentBalance ?? 0)}
             </span>
@@ -221,7 +221,7 @@ export const BankAccountCard: React.FC<BankAccountCardProps> = React.memo(({
         </div>
 
         {/* Turnover Details */}
-        <div className="flex items-center justify-between text-[10px] text-slate-500 px-1 py-1 border-t border-slate-100 dark:border-slate-700/60">
+        <div className="flex items-center justify-between text-[11px] text-slate-500 px-1 py-1 border-t border-slate-100 dark:border-slate-700/60">
           <span>گردش بدهکار اسناد: <strong className="text-emerald-600 font-mono">{bankNumber(bank.totalDebit || 0)}</strong></span>
           <span>گردش بستانکار اسناد: <strong className="text-rose-600 font-mono">{bankNumber(bank.totalCredit || 0)}</strong></span>
         </div>
@@ -230,12 +230,12 @@ export const BankAccountCard: React.FC<BankAccountCardProps> = React.memo(({
         <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-300 mt-2">
           {bank.cardNumber && (
             <div className="flex items-center justify-between bg-slate-50/60 dark:bg-slate-700/20 px-2 py-1 rounded">
-              <span className="text-slate-400 text-[11px]">شماره کارت:</span>
+              <span className="text-slate-500 text-[11px]">شماره کارت:</span>
               <div className="flex items-center gap-1.5 font-mono">
                 <span dir="ltr">{formatBankCard(bank.cardNumber)}</span>
                 <button
                   onClick={() => onCopy(bank.cardNumber || '', `card-${bank.id}`)}
-                  className="text-slate-400 hover:text-indigo-600 cursor-pointer"
+                  className="text-slate-500 hover:text-indigo-600 cursor-pointer"
                   title="کپی شماره کارت"
                 >
                   {copiedId === `card-${bank.id}` ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
@@ -246,12 +246,12 @@ export const BankAccountCard: React.FC<BankAccountCardProps> = React.memo(({
 
           {bank.shebaNumber && (
             <div className="flex items-center justify-between bg-slate-50/60 dark:bg-slate-700/20 px-2 py-1 rounded">
-              <span className="text-slate-400 text-[11px]">شماره شبا:</span>
+              <span className="text-slate-500 text-[11px]">شماره شبا:</span>
               <div className="flex items-center gap-1.5 font-mono text-[11px]">
                 <span dir="ltr">{formatIranianSheba(bank.shebaNumber)}</span>
                 <button
                   onClick={() => onCopy(bank.shebaNumber || '', `sheba-${bank.id}`)}
-                  className="text-slate-400 hover:text-indigo-600 cursor-pointer"
+                  className="text-slate-500 hover:text-indigo-600 cursor-pointer"
                   title="کپی شماره شبا"
                 >
                   {copiedId === `sheba-${bank.id}` ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}

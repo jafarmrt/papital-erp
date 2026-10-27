@@ -36,15 +36,15 @@ const priorityClasses = {
 /** برچسب کوتاه (فهرست میز تدارکات) */
 export const REQUISITION_PRIORITY_BADGES: PillBadgeVariants = {
   urgent: { label: 'فوری', className: priorityClasses.urgent },
-  high: { label: 'بالا', className: priorityClasses.high },
-  low: { label: 'پایین', className: priorityClasses.low },
+  high: { label: 'زیاد', className: priorityClasses.high },
+  low: { label: 'کم', className: priorityClasses.low },
 };
 export const REQUISITION_PRIORITY_FALLBACK: PillBadgeVariant = { label: 'عادی', className: priorityClasses.normal };
 
 /** برچسب کامل (پنجره جزئیات درخواست) */
 export const REQUISITION_PRIORITY_DETAIL_BADGES: PillBadgeVariants = {
-  urgent: { label: 'فوری / اضطراری', className: priorityClasses.urgent },
-  high: { label: 'اولویت بالا', className: priorityClasses.high },
-  low: { label: 'اولویت پایین', className: priorityClasses.low },
+  urgent: { label: 'اولویت فوری', className: priorityClasses.urgent },
+  high: { label: 'اولویت زیاد', className: priorityClasses.high },
+  low: { label: 'اولویت کم', className: priorityClasses.low },
 };
 export const REQUISITION_PRIORITY_DETAIL_FALLBACK: PillBadgeVariant = { label: 'اولویت عادی', className: priorityClasses.normal };

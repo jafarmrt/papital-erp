@@ -6,7 +6,7 @@ import type { InvoiceListActions } from '../../../hooks/invoices/useInvoiceListA
 export function InvoiceRowNotesCell({ doc, actions }: { doc: InvoiceListDocument; actions: InvoiceListActions }) {
   const { access, editingNotesId, setEditingNotesId, tempNotes, setTempNotes, handleUpdateNotes, startEditingNotes } = actions;
   return (
-    <td className="p-3">
+    <td className="p-3" data-phone="hide">
       {editingNotesId === doc.id ? (
         <div className="flex items-center gap-2">
           <textarea 
@@ -18,13 +18,13 @@ export function InvoiceRowNotesCell({ doc, actions }: { doc: InvoiceListDocument
           <div className="flex flex-col gap-1 shrink-0">
             <button 
               onClick={() => handleUpdateNotes(doc.id)} 
-              className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-lg text-[10px] cursor-pointer font-bold"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-lg text-[11px] cursor-pointer font-bold"
             >
               ثبت
             </button>
             <button 
               onClick={() => setEditingNotesId(null)} 
-              className="bg-slate-200 hover:bg-slate-300 px-2 py-1 rounded-lg text-[10px] cursor-pointer font-medium"
+              className="bg-slate-200 hover:bg-slate-300 px-2 py-1 rounded-lg text-[11px] cursor-pointer font-medium"
             >
               لغو
             </button>

@@ -66,7 +66,7 @@ describe('password minimum length (TD-532)', () => {
     const calls = stubFetch();
     const user = { id: 5, username: 'ali', full_name: 'علی', role: 'accountant' } as unknown as User;
     render(<UserProfileModal user={user} isOpen onClose={() => {}} onUserUpdate={() => {}} />);
-    fireEvent.click(screen.getByRole('button', { name: /تغییر کلمه عبور|امنیت|رمز/ }));
+    fireEvent.click(screen.getByRole('button', { name: /تغییر رمز عبور|امنیت|رمز/ }));
     const [current, next, confirm] = Array.from(document.querySelectorAll('input[type="password"]')) as HTMLInputElement[];
     fireEvent.change(current, { target: { value: 'Old-pass-1' } });
     fireEvent.change(next, { target: { value: 'abc12' } });

@@ -14,7 +14,7 @@ export function InvoiceListFilters({ query }: { query: InvoiceListQueryState }) 
     <div className="p-3 bg-slate-50/90 border-b border-slate-200 flex flex-wrap gap-3 items-center">
       {/* Search Box */}
       <div className="relative flex-1 min-w-[220px] max-w-sm">
-        <Search className="absolute right-3 top-2.5 text-slate-400" size={16} />
+        <Search className="absolute right-3 top-2.5 text-slate-500" size={16} />
         <input 
           type="text" 
           placeholder="جست‌وجوی شماره سند، خریدار، تامین‌کننده، کالا..."
