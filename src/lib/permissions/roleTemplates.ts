@@ -24,7 +24,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     permissions: [
       'products.view', 'products.create', 'products.edit', 'products.edit_price', 'products.delete', 'warehouse.view',
       'warehouse.in', 'warehouse.out', 'warehouse.transfer', 'inventory.reconcile', 'documents.view', 'documents.create',
-      'documents.finalize', 'documents.edit', 'documents.delete', 'audit.view', 'audit.apply',
+      'documents.finalize', 'documents.edit', 'documents.delete', 'documents.void_stock', 'audit.view', 'audit.apply',
       'customers.view', 'customers.manage', 'customers.delete', 'crm.view', 'crm.manage', 'crm.delete', 'reports.view', 'reports.sales', 'reports.purchases',
       'projects.view', 'projects.create', 'projects.edit', 'projects.delete', 'workflow.view', 'workflow.approve',
       'workflow.manage', 'events.view', 'events.manage', 'daily_logs.view', 'daily_logs.create', 'daily_logs.manage_all',
@@ -42,7 +42,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     permissions: [
       'accounting.view', 'accounting.vouchers', 'accounting.vouchers_approve', 'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports',
       'products.view', 'products.edit_price', 'documents.view', 'documents.create', 'documents.edit', 'documents.delete',
-      'documents.finalize', 'customers.view', 'customers.manage', 'customers.delete', 'workflow.view', 'workflow.approve', 'events.view',
+      'documents.void_stock', 'documents.finalize', 'customers.view', 'customers.manage', 'customers.delete', 'workflow.view', 'workflow.approve', 'events.view',
       'personnel.view', 'piecework.view', 'piecework.payroll', 'piecework.payroll_approve', 'daily_logs.view', 'daily_logs.create', 'reports.view',
       'reports.sales', 'reports.purchases', 'audit_logs.view',
     ],
@@ -66,8 +66,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     // v11 phase 6.1p (U5): the accountant approves the vouchers that documents and treasury leave as drafts
     permissions: [
       'products.view', 'products.edit_price', 'warehouse.view', 'documents.view', 'documents.create', 'documents.edit',
-      'documents.delete', 'documents.finalize', 'customers.view', 'customers.manage', 'customers.delete', 'workflow.view', 'workflow.approve',
-      'crm.view', 'reports.view', 'projects.view', 'accounting.view', 'accounting.vouchers', 'accounting.vouchers_approve', 'accounting.coa',
+      'documents.delete', 'documents.void_stock', 'documents.finalize', 'customers.view', 'customers.manage', 'customers.delete', 'workflow.view',
+      'workflow.approve', 'crm.view', 'reports.view', 'projects.view', 'accounting.view', 'accounting.vouchers', 'accounting.vouchers_approve', 'accounting.coa',
       'accounting.treasury', 'accounting.cheques', 'accounting.reports', 'daily_logs.view', 'daily_logs.create',
     ],
   },

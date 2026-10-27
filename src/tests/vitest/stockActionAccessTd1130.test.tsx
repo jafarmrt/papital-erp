@@ -98,7 +98,12 @@ describe('stock buttons follow the key of their API (TD-1130)', () => {
     expect(screen.getByText('بازسازی موجودی از روی کاردکس')).toBeTruthy();
     expect(screen.queryByText('ثبت حواله انتقال انبار')).toBeNull();
     cleanup();
+    // v11 phase 6.1j (S7): a transfer is voided with the stock document key, not with «حذف فاکتور»
     grant('audit.view', 'warehouse.transfer', 'documents.delete', 'accounting.view');
+    render(<AuditButtons />);
+    expect(screen.queryByText('ابطال')).toBeNull();
+    cleanup();
+    grant('audit.view', 'warehouse.transfer', 'documents.void_stock', 'accounting.view');
     render(<AuditButtons />);
     expect(screen.getByText('ثبت حواله انتقال انبار')).toBeTruthy();
     expect(screen.getByText('ثبت حواله انتقال جدید')).toBeTruthy();

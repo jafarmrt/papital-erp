@@ -51,9 +51,9 @@ export async function checkStockCountVoucher(wh: string): Promise<string[]> {
   const auditId = await DocumentService.createDocument({
     docType: 'audit', status: 'final', date: '2025-07-02', user: 'inv', location: wh,
     items: [
-      { itemId: raw.id, quantity: 7, physical_stock: 7, location: wh },
-      { itemId: product.id, quantity: 8, physical_stock: 8, location: wh },
-      { itemId: noCost.id, quantity: 4, physical_stock: 4, location: wh },
+      { itemId: raw.id, quantity: 7, physical_stock: 7, system_stock: 10, location: wh },
+      { itemId: product.id, quantity: 8, physical_stock: 8, system_stock: 5, location: wh },
+      { itemId: noCost.id, quantity: 4, physical_stock: 4, system_stock: 0, location: wh },
     ],
   });
   const vouchers = await pool.query<{ id: number; status: string; voucher_type: string }>(
@@ -162,7 +162,7 @@ export async function checkAuditMustBeFinal(wh: string): Promise<string[]> {
   const scope: InvariantScope = { ...mark, itemIds: [item.id] };
   const audit = (status: 'draft' | 'final', skipVoucherSync = false) => DocumentService.createDocument({
     docType: 'audit', status, date: '2025-07-05', user: 'inv', location: wh, skipVoucherSync,
-    items: [{ itemId: item.id, quantity: 2, physical_stock: 2, location: wh }],
+    items: [{ itemId: item.id, quantity: 2, physical_stock: 2, system_stock: 6, location: wh }],
   });
 
   let draftRejected = false;

@@ -10,7 +10,7 @@ import type { JournalVoucher } from '../../types.js';
 /**
  * v8.0.3 (TD-255 / TD-262، تصمیم مالک محصول ۱۲ مهر ۱۴۰۵): سند حسابداری اصلاح موجودی — انبارگردانی و درون‌ریزی اکسل.
  *
- * ارزش هر ردیف همان بهای ثبت‌شده در کاردکس است (مقدار × قیمت ردیف)، پس دفتر کل با ارزش انبار یکی می‌ماند:
+ * ارزش هر ردیف همان بهای ثبت‌شده در کاردکس است (`total_price` ردیف)، پس دفتر کل با ارزش انبار یکی می‌ماند:
  *   کسری:  بدهکار «کسری و اضافات انبار» / بستانکار موجودی مواد اولیه یا کالای ساخته‌شده
  *   اضافی: بدهکار موجودی مواد اولیه یا کالای ساخته‌شده / بستانکار «کسری و اضافات انبار»
  * سند مانند دیگر اسناد خودکار پیش‌نویس صادر می‌شود. ردیف بی‌ارزش (کالای بدون WAC) سطری نمی‌سازد و اصلاح بی‌ارزش
@@ -49,6 +49,7 @@ export async function syncStockAdjustmentVoucher(source: StockAdjustmentVoucherS
     type: transactions.type,
     quantity: transactions.quantity,
     unitPrice: transactions.unitPrice,
+    totalPrice: transactions.totalPrice,
     itemType: items.type,
   })
     .from(transactions)
@@ -57,7 +58,11 @@ export async function syncStockAdjustmentVoucher(source: StockAdjustmentVoucherS
 
   const totals: AdjustmentTotals = { shortageRaw: fin(0), shortageFinished: fin(0), surplusRaw: fin(0), surplusFinished: fin(0) };
   for (const row of rows) {
-    const value = fin(row.quantity).multiply(fin(row.unitPrice));
+    // v11 phase 6.1j (S17): the row's stored value (rounded per row, as the stock value sums it), like every other voucher;
+    // before, quantity × unit price unrounded, so the voucher and the stock value could differ by the rounding
+    const value = row.totalPrice !== null && row.totalPrice !== undefined
+      ? fin(row.totalPrice)
+      : fin(row.quantity).multiply(fin(row.unitPrice)).round(4);
     const finished = row.itemType === 'product';
     if (row.type === 'out') {
       if (finished) totals.shortageFinished = totals.shortageFinished.add(value);

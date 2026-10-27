@@ -118,7 +118,7 @@ export const ExcelPreviewStep: React.FC<ExcelPreviewStepProps> = ({
             ) : (
               filteredPreviewRows.map((r) => {
                 const hasError = r.isDuplicateInBatch || r.isDuplicateInDb || r.hasCellError;
-                const hasWarning = r.hasPrefixMismatch && !hasError;
+                const hasWarning = (r.hasPrefixMismatch || r.hasTypeChange) && !hasError;
 
                 return (
                   <tr

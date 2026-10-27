@@ -28,10 +28,12 @@ import { assertVoidKeepsStockHistory } from '../inventory/voidStockHistory.js';
 import { assertVoidHasNoReturns, assertVoidHasNoTreasuryRows, recordVoidEvents } from './voidDependents.js';
 import { assertPayableCoversSettlement, documentIsSettled } from './settledDocumentEdit.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
+import { assertTransferVoidKeepsReservations } from '../inventory/transferReservations.js';
 import { finalizeDayTarget, proformaInvoiceTarget } from './proformaInvoice.js';
 import { recordFinalizeEvent } from './documentFinalizeEvents.js';
 import { lockLinkedRequisition, voidLinkedOrder } from './linkedOrderHooks.js';
 import { assertProductionReceiptNotFinalized, stockDirectionOf } from './documentRecordRule.js';
+import { assertVoidOutsideClosedYears } from './voidClosedYear.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
 import { consumesProjectReservation } from '../../lib/transactions/projectIssueTypes.js';
 import { documentAuditSnapshot, type DocumentAuditChange, type DocumentAuditSnapshot, type DocumentVoidAudit } from './documentAudit.js';
@@ -330,6 +332,8 @@ export class DocumentLifecycleService {
       // v8.0.6 (TD-265، تصمیم مالک محصول): ابطال سند ورودی‌ای که موجودی‌اش با خروجِ تاریخ‌دار بعدی مصرف شده رد می‌شود
       // (پیش از هر نوشتن)؛ پیش‌تر فقط موجودی لحظه ابطال سنجیده می‌شد و کاردکس به ترتیب تاریخ منفی می‌ماند
       await assertVoidKeepsStockHistory(tx, { id: doc.id, refNumber: doc.refNumber });
+      // v11 phase 6.1j (M10): nor a document with stock movements in a closed fiscal year (409 DOCUMENT_IN_CLOSED_YEAR)
+      await assertVoidOutsideClosedYears(tx, { id: doc.id, refNumber: doc.refNumber, type: doc.type });
       // v9.0.271 (TD-773، ت۴ الف): فاکتوری که برگشت ابطال‌نشده دارد باطل نمی‌شود (۴۰۹ با فهرست برگشت‌ها)
       await assertVoidHasNoReturns(tx, { id: doc.id, refNumber: doc.refNumber });
       // v9.0.272 (TD-779، ت۴ الف): و نه سندی که دریافت یا پرداخت زنده خزانه دارد (۴۰۹ با فهرست آن‌ها)
@@ -361,6 +365,8 @@ export class DocumentLifecycleService {
         .where(and(eq(transactions.documentId, doc.id), eq(transactions.isDeleted, 0)));
       // ردیف کاردکسی که پس از خواندن بالا (پیش از قفل سند) ثبت شده باشد هم پیش از درج معکوس قفل می‌شود (بی‌اثر اگر قفل باشد)
       await lockStockItems(tx, originalTxs.map(t => t.itemId));
+      // v11 phase 6.1j (S4, review): a transfer's void takes the stock back out of the warehouse it went to
+      await assertTransferVoidKeepsReservations(tx, originalTxs.filter(t => t.documentType === 'transfer' && t.type === 'in' && !t.reversalOfId));
 
       await tx.update(transactions).set({ isDeleted: 1 }).where(eq(transactions.documentId, doc.id));
 
@@ -416,7 +422,9 @@ export class DocumentLifecycleService {
             }
           }
         } else if (doc.type !== 'audit') {
-          const docDirection: 'in' | 'out' = (doc.type === 'receipt' || doc.type === 'production_receipt' || doc.type === 'return') ? 'in' : 'out';
+          // v11 phase 6.1j (review): the direction of the type's own table, so a legacy `purchase` goes back out; before, only
+          // receipts, production receipts and returns were incoming here and voiding a purchase raised the stock
+          const docDirection = stockDirectionOf(doc.type);
           for (const item of docLines) {
             const targetLoc = (item.location || '').trim() || defaultWh;
             residues.push(await DocumentStockEngine.applyStockReversal(tx, {

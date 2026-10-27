@@ -1,7 +1,7 @@
-import { maybeStartEntityWorkflow, terminateEntityWorkflows } from '../system/entityWorkflowPort.js';
+import { terminateEntityWorkflows } from '../system/entityWorkflowPort.js';
 import { eq, and, desc, ilike, asc } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { items, itemPrices, warehouses, itemCodeCounters, documentItems, transactions, projectBomAllocations } from '../../db/schema.js';
+import { items, itemPrices, warehouses, itemCodeCounters, documentItems, projectBomAllocations } from '../../db/schema.js';
 import { isDataUrl, uploadBase64ToStorage } from '../../lib/storage.js';
 import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../../utils.js';
 import { ItemPricingService } from './itemPricing.service.js';
@@ -13,8 +13,9 @@ import { checkOccVersion, nextVersion, OptimisticLockError } from '../../lib/occ
 import { advanceItemCodeCounter } from './itemCodeCounter.js';
 import { assertItemCodeAvailable, assertItemNameAvailable, guardItemIdentity } from './itemIdentity.js';
 import { assertCodeUnchangedByEdit } from './itemCodeChange.js';
-import { ItemOpeningService, itemIdsWithOpeningVoucher } from '../inventory/itemOpening.service.js';
+import { assertNoOpeningStockOnEdit, assertOpeningStockAllowed } from './itemOpeningStockRule.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
+import { openProjectsProducingItem } from './itemProjectProducts.js';
 import { startsWithLikePattern } from '../../lib/sqlLike.js';
 import { money } from '../../lib/money.js';
 import { ITEM_WAC_COLUMN, priceExportCells } from '../../lib/items/excelPriceColumns.js';
@@ -81,6 +82,15 @@ export interface ItemWriteBody {
   technical_notes?: unknown;
   /** v9.0.171 (TD-654): نسخه کالایی که فرم ویرایش از آن ساخته شده است؛ ویرایش بی آن رد می‌شود */
   version?: number | string;
+}
+
+/** The opening stock an item body sends: its `stocks` map, its `stock_<warehouse>` fields or `current_stock` */
+function sentOpeningStock(body: ItemWriteBody): number {
+  const values = body.stocks && typeof body.stocks === 'object'
+    ? Object.values(body.stocks)
+    : Object.keys(body).filter(k => k.startsWith('stock_')).map(k => body[k]);
+  const sum = values.reduce<number>((acc, v) => acc + Math.max(0, Number(v) || 0), 0);
+  return sum > 0 ? sum : Math.max(0, Number(body.current_stock) || 0);
 }
 
 function cleanSegment(value: unknown): string {
@@ -503,6 +513,17 @@ export class ItemCatalogService {
         );
       }
 
+      // v11 phase 6.1j (N1): an open project that plans the item as its product would have no item to receive
+      const producingProjects = await openProjectsProducingItem(executor, itemId);
+      if (producingProjects.length > 0) {
+        throw new ConflictError(
+          `حذف کالای «${delItem.name}» مجاز نیست زیرا محصول پروژه باز ${producingProjects.join('، ')} است و رسید تولید آن ثبت نمی‌شد. `
+            + 'ابتدا کالا را از محصولات آن پروژه بردارید یا پروژه را تکمیل یا لغو کنید.',
+          { projects: producingProjects },
+          'ITEM_IS_OPEN_PROJECT_PRODUCT',
+        );
+      }
+
       await executor.update(items).set({ isDeleted: 1 }).where(eq(items.id, itemId));
       await terminateEntityWorkflows(executor, {
         entityType: 'item', entityId: itemId, actionKey: 'terminate', actionTitle: 'بستن فرایند با حذف کالا', comment: 'حذف کالا',
@@ -518,7 +539,9 @@ export class ItemCatalogService {
   static async createItem(
     body: ItemWriteBody,
     user?: { id?: number; username?: string; fullName?: string; full_name?: string },
-    externalTx?: DbExecutor
+    externalTx?: DbExecutor,
+    /** v11 phase 6.1j (S8): the caller holds «ثبت ورود کالا (رسید)», which opening stock asks */
+    options: { canEnterStock?: boolean } = {}
   ): Promise<{
     item: typeof items.$inferSelect;
     insertedId: number;
@@ -555,6 +578,8 @@ export class ItemCatalogService {
         stockValues[defaultWh] = currentStockBody;
         computedStock = currentStockBody;
       }
+
+      if (computedStock > 0) assertOpeningStockAllowed({ name, code }, money(weighted_average_cost || 0), options.canEnterStock === true);
 
       const imageUrl = isDataUrl(image) ? await uploadBase64ToStorage(image, 'image') : (image || '');
       const thumbnailUrl = isDataUrl(thumbnail) ? await uploadBase64ToStorage(thumbnail, 'thumbnail') : (thumbnail || '');
@@ -619,7 +644,7 @@ export class ItemCatalogService {
   }
 
   /**
-   * Updates an item's details and manages initial opening stock / voucher issuance if applicable.
+   * Updates an item's details. v11 phase 6.1j (S8): it never enters opening stock or issues an opening voucher.
    */
   static async updateItem(
     itemId: number,
@@ -630,9 +655,6 @@ export class ItemCatalogService {
     item: typeof items.$inferSelect;
     prevItem: typeof items.$inferSelect;
     updateData: Partial<typeof items.$inferInsert>;
-    openingVoucherId: number | null;
-    computedStock: number;
-    canSetOpening: boolean;
   }> {
     const { name, code, unit, category, image, thumbnail, reorder_point, weighted_average_cost, color, weight, material, size } = body;
 
@@ -672,48 +694,11 @@ export class ItemCatalogService {
         }
       }
 
-      const [txRow] = await tx.select({ id: transactions.id })
-        .from(transactions)
-        .where(and(eq(transactions.itemId, itemId), eq(transactions.isDeleted, 0)))
-        .limit(1);
-      const [docRow] = await tx.select({ id: documentItems.id })
-        .from(documentItems)
-        .where(and(eq(documentItems.itemId, itemId), eq(documentItems.isDeleted, 0)))
-        .limit(1);
-      // v9.0.206 (TD-663): سند افتتاحیه این کالا، سند خودش یا سند ورود اکسل
-      const voucherRow = (await itemIdsWithOpeningVoucher(tx, [itemId])).has(itemId);
-
       // v7.0.45 (audit P2-1): موجودی فعلی از جدول موجودی انبارها (منبع حقیقت)
       const stockBefore = await ItemWarehouseStockService.getStockSnapshot(tx, itemId);
-      const canSetOpening = stockBefore.total <= 0 && !txRow && !docRow && !voucherRow;
-
-      const whs = await tx.select({ code: warehouses.code }).from(warehouses).orderBy(asc(warehouses.id));
-      let computedStock = 0;
-      const stockValues: Record<string, number> = {};
-
-      if (canSetOpening) {
-        if (body.stocks && typeof body.stocks === 'object') {
-          for (const wh of whs) {
-            const val = Number(body.stocks[wh.code] ?? body.stocks[wh.code.toLowerCase()] ?? 0);
-            stockValues[wh.code] = val > 0 ? val : 0;
-            computedStock += stockValues[wh.code];
-          }
-        } else {
-          for (const wh of whs) {
-            const bodyKey = `stock_${wh.code}`;
-            const val = body[bodyKey] !== undefined ? Number(body[bodyKey]) : 0;
-            stockValues[wh.code] = val > 0 ? val : 0;
-            computedStock += stockValues[wh.code];
-          }
-        }
-
-        const currentStockBody = Number(body.current_stock || 0);
-        if (computedStock === 0 && currentStockBody > 0 && whs.length > 0) {
-          const defaultWh = (await getDefaultWarehouseCode(tx)) ?? whs[0].code;
-          stockValues[defaultWh] = currentStockBody;
-          computedStock = currentStockBody;
-        }
-      }
+      // v11 phase 6.1j (S8, card t56-5): opening stock enters only when the item is defined. Before, an item without any
+      // movement took it here with «ویرایش کالا» alone; an edit that still sends a positive stock is refused (422).
+      if (stockBefore.total <= 0 && sentOpeningStock(body) > 0) assertNoOpeningStockOnEdit(prevItem);
 
       const requestedWac = weighted_average_cost !== undefined && weighted_average_cost !== ''
         ? money(weighted_average_cost)
@@ -748,59 +733,11 @@ export class ItemCatalogService {
       if (imageUrl !== undefined) updateData.image = imageUrl;
       if (thumbnailUrl !== undefined) updateData.thumbnail = thumbnailUrl;
 
-      let openingVoucherId: number | null = null;
-
-      let [updatedItem] = await guardItemIdentity(name ?? prevItem.name, () => tx.update(items).set(updateData)
+      const [updatedItem] = await guardItemIdentity(name ?? prevItem.name, () => tx.update(items).set(updateData)
         .where(and(eq(items.id, itemId), eq(items.version, prevItem.version))).returning());
       if (!updatedItem) throw new OptimisticLockError({ entityType: 'Item', entityId: itemId, expectedVersion });
 
-      if (canSetOpening && computedStock > 0) {
-        // v7.0.45 (audit P2-1): موجودی افتتاحیه از موتور مرکزی گردش انبار (کاردکس + جدول موجودی انبارها + کش)
-        const txDate = await businessTodayIsoDate();
-        for (const whCode of Object.keys(stockValues)) {
-          const qty = stockValues[whCode];
-          if (qty > 0) {
-            await DocumentService.applyStockMovement(tx, {
-              itemId,
-              inOut: 'in',
-              quantity: qty,
-              price: effectiveWac,
-              date: txDate,
-              documentType: 'audit',
-              documentRef: 'ثبت موجودی افتتاحیه',
-              user: user?.username || 'سیستم',
-              targetLoc: whCode,
-              notes: 'موجودی اولیه هنگام ویرایش کالا (سند افتتاحیه)'
-            });
-          }
-        }
-        [updatedItem] = await tx.select().from(items).where(eq(items.id, itemId));
-
-        const wfInstance = await maybeStartEntityWorkflow({
-          entityType: 'item',
-          entityId: String(itemId),
-          userId: user?.id,
-          userName: user?.fullName || user?.username,
-          tx // v8.0.77 (TD-324)
-        });
-        if (!wfInstance) {
-          const opening = await ItemOpeningService.issueItemOpeningVoucher(itemId, {
-            userId: user?.id,
-            username: user?.fullName || user?.username,
-            tx
-          });
-          openingVoucherId = opening?.id || null;
-        }
-      }
-
-      return {
-        item: updatedItem,
-        prevItem,
-        updateData,
-        openingVoucherId,
-        computedStock,
-        canSetOpening
-      };
+      return { item: updatedItem, prevItem, updateData };
     };
 
     if (externalTx) {
