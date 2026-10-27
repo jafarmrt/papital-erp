@@ -5,7 +5,9 @@ import { containsLikePattern } from '../../lib/sqlLike.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { readInventoryLedgerValues } from './inventoryLedgerValue.js';
 import { buildVoucherBalanceHealthTest, findVoucherBalanceDifferences } from './voucherBalanceHealth.js';
-import { buildInventoryReconciliationHealthTest, findManualInventoryPostings, inventoryRoundingAllowance, type WarehouseValuation } from './inventoryReconciliationHealth.js';
+import {
+  buildInventoryReconciliationHealthTest, findLegacyStockDocuments, findManualInventoryPostings, inventoryRoundingAllowance, type WarehouseValuation,
+} from './inventoryReconciliationHealth.js';
 import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './voucherNumberIntegrity.js';
 import { buildNoVoucherTreasuryHealthTest, findTreasuryEntriesWithoutVoucher } from './treasury/noVoucherTreasury.js';
 import { buildLegacyChequePartyHealthTest, findLegacyChequePartyMismatches } from './treasury/chequePartyAccount.js';
@@ -435,8 +437,13 @@ export class FinancialHealthService {
     // =========================================================================
     // آزمون ۳: انطباق ارزش موجودی انبار با دفاتر حسابداری کالا (Account 14)
     // =========================================================================
-    const inventoryTest = buildInventoryReconciliationHealthTest(
-      (inventoryPhysicalRes.rows?.[0] || {}) as WarehouseValuation, inventoryLedgerRes, manualInventoryPostings, inventoryRounding);
+    const inventoryPhysical = (inventoryPhysicalRes.rows?.[0] || {}) as WarehouseValuation;
+    let inventoryTest = buildInventoryReconciliationHealthTest(inventoryPhysical, inventoryLedgerRes, manualInventoryPostings, inventoryRounding);
+    // v11 phase 6.1j (M21, review): a gap over the allowance also lists the incoming documents with no Kardex rows
+    if (inventoryTest.items?.some(item => item.id === 'inv_diff')) {
+      inventoryTest = buildInventoryReconciliationHealthTest(
+        inventoryPhysical, inventoryLedgerRes, manualInventoryPostings, inventoryRounding, await findLegacyStockDocuments());
+    }
     overallScore += inventoryTest.scoreImpact;
     tests.push(inventoryTest);
 

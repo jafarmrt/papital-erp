@@ -136,7 +136,7 @@ export async function runStockHealthV11Tests(shouldRun: ShouldRun): Promise<Test
 
   const boundsId = 'reg_health_rounding_bounds_v11_6_1j_m21';
   if (shouldRun(boundsId, 'v11', 'phase6', 'm21', 'health', 'inventory')) {
-    await runCase(results, boundsId, 'v11 phase 6.1j (M21): the stock vs ledger rounding allowance covers the void residue of a legacy receipt with no Kardex rows, a large dollar row whose rial value and product are both rounded (one rial plus the rate\'s 4th decimal on its amount) and the 4-decimal rial unit price of a dollar receipt of a large quantity, each in its own sandbox at a gap the allowance without its term does not cover, so none is reported as a gap', async () => {
+    await runCase(results, boundsId, 'v11 phase 6.1j (M21): the stock vs ledger rounding allowance covers the void residue of a legacy receipt with no Kardex rows, a large dollar row whose rial value and product are both rounded (one rial plus the rate\'s 4th decimal on its amount) and the 4-decimal rial unit price of a dollar receipt of a large quantity, each in its own sandbox at a gap the allowance without its term does not cover, so none is reported as a gap; a legacy void that re-averages the WAC, which no Kardex row bounds, is reported with the legacy documents listed', async () => {
       const problems: string[] = [];
       const testOf = async () => (await FinancialHealthService.runHealthCheck()).tests.find(t => t.id === 'inventory_reconciliation');
       const expectHealthy = (label: string, t: Awaited<ReturnType<typeof testOf>>, minGap: number) => {
@@ -150,17 +150,37 @@ export async function runStockHealthV11Tests(shouldRun: ShouldRun): Promise<Test
       // row, so each of six such voids leaves 0.45 rials as in the case above, with nothing in the Kardex to count it by
       const legacy = await inFiscalSandbox(async () => {
         const { admin, approveAll, receive, sell } = await stockFlows();
+        const voidAsLegacy = async (id: number) => {
+          await orm.update(transactions).set({ isDeleted: 1 }).where(eq(transactions.documentId, id));
+          const voidRes = await admin.del(`/api/documents/${id}`);
+          if (voidRes.status >= 300) throw new Error(`setup: voiding a legacy receipt returned ${voidRes.status} ${JSON.stringify(voidRes.body).slice(0, 200)}`);
+          await approveAll();
+        };
         for (let i = 0; i < 6; i++) {
           const voided = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
           const first = await receive(voided.id, 1, 100);
           await receive(voided.id, 1, 300.9);
           await sell(voided.id, 500);
-          await orm.update(transactions).set({ isDeleted: 1 }).where(eq(transactions.documentId, first));
-          const voidRes = await admin.del(`/api/documents/${first}`);
-          if (voidRes.status >= 300) throw new Error(`setup: voiding a legacy receipt returned ${voidRes.status} ${JSON.stringify(voidRes.body).slice(0, 200)}`);
-          await approveAll();
+          await voidAsLegacy(first);
         }
-        return expectHealthy('six legacy void residues', await testOf(), 3);
+        const residues = expectHealthy('six legacy void residues', await testOf(), 3);
+
+        // a legacy void that leaves stock re-averages the WAC from its lines, with no Kardex row to bound it by: after
+        // 1,000,000 at 1, voiding 1 at 51.0001 and then 1 at 51.0002 moves the WAC to 1.0002, 200 rials over the ledger;
+        // the gap is reported, with those documents listed
+        const bulk = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
+        await receive(bulk.id, 1_000_000, 1);
+        const legacyIds: number[] = [];
+        for (const price of [51.0001, 51.0002]) {
+          const id = await receive(bulk.id, 1, price);
+          await voidAsLegacy(id);
+          legacyIds.push(id);
+        }
+        const drift = await testOf();
+        if (drift?.status !== 'warning' || !legacyIds.every(id => drift.items?.some(i => i.id === `legacy_${id}` && Number(i.linkId) === id))) {
+          problems.push(`two re-averaging legacy voids read ${JSON.stringify({ status: drift?.status, metrics: drift?.metrics, items: drift?.items?.map(i => i.id) })}, expected a warning listing both`);
+        }
+        return `${residues}; re-averaging legacy voids: ${drift?.status}, gap ${drift?.metrics?.discrepancy}, ${drift?.metrics?.legacyStockDocumentCount} legacy documents listed`;
       });
 
       // TD-1030: 103,500,060,145.5 rials sold in dollars at 600,000 is 172,500.1002 USD at 600,000.0002, worth

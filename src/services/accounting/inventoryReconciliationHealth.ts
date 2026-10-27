@@ -155,6 +155,40 @@ export async function findManualInventoryPostings(): Promise<ManualInventoryPost
   }));
 }
 
+export interface LegacyStockDocument {
+  id: number;
+  refNumber: string;
+  type: string;
+  date: string;
+  voided: boolean;
+}
+
+/**
+ * v11 phase 6.1j (M21, review): final incoming documents with stock lines and no live Kardex rows, voided or not (from
+ * before the Kardex). Their posting, and a void's re-average from the lines, moved the WAC by up to the stock on hand ×
+ * half a unit of the 4th decimal with no Kardex row to bound it by, so the allowance cannot cover them; when the gap is over
+ * it they are listed as a possible cause. Read only then (an anti join over every final incoming document).
+ */
+export async function findLegacyStockDocuments(): Promise<LegacyStockDocument[]> {
+  const res = await orm.execute(sql`
+    SELECT d.id, COALESCE(d.ref_number, '') AS ref_number, d.type, d.date::text AS date, d.is_deleted
+      FROM documents d
+     WHERE d.status = 'final' AND d.type IN ('receipt', 'production_receipt', 'return')
+       AND EXISTS (SELECT 1 FROM document_items di WHERE di.document_id = d.id)
+       AND NOT EXISTS (SELECT 1 FROM transactions t WHERE t.document_id = d.id AND t.is_deleted = 0)
+     ORDER BY d.date DESC, d.id DESC
+     LIMIT ${LISTED_POSTINGS}`);
+  return ((res.rows ?? []) as Array<Record<string, unknown>>).map(r => ({
+    id: Number(r.id),
+    refNumber: String(r.ref_number ?? ''),
+    type: String(r.type ?? ''),
+    date: String(r.date ?? '').slice(0, 10),
+    voided: Number(r.is_deleted) === 1,
+  }));
+}
+
+const LEGACY_TYPE_LABELS: Record<string, string> = { receipt: 'رسید انبار', production_receipt: 'رسید تولید', return: 'برگشت از فروش' };
+
 const TITLE = 'انطباق ریالی موجودی انبار با دفتر کل حسابداری';
 const DESCRIPTION = 'بررسی هم‌خوانی ارزش کاردکس و موجودی کالای فیزیکی با سرفصل ۱۴ (موجودی مواد و کالا)، بی حساب کالای در جریان ساخت که بیرون از انبار است؛ '
   + 'اختلاف بیش از آنچه گرد کردن دو طرف، میانگین موزون چهاررقم‌اعشاری، گرد کردن ریالی ردیف‌های ارزی سند و مانده باطل کردن رسید توضیح می‌دهد گزارش می‌شود و سندهای دستی روی حساب موجودی همیشه فهرست می‌شوند';
@@ -164,6 +198,7 @@ export function buildInventoryReconciliationHealthTest(
   ledger: InventoryLedgerValues,
   manualPostings: ManualInventoryPosting[],
   roundingAllowance: string = '0',
+  legacyDocuments: LegacyStockDocument[] = [],
 ): HealthCheckTestResult {
   const warehouseValDec = fin(physical.total_physical_valuation).round(0);
   const ledgerValDec = fin(ledger.posted).round(0);
@@ -189,6 +224,7 @@ export function buildInventoryReconciliationHealthTest(
     workInProgressValuation: workInProgressVal,
     manualInventoryPostingCount: manualPostings.length,
     roundingTolerance: tolerance,
+    ...(hasGap ? { legacyStockDocumentCount: legacyDocuments.length } : {}),
   };
   const unvaluedNote = unvaluedStockCount > 0
     ? ` ${formatPersianNumber(unvaluedStockCount)} کالای دارای موجودی هنوز بهای تمام‌شده ندارد و با ارزش صفر شمرده شد.`
@@ -270,6 +306,18 @@ export function buildInventoryReconciliationHealthTest(
     });
   }
   items.push(...manualItems);
+  if (hasGap) {
+    items.push(...legacyDocuments.map((doc): HealthCheckIssueItem => ({
+      id: `legacy_${doc.id}`,
+      code: doc.refNumber || `#${doc.id}`,
+      title: `${LEGACY_TYPE_LABELS[doc.type] ?? doc.type} قدیمی بی ردیف کاردکس${doc.voided ? ' (باطل‌شده)' : ''}`,
+      subtitle: `تاریخ: ${isoToJalaliDate(doc.date) || doc.date}`,
+      date: doc.date,
+      details: 'این سند پیش از کاردکس ثبت شده است؛ گرد کردن میانگین موزون در ثبت یا باطل کردن آن در کاردکس دیده نمی‌شود و ممکن است بخشی از اختلاف از آن باشد.',
+      linkType: 'document',
+      linkId: doc.id,
+    })));
+  }
 
   return {
     id: 'inventory_reconciliation',
@@ -281,7 +329,8 @@ export function buildInventoryReconciliationHealthTest(
     count: (negativeStockCount > 0 ? 1 : 0) + (hasGap ? 1 : 0),
     message: negativeStockCount > 0
       ? `${negativeStockCount} کالای دارای موجودی منفی و اختلاف ریالی ${formatPersianPrice(invDiscrepancy)} ریال مشاهده شد.`
-      : `مغایرت ریالی ${formatPersianPrice(invDiscrepancy)} ریالی (${invDiscrepancyPercent}٪) بین ارزش انبار و دفاتر ثبت شده است.`,
+      : `مغایرت ریالی ${formatPersianPrice(invDiscrepancy)} ریالی (${invDiscrepancyPercent}٪) بین ارزش انبار و دفاتر ثبت شده است.`
+        + (hasGap && legacyDocuments.length > 0 ? ` ${formatPersianNumber(legacyDocuments.length)} سند ورودی قدیمی بی ردیف کاردکس هم در فهرست آمده است.` : ''),
     quickFixHint: 'ثبت اسناد انبارگردانی و صدور اسناد مکانیزه ورود و خروج انبار',
     items,
     metrics,
