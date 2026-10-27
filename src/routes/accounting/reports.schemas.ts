@@ -5,6 +5,8 @@
 import { z } from 'zod';
 import { storageDateParam } from '../../middleware/validate.js';
 import { JOURNAL_BOOK_MAX_PAGE_SIZE } from '../../lib/accounting/journalBook.js';
+import { ACCOUNT_CARD_MAX_PAGE_SIZE } from '../../lib/accounting/accountCard.js';
+import { MAX_PAGE_NUMBER } from '../../lib/pagination.js';
 
 // ==========================================
 // REPORTS & FINANCIAL STATEMENTS
@@ -32,6 +34,13 @@ export const trialBalanceQuerySchema = z.object({
   }).optional()
 });
 
+/** v11 phase 6.1ch (M13): one page of an account card (default ACCOUNT_CARD_PAGE_SIZE rows), or every row with `export=true` */
+export const accountCardPageQuery = {
+  page: z.coerce.number().int().positive().max(MAX_PAGE_NUMBER).optional(),
+  limit: z.coerce.number().int().positive().max(ACCOUNT_CARD_MAX_PAGE_SIZE).optional(),
+  export: z.enum(['true', 'false']).optional(),
+};
+
 export const accountCardQuerySchema = z.object({
   query: z.object({
     accountId: z.coerce.number().int().positive().optional(),
@@ -41,6 +50,7 @@ export const accountCardQuerySchema = z.object({
     startDate: storageDateParam,
     endDate: storageDateParam,
     currency: z.string().optional(),
+    ...accountCardPageQuery,
   }).optional()
 });
 

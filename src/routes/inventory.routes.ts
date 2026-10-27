@@ -3,7 +3,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission, can, requirePermission, userHasRoleOrPermission } from '../middleware/authorize.js';
 import { BACKDATE_PERMISSION } from '../services/inventory/stockMovementDate.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString, decimalInput, decimalNumberBounds } from '../middleware/validate.js';
+import { validate, paramsIdSchema, numericIdString, decimalInput, decimalNumberBounds, storageDateParam } from '../middleware/validate.js';
 import { fin } from '../lib/financialDecimal.js';
 import { InventoryIntegrityService } from '../services/inventory/inventoryIntegrity.service.js';
 import { ItemsService } from '../services/items.service.js';
@@ -17,7 +17,8 @@ import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { BOM_ALLOCATE_PERMISSIONS, BOM_CONSUME_PERMISSIONS, BOM_RELEASE_PERMISSIONS, PROJECT_STOCK_IN_PERMISSIONS } from '../lib/permissions/projectPermissions.js';
 import { WAC_CORRECTION_PERMISSION } from '../lib/inventoryAudit/wacCorrection.js';
 import { ITEM_COST_READ_PERMISSIONS, RESERVATION_BUYER_READ_PERMISSIONS, reservedItemsReportForAccess } from '../lib/inventory/reservedItemsReport.js';
-import { parsePagination } from '../lib/pagination.js';
+import { MAX_PAGE_NUMBER, parsePagination } from '../lib/pagination.js';
+import { RUNNING_KARDEX_DIRECTIONS, RUNNING_KARDEX_MAX_PAGE_SIZE } from '../lib/transactions/runningKardex.js';
 import { allocationsForCostAccess } from '../lib/inventory/projectMaterialCost.js';
 import { bomAllocationStatusCounts, listBomAllocations } from '../services/inventory/bomAllocationList.js';
 import type { BomAllocationStatus } from '../lib/inventory/bomAllocationList.js';
@@ -37,6 +38,20 @@ export const paramsItemIdSchema = z.object({
   params: z.object({
     itemId: numericIdString,
   })
+});
+
+/** v11 phase 6.1ch (S11): the Kardex window's page, range and filters (`src/lib/transactions/runningKardex.ts`) */
+const itemKardexSchema = paramsItemIdSchema.extend({
+  query: z.object({
+    from: storageDateParam,
+    to: storageDateParam,
+    type: z.enum(RUNNING_KARDEX_DIRECTIONS).optional(),
+    location: z.string().max(200).optional(),
+    search: z.string().max(200).optional(),
+    page: z.coerce.number().int().positive().max(MAX_PAGE_NUMBER).optional(),
+    limit: z.coerce.number().int().positive().max(RUNNING_KARDEX_MAX_PAGE_SIZE).optional(),
+    export: z.enum(['true', 'false']).optional(),
+  }).optional(),
 });
 
 export const rebuildStockSchema = z.object({
@@ -353,14 +368,19 @@ router.post(
 router.get(
   '/item-kardex/:itemId',
   authorizePermission(...ITEM_KARDEX_READ_PERMISSIONS),
-  validate(paramsItemIdSchema),
+  validate(itemKardexSchema),
   asyncHandler(async (req, res) => {
     const itemId = parseInt(String(req.params.itemId), 10);
     if (isNaN(itemId)) {
       throw new BadRequestError('شناسه کالا نامعتبر است.');
     }
 
-    const kardex = await InventoryIntegrityService.getItemRunningKardex(itemId);
+    // v11 phase 6.1ch (S11): one page of the range and filters; before, the whole ledger (25 MB for 61k rows)
+    const query = (req.query ?? {}) as unknown as NonNullable<z.infer<typeof itemKardexSchema>['query']>;
+    const kardex = await InventoryIntegrityService.getItemRunningKardexPage(itemId, {
+      from: query.from, to: query.to, type: query.type, location: query.location, search: query.search,
+      page: query.page, limit: query.limit, exportAll: query.export === 'true',
+    });
     res.json(kardex);
   })
 );

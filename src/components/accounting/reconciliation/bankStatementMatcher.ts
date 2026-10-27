@@ -103,6 +103,32 @@ export function normalizeDateToIso(dateStr: string | null | undefined): string |
 }
 
 /**
+ * v11 phase 6.1ch (M13): the days of the account's treasury rows a statement is matched with: its first and last day,
+ * widened by this margin on each side. A match on amount and date takes at most 2 days apart; a match on the tracking
+ * number takes any date, so the margin keeps a row recorded up to a month away. Before, the window read every row of the
+ * account when it opened (5 MB for 6,000 rows).
+ */
+export const BANK_STATEMENT_DATE_MARGIN_DAYS = 31;
+
+const DAY_MS = 86_400_000;
+
+/** the treasury days to read for a statement, or null when no row has a date that can be read */
+export function statementCandidateRange(rows: Pick<StatementRow, 'date'>[]): { startDate: string; endDate: string } | null {
+  const times = rows
+    .map(row => normalizeDateToIso(row.date))
+    .map(iso => (iso ? Date.parse(`${iso}T00:00:00Z`) : Number.NaN))
+    .filter(time => Number.isFinite(time));
+  if (times.length === 0) return null;
+  const day = (time: number) => new Date(time).toISOString().slice(0, 10);
+  const first = times.reduce((a, b) => Math.min(a, b));
+  const last = times.reduce((a, b) => Math.max(a, b));
+  return {
+    startDate: day(first - BANK_STATEMENT_DATE_MARGIN_DAYS * DAY_MS),
+    endDate: day(last + BANK_STATEMENT_DATE_MARGIN_DAYS * DAY_MS),
+  };
+}
+
+/**
  * TD-151 (V6 Sub-phase 4.2):
  * محاسبه تفاضل دقیق روزهای تقویمی بین دو تاریخ با هر مبنایی (شمسی اکسل بانک یا میلادی دیتابیس)
  * هر دو تاریخ به تاریخ استاندارد میلادی ISO نرمال‌سازی شده و سپس اختلاف روز آن‌ها بر مبنای نیمه‌شب UTC محاسبه می‌شود.

@@ -12,7 +12,7 @@ import {
   type KardexRebuildOptions
 } from './kardexWacRecalculator.service.js';
 import { InventoryStockRepairService } from './inventoryStockRepair.service.js';
-import { buildItemRunningKardex } from './runningKardex.service.js';
+import { buildItemRunningKardex, buildItemRunningKardexPage, type RunningKardexPage } from './runningKardex.service.js';
 import type { NegativeStockPolicyType } from './negativeStockPolicy.service.js';
 import {
   ProjectBomAllocationService,
@@ -51,6 +51,11 @@ export class InventoryIntegrityService {
    */
   static async getItemRunningKardex(itemId: number): Promise<RunningKardexResponse> {
     return buildItemRunningKardex(itemId);
+  }
+
+  /** v11 phase 6.1ch (S11): one page of the Kardex window (`GET /inventory/item-kardex/:itemId`) */
+  static async getItemRunningKardexPage(itemId: number, query: Parameters<typeof buildItemRunningKardexPage>[1]): Promise<RunningKardexPage> {
+    return buildItemRunningKardexPage(itemId, query);
   }
 
   /**

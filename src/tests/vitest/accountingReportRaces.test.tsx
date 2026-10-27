@@ -105,7 +105,7 @@ describe('report views pass an abortable signal (P3-8)', () => {
     const { wrapper: Wrapper } = withClient();
     const view = render(
       <Wrapper><MemoryRouter><FinancialReportsTab accounts={[]} trialBalance={null} incomeStatement={null} balanceSheet={null} ledgerReport={null}
-        loading={false} onFetchTrialBalance={noop} onFetchIncomeStatement={noop} onFetchBalanceSheet={noop} onFetchLedger={noop} /></MemoryRouter></Wrapper>
+        loading={false} onFetchTrialBalance={noop} onFetchIncomeStatement={noop} onFetchBalanceSheet={noop} onFetchLedger={noop} onLedgerPageChange={noop} /></MemoryRouter></Wrapper>
     );
     fireEvent.click(screen.getByText('دفتر روزنامه رسمی'));
     fireEvent.click(screen.getByText('دفتر روزنامه رسمی'));

@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useOnDemandReport } from './accounting/useOnDemandReport';
 import {
   BALANCE_SHEET_REPORT,
+  fetchLedgerExport,
   INCOME_STATEMENT_REPORT,
   LEDGER_REPORT,
   TRIAL_BALANCE_REPORT,
@@ -40,6 +41,17 @@ export function useAccountingReports() {
     await runLedger({ accountId, startDate: startDate || undefined, endDate: endDate || undefined });
   }, [runLedger]);
 
+  // v11 phase 6.1ch (M13): another page of the card last run (its account and dates)
+  const lastLedgerParams = ledger.params;
+  const goToLedgerPage = useCallback(async (page: number) => {
+    if (lastLedgerParams) await runLedger({ ...lastLedgerParams, page });
+  }, [runLedger, lastLedgerParams]);
+  // ... and every row of it, for its print
+  const loadLedgerForPrint = useCallback(
+    async () => (lastLedgerParams ? fetchLedgerExport(lastLedgerParams) : null),
+    [lastLedgerParams],
+  );
+
   return {
     reportsLoading: trial.loading || income.loading || balance.loading || ledger.loading,
     trialBalance: trial.data,
@@ -49,6 +61,8 @@ export function useAccountingReports() {
     fetchTrialBalance,
     fetchIncomeStatement,
     fetchBalanceSheet,
-    fetchLedger
+    fetchLedger,
+    goToLedgerPage,
+    loadLedgerForPrint,
   };
 }
