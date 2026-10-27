@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
@@ -94,13 +94,22 @@ export async function fetchTreasuryTransactions(filters: TreasuryListFilters): P
   return safeExtractArray<TreasuryTransaction>(await fetchJson<unknown>(`/accounting/treasury${params ? `?${params}` : ''}`));
 }
 
-/** تراکنش‌های یک حساب برای تطبیق صورت‌حساب بانک (فقط وقتی پنجره تطبیق باز است) */
-export function useBankTreasuryTransactionsQuery(bankAccountId: number | null) {
-  return useQuery<TreasuryTransaction[]>({
-    queryKey: [...QUERY_KEYS.accounting.treasuryTransactions(), 'bank', bankAccountId],
-    queryFn: ({ signal }) => fetchAccountingList<TreasuryTransaction>(`/accounting/treasury?bankAccountId=${bankAccountId}`, signal, 'bank treasury transactions'),
+/**
+ * v11 phase 6.1ch (M13): the treasury rows of one account within a statement's days (`statementCandidateRange`), the
+ * candidates of a bank statement's matching. The reconciliation window reads them when a statement is processed; before,
+ * it read every row of the account as soon as it opened. Without a range (no date in the statement could be read) every
+ * row of the account is read, as before.
+ */
+export function bankReconcileCandidatesQuery(bankAccountId: number, range: { startDate: string; endDate: string } | null) {
+  const params = new URLSearchParams({ bankAccountId: String(bankAccountId) });
+  if (range) {
+    params.set('startDate', range.startDate);
+    params.set('endDate', range.endDate);
+  }
+  return queryOptions<TreasuryTransaction[]>({
+    queryKey: [...QUERY_KEYS.accounting.treasuryTransactions(), 'bank', bankAccountId, range],
+    queryFn: ({ signal }) => fetchAccountingList<TreasuryTransaction>(`/accounting/treasury?${params.toString()}`, signal, 'bank treasury transactions'),
     ...ACCOUNTING_LIST_QUERY_OPTIONS,
-    enabled: bankAccountId !== null,
   });
 }
 

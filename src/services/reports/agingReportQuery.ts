@@ -32,8 +32,13 @@ export interface AgingScope {
 
 const PARTY_TYPES = sql`('customer', 'supplier')`;
 
-/** تاریخ متنی سند (ISO، یا شمسی قدیمی سال‌های بسته) به ISO */
-const isoDay = (column: SQL): SQL => sql`COALESCE(erp_text_date_to_iso(${column}), ${column})`;
+/**
+ * تاریخ متنی سند (ISO، یا شمسی قدیمی سال‌های بسته) به ISO. v11 phase 6.1ch (M13): a Gregorian ISO day is taken as it
+ * is, and only another text goes through `erp_text_date_to_iso`, a PL/pgSQL call per row that took 20 µs (4 s of the
+ * report on 30k vouchers). The result is the same: for such a text the function gives the text itself or null.
+ */
+const isoDay = (column: SQL): SQL => sql`(CASE WHEN ${column} ~ '^(19|20|21)[0-9]{2}-[0-9]{2}-[0-9]{2}$' THEN ${column}
+  ELSE COALESCE(erp_text_date_to_iso(${column}), ${column}) END)`;
 
 const chequeTypeOf = (kind: AgingKind) => (kind === 'receivable' ? 'received' : 'paid');
 
@@ -43,7 +48,14 @@ function factsCte(scope: AgingScope): SQL {
   const amount = scope.kind === 'receivable' ? sql`(${debit} - ${credit})` : sql`(${credit} - ${debit})`;
   const statuses = scope.approvedOnly ? sql`('approved', 'permanent')` : sql`('approved', 'permanent', 'draft')`;
   const currency = voucherItemCurrencyCondition(scope.currency);
-  return sql`aging_facts AS (
+  // v11 phase 6.1ch (M13): one party per trimmed name, live before deleted and then the lowest id, as the earlier
+  // per-row lookup chose it; a lateral lookup per voucher row cost 0.4 s on 30k vouchers.
+  return sql`aging_legacy AS (
+    SELECT DISTINCT ON (btrim(c.name)) btrim(c.name) AS name, c.id
+      FROM customers c
+     ORDER BY btrim(c.name), c.is_deleted, c.id
+  ),
+  aging_facts AS (
     SELECT COALESCE(
              CASE WHEN journal_voucher_items.detailed_type IN ${PARTY_TYPES} THEN journal_voucher_items.detailed_id END,
              legacy.id
@@ -57,14 +69,10 @@ function factsCte(scope: AgingScope): SQL {
            (journal_vouchers.status = 'draft') AS is_draft
       FROM journal_voucher_items
       JOIN journal_vouchers ON journal_vouchers.id = journal_voucher_items.voucher_id
-      LEFT JOIN LATERAL (
-        SELECT c.id FROM customers c
-         WHERE journal_voucher_items.detailed_type IN ${PARTY_TYPES}
-           AND journal_voucher_items.detailed_id IS NULL
-           AND btrim(c.name) = btrim(journal_voucher_items.detailed_name)
-         ORDER BY c.is_deleted, c.id
-         LIMIT 1
-      ) legacy ON true
+      LEFT JOIN aging_legacy legacy
+        ON journal_voucher_items.detailed_type IN ${PARTY_TYPES}
+       AND journal_voucher_items.detailed_id IS NULL
+       AND legacy.name = btrim(journal_voucher_items.detailed_name)
      WHERE journal_voucher_items.is_deleted = 0
        AND journal_vouchers.is_deleted = 0
        AND ${accountSubtreeCondition(journalVoucherItems.accountId, scope.accountId)}

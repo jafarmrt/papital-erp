@@ -4,11 +4,13 @@ import toast from 'react-hot-toast';
 import { BankAccount } from '../../../types';
 import { formatPersianNumber, formatPersianPrice, formatPersianDate } from '../../../utils';
 import { confirmAction } from '../../ConfirmDialogHost';
-import { useBankReconcileChequesQuery, useBankTreasuryTransactionsQuery } from '../../../hooks/accounting/useTreasuryQueries';
+import { useQueryClient } from '@tanstack/react-query';
+import { bankReconcileCandidatesQuery, useBankReconcileChequesQuery } from '../../../hooks/accounting/useTreasuryQueries';
 import { 
   parseBankStatementBuffer, 
   matchStatementWithTransactions, 
   newMatchedIdsBySource,
+  statementCandidateRange,
   ReconcileMatchedRow,
   TreasuryTxCandidate 
 } from './bankStatementMatcher';
@@ -51,21 +53,24 @@ export function BankReconciliationModal({
     return bankAccounts.find(b => String(b.id) === String(selectedAccountId)) || null;
   }, [bankAccounts, selectedAccountId]);
 
-  // تراکنش‌های حساب انتخابی؛ v9.0.102 (TD-509): فقط همین حساب از سرور خوانده می‌شود، نه کل فهرست خزانه
-  const accountTxQuery = useBankTreasuryTransactionsQuery(selectedAccountId ? Number(selectedAccountId) : null);
   // v10.0.254 (TD-971): چک وصول‌شده در مانده خزانه حساب است، پس نامزد تطبیق هم هست
   const accountChequesQuery = useBankReconcileChequesQuery(selectedAccountId ? Number(selectedAccountId) : null);
-  const accountTxs = useMemo<TreasuryTxCandidate[]>(() => {
-    const rows = Array.isArray(accountTxQuery.data) ? accountTxQuery.data : [];
-    const chequeRows = Array.isArray(accountChequesQuery.data) ? accountChequesQuery.data : [];
+  // v11 phase 6.1ch (M13): the account's treasury rows are read when a statement is processed, only within its days
+  // (`statementCandidateRange`); before, every row of the account was read as soon as the window opened
+  const queryClient = useQueryClient();
+  const [candidateCount, setCandidateCount] = useState<number | null>(null);
+  const loadCandidates = async (bankAccountId: number, statementRows: { date: string }[]): Promise<TreasuryTxCandidate[]> => {
+    const rows = await queryClient.fetchQuery({ ...bankReconcileCandidatesQuery(bankAccountId, statementCandidateRange(statementRows)), staleTime: 0 });
+    const cheques = accountChequesQuery.data ?? (await accountChequesQuery.refetch()).data;
+    const chequeRows = Array.isArray(cheques) ? cheques : [];
     return [
-      ...rows.filter(t => t.bankAccountId === Number(selectedAccountId) && t.status !== 'voided'),
+      ...rows.filter(t => t.bankAccountId === bankAccountId && t.status !== 'voided'),
       ...chequeRows.map(c => ({
         id: c.id, source: 'cheque' as const, transactionNumber: `چک ${c.chequeNumber}`, date: c.date, type: c.type,
         amount: c.amount, partyName: c.partyName, reconciled: c.reconciled,
       })),
     ];
-  }, [accountTxQuery.data, accountChequesQuery.data, selectedAccountId]);
+  };
 
   // پردازش فایل اکسل صورت‌حساب
   const processFile = async (file: File) => {
@@ -84,7 +89,9 @@ export function BankReconciliationModal({
         return;
       }
 
-      // تطبیق با تراکنش‌های خزانه‌داری
+      // تطبیق با تراکنش‌های خزانه‌داری همان روزهای صورت‌حساب
+      const accountTxs = await loadCandidates(Number(selectedAccountId), rows);
+      setCandidateCount(accountTxs.length);
       const matched = matchStatementWithTransactions(rows, accountTxs);
       
       setReconcileRows(matched);
@@ -277,6 +284,7 @@ export function BankReconciliationModal({
                 onChange={e => {
                   setSelectedAccountId(e.target.value);
                   setReconcileRows([]);
+                  setCandidateCount(null);
                   setUploadedFileName(null);
                   setDetectedBankName(null);
                 }}
@@ -299,12 +307,14 @@ export function BankReconciliationModal({
                     {formatPersianPrice(Number(selectedBank.currentBalance ?? selectedBank.treasuryBalance ?? 0))}
                   </span>
                 </div>
-                <div className="bg-white dark:bg-slate-800 px-3.5 py-2 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
-                  <span className="text-slate-400 block text-[10px]">تراکنش‌های فعال در سیستم:</span>
-                  <span className="font-bold text-teal-600 dark:text-teal-400">
-                    {formatPersianNumber(accountTxs.length)} تراکنش
-                  </span>
-                </div>
+                {candidateCount !== null && (
+                  <div className="bg-white dark:bg-slate-800 px-3.5 py-2 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+                    <span className="text-slate-500 block text-[11px]">تراکنش‌های دفتر در روزهای صورت‌حساب:</span>
+                    <span className="font-bold text-teal-600 dark:text-teal-400">
+                      {formatPersianNumber(candidateCount)} تراکنش
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>
