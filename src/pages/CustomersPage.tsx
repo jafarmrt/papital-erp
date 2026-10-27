@@ -57,11 +57,16 @@ export default function CustomersPage({ user }: { user: User }) {
   // 10.3 (ARCH review finding 3, part 12): the account card is read through the shared cache, again for each party opened,
   // and a voucher, treasury entry or document refreshes it while it is open
   const ledgerPartyId = selectedLedgerCustomer?.id ?? null;
-  // v11 phase 6.1ch (M13): the card is paged on the server; each party opens on its first page
+  // v11 phase 6.1ch (M13): the card is paged on the server; each opening of a party starts on its first page, and a page
+  // past the end (rows voided since) goes back to the last page
   const [ledgerPage, setLedgerPage] = useState<{ partyId: number | null; page: number }>({ partyId: null, page: 1 });
+  if (ledgerPage.partyId !== ledgerPartyId) setLedgerPage({ partyId: ledgerPartyId, page: 1 });
   const ledgerCardPage = ledgerPage.partyId === ledgerPartyId ? ledgerPage.page : 1;
   const ledgerRead = useOpeningRead(useCustomerAccountCardQuery(ledgerPartyId, ledgerCardPage), ledgerPartyId);
   const ledgerData = ledgerRead.data ?? null;
+  if (ledgerData && ledgerData.page === ledgerCardPage && ledgerCardPage > accountCardPageCount(ledgerData)) {
+    setLedgerPage({ partyId: ledgerPartyId, page: accountCardPageCount(ledgerData) });
+  }
   const loadingLedger = ledgerPartyId !== null && ledgerRead.data === undefined && !ledgerRead.error;
   const sayLedgerFailed = useEffectEvent(() => { toast.error('خطا در دریافت کارت حساب شخص'); });
   useEffect(() => {
@@ -721,7 +726,7 @@ export default function CustomersPage({ user }: { user: User }) {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
                   <span>در حال محاسبه تراز و بارگذاری اسناد حسابداری...</span>
                 </div>
-              ) : ledgerData && ((ledgerData.items?.length ?? 0) > 0 || partyTemporaryRowsOf(ledgerData).length > 0 || partyDraftRowsOf(ledgerData).length > 0) ? (
+              ) : ledgerData && ((ledgerData.items?.length ?? 0) > 0 || (ledgerData.total ?? 0) > 0 || partyTemporaryRowsOf(ledgerData).length > 0 || partyDraftRowsOf(ledgerData).length > 0) ? (
                 <>
                   {/* Balance Summary Header Cards */}
                   <div className="grid grid-cols-3 gap-3">

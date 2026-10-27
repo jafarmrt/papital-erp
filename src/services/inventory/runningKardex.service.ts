@@ -198,8 +198,8 @@ export interface RunningKardexPage extends RunningKardexResponse {
 /**
  * v11 phase 6.1ch (S11): the Kardex window's page. The running balances and WAC need the whole ledger in registration
  * order, so it is replayed here as before, but only the rows of the range (`from`, `to`, by day) that pass the filters
- * leave the server, a page at a time (`export`: all of them). The range opens with the balance, WAC and value at the end
- * of the day before `from`; the summary stays the item's whole ledger.
+ * leave the server, a page at a time (`export`: all of them). The range opens with the running balance, WAC and value of
+ * the last row before `from` (the rows' own columns); the summary stays the item's whole ledger.
  */
 export async function buildItemRunningKardexPage(
   itemId: number,

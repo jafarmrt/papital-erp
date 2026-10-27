@@ -36,6 +36,8 @@ import { ProjectReportView } from './reports/ProjectReportView';
 import { IncludeClosingToggle } from './reports/IncludeClosingToggle';
 import { trialBalanceTotals } from './reports/trialBalanceTotals';
 import { normalizeSearchText } from '../../lib/search/searchText';
+import { accountCardPageCount } from '../../lib/accounting/accountCard';
+import { usePrintSnapshot } from '../../hooks/usePrintSnapshot';
 
 interface FinancialReportsTabProps {
   accounts: Account[];
@@ -50,6 +52,8 @@ interface FinancialReportsTabProps {
   onFetchLedger: (accountId: number, startDate?: string, endDate?: string) => Promise<void>;
   /** v11 phase 6.1ch (M13): another page of the card on screen */
   onLedgerPageChange: (page: number) => Promise<void>;
+  /** v11 phase 6.1ch (M13): every row of the card on screen, for its print */
+  onLoadLedgerForPrint?: () => Promise<AccountLedgerReport | null>;
 }
 
 /** v10.1.10 (D-03): شناسه طرف حساب از نشانی («صورت‌حساب» گزارش سن مطالبات)؛ هر چیز جز عدد صحیح مثبت نادیده گرفته می‌شود */
@@ -70,6 +74,7 @@ export function FinancialReportsTab({
   onFetchBalanceSheet,
   onFetchLedger,
   onLedgerPageChange,
+  onLoadLedgerForPrint,
 }: FinancialReportsTabProps) {
   const [searchParams] = useSearchParams();
   const validSubTabs = ['trial_balance', 'party_ledger', 'journal_book', 'income_statement', 'balance_sheet', 'ledger', 'ratios', 'audit', 'automation', 'project'] as const;
@@ -173,7 +178,15 @@ export function FinancialReportsTab({
     else if (activeSubTab === 'ratios') fetchFinancialRatios(undefined, ratiosAsOfDate, checked);
   };
 
-  const handlePrint = () => {
+  // v11 phase 6.1ch (M13): a card of several pages prints every row, not only the page on screen
+  const [printLedger, setPrintLedger] = usePrintSnapshot<AccountLedgerReport>();
+  const handlePrint = async () => {
+    if (activeSubTab === 'ledger' && ledgerReport && onLoadLedgerForPrint && accountCardPageCount(ledgerReport) > 1) {
+      const all = await onLoadLedgerForPrint().catch(() => null);
+      if (all) setPrintLedger(all);
+      else toast.error('همه ردیف‌های کارت حساب برای چاپ گرفته نشد؛ دوباره تلاش کنید.');
+      return;
+    }
     window.print();
   };
 
@@ -232,7 +245,7 @@ export function FinancialReportsTab({
         <div className="flex flex-wrap items-center gap-2">
           {showsClosingToggle && <IncludeClosingToggle checked={includeClosing} onChange={handleIncludeClosingChange} />}
           <button
-            onClick={handlePrint}
+            onClick={() => { void handlePrint(); }}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition"
           >
             <Printer className="w-4 h-4" />
@@ -432,7 +445,7 @@ export function FinancialReportsTab({
       {activeSubTab === 'ledger' && (
         <LedgerView
           accounts={accounts}
-          ledgerReport={ledgerReport}
+          ledgerReport={printLedger ?? ledgerReport}
           selectedLedgerAccountId={selectedLedgerAccountId}
           setSelectedLedgerAccountId={setSelectedLedgerAccountId}
           onApplyLedgerFilter={handleApplyLedgerFilter}

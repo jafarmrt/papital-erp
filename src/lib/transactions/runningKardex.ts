@@ -83,7 +83,10 @@ export const RUNNING_KARDEX_DIRECTIONS = ['all', 'in', 'out'] as const;
 export type RunningKardexDirection = typeof RUNNING_KARDEX_DIRECTIONS[number];
 
 export interface RunningKardexOpening {
-  /** the range's first day; the balances are those at the end of the day before */
+  /**
+   * the range's first day; the balances are the running columns of the window's last row before it (voided documents and
+   * their reversals counted as the rows count them, WAC in registration order), not a valuation of the stock by date
+   */
   date: string;
   runningBalance: number;
   runningWac: number;

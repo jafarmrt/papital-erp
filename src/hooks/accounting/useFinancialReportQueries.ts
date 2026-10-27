@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import type {
   AccountLedgerReport,
@@ -25,8 +26,8 @@ export interface TrialBalanceParams extends ClosingVouchersParam { level: string
 export interface DateRangeParams { startDate?: string; endDate?: string }
 export interface IncomeStatementParams extends DateRangeParams, ClosingVouchersParam {}
 export interface BalanceSheetParams extends ClosingVouchersParam { asOfDate?: string }
-/** v11 phase 6.1ch (M13): the card is one page; the page is part of the key */
-export interface LedgerParams { accountId: number; startDate?: string; endDate?: string; page?: number }
+/** v11 phase 6.1ch (M13): the card is one page; the page is part of the key (`exportAll`: every row, for a print) */
+export interface LedgerParams { accountId: number; startDate?: string; endDate?: string; page?: number; exportAll?: boolean }
 export interface RatiosParams extends ClosingVouchersParam { asOfDate?: string; currency?: string }
 
 function dateRange(params: URLSearchParams, { startDate, endDate }: DateRangeParams): URLSearchParams {
@@ -78,11 +79,16 @@ export const LEDGER_REPORT: OnDemandReportSpec<LedgerParams, AccountLedgerReport
   url: (p) => {
     const params = new URLSearchParams();
     params.append('accountId', String(p.accountId));
-    return `/accounting/reports/ledger?${setAccountCardPage(dateRange(params, p), p.page).toString()}`;
+    return `/accounting/reports/ledger?${setAccountCardPage(dateRange(params, p), p.page, p.exportAll).toString()}`;
   },
   parse: reportFromResponse<AccountLedgerReport>,
   errorText: 'خطا در دریافت گردش حساب',
 };
+
+/** v11 phase 6.1ch (M13): every row of a card (its print), read fresh each time */
+export async function fetchLedgerExport(params: LedgerParams): Promise<AccountLedgerReport | null> {
+  return LEDGER_REPORT.parse(await fetchJson<unknown>(LEDGER_REPORT.url({ ...params, page: undefined, exportAll: true })));
+}
 
 /** v9.0.227 (TD-561): دفتر روزنامه صفحه‌به‌صفحه؛ صفحه بخشی از کلید است */
 export interface JournalBookParams extends DateRangeParams { page?: number }

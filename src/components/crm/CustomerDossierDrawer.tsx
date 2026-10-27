@@ -65,12 +65,18 @@ export function CustomerDossierDrawer({
   // read again each time a party's dossier opens; a document, voucher or treasury change refreshes them while it is open
   const partyId = customer?.id ?? null;
   const documentsRead = useOpeningRead(useCustomerDocumentsQuery(partyId), partyId);
-  // v11 phase 6.1ch (M13): the card is paged on the server; each party opens on its first page
+  // v11 phase 6.1ch (M13): the card is paged on the server; each opening of a party starts on its first page, and a page
+  // past the end (rows voided since) goes back to the last page
   const [cardPage, setCardPage] = useState<{ partyId: number | null; page: number }>({ partyId: null, page: 1 });
-  const accountCardRead = useOpeningRead(useCustomerAccountCardQuery(partyId, cardPage.partyId === partyId ? cardPage.page : 1), partyId);
+  if (cardPage.partyId !== partyId) setCardPage({ partyId, page: 1 });
+  const currentCardPage = cardPage.partyId === partyId ? cardPage.page : 1;
+  const accountCardRead = useOpeningRead(useCustomerAccountCardQuery(partyId, currentCardPage), partyId);
   const documents = documentsRead.data ?? NO_DOCUMENTS;
   const loadingDocs = partyId !== null && documentsRead.data === undefined && !documentsRead.error;
   const financialReport = accountCardRead.data ?? null;
+  if (financialReport && financialReport.page === currentCardPage && currentCardPage > accountCardPageCount(financialReport)) {
+    setCardPage({ partyId, page: accountCardPageCount(financialReport) });
+  }
   const loadingFinancials = partyId !== null && accountCardRead.data === undefined && !accountCardRead.error;
   const sayDocumentsFailed = useEffectEvent(() => { toast.error('خطا در دریافت اسناد مشتری'); });
   useEffect(() => {

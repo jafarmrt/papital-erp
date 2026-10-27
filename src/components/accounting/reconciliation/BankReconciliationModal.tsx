@@ -74,6 +74,7 @@ export function BankReconciliationModal({
 
   // پردازش فایل اکسل صورت‌حساب
   const processFile = async (file: File) => {
+    if (isProcessingFile) return;
     if (!selectedAccountId) {
       toast.error('لطفاً ابتدا حساب بانکی مورد نظر را انتخاب کنید.');
       return;
@@ -281,6 +282,8 @@ export function BankReconciliationModal({
               <select
                 id={`${fieldId}-selected-account-id`}
                 value={selectedAccountId}
+                // v11 phase 6.1ch (M13): the statement is matched with the account's rows read for it; no switch meanwhile
+                disabled={isProcessingFile}
                 onChange={e => {
                   setSelectedAccountId(e.target.value);
                   setReconcileRows([]);

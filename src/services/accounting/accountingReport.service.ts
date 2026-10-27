@@ -676,69 +676,74 @@ export class AccountingReportService {
     const limit = Math.min(ACCOUNT_CARD_MAX_PAGE_SIZE, Math.max(1, Math.trunc(params.limit ?? ACCOUNT_CARD_PAGE_SIZE)));
     const cardWhere = and(...periodConditions, partyPermanent);
     const cardOrder = sql`${journalVouchers.date}, ${journalVouchers.voucherNumber}, ${journalVoucherItems.rowOrder}, ${journalVoucherItems.id}`;
-    const [totals] = await orm.select({
-      total: sql<number>`count(*)::int`,
-      totalDebit: sql<string>`COALESCE(SUM(${debitAmount}), 0)::text`,
-      totalCredit: sql<string>`COALESCE(SUM(${creditAmount}), 0)::text`,
-    })
-    .from(journalVoucherItems)
-    .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
-    .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
-    .where(cardWhere);
-
-    const rowsQuery = orm.select({
-      rowNumber: sql<number>`(row_number() OVER (ORDER BY ${cardOrder}))::int`,
-      periodBalance: sql<string>`(SUM(${debitAmount} - ${creditAmount}) OVER (ORDER BY ${cardOrder} ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW))::text`,
-      voucherId: journalVouchers.id,
-      voucherNumber: journalVouchers.voucherNumber,
-      date: journalVouchers.date,
-      itemDescription: journalVoucherItems.description,
-      voucherDescription: journalVouchers.description,
-      accountName: accounts.name,
-      accountCode: accounts.code,
-      detailedName: journalVoucherItems.detailedName,
-      detailedType: journalVoucherItems.detailedType,
-      detailedId: journalVoucherItems.detailedId,
-      rowCurrency: voucherItemCurrencySql,
-      debit: sql<string>`${debitAmount}::text`,
-      credit: sql<string>`${creditAmount}::text`,
-      originalDebit: journalVoucherItems.debit,
-      originalCredit: journalVoucherItems.credit,
-      exchangeRate: journalVoucherItems.exchangeRate,
-    })
-    .from(journalVoucherItems)
-    .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
-    .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
-    .where(cardWhere)
-    .orderBy(asc(journalVouchers.date), asc(journalVouchers.voucherNumber), asc(journalVoucherItems.rowOrder), asc(journalVoucherItems.id))
-    .$dynamic();
-    const rawRows = params.exportAll ? await rowsQuery : await rowsQuery.limit(limit).offset((page - 1) * limit);
-
-    // V2.0.0: مانده ابتدای دوره — تجمیع اسناد قبل از startDate (با همان فیلترهای حساب/تفصیلی)
-    // v7.0.71 (P2-6 بخش ۳): جمع در SQL و مانده‌ها با Decimal
-    let openingDec = fin(0);
-    if (params.startDate) {
-      // بازسازی شرط‌ها بدون شرط startDate: همان فیلترها ولی date < startDate
-      const priorConds: (SQL | undefined)[] = [
-        eq(journalVouchers.isDeleted, 0),
-        eq(journalVoucherItems.isDeleted, 0),
-        or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
-      ];
-      if (params.accountId) priorConds.push(accountSubtreeCondition(journalVoucherItems.accountId, params.accountId));
-      if (params.detailedType && params.detailedType !== 'all') priorConds.push(eq(journalVoucherItems.detailedType, params.detailedType));
-      if (params.detailedId) priorConds.push(eq(journalVoucherItems.detailedId, params.detailedId));
-      if (params.detailedName) priorConds.push(like(journalVoucherItems.detailedName, containsLikePattern(params.detailedName.trim())));
-      if (params.party) priorConds.push(partyDetailedRowsCondition(params.party), partyPermanent);
-      priorConds.push(currencyCondition);
-      if (params.startDate) priorConds.push(lt(journalVouchers.date, params.startDate));
-
-      const [prior] = await orm.select({ balance: sql<string>`COALESCE(SUM(${debitAmount} - ${creditAmount}), 0)::text` })
+    // v11 phase 6.1ch (M13, review): the count, sums, page and opening balance read one snapshot, so a voucher approved
+    // between the reads cannot leave a page's running balance off the final balance
+    const { totals, rawRows, openingDec } = await orm.transaction(async (tx) => {
+      const [totals] = await tx.select({
+        total: sql<number>`count(*)::int`,
+        totalDebit: sql<string>`COALESCE(SUM(${debitAmount}), 0)::text`,
+        totalCredit: sql<string>`COALESCE(SUM(${creditAmount}), 0)::text`,
+      })
       .from(journalVoucherItems)
       .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
       .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
-      .where(and(...priorConds.filter((c): c is SQL => c !== undefined)));
-      openingDec = fin(prior?.balance).round(4);
-    }
+      .where(cardWhere);
+
+      const rowsQuery = tx.select({
+        rowNumber: sql<number>`(row_number() OVER (ORDER BY ${cardOrder}))::int`,
+        periodBalance: sql<string>`(SUM(${debitAmount} - ${creditAmount}) OVER (ORDER BY ${cardOrder} ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW))::text`,
+        voucherId: journalVouchers.id,
+        voucherNumber: journalVouchers.voucherNumber,
+        date: journalVouchers.date,
+        itemDescription: journalVoucherItems.description,
+        voucherDescription: journalVouchers.description,
+        accountName: accounts.name,
+        accountCode: accounts.code,
+        detailedName: journalVoucherItems.detailedName,
+        detailedType: journalVoucherItems.detailedType,
+        detailedId: journalVoucherItems.detailedId,
+        rowCurrency: voucherItemCurrencySql,
+        debit: sql<string>`${debitAmount}::text`,
+        credit: sql<string>`${creditAmount}::text`,
+        originalDebit: journalVoucherItems.debit,
+        originalCredit: journalVoucherItems.credit,
+        exchangeRate: journalVoucherItems.exchangeRate,
+      })
+      .from(journalVoucherItems)
+      .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
+      .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
+      .where(cardWhere)
+      .orderBy(asc(journalVouchers.date), asc(journalVouchers.voucherNumber), asc(journalVoucherItems.rowOrder), asc(journalVoucherItems.id))
+      .$dynamic();
+      const rawRows = params.exportAll ? await rowsQuery : await rowsQuery.limit(limit).offset((page - 1) * limit);
+
+      // V2.0.0: مانده ابتدای دوره — تجمیع اسناد قبل از startDate (با همان فیلترهای حساب/تفصیلی)
+      // v7.0.71 (P2-6 بخش ۳): جمع در SQL و مانده‌ها با Decimal
+      let openingDec = fin(0);
+      if (params.startDate) {
+        // بازسازی شرط‌ها بدون شرط startDate: همان فیلترها ولی date < startDate
+        const priorConds: (SQL | undefined)[] = [
+          eq(journalVouchers.isDeleted, 0),
+          eq(journalVoucherItems.isDeleted, 0),
+          or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
+        ];
+        if (params.accountId) priorConds.push(accountSubtreeCondition(journalVoucherItems.accountId, params.accountId));
+        if (params.detailedType && params.detailedType !== 'all') priorConds.push(eq(journalVoucherItems.detailedType, params.detailedType));
+        if (params.detailedId) priorConds.push(eq(journalVoucherItems.detailedId, params.detailedId));
+        if (params.detailedName) priorConds.push(like(journalVoucherItems.detailedName, containsLikePattern(params.detailedName.trim())));
+        if (params.party) priorConds.push(partyDetailedRowsCondition(params.party), partyPermanent);
+        priorConds.push(currencyCondition);
+        if (params.startDate) priorConds.push(lt(journalVouchers.date, params.startDate));
+
+        const [prior] = await tx.select({ balance: sql<string>`COALESCE(SUM(${debitAmount} - ${creditAmount}), 0)::text` })
+        .from(journalVoucherItems)
+        .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
+        .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
+        .where(and(...priorConds.filter((c): c is SQL => c !== undefined)));
+        openingDec = fin(prior?.balance).round(4);
+      }
+      return { totals, rawRows, openingDec };
+    }, { isolationLevel: 'repeatable read', accessMode: 'read only' });
     const openingBalance = openingDec.toNumber();
     const totalDebitDec = fin(totals?.totalDebit);
     const totalCreditDec = fin(totals?.totalCredit);

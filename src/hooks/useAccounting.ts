@@ -260,6 +260,7 @@ export function useAccounting({ tab = 'dashboard', allowed = true }: UseAccounti
     fetchBalanceSheet: reports.fetchBalanceSheet,
     fetchLedger: reports.fetchLedger,
     goToLedgerPage: reports.goToLedgerPage,
+    loadLedgerForPrint: reports.loadLedgerForPrint,
     handleCreateAccount,
     handleUpdateAccount,
     handleDeleteAccount,

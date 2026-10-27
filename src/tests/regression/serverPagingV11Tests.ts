@@ -124,7 +124,7 @@ export async function runServerPagingV11Tests(shouldRun: ShouldRun): Promise<Tes
 
   const kardexId = 'reg_kardex_window_server_pages_v11_6_1ch_s11';
   if (shouldRun(kardexId, 'v11', 'phase6', 's11', 'inventory', 'kardex', 'paging')) {
-    await runCase(results, kardexId, 'v11 phase 6.1ch (S11): the Kardex window answers the rows of a date range one page at a time, opens the range with the balance at the end of the day before, filters by direction, warehouse and search on the server, lists every warehouse of the item, and keeps the summary of the whole ledger', () => inFiscalSandbox(async () => {
+    await runCase(results, kardexId, 'v11 phase 6.1ch (S11): the Kardex window answers the rows of a date range one page at a time, opens the range with the running balance of the last row before it, filters by direction, warehouse and search on the server, lists every warehouse of the item, and keeps the summary of the whole ledger', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const main = String(await getDefaultWarehouseCode(orm));

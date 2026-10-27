@@ -8,6 +8,7 @@ import { SearchableSelect } from '../SearchableSelect';
 import { fetchExplorerLedgerRows, useExplorerLedgerQuery, type ExplorerLedgerParams, type ExplorerLedgerRow } from '../../hooks/accounting/useAccountExplorerQueries';
 import { accountCardPageCount } from '../../lib/accounting/accountCard';
 import { ListPager } from '../common/ListPager';
+import { usePrintSnapshot } from '../../hooks/usePrintSnapshot';
 import { toast } from 'react-hot-toast';
 import { useVoucherDetailLoader } from '../../hooks/accounting/useVoucherQueries';
 import type { Account, Customer, Personnel, BankAccount, JournalVoucher } from '../../types';
@@ -122,7 +123,9 @@ export function AccountExplorerTab({
   const [ledgerPage, setLedgerPage] = useState<{ key: string; page: number }>({ key: ledgerKey, page: 1 });
   const currentLedgerPage = ledgerPage.key === ledgerKey ? ledgerPage.page : 1;
   const { ledger, loading: isLoadingTransactions, hasFilter: hasLedgerFilter } = useExplorerLedgerQuery(ledgerParams, currentLedgerPage);
-  const transactions: VoucherItemRow[] = ledger.items;
+  // the print holds every row of the selection (`handlePrint`); the screen shows its page
+  const [printRows, setPrintRows] = usePrintSnapshot<VoucherItemRow[]>();
+  const transactions: VoucherItemRow[] = printRows ?? ledger.items;
   const [exportingCsv, setExportingCsv] = useState(false);
   // v10.0.x (TD-1240): ردیف «مانده ابتدای دوره» سند ندارد؛ شماره ردیف‌ها پس از آن از ۱ آغاز می‌شود
   const openingRows = transactions.filter(t => t.isOpening).length;
@@ -168,9 +171,17 @@ export function AccountExplorerTab({
     setSelectedSubsidiaryId(null);
   };
 
-  // Print function
-  const handlePrint = () => {
-    window.print();
+  // Print function; v11 phase 6.1ch (M13): a selection of several pages prints every row (`export=true`)
+  const handlePrint = async () => {
+    if (accountCardPageCount(ledger) <= 1) {
+      window.print();
+      return;
+    }
+    try {
+      setPrintRows(await fetchExplorerLedgerRows(ledgerParams));
+    } catch {
+      toast.error('همه ردیف‌های گردش حساب برای چاپ گرفته نشد؛ دوباره تلاش کنید.');
+    }
   };
 
   // Export CSV function; v11 phase 6.1ch (M13): every row of the selection (`export=true`), not only the page on screen
@@ -407,7 +418,7 @@ export function AccountExplorerTab({
             <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 my-auto hidden sm:block" />
 
             <button
-              onClick={handlePrint}
+              onClick={() => { void handlePrint(); }}
               className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1.5 cursor-pointer"
             >
               <Printer size={14} />
