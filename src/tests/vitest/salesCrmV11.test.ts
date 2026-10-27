@@ -80,9 +80,10 @@ describe('a void or edit of an order rebuilds duplicate rows the same way (C9, r
     expect(shape(rebuildOrderRows([ordered(5, 5), ordered(5, 5)] as never, new Set([7]), [{ itemId: 7, quantity: 6 }], [{ itemId: 7, quantity: 6 }]))).toEqual([[5, 5, 0, 'received'], [1, 1, 4, 'pending']]);
   });
 
-  it('keeps a row closed before the rebuild closed', () => {
-    const closed = { ...ordered(2), closed: true };
-    expect(shape(rebuildOrderRows([ordered(5), closed] as never, new Set([7]), [{ itemId: 7, quantity: 6 }], []))).toEqual([[5, 0, 0, 'ordered'], [1, 0, 0, 'ordered']]);
+  it('keeps a row closed before the rebuild closed: by flag, by note or by the legacy rule (ordered below its request)', () => {
+    for (const closed of [{ ...ordered(2), closed: true }, { ...ordered(2), closureNote: 'بسته شد' }, ordered(3)]) {
+      expect(shape(rebuildOrderRows([ordered(5), closed] as never, new Set([7]), [{ itemId: 7, quantity: 6 }], []))).toEqual([[5, 0, 0, 'ordered'], [1, 0, 0, 'ordered']]);
+    }
   });
 });
 
