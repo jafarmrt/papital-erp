@@ -1,4 +1,5 @@
 import type { DbExecutor } from '../../db/drizzle.js';
+import type { SettlementAllocationView } from '../../lib/treasury/settlementAllocation.js';
 
 export type DbClient = DbExecutor;
 
@@ -211,6 +212,8 @@ export interface FormattedDocument {
     bankAccountId?: number | null;
     description?: string | null;
   }>;
+  /** v11 phase 6.1t (M11): live parts of receipts and cheques put on this document with others */
+  allocations?: SettlementAllocationView[];
   items: FormattedDocumentItem[];
 }
 

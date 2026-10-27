@@ -30,6 +30,16 @@ export const TreasuryHealthBanner: React.FC<TreasuryHealthBannerProps> = React.m
   const waitsForApproval = isHealthy && pendingApprovalAccountsCount > 0;
   const rial = rialDisplayOf(appCurrency);
 
+  // v11 phase 6.1t (U1): with no account there is nothing to compare; before, the banner claimed a full match of 0 of 0
+  if (totalAccountsCount === 0) {
+    return (
+      <div className="p-4 sm:p-5 rounded-2xl border bg-slate-50/60 dark:bg-slate-900/30 border-slate-200 dark:border-slate-700" data-testid="treasury-health-empty">
+        <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">هنوز حساب بانکی یا صندوقی تعریف نشده است</h4>
+        <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">پس از تعریف نخستین حساب، مانده آن با دفاتر حسابداری سنجیده و این‌جا نشان داده می‌شود.</p>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`p-4 sm:p-5 rounded-2xl border transition-all ${

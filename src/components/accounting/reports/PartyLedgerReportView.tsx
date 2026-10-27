@@ -8,6 +8,7 @@ import type { PartyOption } from '../../../types';
 import { usePartiesQuery, usePartyLedgerReport, type PartyLedgerParams } from '../../../hooks/accounting/usePartyProjectReportQueries';
 import { JalaliDateInput } from '../../common/JalaliDateInput';
 import { PartyTemporaryRowsPanel } from './PartyTemporaryRowsPanel';
+import { PartyDraftRowsPanel } from './PartyDraftRowsPanel';
 
 type PartyTypeFilter = 'all' | 'customer' | 'supplier' | 'personnel';
 type CurrencyFilter = 'all' | 'IRR' | 'USD' | 'EUR' | 'AED' | 'GBP';
@@ -767,6 +768,7 @@ export function PartyLedgerReportView({
               </table>
             </div>
 
+            <PartyDraftRowsPanel rows={reportData.draftRows} formatAmount={v => formatPersianPrice(v, reportData.currency || 'IRR')} />
             <PartyTemporaryRowsPanel rows={reportData.temporaryRows} formatAmount={v => formatPersianPrice(v, reportData.currency || 'IRR')} />
 
             {/* Official Signatures Block for Print */}

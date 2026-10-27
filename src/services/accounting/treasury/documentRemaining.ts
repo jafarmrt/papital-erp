@@ -25,7 +25,7 @@ export async function lockSettlementDocument(tx: DbExecutor, documentId: number)
 
 /** مبلغ قابل پرداخت و جمع تسویه سند؛ بسته خزانه بسته اسناد را import نمی‌کند و ریشه ترکیب (`registerWorkflowDomainActions`) آن را ثبت می‌کند */
 export type DocumentRemainingReader = (tx: DbExecutor, documentId: number) =>
-  Promise<{ refNumber: string | null; payable: FinancialDecimal; settled: FinancialDecimal } | null>;
+  Promise<{ refNumber: string | null; payable: FinancialDecimal; settled: FinancialDecimal; returned: FinancialDecimal } | null>;
 
 let readDocumentRemaining: DocumentRemainingReader = async () => {
   throw new BusinessLogicError('مانده سند خوانده نشد؛ سامانه کامل راه‌اندازی نشده است.');
@@ -38,13 +38,14 @@ export function registerDocumentRemainingReader(reader: DocumentRemainingReader)
 export async function assertWithinDocumentRemaining(tx: DbExecutor, link: { documentId: number; amount: number | string }): Promise<void> {
   const doc = await readDocumentRemaining(tx, link.documentId);
   if (!doc) return;
-  const { payable, settled } = doc;
-  const remaining = payable.subtract(settled.isNegative() ? 0 : settled);
+  const { payable, settled, returned } = doc;
+  // v11 phase 6.1t (M11 / U1): its final returns come off too, as on the document page and list
+  const remaining = payable.subtract(settled.isNegative() ? 0 : settled).subtract(returned);
   if (fin(link.amount).greaterThan(remaining.add(0.01))) {
     const left = remaining.isNegative() ? fin(0) : remaining;
     throw new ValidationError(
       `مبلغ ${formatPersianNumber(fin(link.amount).toNumber())} از مانده سند «${doc.refNumber}» (${formatPersianNumber(left.toNumber())}) بیشتر است؛ حداکثر مانده سند را به آن وصل کنید و مازاد را بی پیوند به سند (علی‌الحساب) ثبت کنید.`,
-      { payable: payable.toNumber(), settled: settled.toNumber(), remaining: left.toNumber() },
+      { payable: payable.toNumber(), settled: settled.toNumber(), returned: returned.toNumber(), remaining: left.toNumber() },
       'TREASURY_AMOUNT_EXCEEDS_DOCUMENT_REMAINING',
     );
   }

@@ -16,7 +16,7 @@ import {
   fiscalPeriods, fileAttachments, legacyDateRepairs, refFiscalYearCorrections, workflowTaskReopenLog,
   projectReservationReleases, inventoryReconciliationAnomalies, itemWarehouseStocks,
   integrationDeliveryJobs, eventActionRuleRetirements, webhookEventPatternRepairs, itemPriceTitleCleanup,
-  dailyLogVisibilityRepairs, statutoryRemittanceLines, payrollStatutoryRates, payrollEidiRates, itemCodeHistory,
+  dailyLogVisibilityRepairs, statutoryRemittanceLines, settlementAllocations, payrollStatutoryRates, payrollEidiRates, itemCodeHistory,
   mediaAssets, mediaSections, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
 } from '../../db/schema.js';
 
@@ -59,8 +59,10 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   { name: 'daily_log_visibility_repairs', table: dailyLogVisibilityRepairs },
 
   // 3. Fiscal periods, treasury and accounting (fiscal_periods.closing_voucher_id references journal_vouchers;
-  //    statutory remittance lines reference treasury rows and personnel)
+  //    statutory remittance lines reference treasury rows and personnel; settlement allocations reference treasury rows,
+  //    cheques and documents)
   { name: 'fiscal_periods', table: fiscalPeriods },
+  { name: 'settlement_allocations', table: settlementAllocations },
   { name: 'petty_cash_expense_lines', table: pettyCashExpenseLines },
   { name: 'statutory_remittance_lines', table: statutoryRemittanceLines },
   { name: 'treasury_transactions', table: treasuryTransactions },

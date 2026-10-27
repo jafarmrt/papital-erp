@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useId } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
-import { CreditCard, Plus, Search, ArrowDownLeft, ArrowUpRight, Trash2, X, History, Download, ShieldCheck, Copy, Edit3 } from 'lucide-react';
+import { CreditCard, Plus, Search, ArrowDownLeft, ArrowUpRight, Trash2, X, History, Download, ShieldCheck, Copy, Edit3, FileCheck2 } from 'lucide-react';
 import { downloadSheet } from '../../lib/excel/downloadSheet';
 import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, getTodayIsoDate, formatPersianDate, errorMessageOf, toStorageDate, isoToJalaliDate, toEnglishDigits, toPersianDigits, formatPersianCode } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { ActionMenu } from '../ActionMenu';
-import { useRialDisplay } from '../../hooks/useAppCurrency';
+import { useAppCurrency, useRialDisplay } from '../../hooks/useAppCurrency';
 import { isRialCurrency } from '../../lib/rialDisplay';
 import type { Cheque, ChequeType, ChequeStatus, BankAccountOption, Customer, Personnel, FinancialAttachment } from '../../types';
 import toast from 'react-hot-toast';
@@ -22,6 +22,9 @@ import { personnelPartyName, personnelPartyOption } from '../../lib/treasury/per
 import { personnelServerSearchUrl } from '../../lib/personnel/personnelList';
 import { PartyPurposeFields } from './treasury/PartyPurposeFields';
 import { DialogLayer } from '../common/DialogLayer';
+import { SettlementAllocationField, type SettlementFieldState } from './treasury/SettlementAllocationField';
+import { SettlementAllocationModal, type SettlementWindowTarget } from './treasury/SettlementAllocationModal';
+import { canAllocateCheque } from '../../lib/treasury/settlementAllocation';
 
 interface ChequesTabProps {
   cheques: Cheque[];
@@ -49,6 +52,7 @@ export function ChequesTab({
 }: ChequesTabProps) {
   const fieldId = useId();
   const rial = useRialDisplay();
+  const appCurrency = useAppCurrency();
   const safeCheques = Array.isArray(cheques) ? cheques : [];
   const safeBankAccounts = Array.isArray(bankAccounts) ? bankAccounts : [];
   // v10.1.47 (ت۴۰): چک فقط به حساب بانکی یا صندوق وصول یا به وصول فرستاده می‌شود
@@ -102,6 +106,9 @@ export function ChequesTab({
     attachments: [] as FinancialAttachment[],
   });
 
+  // v11 phase 6.1t (M11 / U2): the documents a new cheque settles, and the window of a recorded one
+  const [settlement, setSettlement] = useState<SettlementFieldState>({ parts: [], problem: null });
+  const [settlementTarget, setSettlementTarget] = useState<SettlementWindowTarget | null>(null);
   const [viewingAttachments, setViewingAttachments] = useState<{ title: string; attachments: FinancialAttachment[] } | null>(null);
   const [statusModalCheque, setStatusModalCheque] = useState<Cheque | null>(null);
   const [targetStatus, setTargetStatus] = useState<ChequeStatus>('passed');
@@ -172,6 +179,15 @@ export function ChequesTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusModalCheque?.id]);
 
+  // a cheque received from a chosen customer or paid to a chosen supplier may settle its open documents
+  const newChequeSettlementQuery = newFormData.partyId
+    && (newFormData.type === 'received' ? newFormData.partyType === 'customer' : newFormData.partyType === 'supplier')
+    ? {
+      direction: newFormData.type === 'received' ? 'receipt' as const : 'payment' as const,
+      partyType: newFormData.partyType, partyId: newFormData.partyId, partyName: newFormData.partyName, currency: newFormData.currency || 'IRR',
+    }
+    : null;
+
   const handleCreateCheque = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFormData.chequeNumber.trim() || !newFormData.bankName.trim() || !newFormData.dueDate.trim()) {
@@ -191,6 +207,10 @@ export function ChequesTab({
       toast.error('سرفصل طرف مقابل را انتخاب کنید.');
       return;
     }
+    if (newChequeSettlementQuery && settlement.problem) {
+      toast.error(settlement.problem);
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -198,6 +218,7 @@ export function ChequesTab({
         ...newFormData,
         purpose: newFormData.partyType === 'personnel' ? newFormData.purpose : undefined,
         contraAccountId: needsContra ? newFormData.contraAccountId : null,
+        allocations: newChequeSettlementQuery ? settlement.parts : undefined,
       });
       toast.success('چک با موفقیت در سامانه ثبت شد');
       setIsNewModalOpen(false);
@@ -609,6 +630,11 @@ export function ChequesTab({
 
                       <td className="py-3 px-4 text-left font-mono font-black text-slate-900 dark:text-white">
                         {isRialCurrency(c.currency) ? rial.number(c.amount) : formatPersianPrice(c.amount, c.currency ?? undefined)}
+                        {(c.allocatedAmount ?? 0) > 0 && (
+                          <div className="font-sans text-[10px] font-bold text-emerald-700 dark:text-emerald-300 mt-0.5">
+                            روی فاکتورها: {rial.money(c.allocatedAmount, c.currency)}
+                          </div>
+                        )}
                       </td>
 
                       <td className="py-3 px-4 text-center">
@@ -653,6 +679,14 @@ export function ChequesTab({
                                 icon: History,
                                 onClick: () => setHistoryModalCheque(c),
                               },
+                              ...(canAllocateCheque(c) ? [{
+                                label: 'نشاندن روی فاکتورها',
+                                icon: FileCheck2,
+                                onClick: () => setSettlementTarget({
+                                  kind: 'cheque', id: c.id, number: c.chequeNumber, amount: Number(c.amount) || 0, currency: c.currency || 'IRR',
+                                  partyLabel: c.type === 'paid' ? 'تامین‌کننده' : 'مشتری', partyName: c.partyName,
+                                }),
+                              }] : []),
                               ...(c.sayadNumber
                                 ? [
                                     {
@@ -942,6 +976,19 @@ export function ChequesTab({
                   />
                 </div>
 
+                {newChequeSettlementQuery && (
+                  <SettlementAllocationField
+                    key={`${newChequeSettlementQuery.direction}-${newChequeSettlementQuery.partyId}`}
+                    query={newChequeSettlementQuery}
+                    amount={newFormData.amount}
+                    currency={newChequeSettlementQuery.currency}
+                    appCurrency={appCurrency}
+                    partyLabel={newFormData.type === 'received' ? 'مشتری' : 'تامین‌کننده'}
+                    onChange={setSettlement}
+                    disabled={isSaving}
+                  />
+                )}
+
                 <div>
                   <label htmlFor={`${fieldId}-description`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     توضیحات و بابت
@@ -1114,6 +1161,10 @@ export function ChequesTab({
       )}
 
       {/* History Modal */}
+      {settlementTarget && (
+        <SettlementAllocationModal target={settlementTarget} appCurrency={appCurrency} onClose={() => setSettlementTarget(null)} />
+      )}
+
       {historyModalCheque && (
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <DialogLayer onClose={() => setHistoryModalCheque(null)} />

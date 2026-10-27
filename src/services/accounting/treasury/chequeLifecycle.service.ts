@@ -27,6 +27,8 @@ import { assertPersonnelPartyId, resolveTreasuryPartyName } from './treasuryLink
 import { chequePartyPosting, requireChequePartyAccount, resolveChequePartyAccountId } from './chequePartyAccount.js';
 import { activeChequeVoucherIds, auditChequeDelete, auditChequeStatusChange, type ChequeAuditActor } from './chequeAudit.js';
 import { auditChequeCreated } from './treasuryAudit.js';
+import { assertAllocatableParty, insertAllocations, lockAndCheckAllocationTargets, normalizeAllocations } from './settlementAllocationWrite.js';
+import type { SettlementAllocationInput } from '../../../lib/treasury/settlementAllocation.js';
 import { domainEventBus } from '../../events/domainEventBus.js';
 import { DomainEventType, type ChequeEventPayload } from '../../events/domainEvents.js';
 import { OutboxService } from '../../events/outboxService.js';
@@ -150,6 +152,8 @@ export class ChequeLifecycleService {
       statusHistory: cheques.statusHistory,
       attachments: cheques.attachments,
       createdAt: cheques.createdAt,
+      // v11 phase 6.1t (M11): what the cheque settles on documents in parts
+      allocatedAmount: sql<string>`(SELECT COALESCE(SUM(a.amount), 0)::text FROM settlement_allocations a WHERE a.cheque_id = ${cheques.id} AND a.is_deleted = 0)`,
     })
     .from(cheques)
     .leftJoin(bankAccounts, eq(bankAccounts.id, cheques.bankAccountId))
@@ -159,6 +163,7 @@ export class ChequeLifecycleService {
     return rawList.map(c => ({
       ...c,
       amount: c.amount.toNumber(), // قرارداد API: مبلغ عدد (P2-6)
+      allocatedAmount: fin(c.allocatedAmount ?? 0).toNumber(),
       type: c.type as Cheque['type'],
       status: c.status as Cheque['status'],
       partyType: c.partyType as Cheque['partyType'],
@@ -207,9 +212,12 @@ export class ChequeLifecycleService {
     contraAccountId?: number | null;
     /** v10.0.262 (TD-934): ممیزی ثبت چک با `tx` همین ثبت */
     audit?: ChequeAuditActor;
+    /** v11 phase 6.1t (M11): the documents this cheque settles, in parts */
+    allocations?: SettlementAllocationInput[];
   }): Promise<Cheque> {
     const amount = exactTreasuryAmount(data.amount, 'مبلغ چک');
     if (amount <= 0) throw new ValidationError('مبلغ چک باید بزرگتر از صفر باشد');
+    const parts = normalizeAllocations(data.allocations, amount);
     assertNoVoucherAllowed(data.createVoucher, data.allowNoVoucher, 'چک');
     // v9.0.84 (TD-497، ت۲ الف): نوع طرف حساب سرفصل سند چک را تعیین می‌کند؛ پرسنل هدف و «متفرقه» سرفصل انتخابی می‌خواهند
     // بی نوع: دریافتی از مشتری و پرداختی به تأمین‌کننده (همان سندی که پیش از v9.0.84 برای هر چک صادر می‌شد)
@@ -249,7 +257,19 @@ export class ChequeLifecycleService {
       if (party.contraAccountId) await requireChoosableContraAccount(txEngine, party.contraAccountId);
       // شناسه طرف حساب در جدول همان نوع (B04-05)
       assertPersonnelPartyId(partyType, data.partyId);
-      await resolveTreasuryPartyName(txEngine, partyType, data.partyId);
+      const partyCurrentName = await resolveTreasuryPartyName(txEngine, partyType, data.partyId);
+      // v11 phase 6.1t (M11): each document of the parts is locked after the bank (level 60 after 10), in id order, and
+      // checked like a treasury link; the new cheque row has no other holder yet
+      if (parts.length > 0) {
+        assertAllocatableParty(data.type === 'paid' ? 'payment' : 'receipt', partyType);
+        await lockAndCheckAllocationTargets(txEngine, {
+          direction: data.type === 'paid' ? 'payment' : 'receipt',
+          partyType,
+          partyId: data.partyId ?? null,
+          partyName: partyCurrentName ?? data.partyName.trim(),
+          currency: data.currency || 'IRR',
+        }, parts);
+      }
       const partyAccountId = await resolveChequePartyAccountId(txEngine, partyType, party.purpose, party.contraAccountId);
       await assertSayadNumberFree(txEngine, data.sayadNumber?.trim() || '');
       // v8.0.19 (TD-271): ابتدا چک ثبت می‌شود تا سند ثبت آن با source_cheque_id به همین چک پیوند بخورد
@@ -362,6 +382,7 @@ export class ChequeLifecycleService {
         row.voucherId = voucherId;
       }
 
+      await insertAllocations(txEngine, { chequeId: row.id }, parts, data.userId);
       // v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک؛ ستون attachments فقط فراداده
       row.attachments = await AttachmentStorageService.attachToNewRecord(txEngine, 'cheque', row.id, data.attachments, data.username);
       const created = {
@@ -372,7 +393,7 @@ export class ChequeLifecycleService {
         partyType: (row.partyType || 'customer') as Cheque['partyType'],
         statusHistory: initialHistory,
       } as Cheque;
-      await auditChequeCreated(txEngine, data.audit, created, { ...created });
+      await auditChequeCreated(txEngine, data.audit, created, { ...created, ...(parts.length > 0 ? { allocations: parts } : {}) });
       return created;
     });
 

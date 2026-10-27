@@ -1,5 +1,6 @@
 import type { ForeignAmountOrigin } from '../../types/accounting.types';
 import type { PartyTemporaryRows } from './partyTemporaryRows';
+import type { PartyDraftRows } from './partyDraftRows';
 
 /**
  * v9.0.118 (TD-574، B03-32): قرارداد مشترک سرور و مرورگر برای کارت حساب (`GET /accounting/reports/ledger`).
@@ -36,6 +37,8 @@ export interface AccountCardReport {
   currency: string;
   /** v10.0.257 (TD-915 / TD-924): فقط کارت یک طرف حساب؛ ردیف‌های حساب موقت او بیرون از مانده */
   temporaryRows?: PartyTemporaryRows;
+  /** v11 phase 6.1t (U1): the party's draft vouchers apart, with the balance they would make (a party card only) */
+  draftRows?: PartyDraftRows;
 }
 
 /** ردیف‌های امن کارت (پاسخ ناقص آرایه نمی‌دهد) */

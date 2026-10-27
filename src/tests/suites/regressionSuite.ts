@@ -11138,6 +11138,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v11 phase 6.1b: control accounts (M3 manual voucher rows and their detail, M6 treasury counter account) and known parties (C8/S16 documents and orders, C5 CRM)
   const { runControlAccountsV11Tests } = await import('../regression/controlAccountsV11Tests.js');
   results.push(...await runControlAccountsV11Tests(shouldRun));
+  // v11 phase 6.1t: receipts, payments and cheques settle invoices in parts (M11 / U2)
+  const { runReceiptsOnInvoicesV11Tests } = await import('../regression/receiptsOnInvoicesV11Tests.js');
+  results.push(...await runReceiptsOnInvoicesV11Tests(shouldRun));
 
   return results;
 }

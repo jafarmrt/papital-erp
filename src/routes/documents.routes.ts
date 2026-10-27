@@ -28,6 +28,7 @@ import { lockLeadForNewProforma, markLeadProforma, releaseLeadOfVoidedDocument }
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
 import { getStockCountSheetItems } from '../services/inventory/stockCountSheet.js';
+import { listOpenSettlementDocuments } from '../services/documents/openSettlementDocuments.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { assertDocumentTypeReadable, documentForReader, readableDocumentTypes } from '../services/documents/documentReadScope.js';
 import type { AuthUserPayload } from '../types.js';
@@ -286,6 +287,21 @@ export const auditItemsQuerySchema = z.object({
   }).passthrough()
 }).passthrough();
 
+/** v11 phase 6.1t (M11): a recorded receipt or cheque by id, or the party, side and currency of one being recorded */
+export const settlementOptionsQuerySchema = z.object({
+  query: z.object({
+    treasuryId: z.coerce.number().int().positive().optional(),
+    chequeId: z.coerce.number().int().positive().optional(),
+    direction: z.enum(['receipt', 'payment']).optional(),
+    partyType: z.enum(['customer', 'supplier', 'personnel', 'other']).optional(),
+    partyId: z.coerce.number().int().positive().optional(),
+    partyName: z.string().max(200).optional(),
+    currency: z.string().max(10).optional(),
+  }).refine(q => Boolean(q.treasuryId) || Boolean(q.chequeId) || Boolean(q.direction && q.partyType && (q.partyId || q.partyName?.trim())), {
+    message: 'دریافت، چک یا طرف حساب را مشخص کنید',
+  })
+});
+
 // V9-1.2: نگاه غیرمخرب (Peek) — شماره بعدی را بدون افزایش شمارنده برمی‌گرداند تا
 // بارگذاری فرم‌ها و فرم‌های رهاشده هرگز شماره سند نسوزانند.
 router.get('/documents/next-ref', authorizePermission(...READ_PERMISSIONS.documentNextRef), validate(nextRefQuerySchema), asyncHandler(async (req, res) => {
@@ -445,6 +461,26 @@ router.get('/documents/audit-items', authorizePermission(...READ_PERMISSIONS.sto
   // v9.0.55 (TD-480): موقعیت با کد یا نام انبار (خالی = انبار پیش‌فرض)؛ موقعیت ناشناخته ۴۲۲. پیش‌تر موجودی با کلید خام
   // خوانده می‌شد و نام انبار (که برگه می‌فرستاد) ستون موجودی را برای همه کالاها ۰ می‌کرد
   res.json(await getStockCountSheetItems(orm, req.query.location));
+}));
+
+// v11 phase 6.1t (M11 / U2, decision ت۵۲-۵): the documents a receipt, payment or cheque can settle, oldest first
+router.get('/documents/settlement-options', authorizePermission('accounting.treasury', 'accounting.cheques'), validate(settlementOptionsQuerySchema), asyncHandler(async (req, res) => {
+  const q = req.query as unknown as z.infer<typeof settlementOptionsQuerySchema>['query'];
+  // a recorded source is read by the holders of its own book
+  if (q.treasuryId && !(await userHasRoleOrPermission(req.user, 'accounting.treasury'))) throw new ForbiddenError('دسترسی به خزانه ندارید.');
+  if (q.chequeId && !(await userHasRoleOrPermission(req.user, 'accounting.cheques'))) throw new ForbiddenError('دسترسی به دفتر چک ندارید.');
+  const data = q.treasuryId
+    ? await listOpenSettlementDocuments({ source: { treasuryId: q.treasuryId } })
+    : q.chequeId
+      ? await listOpenSettlementDocuments({ source: { chequeId: q.chequeId } })
+      : await listOpenSettlementDocuments({
+        direction: q.direction ?? 'receipt',
+        partyType: q.partyType ?? 'customer',
+        partyId: q.partyId ?? null,
+        partyName: q.partyName ?? '',
+        currency: q.currency || 'IRR',
+      });
+  res.json({ success: true, data });
 }));
 
 router.get('/documents/:id', authorizePermission(...READ_PERMISSIONS.documentRecord, ...READ_PERMISSIONS.stockCountDocuments), validate(paramsDocIdSchema), asyncHandler(async (req, res) => {
