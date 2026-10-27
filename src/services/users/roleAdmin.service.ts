@@ -7,7 +7,7 @@ import { invalidateRoleCache } from '../../lib/memoryCache.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../errors/customErrors.js';
 import { ROLE_CODE_PATTERN } from '../../middleware/authorize.js';
 import { isCatalogPermission, isSystemAdminRole, missingRequiredPermissions, withRequiredPermissions } from '../../lib/permissions/permissionCatalog.js';
-import { assertGrantWithinOwn, assertNotOwnRole, grantorPermissions } from './grantBoundary.js';
+import { assertGrantWithinOwn, assertNotOwnRole, assertRemovalWithinOwn, grantorPermissions } from './grantBoundary.js';
 import { WORKSHOP_LONG_SESSION_PERMISSION } from '../../lib/permissions/workshopPermissions.js';
 import { invalidateUserAuthCache } from '../../middleware/auth.js';
 
@@ -107,8 +107,9 @@ export async function updateRole(req: Request, roleId: number, input: RoleUpdate
     const newPermissions: string[] = sent ? withRequiredPermissions(requested) : prevPermissions;
     const addedPermissions = newPermissions.filter(p => !prevPermissions.includes(p));
     const removedPermissions = prevPermissions.filter(p => !newPermissions.includes(p));
-    // v9.0.129 (TD-520، ت۳): افزوده‌ها فقط از مجوزهای ویرایشگر
+    // v9.0.129 (TD-520، ت۳): افزوده‌ها فقط از مجوزهای ویرایشگر؛ v11 phase 6.2 (X5): برداشته‌ها هم
     assertGrantWithinOwn(grantor, addedPermissions);
+    assertRemovalWithinOwn(grantor, removedPermissions);
 
     const updateData: Partial<typeof roles.$inferInsert> = {
       name: input.name || targetRole.name,
@@ -152,12 +153,16 @@ export async function updateRole(req: Request, roleId: number, input: RoleUpdate
 }
 
 export async function deleteRole(req: Request, roleId: number, workflowsRequiringRole: WorkflowsRequiringRole): Promise<void> {
+  const grantor = await grantorPermissions(req.user?.role);
   const roleCode = await orm.transaction(async (tx) => {
     const [targetRole] = await tx.select().from(roles).where(eq(roles.id, roleId)).for('update');
     if (!targetRole) throw new NotFoundError(ROLE_NOT_FOUND);
 
     // v9.0.135 (TD-885، تصمیم ت۹ الف): فقط نقش ثابت «مدیر سیستم» حذف نمی‌شود؛ نقش‌های پیش‌فرض قدیمی نقش عادی‌اند
     if (isSystemAdminRole(targetRole.code)) throw new BadRequestError('نقش مدیر سامانه حذف نمی‌شود');
+    // v11 phase 6.2 (X5, review): deleting a role removes all its permissions, so the rule of an edit holds; a role with
+    // permissions the deleting user lacks could not be made again by them
+    assertRemovalWithinOwn(grantor, (targetRole.permissions as string[]) || []);
 
     // v9.0.179 (TD-535، یافته B02-20): فقط کاربران حذف‌نشده نقش را نگه می‌دارند؛ کاربر حذف‌شده با بازگرداندن نقش تازه می‌گیرد
     const assignedUsers = await tx.select({ id: users.id }).from(users)

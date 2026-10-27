@@ -3,6 +3,7 @@ import { Role, User } from '../../types';
 import { Plus, Trash2, Edit2, Users, Check, ShieldCheck, Layers } from 'lucide-react';
 import { isSystemAdminRole, withRequiredPermissions } from '../../lib/permissions/permissionCatalog';
 import { ROLE_TEMPLATES, type RoleTemplate } from '../../lib/permissions/roleTemplates';
+import { roleWithinGrant, type GrantorPermissions } from '../../lib/permissions/grantBoundary';
 import { formatPersianNumber, formatPersianCode } from '../../utils';
 
 interface RolesTabProps {
@@ -17,6 +18,8 @@ interface RolesTabProps {
   ownRoleCode?: string;
   /** v9.0.134 (TD-526): «ساخت نقش از الگو»؛ فرم نقش تازه با نام و تیک‌های الگو باز می‌شود */
   onAddRoleFromTemplate?: (template: RoleTemplate) => void;
+  /** v11 phase 6.2 (X5): the user's own keys; a role holding a key beyond them is not offered for delete (the server's rule) */
+  grantor?: GrantorPermissions;
 }
 
 export const RolesTab: React.FC<RolesTabProps> = ({
@@ -29,6 +32,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
   canManage = true,
   ownRoleCode,
   onAddRoleFromTemplate,
+  grantor = 'all',
 }) => {
   const [showTemplates, setShowTemplates] = React.useState(false);
   const isOwnRole = (code: string) => Boolean(ownRoleCode) && !isSystemAdminRole(ownRoleCode) && code === ownRoleCode;
@@ -170,7 +174,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                       نقش خودتان؛ کاربر دیگری که «مدیریت نقش‌ها» دارد آن را ویرایش می‌کند.
                     </span>
                   )}
-                  {canManage && !isSys && (
+                  {canManage && !isSys && roleWithinGrant(grantor, r) && (
                     <button
                       onClick={() => onDeleteRole(r.id, r.name)}
                       className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"

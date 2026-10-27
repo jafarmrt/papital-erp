@@ -1,4 +1,4 @@
-import { isSystemAdminRole, permissionDefinition } from './permissionCatalog';
+import { isSystemAdminRole, permissionDefinition, withRequiredPermissions } from './permissionCatalog';
 
 /**
  * v9.0.129 (TD-520، یافته B02-05، تصمیم ت۳ الف): مرز واگذاری دسترسی. دارنده غیرمدیر «مدیریت کاربران» یا «مدیریت
@@ -39,4 +39,15 @@ export function roleWithinGrant(grantor: GrantorPermissions, role: { code?: stri
   if (isSystemAdminRole(role.code)) return false;
   const permissions = Array.isArray(role.permissions) ? (role.permissions as string[]) : [];
   return permissionsBeyond(grantor, permissions).length === 0;
+}
+
+/**
+ * v11 phase 6.2 (X5): a non-admin removes from a role only keys it holds. `next` with the keys of `prev` the grantor
+ * cannot give put back (with their requirements); the role form applies it to every removal and the server refuses
+ * the rest (`assertRemovalWithinOwn`). Before, a holder of «مدیریت نقش‌ها» could strip keys it lacked from another
+ * role (the finance team's) and could not give them back.
+ */
+export function keepBeyondGrant(grantor: GrantorPermissions, prev: readonly string[], next: readonly string[]): string[] {
+  const kept = prev.filter(k => !next.includes(k) && !canGrantPermission(grantor, k));
+  return kept.length === 0 ? [...next] : withRequiredPermissions([...next, ...kept]);
 }

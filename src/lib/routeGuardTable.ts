@@ -1,6 +1,6 @@
 import type { Express } from 'express';
 import { GUARD_ENTRIES } from '../middleware/authorize.js';
-import { AUTHENTICATES } from '../middleware/auth.js';
+import { AUTHENTICATES, isAuthExemptPath } from '../middleware/auth.js';
 import { VALIDATES } from '../middleware/validate.js';
 import { IDEMPOTENT } from '../middleware/idempotencyMark.js';
 
@@ -104,9 +104,12 @@ function walk(stack: ExpressLayer[], prefix: string, inherited: Chain, rows: Rou
       const idempotent = layer.route.stack.some(l => typeof l.handle === 'function' && (l.handle as unknown as Record<string, unknown>)[IDEMPOTENT] === true);
       const paths = Array.isArray(layer.route.path) ? layer.route.path : [layer.route.path];
       for (const method of Object.keys(layer.route.methods)) {
-        if (method === '_all') continue;
+        // v11 phase 6.2 (X14): a `router.all` route (the webhooks) is one `ALL` row; before, it was left out of the table.
+        // A path `authenticateToken` lets through is public even after a router-level `authenticateToken`.
+        const verb = method === '_all' ? 'ALL' : method.toUpperCase();
         for (const p of paths) {
-          rows.push({ method: method.toUpperCase(), path: `${prefix}${p}`, authenticated: routeChain.authenticated, guards: routeChain.guards, ...validation, idempotent });
+          const full = `${prefix}${p}`;
+          rows.push({ method: verb, path: full, authenticated: routeChain.authenticated && !isAuthExemptPath(full), guards: routeChain.guards, ...validation, idempotent });
         }
       }
       continue;

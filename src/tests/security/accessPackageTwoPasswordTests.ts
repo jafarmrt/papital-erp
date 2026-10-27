@@ -8,6 +8,7 @@ import { PASSWORD_TOO_SHORT_MESSAGE } from '../../lib/auth/passwordPolicy.js';
 import { PASSWORD_RESET_REQUIRED } from '../../lib/auth/passwordReset.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 import { addressLockoutMessage, usernameLockoutMessage } from '../../lib/auth/loginLockout.js';
+import { LOGIN_ADDRESS_MAX_FAILURES } from '../../services/auth/loginSecurity.service.js';
 
 /**
  * بسته ۲ (مدل مجوز)، گروه رمز (تصمیم ت۵ الف): سیاست رمز از مسیرهای واقعی Express با ورود واقعی. هر آزمون روی کد پیشین
@@ -174,7 +175,7 @@ export async function runAccessPackageTwoPasswordTests(shouldRun: ShouldRun): Pr
         }
 
         let addressLock: request.Response | null = null;
-        for (let i = 0; i < 12 && addressLock === null; i++) {
+        for (let i = 0; i < LOGIN_ADDRESS_MAX_FAILURES + 2 && addressLock === null; i++) {
           const res = await attempt(`td539_spray_${i}_${h.tag}`, '198.51.100.140');
           if (res.status === 429) addressLock = res;
         }
