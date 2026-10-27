@@ -169,13 +169,19 @@ export async function catalogGapCase(h: Harness, wrong: string[]): Promise<strin
   const { refreshCatalogLocked } = await import('../../services/woocommerce/wcCatalog.service.js');
   const hiddenItem = await newItem(h, 'GAPHIDDEN');
   const lateItem = await newItem(h, 'GAPLATE');
+  const pageItem = await newItem(h, 'GAPPAGE');
+  const variationItem = await newItem(h, 'GAPVAR');
+  const removedItem = await newItem(h, 'GAPGONE');
   const products = filler(h.tag);
   products[20] = { id: 1020, sku: hiddenItem.code };
+  products[150] = { id: 1150, sku: pageItem.code };
   products[230] = { id: 1230, sku: lateItem.code };
   return withShop(h, products, async (store) => {
     await refreshCatalogLocked({});
-    const first = await linksOf(h, [hiddenItem.id, lateItem.id]);
-    if (first.get(hiddenItem.id)?.product !== 1020 || first.get(lateItem.id)?.product !== 1230) wrong.push('the products were not linked first');
+    const first = await linksOf(h, [hiddenItem.id, lateItem.id, pageItem.id]);
+    if (first.get(hiddenItem.id)?.product !== 1020 || first.get(lateItem.id)?.product !== 1230 || first.get(pageItem.id)?.product !== 1150) {
+      wrong.push('the products were not linked first');
+    }
 
     // product 1020 is counted but never listed: page 1 comes with 99 rows, and page 3 is still read
     store.hiddenFromLists = new Set([1020]);
@@ -196,9 +202,44 @@ export async function catalogGapCase(h: Harness, wrong: string[]): Promise<strin
     if (confirmed.status !== 200 || (confirmed.body as { closedCount?: number }).closedCount !== 1) wrong.push(`the confirmed refresh answered ${brief(confirmed)}`);
     if ((await linksOf(h, [hiddenItem.id])).has(hiddenItem.id)) wrong.push('the confirmed refresh kept the link');
 
-    // a gap with nothing to close asks nothing
+    // a gap with nothing to close asks nothing, and the nightly reading no longer reports it (delta review S2)
     const quiet = await h.post('/api/woocommerce/refresh-products', {});
     if (quiet.status !== 200) wrong.push(`a gap with no link to close answered ${brief(quiet)}`);
+    const night = await refreshCatalogLocked({});
+    if (night.catalogMissing !== 0) wrong.push(`a gap that kept no link is still reported: ${night.catalogMissing}`);
+
+    // delta review S1: a whole hidden page in the middle comes empty; the reading goes on to page 3 and only the hidden
+    // product's link is asked about and closed
+    store.hiddenFromLists = new Set(Array.from({ length: 100 }, (_, i) => 1100 + i));
+    const page = await h.post('/api/woocommerce/refresh-products', {});
+    if (page.status !== 409 || (page.body as { details?: { closedCount?: number } }).details?.closedCount !== 1) wrong.push(`a hidden page answered ${brief(page)}`);
+    const pageConfirmed = await h.post('/api/woocommerce/refresh-products', { confirmClose: 1 });
+    const afterPage = await linksOf(h, [pageItem.id, lateItem.id]);
+    if (pageConfirmed.status !== 200 || afterPage.has(pageItem.id) || afterPage.get(lateItem.id)?.product !== 1230) {
+      wrong.push(`after a hidden page: ${brief(pageConfirmed)}, links ${JSON.stringify([...afterPage])}`);
+    }
+
+    // a shop that caps per_page sends more pages (X-WP-TotalPages): every product is read and no gap is seen
+    store.hiddenFromLists = undefined;
+    store.perPageCap = 30;
+    const capped = await refreshCatalogLocked({});
+    store.perPageCap = undefined;
+    if (capped.siteProductCount !== 250 || capped.catalogMissing !== 0 || capped.closedCount !== 0) wrong.push(`a capped page size ${JSON.stringify(capped).slice(0, 240)}`);
+
+    // delta review N1: a gap in one variation list keeps only that product's unread variations at night; a product
+    // removed from the shop still closes
+    products.push({ id: 2000, sku: `GAPPARENT_${h.tag}`, variations: [{ id: 2001, sku: variationItem.code }, { id: 2002, sku: `GAPV_${h.tag}` }] });
+    products.push({ id: 2100, sku: removedItem.code });
+    await refreshCatalogLocked({});
+    store.hiddenFromLists = new Set([2001]);
+    products.splice(products.findIndex(p => p.id === 2100), 1);
+    const varGap = await refreshCatalogLocked({});
+    const afterVar = await linksOf(h, [variationItem.id, removedItem.id]);
+    if (afterVar.get(variationItem.id)?.variation !== 2001 || afterVar.has(removedItem.id) || varGap.catalogMissing !== 1) {
+      wrong.push(`a variation gap: links ${JSON.stringify([...afterVar])}, summary ${JSON.stringify(varGap).slice(0, 240)}`);
+    }
+    const varAsked = await h.post('/api/woocommerce/refresh-products', {});
+    if (varAsked.status !== 409) wrong.push(`a refresh by hand with a variation gap answered ${brief(varAsked)}`);
     store.hiddenFromLists = undefined;
     return 'a lasting gap keeps the links until the user confirms';
   });

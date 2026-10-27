@@ -144,7 +144,9 @@ export function massCloseMessage(closedCount: number, liveCount: number, missing
 
 /** Writes the links of one catalog reading (one transaction) and the run row and audit row with it */
 export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor, run: RefreshRun = {}): Promise<WcRefreshSummary> {
-  const { site, skipped, truncated, maxProductId, unordered, repeated, shifted, missing, partialVariationProducts } = catalog;
+  const {
+    site, skipped, truncated, maxProductId, unordered, repeated, shifted, missing, gapVariationProducts, missingVariations, partialVariationProducts,
+  } = catalog;
   return orm.transaction(async (tx) => {
     const live = await tx.select().from(wcProductLinks).where(eq(wcProductLinks.isDeleted, 0))
       .orderBy(asc(wcProductLinks.id)).for('update');
@@ -159,16 +161,25 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor, ru
     // read moves the next pages up and one product is never shown). Any other reading lists every product, so a link of a
     // product it misses is closed. A variation list read in part keeps the links of its own unread variations (note 3). A
     // gap in the shop's list that did not move (PR #420 review finding 1) keeps them too, unless the user confirmed closing
-    // them or this is a refresh by hand, which asks below
+    // them or this is a refresh by hand, which asks below; a gap in one variation list keeps only that product's unread
+    // variation links (delta review N1)
     const outOfOrder = repeated || (unordered && truncated);
-    const gapKeeps = missing > 0 && run.confirmClose === undefined && !run.askOnGap;
+    const gapsKept = run.confirmClose === undefined && !run.askOnGap;
+    const gapKeeps = missing > 0 && gapsKept;
     const keepUnread = outOfOrder || shifted || gapKeeps;
     const partialParents = new Set(partialVariationProducts);
+    const gapParents = new Set(gapVariationProducts);
     const readKeys = new Set([...site, ...skipped].map(p => keyOf(p.productId, p.variationId)));
-    const leftAsIs = (l: { wcProductId: number; wcVariationId: number }) => (truncated && l.wcProductId > maxProductId)
-      || ((keepUnread || (l.wcVariationId > 0 && partialParents.has(l.wcProductId)))
-        && !readKeys.has(keyOf(l.wcProductId, l.wcVariationId)));
+    const unread = (l: { wcProductId: number; wcVariationId: number }) => !readKeys.has(keyOf(l.wcProductId, l.wcVariationId));
+    const pastCap = (l: { wcProductId: number }) => truncated && l.wcProductId > maxProductId;
+    const inPartialList = (l: { wcProductId: number; wcVariationId: number }) => l.wcVariationId > 0 && partialParents.has(l.wcProductId);
+    const inGapList = (l: { wcProductId: number; wcVariationId: number }) => l.wcVariationId > 0 && gapParents.has(l.wcProductId);
+    const leftAsIs = (l: { wcProductId: number; wcVariationId: number }) => pastCap(l)
+      || ((keepUnread || inPartialList(l) || (gapsKept && inGapList(l))) && unread(l));
     const untouched = live.filter(leftAsIs);
+    // delta review S2: the tab says the shop hid products only while that kept a link no other rule kept
+    const keptByGap = untouched.filter(l => !pastCap(l) && !outOfOrder && !shifted && !inPartialList(l)).length;
+    const missingCount = missing + missingVariations;
     const { matches, unmatched: notMatched } = await matchSiteCatalog(tx, site, new Set(untouched.map(l => l.itemId)));
     const unmatched = [...skipped, ...notMatched];
     const wanted = new Map(matches.map(m => [keyOf(m.site.productId, m.site.variationId), m]));
@@ -202,10 +213,10 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor, ru
     const lost = closedLinks.filter(l => !relinked.has(l.itemId));
     const compared = live.length - untouched.length;
     const mass = lost.length >= WC_MASS_CLOSE_MIN && lost.length * 2 > compared;
-    const gapCloses = missing > 0 && lost.some(l => !readKeys.has(keyOf(l.wcProductId, l.wcVariationId)));
+    const gapCloses = lost.some(l => unread(l) && (missing > 0 || inGapList(l)));
     if ((mass || gapCloses) && (run.confirmClose === undefined || lost.length > run.confirmClose)) {
-      throw new ConflictError(massCloseMessage(lost.length, compared, missing),
-        { closedCount: lost.length, liveCount: compared, missingCount: missing }, WC_MASS_CLOSE_CONFIRM);
+      throw new ConflictError(massCloseMessage(lost.length, compared, missingCount),
+        { closedCount: lost.length, liveCount: compared, missingCount }, WC_MASS_CLOSE_CONFIRM);
     }
     await updateLinkRows(tx, updates, now);
     const fresh = matches.filter(m => !kept.has(keyOf(m.site.productId, m.site.variationId)));
@@ -227,7 +238,7 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor, ru
       catalogTruncated: truncated,
       catalogUnordered: outOfOrder,
       catalogShifted: shifted,
-      catalogMissing: gapKeeps ? missing : 0,
+      catalogMissing: keptByGap > 0 ? missingCount : 0,
       partialVariationProducts: partialParents.size,
     };
     if (run.nightly) {
@@ -249,7 +260,7 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor, ru
       details: {
         siteProductCount: summary.siteProductCount, linkedCount, newCount: fresh.length, closedCount,
         unmatchedTotal: unmatched.length, catalogTruncated: truncated, catalogUnordered: outOfOrder, catalogShifted: shifted,
-        catalogMissing: missing, partialVariationProducts: partialParents.size,
+        catalogMissing: missingCount, partialVariationProducts: partialParents.size,
         ...(run.confirmClose !== undefined ? { confirmClose: run.confirmClose } : {}),
       },
     });

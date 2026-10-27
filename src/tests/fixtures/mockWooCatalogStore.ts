@@ -48,6 +48,8 @@ export interface MockWooCatalogStore {
    * row the key may not read after the query, so its page comes short)
    */
   hiddenFromLists?: Set<number>;
+  /** PR #420 delta review S1: the most rows a catalog page holds whatever `per_page` asks (a shop or plugin that caps it) */
+  perPageCap?: number;
   /** v11 phase 6.5: called before a product or variation list page is answered, with its path and page number (a product
    * removed from the shop between two pages) */
   beforeCatalogPage?: (path: string, page: number) => void;
@@ -89,7 +91,7 @@ export interface MockWooCatalogStore {
 const PREFIX = '/wp-json/wc/v3/';
 
 function page<T>(rows: T[], url: URL, store: MockWooCatalogStore): T[] {
-  const perPage = Number(url.searchParams.get('per_page') || 10);
+  const perPage = Math.min(Number(url.searchParams.get('per_page') || 10), store.perPageCap ?? Infinity);
   const n = Number(url.searchParams.get('page') || 1);
   // part B (delta review N-A): an `offset` starts the page at that row, as WordPress does, and ignores `page`
   if (url.searchParams.has('offset')) {
@@ -110,6 +112,14 @@ function page<T>(rows: T[], url: URL, store: MockWooCatalogStore): T[] {
 function productPage(products: MockProduct[], url: URL, store: MockWooCatalogStore): MockProduct[] {
   const rows = page(store.newestFirst ? [...products].sort((a, b) => b.id - a.id) : products, url, store);
   return store.hiddenFromLists ? rows.filter(p => !store.hiddenFromLists?.has(p.id)) : rows;
+}
+
+/** `X-WP-Total` and `X-WP-TotalPages` of a catalog list, as WooCommerce sends them */
+function setListHeaders(res: http.ServerResponse, total: number, url: URL, store: MockWooCatalogStore): void {
+  if (store.omitTotalHeader) return;
+  const perPage = Math.min(Number(url.searchParams.get('per_page') || 10), store.perPageCap ?? Infinity);
+  res.setHeader('X-WP-Total', String(total));
+  res.setHeader('X-WP-TotalPages', String(Math.ceil(total / perPage)));
 }
 
 type BatchRow = { id: number; stock_quantity?: number; manage_stock?: unknown; regular_price?: unknown; sku?: unknown };
@@ -189,7 +199,7 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
         store.beforeCatalogPage?.(path, Number(url.searchParams.get('page') || 1));
       }
       if (req.method === 'GET' && path === 'products') {
-        if (!store.omitTotalHeader) res.setHeader('X-WP-Total', String(products.length));
+        setListHeaders(res, products.length, url, store);
         send(productPage(products, url, store).map(p => ({
           id: p.id, name: p.name ?? `محصول ${p.id}`, sku: p.sku, type: p.type ?? (p.variations ? 'variable' : 'simple'),
           stock_quantity: p.stock ?? null, manage_stock: p.stock !== undefined && p.stock !== null, regular_price: p.regularPrice ?? '',
@@ -200,8 +210,8 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
       if (req.method === 'GET' && variations) {
         // read live, so a test may change the shop's products between two readings
         const rows = products.find(p => p.id === Number(variations[1]))?.variations ?? [];
-        if (!store.omitTotalHeader) res.setHeader('X-WP-Total', String(rows.length));
-        send(page(rows, url, store).map(v => ({
+        setListHeaders(res, rows.length, url, store);
+        send(page(rows, url, store).filter(v => !store.hiddenFromLists?.has(v.id)).map(v => ({
           id: v.id, sku: v.sku, stock_quantity: v.stock ?? null,
           manage_stock: v.manageStock ?? (v.stock !== undefined && v.stock !== null), regular_price: v.regularPrice ?? '',
         })));
