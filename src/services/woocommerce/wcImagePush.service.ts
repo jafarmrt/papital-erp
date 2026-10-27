@@ -16,7 +16,7 @@ import {
 import { assertSafeExternalUrl } from '../../lib/ssrfGuard.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { updateLinkRows } from './wcLinkUpdates.js';
-import { signedImageUrl } from './wcShopImageLink.js';
+import { isImageOfCover, signedImageUrl } from './wcShopImageLink.js';
 
 /**
  * v11 phase 6.5 (D-04 part D, decisions ت۴۵ / ت۴۶): «ارسال تصویر شاخص». Each live link keeps the SHA-256 of the cover it
@@ -26,7 +26,9 @@ import { signedImageUrl } from './wcShopImageLink.js';
  * cover. Afterwards only a changed cover is sent; a cover taken away is recorded and removes nothing from the shop. A send
  * reads the product's images again first and keeps its gallery (`images: [{ src }, …gallery by id]`); a variation gets
  * `image: { src }`. The shop downloads the file inside the batch request, so batches are of `WC_IMAGE_BATCH_SIZE` and a run
- * sends at most `WC_IMAGE_MAX_PRODUCTS`; the new image id comes back on the answer row.
+ * sends at most `WC_IMAGE_MAX_PRODUCTS`; the new image id comes back on the answer row. PR #421 review: a slow shop may
+ * keep the image after the program gave up waiting for the answer; the image it made is named after the signed file
+ * (`imageNameMark`), so the next run finds it on the product or variation and records it instead of sending it again.
  */
 type Link = Awaited<ReturnType<typeof liveLinks>>[number];
 
@@ -75,7 +77,7 @@ export async function imageSteps(): Promise<Array<{ link: Link; cover: string | 
   });
 }
 
-interface ShopImage { id?: unknown }
+interface ShopImage { id?: unknown; src?: unknown }
 
 /** The images each of these shop products holds now, read again just before the send so the gallery is kept */
 async function currentImages(conn: WcConnection, productIds: number[], signal: AbortSignal): Promise<Map<number, ShopImage[]>> {
@@ -91,11 +93,31 @@ async function currentImages(conn: WcConnection, productIds: number[], signal: A
   return out;
 }
 
+/** The image each of these shop variations shows now, read again so an image that landed is not sent twice */
+async function currentVariationImages(conn: WcConnection, links: Link[], signal: AbortSignal): Promise<Map<number, ShopImage | null>> {
+  const byProduct = new Map<number, number[]>();
+  for (const l of links) byProduct.set(l.wcProductId, [...(byProduct.get(l.wcProductId) ?? []), l.wcVariationId]);
+  const out = new Map<number, ShopImage | null>();
+  for (const [productId, variationIds] of byProduct) {
+    const answer = await wcRequest(conn, 'GET', `products/${productId}/variations`, null, {
+      include: variationIds.join(','), per_page: variationIds.length, _fields: 'id,image',
+    }, { signal });
+    for (const row of Array.isArray(answer) ? answer as Array<{ id?: unknown; image?: unknown }> : []) {
+      out.set(Number(row.id), row.image && typeof row.image === 'object' ? row.image as ShopImage : null);
+    }
+  }
+  return out;
+}
+
+const imageIdOf = (image: ShopImage | null | undefined): number | null => {
+  const id = Number(image?.id);
+  return Number.isInteger(id) && id > 0 ? id : null;
+};
+
 /** The shop image id an answer row carries (a product's first image, a variation's own image), else null */
 export function answeredImageId(answer: Record<string, unknown> | undefined, variation: boolean): number | null {
   const image = variation ? answer?.image : Array.isArray(answer?.images) ? (answer.images as unknown[])[0] : undefined;
-  const id = Number((image as ShopImage | undefined)?.id);
-  return Number.isInteger(id) && id > 0 ? id : null;
+  return imageIdOf(image as ShopImage | undefined);
 }
 
 const GONE = 'محصول در سایت پیدا نشد؛ «بازخوانی محصولات سایت» را بزنید.';
@@ -117,17 +139,25 @@ export function runImagePushOnce(now: Date = new Date(), options: FieldRunOption
     if (due.length === 0) return { state: 'nothing' };
     const conn = await requireWcConnection();
     const gallery = await currentImages(conn, due.filter(d => d.link.wcVariationId === 0).map(d => d.link.wcProductId), signal);
+    const shown = await currentVariationImages(conn, due.filter(d => d.link.wcVariationId > 0).map(d => d.link), signal);
     const plan: Planned[] = [];
     const gone: Planned[] = [];
+    const landed: Array<{ id: number; values: Planned['values'] }> = [];
     for (const { link, cover } of due) {
       const src = signedImageUrl(baseUrl, link.id, cover, now.getTime());
       if (!src) return { state: 'off' };
       const values = { coverSentSha256: cover, imageError: '', imageFailureCount: 0 };
+      const images = link.wcVariationId > 0 ? null : gallery.get(link.wcProductId);
+      const current = link.wcVariationId > 0 ? shown.get(link.wcVariationId) : images?.[0];
+      if (current && isImageOfCover(current.src, link.id, cover)) {
+        const id = imageIdOf(current);
+        landed.push({ id: link.id, values: { ...values, ...(id === null ? {} : { siteImageId: id }) } });
+        continue;
+      }
       if (link.wcVariationId > 0) {
         plan.push({ link, fields: { image: { src } }, values });
         continue;
       }
-      const images = gallery.get(link.wcProductId);
       if (!images) {
         gone.push({ link, fields: {}, values });
         continue;
@@ -135,6 +165,8 @@ export function runImagePushOnce(now: Date = new Date(), options: FieldRunOption
       const kept = images.slice(1).map(i => Number(i.id)).filter(id => Number.isInteger(id) && id > 0).map(id => ({ id }));
       plan.push({ link, fields: { images: [{ src }, ...kept] }, values });
     }
+    if (landed.length > 0) await orm.transaction(tx => updateLinkRows(tx, landed, systemNowUtcIso()));
+    if (plan.length === 0 && gone.length === 0) return { state: 'nothing' };
     return outcomeOf(await sendAndRecord('image_push', plan, steps.length, {}, signal, {
       batchSize: WC_IMAGE_BATCH_SIZE,
       refused: gone.map(g => ({ link: g.link, error: GONE })),

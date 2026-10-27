@@ -98,24 +98,29 @@ export type FieldKind = 'price_push' | 'sku_push' | 'image_push' | 'collection_p
 
 /** each send's audit wording, setting and refusal columns on the link */
 const FIELD_KINDS: Record<FieldKind, {
-  what: string; action: string; setting: string;
+  what: string; setting: string;
   error: 'priceError' | 'skuError' | 'imageError' | 'collectionError';
   count: 'priceFailureCount' | 'skuFailureCount' | 'imageFailureCount' | 'collectionFailureCount';
 }> = {
-  price_push: { what: 'ارسال خودکار قیمت', action: 'WC_PRICE_PUSH', setting: WC_PRICE_LIST_SETTING_KEY, error: 'priceError', count: 'priceFailureCount' },
-  sku_push: { what: 'تغییر خودکار کد', action: 'WC_SKU_PUSH', setting: WC_SKU_RENAME_SETTING_KEY, error: 'skuError', count: 'skuFailureCount' },
-  image_push: { what: 'ارسال تصویر شاخص', action: 'WC_IMAGE_PUSH', setting: WC_IMAGE_PUSH_SETTING_KEY, error: 'imageError', count: 'imageFailureCount' },
+  price_push: { what: 'ارسال خودکار قیمت', setting: WC_PRICE_LIST_SETTING_KEY, error: 'priceError', count: 'priceFailureCount' },
+  sku_push: { what: 'تغییر خودکار کد', setting: WC_SKU_RENAME_SETTING_KEY, error: 'skuError', count: 'skuFailureCount' },
+  image_push: { what: 'ارسال تصویر شاخص', setting: WC_IMAGE_PUSH_SETTING_KEY, error: 'imageError', count: 'imageFailureCount' },
   collection_push: {
-    what: 'ارسال کالکشن‌ها', action: 'WC_COLLECTION_PUSH', setting: WC_COLLECTION_PUSH_SETTING_KEY, error: 'collectionError', count: 'collectionFailureCount',
+    what: 'ارسال کالکشن‌ها', setting: WC_COLLECTION_PUSH_SETTING_KEY, error: 'collectionError', count: 'collectionFailureCount',
   },
+};
+
+/** each send's audit action, a plain table so the audit label test reads every action written */
+const FIELD_ACTIONS: Record<FieldKind, string> = {
+  price_push: 'WC_PRICE_PUSH', sku_push: 'WC_SKU_PUSH', image_push: 'WC_IMAGE_PUSH', collection_push: 'WC_COLLECTION_PUSH',
 };
 
 async function auditFailure(kind: FieldKind, failedRunsBefore: number, message: string): Promise<void> {
   if (failedRunsBefore > 0) return;
-  const { what, action, setting } = FIELD_KINDS[kind];
+  const { what, setting } = FIELD_KINDS[kind];
   try {
     await orm.transaction(tx => logActivity({
-      tx, action, entity: AUDIT_ENTITY, entityId: setting,
+      tx, action: FIELD_ACTIONS[kind], entity: AUDIT_ENTITY, entityId: setting,
       description: `${what} به سایت ناموفق بود: ${message.slice(0, 300)}`, details: { trigger: 'auto', failed: true },
     }));
   } catch (err) {

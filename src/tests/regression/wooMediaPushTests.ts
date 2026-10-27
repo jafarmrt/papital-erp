@@ -79,7 +79,8 @@ export async function imagePushCase(h: Harness, wrong: string[]): Promise<string
     { id: 1, sku: had.code, images: [501, 502] },
     { id: 2, sku: bare.code },
     { id: 3, sku: none.code },
-    { id: 4, sku: `IVPAR_${h.tag}`, variations: [{ id: 41, sku: variation.code }] },
+    // PR #421 review: WooCommerce shows a variation without its own image with its parent's featured image (601)
+    { id: 4, sku: `IVPAR_${h.tag}`, images: [601], variations: [{ id: 41, sku: variation.code }] },
   ];
   const ids = [had.id, bare.id, none.id, variation.id];
   return withMediaSettings(h, ids, () => withShop(h, products, async (store) => {
@@ -154,6 +155,10 @@ export async function imagePushCase(h: Harness, wrong: string[]): Promise<string
       'an item without a cover': signedImageFile(noneLink, bareCover) ?? '',
       'a name of another shape': `${bareLink}.webp`,
       'a path outside': '..%2F..%2Fetc%2Fpasswd',
+      // PR #421 review: a link id above PostgreSQL's integer failed the query (422) while the push was on
+      'a link id above the integer': file.replace(/^\d+-/, '2147483648-'),
+      'a link id of ten nines': file.replace(/^\d+-/, '9999999999-'),
+      'another cover mark': file.replace(/^(\d+)-[0-9a-f]{12}-/, (_m, id: string) => `${id}-000000000000-`),
     };
     const bodies = new Set<string>();
     for (const [what, name] of Object.entries(refusals)) {
@@ -184,10 +189,32 @@ export async function imagePushCase(h: Harness, wrong: string[]): Promise<string
     if (removed.state !== 'nothing' || JSON.stringify(products[1].images) !== keptImages) wrong.push(`taking a cover away ran ${removed.state} and left ${JSON.stringify(products[1].images)}`);
     if ((await linkMedia(h, bare.id))?.cover_sent_sha256 !== 'none') wrong.push('a cover taken away was not recorded');
 
+    // PR #421 review: a slow shop that kept the images after their answer was lost gets no second copy; the next run finds
+    // them on the product and the variation by their file name and only records them
+    const thirdHad = await setCover(h, had.id);
+    const secondVariation = await setCover(h, variation.id);
+    store.applyThenFail = new Set(['products/batch', 'products/4/variations/batch']);
+    const lost = await runImagePushOnce();
+    store.applyThenFail = undefined;
+    const landedProduct = products[0].images?.[0];
+    const landedVariation = products[3].variations?.[0].imageId;
+    if (lost.state !== 'failed' || (await linkMedia(h, had.id))?.cover_sent_sha256 === thirdHad) wrong.push(`a run whose answers were lost was ${lost.state}`);
+    if (!store.imageSrc.get(Number(landedProduct))?.includes(`-${thirdHad.slice(0, 12)}-`)) wrong.push(`the shop image is not named after the file: ${store.imageSrc.get(Number(landedProduct))}`);
+    const sentBefore = store.batchSizes.length;
+    const retry = await runImagePushOnce(later(1));
+    if (store.batchSizes.length !== sentBefore) wrong.push(`the images that landed were sent again (${retry.state})`);
+    if (JSON.stringify(products[0].images) !== JSON.stringify([landedProduct, 502])) wrong.push(`the product images became ${JSON.stringify(products[0].images)}`);
+    const afterHad = await linkMedia(h, had.id);
+    const afterVariation = await linkMedia(h, variation.id);
+    if (afterHad?.cover_sent_sha256 !== thirdHad || Number(afterHad?.site_image_id) !== landedProduct) wrong.push(`the landed product image was recorded as ${JSON.stringify(afterHad)}`);
+    if (afterVariation?.cover_sent_sha256 !== secondVariation || Number(afterVariation?.site_image_id) !== landedVariation) wrong.push(`the landed variation image was recorded as ${JSON.stringify(afterVariation)}`);
+
     // turned off, even a valid address is refused
-    if ((await publicGet(h, pathOf(variationSrc))).status !== 200) wrong.push('a valid variation address was refused');
+    const variationFile = `/api/woocommerce/shop-image/${signedImageFile(Number(afterVariation?.id), secondVariation)}`;
+    if ((await publicGet(h, pathOf(variationSrc))).status !== 404) wrong.push('the address of a replaced variation cover still answers');
+    if ((await publicGet(h, variationFile)).status !== 200) wrong.push('a valid variation address was refused');
     await h.post('/api/woocommerce/image-push', { enabled: false }, manager);
-    if ((await publicGet(h, pathOf(variationSrc))).status !== 404) wrong.push('the image address answers while the push is off');
+    if ((await publicGet(h, variationFile)).status !== 404) wrong.push('the image address answers while the push is off');
     return `${store.requests.length} shop requests`;
   }));
 }
@@ -255,6 +282,27 @@ export async function collectionPushCase(h: Harness, wrong: string[]): Promise<s
     if (second.state !== 'pushed') wrong.push(`the second run was ${second.state}`);
     if (sorted(products[0].tags) !== sorted([80, 85, silver])) wrong.push(`product 1 tags became ${JSON.stringify(products[0].tags)}, expected 80, 85 and Silver`);
     if (sorted(products[1].tags) !== '[81]') wrong.push(`the shop's own tag left product 2: ${JSON.stringify(products[1].tags)}`);
+
+    // PR #421 review: a tag added by a send whose answer was lost stays the program's and leaves with its collection
+    await setCollections(own.id, ['Platinum']);
+    store.applyThenFail = new Set(['products/batch']);
+    const lost = await runCollectionPushOnce(later(1));
+    store.applyThenFail = undefined;
+    const platinum = store.tags.find(t => t.name === 'Platinum')?.id;
+    if (lost.state !== 'failed' || !platinum || !products[1].tags?.includes(platinum)) wrong.push(`a run whose answer was lost was ${lost.state}, tags ${JSON.stringify(products[1].tags)}`);
+    const claimed = (await linkMedia(h, own.id))?.sent_tag_ids;
+    await setCollections(own.id, []);
+    const cleaned = await runCollectionPushOnce(later(2));
+    if (sorted(products[1].tags) !== '[81]') wrong.push(`a tag whose answer was lost stayed on product 2: ${JSON.stringify(products[1].tags)} (claimed ${JSON.stringify(claimed)}, run ${JSON.stringify(cleaned).slice(0, 200)})`);
+
+    // PR #421 review: a name the shop will not make refuses only its product; the others still go
+    await setCollections(bare.id, ['<>']);
+    await setCollections(many.id, ['Silver', 'Gold']);
+    const refusedName = await runCollectionPushOnce(later(3));
+    if (refusedName.state !== 'pushed' || refusedName.result?.failedCount !== 1) wrong.push(`a run with a name the shop refused was ${JSON.stringify(refusedName).slice(0, 300)}`);
+    const [refusedLink] = await h.q(`SELECT collection_error FROM wc_product_links WHERE is_deleted = 0 AND item_id = $1`, [bare.id]);
+    if (!String(refusedLink?.collection_error).includes('<>')) wrong.push(`the refused name was recorded as ${refusedLink?.collection_error}`);
+    if (store.tagsSent.has(3) || sorted(products[0].tags) !== sorted([80, 85, silver, 81])) wrong.push(`after a refused name product 1 tags ${JSON.stringify(products[0].tags)}, product 3 sent ${store.tagsSent.has(3)}`);
 
     await h.post('/api/woocommerce/collection-push', { enabled: false }, manager);
     await setCollections(many.id, []);

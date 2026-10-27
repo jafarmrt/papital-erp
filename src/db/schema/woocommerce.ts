@@ -51,7 +51,7 @@ export const wcProductLinks = pgTable('wc_product_links', {
   /**
    * v11 phase 6.5 (D-04 part D, migration 0006): the shop product's featured image id as last read or written (0 none, null
    * not read yet), the cover the image push last brought in line ('' never compared, 'none' compared without a cover), the
-   * tag ids the collection push added and the collections it sent them for (null until compared), and each send's last
+   * tag ids the collection push added (none at first) and the collections it sent them for (null until compared), and each send's last
    * refusal and refusals in a row
    */
   siteImageId: integer('site_image_id'),

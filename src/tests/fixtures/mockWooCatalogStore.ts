@@ -101,6 +101,10 @@ export interface MockWooCatalogStore {
   tagsSent: Map<number, number[]>;
   /** part D: the next image id the shop gives a downloaded image */
   nextImageId: number;
+  /** PR #421 review: each downloaded image's address, named after the file as WordPress does (with a `-1` suffix) */
+  imageSrc: Map<number, string>;
+  /** PR #421 review: batch paths the shop applies and then answers 500 (an answer lost to a slow shop) */
+  applyThenFail?: Set<string>;
   /** review nit N-1: the settings and currency reads answer this status (a key of a user who does not manage the shop gets 403) */
   settingsStatus?: number;
   close(): Promise<void>;
@@ -150,6 +154,16 @@ function shopRows(products: MockProduct[]): Array<MockProduct | MockVariation> {
   return products.flatMap(p => [p, ...(p.variations ?? [])]);
 }
 
+/** A downloaded image: a new id, its address named after the file */
+function downloaded(store: MockWooCatalogStore, src: string): number {
+  const id = store.nextImageId++;
+  const name = new URL(src).pathname.split('/').pop() ?? 'image.webp';
+  store.imageSrc.set(id, `https://shop.test/uploads/${name.replace(/\.webp$/, '-1.webp')}`);
+  return id;
+}
+
+const imageOf = (store: MockWooCatalogStore, id: number) => ({ id, src: store.imageSrc.get(id) ?? `https://shop.test/img/${id}.jpg` });
+
 function batchAnswer(store: MockWooCatalogStore, body: string, products: MockProduct[]): unknown {
   const parsed = JSON.parse(body || '{}') as { update?: BatchRow[] };
   const rows = parsed.update ?? [];
@@ -179,7 +193,7 @@ function batchAnswer(store: MockWooCatalogStore, body: string, products: MockPro
         p.images = row.images.map((img) => {
           if (img.src) {
             store.imageSrcSent.set(row.id, img.src);
-            return store.nextImageId++;
+            return downloaded(store, img.src);
           }
           return Number(img.id);
         });
@@ -187,7 +201,7 @@ function batchAnswer(store: MockWooCatalogStore, body: string, products: MockPro
       }
       if (row.image?.src && target) {
         store.imageSrcSent.set(row.id, row.image.src);
-        (target as MockVariation).imageId = store.nextImageId++;
+        (target as MockVariation).imageId = downloaded(store, row.image.src);
         extra.image = { id: (target as MockVariation).imageId };
       }
       if (row.tags && target) {
@@ -211,7 +225,7 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
     pushed: new Map(), requests: [], arrivals: [], batchSizes: [], rowErrors: new Set(), failPaths: new Set(), statusPaths: new Map(),
     queries: [], maxInFlight: 0,
     orders: [], manageStockSent: new Map(), pricesSent: new Map(), skusSent: new Map(), currency: 'IRR', decimals: 2,
-    tags: [], hiddenTags: [], imageSrcSent: new Map(), tagsSent: new Map(), nextImageId: 9000,
+    tags: [], hiddenTags: [], imageSrcSent: new Map(), tagsSent: new Map(), nextImageId: 9000, imageSrc: new Map(),
   } as unknown as MockWooCatalogStore;
   let inFlight = 0;
   const server = http.createServer((req, res) => {
@@ -248,7 +262,7 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
         const shape = (p: MockProduct) => ({
           id: p.id, name: p.name ?? `محصول ${p.id}`, sku: p.sku, type: p.type ?? (p.variations ? 'variable' : 'simple'),
           stock_quantity: p.stock ?? null, manage_stock: p.stock !== undefined && p.stock !== null, regular_price: p.regularPrice ?? '',
-          images: (p.images ?? []).map(id => ({ id, src: `https://shop.test/img/${id}.jpg` })), tags: (p.tags ?? []).map(id => ({ id })),
+          images: (p.images ?? []).map(id => imageOf(store, id)), tags: (p.tags ?? []).map(id => ({ id })),
         });
         // part D: `include` reads the named products again (the image and tag sends keep the gallery and the other tags)
         if (url.searchParams.has('include')) {
@@ -269,6 +283,8 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
       if (req.method === 'POST' && path === 'products/tags/batch') {
         const create = (JSON.parse(body || '{}') as { create?: Array<{ name: string }> }).create ?? [];
         send({ create: create.map(({ name }) => {
+          // WordPress cleans a name of its tags and refuses one left empty
+          if (name.replace(/<[^>]*>|[<>]/g, '').trim() === '') return { id: 0, error: { code: 'empty_term_name', message: 'نام برچسب خالی است.', data: { status: 400 } } };
           const taken = [...store.tags, ...store.hiddenTags].find(t => t.name.toLowerCase() === name.toLowerCase());
           if (taken) return { id: 0, error: { code: 'term_exists', message: 'برچسب هست.', data: { status: 400, resource_id: taken.id } } };
           const tag = { id: 7000 + store.tags.length, name };
@@ -280,12 +296,17 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
       const variations = path.match(/^products\/(\d+)\/variations$/);
       if (req.method === 'GET' && variations) {
         // read live, so a test may change the shop's products between two readings
-        const rows = products.find(p => p.id === Number(variations[1]))?.variations ?? [];
+        const parent = products.find(p => p.id === Number(variations[1]));
+        const listed = parent?.variations ?? [];
+        // PR #421 review: `include` reads the named variations again (the image send looks for an image that landed)
+        const included = url.searchParams.has('include') ? new Set(String(url.searchParams.get('include')).split(',').map(Number)) : null;
+        const rows = included ? listed.filter(v => included.has(v.id)) : listed;
         setListHeaders(res, rows.length, url, store);
         send(page(rows, url, store).filter(v => !store.hiddenFromLists?.has(v.id)).map(v => ({
           id: v.id, sku: v.sku, stock_quantity: v.stock ?? null,
           manage_stock: v.manageStock ?? (v.stock !== undefined && v.stock !== null), regular_price: v.regularPrice ?? '',
-          image: v.imageId ? { id: v.imageId, src: `https://shop.test/img/${v.imageId}.jpg` } : null,
+          // WooCommerce answers a variation without its own image with its parent's featured image
+          image: v.imageId ? imageOf(store, v.imageId) : parent?.images?.[0] ? imageOf(store, parent.images[0]) : null,
         })));
         return;
       }
@@ -334,7 +355,13 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
         return;
       }
       if (req.method === 'POST' && (path === 'products/batch' || /^products\/\d+\/variations\/batch$/.test(path))) {
-        send(batchAnswer(store, body, products));
+        const answer = batchAnswer(store, body, products);
+        if (store.applyThenFail?.has(path)) {
+          res.statusCode = 500;
+          send({ code: 'internal_error', message: 'خطای میزبان سایت' });
+          return;
+        }
+        send(answer);
         return;
       }
       res.statusCode = 404;

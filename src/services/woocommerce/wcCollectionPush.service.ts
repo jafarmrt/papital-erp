@@ -7,8 +7,7 @@ import { WC_AUTO_MAX_LINK_FAILURES } from '../../lib/woocommerce/wcAutoPush.js';
 import {
   collectionsKey, isMediaSendOn, WC_COLLECTION_MAX_PRODUCTS, WC_COLLECTION_PUSH_SETTING_KEY,
 } from '../../lib/woocommerce/wcMediaPush.js';
-import { ValidationError } from '../../errors/customErrors.js';
-import { requireWcConnection, wcListRequest, wcRequest, WC_SHOP_REQUEST_FAILED, type WcConnection } from './wcClient.js';
+import { requireWcConnection, wcListRequest, wcRequest, type WcConnection } from './wcClient.js';
 import { liveLinks, type WcActor } from './wcCatalog.service.js';
 import {
   outcomeOf, runField, sendAndRecord, writeSetting, type FieldRunOptions, type FieldRunOutcome, type Planned,
@@ -75,7 +74,7 @@ export function tagNameKey(name: unknown): string {
 
 interface ShopTag { id?: unknown; name?: unknown }
 
-/** The shop's tag id for each name, making the tags it does not have */
+/** The shop's tag id for each name, making the tags it does not have; a name the shop would not make is left out */
 async function tagIdsFor(conn: WcConnection, names: string[], signal: AbortSignal): Promise<Map<string, number>> {
   const byName = new Map<string, number>();
   const keep = (rows: ShopTag[]) => rows.forEach((t) => {
@@ -103,10 +102,6 @@ async function tagIdsFor(conn: WcConnection, names: string[], signal: AbortSigna
       const id = Number(row.error ? row.error.data?.resource_id : row.id);
       if (Number.isInteger(id) && id > 0 && part[i] !== undefined) byName.set(tagNameKey(part[i]), id);
     });
-  }
-  const unknown = wanted.filter(([k]) => !byName.has(k));
-  if (unknown.length > 0) {
-    throw new ValidationError(`سایت برچسب «${unknown[0][1]}» را نساخت و برچسبی فرستاده نشد.`, undefined, WC_SHOP_REQUEST_FAILED);
   }
   return byName;
 }
@@ -143,19 +138,32 @@ export function runCollectionPushOnce(now: Date = new Date(), options: FieldRunO
     const current = await currentTags(conn, due.map(d => d.link.wcProductId), signal);
     const plan: Planned[] = [];
     const gone: Array<{ link: Link; error: string }> = [];
+    const claims: Array<{ id: number; values: Planned['values'] }> = [];
     for (const { link, names, key } of due) {
       const tags = current.get(link.wcProductId);
       if (!tags) {
         gone.push({ link, error: GONE });
         continue;
       }
+      // PR #421 review: a name the shop would not make (one WordPress cleans to nothing) refuses only this product
+      const refusedName = names.find(n => !ids.has(tagNameKey(n)));
+      if (refusedName !== undefined) {
+        gone.push({ link, error: `سایت برچسب «${refusedName.slice(0, 100)}» را نساخت؛ نام کالکشن را اصلاح کنید.` });
+        continue;
+      }
       const wanted = [...new Set(names.map(n => ids.get(tagNameKey(n))).filter((id): id is number => id !== undefined))];
       const next = nextTags(tags, sentTagIds(link.sentTagIds), wanted);
+      const claimed = [...new Set([...sentTagIds(link.sentTagIds), ...wanted.filter(id => !tags.includes(id))])];
+      // with the collections compared again (null), so the link stays due until a send brings it in line
+      if (claimed.length > sentTagIds(link.sentTagIds).length) claims.push({ id: link.id, values: { sentTagIds: JSON.stringify(claimed), sentCollections: null } });
       plan.push({
         link, fields: { tags: next.tags.map(id => ({ id })) },
         values: { sentTagIds: JSON.stringify(next.added), sentCollections: key, collectionError: '', collectionFailureCount: 0 },
       });
     }
+    // PR #421 review: the tags about to be added are the program's before the send, so a send whose answer never came back
+    // (the shop added them anyway) cannot leave them looking like the shop's own; these ids were not on the product
+    if (claims.length > 0) await orm.transaction(tx => updateLinkRows(tx, claims, systemNowUtcIso()));
     return outcomeOf(await sendAndRecord('collection_push', plan, steps.length, {}, signal, { refused: gone }));
   });
 }

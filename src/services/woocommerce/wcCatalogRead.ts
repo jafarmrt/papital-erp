@@ -112,6 +112,15 @@ function imageIdOf(raw: RawProduct, variation: boolean): number | null {
   return Number.isInteger(id) && id > 0 ? id : 0;
 }
 
+/**
+ * PR #421 review: WooCommerce answers a variation without its own image with its parent's featured image, so that image is
+ * not the variation's own (one set by hand to the same image is taken as none too, and gets the cover)
+ */
+function variationImageId(raw: RawProduct, parentImageId: number | null): number | null {
+  const id = imageIdOf(raw, true);
+  return id !== null && id > 0 && id === parentImageId ? 0 : id;
+}
+
 function stockOf(raw: RawProduct): number | null {
   const n = Number(raw.stock_quantity);
   return raw.stock_quantity === null || raw.stock_quantity === undefined || !Number.isFinite(n) ? null : Math.trunc(n);
@@ -221,7 +230,7 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
   const site: SiteProduct[] = [];
   const skipped: WcUnmatchedProduct[] = [];
   let maxProductId = 0;
-  const variable: Array<{ productId: number; name: string; sku: string }> = [];
+  const variable: Array<{ productId: number; name: string; sku: string; imageId: number | null }> = [];
   for (const p of products) {
     const productId = Number(p.id);
     if (!Number.isInteger(productId) || productId <= 0) continue;
@@ -236,7 +245,7 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
       productId, variationId: 0, name, sku, stock: stockOf(p), manageStock: p.manage_stock === true,
       type: String(p.type ?? '').slice(0, 50), regularPrice: regularPriceOf(p), imageId: imageIdOf(p, false),
     });
-    if (isVariableParentType(String(p.type ?? ''))) variable.push({ productId, name, sku });
+    if (isVariableParentType(String(p.type ?? ''))) variable.push({ productId, name, sku, imageId: imageIdOf(p, false) });
   }
   // review N-G: the first failed variation read aborts the reads still in flight; the deadline aborts them all too
   const readers = new AbortController();
@@ -254,7 +263,7 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
   const partialVariationProducts: number[] = [];
   const gapVariationProducts: number[] = [];
   let missingVariations = 0;
-  variable.forEach(({ productId, name, sku }, i) => {
+  variable.forEach(({ productId, name, sku, imageId: parentImageId }, i) => {
     const list = variationLists[i];
     if (list.missing > 0) {
       gapVariationProducts.push(productId);
@@ -272,7 +281,7 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
       }
       site.push({
         productId, variationId, name, sku: vSku, stock: stockOf(v), manageStock: v.manage_stock === true,
-        type: 'variation', regularPrice: regularPriceOf(v), imageId: imageIdOf(v, true),
+        type: 'variation', regularPrice: regularPriceOf(v), imageId: variationImageId(v, parentImageId),
       });
     }
   });
