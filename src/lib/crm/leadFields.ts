@@ -6,6 +6,12 @@
 export const CRM_LEAD_STAGES = ['lead', 'qualified', 'proposal', 'won', 'lost'] as const;
 export type CrmLeadStage = typeof CRM_LEAD_STAGES[number];
 
+/**
+ * The board's list (and the server's unpaged answer) holds at most this many files: since v11 phase 6.4 (C6) the open
+ * ones first, then the newest closed ones
+ */
+export const CRM_BOARD_LEAD_CAP = 500;
+
 export const CRM_LEAD_STATUSES = ['active', 'won', 'lost', 'archived'] as const;
 export type CrmLeadStatus = typeof CRM_LEAD_STATUSES[number];
 

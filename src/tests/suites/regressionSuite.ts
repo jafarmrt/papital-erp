@@ -11166,6 +11166,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v11 phase 6.3p (U8, C12, U6, U17): one search rule, global search sections, workflow task notices, a proforma from any open lead
   const { runWorkflowPurchaseV11Tests } = await import('../regression/workflowPurchaseV11Tests.js');
   results.push(...await runWorkflowPurchaseV11Tests(shouldRun));
+  // v11 phase 6.4 (C3, C4, C6, C9): a lead's status follows its stage, a final invoice is its lead's sale, open leads first, orders spread over duplicate rows
+  const { runSalesCrmV11Tests } = await import('../regression/salesCrmV11Tests.js');
+  results.push(...await runSalesCrmV11Tests(shouldRun));
 
   return results;
 }

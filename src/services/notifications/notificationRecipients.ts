@@ -1,5 +1,5 @@
 import { and, eq, sql } from 'drizzle-orm';
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { roles, users } from '../../db/schema.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { permissionDefinition, SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
@@ -10,8 +10,13 @@ import { permissionDefinition, SYSTEM_ADMIN_ROLE } from '../../lib/permissions/p
  * موفق» به پنج کد ثابت می‌رفت، پس نقش سفارشی با همان تیک‌ها هیچ‌کدام را نمی‌گرفت.
  */
 export async function permissionHolderUserIds(permission: string): Promise<number[]> {
+  return permissionHolderUserIdsWith(orm, permission);
+}
+
+/** v11 phase 6.4 (C3): the same holders read in the caller's transaction (the «معامله موفق» notice of a finalize) */
+export async function permissionHolderUserIdsWith(executor: DbExecutor, permission: string): Promise<number[]> {
   if (!permissionDefinition(permission)) throw new Error(`Unknown permission key for notification recipients: ${permission}`);
-  const rows = await orm.select({ id: users.id }).from(users)
+  const rows = await executor.select({ id: users.id }).from(users)
     .leftJoin(roles, eq(roles.code, users.role))
     .where(and(eq(users.isDeleted, 0), sql`(${users.role} = ${SYSTEM_ADMIN_ROLE} OR coalesce(${roles.permissions}, '[]'::jsonb) ? ${permission})`))
     .orderBy(users.id);

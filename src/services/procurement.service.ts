@@ -23,7 +23,8 @@ const CLOSED_REQUISITION_STATUSES = new Set(['rejected', 'cancelled']);
 import type { PurchaseRequisition, ProcurementOrder } from '../types.js';
 import { applyDeliveredLines, isSettledRequisitionRow, type RequisitionItemWithReceipt } from './procurement/requisitionReceipt.js';
 import { assertMayReceiveIntoStock, assertProcurementIncomingDocument, RECEIVED_REQUISITION_STATUSES, requisitionOrderDocuments } from './procurement/requisitionReceiveAction.js';
-import { describeOverOrders, findOverOrders } from './procurement/requisitionOrder.js';
+import { describeOverOrders, findOverOrders, spreadOrderedQuantity } from './procurement/requisitionOrder.js';
+import { fin } from '../lib/financialDecimal.js';
 import { money } from '../lib/money.js';
 import { canEditRequisition, REQUISITION_PRIORITIES, requisitionActionLabel, type RequisitionPriority } from '../lib/procurement/requisitionFields.js';
 import {
@@ -727,15 +728,16 @@ export class ProcurementService {
           const docIds = documentIdsByItem.get(Number(groupItem.itemId)) ?? [];
           if (!docIds.includes(createdDocId)) documentIdsByItem.set(Number(groupItem.itemId), [...docIds, createdDocId]);
 
-          const targetReqItem = updatedItems.find(r =>
+          // v11 phase 6.4 (C9): spread over every row of the item (`spreadOrderedQuantity`); before, the first row took it all
+          const itemRows = updatedItems.filter(r =>
             (r.itemId && r.itemId === groupItem.itemId) ||
             (r.itemCode && groupItem.itemCode && r.itemCode === groupItem.itemCode)
           );
 
-          if (targetReqItem) {
-            const ordQty = (targetReqItem.orderedQty || 0) + Number(groupItem.quantity);
+          for (const { row: targetReqItem, added } of spreadOrderedQuantity(itemRows, groupItem.quantity)) {
+            const ordQty = fin(targetReqItem.orderedQty || 0).add(added).toNumber();
             targetReqItem.orderedQty = ordQty;
-            targetReqItem.remainingQty = Math.max(0, (targetReqItem.requestedQty || 0) - ordQty);
+            targetReqItem.remainingQty = Math.max(0, fin(targetReqItem.requestedQty || 0).subtract(ordQty).toNumber());
             targetReqItem.targetSupplierName = supplierName;
             targetReqItem.targetSupplierId = supplierId;
             targetReqItem.status = targetReqItem.remainingQty <= 0 ? 'ordered' : 'pending';
@@ -750,7 +752,8 @@ export class ProcurementService {
 
       // v8.0.38 (TD-289): هر سفارش بیش از درخواست با دلیل روی ردیف همان کالا ثبت می‌شود
       for (const over of overOrders) {
-        const row = updatedItems.find(r => Number(r.itemId) === over.itemId);
+        // v11 phase 6.4 (C9): the last row of the item, which holds the excess (`spreadOrderedQuantity`)
+        const row = [...updatedItems].reverse().find(r => Number(r.itemId) === over.itemId);
         if (!row) continue;
         row.overOrders = [...(Array.isArray(row.overOrders) ? row.overOrders : []), {
           quantity: over.excess, reason: overOrderReason, user: username, date: today, documentIds: documentIdsByItem.get(over.itemId) ?? [],

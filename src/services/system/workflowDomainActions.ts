@@ -10,6 +10,9 @@ import { registerPendingMaterialWorkflowAction } from '../inventory/pendingMater
 import { registerRequisitionWorkflowAction } from '../procurement/requisitionWorkflowAction.js';
 import { procurementOrderHooks } from '../procurement/requisitionOrderSync.js';
 import { registerLinkedOrderHooks } from '../documents/linkedOrderHooks.js';
+import { registerLinkedLeadHooks } from '../documents/linkedLeadHooks.js';
+import { lockLeadOfSalesDocument, markLeadWonByInvoice } from '../crm/crmLeadOutcome.js';
+import { permissionHolderUserIdsWith } from '../notifications/notificationRecipients.js';
 import { registerEntityWorkflowPort } from './entityWorkflowPort.js';
 import { registerScheduleProgressSync } from '../piecework/scheduleProgressSync.js';
 import { syncProjectsAfterScheduleWork } from '../projects/projectStatusSync.js';
@@ -36,6 +39,11 @@ export function registerWorkflowDomainActions(): void {
   // v10.0.237 / v10.0.238 (TD-912 / TD-913): voiding or editing a procurement order updates its requisition (not a workflow
   // action, but the same composition root: the documents package may not import procurement)
   registerLinkedOrderHooks(procurementOrderHooks);
+  // v11 phase 6.4 (C3): finalizing a lead's proforma into an invoice makes the lead a sale (the documents package may not import CRM)
+  registerLinkedLeadHooks({
+    lockLeadOfDocument: lockLeadOfSalesDocument,
+    markLeadSold: async (tx, lead, invoice, actorName) => { await markLeadWonByInvoice(tx, lead, invoice, { name: actorName }, permissionHolderUserIdsWith); },
+  });
   // v10.0.250 (OBS-R2-02): the accounting, treasury and item cores start and close their entity workflows through this port
   registerEntityWorkflowPort({ maybeStart: params => WorkflowEngineService.maybeStartWorkflow(params), terminateOpen: terminateOpenWorkflows });
   // 10.2 package 12 (D6): a work log of a workshop schedule row syncs its project's progress (piecework may not import projects)

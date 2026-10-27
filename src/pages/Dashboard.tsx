@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, useHasAnyPermission, useHasPermission } from '../contexts/AuthContext';
 import { useDashboardCrm } from '../hooks/useDashboardCrm';
+import { dashboardLeadCapNotice, isOpenLead } from '../lib/crm/crmListPages';
 import { useDashboardDailyLogs } from '../hooks/useDashboardDailyLogs';
 import { PersonalBanner } from '../components/dashboard/PersonalBanner';
 import { CustomizableShortcuts } from '../components/dashboard/CustomizableShortcuts';
@@ -44,6 +45,8 @@ export default function Dashboard() {
     loading: crmLoading,
     refresh: fetchCRMData
   } = useDashboardCrm(hasCrmPermission);
+
+  const leadCapNotice = hasCrmPermission ? dashboardLeadCapNotice(leads.filter(isOpenLead).length) : null;
 
   // v9.0.14 (TD-428): ویجت «امروز و معوق» از پیگیری‌های باز سرور، بی بازه تاریخ اقدام
   const openFollowups = useCrmFollowups({ status: 'pending', page: 1, limit: 200 }, hasCrmPermission);
@@ -187,6 +190,10 @@ export default function Dashboard() {
               onEventClick={handleCalendarEventClick}
             />
           </div>
+          {/* v11 phase 6.4 (C6): the calendar says when the open sales files alone fill its list */}
+          {leadCapNotice && (
+            <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-2.5" role="note">{leadCapNotice}</p>
+          )}
 
           {/* Warehouse BI & Analytics Quick Link Card */}
           {canViewWarehouseStatus && (
