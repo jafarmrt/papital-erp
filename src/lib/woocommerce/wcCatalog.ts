@@ -129,7 +129,7 @@ export function catalogCapNotice(): string {
  * the cap; review M-C / N-1 / M-R / M-S)
  */
 export function catalogOrderNotice(): string {
-  return 'ممکن است در بازخوانی سایت محصولی خوانده نشده باشد؛ پیوند محصولاتی که خوانده نشد دست نخورد. اگر این پیام تکرار شد، افزونه‌ها یا تنظیمات مرتب‌سازی سایت را بررسی کنید.';
+  return 'ممکن است در بازخوانی سایت محصولی خوانده نشده باشد؛ پیوند محصولاتی که خوانده نشد دست نخورد. اگر این پیام تکرار شد، افزونه‌ها، دسترسی کلید سایت یا تنظیمات مرتب‌سازی آن را بررسی کنید.';
 }
 
 /** v11 phase 6.5 (#322 review notes 1 and 4): the shop's count of products changed while it was read */

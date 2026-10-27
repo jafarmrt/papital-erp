@@ -246,13 +246,13 @@ export async function catalogGapCase(h: Harness, wrong: string[]): Promise<strin
 }
 
 /**
- * PR #420 third review SF1: a shop that hides most of a long list sends empty page after empty page; the reading gives up
- * after `WC_MAX_EMPTY_PAGES` of them instead of reading to the cap, keeps every link it did not read (at night and by
- * hand alike) and says it may have missed a product
+ * PR #420 third review SF1: a shop that hides most of a list sends empty page after empty page. A list whose count fits
+ * the cap is read to its count and the hidden rows are a gap (kept at night, asked by hand); a list cut at the cap after
+ * a short page keeps every link it did not read, by hand too, and says it may have missed a product
  */
 export async function catalogEmptyPagesCase(h: Harness, wrong: string[]): Promise<string> {
   const { refreshCatalogLocked } = await import('../../services/woocommerce/wcCatalog.service.js');
-  const { WC_MAX_EMPTY_PAGES } = await import('../../services/woocommerce/wcCatalogRead.js');
+  const { WC_MAX_CATALOG_PAGES } = await import('../../lib/woocommerce/wcCatalog.js');
   const hidden = await newItem(h, 'EMPTYHIDDEN');
   const products: MockProduct[] = Array.from({ length: 1000 }, (_, i) => ({ id: 3000 + i, sku: i === 30 ? hidden.code : `EP_${h.tag}_${i}` }));
   return withShop(h, products, async (store) => {
@@ -262,13 +262,24 @@ export async function catalogEmptyPagesCase(h: Harness, wrong: string[]): Promis
     store.requests.length = 0;
     const night = await refreshCatalogLocked({});
     const reads = store.requests.filter(r => r.startsWith('GET products')).length;
-    if (reads !== 1 + WC_MAX_EMPTY_PAGES) wrong.push(`the reading asked ${reads} pages, expected ${1 + WC_MAX_EMPTY_PAGES}`);
-    if (!(await linksOf(h, [hidden.id])).has(hidden.id) || night.closedCount !== 0 || !night.catalogUnordered) {
-      wrong.push(`a reading given up after empty pages closed a link or kept quiet: ${JSON.stringify(night).slice(0, 240)}`);
+    if (reads !== 10) wrong.push(`the reading asked ${reads} pages, expected the 10 its count names`);
+    if (!(await linksOf(h, [hidden.id])).has(hidden.id) || night.closedCount !== 0 || night.catalogMissing !== 941) {
+      wrong.push(`a reading with a long gap closed a link or kept quiet: ${JSON.stringify(night).slice(0, 240)}`);
     }
     const byHand = await h.post('/api/woocommerce/refresh-products', {});
-    if (byHand.status !== 200 || !(await linksOf(h, [hidden.id])).has(hidden.id)) wrong.push(`by hand: ${brief(byHand)}`);
+    if (byHand.status !== 409 || !(await linksOf(h, [hidden.id])).has(hidden.id)) wrong.push(`by hand with a long gap: ${brief(byHand)}`);
+
+    // past the cap: a shop that caps its pages at 9 rows needs 112 pages, more than the cap reads, and hides the linked
+    // product among short pages
+    store.perPageCap = 9;
+    const cut = await refreshCatalogLocked({});
+    const askedCut = await h.post('/api/woocommerce/refresh-products', {});
+    store.perPageCap = undefined;
     store.hiddenFromLists = undefined;
-    return 'a list given up after empty pages keeps its unread links';
+    if (!(await linksOf(h, [hidden.id])).has(hidden.id) || !cut.catalogTruncated || !cut.catalogUnordered || cut.closedCount !== 0) {
+      wrong.push(`a reading cut at the cap ${WC_MAX_CATALOG_PAGES} after short pages closed a link or kept quiet: ${JSON.stringify(cut).slice(0, 240)}`);
+    }
+    if (askedCut.status !== 200) wrong.push(`by hand at the cap: ${brief(askedCut)}`);
+    return 'a long gap asks; a list cut at the cap after short pages keeps its unread links';
   });
 }

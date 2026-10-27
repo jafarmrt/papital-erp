@@ -58,8 +58,8 @@ export interface SiteCatalog {
    */
   shifted: boolean;
   /**
-   * PR #420 third review SF1: the product list stopped after `WC_MAX_EMPTY_PAGES` empty pages in a row while its count
-   * said more, or was cut at the cap after a short page; every link of a product not read is left as it is
+   * PR #420 third review SF1: the product list was cut at the cap after a short or empty page, so rows the shop hid may lie
+   * below the largest id read too; every link of a product not read is left as it is
    */
   incomplete: boolean;
   /**
@@ -110,12 +110,6 @@ interface PagedRows {
 }
 
 /**
- * PR #420 third review SF1: empty pages in a row after which a list that its count says goes on is read no further; it is
- * then `incomplete`, like a list cut at the cap after a short page, and every link of a product not read is kept
- */
-export const WC_MAX_EMPTY_PAGES = 5;
-
-/**
  * Every page of a list in id order (review H-1: the default date order has no tie-breaker, so a product could be read on
  * two pages and be reported as a duplicate of itself); a row read twice is kept once and marks the list `repeated`
  * (review M-R), a new id not above every id read before marks it `unordered` (review M-C), and a list whose count
@@ -135,7 +129,6 @@ async function readPages(conn: WcConnection, path: string, fields: string, signa
   let count: number | null = null;
   let pages: number | null = null;
   let sawShort = false;
-  let emptyInRow = 0;
   for (let page = 1; page <= WC_MAX_CATALOG_PAGES; page++) {
     const answer = await wcListRequest(conn, path, {
       per_page: WC_BATCH_SIZE, page, status: 'any', orderby: 'id', order: 'asc', _fields: fields,
@@ -163,10 +156,6 @@ async function readPages(conn: WcConnection, path: string, fields: string, signa
     const unreadCounted = count === null || shifted || rows.length < count;
     const more = unreadCounted && ((count !== null && !shifted && page * WC_BATCH_SIZE < count) || (pages !== null && page < pages));
     if (batch.length < WC_BATCH_SIZE) sawShort = true;
-    emptyInRow = batch.length === 0 ? emptyInRow + 1 : 0;
-    if (batch.length < WC_BATCH_SIZE && more && emptyInRow >= WC_MAX_EMPTY_PAGES) {
-      return { rows, truncated: false, unordered, repeated, shifted, missing: 0, incomplete: true };
-    }
     if (batch.length < WC_BATCH_SIZE && !more) {
       if (count !== null && rows.length > count) shifted = true;
       const missing = count !== null && !shifted && !repeated ? Math.max(0, count - rows.length) : 0;

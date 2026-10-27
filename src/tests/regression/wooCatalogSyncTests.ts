@@ -60,7 +60,7 @@ export async function runWooCatalogSyncTests(shouldRun: ShouldRun): Promise<Test
       'v11 phase 6.5 (PR #420 review findings 1 and 2): a shop that counts a product it never lists is read to its count, the nightly reading keeps the unread link and says so, and a refresh by hand closes it only after the user confirms',
       ['v11_6_5', 'd04', 'woocommerce', 'catalog'], catalogGapCase],
     ['reg_wc_catalog_empty_pages_v11_6_5',
-      'v11 phase 6.5 (PR #420 third review SF1): a list that comes empty page after page while its count says more is given up after a few pages and keeps every link it did not read',
+      'v11 phase 6.5 (PR #420 third review SF1): a list that comes empty page after page is read to its count and its gap asks, and one cut at the cap after short pages keeps every link it did not read',
       ['v11_6_5', 'd04', 'woocommerce', 'catalog'], catalogEmptyPagesCase],
     ['reg_wc_auto_push_switch_d04',
       'D-04 part B: the automatic push is off by default, only woocommerce.manage turns it on or off with the target state, with an audit row and a complete connection',
