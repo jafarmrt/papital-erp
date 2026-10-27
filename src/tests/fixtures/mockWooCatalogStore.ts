@@ -41,8 +41,11 @@ export interface MockWooCatalogStore {
   statusPaths: Map<string, number>;
   /** called before an orders page is answered, with its page number (review M-5: the list moves between two pages) */
   beforeOrdersPage?: (page: number) => void;
-  /** the orders list sends no `X-WP-Total` (a shop or a cache that strips it) */
+  /** the orders list sends no `X-WP-Total` (a shop or a cache that strips it); the product and variation lists neither */
   omitTotalHeader?: boolean;
+  /** v11 phase 6.5: called before a product or variation list page is answered, with its path and page number (a product
+   * removed from the shop between two pages) */
+  beforeCatalogPage?: (path: string, page: number) => void;
   /** orders the list sends without their `id` (delta review 4, item E: a shop or a plugin that drops the field) */
   ordersWithoutId?: Set<number>;
   /** catalog pages after the first start one row early, so their first row repeats the last row of the page before (a date
@@ -73,6 +76,8 @@ export interface MockWooCatalogStore {
   currency: string;
   /** review M-A: the price decimals `GET settings/general/woocommerce_price_num_decimals` answers (2, WooCommerce's default) */
   decimals: number | string;
+  /** review nit N-1: the settings read answers this status (a key of a user who does not manage the shop gets 403) */
+  settingsStatus?: number;
   close(): Promise<void>;
 }
 
@@ -174,7 +179,11 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
         send({ code: 'woocommerce_rest_product_invalid_id', message: 'شناسه نامعتبر است.' });
         return;
       }
+      if (req.method === 'GET' && (path === 'products' || /^products\/\d+\/variations$/.test(path))) {
+        store.beforeCatalogPage?.(path, Number(url.searchParams.get('page') || 1));
+      }
       if (req.method === 'GET' && path === 'products') {
+        if (!store.omitTotalHeader) res.setHeader('X-WP-Total', String(products.length));
         send(productPage(products, url, store).map(p => ({
           id: p.id, name: p.name ?? `محصول ${p.id}`, sku: p.sku, type: p.type ?? (p.variations ? 'variable' : 'simple'),
           stock_quantity: p.stock ?? null, manage_stock: p.stock !== undefined && p.stock !== null, regular_price: p.regularPrice ?? '',
@@ -185,6 +194,7 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
       if (req.method === 'GET' && variations) {
         // read live, so a test may change the shop's products between two readings
         const rows = products.find(p => p.id === Number(variations[1]))?.variations ?? [];
+        if (!store.omitTotalHeader) res.setHeader('X-WP-Total', String(rows.length));
         send(page(rows, url, store).map(v => ({
           id: v.id, sku: v.sku, stock_quantity: v.stock ?? null,
           manage_stock: v.manageStock ?? (v.stock !== undefined && v.stock !== null), regular_price: v.regularPrice ?? '',
@@ -212,6 +222,11 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
         return;
       }
       if (req.method === 'GET' && path === 'settings/general/woocommerce_price_num_decimals') {
+        if (store.settingsStatus) {
+          res.statusCode = store.settingsStatus;
+          send({ code: 'woocommerce_rest_cannot_view', message: 'Sorry, you cannot list resources.' });
+          return;
+        }
         send({ id: 'woocommerce_price_num_decimals', type: 'number', value: String(store.decimals) });
         return;
       }

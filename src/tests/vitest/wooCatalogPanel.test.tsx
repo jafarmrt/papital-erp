@@ -7,17 +7,25 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { toast } from 'react-hot-toast';
-import { fetchJson } from '../../api';
+import { ApiError, fetchJson } from '../../api';
+import { confirmAction } from '../../components/ConfirmDialogHost';
 import { WcCatalogPanel } from '../../components/settings/WcCatalogPanel';
 import { stockSyncOutcome } from '../../lib/woocommerce/stockSyncOutcome';
-import { WC_UNMATCHED_REASON_LABELS, catalogCapNotice, catalogOrderNotice, catalogRefreshMessage, trackingEnabledNote, chunked, siteStockQuantity, type WcCatalogReport } from '../../lib/woocommerce/wcCatalog';
+import {
+  WC_UNMATCHED_REASON_LABELS, catalogCapNotice, catalogOrderNotice, catalogRefreshMessage, catalogShiftNotice, massCloseConfirmText,
+  partialVariationsNotice, trackingEnabledNote, chunked, siteStockQuantity, type WcCatalogReport,
+} from '../../lib/woocommerce/wcCatalog';
 
 vi.mock('../../api', async () => {
   const actual = await vi.importActual<typeof import('../../api')>('../../api');
   return { ...actual, fetchJson: vi.fn() };
 });
 vi.mock('react-hot-toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-afterEach(() => { cleanup(); vi.mocked(fetchJson).mockReset(); vi.mocked(toast.success).mockClear(); vi.mocked(toast.error).mockClear(); });
+vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: vi.fn(async () => true) }));
+afterEach(() => {
+  cleanup(); vi.mocked(fetchJson).mockReset(); vi.mocked(toast.success).mockClear(); vi.mocked(toast.error).mockClear();
+  vi.mocked(confirmAction).mockClear();
+});
 
 function wrapper({ children }: { children: React.ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -40,6 +48,8 @@ const report: WcCatalogReport = {
   failingTotal: 1,
   catalogTruncated: false,
   catalogUnordered: false,
+  catalogShifted: false,
+  partialVariationProducts: 0,
 };
 
 function serve(refreshAnswer: unknown = { success: true, message: 'پیام سرور' }, catalog: WcCatalogReport = report) {
@@ -149,5 +159,44 @@ describe('D-04 the item ↔ shop product links panel', () => {
     const before = reads();
     view.rerender(<WcCatalogPanel canManage stockPushRunning={false} />);
     await waitFor(() => expect(reads()).toBe(before + 1));
+  });
+
+  it('v11 phase 6.5 (#322 notes 1, 3, 4): a reading whose count moved or whose variation lists were cut says its unread links were kept', async () => {
+    expect(catalogRefreshMessage({ siteProductCount: 3, linkedCount: 2, unmatchedTotal: 0, catalogShifted: true })).toContain(catalogShiftNotice());
+    expect(catalogRefreshMessage({ siteProductCount: 3, linkedCount: 2, unmatchedTotal: 0, partialVariationProducts: 2 }))
+      .toContain(partialVariationsNotice(2));
+    expect(partialVariationsNotice(0)).toBe('');
+    expect(partialVariationsNotice(2)).toContain('۲ محصول متغیر');
+    serve(undefined, { ...report, catalogShifted: true, partialVariationProducts: 1 });
+    render(<WcCatalogPanel canManage={false} stockPushRunning={false} />, { wrapper });
+    expect(await screen.findByText(catalogShiftNotice())).toBeTruthy();
+    expect(screen.getByText(partialVariationsNotice(1))).toBeTruthy();
+  });
+
+  it('#322 note 2: a refresh that would close most links asks with the counts and is sent again with confirmClose only once confirmed', async () => {
+    const asked = new ApiError('بسیاری بسته می‌شود', 'WC_MASS_CLOSE_CONFIRM', 409, { closedCount: 8, liveCount: 10 });
+    const bodies: unknown[] = [];
+    vi.mocked(fetchJson).mockImplementation(async (url: string, opts?: { body?: unknown }) => {
+      if (url === '/woocommerce/catalog') return report;
+      bodies.push(opts?.body);
+      if (!opts?.body) throw asked;
+      return { success: true, message: 'پیام سرور' };
+    });
+    render(<WcCatalogPanel canManage stockPushRunning={false} />, { wrapper });
+    fireEvent.click(await screen.findByRole('button', { name: REFRESH_BUTTON }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('پیام سرور', { duration: 8000 }));
+    expect(vi.mocked(confirmAction).mock.calls[0][0]).toMatchObject({ message: massCloseConfirmText({ closedCount: 8, liveCount: 10 }) });
+    expect(massCloseConfirmText({ closedCount: 8, liveCount: 10 })).toContain('۸ محصول از ۱۰');
+    expect(bodies).toEqual([undefined, JSON.stringify({ confirmClose: true })]);
+
+    // the user cancels: nothing is sent again and no error toast
+    cleanup();
+    bodies.length = 0;
+    vi.mocked(confirmAction).mockResolvedValueOnce(false);
+    render(<WcCatalogPanel canManage stockPushRunning={false} />, { wrapper });
+    fireEvent.click(await screen.findByRole('button', { name: REFRESH_BUTTON }));
+    await waitFor(() => expect(vi.mocked(confirmAction)).toHaveBeenCalledTimes(2));
+    expect(bodies).toEqual([undefined]);
+    expect(toast.error).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,7 @@
 import { ValidationError } from '../../errors/customErrors.js';
 import { WC_BATCH_SIZE, WC_MAX_CATALOG_PAGES, type WcUnmatchedProduct } from '../../lib/woocommerce/wcCatalog.js';
 import { isVariableParentType } from '../../lib/woocommerce/wcShopSync.js';
-import { wcRequest, WC_SHOP_REQUEST_FAILED, type WcConnection } from './wcClient.js';
+import { wcListRequest, WC_SHOP_REQUEST_FAILED, type WcConnection } from './wcClient.js';
 
 /**
  * 10.2 package 6 (D-04 parts A and C): one reading of the shop's catalog, page by page in id order: the products, then the
@@ -51,6 +51,17 @@ export interface SiteCatalog {
    * out, so every link of a product not read is then left as it is
    */
   repeated: boolean;
+  /**
+   * v11 phase 6.5 (#322 review notes 1 and 4): the shop's count of products (`X-WP-Total`) changed between two pages, or
+   * differs from the products read: a product removed from a page already read moves the next pages up by one, so a
+   * product may have been skipped, and every link of a product not read is left as it is
+   */
+  shifted: boolean;
+  /**
+   * #322 review note 3: the variable products whose own variation list was not read whole (cut at the cap, a row shown
+   * twice, out of order and cut, or its count changed); the links of their variations not read are left as they are
+   */
+  partialVariationProducts: number[];
 }
 
 /** review M-6: one refresh never holds the lock longer than this (under the 60 s of a reverse proxy) */
@@ -76,12 +87,14 @@ function stockOf(raw: RawProduct): number | null {
   return raw.stock_quantity === null || raw.stock_quantity === undefined || !Number.isFinite(n) ? null : Math.trunc(n);
 }
 
-interface PagedRows { rows: RawProduct[]; truncated: boolean; unordered: boolean; repeated: boolean }
+interface PagedRows { rows: RawProduct[]; truncated: boolean; unordered: boolean; repeated: boolean; shifted: boolean }
 
 /**
  * Every page of a list in id order (review H-1: the default date order has no tie-breaker, so a product could be read on
  * two pages and be reported as a duplicate of itself); a row read twice is kept once and marks the list `repeated`
- * (review M-R), and a new id not above every id read before marks it `unordered` (review M-C)
+ * (review M-R), a new id not above every id read before marks it `unordered` (review M-C), and a list whose count
+ * (`X-WP-Total`) changed between two pages, or that ended with another number of rows than its count, is `shifted`
+ * (v11 phase 6.5, #322 review notes 1 and 4; a shop that sends no count is never marked so)
  */
 async function readPages(conn: WcConnection, path: string, fields: string, signal?: AbortSignal): Promise<PagedRows> {
   const rows: RawProduct[] = [];
@@ -89,10 +102,17 @@ async function readPages(conn: WcConnection, path: string, fields: string, signa
   let lastId = 0;
   let unordered = false;
   let repeated = false;
+  let shifted = false;
+  let count: number | null = null;
   for (let page = 1; page <= WC_MAX_CATALOG_PAGES; page++) {
-    const batch = asRows(await wcRequest(conn, 'GET', path, null, {
+    const answer = await wcListRequest(conn, path, {
       per_page: WC_BATCH_SIZE, page, status: 'any', orderby: 'id', order: 'asc', _fields: fields,
-    }, { signal }));
+    }, { signal });
+    const batch = asRows(answer.data);
+    if (answer.total !== null) {
+      if (count !== null && answer.total !== count) shifted = true;
+      count ??= answer.total;
+    }
     for (const row of batch) {
       const id = Number(row.id);
       if (seen.has(id)) {
@@ -104,9 +124,12 @@ async function readPages(conn: WcConnection, path: string, fields: string, signa
       lastId = Math.max(lastId, id);
       rows.push(row);
     }
-    if (batch.length < WC_BATCH_SIZE) return { rows, truncated: false, unordered, repeated };
+    if (batch.length < WC_BATCH_SIZE) {
+      if (count !== null && rows.length !== count) shifted = true;
+      return { rows, truncated: false, unordered, repeated, shifted };
+    }
   }
-  return { rows, truncated: true, unordered, repeated };
+  return { rows, truncated: true, unordered, repeated, shifted };
 }
 
 /**
@@ -147,7 +170,7 @@ export async function mapLimited<T, R>(
  * linked, so a push never changes how the shop keeps their stock (review M-1 / N-4).
  */
 export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal): Promise<SiteCatalog> {
-  const { rows: products, truncated, unordered: productsUnordered, repeated: productsRepeated } =
+  const { rows: products, truncated, unordered, repeated, shifted } =
     await readPages(conn, 'products', 'id,name,sku,type,stock_quantity,manage_stock,regular_price', signal);
   const site: SiteProduct[] = [];
   const skipped: WcUnmatchedProduct[] = [];
@@ -182,8 +205,12 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
   } finally {
     signal?.removeEventListener('abort', stopReaders);
   }
+  const partialVariationProducts: number[] = [];
   variable.forEach(({ productId, name, sku }, i) => {
-    for (const v of variationLists[i].rows) {
+    const list = variationLists[i];
+    // #322 review note 3: a variation list read in part keeps the links of its own variations, never the whole catalog's
+    if (list.truncated || list.repeated || list.shifted) partialVariationProducts.push(productId);
+    for (const v of list.rows) {
       const variationId = Number(v.id);
       const vSku = String(v.sku ?? '').trim();
       if (!Number.isInteger(variationId) || variationId <= 0 || (vSku !== '' && vSku === sku)) continue;
@@ -197,9 +224,5 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
       });
     }
   });
-  return {
-    site, skipped, truncated, maxProductId,
-    unordered: productsUnordered || variationLists.some(l => l.unordered),
-    repeated: productsRepeated || variationLists.some(l => l.repeated),
-  };
+  return { site, skipped, truncated, maxProductId, unordered, repeated, shifted, partialVariationProducts };
 }

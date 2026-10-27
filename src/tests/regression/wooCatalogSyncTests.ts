@@ -4,6 +4,7 @@ import { runReservationCases } from './stockReservationTests.js';
 import type { MockProduct } from '../fixtures/mockWooCatalogStore.js';
 import { brief, linksOf, newItem, withShop } from './wooCatalogTestKit.js';
 import { deadlineAndCapCase, emptyOrUnorderedCase, removedProductAndDeadlinesCase } from './wooCatalogReviewTests.js';
+import { massCloseCase, partialVariationsCase, shiftedCatalogCase } from './wooCatalogReadEdgeTests.js';
 import { autoPushBoundedFailuresCase, autoPushChangedTrackedCase, autoPushOpenOrdersCase, autoPushSwitchCase } from './wooAutoPushTests.js';
 import {
   autoPushCapCase, autoPushOrderListMovedCase, autoPushOrderPageEdgeCase, autoPushRefusedBatchCase, autoPushRunPurgeCase, autoPushWebhookAndHourlyCase,
@@ -46,6 +47,15 @@ export async function runWooCatalogSyncTests(shouldRun: ShouldRun): Promise<Test
     ['reg_wc_catalog_empty_or_unordered_d04',
       'D-04 delta review M-B / M-C / N-1 / M-R / M-S: an empty catalog while items are linked is a failed run that closes no link, and only a reading that showed a row twice, or was out of id order and cut at the cap, keeps the links of products it did not read and says so',
       ['d04', 'woocommerce', 'catalog', 'review'], emptyOrUnorderedCase],
+    ['reg_wc_catalog_count_moved_keeps_links_v11_6_5',
+      'v11 phase 6.5 (#322 review notes 1 and 4): a product removed or added while the catalog is read page by page changes the shop count, and that reading keeps every link it did not read and says so',
+      ['v11_6_5', 'd04', 'woocommerce', 'catalog'], shiftedCatalogCase],
+    ['reg_wc_catalog_mass_close_asks_v11_6_5',
+      'v11 phase 6.5 (#322 review note 2): a refresh that would close five or more links and more than half of them changes nothing until the user confirms it',
+      ['v11_6_5', 'd04', 'woocommerce', 'catalog'], massCloseCase],
+    ['reg_wc_catalog_partial_variations_v11_6_5',
+      'v11 phase 6.5 (#322 review note 3): a variation list read in part keeps the links of its own unread variations, and a product removed from the shop still closes',
+      ['v11_6_5', 'd04', 'woocommerce', 'catalog'], partialVariationsCase],
     ['reg_wc_auto_push_switch_d04',
       'D-04 part B: the automatic push is off by default, only woocommerce.manage turns it on or off with the target state, with an audit row and a complete connection',
       ['d04', 'woocommerce', 'auto'], autoPushSwitchCase],

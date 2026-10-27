@@ -26,7 +26,9 @@ export interface WcRefreshResult {
 export function useRefreshWcCatalogMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async () => (await fetchJson('/woocommerce/refresh-products', { method: 'POST' })) as WcRefreshResult,
+    // v11 phase 6.5 (#322 review note 2): sent again with `confirmClose` once the user confirmed closing most links
+    mutationFn: async (confirmClose?: boolean) => (await fetchJson('/woocommerce/refresh-products', confirmClose
+      ? { method: 'POST', body: JSON.stringify({ confirmClose: true }) } : { method: 'POST' })) as WcRefreshResult,
     onSettled: () => { void queryClient.invalidateQueries({ queryKey: WC_CATALOG_KEY }); },
   });
 }

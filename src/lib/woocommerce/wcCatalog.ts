@@ -80,6 +80,10 @@ export interface WcCatalogReport {
   catalogTruncated: boolean;
   /** the shop did not list the last refresh's products in id order, so links of products it did not read were kept (review M-C) */
   catalogUnordered: boolean;
+  /** v11 phase 6.5: the shop's count of products changed while the last refresh read it, so unread links were kept */
+  catalogShifted: boolean;
+  /** #322 review note 3: variable products whose variation list the last refresh read in part */
+  partialVariationProducts: number;
   /** finished products with a code and no live link (only after a refresh) */
   itemsNotOnSite: WcCatalogItem[];
   itemsNotOnSiteTotal: number;
@@ -126,13 +130,35 @@ export function catalogOrderNotice(): string {
   return 'ممکن است در بازخوانی سایت محصولی خوانده نشده باشد؛ پیوند محصولاتی که خوانده نشد دست نخورد. اگر این پیام تکرار شد، افزونه‌ها یا تنظیمات مرتب‌سازی سایت را بررسی کنید.';
 }
 
+/** v11 phase 6.5 (#322 review notes 1 and 4): the shop's count of products changed while it was read */
+export function catalogShiftNotice(): string {
+  return 'تعداد محصولات سایت هنگام بازخوانی تغییر کرد و ممکن است محصولی خوانده نشده باشد؛ پیوند محصولاتی که خوانده نشد دست نخورد. کمی بعد دوباره بازخوانی کنید.';
+}
+
+/** #322 review note 3: some variation lists were read in part */
+export function partialVariationsNotice(count: unknown): string {
+  const n = Math.max(0, Math.floor(Number(count) || 0));
+  return n > 0 ? `گونه‌های ${formatPersianNumber(n)} محصول متغیر کامل خوانده نشد؛ پیوند گونه‌هایی از آن‌ها که خوانده نشد دست نخورد.` : '';
+}
+
+/** #322 review note 2: what the refresh asks before closing most links at once */
+export function massCloseConfirmText(details: unknown): string {
+  const d = (details ?? {}) as { closedCount?: unknown; liveCount?: unknown };
+  const n = (v: unknown) => formatPersianNumber(Math.max(0, Math.floor(Number(v) || 0)));
+  return `سایت ${n(d.closedCount)} محصول از ${n(d.liveCount)} محصول وصل را نشان نداد. اگر ادامه دهید پیوند این کالاها بسته می‌شود و `
+    + 'موجودی و قیمت آن‌ها دیگر به سایت نمی‌رود. اگر این محصولات را در سایت برنداشته‌اید، انصراف دهید و نشانی سایت و افزونه‌های آن را بررسی کنید.';
+}
+
 export function catalogRefreshMessage(summary: {
   siteProductCount?: unknown; linkedCount?: unknown; unmatchedTotal?: unknown; catalogTruncated?: unknown; catalogUnordered?: unknown;
+  catalogShifted?: unknown; partialVariationProducts?: unknown;
 }): string {
   const n = (v: unknown) => formatPersianNumber(Math.max(0, Math.floor(Number(v) || 0)));
   const unmatched = Number(summary.unmatchedTotal) || 0;
   return `${n(summary.siteProductCount)} محصول سایت خوانده شد و ${n(summary.linkedCount)} کالا به محصول سایت وصل است.`
     + (unmatched > 0 ? ` ${n(unmatched)} محصول سایت به هیچ کالایی وصل نشد؛ فهرست آن پایین‌تر است.` : '')
     + (summary.catalogTruncated === true ? ` ${catalogCapNotice()}` : '')
-    + (summary.catalogUnordered === true ? ` ${catalogOrderNotice()}` : '');
+    + (summary.catalogUnordered === true ? ` ${catalogOrderNotice()}` : '')
+    + (summary.catalogShifted === true ? ` ${catalogShiftNotice()}` : '')
+    + (partialVariationsNotice(summary.partialVariationProducts) ? ` ${partialVariationsNotice(summary.partialVariationProducts)}` : '');
 }
