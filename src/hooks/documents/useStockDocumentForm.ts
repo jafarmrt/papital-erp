@@ -282,6 +282,8 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     totalReservedItemsCount,
     selectedProjectReservedItems,
     itemsWithReserved,
+    // while they are read, «add the reserved items» waits instead of calling them missing
+    reservedItemsLoading: reservedItemRows.loading,
     getItemReservationSummary,
     totalSum,
     totalQuantitySum,

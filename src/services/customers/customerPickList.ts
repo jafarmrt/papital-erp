@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { customers } from '../../db/schema.js';
 import { customerHasTagCondition } from './customerTags.service.js';
@@ -38,7 +38,9 @@ export function customerListConditions(search: string | undefined, partyType: st
   if (partyType === 'supplier') {
     conditions.push(or(eq(customers.partyType, 'supplier'), eq(customers.partyType, 'both')) as SQL);
   } else if (partyType === 'customer') {
-    conditions.push(or(eq(customers.partyType, 'customer'), eq(customers.partyType, 'both')) as SQL);
+    // v11 phase 6.1ch (C13, review): a legacy party without a kind is a customer, as the treasury and voucher rules and the
+    // forms read it (`partyType || 'customer'`), so a server search past the cap finds it too
+    conditions.push(or(eq(customers.partyType, 'customer'), eq(customers.partyType, 'both'), isNull(customers.partyType), eq(customers.partyType, '')) as SQL);
   } else if (partyType === 'both') {
     conditions.push(eq(customers.partyType, 'both'));
   }

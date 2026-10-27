@@ -40,22 +40,33 @@ export default function CRMPage({ user }: { user: any }) {
   // v10.2 package 7 (OBS-R2-24): the dossier of the file's own party, never a made-up party with id 0
   // v11 phase 6.1ch (C13): a party the cut pick list lacks is read from the server (`useDossierPartyFinder`)
   const findDossierParty = useDossierPartyFinder(crm.customersList as Customer[]);
-  const handleOpenLeadDossier = (lead: CRMLead) => {
-    findDossierParty(lead).then(
+  // only the latest dossier asked opens: a later click, or closing the dossier, drops an earlier answer still on its way
+  const dossierRequest = useRef(0);
+  const openDossierOf = (lookup: Promise<Customer | null>, missingText: string | null) => {
+    const request = ++dossierRequest.current;
+    lookup.then(
       (party) => {
+        if (request !== dossierRequest.current) return;
         if (party) setSelectedCustomerDossier(party);
-        else toast.error(DOSSIER_PARTY_MISSING_TEXT);
+        else if (missingText) toast.error(missingText);
       },
-      (err: unknown) => toast.error(errorMessageOf(err) || DOSSIER_PARTY_MISSING_TEXT),
+      (err: unknown) => { if (request === dossierRequest.current) toast.error(errorMessageOf(err) || DOSSIER_PARTY_MISSING_TEXT); },
     );
   };
+  const closeDossier = () => {
+    dossierRequest.current += 1;
+    setSelectedCustomerDossier(null);
+  };
+  const handleOpenLeadDossier = (lead: CRMLead) => openDossierOf(findDossierParty(lead), DOSSIER_PARTY_MISSING_TEXT);
 
   // a party named by a link waits for the party pick list
   const [pendingPartyId, setPendingPartyId] = useState<number | null>(null);
   const findPendingParty = useEffectEvent((partyId: number, isCancelled: () => boolean) => {
+    const request = ++dossierRequest.current;
     const done = (party: Customer | null) => {
       if (isCancelled()) return;
       setPendingPartyId(null);
+      if (request !== dossierRequest.current) return;
       if (party) setSelectedCustomerDossier(party);
       else toast.error('طرف حساب این اقدام پیدا نشد.');
     };
@@ -246,12 +257,7 @@ export default function CRMPage({ user }: { user: any }) {
               />
               {crm.filterCustomer && (
                 <button
-                  onClick={() => {
-                    findDossierParty({ customerId: Number(crm.filterCustomer) }).then(
-                      (party) => { if (party) setSelectedCustomerDossier(party); },
-                      (err: unknown) => toast.error(errorMessageOf(err) || DOSSIER_PARTY_MISSING_TEXT),
-                    );
-                  }}
+                  onClick={() => openDossierOf(findDossierParty({ customerId: Number(crm.filterCustomer) }), null)}
                   className="p-2 bg-blue-100 hover:bg-blue-200 text-blue-900 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0"
                   title="مشاهده پرونده جامع این مشتری"
                 >
@@ -381,7 +387,7 @@ export default function CRMPage({ user }: { user: any }) {
       <CrmCustomerDossierHost
         crm={crm}
         customer={selectedCustomerDossier}
-        onClose={() => setSelectedCustomerDossier(null)}
+        onClose={closeDossier}
         onEditCustomer={(cust) => {
           setSelectedCustomerDossier(null);
           // v10.2 package 7 (OBS-R2-24): the customers page reads the full record by id (a pick-list row has no version)

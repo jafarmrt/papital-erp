@@ -120,15 +120,20 @@ describe('a chosen or stored party the cut list lacks (C13)', () => {
   });
 
   it('a dossier opened from the sales page reads its party by id, or by the only party of the file\'s name', async () => {
-    answer = (url) => (url.includes('ids=5001') || url.includes('search=') ? [far] : []);
+    const twin = { id: 6007, name: 'طرف حساب 7', partyType: 'customer' };
+    answer = (url) => (url.includes('ids=5001') ? [far] : decodeURIComponent(url).includes('طرف') ? [{ id: 7, name: 'طرف حساب 7' }, twin] : url.includes('search=') ? [far] : []);
     const { result } = renderHook(() => useDossierPartyFinder(parties(PICK_LIST_LIMIT) as never), { wrapper: wrapperOf(newClient()) });
     await expect(result.current({ customerId: 5001 })).resolves.toMatchObject({ id: 5001, name: 'مشتری دور' });
     await expect(result.current({ customerName: ' مشتری دور ' })).resolves.toMatchObject({ id: 5001 });
     await expect(result.current({ customerId: 2 })).resolves.toMatchObject({ id: 2 });
     expect(decoded()).toEqual(['/customers/options?ids=5001', '/customers/options?search=مشتری دور&limit=50']);
+    // one party of the name in the cut list, another past the cap: two parties of that name, so none is guessed
+    await expect(result.current({ customerName: 'طرف حساب 7' })).resolves.toBeNull();
+    requested.length = 0;
     const short = renderHook(() => useDossierPartyFinder(parties(3) as never), { wrapper: wrapperOf(newClient()) });
     await expect(short.result.current({ customerId: 5001 })).resolves.toBeNull();
-    expect(requested).toHaveLength(2);
+    await expect(short.result.current({ customerName: 'طرف حساب 2' })).resolves.toMatchObject({ id: 2 });
+    expect(requested).toEqual([]);
   });
 
   it('the project form keeps the stored customer of an edited project beyond the cap: its name is saved, never emptied', async () => {
@@ -203,14 +208,25 @@ describe('every party and item pick list a form reads is capped (C13)', () => {
   });
 
   it('wires the server search into every picker fed by a capped party or item list', () => {
-    const files = [
+    // every picker of these forms searches the server past the cap, but the bank account, personnel (TD-1321) and project pickers
+    const pickers = [
       'src/components/accounting/AccountExplorerTab.tsx', 'src/components/accounting/ChequesTab.tsx',
       'src/components/accounting/treasury/TreasuryTransactionModal.tsx', 'src/components/accounting/VoucherDetailedPicker.tsx',
       'src/components/project-modal/ProjectGeneralForm.tsx', 'src/components/project-modal/ProjectProductsForm.tsx',
-      'src/components/crm/CRMLeadModal.tsx', 'src/pages/CRMPage.tsx', 'src/hooks/useEntitySelectors.ts',
-      'src/components/reorder/ReorderPurchaseModal.tsx', 'src/components/documents/stock/StockCounterpartyField.tsx',
+      'src/components/crm/CRMLeadModal.tsx', 'src/pages/CRMPage.tsx', 'src/components/documents/stock/StockCounterpartyField.tsx',
       'src/components/InventoryRebuildModal.tsx', 'src/components/inventory/allocations/AllocateMaterialDialog.tsx',
+      'src/components/procurement/SplitOrderModal.tsx', 'src/components/project/ProjectDirectOrderFields.tsx',
+      'src/components/reorder/ReorderOrderFields.tsx',
     ];
-    for (const file of files) expect(readFileSync(join(process.cwd(), file), 'utf8'), file).toContain('pickListServerSearchUrl(');
+    const otherLists = /options=\{\s*(?:\(Array\.isArray\(bankAccounts\)|personnelList\.|projectsList\.)/;
+    const unwired = pickers.flatMap(file => [...readFileSync(join(process.cwd(), file), 'utf8').matchAll(/<SearchableSelect\b[\s\S]*?\/>/g)]
+      .map(m => m[0])
+      .filter(el => !el.includes('serverSearchUrl') && !otherLists.test(el))
+      .map(el => `${file}: ${el.slice(0, 120)}`));
+    expect(unwired).toEqual([]);
+    // the forms that hand the url to a shared picker
+    for (const file of ['src/hooks/useEntitySelectors.ts', 'src/components/reorder/ReorderPurchaseModal.tsx']) {
+      expect(readFileSync(join(process.cwd(), file), 'utf8'), file).toContain('pickListServerSearchUrl(');
+    }
   });
 });

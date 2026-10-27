@@ -16,9 +16,11 @@ export function useDossierPartyFinder(parties: readonly Customer[]) {
   const queryClient = useQueryClient();
   return async (lead: { customerId?: number | null; customerName?: string | null }): Promise<Customer | null> => {
     const listed = resolveDossierParty(lead, parties);
-    if (listed || !isCutPickList(parties)) return listed;
     const id = Number(lead.customerId);
-    if (Number.isSafeInteger(id) && id > 0) return (await fetchPickRows<Customer>(queryClient, 'customers', [id]))[0] ?? null;
+    const byId = Number.isSafeInteger(id) && id > 0;
+    if (!isCutPickList(parties) || (byId && listed)) return listed;
+    if (byId) return (await fetchPickRows<Customer>(queryClient, 'customers', [id]))[0] ?? null;
+    // by name, the server decides even when the cut list holds one party of the name: it may hold another past the cap
     const matches = await fetchPickMatches<Customer>(queryClient, 'customers', String(lead.customerName ?? ''), DOSSIER_NAME_MATCHES);
     return resolveDossierParty(lead, withPickRows(parties, matches));
   };

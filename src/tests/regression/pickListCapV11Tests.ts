@@ -9,8 +9,8 @@ import { PICK_LIST_IDS_MAX } from '../../lib/permissions/pickListCap.js';
  * v11 phase 6.1ch (C13): a form's party or item pick list holds at most the cap, and a form that needs the row of a chosen
  * or stored party or item the cut list lacks reads it by id: `GET /customers/options?ids=` and `GET /items/options?ids=`
  * answer only those live rows, with the pick list's fields, whatever their place in the list; a malformed or too long id
- * list is a 400. Real Express routes on PostgreSQL; red on v11.4.0 (both routes refused `ids` as an unknown parameter or
- * answered every row).
+ * list is a 400; a legacy party without a kind is found as a customer. Real Express routes on PostgreSQL; red on v11.4.0
+ * (both routes refused `ids` as an unknown parameter or answered every row).
  */
 
 interface Session { cookie: string; csrfToken: string }
@@ -43,6 +43,8 @@ export async function runPickListCapV11Tests(shouldRun: (id: string, ...extra: s
     customerIds.push(...parties.map(p => p.id));
     const gone = await createTestCustomer({ name: `فهرست انتخاب حذف‌شده ${tag}`, isDeleted: 1 });
     customerIds.push(gone.id);
+    const kindless = await createTestCustomer({ name: `فهرست انتخاب بی‌نوع ${tag}`, partyType: null });
+    customerIds.push(kindless.id);
     const goods = [];
     for (const label of ['A', 'B', 'C']) goods.push(await createTestItem({ name: `کالای فهرست انتخاب ${label} ${tag}`, code: `C13-${label}-${tag}` }));
     itemIds.push(...goods.map(g => g.id));
@@ -61,6 +63,12 @@ export async function runPickListCapV11Tests(shouldRun: (id: string, ...extra: s
       wrong.push(`customers ids answered ${JSON.stringify(partyIdsAnswered)}, not ${JSON.stringify(partyIdsWanted)} (the deleted party must stay out)`);
     }
     if (partyRows.some(r => 'notes' in r || 'version' in r)) wrong.push('customers ids answered notes or version, which the pick list never shows');
+
+    // 2b) a legacy party without a kind is a customer, also in the server search past the cap
+    const asCustomer = await get(`/api/customers/options?partyType=customer&search=${encodeURIComponent(`بی‌نوع ${tag}`)}`);
+    if (!rowsOf(asCustomer.body).some(r => r.id === kindless.id)) wrong.push(`partyType=customer did not find the party without a kind (${asCustomer.status})`);
+    const asSupplier = await get(`/api/customers/options?partyType=supplier&ids=${kindless.id}`);
+    if (rowsOf(asSupplier.body).length !== 0) wrong.push('partyType=supplier answered the party without a kind');
 
     // 3) items by id: only those, with their stock by warehouse
     const itemsByIds = await get(`/api/items/options?ids=${goods[0].id},${goods[1].id}`);
@@ -86,7 +94,7 @@ export async function runPickListCapV11Tests(shouldRun: (id: string, ...extra: s
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: `limit=1 cut the list; ids answered the 2 live parties of 3 asked, each once (no notes or version) and the 2 items with their stock; 7 malformed id lists were 400 on both routes; ${PICK_LIST_IDS_MAX} ids were accepted`,
+      details: `limit=1 cut the list; ids answered the 2 live parties of 3 asked, each once (no notes or version); a party without a kind was a customer, not a supplier and the 2 items with their stock; 7 malformed id lists were 400 on both routes; ${PICK_LIST_IDS_MAX} ids were accepted`,
     }));
   } catch (err) {
     results.push(makeTestCase({

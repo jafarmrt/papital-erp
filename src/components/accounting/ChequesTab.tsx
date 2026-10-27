@@ -122,6 +122,8 @@ export function ChequesTab({
   const [statusActionDate, setStatusActionDate] = useState('');
   const [targetBankAccountId, setTargetBankAccountId] = useState<number | null>(null);
   const [transfereePartyId, setTransfereePartyId] = useState<number | null>(null);
+  // v11 phase 6.1ch (C13): the chosen transferee's label, for a supplier picked from the server's matches
+  const [transfereeLabel, setTransfereeLabel] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   const [historyModalCheque, setHistoryModalCheque] = useState<Cheque | null>(null);
@@ -180,6 +182,7 @@ export function ChequesTab({
       const opts = chequeNextStatuses(statusModalCheque.status, statusModalCheque.type);
       setTargetStatus(opts[0] || ('passed' as ChequeStatus));
       setTransfereePartyId(null);
+      setTransfereeLabel('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusModalCheque?.id]);
@@ -1109,9 +1112,16 @@ export function ChequesTab({
                   <SearchableSelect
                     id={`${fieldId}-transferee-party-id`}
                     value={String(transfereePartyId || '')}
-                    onChange={(val) => setTransfereePartyId(Number(val) || null)}
+                    onChange={(val, raw?: Customer) => {
+                      const s = supplierList.find(x => String(x.id) === val) || (raw && String(raw.id) === val ? raw : undefined);
+                      setTransfereePartyId(s ? s.id : null);
+                      setTransfereeLabel(s ? supplierPartyOption(s).label : '');
+                    }}
                     placeholder="جست‌وجو و انتخاب تأمین‌کننده..."
-                    options={supplierList.map(s => ({ value: String(s.id), label: `${s.name}${s.phone ? ` - ${s.phone}` : ''}` }))}
+                    options={supplierList.map(supplierPartyOption)}
+                    serverSearchUrl={pickListServerSearchUrl(safeCustomers, `${PICK_LIST_URLS.customers}?partyType=supplier`)}
+                    mapResultToOption={supplierPartyOption}
+                    valueLabel={transfereeLabel || undefined}
                   />
                 </div>
               )}

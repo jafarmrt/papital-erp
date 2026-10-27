@@ -3,7 +3,7 @@ import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
-import { pickListIds, pickListIdsUrl } from '../../lib/permissions/pickListCap';
+import { isCutPickList, pickListIds, pickListIdsUrl } from '../../lib/permissions/pickListCap';
 
 /** The pick lists a form reads by id when its own list was cut at the cap (v11 phase 6.1ch, C13) */
 export type PickListKind = 'customers' | 'items';
@@ -21,8 +21,9 @@ export function pickRowsKey(kind: PickListKind, ids: string) {
 
 /**
  * v11 phase 6.1ch (C13): the rows of chosen or stored parties or items that a form's pick list lacks (the list reached the
- * cap), read by id. Nothing is read while `ready` is false (the list itself still loads, so it may hold them) or when the
- * list holds every id. `loading` is true while a needed read runs, so a form can wait for it before it decides a row is gone.
+ * cap), read by id. Nothing is read while `ready` is false (the list itself still loads, so it may hold them), when the
+ * list holds every id, or when the list is under the cap (it holds every live row, so a missing id is a deleted one).
+ * `loading` is true while a needed read runs, so a form can wait for it before it decides a row is gone.
  */
 export function useMissingPickRows<T extends { id: number | string }>(
   kind: PickListKind,
@@ -37,7 +38,7 @@ export function useMissingPickRows<T extends { id: number | string }>(
     return wanted.split(',').map(Number).filter(id => !held.has(id));
   }, [list, wanted]);
   const key = missing.join(',');
-  const enabled = ready && missing.length > 0;
+  const enabled = ready && missing.length > 0 && isCutPickList(list);
   const query = useQuery<T[]>({
     queryKey: pickRowsKey(kind, key),
     queryFn: async ({ signal }) => rowsOf<T>(await fetchJson<unknown>(pickListIdsUrl(PICK_LIST_URLS[kind], key.split(',').map(Number)), { signal })),
