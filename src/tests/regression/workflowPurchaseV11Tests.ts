@@ -6,6 +6,7 @@ import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { approvalInboxInstanceLink } from '../../lib/notifications/notificationNotices.js';
 import { getDefaultWarehouseCode } from '../../services/inventory/warehouseResolver.js';
 import { WorkflowDefinitionService } from '../../services/workflow/workflowDefinitionService.js';
+import { WorkflowTaskService } from '../../services/workflow/workflowTaskService.js';
 import { WorkflowTransitionExecutor } from '../../services/workflow/workflowTransitionExecutor.js';
 import { terminateOpenWorkflows } from '../../services/workflow/workflowTermination.js';
 import { createTestCustomer, createTestDocument, createTestItem } from '../fixtures/factories.js';
@@ -130,7 +131,7 @@ export async function runWorkflowPurchaseV11Tests(shouldRun: ShouldRun): Promise
 
   const notices = 'reg_workflow_task_notice_v11_6_3p_u6';
   if (shouldRun(notices, 'v11', 'phase6', 'u6', 'workflow', 'notifications')) {
-    await runCase(results, notices, 'v11 phase 6.3p (U6): a workflow task notice links to its own record in the inbox; when one recipient acts, the notices of that step still unread by the others are marked read, while another record\'s notices stay unread; a workflow that is ended closes its notices too', () => inFiscalSandbox(async () => {
+    await runCase(results, notices, 'v11 phase 6.3p (U6): a workflow task notice links to its own record in the inbox, which reads that record\'s task by its instance whatever page it is on; when one recipient acts, the notices of that step still unread by the others are marked read, while another record\'s notices stay unread; a workflow that is ended closes its notices too', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
       const entityType = `reg_63p_u6_${suffix}`;
@@ -164,6 +165,12 @@ export async function runWorkflowPurchaseV11Tests(shouldRun: ShouldRun): Promise
           if (mine.length !== 1 || mine[0].isRead !== 0) problems.push(`user ${userId} has ${mine.length} unread notice(s) of record ${inst.id}, expected 1`);
         }
       }
+      // the inbox reads the linked record's task by its instance, whatever page it is on (a one-row page holds the first)
+      const linked = await WorkflowTaskService.getMyTasks({ userId: userIds[1], userRole: role, userPermissions: ['workflow.approve'], status: 'pending', page: 1, limit: 1, instanceId: third.id });
+      const linkedRows = (linked.data ?? []) as Array<{ instanceId: number }>;
+      if (linked.total !== 1 || linkedRows.length !== 1 || Number(linkedRows[0].instanceId) !== third.id) {
+        problems.push(`user b's task on the third record reads ${JSON.stringify({ total: linked.total, instances: linkedRows.map(r => r.instanceId) })}, expected that one task`);
+      }
 
       // 2) user a acts on the first record: user b's notice of it is read; the second record's notices stay unread
       const state = await WorkflowTransitionExecutor.getInstanceByEntity(entityType, '1', userIds[0], role, []);
@@ -189,7 +196,7 @@ export async function runWorkflowPurchaseV11Tests(shouldRun: ShouldRun): Promise
 
   const proforma = 'reg_lead_proforma_any_stage_v11_6_3p_u17';
   if (shouldRun(proforma, 'v11', 'phase6', 'u17', 'crm', 'proforma')) {
-    await runCase(results, proforma, 'v11 phase 6.3p (U17): a proforma linked to a sales lead at its first stage (lead) is accepted and moves the lead to the proposal stage, as the screens now offer; a second proforma of the same lead and a proforma of a won lead are refused', () => inFiscalSandbox(async () => {
+    await runCase(results, proforma, 'v11 phase 6.3p (U17): converting a sales lead at its first stage (lead) to a customer keeps its stage, and a proforma linked to it is accepted and moves the lead to the proposal stage, as the screens now offer; a second proforma of the same lead and a proforma of a won lead are refused', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const today = await businessTodayIsoDate();
@@ -202,6 +209,11 @@ export async function runWorkflowPurchaseV11Tests(shouldRun: ShouldRun): Promise
         docType: 'invoice', status: 'proforma', refNumber: 'auto', date: today, location: main, buyer_name: customer.name, partyId: customer.id,
         inOut: 'out', crmLeadId: leadId, items: [{ itemId: item.id, quantity: 1, unit_price: 100_000 }],
       });
+
+      // the screens convert the lead first; the conversion keeps the stage, so a proforma form left unsaved moves nothing
+      const converted = await admin.post(`/api/crm/leads/${lead.id}/convert-to-customer`, {});
+      const [afterConvert] = await orm.select().from(crmLeads).where(eq(crmLeads.id, lead.id));
+      if (!ok(converted) || afterConvert?.stage !== 'lead') problems.push(`converting a first-stage lead returned ${brief(converted)} and left it at ${afterConvert?.stage}, expected lead`);
 
       const issued = await issue(lead.id);
       if (!ok(issued)) problems.push(`a proforma of a lead at its first stage returned ${brief(issued)}, expected it accepted`);
@@ -217,7 +229,7 @@ export async function runWorkflowPurchaseV11Tests(shouldRun: ShouldRun): Promise
       if (wonAfter?.stage !== 'won' || wonAfter?.hasProforma !== 0) problems.push(`the won lead changed to ${wonAfter?.stage} with proforma ${wonAfter?.hasProforma}`);
 
       if (problems.length > 0) throw new Error(problems.join(' | '));
-      return 'a first-stage lead takes a proforma and moves to proposal; a second one and a won lead are refused';
+      return 'a first-stage lead keeps its stage when converted, takes a proforma and moves to proposal; a second one and a won lead are refused';
     }));
   }
 

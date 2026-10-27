@@ -21,7 +21,6 @@ import { getCrmStats } from '../services/crm/crmStats.js';
 import { listFollowups, liveLeadActivityCondition, nextFollowupDatesByLead, type FollowupStatus } from '../services/crm/crmFollowups.js';
 import { deleteLead } from '../services/crm/crmLeadDelete.js';
 import { leadAuditDetails } from '../services/crm/crmLeadAudit.js';
-import { isClosedLead } from '../services/crm/leadProforma.js';
 import { setFollowupCompleted } from '../services/crm/crmFollowupStatus.js';
 import { resolveActivityParents } from '../services/crm/crmActivityParents.js';
 import { notifyActivityMentions, resolveActivityMentions } from '../services/crm/crmActivityMentions.js';
@@ -647,20 +646,16 @@ router.post('/crm/leads/:id/convert-to-customer', authorizePermission('crm.manag
       title: lead.title,
     }, tx, { userId: currentUser?.id, username: currentUser?.username });
 
+    // v11 6.3p (U17, review): the conversion only links the customer and keeps the stage; the proforma, once saved, moves
+    // the lead to «پیش‌فاکتور و پیشنهاد» (`markLeadProforma`). Before, an open lead moved here, so a proforma form left
+    // unsaved left the lead at that stage with no proforma
     const nowIso = systemNowUtcIso();
-    const keepState = isClosedLead(lead);
     const [updated] = await tx.update(crmLeads).set({
       customerId: party.customerId,
       notes: notesWithPartyDifferences(lead.notes, party.differences),
-      stage: keepState ? lead.stage : 'proposal',
-      status: keepState ? lead.status : 'active',
       updatedAt: nowIso
     }).where(eq(crmLeads.id, id)).returning();
 
-    await recordLeadStageChange(tx, {
-      leadId: id, fromStage: lead.stage, toStage: updated.stage || 'proposal', assignedPersonnelId: updated.assignedPersonnelId,
-      actor: { id: currentUser?.id, name: authorName },
-    });
     await tx.insert(crmActivities).values({
       leadId: id,
       customerId: party.customerId,

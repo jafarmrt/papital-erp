@@ -52,3 +52,13 @@ export function searchMatches(search: unknown, ...fields: unknown[]): boolean {
   if (!q) return true;
   return fields.some(field => normalizeSearchText(field).includes(q));
 }
+
+/**
+ * v11 phase 6.3p (U8, review): `searchMatches` under `compactSearchText`, for a pick list of names written with separators
+ * (the account picker): «ملت جاری» finds «بانک ملت - جاری», as `normalizePersianText` did there before.
+ */
+export function compactSearchMatches(search: unknown, ...fields: unknown[]): boolean {
+  const q = compactSearchText(search);
+  if (!q) return true;
+  return fields.some(field => compactSearchText(field).includes(q));
+}

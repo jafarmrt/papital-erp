@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { 
   useMyTasksQuery,
+  useMyTaskOnInstanceQuery,
   useTaskStatsQuery,
   useExecuteTaskMutation,
   WorkflowState,
@@ -191,26 +192,30 @@ export function ApprovalInboxPage() {
     setSelectedTask(null);
   };
 
-  // v11 6.3p (U6): a task notice links to /approval-inbox?instance=<id>; open that task once the list is in
+  // v11 6.3p (U6): a task notice links to /approval-inbox?instance=<id>; that task is read fresh from the server (the
+  // cached inbox page may predate it or not hold it) and opened, or the inbox says it is no longer the reader's
   const [searchParams, setSearchParams] = useSearchParams();
   const linkedInstance = Number(searchParams.get('instance')) || 0;
   const [linkedTaskGone, setLinkedTaskGone] = useState(false);
+  const { data: linkedTaskData, isSuccess: linkedTaskRead, isError: linkedTaskFailed, isFetching: linkedTaskFetching } = useMyTaskOnInstanceQuery(linkedInstance);
   useEffect(() => {
-    if (!linkedInstance || isTasksLoading) return;
-    const linked = myTasks.find((t) => Number(t?.instanceId || t?.instance?.id) === linkedInstance);
+    if (!linkedInstance || linkedTaskFetching || !(linkedTaskRead || linkedTaskFailed)) return;
+    const rows: TaskItem[] = Array.isArray(linkedTaskData?.data) ? linkedTaskData.data : [];
+    const linked = linkedTaskRead ? rows.find((t) => Number(t?.instanceId || t?.instance?.id) === linkedInstance) : undefined;
     if (linked) {
       setTaskAction('approve');
       setComment('');
       setRejectTransitionId(null);
       setSelectedTask(linked);
+      void refetchTasks();
     }
-    setLinkedTaskGone(!linked);
+    setLinkedTaskGone(linkedTaskRead && !linked);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete('instance');
       return next;
     }, { replace: true });
-  }, [linkedInstance, isTasksLoading, myTasks, setSearchParams]);
+  }, [linkedInstance, linkedTaskFetching, linkedTaskRead, linkedTaskFailed, linkedTaskData, refetchTasks, setSearchParams]);
 
   const handleExecuteTask = () => {
     if (!selectedTask) return;

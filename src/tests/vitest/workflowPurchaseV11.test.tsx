@@ -3,7 +3,7 @@ import { join, relative } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { normalizeSearchText, searchMatches, SEARCH_FOLD_FROM, SEARCH_FOLD_TO } from '../../lib/search/searchText';
+import { compactSearchMatches, normalizeSearchText, searchMatches, SEARCH_FOLD_FROM, SEARCH_FOLD_TO } from '../../lib/search/searchText';
 import { canIssueLeadProforma, isClosedLead } from '../../lib/crm/leadProformaRule';
 import { approvalInboxInstanceLink } from '../../lib/notifications/notificationNotices';
 import { REORDER_DIRECT_RECEIPT_PERMISSION } from '../../lib/reorderAlerts/reorderPurchaseReceipt';
@@ -37,13 +37,21 @@ describe('one search fold (U8)', () => {
     expect(searchMatches('ABC', 'abc-1')).toBe(true);
     expect(searchMatches('ساعت', 'کیف', undefined, 12)).toBe(false);
   });
+
+  it('keeps the account picker compact: separators and double spaces are ignored (review)', () => {
+    expect(compactSearchMatches('ملت جاری', 'بانک ملت - جاری')).toBe(true);
+    expect(compactSearchMatches('ملت  جاری', 'بانک ملت_جاری')).toBe(true);
+    expect(compactSearchMatches('۱۱۰۱', '1101')).toBe(true);
+    expect(compactSearchMatches('', null)).toBe(true);
+    expect(compactSearchMatches('ملت تجارت', 'بانک ملت - جاری')).toBe(false);
+  });
 });
 
-// Files that search outside the fold on purpose: code series prefixes, technical event ids, the trigram-indexed activity
-// log (TD-1324), a fixed health check literal and the browser Excel column matching
+// Files that search outside the fold on purpose: code series prefixes, technical event ids (the dead letter queue and the
+// outbox), the trigram-indexed activity log (TD-1324), a fixed health check literal, the piecework task code and, on the
+// client, the browser Excel column matching
 const SERVER_ALLOW = new Set([
   'services/items/itemCatalog.service.ts',
-  'services/events/eventSourcingReplayService.ts',
   'services/events/deadLetterQueueService.ts',
   'services/events/outboxSearch.ts',
   'services/system/activityLogQuery.service.ts',

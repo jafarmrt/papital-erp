@@ -6,7 +6,7 @@ import { formatPersianCode } from '../../utils';
 const accountInputText = (account: { code: string; name: string }) => `${formatPersianCode(account.code)} - ${account.name}`;
 import type { Account } from '../../types';
 import { useClickOutside } from '../../hooks/useClickOutside';
-import { searchMatches } from '../../lib/search/searchText';
+import { compactSearchMatches } from '../../lib/search/searchText';
 
 interface AccountSearchSelectProps {
   accounts: Account[];
@@ -54,11 +54,12 @@ export function AccountSearchSelect({
   // Filter selectable accounts (primarily subsidiary and detailed, but allow general too)
   // v9.0.194 (TD-571، B03-29): رقم فارسی و عربی هر دو سو لاتین می‌شود؛ پیش‌تر «۱۱۰۱» با صفحه‌کلید فارسی حسابی پیدا نمی‌کرد
   const filteredAccounts = useMemo(() => {
-    // v11 phase 6.3p (U8): the one search rule of every list (`searchMatches`)
+    // v11 phase 6.3p (U8): the one search fold, compact as before (spaces, «-» and «_» ignored), so «ملت جاری» finds
+    // «بانک ملت - جاری»
     if (!searchQuery.trim()) {
       return baseAccounts.slice(0, 100);
     }
-    return baseAccounts.filter(acc => searchMatches(searchQuery, acc.code, acc.name, acc.accountType, acc.description)).slice(0, 100);
+    return baseAccounts.filter(acc => compactSearchMatches(searchQuery, acc.code, acc.name, acc.accountType, acc.description)).slice(0, 100);
   }, [baseAccounts, searchQuery]);
 
   useEffect(() => {

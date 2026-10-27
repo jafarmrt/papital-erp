@@ -66,7 +66,7 @@ export default function CRMPage({ user }: { user: any }) {
       return;
     }
 
-    // v11 6.3p (U17): any open lead; the conversion moves it to «پیش‌فاکتور و پیشنهاد»
+    // v11 6.3p (U17): any open lead; the saved proforma moves it to «پیش‌فاکتور و پیشنهاد», not the conversion
     if (!canIssueLeadProforma(lead)) {
       toast.error('پرونده فروش بسته‌شده («فروش موفق» یا «از دست رفته») پیش‌فاکتور تازه نمی‌گیرد.');
       return;

@@ -15,6 +15,7 @@ vi.mock('../../hooks/queries', () => ({
   useMyTasksQuery: () => ({ data: [task], isLoading: false, isFetching: false, refetch: () => Promise.resolve() }),
   useTaskStatsQuery: () => ({ data: { pendingCount: 1 }, refetch: () => Promise.resolve() }),
   useExecuteTaskMutation: () => ({ mutate: () => undefined, isPending: false }),
+  useMyTaskOnInstanceQuery: (instanceId: number) => ({ data: { data: instanceId === task.instance.id ? [task] : [] }, isSuccess: instanceId > 0, isError: false, isFetching: false }),
 }));
 vi.mock('../../hooks/useApprovalTaskEntity', () => ({
   useApprovalTaskEntity: () => ({ docDetails: null, isLoadingDoc: false, requisitionDetails: null, isLoadingRequisition: false }),
