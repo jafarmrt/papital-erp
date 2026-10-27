@@ -1,8 +1,15 @@
 import { formatCurrencyLabel } from '../../../utils';
+import { useShownRial } from '../../../contexts/RialDisplayContext';
+import { isRialCurrency } from '../../../lib/rialDisplay';
 import { detailsTypeLabelOf, documentStatusLabelOf, type InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
+
+const RIAL_SHOWN_IN = 'نمایش به';
 
 /** TD-080 (بخش ۳): کارت‌های طرف حساب، نوع/وضعیت و ارز در مودال جزئیات سند */
 export function InvoiceDetailsInfoCards({ selectedDocDetails }: { selectedDocDetails: InvoiceListDocument }) {
+  const rial = useShownRial();
+  // v11 phase 6.3 (U3): a rial document is stored and printed in rial; on screen its amounts read in the display unit
+  const shownIn = isRialCurrency(selectedDocDetails.currency) && rial.unit === 'TOMAN' ? ` (${RIAL_SHOWN_IN} ${rial.label})` : '';
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
       <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
@@ -41,7 +48,7 @@ export function InvoiceDetailsInfoCards({ selectedDocDetails }: { selectedDocDet
       <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
         <span className="text-[11px] text-slate-500 font-bold block mb-1">واحد پولی و مالی</span>
         <div className="font-bold text-slate-800 text-xs">
-          واحد ارز: {formatCurrencyLabel(selectedDocDetails.currency || 'IRR')}
+          واحد ارز: {formatCurrencyLabel(selectedDocDetails.currency || 'IRR')}{shownIn}
         </div>
         {selectedDocDetails.notes && (
           <p className="text-[11px] text-slate-600 mt-1 line-clamp-2" title={selectedDocDetails.notes}>

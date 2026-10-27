@@ -10,6 +10,7 @@ import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 import { PayrollDeductionsField, deductionsNeedDescription } from './PayrollDeductionsField';
 import { PayrollPrepaymentField, prepaymentNeedsReason, type PayrollPrepaymentState } from './PayrollPrepaymentField';
 import { DecimalInput } from '../common/DecimalInput';
+import { RialEquivalent } from '../common/RialEquivalent';
 import { DialogLayer } from '../common/DialogLayer';
 
 interface PieceworkPayrollModalProps {
@@ -180,16 +181,17 @@ export function PieceworkPayrollModal({
                 onValueChange={(v) => setPayrollBonuses(nonNegativeInput(v))}
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
               />
+              <RialEquivalent value={payrollBonuses} />
             </div>
 
             <PayrollDeductionsField amount={payrollDeductions} onAmountChange={setPayrollDeductions} description={payrollDeductionsDescription}
-              onDescriptionChange={setPayrollDeductionsDescription} currencyLabel={rial.label} />
+              onDescriptionChange={setPayrollDeductionsDescription} />
           </div>
 
           {/* V1.9.0: کسر از مساعده/وام پرسنلی */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-bold text-slate-700">کسر از مساعده/وام پرسنلی (اختیاری)</label>
+              <label className="text-xs font-bold text-slate-700">{`کسر از مساعده/وام پرسنلی (${inputCurLbl}، اختیاری)`}</label>
               {advanceBalance && advanceBalance.outstandingAdvance > 0 && (
                 <button
                   type="button"
@@ -207,6 +209,7 @@ export function PieceworkPayrollModal({
               placeholder="مبلغی که از مساعده قبلی پرسنل کسر می‌شود"
               className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
             />
+            <RialEquivalent value={advanceDeduction} />
             {advanceBalance && advanceBalance.outstandingAdvance > 0 && (
               <div className="mt-1.5 p-2 bg-indigo-50/70 border border-indigo-100 rounded-lg text-[11px] text-indigo-900 font-bold flex items-center justify-between">
                 <span className="flex items-center gap-1">

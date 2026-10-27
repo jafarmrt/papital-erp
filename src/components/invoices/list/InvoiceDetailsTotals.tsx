@@ -1,16 +1,17 @@
 import { DollarSign } from 'lucide-react';
-import { formatPersianPrice, formatCurrencyLabel } from '../../../utils';
-import { addLineGross, addLineDiscount, amountDecimalsOf, documentPayableOf, type InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
+import { addLineGross, addLineDiscount, docAmountFormatOf, documentPayableOf, type InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
+import { useShownRial } from '../../../contexts/RialDisplayContext';
 
 /**
  * TD-080 (بخش ۳): نوار جمع کل، جمع ناخالص و مجموع تخفیف در مودال جزئیات.
  * v7.0.94 (TD-235 بند ۱): جمع کل = خالص اقلام + مالیات (documentPayableOf)؛ پیش‌تر مالیات حذف می‌شد و اگر سند کامل
  * بارگذاری نمی‌شد (ردیف بدون اقلام) صفر نشان می‌داد. v7.0.103 (TD-191): هزینه ارسال و خدمات جدا نمایش داده می‌شود.
+ * v11 phase 6.3 (U3): a rial document's amounts in the display unit (`docAmountFormatOf`).
  */
 export function InvoiceDetailsTotals({ selectedDocDetails }: { selectedDocDetails: InvoiceListDocument }) {
   const vatAmount = Number(selectedDocDetails.vatAmount || 0);
   const serviceChargeAmount = Number(selectedDocDetails.serviceChargeAmount || 0);
-  const decimals = amountDecimalsOf(selectedDocDetails.currency);
+  const amounts = docAmountFormatOf(selectedDocDetails.currency, useShownRial());
   return (
     <div className="bg-slate-900 text-white rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
       <div className="flex items-center gap-3">
@@ -20,7 +21,7 @@ export function InvoiceDetailsTotals({ selectedDocDetails }: { selectedDocDetail
         <div>
           <span className="text-[11px] text-slate-300 block font-medium">جمع کل ارزش نهایی سند:</span>
           <strong className="text-base font-black text-white font-mono">
-            {formatPersianPrice(documentPayableOf(selectedDocDetails), undefined, decimals)} {formatCurrencyLabel(selectedDocDetails.currency)}
+            {amounts.number(documentPayableOf(selectedDocDetails))} {amounts.label}
           </strong>
         </div>
       </div>
@@ -29,20 +30,20 @@ export function InvoiceDetailsTotals({ selectedDocDetails }: { selectedDocDetail
         <div className="text-right">
           <span className="text-[11px] text-slate-300 block">جمع ناخالص:</span>
           <span className="font-mono text-slate-200 font-bold">
-            {formatPersianPrice((selectedDocDetails.items || []).reduce(addLineGross, 0), undefined, decimals)}
+            {amounts.number((selectedDocDetails.items || []).reduce(addLineGross, 0))}
           </span>
         </div>
         <div className="text-right">
           <span className="text-[11px] text-slate-300 block">مجموع تخفیف:</span>
           <span className="font-mono text-rose-400 font-bold">
-            {formatPersianPrice((selectedDocDetails.items || []).reduce(addLineDiscount, 0), undefined, decimals)}
+            {amounts.number((selectedDocDetails.items || []).reduce(addLineDiscount, 0))}
           </span>
         </div>
         {serviceChargeAmount > 0 && (
           <div className="text-right">
             <span className="text-[11px] text-slate-300 block">هزینه ارسال و خدمات:</span>
             <span className="font-mono text-sky-300 font-bold">
-              {formatPersianPrice(serviceChargeAmount, undefined, decimals)}
+              {amounts.number(serviceChargeAmount)}
             </span>
           </div>
         )}
@@ -50,7 +51,7 @@ export function InvoiceDetailsTotals({ selectedDocDetails }: { selectedDocDetail
           <div className="text-right">
             <span className="text-[11px] text-slate-300 block">مالیات بر ارزش افزوده:</span>
             <span className="font-mono text-amber-300 font-bold">
-              {formatPersianPrice(vatAmount, undefined, decimals)}
+              {amounts.number(vatAmount)}
             </span>
           </div>
         )}

@@ -8,6 +8,8 @@ import { getSellableStock } from '../../../lib/stockAvailability';
 import { itemPickWithReservedUrl } from '../../../lib/permissions/pickLists';
 import type { WarehouseItem } from '../../../hooks/queries/useSettingsQueries';
 import { INVOICE_FIELD, INVOICE_LABEL, INVOICE_NUMBER_FIELD } from './invoiceFormStyles';
+import { RialEquivalent } from '../../common/RialEquivalent';
+import { isRialCurrency } from '../../../lib/rialDisplay';
 
 /** متن‌هایی که آزمون‌ها می‌خوانند */
 export const INVOICE_LINE_TEXT = {
@@ -58,6 +60,8 @@ export function InvoiceLinePicker(props: InvoiceLinePickerProps) {
   const { location, status, editingDocId, warehouses, currency, selectedItem, onItemSelect, prices,
     quantity, onQuantityChange, unitPrice, onUnitPriceChange, discount, onDiscountChange, onAdd } = props;
   const currencyLabel = formatCurrencyLabel(currency);
+  // v11 phase 6.3 (U3): a rial price is typed in rial; its toman equivalent sits beside the label (the row aligns at the bottom)
+  const isRial = isRialCurrency(currency);
   return (
     <div data-decimal-scope="" className="grid grid-cols-2 sm:grid-cols-6 lg:grid-cols-12 gap-3 items-end bg-slate-50 p-3 sm:p-4 rounded-xl border border-slate-200">
       <div className="col-span-2 sm:col-span-6 lg:col-span-12">
@@ -93,12 +97,18 @@ export function InvoiceLinePicker(props: InvoiceLinePickerProps) {
         <DecimalInput id="invoice-line-quantity" min="0" step="any" value={quantity} onValueChange={v => onQuantityChange(amountOf(v))} className={INVOICE_NUMBER_FIELD} />
       </div>
       <div className="col-span-1 sm:col-span-2 lg:col-span-3">
-        <label htmlFor="invoice-line-unit-price" className={INVOICE_LABEL}>مبلغ واحد ({currencyLabel})</label>
-        <DecimalInput id="invoice-line-unit-price" min="0" value={unitPrice} onValueChange={v => onUnitPriceChange(amountOf(v))} className={INVOICE_NUMBER_FIELD} />
+        <div className="flex flex-wrap items-baseline">
+          <label htmlFor="invoice-line-unit-price" className={INVOICE_LABEL}>مبلغ واحد ({currencyLabel})</label>
+          {isRial && <RialEquivalent inline id="invoice-line-unit-price-equivalent" value={unitPrice} />}
+        </div>
+        <DecimalInput id="invoice-line-unit-price" aria-describedby={isRial ? 'invoice-line-unit-price-equivalent' : undefined} min="0" value={unitPrice} onValueChange={v => onUnitPriceChange(amountOf(v))} className={INVOICE_NUMBER_FIELD} />
       </div>
       <div className="col-span-1 sm:col-span-2 lg:col-span-2">
-        <label htmlFor="invoice-line-discount" className={INVOICE_LABEL}>تخفیف ردیف ({currencyLabel})</label>
-        <DecimalInput id="invoice-line-discount" min="0" value={discount} onValueChange={v => onDiscountChange(amountOf(v))} className={INVOICE_NUMBER_FIELD} />
+        <div className="flex flex-wrap items-baseline">
+          <label htmlFor="invoice-line-discount" className={INVOICE_LABEL}>تخفیف ردیف ({currencyLabel})</label>
+          {isRial && <RialEquivalent inline id="invoice-line-discount-equivalent" value={discount} />}
+        </div>
+        <DecimalInput id="invoice-line-discount" aria-describedby={isRial ? 'invoice-line-discount-equivalent' : undefined} min="0" value={discount} onValueChange={v => onDiscountChange(amountOf(v))} className={INVOICE_NUMBER_FIELD} />
       </div>
       <div className="col-span-1 sm:col-span-6 lg:col-span-2">
         <button type="button" onClick={(e) => { if (!refuseInvalidDecimalInputs(e.currentTarget)) onAdd(); }}
