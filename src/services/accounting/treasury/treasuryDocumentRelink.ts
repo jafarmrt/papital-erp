@@ -7,6 +7,7 @@ import { LockHierarchyLevel, validateLockOrder } from '../../../lib/lockOrder.js
 import { assertTreasuryDocumentLink, resolveTreasuryPartyName } from './treasuryLinks.js';
 import { assertWithinDocumentRemaining, lockSettlementDocument } from './documentRemaining.js';
 import { idempotentTransaction } from '../../../middleware/idempotency.js';
+import { hasLiveSourceAllocations } from './settlementAllocationWrite.js';
 
 /**
  * v9.0.272 (TD-779، تصمیم ت۴ «الف» بسته ۸): دریافت یا پرداخت ثبت‌شده خزانه از سندش جدا («علی‌الحساب») یا به سند فعال
@@ -74,6 +75,14 @@ export async function relinkTreasuryDocument(params: {
     }
     if (row.payrollId) {
       throw new ConflictError('پرداخت حقوق به فیش خودش بسته است و به سند دیگری وصل نمی‌شود.', undefined, 'TREASURY_ROW_NOT_RELINKABLE');
+    }
+    // v11 phase 6.1t (M11): a row put on several documents in parts changes only in its own window, so it never has both
+    if (await hasLiveSourceAllocations(tx, row.id)) {
+      throw new ConflictError(
+        `تراکنش «${row.transactionNumber}» روی چند سند نشسته است؛ سهم‌ها را از «نشاندن روی فاکتورها» همان ردیف تغییر دهید.`,
+        undefined,
+        'TREASURY_ROW_HAS_ALLOCATIONS',
+      );
     }
     const previousDocumentId = row.documentId ?? null;
     if (previousDocumentId === params.documentId) {

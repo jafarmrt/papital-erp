@@ -138,7 +138,7 @@ export const projectReservationReleases = pgTable('project_reservation_releases'
   idx_project_reservation_releases_bom_allocation_id: index('idx_project_reservation_releases_bom_allocation_id').on(table.bomAllocationId).where(sql`${table.bomAllocationId} IS NOT NULL`),
 }));
 
-// v11 phase 6.1ث (S2, decision ت۵۲-۳, migration 0003): how a project's production receipt was priced under the project lock:
+// v11 phase 6.1ث (S2, decision ت۵۲-۳, migration 0004): how a project's production receipt was priced under the project lock:
 // the project's 1402 before it, what the receipt takes from 1402 (its voucher credits exactly that and posts the difference to
 // the lines' value on «اختلاف بهای تولید»), the rule (`DeliveryCostRule`) and the reason of a cost other than the real one. A
 // receipt recorded before has no row and its voucher credits 1402 with the lines' value, as before.

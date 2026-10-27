@@ -12,6 +12,7 @@ import { VOUCHER_DETAILED_TYPES } from '../../lib/accounting/voucherDetailedType
 import { VOUCHER_PAGE_MAX } from '../../lib/accounting/voucherList.js';
 import { PERSONNEL_PURPOSES } from '../../lib/treasury/partyPurpose.js';
 import { CHEQUE_STATUSES } from '../../lib/treasury/chequeTransitions.js';
+import { settlementParts } from './settlementAllocation.schemas.js';
 import { isReservedVoucherReference, MANUAL_CLOSING_TYPE_MESSAGE, RESERVED_REFERENCE_MESSAGE } from '../../lib/accounting/manualVoucherRules.js';
 import { ACCOUNT_CODE_FORMAT_MESSAGE, ACCOUNT_CODE_PATTERN } from '../../lib/accounting/accountCode.js';
 import { CONTROL_REASON_MAX } from '../../lib/accounting/controlAccounts.js';
@@ -354,6 +355,7 @@ export const createTreasuryTxSchema = z.object({
     purpose: z.enum(PERSONNEL_PURPOSES).optional(),
     // v9.0.82 (TD-507): سرفصل طرف مقابل «متفرقه» و «سایر» پرسنل
     contraAccountId: z.coerce.number().int().positive().nullable().optional(),
+    allocations: settlementParts.optional(),
   })
 });
 
@@ -475,6 +477,7 @@ export const createChequeSchema = z.object({
     // v9.0.84 (TD-497): هدف چک پرسنل و سرفصل طرف مقابل «متفرقه» و «سایر»
     purpose: z.enum(PERSONNEL_PURPOSES).optional(),
     contraAccountId: z.coerce.number().int().positive().nullable().optional(),
+    allocations: settlementParts.optional(),
   })
 });
 
@@ -495,3 +498,4 @@ export const updateChequeStatusSchema = z.object({
 });
 
 export * from './reports.schemas.js';
+export { replaceSourceAllocationsSchema, sourceAllocationsSchema } from './settlementAllocation.schemas.js';

@@ -31,6 +31,7 @@ export function assertDocumentTypeReadable(types: readonly string[] | null, type
  * خوانندگان خزانه (`READ_PERMISSIONS.treasuryTransactions`) داده می‌شود؛ دیگر خوانندگان سند فقط مبلغ پرداخت‌شده، مانده و
  * وضعیت تسویه را می‌گیرند. پیش‌تر انباردار و هر خواننده دیگر سند جزئیات دریافت‌ها را می‌دید.
  */
-export async function documentForReader<T extends { settlements?: unknown }>(user: { role?: string } | undefined, doc: T): Promise<T> {
-  return await can(user, ...READ_PERMISSIONS.treasuryTransactions) ? doc : { ...doc, settlements: undefined };
+export async function documentForReader<T extends { settlements?: unknown; allocations?: unknown }>(user: { role?: string } | undefined, doc: T): Promise<T> {
+  // v11 phase 6.1t (M11): the parts of receipts and cheques name their treasury rows and cheques, so the same readers only
+  return await can(user, ...READ_PERMISSIONS.treasuryTransactions) ? doc : { ...doc, settlements: undefined, allocations: undefined };
 }

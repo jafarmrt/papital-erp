@@ -13,6 +13,7 @@ import { createLedgerLocationResolver } from '../inventory/warehouseResolver.js'
 import { fetchSettlementRows, settledAmount } from './documentSettlement.js';
 import type { SettlementRow } from './documentSettlement.js';
 import { fetchReturnCredits } from './documentReturnCredit.js';
+import { allocatedAmounts, fetchLiveAllocations } from './documentAllocations.js';
 import { documentPartyCondition } from './documentParty.js';
 import { rejectedWorkflowDocumentIds } from './rejectedDraftDocuments.js';
 import type { 
@@ -111,6 +112,7 @@ export class DocumentQueryService {
     }> = [];
     let treasurySettlements: SettlementRow[] = [];
     let returnCredits = new Map<number, FinancialDecimal>();
+    let allocated = new Map<number, FinancialDecimal>();
 
     if (docIds.length > 0) {
       allItems = await orm.select({
@@ -130,7 +132,9 @@ export class DocumentQueryService {
       .where(and(inArray(documentItems.documentId, docIds), eq(documentItems.isDeleted, 0)));
 
       treasurySettlements = await fetchSettlementRows(docIds);
-      returnCredits = await fetchReturnCredits(docIds);
+      returnCredits = await fetchReturnCredits(docIds, orm);
+      // v11 phase 6.1t (M11): the live parts of receipts and cheques put on several documents
+      allocated = allocatedAmounts(await fetchLiveAllocations(orm, docIds));
     }
 
     const formattedDocs: FormattedDocument[] = docs.map(d => {
@@ -144,7 +148,7 @@ export class DocumentQueryService {
       const amounts = documentAmounts(
         dItems.map(i => ({ quantity: i.quantity, unitPrice: i.unit_price, discount: i.discount })),
         d.vatAmount,
-        settledAmount(docSettlements, isPurchase),
+        settledAmount(docSettlements, isPurchase).add(allocated.get(d.id) ?? 0),
         d.serviceChargeAmount,
         returnCredits.get(d.id)
       );
@@ -288,7 +292,9 @@ export class DocumentQueryService {
     ));
     // v9.0.68 (TD-500): جمع تسویه ردیف باطلِ معکوس‌شده را هم می‌خواند؛ فهرست نمایش همان ردیف‌های کامل است
     const settlementRows = await fetchSettlementRows([doc.id]);
-    const returnCredit = (await fetchReturnCredits([doc.id])).get(doc.id);
+    const returnCredit = (await fetchReturnCredits([doc.id], orm)).get(doc.id);
+    // v11 phase 6.1t (M11): parts of receipts and cheques put on this document with others
+    const allocations = await fetchLiveAllocations(orm, [doc.id]);
 
     const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(doc.type);
     // v7.0.32 (TD-197): مبلغ قابل وصول = جمع خالص اقلام + مالیات ساختاریافته
@@ -296,7 +302,7 @@ export class DocumentQueryService {
     const amounts = documentAmounts(
       rows.map(row => ({ quantity: row.quantity as DecimalValue, unitPrice: row.unit_price as DecimalValue, discount: row.discount as DecimalValue })),
       doc.vatAmount,
-      settledAmount(settlementRows, isPurchase),
+      settledAmount(settlementRows, isPurchase).add(allocatedAmounts(allocations).get(doc.id) ?? 0),
       doc.serviceChargeAmount,
       returnCredit
     );
@@ -337,6 +343,7 @@ export class DocumentQueryService {
       settlementStatus: amounts.settlementStatus,
       // قرارداد API: مبلغ عدد (P2-6)
       settlements: settlements.map(t => ({ ...t, amount: t.amount.toNumber() })),
+      allocations,
       // v9.0.80 (TD-489): انبار مبدأ و مقصد حواله انتقال
       ...(doc.type === 'transfer' ? (await transferLocationsByDocument([doc.id])).get(doc.id) : {}),
       items: formattedItems

@@ -38,6 +38,7 @@ import { releaseReservationsForDocument, type ProjectReservationRelease } from '
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
 import { money } from '../../lib/money.js';
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
+import { assertPayableCoversSettlement, assertSettledDocumentIdentity, documentIsSettled } from './settledDocumentEdit.js';
 import { assertDocumentStatus, assertRecordableDocument, stockDirectionOf } from './documentRecordRule.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
 import { consumesProjectReservation } from '../../lib/transactions/projectIssueTypes.js';
@@ -127,6 +128,8 @@ export class DocumentCreationService {
       // v10.0.86 (TD-1138، ت۱۳): سندی که در گام بازبینی گردش کار است تا پایان بازبینی ویرایش نمی‌شود
       await assertDocumentNotInReview(tx, id);
       const before = await documentAuditSnapshot(tx, id);
+      // v11 phase 6.1t (review of M11): a document a receipt or cheque settles keeps its party, currency and cover
+      const settled = await documentIsSettled(tx, id);
 
       if (status === 'final') {
         throw new ValidationError(
@@ -238,6 +241,12 @@ export class DocumentCreationService {
         })
         : { partyId: existingDoc.partyId ?? null, buyerName: existingDoc.buyerName ?? '' };
       if (returnInvoiceId !== null && requestedPartyId !== undefined) await assertReturnPartyOfInvoice(tx, returnInvoiceId, party.partyId);
+      if (settled) {
+        assertSettledDocumentIdentity(
+          { refNumber: existingDoc.refNumber, partyId: existingDoc.partyId ?? null, buyerName: existingDoc.buyerName, currency: existingDoc.currency },
+          { partyId: party.partyId, buyerName: party.buyerName, currency: docCurrency },
+        );
+      }
 
       // v10.0.238 (TD-913، تصمیم ت۹ الف): ویرایش سفارش وصل همان قاعده «سفارش بیش از درخواست با دلیل» را دارد و مقدار
       // سفارش‌شده درخواست را با سطرهای تازه دوباره می‌سازد؛ دلیل در یادداشت سند هم می‌ماند
@@ -319,6 +328,8 @@ export class DocumentCreationService {
         }
         await insertDocumentLines(tx, lineRows);
       }
+
+      if (settled) await assertPayableCoversSettlement(tx, id);
 
       if (leadLock) {
         await applyDocumentLeadLink(tx, { id, refNumber: nextRefNumber, isProforma: leadDocIsProforma }, leadLock, user || existingDoc.user || 'سیستم');

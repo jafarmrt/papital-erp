@@ -23,6 +23,7 @@ import { exactDetailedNameCondition, partyDetailedRowsCondition, personnelDetail
 import type { BalanceSheetReport, IncomeStatementReport, StatementRow } from '../../lib/accounting/financialStatements.js';
 import { accountSubtreeCondition } from './accountSubtree.js';
 import { foreignOrigin, permanentAccountCondition, readPartyTemporaryRows } from './partyTemporaryRows.js';
+import { readPartyDraftRows } from './partyDraftRows.js';
 import { yearEndClosingCutoff, yearEndClosingVoucherSql } from './yearEndClosingVouchers.js';
 import { accountCardHasFilter, type AccountCardReport } from '../../lib/accounting/accountCard.js';
 import { JOURNAL_BOOK_MAX_PAGE_SIZE, JOURNAL_BOOK_PAGE_SIZE, type JournalBookReport, type JournalBookRow } from '../../lib/accounting/journalBook.js';
@@ -790,6 +791,12 @@ export class AccountingReportService {
         temporaryRows: await readPartyTemporaryRows({
           periodConditions: periodConditions.filter((c): c is SQL => c !== undefined), debitAmount, creditAmount, reportCurrency, allCurrencies,
         }),
+        // v11 phase 6.1t (U1): the party's draft vouchers apart, labelled, with the balance they would make
+        draftRows: await readPartyDraftRows({
+          partyRowsCondition: partyDetailedRowsCondition(params.party), currencyCondition: currencyCondition ?? undefined,
+          startDate: params.startDate, endDate: params.endDate, debitAmount, creditAmount, reportCurrency, allCurrencies,
+          approvedBalance: runningDec.toNumber(),
+        }),
       } : {}),
     };
   }
@@ -1107,6 +1114,14 @@ export class AccountingReportService {
       items,
       // v10.0.257 (TD-915 / TD-924، ت۵ الف): مانده و گردش بالا فقط حساب‌های دائم؛ ردیف موقت طرف حساب جدا
       temporaryRows: await readPartyTemporaryRows({ periodConditions, debitAmount, creditAmount, reportCurrency, allCurrencies }),
+      // v11 phase 6.1t (U1): the party's draft vouchers apart, labelled (none when the statement already counts them)
+      ...(params.includeDrafts ? {} : {
+        draftRows: await readPartyDraftRows({
+          partyRowsCondition, currencyCondition: voucherItemCurrencyCondition(params.currency) ?? undefined,
+          startDate: params.startDate, endDate: params.endDate, debitAmount, creditAmount, reportCurrency, allCurrencies,
+          approvedBalance: finalBalance,
+        }),
+      }),
     };
   }
 

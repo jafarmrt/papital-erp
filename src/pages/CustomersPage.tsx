@@ -16,6 +16,8 @@ import { useCustomerAccountCardQuery } from '../hooks/queries/useCustomerQueries
 import { useOpeningRead } from '../hooks/queries/readOnEveryOpening';
 import { partyTemporaryRowsOf } from '../lib/accounting/partyTemporaryRows';
 import { PartyTemporaryRowsPanel } from '../components/accounting/reports/PartyTemporaryRowsPanel';
+import { PartyDraftRowsPanel } from '../components/accounting/reports/PartyDraftRowsPanel';
+import { partyDraftRowsOf } from '../lib/accounting/partyDraftRows';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidatePreset } from '../lib/queryInvalidation';
 import { formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber, formatPersianDate, formatPersianNumber, errorMessageOf, formatPersianCode } from '../utils';
@@ -714,7 +716,7 @@ export default function CustomersPage({ user }: { user: User }) {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
                   <span>در حال محاسبه تراز و بارگذاری اسناد حسابداری...</span>
                 </div>
-              ) : ledgerData && ((ledgerData.items?.length ?? 0) > 0 || partyTemporaryRowsOf(ledgerData).length > 0) ? (
+              ) : ledgerData && ((ledgerData.items?.length ?? 0) > 0 || partyTemporaryRowsOf(ledgerData).length > 0 || partyDraftRowsOf(ledgerData).length > 0) ? (
                 <>
                   {/* Balance Summary Header Cards */}
                   <div className="grid grid-cols-3 gap-3">
@@ -746,7 +748,13 @@ export default function CustomersPage({ user }: { user: User }) {
                     </div>
                   </div>
 
+                  {/* v11 phase 6.1t (U1): the draft vouchers apart, with the balance they would make */}
+                  <PartyDraftRowsPanel rows={ledgerData.draftRows} formatAmount={rial.number} />
+
                   {/* Transactions Table */}
+                  {(ledgerData.items?.length ?? 0) === 0 ? (
+                    <p className="p-4 text-center text-slate-500 border border-dashed border-slate-200 rounded-xl">هنوز سند تأییدشده‌ای برای این شخص نیست؛ اسناد پیش‌نویس او در بخش بالا آمده‌اند.</p>
+                  ) : (
                   <div className="border border-slate-200 rounded-xl overflow-hidden">
                     <table className="w-full text-xs text-right">
                       <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 text-center font-bold">
@@ -777,6 +785,7 @@ export default function CustomersPage({ user }: { user: User }) {
                       </tbody>
                     </table>
                   </div>
+                  )}
                   <PartyTemporaryRowsPanel rows={ledgerData.temporaryRows} formatAmount={rial.number} />
                 </>
               ) : (

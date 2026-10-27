@@ -27,7 +27,14 @@
       "idx": 3,
       "version": "7",
       "when": 1796586800000,
-      "tag": "0003_production_receipt_costs",
+      "tag": "0003_settlement_allocations",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1796596800000,
+      "tag": "0004_production_receipt_costs",
       "breakpoints": true
     }
   ]
