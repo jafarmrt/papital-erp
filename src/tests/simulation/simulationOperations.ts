@@ -204,7 +204,7 @@ export function createSimulationOperations(random: SimRandom, world: SimWorld) {
     const physical = Math.max(0, Math.floor(Number(row.current_stock)) + between(-2, 2));
     const id = await createDoc({
       docType: 'audit', dayIndex,
-      lines: [{ itemId: row.item_id, quantity: physical, physical_stock: physical, location: row.warehouse_code }],
+      lines: [{ itemId: row.item_id, quantity: physical, physical_stock: physical, system_stock: Number(row.current_stock), location: row.warehouse_code }],
     });
     const diff = physical - Number(row.current_stock);
     return {

@@ -48,6 +48,9 @@ export function parseItemTypeCell(row: Record<string, unknown>): CellResult<Item
   return { error: `«${text}» در ستون «${header}» نوع شناخته‌شده‌ای نیست؛ «ماده اولیه» یا «محصول نهایی» بنویسید. ردیف ثبت نشد.` };
 }
 
+/** the word each item type reads as in an Excel row or message */
+export const ITEM_EXCEL_TYPE_LABELS: Record<ItemExcelType, string> = { product: 'محصول نهایی', raw_material: 'ماده اولیه' };
+
 /** نوع کالای تازه: ستون نوع، وگرنه پالایش صفحه، وگرنه محصول (همان قاعده سرور) */
 export function newItemTypeOf(typeCell: ItemExcelType | undefined, typeFilter: string | undefined): ItemExcelType {
   return typeCell ?? (typeFilter === 'raw_material' ? 'raw_material' : 'product');

@@ -6,6 +6,7 @@ import { documentStockDirection } from '../../lib/documents/documentDirection.js
 import type { DocumentLineStock } from '../../lib/documents/documentLineStock.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { InsufficientStockError, NotFoundError } from '../../errors/customErrors.js';
+import { deletedItemError } from '../../lib/items/deletedItem.js';
 import { formatPersianNumber } from '../../utils/persianNumber.js';
 import { createWarehouseResolver } from '../inventory/warehouseResolver.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
@@ -77,12 +78,14 @@ async function findSellableShortages(tx: DbExecutor, lines: OutflowLine[], ctx: 
 
   const itemIds = Array.from(new Set(Array.from(requested.values(), r => r.itemId))).sort((a, b) => a - b);
   const itemRows = await tx
-    .select({ id: items.id, code: items.code, name: items.name, unit: items.unit })
+    .select({ id: items.id, code: items.code, name: items.name, unit: items.unit, isDeleted: items.isDeleted })
     .from(items)
-    .where(and(inArray(items.id, itemIds), eq(items.isDeleted, 0)));
+    .where(inArray(items.id, itemIds));
   const itemById = new Map(itemRows.map(row => [row.id, row]));
   const missing = itemIds.find(id => !itemById.has(id));
   if (missing !== undefined) throw new NotFoundError(`کالا با شناسه ${formatPersianNumber(missing, 0)} یافت نشد.`);
+  const deleted = itemRows.find(row => row.isDeleted === 1);
+  if (deleted) throw deletedItemError(deleted); // v11 phase 6.1j (N3)
 
   const stocks = await ItemWarehouseStockService.getStocksForItems(tx, itemIds);
   const report = await ItemStockReservationService.getReservedStockDetails(tx, true, { itemIds });

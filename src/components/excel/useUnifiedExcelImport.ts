@@ -41,7 +41,7 @@ export function useUnifiedExcelImport({
 
       if (!matchesSearch) return false;
       if (filterMode === 'issues') {
-        return r.hasPrefixMismatch || r.isDuplicateInBatch || r.isDuplicateInDb || r.hasCellError;
+        return r.hasPrefixMismatch || r.hasTypeChange || r.isDuplicateInBatch || r.isDuplicateInDb || r.hasCellError;
       }
       return true;
     });
@@ -262,7 +262,7 @@ export function useUnifiedExcelImport({
     mismatchCount: previewRows.filter(r => r.hasPrefixMismatch).length,
     duplicateBatchCount: previewRows.filter(r => r.isDuplicateInBatch).length,
     duplicateDbCount: previewRows.filter(r => r.isDuplicateInDb).length,
-    totalIssues: previewRows.filter(r => r.hasPrefixMismatch || r.isDuplicateInBatch || r.isDuplicateInDb || r.hasCellError).length,
+    totalIssues: previewRows.filter(r => r.hasPrefixMismatch || r.hasTypeChange || r.isDuplicateInBatch || r.isDuplicateInDb || r.hasCellError).length,
     handleClose,
     handleResetModal,
     handleDownloadExport,

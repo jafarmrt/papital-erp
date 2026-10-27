@@ -19,6 +19,8 @@ export interface PreviewRow {
   isDuplicateInDb: boolean;
   /** v10.0.1 (TD-1010): سلولی که سرور ردیف را برایش رد می‌کند */
   hasCellError: boolean;
+  /** v11 phase 6.1j (N2): the row changes the type of an item without stock; the server refuses it if the item moved */
+  hasTypeChange?: boolean;
   issues: string[];
 }
 

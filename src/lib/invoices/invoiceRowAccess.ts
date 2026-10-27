@@ -1,4 +1,5 @@
 import { WORKFLOW_WIDGET_PERMISSIONS } from '../recordReadPermissions';
+import { INVOICE_VOID_PERMISSION, STOCK_DOCUMENT_VOID_PERMISSION } from '../permissions/documentPermissions';
 
 /**
  * v9.0.340 (TD-795، یافته B08-26): هر دکمه ردیف فهرست اسناد با مجوز همان API‌ای نمایش داده می‌شود که صدا می‌زند؛ پیش‌تر
@@ -10,8 +11,10 @@ export const INVOICE_ROW_ACTION_PERMISSIONS = {
   settle: ['accounting.treasury'],
   /** `PUT /documents/:id/notes` */
   editNotes: ['documents.edit'],
-  /** `DELETE /documents/:id` */
-  void: ['documents.delete'],
+  /** `DELETE /documents/:id` of an invoice, proforma or return */
+  void: [INVOICE_VOID_PERMISSION],
+  /** `DELETE /documents/:id` of a stock document (v11 phase 6.1j, S7) */
+  voidStock: [STOCK_DOCUMENT_VOID_PERMISSION],
   /** `GET /workflow/instance/document/:id` */
   workflow: WORKFLOW_WIDGET_PERMISSIONS,
 } as const satisfies Record<string, readonly string[]>;

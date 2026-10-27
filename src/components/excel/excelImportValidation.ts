@@ -1,6 +1,6 @@
 import { Category, Item } from '../../types';
 import { PreviewRow } from './types';
-import { newItemStockWithoutCost, newItemTypeOf, parseItemTypeCell, parseNumberCell, stockColumnsOf } from '../../lib/items/itemExcelCells';
+import { ITEM_EXCEL_TYPE_LABELS, newItemStockWithoutCost, newItemTypeOf, parseItemTypeCell, parseNumberCell, stockColumnsOf, type ItemExcelType } from '../../lib/items/itemExcelCells';
 import { ITEM_WAC_COLUMN, WAC_COLUMNS } from '../../lib/items/excelPriceColumns';
 import { REORDER_POINT_COLUMNS } from '../../lib/items/itemExcelColumns';
 import { PRODUCT_CODE_FORMAT_HINT, PRODUCT_CODE_PATTERN, RAW_MATERIAL_CODE_FORMAT_HINT, RAW_MATERIAL_CODE_PATTERN } from '../../lib/items/itemCodeFormat';
@@ -18,6 +18,20 @@ export interface ParsedExcelItem {
 function numberCellErrors(raw: Record<string, unknown>): Array<string | undefined> {
   const groups: Array<readonly string[]> = [WAC_COLUMNS, REORDER_POINT_COLUMNS, ['وزن', 'weight'], ...stockColumnsOf(raw).map(h => [h])];
   return groups.map(headers => parseNumberCell(raw, headers).error);
+}
+
+/**
+ * v11 phase 6.1j (N2): the server refuses a type change of an item with stock or a stock movement (phase 3.2, S1). An
+ * item with stock is refused here too; for one without stock the preview cannot see its movements, so it warns.
+ */
+function typeChangeIssue(item: Item | undefined, newType: ItemExcelType | undefined): { error?: string; warning?: string } {
+  if (!item?.type || !newType || newType === item.type) return {};
+  const from = ITEM_EXCEL_TYPE_LABELS[item.type] ?? item.type;
+  const to = ITEM_EXCEL_TYPE_LABELS[newType];
+  if (Number(item.current_stock ?? item.currentStock ?? 0) !== 0) {
+    return { error: `نوع کالای «${item.name}» از «${from}» به «${to}» عوض نمی‌شود، چون موجودی دارد. ستون «نوع کالا» را خالی بگذارید یا «${from}» بنویسید.` };
+  }
+  return { warning: `نوع کالا از «${from}» به «${to}» عوض می‌شود؛ اگر این کالا گردش انبار داشته باشد، ثبت این ردیف رد می‌شود.` };
 }
 
 function cleanCodeIsNew(code: string, dbCodes: Set<string>): boolean {
@@ -48,6 +62,7 @@ export function validateExcelRows(
 
   // v9.0.155 (TD-650): کالای موجود با کد شناخته می‌شود و قالب کد فقط برای کالای تازه سنجیده می‌شود (مثل سرور)
   const dbCodes = new Set(dbItems.map(it => String(it.code ?? '').trim()).filter(Boolean));
+  const dbByCode = new Map(dbItems.map(it => [String(it.code ?? '').trim(), it]));
 
   // Create category lookup
   const catMap = new Map<string, Category>();
@@ -76,7 +91,10 @@ export function validateExcelRows(
     if (cleanCodeIsNew(r.code, dbCodes) && newItemStockWithoutCost(r.raw ?? {}, WAC_COLUMNS)) {
       cellErrors.push(`کالای تازه موجودی دارد ولی «${ITEM_WAC_COLUMN}» ندارد؛ موجودی بی‌بها وارد انبار نمی‌شود.`);
     }
+    const typeChange = typeChangeIssue(dbByCode.get(r.code.trim()), typeCell.value);
+    if (typeChange.error) cellErrors.push(typeChange.error);
     issues.push(...cellErrors);
+    if (typeChange.warning) issues.push(typeChange.warning);
     const itemType = newItemTypeOf(typeCell.value, typeFilter);
 
     // 1. Format & Prefix Validation
@@ -129,6 +147,7 @@ export function validateExcelRows(
       isDuplicateInBatch,
       isDuplicateInDb,
       hasCellError: cellErrors.length > 0,
+      hasTypeChange: !!typeChange.warning,
       issues
     };
   });

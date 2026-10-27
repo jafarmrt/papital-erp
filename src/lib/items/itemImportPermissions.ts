@@ -1,7 +1,7 @@
 /**
  * v9.0.154 (TD-648، تصمیم ت۲ الف): مجوز هر بخش از ورود اکسل کالا، مشترک میان سرور و پیش‌نمایش مرورگر. پیش‌تر هر دارنده
  * «تعریف کالا» یا «ویرایش کالا» با یک ردیف اکسل قیمت فروش و موجودی انبار را هم عوض می‌کرد.
- * - کالای تازه (با موجودی اولیه‌اش، مثل فرم کالا): `products.create`
+ * - کالای تازه: `products.create`؛ کالای تازه با موجودی اولیه `warehouse.in` هم می‌خواهد (v11 6.1j S8، مثل فرم کالا)
  * - مشخصات کالای موجود: `products.edit`
  * - قیمت فروش: `products.edit_price`
  * - افزایش موجودی کالای موجود: `warehouse.in`؛ کاهش آن: `warehouse.out` (همان مجوز سند انبارگردانی)
@@ -41,6 +41,9 @@ export const ITEM_IMPORT_DENIED_MESSAGES: Readonly<Record<keyof ItemImportPermis
   stockOut: 'برای کاهش موجودی مجوز «ثبت خروج کالا (حواله)» لازم است؛ موجودی این ردیف تغییر نکرد.',
 };
 
+/** v11 6.1j (S8): a new item with opening stock needs `warehouse.in` as well, as in the item form; the row is not created */
+export const ITEM_IMPORT_OPENING_DENIED_MESSAGE = 'برای تعریف کالای تازه با موجودی اولیه مجوز «ثبت ورود کالا (رسید)» لازم است؛ این ردیف ثبت نشد. موجودی را خالی بگذارید یا از دارنده این مجوز بخواهید.';
+
 /** مجوزهای کاربر از فهرست کلیدهای نقش (مرورگر)؛ مدیر سیستم همه را دارد */
 export function itemImportPermissionsFromKeys(isAdmin: boolean, keys: readonly string[]): ItemImportPermissions {
   const has = (k: keyof ItemImportPermissions) => isAdmin || keys.includes(ITEM_IMPORT_PERMISSION_KEYS[k]);
@@ -62,7 +65,7 @@ export function itemImportPermissionNotices(perms: ItemImportPermissions): strin
   if (!perms.createItems) notices.push('مجوز «تعریف کالای جدید» را ندارید: ردیف کالاهای تازه ثبت نمی‌شود.');
   if (!perms.editItems) notices.push('مجوز «ویرایش اطلاعات کالا» را ندارید: مشخصات کالاهای موجود تغییر نمی‌کند.');
   if (!perms.editPrices) notices.push('مجوز «ویرایش قیمت‌ها» را ندارید: ستون‌های قیمت ثبت نمی‌شوند.');
-  if (!perms.stockIn) notices.push('مجوز «ثبت ورود کالا (رسید)» را ندارید: افزایش موجودی کالاهای موجود ثبت نمی‌شود.');
+  if (!perms.stockIn) notices.push('مجوز «ثبت ورود کالا (رسید)» را ندارید: افزایش موجودی کالاهای موجود ثبت نمی‌شود و کالای تازه با موجودی اولیه تعریف نمی‌شود.');
   if (!perms.stockOut) notices.push('مجوز «ثبت خروج کالا (حواله)» را ندارید: کاهش موجودی کالاهای موجود ثبت نمی‌شود.');
   return notices;
 }

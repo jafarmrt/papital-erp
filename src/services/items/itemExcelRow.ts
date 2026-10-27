@@ -1,6 +1,6 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { items, itemPrices, transactions, warehouses } from '../../db/schema.js';
+import { items, itemPrices, warehouses } from '../../db/schema.js';
 import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../../utils.js';
 import { DocumentService } from '../document.service.js';
 import { money, Money } from '../../lib/money.js';
@@ -9,7 +9,7 @@ import { REORDER_POINT_COLUMNS } from '../../lib/items/itemExcelColumns.js';
 import { DECIMAL_INPUT_MAX_WHOLE_DIGITS, DECIMAL_PATTERN, decimalTextScaleIssue } from '../../lib/numericInput.js';
 import { parsePriceAmount, priceAmountFits, priceCurrencyOf } from '../../lib/items/priceInput.js';
 import type { ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
-import { newItemTypeOf, parseItemTypeCell, parseNumberCell } from '../../lib/items/itemExcelCells.js';
+import { ITEM_EXCEL_TYPE_LABELS, newItemTypeOf, parseItemTypeCell, parseNumberCell } from '../../lib/items/itemExcelCells.js';
 import { PRODUCT_CARD_COLUMNS } from '../../lib/media/productCard.js';
 import { productCardValues, type ProductCardValues } from '../media/productCardWrite.js';
 import { errorMessageOf } from '../../utils.js';
@@ -157,7 +157,7 @@ export function stockWithoutCostError(item: { name: string; code: string }, chan
     `چون چنین کالایی هیچ فروش یا حواله‌ای را نمی‌پذیرد. ستون «${ITEM_WAC_COLUMN}» را پر کنید. ردیف ثبت نشد.`;
 }
 
-const ITEM_TYPE_LABELS: Record<ItemRow['type'], string> = { product: 'محصول نهایی', raw_material: 'ماده اولیه' };
+const ITEM_TYPE_LABELS: Record<ItemRow['type'], string> = ITEM_EXCEL_TYPE_LABELS;
 
 /**
  * v11 phase 3.2 (S1): the type of an item with stock or any live Kardex row does not change from Excel (the form never
@@ -167,8 +167,14 @@ const ITEM_TYPE_LABELS: Record<ItemRow['type'], string> = { product: 'محصول
  */
 export async function itemTypeChangeError(tx: DbExecutor, item: ItemRow, newType: RowFields['itemType'], stockTotal: number): Promise<string | null> {
   if (!newType || newType === item.type) return null;
-  const hasHistory = stockTotal !== 0 || (await tx.select({ id: transactions.id }).from(transactions)
-    .where(and(eq(transactions.itemId, item.id), eq(transactions.isDeleted, 0))).limit(1)).length > 0;
+  // v11 phase 6.1j (N4): a fully voided document leaves no movement: its rows are deleted and their reversals, which
+  // only close them, do not count (the ledger rule of LEDGER_ROW_FILTER, written here since items sit below inventory);
+  // before, a voided receipt kept the type locked for good
+  const hasHistory = stockTotal !== 0 || ((await tx.execute(sql`
+    SELECT 1 FROM transactions t
+     WHERE t.item_id = ${item.id} AND t.is_deleted = 0
+       AND NOT EXISTS (SELECT 1 FROM transactions o WHERE o.id = t.reversal_of_id AND o.is_deleted = 1)
+     LIMIT 1`)).rows ?? []).length > 0;
   if (!hasHistory) return null;
   const current = ITEM_TYPE_LABELS[item.type] ?? item.type;
   return `نوع کالای «${item.name}» (${item.code}) از اکسل عوض نمی‌شود، چون این کالا موجودی یا گردش انبار دارد و گردش‌هایش در ` +

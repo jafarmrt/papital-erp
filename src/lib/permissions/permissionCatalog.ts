@@ -72,7 +72,9 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
       // v9.0.125 (TD-541 / TD-771، تصمیم ت۱ بسته ۸): جای قاعده «کاربر فروش فقط پیش‌فاکتور» که با کد نقش نوشته شده بود
       { key: 'documents.finalize', title: 'قطعی کردن سند فروش', description: 'ثبت قطعی یا نهایی کردن فاکتور، پیش‌فاکتور و برگشت از فروش، با کسر یا افزایش موجودی و صدور سند حسابداری', requires: ['documents.view'] },
       { key: 'documents.edit', title: 'ویرایش فاکتورها', description: 'اصلاح اقلام و مشخصات فاکتورهای صادرشده', requires: ['documents.view'] },
-      { key: 'documents.delete', title: 'حذف فاکتور', description: 'حذف فاکتور و برگشت خودکار موجودی کالاها', requires: ['documents.view'] },
+      { key: 'documents.delete', title: 'حذف فاکتور', description: 'ابطال فاکتور فروش و خرید، پیش‌فاکتور و برگشت از فروش، با برگشت خودکار موجودی کالاها', requires: ['documents.view'] },
+      // v11 phase 6.1j (S7، کارت ت۵۶-۷): به هر نقشی که «حذف فاکتور» داشت داده شد تا دسترسی کسی کم نشود
+      { key: 'documents.void_stock', title: 'باطل کردن سند انبار', description: 'ابطال رسید، رسید تولید، حواله، ضایعات، حواله انتقال و انبارگردانی، با برگشت گردش کالا و سند حسابداری آن', requires: ['documents.view'] },
     ]
   },
   {

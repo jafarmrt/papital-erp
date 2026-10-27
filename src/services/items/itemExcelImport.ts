@@ -13,7 +13,7 @@ import { syncStockAdjustmentVoucher } from '../accounting/stockAdjustmentVoucher
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { money } from '../../lib/money.js';
 import { nextVersion } from '../../lib/occHelper.js';
-import { ITEM_IMPORT_DENIED_MESSAGES, type ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
+import { ITEM_IMPORT_DENIED_MESSAGES, ITEM_IMPORT_OPENING_DENIED_MESSAGE, type ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
 import {
   EXCEL_DOCUMENT_REF, ITEM_FIELD_KEYS, applyStockChange, changedRowPrices, codeFormatError, deniedStockPermissions,
   itemTypeChangeError, newItemType, planStockChanges, readRowFields, readRowPrices, readRowStock, saveRowPrices, sameFieldValue, stockWithoutCostError,
@@ -253,6 +253,10 @@ async function createNewItem(ctx: ImportContext, input: RowInput): Promise<numbe
   const plan = planStockChanges(stock, { byCode: {}, total: 0 }, ctx.whs, ctx.defaultWhCode);
   if ('error' in plan) {
     input.push(plan.error);
+    return null;
+  }
+  if (plan.changes.length > 0 && !ctx.perms.stockIn) {
+    input.push(ITEM_IMPORT_OPENING_DENIED_MESSAGE);
     return null;
   }
   const itemWac = money(fields.weightedAverageCost);

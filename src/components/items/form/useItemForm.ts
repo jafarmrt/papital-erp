@@ -5,6 +5,8 @@ import { fetchJson } from '../../../api';
 import { getTodayJalaliDate, parseCleanNumber, errorMessageOf } from '../../../utils';
 import { ItemFormData, ItemFormModalProps } from './types';
 import { EMPTY_PRODUCT_CARD, productCardFormOf, productCardPayload } from '../../../lib/media/productCardForm';
+import { useHasPermission } from '../../../contexts/AuthContext';
+import { OPENING_STOCK_PERMISSION } from '../../../lib/permissions/stockActionPermissions';
 import {
   parseItemStocks,
   parseMultiValue,
@@ -32,6 +34,8 @@ export function useItemForm({
   onClose
 }: ItemFormModalProps) {
   const item = editingItem ?? propItem ?? null;
+  // v11 phase 6.1j (S8, card t56-5): opening stock only when a new item is defined, by a user who may record a receipt
+  const canEnterOpeningStock = useHasPermission(OPENING_STOCK_PERMISSION) && !item;
   const categories = propCategories.length > 0 ? propCategories : allCategories;
   const activeTypeFilter = propType || typeFilter || '';
 
@@ -231,19 +235,19 @@ export function useItemForm({
           : buildRawItemCode(rawPrefix, rawNum);
       }
 
-      let calculatedStock = form.current_stock;
-      const canSetOpening = !item || Boolean(item.canSetOpeningBalance ?? (item as any).can_set_opening_balance);
-      if (canSetOpening && Object.keys(form.stocks).length > 0) {
-        calculatedStock = Object.values(form.stocks).reduce((acc: number, val: any) => acc + (Number(val) || 0), 0);
+      // v11 phase 6.1j (S8): the form's stock fields are left out of the fields an edit sends
+      const { card, stocks, current_stock: formStock, ...formFields } = form;
+      let calculatedStock = canEnterOpeningStock ? formStock : 0;
+      if (canEnterOpeningStock && Object.keys(stocks).length > 0) {
+        calculatedStock = Object.values(stocks).reduce((acc: number, val: any) => acc + (Number(val) || 0), 0);
       }
 
-      const { card, ...formFields } = form;
       const payload: Partial<Item> & Record<string, any> = {
         ...formFields,
         ...productCardPayload(card),
         code: finalCode,
-        current_stock: calculatedStock,
-        stocks: form.stocks,
+        // v11 phase 6.1j (S8): an edit sends no stock; the server refuses opening stock on an edit (422)
+        ...(canEnterOpeningStock ? { current_stock: calculatedStock, stocks } : {}),
         // v9.0.173 (TD-657): وزن خالی null فرستاده می‌شود تا ویرایش وزن را پاک کند (نیامدن فیلد یعنی بی‌تغییر)
         weight: form.weight ? parseCleanNumber(form.weight) : null,
         // V2.0.0: کلید صحیح بک‌اند برای «بهای تمام‌شده اولیه (WAC/خرید)» —
@@ -290,6 +294,7 @@ export function useItemForm({
 
   return {
     item,
+    canEnterOpeningStock,
     categories,
     form,
     setForm,

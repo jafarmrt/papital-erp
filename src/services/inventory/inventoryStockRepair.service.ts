@@ -1,15 +1,17 @@
 import { type DbExecutor } from '../../db/drizzle.js';
 import { documentItems, documents, items, transactions } from '../../db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { fin } from '../../lib/financialDecimal.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { AppError, InsufficientStockError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { deletedItemError } from '../../lib/items/deletedItem.js';
 import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
 import { withOrderedLocks } from '../../lib/lockOrder.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { money } from '../../lib/money.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
 import { assertStockMovementDate } from './stockMovementDate.js';
+import { assertTransferKeepsReservations } from './transferReservations.js';
 import { DocumentRefNumberService } from '../documents/documentRefNumber.service.js';
 import { idempotentTransaction } from '../../middleware/idempotency.js';
 
@@ -75,12 +77,13 @@ export class InventoryStockRepairService {
       const [item] = await txEngine
         .select()
         .from(items)
-        .where(and(eq(items.id, params.itemId), eq(items.isDeleted, 0)))
+        .where(eq(items.id, params.itemId))
         .for('no key update'); // v8.0.67 (TD-320): هم‌حالت lockStockItems
 
       if (!item) {
         throw new NotFoundError(`کالا با شناسه ${params.itemId} یافت نشد.`);
       }
+      if (item.isDeleted === 1) throw deletedItemError(item); // v11 phase 6.1j (N3)
 
       // v9.0.81 (TD-494): انبار مبدأ و مقصد با resolver مشترک (کد یا نام، بی‌توجه به حروف بزرگ و کوچک، فقط انبار فعال)؛
       // ناشناخته ۴۲۲ و نه ۵۰۰. پیش‌تر فقط کد دقیق پذیرفته می‌شد و خطای کاری ۵۰۰ می‌داد.
@@ -97,6 +100,16 @@ export class InventoryStockRepairService {
           `موجودی انبار مبدأ («${fromWh.name || fromWh.code}») برای کالا کافی نیست. موجودی فعلی: ${currentFromQty}، درخواست: ${qty}`
         );
       }
+
+      // v11 phase 6.1j (S4): the source keeps what the sales proformas taking from it reserve
+      await assertTransferKeepsReservations(txEngine, {
+        itemId: params.itemId,
+        itemLabel: `«${item.name}» (${item.code})`,
+        unit: item.unit || 'عدد',
+        from: { code: fromWh.code, name: fromWh.name || fromWh.code },
+        sourceStock: currentFromQty,
+        quantity: qty,
+      });
 
       // v8.0.4 (TD-257): تاریخ انتقال نه پیش از آخرین گردش کالا، مگر با مجوز و موجودی کافی انبار مبداء تا آن تاریخ و پس از آن
       await assertStockMovementDate(txEngine, {

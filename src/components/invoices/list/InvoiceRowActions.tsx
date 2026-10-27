@@ -2,6 +2,7 @@ import { Printer, Trash2, Eye, CreditCard, GitBranch } from 'lucide-react';
 import { ActionMenu, type ActionMenuItem } from '../../ActionMenu';
 import type { InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
 import type { InvoiceListActions } from '../../../hooks/invoices/useInvoiceListActions';
+import { documentVoidPermission, STOCK_DOCUMENT_VOID_PERMISSION } from '../../../lib/permissions/documentPermissions';
 
 interface InvoiceRowActionsProps {
   doc: InvoiceListDocument;
@@ -28,7 +29,8 @@ export function InvoiceRowActions({ doc, isCommercial, settlementStatus, actions
       onClick: () => setWorkflowDoc(doc),
     });
   }
-  if (access.void) {
+  // v11 phase 6.1j (S7): a stock document is voided with «باطل کردن سند انبار», an invoice with «حذف فاکتور»
+  if (documentVoidPermission(doc.type ?? '') === STOCK_DOCUMENT_VOID_PERMISSION ? access.voidStock : access.void) {
     menuItems.push({
       label: 'ابطال / حذف سند',
       icon: Trash2,
