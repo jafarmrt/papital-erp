@@ -12,6 +12,7 @@ const card: AccountLedgerReport = {
     { voucherId: 9, voucherNumber: 120, date: '2026-04-01', description: 'دریافت از مشتری', accountName: 'صندوق', accountCode: '1101', currency: 'IRR', debit: 10_000_000, credit: 0, runningBalance: 60_000_000 },
   ],
   openingBalance: 50_000_000, totalDebit: 10_000_000, totalCredit: 0, finalBalance: 60_000_000, currency: 'IRR',
+  total: 1, page: 1, limit: 200,
 };
 const accounts = [
   { id: 1, code: '1', name: 'دارایی‌ها', level: 'group' },
@@ -20,7 +21,7 @@ const accounts = [
 
 function renderLedger(selected: number) {
   return render(<LedgerView accounts={accounts} ledgerReport={card} selectedLedgerAccountId={selected} setSelectedLedgerAccountId={() => {}}
-    onApplyLedgerFilter={() => {}} onFetchLedger={() => {}} startDate="2026-03-21" endDate="" />);
+    onApplyLedgerFilter={() => {}} onFetchLedger={() => {}} onPageChange={() => {}} startDate="2026-03-21" endDate="" />);
 }
 
 // v9.0.118 (TD-574, B03-32): the ledger printed «مانده ابتدای دوره» twice (its own row and the server's) and its title read

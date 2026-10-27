@@ -59,6 +59,7 @@ export const MONEY_STOCK_WRITE_MODULES = [
  * repeats nothing there, or no money or stock route reaches them; the list only shrinks.
  */
 export const PLAIN_TRANSACTION_WRITES = new Map<string, { count: number; reason: string }>([
+  ['src/services/accounting/accountingReport.service.ts', { count: 1, reason: 'v11 phase 6.1ch: the account card reads its count, sums, page and opening balance in one read-only snapshot and writes nothing' }],
   ['src/services/accounting/voucherSync.service.ts', { count: 1, reason: '«ساخت اسناد جاافتاده» runs one transaction per document and makes only the vouchers still missing, so a resend finds them made' }],
   ['src/services/documents/documentRefNumber.service.ts', { count: 1, reason: 'a write takes its number on its own transaction; alone it only serves a number to a form' }],
   ['src/services/inventory/kardexBackfill.service.ts', { count: 1, reason: 'adds only the opening movements still missing, under its own lock, so a resend finds them added' }],

@@ -125,11 +125,12 @@ export function useDeleteCustomerMutation() {
  * report both as `report` and spread). It sits under the accounting reports, so a voucher, a treasury entry or a
  * document refreshes it while the card or the dossier is open; it is read again on each opening of a party.
  */
-export function useCustomerAccountCardQuery(customerId: number | null) {
+export function useCustomerAccountCardQuery(customerId: number | null, page = 1) {
   return useQuery<AccountCardReport | null>({
-    queryKey: QUERY_KEYS.accounting.report('customer-account-card', { customerId }),
+    // v11 phase 6.1ch (M13): one page of the card; the page is part of the key
+    queryKey: QUERY_KEYS.accounting.report('customer-account-card', { customerId, page }),
     queryFn: async ({ signal }) => {
-      const res = await fetchJson<(AccountCardReport & { report?: AccountCardReport }) | null>(customerAccountCardUrl(customerId ?? 0), { signal });
+      const res = await fetchJson<(AccountCardReport & { report?: AccountCardReport }) | null>(customerAccountCardUrl(customerId ?? 0, page), { signal });
       return res?.report ?? res ?? null;
     },
     enabled: customerId !== null,

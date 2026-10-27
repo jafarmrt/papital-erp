@@ -17,7 +17,6 @@ import { ItemCatalogService } from '../services/items/itemCatalog.service.js';
 import { resolveWarehouseCode } from '../services/inventory/warehouseResolver.js';
 import { ItemWarehouseStockService } from '../services/inventory/itemWarehouseStock.service.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
-import { parsePickListIds } from '../lib/permissions/pickListCap.js';
 import { itemListConditions, itemListOrder, itemListStats, listItemPicks } from '../services/items/itemPickList.js';
 import { parseItemListSort } from '../lib/items/itemListSort.js';
 import { listReorderAlerts } from '../services/items/reorderAlerts.service.js';
@@ -53,10 +52,10 @@ const itemPickListValidation = z.object({
 
 // v9.0.138 (TD-888، تصمیم ت۱۰ الف): فهرست انتخاب کالا برای فرم‌های بخش‌های دیگر؛ فهرست کامل پایین فقط با مجوز بخش کالا
 router.get('/items/options', authorizePermission(...READ_PERMISSIONS.itemOptions), validate(itemPickListValidation), asyncHandler(async (req, res) => {
-  const query = req.query as { type?: string; search?: string; limit?: string; reserved?: string; excludeDocumentId?: string; id?: string; ids?: string };
+  const query = req.query as { type?: string; search?: string; limit?: string; reserved?: string; excludeDocumentId?: string; id?: string; ids?: number[] };
   const picks = await listItemPicks(req.user, {
     type: query.type, search: query.search, limit: parsePickListLimit(query.limit), id: query.id ? Number(query.id) : undefined,
-    ids: parsePickListIds(query.ids),
+    ids: query.ids,
   });
   // v10.0.258 (TD-1135): the sales invoice picker asks `reserved=1` for each item's reserved quantity; a reservation read
   // error refuses this request only (TD-821), the other forms never read reservations

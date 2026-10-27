@@ -51,8 +51,8 @@ export async function runPickListCapV11Tests(shouldRun: (id: string, ...extra: s
     const capped = await get('/api/customers/options?limit=1');
     if (capped.status !== 200 || rowsOf(capped.body).length !== 1) wrong.push(`customers limit=1: ${capped.status}, ${rowsOf(capped.body).length} rows`);
 
-    // 2) parties by id: only those, live ones only, the pick fields only (no notes or version)
-    const byIds = await get(`/api/customers/options?ids=${parties[2].id},${parties[0].id},${gone.id}`);
+    // 2) parties by id: only those, each once, live ones only, the pick fields only (no notes or version)
+    const byIds = await get(`/api/customers/options?ids=${parties[2].id},${parties[0].id},${gone.id},${parties[2].id}`);
     const partyRows = rowsOf(byIds.body);
     const partyIdsAnswered = partyRows.map(r => r.id).sort((a, b) => a - b);
     const partyIdsWanted = [parties[0].id, parties[2].id].sort((a, b) => a - b);
@@ -86,7 +86,7 @@ export async function runPickListCapV11Tests(shouldRun: (id: string, ...extra: s
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: `limit=1 cut the list; ids answered the 2 live parties of 3 asked (no notes or version) and the 2 items with their stock; 7 malformed id lists were 400 on both routes; ${PICK_LIST_IDS_MAX} ids were accepted`,
+      details: `limit=1 cut the list; ids answered the 2 live parties of 3 asked, each once (no notes or version) and the 2 items with their stock; 7 malformed id lists were 400 on both routes; ${PICK_LIST_IDS_MAX} ids were accepted`,
     }));
   } catch (err) {
     results.push(makeTestCase({

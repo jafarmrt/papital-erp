@@ -17,6 +17,9 @@ export async function runAgingReportTests(shouldRun: ShouldRun): Promise<TestCas
     ['reg_aging_report_ledger_match_d03',
       'v10.1.10: after an invoice, a treasury receipt and a received cheque the aging balance of the customer equals its ledger balance, its drafts and its last settlement (D-03)',
       ['d03', 'reports', 'aging', 'ledger', 'treasury', 'cheque'], agingLedgerCase],
+    ['reg_aging_legacy_name_text_date_v11_6_1ch',
+      'v11 phase 6.1ch (M13): with the legacy party lookup and the date shortcut of the faster aging query, a legacy row by name still goes to the live party before a deleted one of that name and then to the lowest id, and a voucher dated in the old Jalali text is aged from its Gregorian day',
+      ['v11', 'phase6', 'm13', 'reports', 'aging', 'legacy'], agingLegacyAndTextDateCase],
     ['reg_aging_report_access_d03',
       'v10.1.10: GET /reports/aging needs accounting.reports and refuses an unknown or invalid query (D-03)',
       ['d03', 'reports', 'aging', 'permission'], agingAccessCase],
@@ -298,6 +301,49 @@ async function agingLedgerCase(h: Harness, wrong: string[]): Promise<string> {
   const before = await report(h, `partyId=${customer.id}&asOf=${d(2)}`);
   expectEqual(wrong, 'last settlement before the cheque', JSON.stringify(before.rows[0]?.lastSettlement), JSON.stringify({ date: d(2), amount: '300000', byCheque: false }));
   return `balance ${row?.balance}, drafts ${row?.draft}`;
+}
+
+/**
+ * v11 phase 6.1ch (M13): the aging query finds a legacy row's party in one pass over the parties (one per trimmed name,
+ * live before deleted, then the lowest id) and takes a Gregorian ISO day as it is. A party's name is unique only among
+ * live parties, so a name can belong to one live party and deleted ones, or to deleted ones only.
+ */
+async function agingLegacyAndTextDateCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const { createTestCustomer } = await import('../fixtures/factories.js');
+  const acc = await ledgerAccounts(h);
+  const d = (days: number) => daysBefore(f.today, days);
+  const party = async (name: string) => Number((await createTestCustomer({ name, partyType: 'customer' } as never)).id);
+  const remove = (id: number) => h.q(`UPDATE customers SET is_deleted = 1 WHERE id = $1`, [id]);
+  const onR = (id: number | null, name: string, debit: number): Line[] => [
+    { account: acc.receivable, debit, detail: { type: 'customer', id, name } },
+    { account: acc.counter, credit: debit },
+  ];
+
+  const twin = `D03 aging twin ${h.tag}`;
+  const twinDeleted = await party(twin);
+  await remove(twinDeleted);
+  const twinLive = await party(twin);
+  const gone = `D03 aging gone ${h.tag}`;
+  const goneFirst = await party(gone);
+  await remove(goneFirst);
+  const goneSecond = await party(gone);
+  await remove(goneSecond);
+  const old = await party(`D03 aging jalali ${h.tag}`);
+
+  await voucher(h, d(10), 'approved', onR(null, `  ${twin} `, 40_000));
+  await voucher(h, d(50), 'approved', onR(null, gone, 25_000));
+  await voucher(h, '1402-05-10', 'approved', onR(old, `D03 aging jalali ${h.tag}`, 60_000));
+
+  expectAmounts(wrong, 'twin, live', (await report(h, `partyId=${twinLive}`)).rows[0], { balance: 40_000, upTo30: 40_000 });
+  expectEqual(wrong, 'twin, deleted rows', (await report(h, `partyId=${twinDeleted}`)).rows.length, 0);
+  expectAmounts(wrong, 'gone, lowest id', (await report(h, `partyId=${goneFirst}`)).rows[0], { balance: 25_000, upTo60: 25_000 });
+  expectEqual(wrong, 'gone, the later id rows', (await report(h, `partyId=${goneSecond}`)).rows.length, 0);
+  // 1402-05-10 is 2023-08-01
+  expectAmounts(wrong, 'Jalali text day', (await report(h, `partyId=${old}`)).rows[0], { balance: 60_000, over180: 60_000 });
+  expectEqual(wrong, 'Jalali text day, the day before', (await report(h, `partyId=${old}&asOf=2023-07-31`)).rows.length, 0);
+  expectAmounts(wrong, 'Jalali text day, on the day', (await report(h, `partyId=${old}&asOf=2023-08-01`)).rows[0], { balance: 60_000, upTo30: 60_000 });
+  return 'legacy rows to the live namesake and to the lowest deleted id; 1402-05-10 aged from 2023-08-01';
 }
 
 async function agingAccessCase(h: Harness, wrong: string[]): Promise<string> {

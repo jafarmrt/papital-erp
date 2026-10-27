@@ -29,7 +29,7 @@ function withClient(ui: ReactNode) {
 function renderTab() {
   const props = {
     onFetchTrialBalance: vi.fn(async () => {}), onFetchIncomeStatement: vi.fn(async () => {}),
-    onFetchBalanceSheet: vi.fn(async () => {}), onFetchLedger: vi.fn(async () => {}),
+    onFetchBalanceSheet: vi.fn(async () => {}), onFetchLedger: vi.fn(async () => {}), onLedgerPageChange: vi.fn(async () => {}),
   };
   render(withClient(<FinancialReportsTab accounts={[]} trialBalance={null} incomeStatement={null} balanceSheet={null} ledgerReport={null} loading={false} {...props} />));
   return props;

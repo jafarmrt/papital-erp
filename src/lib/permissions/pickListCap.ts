@@ -61,14 +61,5 @@ export function pickListIdsUrl(url: string, ids: readonly number[]): string {
   return `${path}?ids=${pickListIds(ids).join(',')}`;
 }
 
-/**
- * The server's reading of `?ids=`: a comma list of up to `PICK_LIST_IDS_MAX` positive ids; none for an absent value. The
- * route's validation refuses any other text before this runs.
- */
-export function parsePickListIds(raw: unknown): number[] | undefined {
-  if (typeof raw !== 'string' || raw === '') return undefined;
-  return pickListIds(raw.split(','));
-}
-
 /** `?ids=` as the routes validate it: digits and commas, at most `PICK_LIST_IDS_MAX` ids of a PostgreSQL integer each */
 export const PICK_LIST_IDS_PATTERN = new RegExp(`^[1-9]\\d{0,9}(,[1-9]\\d{0,9}){0,${PICK_LIST_IDS_MAX - 1}}$`);

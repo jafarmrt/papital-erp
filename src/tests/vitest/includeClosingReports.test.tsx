@@ -24,7 +24,7 @@ afterEach(() => { cleanup(); fetchJson.mockReset(); });
 function renderTab() {
   const props = {
     onFetchTrialBalance: vi.fn(async () => {}), onFetchIncomeStatement: vi.fn(async () => {}),
-    onFetchBalanceSheet: vi.fn(async () => {}), onFetchLedger: vi.fn(async () => {}),
+    onFetchBalanceSheet: vi.fn(async () => {}), onFetchLedger: vi.fn(async () => {}), onLedgerPageChange: vi.fn(async () => {}),
   };
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const ui: ReactNode = <FinancialReportsTab accounts={[]} trialBalance={null} incomeStatement={null} balanceSheet={null} ledgerReport={null} loading={false} {...props} />;

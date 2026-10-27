@@ -24,7 +24,7 @@ import { accountSubtreeCondition } from './accountSubtree.js';
 import { foreignOrigin, permanentAccountCondition, readPartyTemporaryRows } from './partyTemporaryRows.js';
 import { readPartyDraftRows } from './partyDraftRows.js';
 import { yearEndClosingCutoff, yearEndClosingVoucherSql } from './yearEndClosingVouchers.js';
-import { accountCardHasFilter, type AccountCardReport } from '../../lib/accounting/accountCard.js';
+import { ACCOUNT_CARD_MAX_PAGE_SIZE, ACCOUNT_CARD_PAGE_SIZE, accountCardHasFilter, type AccountCardReport } from '../../lib/accounting/accountCard.js';
 import { JOURNAL_BOOK_MAX_PAGE_SIZE, JOURNAL_BOOK_PAGE_SIZE, type JournalBookReport, type JournalBookRow } from '../../lib/accounting/journalBook.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { currentDetailNames, detailDisplayName, isManualReferenceModule, itemOfOpeningRow, openingVoucherItems, trialBalanceDetailKey, type DetailRef, type StableRef } from './trialBalanceDetail.js';
@@ -622,6 +622,10 @@ export class AccountingReportService {
     startDate?: string;
     endDate?: string;
     currency?: string;
+    /** v11 phase 6.1ch (M13): one page of rows (default ACCOUNT_CARD_PAGE_SIZE), or every row with `exportAll` */
+    page?: number;
+    limit?: number;
+    exportAll?: boolean;
   }): Promise<AccountCardReport> {
     // v9.0.225 (TD-547، B03-05، تصمیم ت۵ الف): کارت حساب بی حساب و بی طرف حساب ۴۲۲؛ پیش‌تر همه ردیف‌های دفتر برمی‌گشت
     if (!params.party && !accountCardHasFilter(params)) {
@@ -667,60 +671,85 @@ export class AccountingReportService {
     // v10.0.257 (TD-915 / TD-924، ت۵ الف): کارت طرف حساب مانده را فقط روی حساب‌های دائم می‌گیرد؛ ردیف موقت جدا می‌آید
     const partyPermanent = params.party ? permanentAccountCondition() : undefined;
 
-    const rawRows = await orm.select({
-      voucherId: journalVouchers.id,
-      voucherNumber: journalVouchers.voucherNumber,
-      date: journalVouchers.date,
-      itemDescription: journalVoucherItems.description,
-      voucherDescription: journalVouchers.description,
-      accountName: accounts.name,
-      accountCode: accounts.code,
-      detailedName: journalVoucherItems.detailedName,
-      detailedType: journalVoucherItems.detailedType,
-      detailedId: journalVoucherItems.detailedId,
-      rowCurrency: voucherItemCurrencySql,
-      debit: sql<string>`${debitAmount}::text`,
-      credit: sql<string>`${creditAmount}::text`,
-      originalDebit: journalVoucherItems.debit,
-      originalCredit: journalVoucherItems.credit,
-      exchangeRate: journalVoucherItems.exchangeRate,
-    })
-    .from(journalVoucherItems)
-    .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
-    .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
-    .where(and(...periodConditions, partyPermanent))
-    .orderBy(asc(journalVouchers.date), asc(journalVouchers.voucherNumber), asc(journalVoucherItems.rowOrder));
-
-    // V2.0.0: مانده ابتدای دوره — تجمیع اسناد قبل از startDate (با همان فیلترهای حساب/تفصیلی)
-    // v7.0.71 (P2-6 بخش ۳): جمع در SQL و مانده‌ها با Decimal
-    let openingDec = fin(0);
-    if (params.startDate) {
-      // بازسازی شرط‌ها بدون شرط startDate: همان فیلترها ولی date < startDate
-      const priorConds: (SQL | undefined)[] = [
-        eq(journalVouchers.isDeleted, 0),
-        eq(journalVoucherItems.isDeleted, 0),
-        or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
-      ];
-      if (params.accountId) priorConds.push(accountSubtreeCondition(journalVoucherItems.accountId, params.accountId));
-      if (params.detailedType && params.detailedType !== 'all') priorConds.push(eq(journalVoucherItems.detailedType, params.detailedType));
-      if (params.detailedId) priorConds.push(eq(journalVoucherItems.detailedId, params.detailedId));
-      if (params.detailedName) priorConds.push(foldedContains([journalVoucherItems.detailedName], params.detailedName));
-      if (params.party) priorConds.push(partyDetailedRowsCondition(params.party), partyPermanent);
-      priorConds.push(currencyCondition);
-      if (params.startDate) priorConds.push(lt(journalVouchers.date, params.startDate));
-
-      const [prior] = await orm.select({ balance: sql<string>`COALESCE(SUM(${debitAmount} - ${creditAmount}), 0)::text` })
+    // v11 phase 6.1ch (M13): one page of rows. The totals and the row count take the whole period in SQL, and the row
+    // number and the running balance come from window functions over the whole period (before LIMIT), so page two goes
+    // on from where page one ended; the opening balance is added to each running balance below.
+    const page = Math.max(1, Math.trunc(params.page ?? 1));
+    const limit = Math.min(ACCOUNT_CARD_MAX_PAGE_SIZE, Math.max(1, Math.trunc(params.limit ?? ACCOUNT_CARD_PAGE_SIZE)));
+    const cardWhere = and(...periodConditions, partyPermanent);
+    const cardOrder = sql`${journalVouchers.date}, ${journalVouchers.voucherNumber}, ${journalVoucherItems.rowOrder}, ${journalVoucherItems.id}`;
+    // v11 phase 6.1ch (M13, review): the count, sums, page and opening balance read one snapshot, so a voucher approved
+    // between the reads cannot leave a page's running balance off the final balance
+    const { totals, rawRows, openingDec } = await orm.transaction(async (tx) => {
+      const [totals] = await tx.select({
+        total: sql<number>`count(*)::int`,
+        totalDebit: sql<string>`COALESCE(SUM(${debitAmount}), 0)::text`,
+        totalCredit: sql<string>`COALESCE(SUM(${creditAmount}), 0)::text`,
+      })
       .from(journalVoucherItems)
       .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
       .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
-      .where(and(...priorConds.filter((c): c is SQL => c !== undefined)));
-      openingDec = fin(prior?.balance).round(4);
-    }
-    const openingBalance = openingDec.toNumber();
+      .where(cardWhere);
 
-    let runningDec = openingDec;
-    let totalDebitDec = fin(0);
-    let totalCreditDec = fin(0);
+      const rowsQuery = tx.select({
+        rowNumber: sql<number>`(row_number() OVER (ORDER BY ${cardOrder}))::int`,
+        periodBalance: sql<string>`(SUM(${debitAmount} - ${creditAmount}) OVER (ORDER BY ${cardOrder} ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW))::text`,
+        voucherId: journalVouchers.id,
+        voucherNumber: journalVouchers.voucherNumber,
+        date: journalVouchers.date,
+        itemDescription: journalVoucherItems.description,
+        voucherDescription: journalVouchers.description,
+        accountName: accounts.name,
+        accountCode: accounts.code,
+        detailedName: journalVoucherItems.detailedName,
+        detailedType: journalVoucherItems.detailedType,
+        detailedId: journalVoucherItems.detailedId,
+        rowCurrency: voucherItemCurrencySql,
+        debit: sql<string>`${debitAmount}::text`,
+        credit: sql<string>`${creditAmount}::text`,
+        originalDebit: journalVoucherItems.debit,
+        originalCredit: journalVoucherItems.credit,
+        exchangeRate: journalVoucherItems.exchangeRate,
+      })
+      .from(journalVoucherItems)
+      .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
+      .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
+      .where(cardWhere)
+      .orderBy(asc(journalVouchers.date), asc(journalVouchers.voucherNumber), asc(journalVoucherItems.rowOrder), asc(journalVoucherItems.id))
+      .$dynamic();
+      const rawRows = params.exportAll ? await rowsQuery : await rowsQuery.limit(limit).offset((page - 1) * limit);
+
+      // V2.0.0: مانده ابتدای دوره — تجمیع اسناد قبل از startDate (با همان فیلترهای حساب/تفصیلی)
+      // v7.0.71 (P2-6 بخش ۳): جمع در SQL و مانده‌ها با Decimal
+      let openingDec = fin(0);
+      if (params.startDate) {
+        // بازسازی شرط‌ها بدون شرط startDate: همان فیلترها ولی date < startDate
+        const priorConds: (SQL | undefined)[] = [
+          eq(journalVouchers.isDeleted, 0),
+          eq(journalVoucherItems.isDeleted, 0),
+          or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
+        ];
+        if (params.accountId) priorConds.push(accountSubtreeCondition(journalVoucherItems.accountId, params.accountId));
+        if (params.detailedType && params.detailedType !== 'all') priorConds.push(eq(journalVoucherItems.detailedType, params.detailedType));
+        if (params.detailedId) priorConds.push(eq(journalVoucherItems.detailedId, params.detailedId));
+        if (params.detailedName) priorConds.push(foldedContains([journalVoucherItems.detailedName], params.detailedName));
+        if (params.party) priorConds.push(partyDetailedRowsCondition(params.party), partyPermanent);
+        priorConds.push(currencyCondition);
+        if (params.startDate) priorConds.push(lt(journalVouchers.date, params.startDate));
+
+        const [prior] = await tx.select({ balance: sql<string>`COALESCE(SUM(${debitAmount} - ${creditAmount}), 0)::text` })
+        .from(journalVoucherItems)
+        .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
+        .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
+        .where(and(...priorConds.filter((c): c is SQL => c !== undefined)));
+        openingDec = fin(prior?.balance).round(4);
+      }
+      return { totals, rawRows, openingDec };
+    }, { isolationLevel: 'repeatable read', accessMode: 'read only' });
+    const openingBalance = openingDec.toNumber();
+    const totalDebitDec = fin(totals?.totalDebit);
+    const totalCreditDec = fin(totals?.totalCredit);
+    const finalDec = openingDec.add(totalDebitDec).subtract(totalCreditDec);
 
     interface LedgerOutputRow extends ForeignAmountOrigin {
       voucherId: number;
@@ -737,17 +766,16 @@ export class AccountingReportService {
       credit: number;
       runningBalance: number;
       isOpening?: boolean;
+      rowNumber?: number;
     }
     const reportCurrency = allCurrencies ? 'IRR' : String(params.currency).toUpperCase();
 
     const items: LedgerOutputRow[] = rawRows.map(r => {
       const d = fin(r.debit);
       const c = fin(r.credit);
-      totalDebitDec = totalDebitDec.add(d);
-      totalCreditDec = totalCreditDec.add(c);
-      runningDec = runningDec.add(d).subtract(c);
 
       return {
+        rowNumber: Number(r.rowNumber),
         voucherId: r.voucherId,
         voucherNumber: r.voucherNumber,
         date: r.date,
@@ -760,13 +788,13 @@ export class AccountingReportService {
         currency: reportCurrency,
         debit: d.toNumber(),
         credit: c.toNumber(),
-        runningBalance: runningDec.toNumber(),
+        runningBalance: openingDec.add(fin(r.periodBalance)).toNumber(),
         ...foreignOrigin(allCurrencies, r),
       };
     });
 
-    // V2.0.0: ردیف «مانده ابتدای دوره» به ابتدای لیست (وقتی بازه تعیین شده و مانده صفر نیست)
-    if (params.startDate && openingBalance !== 0) {
+    // V2.0.0: ردیف «مانده ابتدای دوره» به ابتدای لیست (وقتی بازه تعیین شده و مانده صفر نیست)؛ v11 phase 6.1ch: صفحه اول
+    if (params.startDate && openingBalance !== 0 && (params.exportAll || page === 1)) {
       items.unshift({
         voucherId: 0,
         voucherNumber: 0,
@@ -782,13 +810,17 @@ export class AccountingReportService {
       });
     }
 
+    const total = Number(totals?.total ?? 0);
     return {
       items,
       openingBalance,
       totalDebit: totalDebitDec.toNumber(),
       totalCredit: totalCreditDec.toNumber(),
-      finalBalance: runningDec.toNumber(),
+      finalBalance: finalDec.toNumber(),
       currency: reportCurrency,
+      total,
+      page: params.exportAll ? 1 : page,
+      limit: params.exportAll ? Math.max(total, 1) : limit,
       ...(params.party ? {
         temporaryRows: await readPartyTemporaryRows({
           periodConditions: periodConditions.filter((c): c is SQL => c !== undefined), debitAmount, creditAmount, reportCurrency, allCurrencies,
@@ -797,7 +829,7 @@ export class AccountingReportService {
         draftRows: await readPartyDraftRows({
           partyRowsCondition: partyDetailedRowsCondition(params.party), currencyCondition: currencyCondition ?? undefined,
           startDate: params.startDate, endDate: params.endDate, debitAmount, creditAmount, reportCurrency, allCurrencies,
-          approvedBalance: runningDec.toNumber(),
+          approvedBalance: finalDec.toNumber(),
         }),
       } : {}),
     };

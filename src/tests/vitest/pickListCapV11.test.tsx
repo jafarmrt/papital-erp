@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
-  PICK_LIST_IDS_MAX, PICK_LIST_IDS_PATTERN, PICK_LIST_LIMIT, cappedPickListUrl, isCutPickList, parsePickListIds, pickListIds,
+  PICK_LIST_IDS_MAX, PICK_LIST_IDS_PATTERN, PICK_LIST_LIMIT, cappedPickListUrl, isCutPickList, pickListIds,
   pickListIdsUrl, pickListServerSearchUrl, takePickList,
 } from '../../lib/permissions/pickListCap';
 
@@ -69,8 +69,6 @@ describe('the cap of a pick list (C13)', () => {
     expect(pickListIds([5, '3', 5, null, 0, -2, 'x', 2.5, undefined])).toEqual([3, 5]);
     expect(pickListIds(Array.from({ length: PICK_LIST_IDS_MAX + 9 }, (_, i) => i + 1))).toHaveLength(PICK_LIST_IDS_MAX);
     expect(pickListIdsUrl('/customers/options?partyType=customer', [9, 2, 9])).toBe('/customers/options?ids=2,9');
-    expect(parsePickListIds('7,3,7')).toEqual([3, 7]);
-    expect(parsePickListIds(undefined)).toBeUndefined();
     for (const good of ['1', '1,2,3', '2147483647']) expect(PICK_LIST_IDS_PATTERN.test(good)).toBe(true);
     for (const bad of ['', '0', '01', '1,', ',1', '1,,2', 'a', '-1', '12345678901']) expect(PICK_LIST_IDS_PATTERN.test(bad)).toBe(false);
     expect(PICK_LIST_IDS_PATTERN.test(Array.from({ length: PICK_LIST_IDS_MAX + 1 }, (_, i) => i + 1).join(','))).toBe(false);

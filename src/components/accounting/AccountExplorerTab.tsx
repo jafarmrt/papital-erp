@@ -5,7 +5,11 @@ import { formatPersianNumber, formatPersianDate, getTodayJalaliDate, formatPersi
 import { accountExplorerFileName } from '../../lib/accounting/accountingExport';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { SearchableSelect } from '../SearchableSelect';
-import { useExplorerLedgerQuery, type ExplorerLedgerParams, type ExplorerLedgerRow } from '../../hooks/accounting/useAccountExplorerQueries';
+import { fetchExplorerLedgerRows, useExplorerLedgerQuery, type ExplorerLedgerParams, type ExplorerLedgerRow } from '../../hooks/accounting/useAccountExplorerQueries';
+import { accountCardPageCount } from '../../lib/accounting/accountCard';
+import { ListPager } from '../common/ListPager';
+import { usePrintSnapshot } from '../../hooks/usePrintSnapshot';
+import { toast } from 'react-hot-toast';
 import { useVoucherDetailLoader } from '../../hooks/accounting/useVoucherQueries';
 import type { Account, Customer, Personnel, BankAccount, JournalVoucher } from '../../types';
 import { DialogLayer } from '../common/DialogLayer';
@@ -121,8 +125,15 @@ export function AccountExplorerTab({
     startDate,
     endDate
   ]);
-  const { ledger, loading: isLoadingTransactions, hasFilter: hasLedgerFilter } = useExplorerLedgerQuery(ledgerParams);
-  const transactions: VoucherItemRow[] = ledger.items;
+  // v11 phase 6.1ch (M13): the card is paged on the server; a new selection opens on its first page
+  const ledgerKey = JSON.stringify(ledgerParams);
+  const [ledgerPage, setLedgerPage] = useState<{ key: string; page: number }>({ key: ledgerKey, page: 1 });
+  const currentLedgerPage = ledgerPage.key === ledgerKey ? ledgerPage.page : 1;
+  const { ledger, loading: isLoadingTransactions, hasFilter: hasLedgerFilter } = useExplorerLedgerQuery(ledgerParams, currentLedgerPage);
+  // the print holds every row of the selection (`handlePrint`); the screen shows its page
+  const ledgerPrint = usePrintSnapshot<VoucherItemRow[]>(ledgerKey);
+  const transactions: VoucherItemRow[] = ledgerPrint.data ?? ledger.items;
+  const [exportingCsv, setExportingCsv] = useState(false);
   // v10.0.x (TD-1240): ردیف «مانده ابتدای دوره» سند ندارد؛ شماره ردیف‌ها پس از آن از ۱ آغاز می‌شود
   const openingRows = transactions.filter(t => t.isOpening).length;
   const summaryStats = useMemo(() => ({
@@ -167,16 +178,31 @@ export function AccountExplorerTab({
     setSelectedSubsidiaryId(null);
   };
 
-  // Print function
-  const handlePrint = () => {
-    window.print();
+  // Print function; v11 phase 6.1ch (M13): a selection of several pages prints every row (`export=true`)
+  const handlePrint = async () => {
+    if (accountCardPageCount(ledger) <= 1) {
+      window.print();
+      return;
+    }
+    const printed = await ledgerPrint.start(() => fetchExplorerLedgerRows(ledgerParams)).catch(() => false);
+    if (!printed) toast.error('همه ردیف‌های گردش حساب برای چاپ گرفته نشد؛ دوباره تلاش کنید.');
   };
 
-  // Export CSV function
-  const handleExportCSV = () => {
-    if (!transactions.length) return;
+  // Export CSV function; v11 phase 6.1ch (M13): every row of the selection (`export=true`), not only the page on screen
+  const handleExportCSV = async () => {
+    if (!transactions.length || exportingCsv) return;
+    setExportingCsv(true);
+    let allRows: VoucherItemRow[];
+    try {
+      allRows = await fetchExplorerLedgerRows(ledgerParams);
+    } catch {
+      toast.error('خروجی گردش حساب گرفته نشد؛ دوباره تلاش کنید.');
+      return;
+    } finally {
+      setExportingCsv(false);
+    }
     const headers = ["شماره سند", "تاریخ", "کد حساب", "نام حساب", "تفصیلی", "شرح ردیف", "بدهکار (ریال)", "بستانکار (ریال)", "مانده (ریال)"];
-    const rows = transactions.map(t => [
+    const rows = allRows.map(t => [
       t.isOpening ? '' : t.voucherNumber,
       formatPersianDate(t.date, { englishDigits: true }),
       t.isOpening ? '' : t.accountCode,
@@ -396,7 +422,8 @@ export function AccountExplorerTab({
             <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 my-auto hidden sm:block" />
 
             <button
-              onClick={handlePrint}
+              onClick={() => { void handlePrint(); }}
+              disabled={ledgerPrint.loading}
               className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1.5 cursor-pointer"
             >
               <Printer size={14} />
@@ -404,8 +431,9 @@ export function AccountExplorerTab({
             </button>
 
             <button
-              onClick={handleExportCSV}
-              className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+              onClick={() => { void handleExportCSV(); }}
+              disabled={exportingCsv}
+              className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-60"
             >
               <Download size={14} />
               <span className="hidden sm:inline">خروجی اکسل</span>
@@ -623,7 +651,7 @@ export function AccountExplorerTab({
           <div className="flex items-center gap-2">
             <FileText className="w-4 h-4 text-indigo-500" />
             <h3 className="font-bold text-sm text-slate-800 dark:text-slate-200">
-              کاردکس و ریز ردیف‌های اسناد حسابداری ({formatPersianNumber(transactions.length)} ردیف)
+              کاردکس و ریز ردیف‌های اسناد حسابداری ({formatPersianNumber(ledger.total)} ردیف)
             </h3>
           </div>
           {isLoadingTransactions && (
@@ -665,7 +693,7 @@ export function AccountExplorerTab({
               ) : (
                 transactions.map((item, idx) => (
                   <tr key={idx} className={`hover:bg-slate-50/80 dark:hover:bg-slate-700/40 transition ${item.isOpening ? 'bg-indigo-50/40 dark:bg-indigo-900/20 font-bold' : ''}`}>
-                    <td className="py-3 px-3 text-center font-mono text-slate-400">{item.isOpening ? '—' : formatPersianNumber(idx + 1 - openingRows)}</td>
+                    <td className="py-3 px-3 text-center font-mono text-slate-400">{item.isOpening ? '—' : formatPersianNumber(item.rowNumber ?? idx + 1 - openingRows)}</td>
                     <td className="py-3 px-3 text-center font-mono font-bold text-indigo-600 dark:text-indigo-400">
                       {item.isOpening ? '—' : formatPersianNumber(item.voucherNumber)}
                     </td>
@@ -686,7 +714,7 @@ export function AccountExplorerTab({
                         <span className="text-slate-400">-</span>
                       )}
                     </td>
-                    <td className="py-3 px-3 text-slate-600 dark:text-slate-300 max-w-xs truncate" title={item.description}>
+                    <td className="py-3 px-3 text-slate-600 dark:text-slate-300 max-w-xs truncate" title={item.description ?? undefined}>
                       {item.description || '-'}
                     </td>
                     <td className="py-3 px-3 text-left font-mono font-bold text-emerald-600 dark:text-emerald-400">
@@ -718,6 +746,12 @@ export function AccountExplorerTab({
             </tbody>
           </table>
         </div>
+        {hasLedgerFilter && (
+          <div className="p-3 no-print">
+            <ListPager page={ledger.page} totalPages={accountCardPageCount(ledger)} total={ledger.total} limit={ledger.limit}
+              onPage={(page) => setLedgerPage({ key: ledgerKey, page })} disabled={isLoadingTransactions} />
+          </div>
+        )}
       </div>
 
       {/* Drill-down Voucher Detail Modal */}

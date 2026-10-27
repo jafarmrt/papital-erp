@@ -2,7 +2,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { ACCOUNTING_REPORT_QUERY_OPTIONS } from './accountingQueryConfig';
-import { accountCardHasFilter } from '../../lib/accounting/accountCard';
+import { ACCOUNT_CARD_PAGE_SIZE, accountCardHasFilter, accountCardRows, setAccountCardPage, type AccountCardReport, type AccountCardRow } from '../../lib/accounting/accountCard';
 
 /**
  * تب «مرور حساب‌ها»: گردش حساب/تفصیلی انتخاب‌شده (GET /accounting/reports/ledger) با React Query.
@@ -20,39 +20,14 @@ export interface ExplorerLedgerParams {
   endDate?: string;
 }
 
-export interface ExplorerLedgerRow {
-  voucherId: number;
-  voucherNumber: number;
-  date: string;
-  description: string;
-  accountName: string;
-  accountCode: string;
-  detailedName?: string;
-  detailedType?: string;
-  debit: number;
-  credit: number;
-  runningBalance: number;
-  /** v10.0.x (TD-1240): ردیف «مانده ابتدای دوره» که سرور می‌فرستد؛ سند، شماره و کد حساب ندارد */
-  isOpening?: boolean;
-}
+/** v11 phase 6.1ch (M13): one page of the card, on the shared contract (`src/lib/accounting/accountCard.ts`) */
+export type ExplorerLedgerRow = AccountCardRow;
+export type ExplorerLedgerData = Pick<AccountCardReport, 'items' | 'totalDebit' | 'totalCredit' | 'finalBalance' | 'total' | 'page' | 'limit'>;
 
-export interface ExplorerLedgerData {
-  items: ExplorerLedgerRow[];
-  totalDebit: number;
-  totalCredit: number;
-  finalBalance: number;
-}
+const EMPTY_LEDGER: ExplorerLedgerData = { items: [], totalDebit: 0, totalCredit: 0, finalBalance: 0, total: 0, page: 1, limit: ACCOUNT_CARD_PAGE_SIZE };
 
-interface ExplorerLedgerResponse {
-  items?: unknown;
-  totalDebit?: number;
-  totalCredit?: number;
-  finalBalance?: number;
-}
-
-const EMPTY_LEDGER: ExplorerLedgerData = { items: [], totalDebit: 0, totalCredit: 0, finalBalance: 0 };
-
-export function explorerLedgerUrl(p: ExplorerLedgerParams): string {
+/** the card of the selection: one page (`page` above 1 is sent), or every row for the CSV file (`exportAll`) */
+export function explorerLedgerUrl(p: ExplorerLedgerParams, page = 1, exportAll = false): string {
   const queryParams = new URLSearchParams();
   if (p.accountId) queryParams.set('accountId', p.accountId.toString());
   if (p.detailedType) queryParams.set('detailedType', p.detailedType);
@@ -60,25 +35,36 @@ export function explorerLedgerUrl(p: ExplorerLedgerParams): string {
   if (p.detailedName) queryParams.set('detailedName', p.detailedName);
   if (p.startDate) queryParams.set('startDate', p.startDate);
   if (p.endDate) queryParams.set('endDate', p.endDate);
-  return `/accounting/reports/ledger?${queryParams.toString()}`;
+  return `/accounting/reports/ledger?${setAccountCardPage(queryParams, page, exportAll).toString()}`;
 }
 
-export function useExplorerLedgerQuery(params: ExplorerLedgerParams) {
+function ledgerOf(res: Partial<AccountCardReport> | null): ExplorerLedgerData | null {
+  if (!res) return null;
+  return {
+    items: accountCardRows(res as AccountCardReport),
+    totalDebit: res.totalDebit || 0,
+    totalCredit: res.totalCredit || 0,
+    finalBalance: res.finalBalance || 0,
+    total: Number(res.total ?? 0),
+    page: Number(res.page ?? 1),
+    limit: Number(res.limit ?? ACCOUNT_CARD_PAGE_SIZE),
+  };
+}
+
+/** every row of the selection for the CSV file (`export=true`); the screen shows one page */
+export async function fetchExplorerLedgerRows(params: ExplorerLedgerParams): Promise<ExplorerLedgerRow[]> {
+  return ledgerOf(await fetchJson<Partial<AccountCardReport> | null>(explorerLedgerUrl(params, 1, true)))?.items ?? [];
+}
+
+export function useExplorerLedgerQuery(params: ExplorerLedgerParams, page = 1) {
   // v9.0.225 (TD-547، ت۵ الف): بی حساب و بی طرف حساب درخواستی نمی‌رود (سرور ۴۲۲ می‌دهد)؛ پیش‌تر باز شدن زبانه کل دفتر را می‌خواند
   const hasFilter = accountCardHasFilter(params);
   const query = useQuery<ExplorerLedgerData | null>({
     enabled: hasFilter,
-    queryKey: QUERY_KEYS.accounting.report('explorer-ledger', params),
+    queryKey: QUERY_KEYS.accounting.report('explorer-ledger', { ...params, page }),
     queryFn: async ({ signal }) => {
       try {
-        const res = await fetchJson<ExplorerLedgerResponse | null>(explorerLedgerUrl(params), { signal });
-        if (!res) return null;
-        return {
-          items: Array.isArray(res.items) ? (res.items as ExplorerLedgerRow[]) : [],
-          totalDebit: res.totalDebit || 0,
-          totalCredit: res.totalCredit || 0,
-          finalBalance: res.finalBalance || 0,
-        };
+        return ledgerOf(await fetchJson<Partial<AccountCardReport> | null>(explorerLedgerUrl(params, page), { signal }));
       } catch (err: unknown) {
         if (!signal.aborted) console.error('Error fetching explorer transactions:', err);
         throw err;

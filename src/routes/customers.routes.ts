@@ -8,6 +8,8 @@ import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString, pickListIdsString, storageDateParam } from '../middleware/validate.js';
+import { accountCardPageQuery } from './accounting/reports.schemas.js';
+import type { ValidatedQuery } from './accounting/accounting.schemas.js';
 import { customerBulkImportSchema } from './importRows.schemas.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { BadRequestError, NotFoundError } from '../errors/customErrors.js';
@@ -16,7 +18,6 @@ import { CustomerService } from '../services/customer.service.js';
 import { getCustomerAccountCard } from '../services/customers/customerAccountCard.js';
 import { getCustomerSalesDocuments } from '../services/customers/customerDocuments.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
-import { parsePickListIds } from '../lib/permissions/pickListCap.js';
 import { partyRowsForUser } from '../services/customers/partyBankInfoAccess.js';
 import { customerListConditions, listCustomerPicks } from '../services/customers/customerPickList.js';
 import { customerTagNames, setCustomerTags, tagsByCustomer } from '../services/customers/customerTags.service.js';
@@ -227,8 +228,8 @@ const customerPickListValidation = z.object({
 
 // v9.0.137 (TD-887، تصمیم ت۱۰ الف): فهرست انتخاب طرف حساب‌ها برای فرم‌های بخش‌های دیگر؛ فهرست کامل بالا فقط با customers.view
 router.get('/customers/options', authorizePermission(...READ_PERMISSIONS.customerOptions), validate(customerPickListValidation), asyncHandler(async (req, res) => {
-  const { search, partyType, limit, ids } = req.query as { search?: string; partyType?: string; limit?: string; ids?: string };
-  res.json({ success: true, data: await listCustomerPicks(req.user, { search, partyType, limit: parsePickListLimit(limit), ids: parsePickListIds(ids) }) });
+  const { search, partyType, limit, ids } = req.query as { search?: string; partyType?: string; limit?: string; ids?: number[] };
+  res.json({ success: true, data: await listCustomerPicks(req.user, { search, partyType, limit: parsePickListLimit(limit), ids }) });
 }));
 
 // GET /api/customers/export-excel - Structured Excel export rows
@@ -284,14 +285,16 @@ const customerAccountCardValidation = z.object({
     startDate: storageDateParam,
     endDate: storageDateParam,
     currency: z.string().max(10).optional(),
+    ...accountCardPageQuery,
   }).optional(),
 });
 
 // v9.0.4 (TD-416): کارت حساب و مانده طرف حساب با شناسه او (صفحه طرف حساب‌ها و پرونده مشتری)
 router.get('/customers/:id/account-card', authorizePermission(...READ_PERMISSIONS.partyAccountCard), validate(customerAccountCardValidation), asyncHandler(async (req, res) => {
-  const { startDate, endDate, currency } = (req.query as { startDate?: string; endDate?: string; currency?: string }) || {};
-  const data = await getCustomerAccountCard(Number(req.params.id), { startDate, endDate, currency });
-  res.json({ report: data, ...data });
+  const { startDate, endDate, currency, page, limit, export: exportAll } = (req.query as ValidatedQuery<typeof customerAccountCardValidation>) || {};
+  const data = await getCustomerAccountCard(Number(req.params.id), { startDate, endDate, currency, page, limit, exportAll: exportAll === 'true' });
+  // v11 phase 6.1ch (M13): one page of the card, sent once
+  res.json(data);
 }));
 
 const customerDocumentsValidation = z.object({
