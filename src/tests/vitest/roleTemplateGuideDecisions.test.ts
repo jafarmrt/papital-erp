@@ -27,4 +27,8 @@ describe('role_template_guide_decisions_td_1181: role templates follow the guide
   it('the production manager does not approve raw material requests', () => {
     expect(permissionsOf('production_manager')).not.toContain('pending_materials.approve');
   });
+  // v11 phase 6.1p (U5): documents and treasury leave their vouchers as drafts, and the accountant approves them
+  it('the accountant approves vouchers, with the keys that permission needs', () => {
+    expect(permissionsOf('accountant')).toEqual(expect.arrayContaining(['accounting.vouchers_approve', 'accounting.vouchers', 'workflow.approve']));
+  });
 });

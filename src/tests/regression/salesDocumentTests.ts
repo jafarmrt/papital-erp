@@ -1,6 +1,7 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { createHarness, type Harness, type ShouldRun } from '../security/workflowTestHarness.js';
 import { brief, docVersion, fixture } from './documentEntryTests.js';
+import { closeDocumentWorkflow } from '../fixtures/documentWorkflow.js';
 
 /**
  * Package 8 (documents and invoices), PR B: the money of sales documents (zero-price invoices, voiding an invoice that has
@@ -97,6 +98,7 @@ async function zeroPriceInvoiceCase(h: Harness, wrong: string[]): Promise<string
   const b = await f.item(10, 30_000);
   const proforma = await h.post('/api/documents', f.doc('proforma', 'proforma', [{ itemId: b, quantity: 1, unit_price: 0, location: f.wh }]));
   const proformaId = docIdOf(proforma);
+  await closeDocumentWorkflow(proformaId);
   const finalized = await h.put(`/api/documents/${proformaId}/finalize`, {});
   if (proforma.status !== 200 || finalized.status !== 200) wrong.push(`a zero-price proforma and its finalize answered ${brief(proforma)} and ${brief(finalized)}, expected 200 and 200`);
   else await expectCostOnly(proformaId, 30_000, 'finalized zero-price proforma');

@@ -63,10 +63,11 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     code: 'accountant',
     name: 'حسابدار و کارشناس مالی',
     description: 'مدیریت اسناد دوبل، کدینگ، فاکتورهای فروش، خزانه‌داری و صدور چک و صورت‌های مالی',
+    // v11 phase 6.1p (U5): the accountant approves the vouchers that documents and treasury leave as drafts
     permissions: [
       'products.view', 'products.edit_price', 'warehouse.view', 'documents.view', 'documents.create', 'documents.edit',
       'documents.delete', 'documents.finalize', 'customers.view', 'customers.manage', 'customers.delete', 'workflow.view', 'workflow.approve',
-      'crm.view', 'reports.view', 'projects.view', 'accounting.view', 'accounting.vouchers', 'accounting.coa',
+      'crm.view', 'reports.view', 'projects.view', 'accounting.view', 'accounting.vouchers', 'accounting.vouchers_approve', 'accounting.coa',
       'accounting.treasury', 'accounting.cheques', 'accounting.reports', 'daily_logs.view', 'daily_logs.create',
     ],
   },

@@ -1,6 +1,7 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { createHarness, type Harness, type ShouldRun } from '../security/workflowTestHarness.js';
 import { brief, docVersion, fixture } from './documentEntryTests.js';
+import { closeDocumentWorkflow } from '../fixtures/documentWorkflow.js';
 
 /**
  * Package 8 (documents and invoices), PR E: the data of a document (who reads its treasury rows, its party by id). Through the real
@@ -243,6 +244,7 @@ async function documentAuditTrailCase(h: Harness, wrong: string[]): Promise<stri
   }
 
   // 3) finalize: one UPDATE row from draft to final
+  await closeDocumentWorkflow(docId);
   const finalized = await h.put(`/api/documents/${docId}/finalize`, {});
   if (finalized.status !== 200) throw new Error(`setup: finalize ${brief(finalized)}`);
   rows = await auditRows(docId);
