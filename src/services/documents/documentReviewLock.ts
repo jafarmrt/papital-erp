@@ -19,7 +19,8 @@ interface ReviewStep {
   isInitial: boolean;
 }
 
-async function currentStepOf(tx: DbExecutor, snapshot: unknown, stateId: number): Promise<ReviewStep | null> {
+/** the instance's current step, from its own snapshot (a saved design gives the steps new ids), else the live table */
+export async function currentStepOf(tx: DbExecutor, snapshot: unknown, stateId: number): Promise<ReviewStep | null> {
   const dsl = snapshot as WorkflowSnapshotDsl | null | undefined;
   if (isUsableSnapshot(dsl)) {
     const state = dsl.states!.find(s => s.id === stateId);

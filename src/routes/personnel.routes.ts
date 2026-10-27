@@ -4,7 +4,7 @@ import { orm } from '../db/drizzle.js';
 import { personnel, users } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { authorizePermission } from '../middleware/authorize.js';
+import { authorizePermission, userHasRoleOrPermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../errors/customErrors.js';
 import { personnelAuditChanges, personnelAuditSnapshot } from '../services/personnel/personnelAudit.js';
@@ -27,7 +27,10 @@ import { requirePersonnelNationalId } from '../services/personnel/personnelNatio
 import { paddedNationalIdNotice, readImportedNationalId } from '../lib/personnel/nationalIdCell.js';
 import { assertPersonnelCodeAvailable, guardPersonnelCode, isPersonnelCodeUniqueViolation, personnelCodeKey, personnelCodeTakenMessage } from '../services/personnel/personnelCode.js';
 import { assertPersonnelNationalIdAvailable, guardPersonnelNationalId, isPersonnelNationalIdUniqueViolation, personnelNationalIdKey, personnelNationalIdTakenMessage } from '../services/personnel/personnelNationalIdUnique.js';
-import { guardPersonnelUserLink, parsePersonnelUserId, resolvePersonnelUserLink } from '../services/personnel/personnelUserLink.js';
+import {
+  assertPersonnelUserLinkChange, guardPersonnelUserLink, parsePersonnelUserId, recordPersonnelUserLinkChange, resolvePersonnelUserLink,
+} from '../services/personnel/personnelUserLink.js';
+import { PERSONNEL_USER_LINK_PERMISSION } from '../lib/personnel/personnelUserLinks.js';
 import { personnelReadScope, scopePersonnelRow, withoutNobitexPassword } from '../services/personnel/personnelFieldScope.js';
 import { PERSONNEL_DETAIL_COLUMNS, countPersonnelRows, listPersonnelRows, personnelListStats } from '../services/personnel/personnelList.js';
 import { parsePagination, parsePickListLimit } from '../lib/pagination.js';
@@ -518,6 +521,8 @@ router.post('/personnel', authorizePermission('personnel.manage'), validate(crea
     // v9.0.28 (TD-439): کد پرسنلی با کلید lower(btrim) میان پرسنل فعال یکتاست؛ نقض ایندکس 0054 همان پیام فارسی ۴۰۰ است
     // OBS-R2-56 (ت۴۰): کد ملی غیرخالی میان پرسنل فعال یکتاست (۴۰۹ PERSONNEL_NATIONAL_ID_TAKEN، ایندکس 0122)
     const newNationalId = requirePersonnelNationalId(nationalId);
+    // v11 phase 6.2 (X6): linking an account needs «مدیریت کاربران»
+    assertPersonnelUserLinkChange(null, parsePersonnelUserId(userId), await userHasRoleOrPermission(req.user, PERSONNEL_USER_LINK_PERMISSION));
     const inserted = await guardPersonnelNationalId(newNationalId, () => guardPersonnelCode(personnelCode, () => guardPersonnelUserLink(() => orm.transaction(async (tx) => {
       await assertPersonnelCodeAvailable(personnelCode, tx);
       await assertPersonnelNationalIdAvailable(newNationalId, tx);
@@ -571,6 +576,7 @@ router.post('/personnel', authorizePermission('personnel.manage'), validate(crea
         req,
         tx
       });
+      await recordPersonnelUserLinkChange(tx, { req, personnelId: row.id, fullName: computedFullName, before: null, after: linkedUserId });
       return row;
     }))));
 
@@ -641,6 +647,10 @@ router.put('/personnel/:id', authorizePermission('personnel.manage'), validate(u
 
     const nowIso = new Date().toISOString();
     const nextNobitex = await nextNobitexPassword(nobitexPassword, existing, req.user);
+    // v11 phase 6.2 (X6): a change of the account needs «مدیریت کاربران», and never goes straight to another account
+    const requestedUserId = parsePersonnelUserId(userId);
+    assertPersonnelUserLinkChange(existing.userId ?? null, requestedUserId,
+      requestedUserId === (existing.userId ?? null) || await userHasRoleOrPermission(req.user, PERSONNEL_USER_LINK_PERMISSION));
 
     // v9.0.24 (TD-435): پیوند تازه یا عوض‌شده کاربر زیر قفل ردیف کاربر سنجیده می‌شود؛ پیوند فعلی دست نمی‌خورد
     const codeChanged = personnelCodeKey(personnelCode) !== personnelCodeKey(existing.personnelCode);
@@ -649,7 +659,6 @@ router.put('/personnel/:id', authorizePermission('personnel.manage'), validate(u
     await guardPersonnelNationalId(nextNationalId, () => guardPersonnelCode(personnelCode ?? '', () => guardPersonnelUserLink(() => orm.transaction(async (tx) => {
       if (codeChanged) await assertPersonnelCodeAvailable(personnelCode ?? '', tx, id);
       if (nationalIdChanged) await assertPersonnelNationalIdAvailable(nextNationalId, tx, id);
-      const requestedUserId = parsePersonnelUserId(userId);
       const linkedUserId = requestedUserId === existing.userId ? requestedUserId : await resolvePersonnelUserLink(tx, requestedUserId, id);
       const updated = await updatePersonnelAtVersion(tx, id, existing.version, {
           firstName: firstName ? firstName.trim() : '',
@@ -702,6 +711,7 @@ router.put('/personnel/:id', authorizePermission('personnel.manage'), validate(u
         req,
         tx
       });
+      await recordPersonnelUserLinkChange(tx, { req, personnelId: id, fullName: computedFullName, before: existing.userId ?? null, after: linkedUserId });
     }))));
 
     res.json({ status: 'ok', message: 'اطلاعات پرسنل با موفقیت ویرایش شد' });

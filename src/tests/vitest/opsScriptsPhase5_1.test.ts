@@ -194,7 +194,7 @@ describe('cron_exec_bits_o3: a zip without unix modes no longer stops the backup
   it('every cron job runs its script through bash, so a script without its executable bit still runs', () => {
     const dir = tmp('ops-cron-');
     const cronFile = path.join(dir, 'papital-erp');
-    const run = spawnSync('bash', [path.join(ROOT, 'scripts/install-ops-cron.sh'), os.userInfo().username], {
+    const run = spawnSync('bash', [path.join(ROOT, 'scripts/install-ops-cron.sh'), 'root'], {
       encoding: 'utf8', env: { ...process.env, CRON_FILE: cronFile, APP_DIR: ROOT },
     });
     expect(run.status, run.stderr).toBe(0);
@@ -308,7 +308,7 @@ esac`, { mode: 0o755 });
     spawnSync('chown', ['-R', 'nobody', m.app]);
     const r = m.run();
     expect(r.status).toBe(1);
-    expect(r.stdout).toContain(`sudo -u nobody bash ${m.app}/scripts/restore-media.sh`);
+    expect(r.stdout).toContain(`sudo -u nobody -H bash ${m.app}/scripts/restore-media.sh`);
     expect(fs.existsSync(path.join(m.app, 'media-library'))).toBe(false);
   });
 

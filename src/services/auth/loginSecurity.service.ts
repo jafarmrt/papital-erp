@@ -31,6 +31,28 @@ export const MAX_LOCK_MINUTES = 30;
  * this many consecutive failures; below it only the attacking (username + IP) pair is locked.
  */
 export const ACCOUNT_LOCKOUT_THRESHOLD = 50;
+/**
+ * v11 phase 6.2 (X15): failed logins one address may make in 15 minutes (the login limiter in app.ts), whoever the user.
+ * An office shares one public address, so the bucket is wide and the pair and account rules above do the locking; an
+ * answer that checked no password (`markPasswordNotChecked`) is not counted. Before, 10 failures, the lock answers among
+ * them, blocked the whole office.
+ */
+export const LOGIN_ADDRESS_MAX_FAILURES = 30;
+
+interface ResponseLocals { locals: Record<string, unknown> }
+
+/**
+ * v11 phase 6.2 (X15): the login answered without checking a password: a pair or account lock refused it first, or the
+ * address limiter itself answered. Such an answer is not a failure of the address limiter. A wrong password that then
+ * starts or renews a lock answers 429 too, but it checked the password, so it still counts.
+ */
+export function markPasswordNotChecked(res: ResponseLocals): void {
+  res.locals.loginPasswordNotChecked = true;
+}
+
+export function passwordWasNotChecked(res: ResponseLocals): boolean {
+  return res.locals.loginPasswordNotChecked === true;
+}
 /** After this quiet period since the last failure, a failure streak starts again from zero */
 const STREAK_RESET_AFTER_MS = 24 * 60 * 60 * 1000;
 

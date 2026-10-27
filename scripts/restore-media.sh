@@ -37,7 +37,7 @@ RCLONE_CONFIG_VALUE="$(setting RCLONE_CONFIG)"
 # the files must belong to the service's user: root copying them would leave them unreadable for a non-root service
 OWNER="$(stat -c %U "$MEDIA_ROOT" 2>/dev/null || stat -c %U "$APP_DIR")"
 if [ "$(id -u)" = "0" ] && [ "$OWNER" != "root" ]; then
-  fail "run it as the user that owns $APP_DIR: sudo -u $OWNER bash $APP_DIR/scripts/restore-media.sh"
+  fail "run it as the user that owns the media library ($MEDIA_ROOT, the service user): sudo -u $OWNER -H bash $APP_DIR/scripts/restore-media.sh"
 fi
 [ -n "$REMOTE" ] || fail "MEDIA_RCLONE_REMOTE is not set in $APP_DIR/.env: there is no off-server copy to restore from (docs/OFFSITE_BACKUP.md)"
 case "$REMOTE" in *:*) ;; *) fail "MEDIA_RCLONE_REMOTE must be an rclone remote such as papital-crypt: (got $REMOTE)" ;; esac

@@ -12,10 +12,16 @@ OPS_UPDATE_LOCK_NAME=".update.lock"
 OPS_BUSY_LOCK_NAME="logs/.ops-busy.lock"
 
 # ops_lock_held <file>: 0 when another process holds a lock on <file>; a missing or unreadable file is not held
+# v11 (phase 5.3, TD-1354): logs/ belongs to the service user, who could put a FIFO or a link to one there: opening it
+# would wait forever (update.sh, the nightly check). Only a plain file is opened, and the open itself is given 10
+# seconds, since the file can be swapped between the test and the open; anything else is not held
 ops_lock_held() {
-  [ -r "$1" ] || return 1
+  [ -f "$1" ] && [ ! -L "$1" ] && [ -r "$1" ] || return 1
   command -v flock >/dev/null 2>&1 || return 1
-  ! ( exec 6<"$1" && flock -n -x 6 )
+  # shellcheck disable=SC2016
+  local rc=0
+  timeout 10 bash -c 'flock -n -x -E 75 6 6<"$1"' lock "$1" 2>/dev/null || rc=$?
+  [ "$rc" -eq 75 ]
 }
 
 # ops_busy_hold <app-dir>: takes the shared busy lock on descriptor 7 until this process ends. A lock file that cannot be

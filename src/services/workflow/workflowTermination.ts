@@ -18,7 +18,8 @@ export interface TerminateWorkflowParams {
  * انتظار تأیید پاک و یک ردیف تاریخچه در گام جاری. فراخواننده پیش‌تر ردیف خود موجودیت را قفل کرده است (همان ترتیب
  * «موجودیت ← نمونه» اجرای انتقال). خروجی: شناسه نمونه‌های بسته‌شده.
  *
- * v9.0.39 (TD-446، ت۴): سندی که بیرون از گردش کار قطعی می‌شود؛ v9.0.40 (TD-447، ت۵): ابطال یا حذف موجودیت.
+ * v9.0.40 (TD-447، ت۵): ابطال یا حذف موجودیت. (v9.0.39، TD-446: قطعی کردن مستقیم سند هم آن را می‌بست، تا v11 phase 6.1p که
+ * قطعی کردن سندِ در گردش کار را رد می‌کند.)
  */
 export async function terminateOpenWorkflows(tx: DbExecutor, params: TerminateWorkflowParams): Promise<number[]> {
   const open = await tx.select({ id: workflowInstances.id, currentStateId: workflowInstances.currentStateId, version: workflowInstances.version })

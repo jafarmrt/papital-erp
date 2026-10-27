@@ -1,6 +1,7 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { createHarness, type Harness, type ShouldRun } from '../security/workflowTestHarness.js';
+import { closeDocumentWorkflow } from '../fixtures/documentWorkflow.js';
 
 /**
  * Package 8 (documents and invoices), PR A: stock direction, the sellable gate and line numbers of `POST /documents`, through
@@ -174,6 +175,7 @@ async function sellableGateCase(h: Harness, wrong: string[]): Promise<string> {
   const draftId = Number((draft.body as { docId?: unknown })?.docId);
   if (draft.status !== 200 || !draftId) wrong.push(`the draft with two lines of 4 answered ${brief(draft)}, expected 200`);
   else {
+    await closeDocumentWorkflow(draftId);
     const finalized = await h.put(`/api/documents/${draftId}/finalize`, {});
     if (!refusedWith(finalized)) wrong.push(`finalizing the draft with two lines of 4 answered ${brief(finalized)}, expected 400 INSUFFICIENT_STOCK`);
     await stockIs(10, 'a refused finalize');
@@ -183,6 +185,7 @@ async function sellableGateCase(h: Harness, wrong: string[]): Promise<string> {
   const four = await h.post('/api/documents', f.doc('invoice', 'final', [line(a, 4)]));
   if (four.status !== 200) wrong.push(`a final invoice of 4 answered ${brief(four)}, expected 200`);
   await stockIs(6, 'an invoice of 4');
+  await closeDocumentWorkflow(proformaId);
   const finProforma = await h.put(`/api/documents/${proformaId}/finalize`, {});
   if (finProforma.status !== 200) wrong.push(`finalizing the reserving proforma of 6 answered ${brief(finProforma)}, expected 200`);
   await stockIs(0, 'finalizing the proforma');
