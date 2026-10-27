@@ -155,7 +155,9 @@ if ! grep -qE '^[[:space:]]*(export[[:space:]]+)?ERP_LISTEN_HOST[[:space:]]*=' "
   echo "ERP_LISTEN_HOST=127.0.0.1" >> "$APP_DIR/.env"
   log "The app now listens on 127.0.0.1:${APP_PORT} only (ERP_LISTEN_HOST in .env); open it through https://${DOMAIN}."
 fi
-chmod 600 "$APP_DIR/.env"
+# v11 (phase 5.3, TD-1354): a .env given to the group of the service user (install.sh) keeps that group's read;
+# nobody else reads it. Only a .env that has the group read already keeps it (a root:adm .env of 600 stays 600)
+if [ "$(stat -c %g "$APP_DIR/.env")" != "$(id -g "$(stat -c %U "$APP_DIR/.env")" 2>/dev/null)" ] && [ $((0$(stat -c %a "$APP_DIR/.env") & 040)) -ne 0 ]; then chmod 640 "$APP_DIR/.env"; else chmod 600 "$APP_DIR/.env"; fi
 
 systemctl restart "$SERVICE_NAME"
 # v11 (O12): healthy means started (migrations, seed and engines done), as update.sh checks it; /health/live answers

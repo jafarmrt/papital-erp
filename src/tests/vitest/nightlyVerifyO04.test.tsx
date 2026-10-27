@@ -206,18 +206,18 @@ describe('nightly_verify_o_04: the nightly check on a copy of the backup', () =>
   it('install-ops-cron.sh schedules it every night at 04:00 as root, after the backup', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ops-cron-'));
     const cronFile = path.join(dir, 'papital-erp');
-    const run = spawnSync('bash', [path.join(ROOT, 'scripts/install-ops-cron.sh'), os.userInfo().username], {
+    const run = spawnSync('bash', [path.join(ROOT, 'scripts/install-ops-cron.sh'), 'root'], {
       encoding: 'utf8', env: { ...process.env, CRON_FILE: cronFile, APP_DIR: ROOT },
     });
     expect(run.status, run.stderr).toBe(0);
     expect(fs.readFileSync(cronFile, 'utf8')).toContain(`0 4 * * * root bash ${ROOT}/scripts/nightly-verify.sh >> ${ROOT}/logs/nightly-verify.log 2>&1`);
-    const bad = spawnSync('bash', [path.join(ROOT, 'scripts/install-ops-cron.sh'), os.userInfo().username], {
+    const bad = spawnSync('bash', [path.join(ROOT, 'scripts/install-ops-cron.sh'), 'root'], {
       encoding: 'utf8', env: { ...process.env, CRON_FILE: path.join(dir, 'other'), APP_DIR: ROOT, NIGHTLY_VERIFY_HOUR: '25' },
     });
     expect(bad.status).toBe(1);
     expect(run.stderr).toContain('the default 2 is written');
     expect(run.stdout).toContain('nightly backup check at 04:00');
-    const cron = (env: Record<string, string>) => spawnSync('bash', [path.join(ROOT, 'scripts/install-ops-cron.sh'), os.userInfo().username], {
+    const cron = (env: Record<string, string>) => spawnSync('bash', [path.join(ROOT, 'scripts/install-ops-cron.sh'), 'root'], {
       encoding: 'utf8', env: { ...process.env, CRON_FILE: path.join(dir, 'times'), APP_DIR: ROOT, ...env },
     });
     // 08 and 09 are decimal hours
