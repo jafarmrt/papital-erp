@@ -4,6 +4,7 @@ import { eq, desc, and } from 'drizzle-orm';
 import { appSettings, documents, woocommerceOrderLogs } from '../db/schema.js';
 import crypto from 'crypto';
 import { authenticateToken } from '../middleware/auth.js';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission, can } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
@@ -14,11 +15,15 @@ import { pushAllStocks, pushItemStock } from '../services/woocommerce/wcStockPus
 import { getAutoPushView, setAutoPush } from '../services/woocommerce/wcAutoPush.service.js';
 import { setShopPriceList, setSkuRename } from '../services/woocommerce/wcFieldPush.service.js';
 import { getShopSyncView } from '../services/woocommerce/wcShopSyncView.js';
+import { resolveShopImage, SHOP_IMAGE_ROUTE } from '../services/woocommerce/wcShopImageLink.js';
+import { setImagePush } from '../services/woocommerce/wcImagePush.service.js';
+import { setCollectionPush } from '../services/woocommerce/wcCollectionPush.service.js';
+import { WC_SHOP_IMAGE_REQUESTS_PER_MINUTE } from '../lib/woocommerce/wcMediaPush.js';
 import { catalogRefreshMessage, trackingEnabledNote } from '../lib/woocommerce/wcCatalog.js';
 import { formatPersianNumber } from '../utils/persianNumber.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
-import { AppError, ForbiddenError, ValidationError } from '../errors/customErrors.js';
+import { AppError, ForbiddenError, NotFoundError, ValidationError } from '../errors/customErrors.js';
 import { resolveWcTestCredentials } from '../lib/woocommerce/wcConnectionTest.js';
 import { readWcConnectionSettings } from '../services/woocommerce/wcConnectionSettings.js';
 import { openSettingSecret } from '../services/settings/settingSecrets.js';
@@ -57,6 +62,15 @@ const priceListSchema = z.object({
   body: z.object({ priceList: z.string().max(200) }).strict(),
 });
 const skuRenameSchema = z.object({
+  body: z.object({ enabled: z.boolean() }).strict(),
+});
+
+// v11 phase 6.5 (part D): the target state of the image push (with the program's public address to turn it on) and of
+// the collection push
+const imagePushSchema = z.object({
+  body: z.object({ enabled: z.boolean(), mediaBaseUrl: z.string().max(300).optional() }).strict(),
+});
+const collectionPushSchema = z.object({
   body: z.object({ enabled: z.boolean() }).strict(),
 });
 
@@ -165,6 +179,26 @@ const handleWebhookPingOrPayload = async (req: Request, res: Response) => {
 
 router.all('/webhook/order', asyncHandler(handleWebhookPingOrPayload));
 
+// v11 phase 6.5 (D-04 part D, decision ت۴۶): the shop downloads an item's cover from a short-lived signed address; public,
+// limited per address, and every refusal is the same 404 (`resolveShopImage`)
+const shopImageLimiter = rateLimit({
+  windowMs: 60_000,
+  max: WC_SHOP_IMAGE_REQUESTS_PER_MINUTE,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `wc-image:${ipKeyGenerator(req.ip || req.socket?.remoteAddress || '127.0.0.1')}`,
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+  handler: (_req, _res, next) => next(new NotFoundError('پیدا نشد')),
+});
+router.get(`${SHOP_IMAGE_ROUTE}/:file`, shopImageLimiter, asyncHandler(async (req, res) => {
+  const filePath = await resolveShopImage(String(req.params.file ?? ''));
+  await new Promise<void>((resolve, reject) => {
+    res.sendFile(filePath, {
+      headers: { 'Content-Type': 'image/webp', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }, dotfiles: 'deny',
+    }, (err) => (err && !res.headersSent ? reject(new NotFoundError('پیدا نشد')) : resolve()));
+  });
+}));
+
 
 // ==========================================
 // AUTHENTICATED ROUTES
@@ -233,6 +267,30 @@ router.post('/sku-rename', authorizePermission('woocommerce.manage'), idempotenc
   res.json({
     success: true, ...result,
     message: result.enabled ? 'تغییر خودکار کد محصولات سایت روشن شد.' : 'تغییر خودکار کد محصولات سایت خاموش شد.',
+  });
+}));
+
+// «ارسال تصویر شاخص» on or off (v11 phase 6.5, part D; off by default): turning it on needs media.manage too
+router.post('/image-push', authorizePermission('woocommerce.manage'), idempotency({ scope: 'woocommerce' }), validate(imagePushSchema), asyncHandler(async (req, res) => {
+  if (req.body.enabled === true && !(await can(req.user, 'media.manage'))) {
+    throw new ForbiddenError('روشن کردن ارسال تصویر شاخص مجوز «مدیریت کتابخانه تصاویر» را هم می‌خواهد.', undefined, 'WC_IMAGE_PUSH_NEEDS_MEDIA');
+  }
+  const result = await setImagePush({ req }, req.body.enabled === true, req.body.mediaBaseUrl);
+  res.json({
+    success: true, ...result,
+    message: result.enabled ? 'ارسال تصویر شاخص به سایت روشن شد.' : 'ارسال تصویر شاخص به سایت خاموش شد.',
+  });
+}));
+
+// «ارسال کالکشن‌ها» on or off (part D; off by default): turning it on needs a key that edits a product's collections
+router.post('/collection-push', authorizePermission('woocommerce.manage'), idempotency({ scope: 'woocommerce' }), validate(collectionPushSchema), asyncHandler(async (req, res) => {
+  if (req.body.enabled === true && !(await can(req.user, 'media.manage', 'products.edit'))) {
+    throw new ForbiddenError('روشن کردن ارسال کالکشن‌ها مجوز «مدیریت کتابخانه تصاویر» یا «ویرایش اطلاعات کالا» را هم می‌خواهد.', undefined, 'WC_COLLECTION_PUSH_NEEDS_PRODUCT_INFO');
+  }
+  const result = await setCollectionPush({ req }, req.body.enabled === true);
+  res.json({
+    success: true, ...result,
+    message: result.enabled ? 'ارسال کالکشن‌ها به برچسب‌های سایت روشن شد.' : 'ارسال کالکشن‌ها به برچسب‌های سایت خاموش شد.',
   });
 }));
 

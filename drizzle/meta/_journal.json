@@ -43,6 +43,13 @@
       "when": 1796606800000,
       "tag": "0005_stock_document_void",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1796616800000,
+      "tag": "0006_wc_image_collection_push",
+      "breakpoints": true
     }
   ]
 }

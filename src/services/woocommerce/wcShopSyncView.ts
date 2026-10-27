@@ -6,16 +6,25 @@ import { WC_AUTO_MAX_LINK_FAILURES } from '../../lib/woocommerce/wcAutoPush.js';
 import type { WcDriftRow, WcFieldPushView, WcPriceSkipRow, WcShopSyncView, WcSiteMoney } from '../../lib/woocommerce/wcShopSync.js';
 import { ItemPricingService } from '../items/itemPricing.service.js';
 import { autoRunCondition, liveLinks, runView } from './wcCatalog.service.js';
-import { activeShopPriceList, isSkuRenameEnabled, renamedLinks, wantedSitePrices } from './wcFieldPush.service.js';
+import { activeShopPriceList, isSkuRenameEnabled, renamedLinks, wantedSitePrices, type FieldKind } from './wcFieldPush.service.js';
+import { imagePushSettings, imageSteps } from './wcImagePush.service.js';
+import { collectionSteps, isCollectionPushEnabled, sentTagIds } from './wcCollectionPush.service.js';
+import type { WcCollectionPushView, WcImagePushView } from '../../lib/woocommerce/wcMediaPush.js';
 import { autoRunBackoff } from './wcRunBackoff.js';
 import { lastSiteMoney } from './wcSiteCurrency.js';
 
 /** 10.2 package 6 (D-04 part C): what the WooCommerce tab shows about the price push, the SKU rename and the nightly re-read */
 const liveLink = (...extra: SQL[]) => and(eq(wcProductLinks.isDeleted, 0), eq(items.isDeleted, 0), ...extra);
 
-async function stoppedLinks(field: 'price' | 'sku') {
-  const column = field === 'price' ? wcProductLinks.priceFailureCount : wcProductLinks.skuFailureCount;
-  const error = field === 'price' ? wcProductLinks.priceError : wcProductLinks.skuError;
+const FAILURE_COLUMNS = {
+  price: [wcProductLinks.priceFailureCount, wcProductLinks.priceError],
+  sku: [wcProductLinks.skuFailureCount, wcProductLinks.skuError],
+  image: [wcProductLinks.imageFailureCount, wcProductLinks.imageError],
+  collection: [wcProductLinks.collectionFailureCount, wcProductLinks.collectionError],
+} as const;
+
+async function stoppedLinks(field: keyof typeof FAILURE_COLUMNS) {
+  const [column, error] = FAILURE_COLUMNS[field];
   const where = liveLink(gte(column, WC_AUTO_MAX_LINK_FAILURES));
   const rows = await orm.select({ itemId: items.id, code: items.code, name: items.name, error })
     .from(wcProductLinks).innerJoin(items, eq(items.id, wcProductLinks.itemId))
@@ -25,7 +34,7 @@ async function stoppedLinks(field: 'price' | 'sku') {
   return { stopped: rows.map(r => ({ itemId: r.itemId, code: r.code ?? '', name: r.name ?? '', error: r.error || undefined })), stoppedTotal: total };
 }
 
-async function fieldView(kind: 'price_push' | 'sku_push', enabled: boolean, stopped: { stopped: WcCatalogItem[]; stoppedTotal: number }): Promise<WcFieldPushView> {
+async function fieldView(kind: FieldKind, enabled: boolean, stopped: { stopped: WcCatalogItem[]; stoppedTotal: number }): Promise<WcFieldPushView> {
   const [[last], backoff] = await Promise.all([
     orm.select().from(wcSyncRuns).where(and(eq(wcSyncRuns.kind, kind), autoRunCondition)).orderBy(desc(wcSyncRuns.id)).limit(1),
     autoRunBackoff(kind),
@@ -74,18 +83,39 @@ async function knownSiteMoney(): Promise<WcSiteMoney | null> {
   return row?.currency ? { currency: String(row.currency), decimals: Number(row.decimals) } : null;
 }
 
+/** v11 phase 6.5 (part D): the image push's and the collection push's lines of the tab */
+async function mediaViews(): Promise<{ image: WcImagePushView; collection: WcCollectionPushView }> {
+  const settings = await imagePushSettings();
+  const [steps, collections, collectionOn] = await Promise.all([imageSteps(), collectionSteps(), isCollectionPushEnabled()]);
+  const [image, collection] = await Promise.all([
+    fieldView('image_push', settings.enabled, await stoppedLinks('image')),
+    fieldView('collection_push', collectionOn, await stoppedLinks('collection')),
+  ]);
+  return {
+    image: {
+      ...image, baseUrl: settings.baseUrl, secretsReady: settings.secretsReady,
+      pending: steps.filter(s => s.step !== null && 'send' in s.step).length,
+      notRead: steps.filter(s => s.link.siteImageId === null && s.link.coverSentSha256 === '').length,
+    },
+    collection: {
+      ...collection, pending: collections.filter(s => s.key !== '' || sentTagIds(s.link.sentTagIds).length > 0).length,
+    },
+  };
+}
+
 export async function getShopSyncView(): Promise<WcShopSyncView> {
   const { stored, title } = await activeShopPriceList();
   const priceLists = await ItemPricingService.getPricingStrategies().catch(() => [] as string[]);
   const site = await knownSiteMoney();
   const skuOn = await isSkuRenameEnabled();
-  const [price, sku, skipped, pending, [nightly]] = await Promise.all([
+  const [price, sku, skipped, pending, [nightly], media] = await Promise.all([
     fieldView('price_push', title !== '', await stoppedLinks('price')),
     fieldView('sku_push', skuOn, await stoppedLinks('sku')),
     skippedPrices(title, site),
     renamedLinks(),
     orm.select().from(wcSyncRuns).where(and(eq(wcSyncRuns.kind, 'refresh'), sql`${wcSyncRuns.summary}->>'trigger' = 'nightly'`))
       .orderBy(desc(wcSyncRuns.id)).limit(1),
+    mediaViews(),
   ]);
   const lastNightly = nightly ? runView(nightly) : null;
   const ok = lastNightly && lastNightly.status !== 'failed';
@@ -98,6 +128,7 @@ export async function getShopSyncView(): Promise<WcShopSyncView> {
     siteDecimals: site?.decimals ?? null,
     price: { ...price, ...skipped },
     sku: { ...sku, pending: pending.length },
+    ...media,
     lastNightly,
     differencesCurrency: ok && typeof lastNightly.summary.siteCurrency === 'string' ? lastNightly.summary.siteCurrency : null,
     differences: ok && Array.isArray(lastNightly.summary.differences) ? lastNightly.summary.differences as WcDriftRow[] : [],

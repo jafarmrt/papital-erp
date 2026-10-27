@@ -10,7 +10,7 @@ import { chunked } from '../../lib/woocommerce/wcCatalog.js';
  */
 const LINK_UPDATE_BATCH = 500;
 
-type CastType = 'int' | 'text' | 'timestamp';
+type CastType = 'int' | 'text' | 'timestamp' | 'jsonb';
 
 export interface LinkRowUpdate {
   id: number;
@@ -33,6 +33,15 @@ const LINK_COLUMNS = {
   priceFailureCount: { column: wcProductLinks.priceFailureCount, cast: 'int' },
   skuError: { column: wcProductLinks.skuError, cast: 'text' },
   skuFailureCount: { column: wcProductLinks.skuFailureCount, cast: 'int' },
+  // v11 phase 6.5 (part D): `sentTagIds` is written as JSON text
+  siteImageId: { column: wcProductLinks.siteImageId, cast: 'int' },
+  coverSentSha256: { column: wcProductLinks.coverSentSha256, cast: 'text' },
+  imageError: { column: wcProductLinks.imageError, cast: 'text' },
+  imageFailureCount: { column: wcProductLinks.imageFailureCount, cast: 'int' },
+  sentTagIds: { column: wcProductLinks.sentTagIds, cast: 'jsonb' },
+  sentCollections: { column: wcProductLinks.sentCollections, cast: 'text' },
+  collectionError: { column: wcProductLinks.collectionError, cast: 'text' },
+  collectionFailureCount: { column: wcProductLinks.collectionFailureCount, cast: 'int' },
 } as const satisfies Record<string, { column: unknown; cast: CastType }>;
 
 export type LinkColumn = keyof typeof LINK_COLUMNS;

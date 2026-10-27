@@ -47,7 +47,7 @@ export async function emptyOrUnorderedCase(h: Harness, wrong: string[]): Promise
 
     // a reading cut at the cap and out of id order keeps every link it did not read, even below the largest id read, and says so
     await h.q(`INSERT INTO wc_product_links (item_id, wc_product_id, wc_variation_id, site_sku) VALUES ($1, 40, 41, $2)`, [two.id, two.code]);
-    const read10 = [{ productId: 10, variationId: 0, name: 'o', sku: one.code, stock: null, manageStock: false, type: 'simple', regularPrice: null }];
+    const read10 = [{ productId: 10, variationId: 0, name: 'o', sku: one.code, stock: null, manageStock: false, type: 'simple', regularPrice: null, imageId: null }];
     const cut = await applyCatalogLinks({ site: read10, skipped: [], truncated: true, maxProductId: 90, unordered: true, repeated: false, shifted: false, incomplete: false, missing: 0, gapVariationProducts: [], missingVariations: 0, partialVariationProducts: [] }, {});
     if ((await linksOf(h, [two.id])).get(two.id)?.variation !== 41 || cut.closedCount !== 0 || !cut.catalogUnordered) {
       wrong.push(`a truncated unordered reading closed an unread variation link: ${JSON.stringify(cut).slice(0, 200)}`);
@@ -112,8 +112,8 @@ export async function deadlineAndCapCase(h: Harness, wrong: string[]): Promise<s
     await h.q(`INSERT INTO wc_product_links (item_id, wc_product_id, wc_variation_id, site_sku) VALUES ($1, 999, 0, $2)`, [far.id, far.code]);
     const capped = await applyCatalogLinks({
       site: [
-        { productId: 1, variationId: 0, name: 'n', sku: near.code, stock: null, manageStock: false, type: 'simple', regularPrice: null },
-        { productId: 2, variationId: 0, name: 'f', sku: far.code, stock: null, manageStock: false, type: 'simple', regularPrice: null },
+        { productId: 1, variationId: 0, name: 'n', sku: near.code, stock: null, manageStock: false, type: 'simple', regularPrice: null, imageId: null },
+        { productId: 2, variationId: 0, name: 'f', sku: far.code, stock: null, manageStock: false, type: 'simple', regularPrice: null, imageId: null },
       ],
       skipped: [], truncated: true, maxProductId: 2, unordered: false, repeated: false, shifted: false, incomplete: false, missing: 0, gapVariationProducts: [], missingVariations: 0, partialVariationProducts: [],
     }, {});
@@ -174,7 +174,7 @@ export async function removedProductAndDeadlinesCase(h: Harness, wrong: string[]
     await h.q(`UPDATE wc_product_links SET is_deleted = 1 WHERE item_id = $1 AND wc_product_id = 21`, [gone.id]);
     await h.q(`INSERT INTO wc_product_links (item_id, wc_product_id, wc_variation_id, site_sku) VALUES ($1, 5, 0, 'X5')`, [gone.id]);
     const capped = await applyCatalogLinks({
-      site: [{ productId: 10, variationId: 0, name: 'k', sku: kept.code, stock: null, manageStock: false, type: 'simple', regularPrice: null }],
+      site: [{ productId: 10, variationId: 0, name: 'k', sku: kept.code, stock: null, manageStock: false, type: 'simple', regularPrice: null, imageId: null }],
       skipped: [], truncated: true, maxProductId: 10, unordered: false, repeated: false, shifted: false, incomplete: false, missing: 0, gapVariationProducts: [], missingVariations: 0, partialVariationProducts: [],
     }, {});
     if ((await linksOf(h, [gone.id])).has(gone.id)) wrong.push('a truncated reading kept the link of a missing product below the largest id read');

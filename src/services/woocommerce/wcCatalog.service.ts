@@ -202,6 +202,7 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor, ru
         updates.push({ id: link.id, values: {
           siteSku: match.site.sku, siteStock: match.site.stock, siteManageStock: match.site.manageStock ? 1 : 0, lastReadAt: now,
           siteType: match.site.type, siteRegularPrice: match.site.regularPrice,
+          ...(match.site.imageId === null ? {} : { siteImageId: match.site.imageId }),
         } });
       } else {
         closedCount++;
@@ -227,7 +228,7 @@ export async function applyCatalogLinks(catalog: SiteCatalog, actor: WcActor, ru
       await tx.insert(wcProductLinks).values(part.map(m => ({
         itemId: m.itemId, wcProductId: m.site.productId, wcVariationId: m.site.variationId, siteSku: m.site.sku,
         siteStock: m.site.stock, siteManageStock: m.site.manageStock ? 1 : 0, lastReadAt: now, createdAt: now, updatedAt: now,
-        siteType: m.site.type, siteRegularPrice: m.site.regularPrice,
+        siteType: m.site.type, siteRegularPrice: m.site.regularPrice, siteImageId: m.site.imageId,
       })));
     }
     const linkedCount = matches.length + untouched.length;

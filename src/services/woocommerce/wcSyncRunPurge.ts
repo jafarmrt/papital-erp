@@ -16,7 +16,7 @@ export async function purgeOldAutoRuns(olderThanDays: number = WC_AUTO_RUN_RETEN
   // by hand stays
   const nightly = and(eq(wcSyncRuns.kind, 'refresh'), sql`${wcSyncRuns.summary}->>'trigger' = 'nightly'`);
   const purgeable = and(
-    or(and(inArray(wcSyncRuns.kind, ['stock_push', 'price_push', 'sku_push']), autoRunCondition), nightly),
+    or(and(inArray(wcSyncRuns.kind, ['stock_push', 'price_push', 'sku_push', 'image_push', 'collection_push']), autoRunCondition), nightly),
     lt(wcSyncRuns.finishedAt, cutoff),
   );
   return deleteInBatches(OPERATIONAL_PURGE_BATCH_SIZE, async () => {

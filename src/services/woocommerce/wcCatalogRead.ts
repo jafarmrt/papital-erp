@@ -19,6 +19,8 @@ export interface SiteProduct {
   /** part C: the product's type (`variation` for a variation) and its regular price as the shop sent it ('' for none) */
   type: string;
   regularPrice: string | null;
+  /** v11 phase 6.5 (part D): the shop's featured image id (a variation's own image), 0 for none, null when not sent */
+  imageId: number | null;
 }
 
 interface RawProduct {
@@ -29,6 +31,8 @@ interface RawProduct {
   stock_quantity?: unknown;
   manage_stock?: unknown;
   regular_price?: unknown;
+  images?: unknown;
+  image?: unknown;
 }
 
 /** One reading of the shop's catalog */
@@ -98,6 +102,14 @@ function asRows(answer: unknown): RawProduct[] {
 
 function regularPriceOf(raw: RawProduct): string | null {
   return raw.regular_price === undefined || raw.regular_price === null ? null : String(raw.regular_price).trim().slice(0, 50);
+}
+
+/** part D: a product's first image (its featured image) or a variation's own image; 0 for none, null when not sent */
+function imageIdOf(raw: RawProduct, variation: boolean): number | null {
+  const image = variation ? raw.image : Array.isArray(raw.images) ? raw.images[0] ?? null : undefined;
+  if (image === undefined) return null;
+  const id = Number((image as { id?: unknown } | null)?.id);
+  return Number.isInteger(id) && id > 0 ? id : 0;
 }
 
 function stockOf(raw: RawProduct): number | null {
@@ -205,7 +217,7 @@ export async function mapLimited<T, R>(
  */
 export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal): Promise<SiteCatalog> {
   const { rows: products, truncated, unordered, repeated, shifted, missing: productsMissing, incomplete } =
-    await readPages(conn, 'products', 'id,name,sku,type,stock_quantity,manage_stock,regular_price', signal);
+    await readPages(conn, 'products', 'id,name,sku,type,stock_quantity,manage_stock,regular_price,images', signal);
   const site: SiteProduct[] = [];
   const skipped: WcUnmatchedProduct[] = [];
   let maxProductId = 0;
@@ -222,7 +234,7 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
     }
     site.push({
       productId, variationId: 0, name, sku, stock: stockOf(p), manageStock: p.manage_stock === true,
-      type: String(p.type ?? '').slice(0, 50), regularPrice: regularPriceOf(p),
+      type: String(p.type ?? '').slice(0, 50), regularPrice: regularPriceOf(p), imageId: imageIdOf(p, false),
     });
     if (isVariableParentType(String(p.type ?? ''))) variable.push({ productId, name, sku });
   }
@@ -234,7 +246,7 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
   let variationLists: PagedRows[];
   try {
     variationLists = await mapLimited(variable, WC_VARIATION_READ_CONCURRENCY,
-      v => readPages(conn, `products/${v.productId}/variations`, 'id,sku,stock_quantity,manage_stock,regular_price', readers.signal),
+      v => readPages(conn, `products/${v.productId}/variations`, 'id,sku,stock_quantity,manage_stock,regular_price,image', readers.signal),
       stopReaders);
   } finally {
     signal?.removeEventListener('abort', stopReaders);
@@ -260,7 +272,7 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
       }
       site.push({
         productId, variationId, name, sku: vSku, stock: stockOf(v), manageStock: v.manage_stock === true,
-        type: 'variation', regularPrice: regularPriceOf(v),
+        type: 'variation', regularPrice: regularPriceOf(v), imageId: imageIdOf(v, true),
       });
     }
   });

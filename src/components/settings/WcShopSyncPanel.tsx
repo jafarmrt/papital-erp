@@ -11,6 +11,7 @@ import { permissionDefinition } from '../../lib/permissions/permissionCatalog';
 import { formatPersianDateTime, formatPersianNumber, getErrorMessage } from '../../utils';
 import { WcItemList } from './WcCatalogLists';
 import { WcDriftList, WcPriceSkipList } from './WcShopSyncLists';
+import { WcMediaPushPanel } from './WcMediaPushPanel';
 
 /**
  * 10.2 package 6 (D-04 part C): «ارسال خودکار قیمت», «تغییر خودکار کد در سایت» and the nightly re-read. Both sends are off
@@ -155,9 +156,10 @@ export function WcShopSyncPanel({ view, canManage }: { view: WcShopSyncView; can
   const canSku = useHasPermission('products.change_code');
   const nightly = view.lastNightly;
   return (
-    <div className="bg-white border border-indigo-100 rounded-lg p-3 space-y-3" aria-label="ارسال قیمت، تغییر کد و بازخوانی شبانه">
+    <div className="bg-white border border-indigo-100 rounded-lg p-3 space-y-3" aria-label="ارسال قیمت، تغییر کد، تصویر و کالکشن، و بازخوانی شبانه">
       <PriceSection view={view} canManage={canManage} canChoose={canManage && canPrice} />
       <SkuSection view={view} canManage={canManage} canEnable={canManage && canSku} />
+      <WcMediaPushPanel image={view.image} collection={view.collection} canManage={canManage} />
       <section className="space-y-2 border-t border-indigo-50 pt-2" aria-label="بازخوانی شبانه">
         <div className="text-xs font-bold text-indigo-950 flex items-center gap-2">
           <CalendarClock size={15} className="text-indigo-600" /> بازخوانی شبانه

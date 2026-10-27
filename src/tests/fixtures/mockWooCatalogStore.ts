@@ -6,14 +6,24 @@ import http from 'http';
  * `POST products/<id>/variations/batch`), records every request and every stock it was sent, and answers a row error for
  * the ids in `rowErrors`. No real shop is ever called.
  */
-export interface MockVariation { id: number; sku: string; stock?: number | null; manageStock?: boolean | 'parent'; regularPrice?: string }
+export interface MockVariation {
+  id: number; sku: string; stock?: number | null; manageStock?: boolean | 'parent'; regularPrice?: string;
+  /** v11 phase 6.5 (part D): the variation's own image id (none by default) */
+  imageId?: number;
+}
 export interface MockProduct {
   id: number; sku: string; name?: string; stock?: number | null; variations?: MockVariation[];
   /** WooCommerce product type; `variable` when the product has variations, else `simple` */
   type?: string;
   /** part C: the regular price as the shop holds it ('' by default) */
   regularPrice?: string;
+  /** v11 phase 6.5 (part D): the product's image ids, the first being the featured image, and its tag ids */
+  images?: number[];
+  tags?: number[];
 }
+
+/** part D: a product tag of the shop */
+export interface MockTag { id: number; name: string }
 
 /** part B: an order the shop holds; `GET orders?status=a,b` answers those of the listed statuses, in id order (newest first
  * with `order=desc`) */
@@ -83,6 +93,14 @@ export interface MockWooCatalogStore {
   currency: string;
   /** review M-A: the price decimals `GET settings/general/woocommerce_price_num_decimals` answers (2, WooCommerce's default) */
   decimals: number | string;
+  /** part D: the shop's product tags, and every image `src` and tag list a batch row sent (product or variation id) */
+  tags: MockTag[];
+  /** tags the shop holds but leaves out of its lists (one made by someone else meanwhile): creating one answers `term_exists` */
+  hiddenTags: MockTag[];
+  imageSrcSent: Map<number, string>;
+  tagsSent: Map<number, number[]>;
+  /** part D: the next image id the shop gives a downloaded image */
+  nextImageId: number;
   /** review nit N-1: the settings and currency reads answer this status (a key of a user who does not manage the shop gets 403) */
   settingsStatus?: number;
   close(): Promise<void>;
@@ -122,7 +140,10 @@ function setListHeaders(res: http.ServerResponse, total: number, url: URL, store
   res.setHeader('X-WP-TotalPages', String(Math.ceil(total / perPage)));
 }
 
-type BatchRow = { id: number; stock_quantity?: number; manage_stock?: unknown; regular_price?: unknown; sku?: unknown };
+type BatchRow = {
+  id: number; stock_quantity?: number; manage_stock?: unknown; regular_price?: unknown; sku?: unknown;
+  images?: Array<{ id?: number; src?: string }>; image?: { src?: string }; tags?: Array<{ id?: number }>;
+};
 
 /** every product and variation of the shop, to apply a batch row to (ids are unique across both in the tests) */
 function shopRows(products: MockProduct[]): Array<MockProduct | MockVariation> {
@@ -151,12 +172,36 @@ function batchAnswer(store: MockWooCatalogStore, body: string, products: MockPro
         store.pricesSent.set(row.id, String(row.regular_price));
         if (target) target.regularPrice = String(row.regular_price);
       }
+      // part D: an image `src` becomes a new image of the shop (WooCommerce downloads it inside the request)
+      const extra: Record<string, unknown> = {};
+      if (row.images && target) {
+        const p = target as MockProduct;
+        p.images = row.images.map((img) => {
+          if (img.src) {
+            store.imageSrcSent.set(row.id, img.src);
+            return store.nextImageId++;
+          }
+          return Number(img.id);
+        });
+        extra.images = p.images.map(id => ({ id }));
+      }
+      if (row.image?.src && target) {
+        store.imageSrcSent.set(row.id, row.image.src);
+        (target as MockVariation).imageId = store.nextImageId++;
+        extra.image = { id: (target as MockVariation).imageId };
+      }
+      if (row.tags && target) {
+        const ids = row.tags.map(t => Number(t.id));
+        store.tagsSent.set(row.id, ids);
+        (target as MockProduct).tags = ids;
+        extra.tags = ids.map(id => ({ id }));
+      }
       if ('stock_quantity' in row) {
         store.pushed.set(row.id, Number(row.stock_quantity));
         if ('manage_stock' in row) store.manageStockSent.set(row.id, row.manage_stock);
         else store.manageStockSent.delete(row.id);
       }
-      return { id: row.id, stock_quantity: row.stock_quantity, sku: target?.sku, regular_price: target?.regularPrice ?? '' };
+      return { id: row.id, stock_quantity: row.stock_quantity, sku: target?.sku, regular_price: target?.regularPrice ?? '', ...extra };
     }),
   };
 }
@@ -166,6 +211,7 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
     pushed: new Map(), requests: [], arrivals: [], batchSizes: [], rowErrors: new Set(), failPaths: new Set(), statusPaths: new Map(),
     queries: [], maxInFlight: 0,
     orders: [], manageStockSent: new Map(), pricesSent: new Map(), skusSent: new Map(), currency: 'IRR', decimals: 2,
+    tags: [], hiddenTags: [], imageSrcSent: new Map(), tagsSent: new Map(), nextImageId: 9000,
   } as unknown as MockWooCatalogStore;
   let inFlight = 0;
   const server = http.createServer((req, res) => {
@@ -199,11 +245,36 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
         store.beforeCatalogPage?.(path, Number(url.searchParams.get('page') || 1));
       }
       if (req.method === 'GET' && path === 'products') {
-        setListHeaders(res, products.length, url, store);
-        send(productPage(products, url, store).map(p => ({
+        const shape = (p: MockProduct) => ({
           id: p.id, name: p.name ?? `محصول ${p.id}`, sku: p.sku, type: p.type ?? (p.variations ? 'variable' : 'simple'),
           stock_quantity: p.stock ?? null, manage_stock: p.stock !== undefined && p.stock !== null, regular_price: p.regularPrice ?? '',
-        })));
+          images: (p.images ?? []).map(id => ({ id, src: `https://shop.test/img/${id}.jpg` })), tags: (p.tags ?? []).map(id => ({ id })),
+        });
+        // part D: `include` reads the named products again (the image and tag sends keep the gallery and the other tags)
+        if (url.searchParams.has('include')) {
+          const ids = new Set(String(url.searchParams.get('include')).split(',').map(Number));
+          send(products.filter(p => ids.has(p.id)).map(shape));
+          return;
+        }
+        setListHeaders(res, products.length, url, store);
+        send(productPage(products, url, store).map(shape));
+        return;
+      }
+      if (req.method === 'GET' && path === 'products/tags') {
+        const search = url.searchParams.get('search');
+        const rows = search ? store.tags.filter(t => t.name.toLowerCase().includes(search.toLowerCase())) : store.tags;
+        send(page([...rows].sort((a, b) => a.id - b.id), url, store).map(t => ({ id: t.id, name: t.name.replace(/&/g, '&amp;') })));
+        return;
+      }
+      if (req.method === 'POST' && path === 'products/tags/batch') {
+        const create = (JSON.parse(body || '{}') as { create?: Array<{ name: string }> }).create ?? [];
+        send({ create: create.map(({ name }) => {
+          const taken = [...store.tags, ...store.hiddenTags].find(t => t.name.toLowerCase() === name.toLowerCase());
+          if (taken) return { id: 0, error: { code: 'term_exists', message: 'برچسب هست.', data: { status: 400, resource_id: taken.id } } };
+          const tag = { id: 7000 + store.tags.length, name };
+          store.tags.push(tag);
+          return tag;
+        }) });
         return;
       }
       const variations = path.match(/^products\/(\d+)\/variations$/);
@@ -214,6 +285,7 @@ export async function mockWooCatalogStore(products: MockProduct[]): Promise<Mock
         send(page(rows, url, store).filter(v => !store.hiddenFromLists?.has(v.id)).map(v => ({
           id: v.id, sku: v.sku, stock_quantity: v.stock ?? null,
           manage_stock: v.manageStock ?? (v.stock !== undefined && v.stock !== null), regular_price: v.regularPrice ?? '',
+          image: v.imageId ? { id: v.imageId, src: `https://shop.test/img/${v.imageId}.jpg` } : null,
         })));
         return;
       }

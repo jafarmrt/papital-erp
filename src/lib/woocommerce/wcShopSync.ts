@@ -3,6 +3,7 @@ import { formatPersianNumber } from '../../utils/persianNumber';
 import { formatCurrencyLabel } from '../../utils/formatters';
 import { rialUnitMultiplier } from './wcCurrency';
 import type { WcCatalogItem, WcRunView } from './wcCatalog';
+import type { WcCollectionPushView, WcImagePushView } from './wcMediaPush';
 
 /**
  * 10.2 package 6 (D-04 part C), shared by the server and the WooCommerce tab. Two more things go to the shop, each behind its
@@ -25,8 +26,8 @@ export const WC_NIGHTLY_RETRY_MINUTES = 30;
 /** the shop currency read from the shop is used this long before it is read again */
 export const WC_SITE_CURRENCY_TTL_MS = 6 * 60 * 60_000;
 
-/** the kinds of `wc_sync_runs` rows (migration 0131 added the price and SKU runs) */
-export type WcRunKind = 'refresh' | 'stock_push' | 'price_push' | 'sku_push';
+/** the kinds of `wc_sync_runs` rows (migration 0131 added the price and SKU runs, v11 migration 0006 the image and tag runs) */
+export type WcRunKind = 'refresh' | 'stock_push' | 'price_push' | 'sku_push' | 'image_push' | 'collection_push';
 
 export type WcPriceSkipReason = 'no_price' | 'currency_mismatch' | 'not_positive' | 'inexact_unit' | 'variable_parent' | 'not_read';
 
@@ -151,6 +152,9 @@ export interface WcShopSyncView {
   siteDecimals: number | null;
   price: WcFieldPushView & { skipped: WcPriceSkipRow[]; skippedTotal: number };
   sku: WcFieldPushView & { pending: number };
+  /** v11 phase 6.5 (part D): the featured image and the product tags */
+  image: WcImagePushView;
+  collection: WcCollectionPushView;
   /** the last nightly re-read and the differences it found */
   lastNightly: WcRunView | null;
   /** the shop currency that nightly reading compared prices in (review N-4) */

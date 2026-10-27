@@ -69,8 +69,10 @@ export const PLAIN_TRANSACTION_WRITES = new Map<string, { count: number; reason:
   // #359 review: the shop routes run several transactions per request and each one repeats nothing on a resend
   ['src/services/woocommerce/wooOrderSync.service.ts', { count: 5, reason: 'an order is invoiced, voided, flagged or deferred, or its failure recorded, under its locked order-log row (wc_order_id unique); a resend finds an invoiced or voided order done (alreadyExists) and rewrites the same flag or deferral' }],
   ['src/services/woocommerce/wcStockPush.service.ts', { count: 2, reason: 'a read-only snapshot of the site stocks and the push run row; the shop is sent absolute quantities, so a resend sends the same ones and only logs another run' }],
-  ['src/services/woocommerce/wcFieldPush.service.ts', { count: 3, reason: 'a failure audit row, the price or SKU push run and a setting (a toggle or the price-list name); prices and SKUs are sent as absolute values, so a resend only logs another run' }],
+  ['src/services/woocommerce/wcFieldPush.service.ts', { count: 3, reason: 'a failure audit row, the price, SKU, image or tag push run and a setting (a toggle, the price-list name or the public address); prices, SKUs, images and tags are sent as absolute values, so a resend only logs another run' }],
   ['src/services/woocommerce/wcAutoPush.service.ts', { count: 2, reason: 'a failure audit row and the automatic push toggle (a state, not a record)' }],
+  ['src/services/woocommerce/wcImagePush.service.ts', { count: 1, reason: 'v11 phase 6.5: the worker records the cover each link was compared with (a state, not a record); no request key reaches it' }],
+  ['src/services/woocommerce/wcCollectionPush.service.ts', { count: 1, reason: 'v11 phase 6.5: the worker records that an item without collections was compared (a state, not a record); no request key reaches it' }],
   ['src/services/woocommerce/wcCatalog.service.ts', { count: 1, reason: 'rewrites the item links of one catalog reading; a resend writes the same links' }],
 ]);
 

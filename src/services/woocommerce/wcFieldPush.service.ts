@@ -12,8 +12,9 @@ import { chunked, WC_LIST_LIMIT, WC_PUSH_DEADLINE_MS } from '../../lib/woocommer
 import { WC_AUTO_MAX_LINK_FAILURES, WC_AUTO_PUSH_MAX_PRODUCTS } from '../../lib/woocommerce/wcAutoPush.js';
 import {
   isSkuRenameOn, isVariableParentType, sameSitePrice, sitePriceOf, WC_PRICE_LIST_SETTING_KEY, WC_SKU_RENAME_SETTING_KEY,
-  type WcPriceSkipReason, type WcRunKind, type WcSiteMoney,
+  type WcPriceSkipReason, type WcSiteMoney,
 } from '../../lib/woocommerce/wcShopSync.js';
+import { WC_COLLECTION_PUSH_SETTING_KEY, WC_IMAGE_PUSH_SETTING_KEY } from '../../lib/woocommerce/wcMediaPush.js';
 import { ItemPricingService } from '../items/itemPricing.service.js';
 import { requireWcConnection } from './wcClient.js';
 import { liveLinks, recordFailedRun, type WcActor } from './wcCatalog.service.js';
@@ -92,13 +93,29 @@ export async function wantedSitePrices(links: Link[], priceList: string, site: W
   return { wanted, skipped };
 }
 
-async function auditFailure(kind: WcRunKind, failedRunsBefore: number, message: string): Promise<void> {
+/** v11 phase 6.5: the automatic sends that share these runs (part C's price and SKU, part D's image and tags) */
+export type FieldKind = 'price_push' | 'sku_push' | 'image_push' | 'collection_push';
+
+/** each send's audit wording, setting and refusal columns on the link */
+const FIELD_KINDS: Record<FieldKind, {
+  what: string; action: string; setting: string;
+  error: 'priceError' | 'skuError' | 'imageError' | 'collectionError';
+  count: 'priceFailureCount' | 'skuFailureCount' | 'imageFailureCount' | 'collectionFailureCount';
+}> = {
+  price_push: { what: 'ارسال خودکار قیمت', action: 'WC_PRICE_PUSH', setting: WC_PRICE_LIST_SETTING_KEY, error: 'priceError', count: 'priceFailureCount' },
+  sku_push: { what: 'تغییر خودکار کد', action: 'WC_SKU_PUSH', setting: WC_SKU_RENAME_SETTING_KEY, error: 'skuError', count: 'skuFailureCount' },
+  image_push: { what: 'ارسال تصویر شاخص', action: 'WC_IMAGE_PUSH', setting: WC_IMAGE_PUSH_SETTING_KEY, error: 'imageError', count: 'imageFailureCount' },
+  collection_push: {
+    what: 'ارسال کالکشن‌ها', action: 'WC_COLLECTION_PUSH', setting: WC_COLLECTION_PUSH_SETTING_KEY, error: 'collectionError', count: 'collectionFailureCount',
+  },
+};
+
+async function auditFailure(kind: FieldKind, failedRunsBefore: number, message: string): Promise<void> {
   if (failedRunsBefore > 0) return;
-  const what = kind === 'price_push' ? 'ارسال خودکار قیمت' : 'تغییر خودکار کد';
+  const { what, action, setting } = FIELD_KINDS[kind];
   try {
     await orm.transaction(tx => logActivity({
-      tx, action: kind === 'price_push' ? 'WC_PRICE_PUSH' : 'WC_SKU_PUSH', entity: AUDIT_ENTITY,
-      entityId: kind === 'price_push' ? WC_PRICE_LIST_SETTING_KEY : WC_SKU_RENAME_SETTING_KEY,
+      tx, action, entity: AUDIT_ENTITY, entityId: setting,
       description: `${what} به سایت ناموفق بود: ${message.slice(0, 300)}`, details: { trigger: 'auto', failed: true },
     }));
   } catch (err) {
@@ -106,36 +123,47 @@ async function auditFailure(kind: WcRunKind, failedRunsBefore: number, message: 
   }
 }
 
-interface Planned { link: Link; fields: Record<string, unknown>; values: LinkRowUpdate['values'] }
+export interface Planned { link: Link; fields: Record<string, unknown>; values: LinkRowUpdate['values'] }
+
+export interface SendOptions {
+  /** what the run row records about what was sent */
+  details?: (outcomes: Array<FieldOutcome<Link>>, plan: Planned[]) => Record<string, unknown>;
+  /** rows in one batch request (100 unless given) */
+  batchSize?: number;
+  /** links refused before anything was sent (a product the shop no longer has), recorded as refusals of this send */
+  refused?: Array<{ link: Link; error: string }>;
+  /** more values a link takes from its answer row once sent */
+  answered?: (link: Link, answer: Record<string, unknown> | undefined) => LinkRowUpdate['values'];
+}
 
 /** Sends what the run planned and records the outcomes on the links and one run row, in one transaction */
-async function sendAndRecord(
-  kind: 'price_push' | 'sku_push', plan: Planned[], totalLinks: number, extra: Record<string, unknown>, signal: AbortSignal,
-  sentDetails?: (outcomes: Array<FieldOutcome<Link>>, plan: Planned[]) => Record<string, unknown>,
+export async function sendAndRecord(
+  kind: FieldKind, plan: Planned[], totalLinks: number, extra: Record<string, unknown>, signal: AbortSignal, options: SendOptions = {},
 ): Promise<{ result: FieldRunResult; status: 'ok' | 'partial' | 'failed' }> {
   const conn = await requireWcConnection();
-  const outcomes: Array<FieldOutcome<Link>> = await sendLinkFields(conn, plan.map(p => ({ link: p.link, fields: p.fields })), signal);
+  const sent: Array<FieldOutcome<Link>> = plan.length === 0 ? []
+    : await sendLinkFields(conn, plan.map(p => ({ link: p.link, fields: p.fields })), signal, { batchSize: options.batchSize });
+  const outcomes: Array<FieldOutcome<Link>> = [...sent, ...(options.refused ?? []).map(r => ({ link: r.link, error: r.error }))];
   const valuesOf = new Map(plan.map(p => [p.link.id, p.values]));
   const failed = outcomes.filter(o => o.error);
   const errors = failed.map(o => `${o.link.siteSku || `#${o.link.wcProductId}`}: ${o.error}`);
   const result: FieldRunResult = {
-    totalLinks, syncedCount: outcomes.length - failed.length, failedCount: failed.length, skippedCount: totalLinks - plan.length,
+    totalLinks, syncedCount: outcomes.length - failed.length, failedCount: failed.length, skippedCount: totalLinks - outcomes.length,
     errors: errors.slice(0, WC_LIST_LIMIT),
   };
   const status = fieldRunStatus(outcomes);
   const now = systemNowUtcIso();
+  const { error: errorColumn, count: countColumn } = FIELD_KINDS[kind];
   await orm.transaction(async (tx) => {
     await updateLinkRows(tx, outcomes.map(o => {
-      if (!o.error) return { id: o.link.id, values: valuesOf.get(o.link.id) ?? {} };
+      if (!o.error) return { id: o.link.id, values: { ...(valuesOf.get(o.link.id) ?? {}), ...(options.answered?.(o.link, o.answer) ?? {}) } };
       // a request that failed for the shop never counts against the product
-      const count = kind === 'price_push' ? o.link.priceFailureCount : o.link.skuFailureCount;
-      const next = o.requestFailed ? count : count + 1;
-      return { id: o.link.id, values: kind === 'price_push'
-        ? { priceError: o.error, priceFailureCount: next } : { skuError: o.error, skuFailureCount: next } };
+      const count = o.link[countColumn];
+      return { id: o.link.id, values: { [errorColumn]: o.error, [countColumn]: o.requestFailed ? count : count + 1 } };
     }), now);
     await tx.insert(wcSyncRuns).values({
       kind, status, startedAt: now, finishedAt: now,
-      summary: { trigger: 'auto', ...extra, ...(sentDetails ? sentDetails(outcomes, plan) : {}), totalLinks, syncedCount: result.syncedCount, failedCount: result.failedCount,
+      summary: { trigger: 'auto', ...extra, ...(options.details ? options.details(outcomes, plan) : {}), totalLinks, syncedCount: result.syncedCount, failedCount: result.failedCount,
         skippedCount: result.skippedCount, errors: errors.slice(0, 20) },
     });
   });
@@ -143,8 +171,8 @@ async function sendAndRecord(
 }
 
 /** One run of a kind: the setting, the backoff, the lock, then the run, whose error becomes a failed run row */
-async function runField(
-  kind: 'price_push' | 'sku_push', enabled: () => Promise<boolean>, now: Date,
+export async function runField(
+  kind: FieldKind, enabled: () => Promise<boolean>, now: Date,
   locked: (signal: AbortSignal) => Promise<FieldRunOutcome>,
 ): Promise<FieldRunOutcome> {
   if (!(await enabled())) return { state: 'off' };
@@ -169,7 +197,7 @@ async function runField(
   return outcome.acquired ? outcome.result : { state: 'busy' };
 }
 
-function outcomeOf(sent: { result: FieldRunResult; status: 'ok' | 'partial' | 'failed' }): FieldRunOutcome {
+export function outcomeOf(sent: { result: FieldRunResult; status: 'ok' | 'partial' | 'failed' }): FieldRunOutcome {
   return { state: sent.status === 'failed' ? 'failed' : 'pushed', result: sent.result };
 }
 
@@ -217,7 +245,7 @@ export function runPricePushOnce(now: Date = new Date(), options: FieldRunOption
     }
     if (plan.length === 0) return { state: 'nothing' };
     const recorded = { priceList: title, siteCurrency: site.currency, siteDecimals: site.decimals };
-    return outcomeOf(await sendAndRecord('price_push', plan, links.length, recorded, signal, priceChanges));
+    return outcomeOf(await sendAndRecord('price_push', plan, links.length, recorded, signal, { details: priceChanges }));
   });
 }
 
@@ -251,7 +279,7 @@ export function runSkuRenameOnce(now: Date = new Date(), options: FieldRunOption
  * Writes a send setting under its row lock with its audit row in the same transaction; a value equal to the stored one
  * changes nothing (false)
  */
-async function writeSetting(
+export async function writeSetting(
   actor: WcActor, key: string, value: string, describe: (before: string) => { text: string; before: unknown; after: unknown },
 ): Promise<boolean> {
   const changed = await orm.transaction(async (tx) => {
