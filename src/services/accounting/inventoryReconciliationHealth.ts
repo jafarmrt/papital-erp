@@ -22,8 +22,10 @@ export const INVENTORY_RECONCILIATION_TOLERANCE = 1;
 
 /** half a unit of the 4th decimal: the most one rounding of a numeric(18,4) cost or amount can be off */
 const HALF_UNIT_4DP = '0.00005';
-/** half a rial: the most one amount rounded to the rial can be off (TD-1030 foreign rows, TD-1147 void residues) */
+/** half a rial: the most one amount rounded to the rial can be off (TD-1147 void residues) */
 const HALF_RIAL = '0.5';
+/** one rial: a foreign row's rial value rounded, then the 4-decimal rate's product rounded again (TD-1030) */
+const ONE_RIAL = '1';
 
 /**
  * The most rounding can explain between the warehouse value (stock × WAC) and the ledger, beyond the one rial of
@@ -32,12 +34,17 @@ const HALF_RIAL = '0.5';
  *   reversal of a row) the stock on hand after it is valued up to half a unit of the 4th decimal off what the ledger got,
  *   and later issues credit inventory at that rounded WAC, so the difference stays. The WAC is averaged in posting order,
  *   so the stock on hand is summed in id order over every live Kardex row plus the voided rows that have a live reversal
- *   (they were on hand until voided); each Kardex amount is rounded to 4 decimals too;
+ *   (they were on hand until voided); each Kardex amount is rounded to 4 decimals too, and so is the rial unit price of
+ *   a foreign incoming row (`stockUnitPriceInIrr`), whose voucher carries the unrounded value: half a unit of the 4th
+ *   decimal on its quantity;
  * - each inventory row in a foreign currency is worth its amount × its 4-decimal rate rounded to the rial (TD-1030 in
- *   the vouchers, and `readInventoryLedgerValues` per row): half a rial, plus half a unit of the rate's 4th decimal on
- *   the amount, since a large row's rate cannot always land on its exact Kardex rials (`rateForRial`);
- * - the residue voucher of a voided receipt (TD-1147, `postVoidResidueVoucher`) is rounded to the rial and skipped under
- *   half a rial, so each live reversal of an incoming row may leave half a rial in the ledger.
+ *   the vouchers, and `readInventoryLedgerValues` per row): its rial value is rounded once (half a rial) and the product
+ *   again (half a rial), plus half a unit of the rate's 4th decimal on the amount, since a large row's rate cannot
+ *   always land on its exact rials (`rateForRial`);
+ * - the residue voucher of a voided receipt (TD-1147, `postVoidResidueVoucher`) is rounded to the rial per document
+ *   and per raw or finished part and skipped under half a rial: half a rial for each live reversal of an incoming row,
+ *   and one rial for each voided incoming document with no live Kardex rows (a legacy document, reversed from its lines
+ *   with no reversal rows).
  * Other rial vouchers keep the 4-decimal Kardex amount.
  * The voided rows are read by id from the reversals (UNION ALL, not OR EXISTS): `reversal_of_id` has no index, and on a
  * few hundred thousand Kardex rows the OR form scanned the table once per voided row.
@@ -60,12 +67,12 @@ export async function inventoryRoundingAllowance(): Promise<string> {
         FROM history h
     ), wac AS (
       SELECT ${HALF_UNIT_4DP}::numeric * (
-               COALESCE(SUM(GREATEST(on_hand_after, 0)) FILTER (
+               COALESCE(SUM(GREATEST(on_hand_after, 0) + CASE WHEN type = 'in' THEN quantity ELSE 0 END) FILTER (
                  WHERE document_type <> 'transfer' AND (type = 'in' OR reversal_of_id IS NOT NULL)), 0)
                + 2 * COUNT(*)) AS allowance
         FROM running
     ), rial AS (
-      SELECT COALESCE(SUM(${HALF_RIAL}::numeric + ${HALF_UNIT_4DP}::numeric * ABS(vi.debit - vi.credit)), 0) AS allowance
+      SELECT COALESCE(SUM(${ONE_RIAL}::numeric + ${HALF_UNIT_4DP}::numeric * ABS(vi.debit - vi.credit)), 0) AS allowance
         FROM journal_voucher_items vi
         JOIN journal_vouchers v ON v.id = vi.voucher_id AND v.is_deleted = 0
         JOIN accounts a ON a.id = vi.account_id AND a.is_deleted = 0
@@ -77,8 +84,14 @@ export async function inventoryRoundingAllowance(): Promise<string> {
         FROM transactions r
         JOIN transactions o ON o.id = r.reversal_of_id
        WHERE r.is_deleted = 0 AND o.type = 'in' AND COALESCE(o.document_type, '') <> 'transfer'
+    ), legacy AS (
+      SELECT 2 * ${HALF_RIAL}::numeric * COUNT(*) AS allowance
+        FROM documents d
+       WHERE d.is_deleted = 1 AND d.status = 'final' AND d.type IN ('receipt', 'production_receipt', 'return')
+         AND NOT EXISTS (SELECT 1 FROM transactions t WHERE t.document_id = d.id AND t.is_deleted = 0)
     )
-    SELECT ((SELECT allowance FROM wac) + (SELECT allowance FROM rial) + (SELECT allowance FROM residue))::text AS allowance`);
+    SELECT ((SELECT allowance FROM wac) + (SELECT allowance FROM rial) + (SELECT allowance FROM residue)
+            + (SELECT allowance FROM legacy))::text AS allowance`);
   const row = (res.rows?.[0] ?? {}) as { allowance?: string };
   return row.allowance ?? '0';
 }
@@ -144,7 +157,7 @@ export async function findManualInventoryPostings(): Promise<ManualInventoryPost
 
 const TITLE = 'انطباق ریالی موجودی انبار با دفتر کل حسابداری';
 const DESCRIPTION = 'بررسی هم‌خوانی ارزش کاردکس و موجودی کالای فیزیکی با سرفصل ۱۴ (موجودی مواد و کالا)، بی حساب کالای در جریان ساخت که بیرون از انبار است؛ '
-  + 'اختلاف بیش از آنچه گرد کردن دو طرف، میانگین موزون چهاررقم‌اعشاری و گرد کردن ریالی ردیف‌های ارزی سند توضیح می‌دهد گزارش می‌شود و سندهای دستی روی حساب موجودی همیشه فهرست می‌شوند';
+  + 'اختلاف بیش از آنچه گرد کردن دو طرف، میانگین موزون چهاررقم‌اعشاری، گرد کردن ریالی ردیف‌های ارزی سند و مانده باطل کردن رسید توضیح می‌دهد گزارش می‌شود و سندهای دستی روی حساب موجودی همیشه فهرست می‌شوند';
 
 export function buildInventoryReconciliationHealthTest(
   physical: WarehouseValuation,
