@@ -125,11 +125,11 @@ export const SettlementAllocationList: React.FC<SettlementAllocationListProps> =
                 <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100">
                   {SETTLEMENT_DOCUMENT_TYPE_LABELS[doc.type] ?? 'سند'} {formatPersianCode(doc.refNumber)}
                 </span>
-                <span className="text-[10px] text-slate-500">{doc.date ? formatPersianDate(doc.date) : '—'}</span>
+                <span className="text-[11px] text-slate-500">{doc.date ? formatPersianDate(doc.date) : '—'}</span>
                 {!isSettleableStatus(doc.status) && (
-                  <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300">پیش‌نویس: سهم آن بیشتر نمی‌شود</span>
+                  <span className="text-[11px] font-bold text-amber-700 dark:text-amber-300">پیش‌نویس: سهم آن بیشتر نمی‌شود</span>
                 )}
-                <span className="text-[10px] text-slate-500">
+                <span className="text-[11px] text-slate-500">
                   مانده: {rial.money(settlementRoom(doc), currency)}
                 </span>
                 <span className="ms-auto">
@@ -146,7 +146,7 @@ export const SettlementAllocationList: React.FC<SettlementAllocationListProps> =
                   ) : part !== undefined ? (
                     <span className="text-[11px] font-black text-emerald-700 dark:text-emerald-300">{rial.money(part, currency)}</span>
                   ) : (
-                    <span className="text-[10px] text-slate-400">—</span>
+                    <span className="text-[11px] text-slate-500">—</span>
                   )}
                 </span>
               </li>

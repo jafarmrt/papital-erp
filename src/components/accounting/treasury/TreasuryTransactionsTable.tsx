@@ -344,7 +344,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                         {isReceipt ? '+' : '-'}{isRialCurrency(tx.currency) ? rial.number(tx.amount) : formatPersianPrice(tx.amount, String(tx.currency).trim())}
                       </span>
                       {!isVoided && (tx.allocatedAmount ?? 0) > 0 && (
-                        <div className="font-sans text-[10px] font-bold text-emerald-700 dark:text-emerald-300 mt-0.5">
+                        <div className="font-sans text-[11px] font-bold text-emerald-700 dark:text-emerald-300 mt-0.5">
                           روی فاکتورها: {rial.money(tx.allocatedAmount, tx.currency)}
                         </div>
                       )}
@@ -401,7 +401,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                               onClick={() => onAllocateDocuments(tx)}
                               title="نشاندن روی فاکتورها"
                               aria-label="نشاندن روی فاکتورها"
-                              className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg transition cursor-pointer"
+                              className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg transition cursor-pointer"
                             >
                               <FileCheck2 size={14} />
                             </button>
