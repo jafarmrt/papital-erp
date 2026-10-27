@@ -4,7 +4,7 @@ import request from 'supertest';
 import { and, eq, inArray } from 'drizzle-orm';
 import { TestCaseResult } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { fileAttachments, journalVouchers, notifications, personnel, users } from '../../db/schema.js';
+import { fileAttachments, integrationDeliveryJobs, journalVouchers, notifications, personnel, userMessengerLinks, users } from '../../db/schema.js';
 import { runCase, type Harness, type Row, type ShouldRun } from './workflowTestHarness.js';
 
 /**
@@ -286,7 +286,7 @@ export async function runSecurityHardeningV11Tests(shouldRun: ShouldRun): Promis
     await runCase(results, {
       id: 'sec_personnel_user_link_rights_v11_6_2',
       name: 'v11 phase 6.2: linking a person to an account needs users.manage, goes through an unlink, is audited and told to both accounts (X6)',
-      details: 'A holder of personnel.manage alone linking an account is 403 PERSONNEL_USER_LINK_FORBIDDEN, though editing other fields with the same link goes through; the admin moving a linked person straight to another account is 409 PERSONNEL_USER_RELINK_REFUSED; unlinking then linking goes through, with one audit row «پیوند حساب کاربری» per change and a notice to the account that loses the person and to the one that gains it',
+      details: 'A holder of personnel.manage alone linking an account is 403 PERSONNEL_USER_LINK_FORBIDDEN, though editing other fields with the same link goes through; the admin moving a linked person straight to another account is 409 PERSONNEL_USER_RELINK_REFUSED; unlinking then linking goes through, with one audit row «پیوند حساب کاربری» per change and a notice to the account that loses the person and to the one that gains it, kept in the bell: none goes to a linked messenger, where the payslip category would read «فیش حقوق شما تأیید شد.»',
     }, async (h, wrong) => {
       const { personnelVersion } = await import('../fixtures/personnelVersion.js');
       const manager = await h.sessionWith(['personnel.view', 'personnel.manage']);
@@ -296,6 +296,8 @@ export async function runSecurityHardeningV11Tests(shouldRun: ShouldRun): Promis
       const pid = Number(created.body?.id);
       const edit = async (body: Row, s = h.admin) => h.put(`/api/personnel/${pid}`, { version: await personnelVersion(pid), firstName: 'پیوند', lastName: `X6 ${h.tag}`, ...body }, s);
       const linkedTo = async () => (await h.q('SELECT user_id FROM personnel WHERE id = $1', [pid]))[0]?.user_id ?? null;
+      const [messengerLink] = await orm.insert(userMessengerLinks)
+        .values({ userId: first.userId, messenger: 'telegram', chatId: `x6-${h.tag}`, chatName: 'test' }).returning({ id: userMessengerLinks.id });
       try {
         if (created.status !== 201) throw new Error(`creating the person returned ${created.status}: ${errorText(created)}`);
         const byManager = await edit({ userId: first.userId }, manager);
@@ -322,7 +324,11 @@ export async function runSecurityHardeningV11Tests(shouldRun: ShouldRun): Promis
         const secondNotices = await noticesOf(second.userId);
         if (firstNotices.length !== 2) wrong.push(`the first account got ${firstNotices.length} notices, expected the link and the unlink: ${firstNotices.join(' | ')}`);
         if (secondNotices.length !== 1) wrong.push(`the second account got ${secondNotices.length} notices, expected one: ${secondNotices.join(' | ')}`);
+        const sent = await orm.select({ id: integrationDeliveryJobs.id }).from(integrationDeliveryJobs).where(and(eq(integrationDeliveryJobs.kind, 'messenger'), eq(integrationDeliveryJobs.targetId, messengerLink.id)));
+        if (sent.length !== 0) wrong.push(`${sent.length} link notices were queued for the messenger, where they would read as an approved payslip`);
       } finally {
+        await orm.delete(integrationDeliveryJobs).where(and(eq(integrationDeliveryJobs.kind, 'messenger'), eq(integrationDeliveryJobs.targetId, messengerLink.id))).catch(() => undefined);
+        await orm.delete(userMessengerLinks).where(eq(userMessengerLinks.id, messengerLink.id)).catch(() => undefined);
         await orm.delete(notifications).where(inArray(notifications.userId, [first.userId, second.userId])).catch(() => undefined);
         if (pid > 0) await orm.delete(personnel).where(eq(personnel.id, pid)).catch(() => undefined);
       }

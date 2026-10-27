@@ -91,18 +91,19 @@ export async function recordPersonnelUserLinkChange(tx: DbTransaction, params: {
     details: { personnelId, before: { userId: before }, after: { userId: after } },
   });
   const sender = req.user as { id?: number; username?: string } | undefined;
+  // bell only: in the messenger the `payslip` category is the fixed sentence «فیش حقوق شما تأیید شد.»
   await createNotifications(tx, [
     ...(after !== null ? [{
       userId: after, category: 'payslip' as const, type: 'system',
       title: 'پرونده پرسنلی به حساب شما وصل شد',
       message: `پرونده پرسنلی «${fullName}» به حساب کاربری شما وصل شد و فیش‌های حقوق آن در «فیش‌های من» دیده می‌شود. اگر این پرونده شما نیست به مدیر خبر دهید.`,
-      senderId: sender?.id ?? null, senderName: sender?.username ?? '',
+      senderId: sender?.id ?? null, senderName: sender?.username ?? '', bellOnly: true,
     }] : []),
     ...(before !== null ? [{
       userId: before, category: 'payslip' as const, type: 'system',
       title: 'پرونده پرسنلی از حساب شما جدا شد',
       message: `پرونده پرسنلی «${fullName}» از حساب کاربری شما جدا شد و فیش‌های حقوق آن دیگر در «فیش‌های من» نیست.`,
-      senderId: sender?.id ?? null, senderName: sender?.username ?? '',
+      senderId: sender?.id ?? null, senderName: sender?.username ?? '', bellOnly: true,
     }] : []),
   ]);
 }
