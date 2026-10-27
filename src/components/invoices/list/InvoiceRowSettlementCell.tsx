@@ -27,7 +27,7 @@ export function InvoiceRowSettlementCell({ isCommercial, settlementStatus, remai
                 <span>تسویه ناقص</span>
               </span>
               <div className="text-[11px] text-slate-500 font-mono mt-0.5">
-                مانده: <span className="text-amber-700 font-bold">{amounts.number(remainingAmt)}</span>
+                مانده: <span className="text-amber-700 font-bold">{amounts.number(remainingAmt)}</span> {amounts.label}
               </div>
             </div>
           ) : (
@@ -37,7 +37,7 @@ export function InvoiceRowSettlementCell({ isCommercial, settlementStatus, remai
                 <span>تسویه نشده</span>
               </span>
               <div className="text-[11px] text-slate-500 font-mono mt-0.5">
-                مانده: {amounts.number(remainingAmt)}
+                مانده: {amounts.number(remainingAmt)} {amounts.label}
               </div>
             </div>
           )}

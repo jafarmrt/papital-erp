@@ -200,6 +200,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
         body: JSON.stringify(payload),
       });
 
+      // the toast repeats the amount just typed in the rial field, so it stays in rial (U3)
       toast.success(
         isPurchase 
           ? `پرداخت به مبلغ ${formatPersianPrice(parsedAmount, currency)} با موفقیت ثبت شد.`
@@ -533,7 +534,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
                       <span className="text-slate-400 font-mono text-[10px]">({formatPersianCode(part.sourceNumber)})</span>
                     </div>
                     <span className="font-bold text-emerald-700">
-                      {formatPersianPrice(part.amount, currency)}
+                      {shown.money(part.amount, currency)}
                     </span>
                   </div>
                 ))}

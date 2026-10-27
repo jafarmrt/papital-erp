@@ -120,8 +120,8 @@ export interface DocAmountFormat {
 
 /**
  * v11 phase 6.3 (U3, decision ت۵۷): a screen that only shows a document's amounts (the invoice list, its detail window, the
- * quick settlement) reads a rial document in the display unit, as the list's totals cards already did; a foreign one stays
- * in its own currency with its decimals. Before, the cards read toman over rows in rial. A printed invoice stays in rial.
+ * quick settlement, the totals cards) reads a rial document in the display unit; a foreign one stays in its own currency
+ * with its decimals. Before, all of them read rial whatever the setting. A printed invoice stays in rial.
  */
 export function docAmountFormatOf(currency: string | null | undefined, rial: RialDisplay): DocAmountFormat {
   if (isRialCurrency(currency)) return { number: rial.number, label: rial.label };

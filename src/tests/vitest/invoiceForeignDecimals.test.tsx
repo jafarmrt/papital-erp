@@ -18,7 +18,7 @@ describe('foreign-currency amounts in the invoices list', () => {
     render(<InvoiceRowSettlementCell isCommercial settlementStatus="unpaid" remainingAmt={200.5} amounts={docAmountFormatOf('USD', rialDisplayOf('TOMAN'))} />);
     const expected = formatPersianPrice(200.5, undefined, 2);
     expect(expected).not.toBe(formatPersianPrice(200.5));
-    expect(screen.getByText(`مانده: ${expected}`)).toBeTruthy();
+    expect(screen.getByText(`مانده: ${expected} دلار`)).toBeTruthy();
   });
 
   it('details total keeps the cents of a USD invoice', () => {

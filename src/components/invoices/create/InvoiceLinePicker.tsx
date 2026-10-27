@@ -97,16 +97,18 @@ export function InvoiceLinePicker(props: InvoiceLinePickerProps) {
         <DecimalInput id="invoice-line-quantity" min="0" step="any" value={quantity} onValueChange={v => onQuantityChange(amountOf(v))} className={INVOICE_NUMBER_FIELD} />
       </div>
       <div className="col-span-1 sm:col-span-2 lg:col-span-3">
-        <label htmlFor="invoice-line-unit-price" className={INVOICE_LABEL}>
-          مبلغ واحد ({currencyLabel}){isRial && <RialEquivalent inline value={unitPrice} />}
-        </label>
-        <DecimalInput id="invoice-line-unit-price" min="0" value={unitPrice} onValueChange={v => onUnitPriceChange(amountOf(v))} className={INVOICE_NUMBER_FIELD} />
+        <div className="flex flex-wrap items-baseline">
+          <label htmlFor="invoice-line-unit-price" className={INVOICE_LABEL}>مبلغ واحد ({currencyLabel})</label>
+          {isRial && <RialEquivalent inline id="invoice-line-unit-price-equivalent" value={unitPrice} />}
+        </div>
+        <DecimalInput id="invoice-line-unit-price" aria-describedby={isRial ? 'invoice-line-unit-price-equivalent' : undefined} min="0" value={unitPrice} onValueChange={v => onUnitPriceChange(amountOf(v))} className={INVOICE_NUMBER_FIELD} />
       </div>
       <div className="col-span-1 sm:col-span-2 lg:col-span-2">
-        <label htmlFor="invoice-line-discount" className={INVOICE_LABEL}>
-          تخفیف ردیف ({currencyLabel}){isRial && <RialEquivalent inline value={discount} />}
-        </label>
-        <DecimalInput id="invoice-line-discount" min="0" value={discount} onValueChange={v => onDiscountChange(amountOf(v))} className={INVOICE_NUMBER_FIELD} />
+        <div className="flex flex-wrap items-baseline">
+          <label htmlFor="invoice-line-discount" className={INVOICE_LABEL}>تخفیف ردیف ({currencyLabel})</label>
+          {isRial && <RialEquivalent inline id="invoice-line-discount-equivalent" value={discount} />}
+        </div>
+        <DecimalInput id="invoice-line-discount" aria-describedby={isRial ? 'invoice-line-discount-equivalent' : undefined} min="0" value={discount} onValueChange={v => onDiscountChange(amountOf(v))} className={INVOICE_NUMBER_FIELD} />
       </div>
       <div className="col-span-1 sm:col-span-6 lg:col-span-2">
         <button type="button" onClick={(e) => { if (!refuseInvalidDecimalInputs(e.currentTarget)) onAdd(); }}

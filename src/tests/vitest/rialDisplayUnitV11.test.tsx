@@ -12,6 +12,10 @@ vi.mock('../../hooks/useAppCurrency', async () => {
   return { useAppCurrency: () => displayUnit.current, useRialDisplay: () => rialDisplayOf(displayUnit.current) };
 });
 
+// the row's actions and notes cells read permissions and list state; the amounts are what is checked here
+vi.mock('../../components/invoices/list/InvoiceRowActions', () => ({ InvoiceRowActions: () => <td /> }));
+vi.mock('../../components/invoices/list/InvoiceRowNotesCell', () => ({ InvoiceRowNotesCell: () => <td /> }));
+
 const { RialDisplayProvider } = await import('../../contexts/RialDisplayContext');
 const { docAmountFormatOf } = await import('../../lib/invoices/invoiceListDocuments');
 const { rialDisplayOf } = await import('../../lib/rialDisplay');
@@ -19,6 +23,10 @@ const { InvoiceRowSettlementCell } = await import('../../components/invoices/lis
 const { InvoiceDetailsTotals } = await import('../../components/invoices/list/InvoiceDetailsTotals');
 const { RialEquivalent } = await import('../../components/common/RialEquivalent');
 const { PayrollDeductionsField } = await import('../../components/piecework/PayrollDeductionsField');
+const { InvoiceListRow } = await import('../../components/invoices/list/InvoiceListRow');
+const { DocumentDetailsPreview } = await import('../../components/approval/DocumentDetailsPreview');
+const { Money } = await import('../../components/Money');
+const { formatPersianPrice } = await import('../../utils');
 
 afterEach(() => {
   cleanup();
@@ -27,8 +35,11 @@ afterEach(() => {
 
 const inApp = (node: ReactNode) => render(<RialDisplayProvider>{node}</RialDisplayProvider>);
 
-const TOMAN_REMAINING = 'مانده: ۱۲٬۵۰۰';
-const RIAL_REMAINING = 'مانده: ۱۲۵٬۰۰۰';
+const TOMAN_REMAINING = 'مانده: ۱۲٬۵۰۰ تومان';
+const RIAL_REMAINING = 'مانده: ۱۲۵٬۰۰۰ ریال';
+const RIAL_TOTAL = '۱۲۵٬۰۰۰ ریال';
+const TOMAN_AMOUNT = '۱۲٬۵۰۰ تومان';
+const PAYABLE_LABEL = 'مبلغ قابل پرداخت:';
 const TOMAN_TOTAL = '۲٬۵۰۰٬۰۰۰ تومان';
 const TOMAN_EQUIVALENT = 'معادل: ۲٬۵۰۰٬۰۰۰ تومان';
 const DEDUCTIONS_LABEL = 'سایر کسورات (ریال)';
@@ -62,7 +73,44 @@ describe('display unit on screens that only show amounts', () => {
   it('keeps rial outside the app frame (a test, the sign-in page)', () => {
     render(<InvoiceDetailsTotals selectedDocDetails={{ id: 1, type: 'invoice', currency: 'IRR', payableAmount: 125_000, items: [] }} />);
     const total = screen.getByText(TOTALS_LABEL).parentElement?.querySelector('strong')?.textContent ?? '';
-    expect(total).not.toContain(TOMAN);
+    expect(total).toBe(RIAL_TOTAL);
+  });
+
+  const listRow = (currency: string, amount: number) => inApp(
+    <table><tbody>
+      <InvoiceListRow doc={{ id: 1, type: 'invoice', status: 'final', currency, payableAmount: amount, paidAmount: 0, items: [] }} actions={{} as never} />
+    </tbody></table>,
+  );
+
+  it('shows an invoice list row of a rial document in toman, amount and remaining alike', () => {
+    listRow('IRR', 125_000);
+    const cell = document.querySelector('td[data-label="مبلغ سند"]')?.textContent ?? '';
+    expect(cell).toBe(TOMAN_AMOUNT.replace(' ', ''));
+    expect(screen.getByText(TOMAN_REMAINING)).toBeTruthy();
+  });
+
+  it('keeps an invoice list row of a dollar document in dollars with its cents', () => {
+    listRow('USD', 200.5);
+    const cell = document.querySelector('td[data-label="مبلغ سند"]')?.textContent ?? '';
+    expect(cell).toBe(`${formatPersianPrice(200.5, undefined, 2)}${DOLLAR}`);
+    expect(document.body.textContent).not.toContain(TOMAN);
+  });
+
+  it('shows the approval preview of a rial document in toman and of a dollar document in dollars', () => {
+    inApp(<DocumentDetailsPreview isLoadingDoc={false} docDetails={{ id: 1, currency: 'IRR', payableAmount: 125_000, items: [] }} />);
+    expect(screen.getByText(PAYABLE_LABEL).nextElementSibling?.textContent).toBe(TOMAN_AMOUNT);
+    cleanup();
+    inApp(<DocumentDetailsPreview isLoadingDoc={false} docDetails={{ id: 1, currency: 'USD', payableAmount: 200.5, items: [{ quantity: 1, unit_price: 200.5 }] }} />);
+    expect(screen.getByText(PAYABLE_LABEL).nextElementSibling?.textContent).toBe(`${formatPersianPrice(200.5, undefined, 2)} ${DOLLAR}`);
+    expect(document.body.textContent).not.toContain(TOMAN);
+  });
+
+  it('shows the invoice list totals cards (Money) in the display unit, a foreign amount in its currency', () => {
+    inApp(<Money amount={125_000} currency="IRR" />);
+    expect(document.body.textContent).toBe(TOMAN_AMOUNT);
+    cleanup();
+    inApp(<Money amount={200.5} currency="USD" />);
+    expect(document.body.textContent).not.toContain(TOMAN);
   });
 });
 
