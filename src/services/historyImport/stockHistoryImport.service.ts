@@ -14,6 +14,7 @@ import {
 import { isoToJalaliDate, toPersianDigits } from '../../utils.js';
 import { DocumentService } from '../document.service.js';
 import { permissionToCreateDocument } from '../documents/documentRecordRule.js';
+import { OPENING_STOCK_PERMISSION } from '../../lib/permissions/stockActionPermissions.js';
 import type { DocumentAuditActor } from '../documents/documentAudit.js';
 import { FiscalPeriodService } from '../accounting/fiscalPeriod.service.js';
 import { ItemOpeningService, itemIdsWithOpeningVoucher } from '../inventory/itemOpening.service.js';
@@ -165,7 +166,7 @@ async function postOpening(tx: DbExecutor, p: PreparedRow, options: StockImportO
              WHERE t.item_id = ${p.itemId} AND ${LEDGER_ROW_FILTER}) AS qty`);
   const heldQty = fin(String((held.rows?.[0] as { qty?: string | number } | undefined)?.qty ?? 0));
   if (!heldQty.isZero()) {
-    throw new ValidationError(`این کالا ${toPersianDigits(heldQty.toString())} واحد موجودی دارد که در کاردکس نیست؛ موجودی اولیه فقط برای کالایی با موجودی صفر ثبت می‌شود. موجودی آن را با انبارگردانی صفر کنید یا کاردکس آغازین را بسازید.`);
+    throw new ValidationError(`این کالا ${toPersianDigits(heldQty.toString())} واحد موجودی دارد که در کاردکس نیست؛ موجودی اولیه از اکسل فقط برای کالایی با موجودی صفر ثبت می‌شود. موجودی ۱ فروردین این کالا را با دست ثبت کنید (انبارگردانی با تاریخ ۱۴۰۵/۰۱/۰۱) و ردیفش را از پرونده بردارید.`);
   }
   if ((await itemIdsWithOpeningVoucher(tx, [p.itemId])).size > 0) {
     throw new ValidationError('این کالا پیش‌تر سند افتتاحیهٔ موجودی دارد؛ موجودی اولیه دوباره ثبت نمی‌شود.');
@@ -291,10 +292,10 @@ async function resolveItems(tx: DbExecutor, rows: PreparedRow[]): Promise<Prepar
 
 /**
  * The permission each kind of row needs: what its hand form asks to record it final (the document's create permission, the
- * transfer form's `warehouse.transfer`); opening stock needs only the import's own permission (which requires warehouse.in).
+ * transfer form's `warehouse.transfer`, the item form's opening-stock permission).
  */
 export const STOCK_IMPORT_KIND_PERMISSIONS: ReadonlyArray<readonly [StockImportKind, string | null]> = [
-  ['opening', null],
+  ['opening', OPENING_STOCK_PERMISSION],
   ['purchase', permissionToCreateDocument({ docType: 'receipt', status: 'final' })],
   ['production', permissionToCreateDocument({ docType: 'production_receipt', status: 'final' })],
   ['consumption', permissionToCreateDocument({ docType: 'remittance', status: 'final' })],
