@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { cappedPickListUrl, takePickList } from '../../lib/permissions/pickListCap';
 import { EMPTY_ALLOCATION_STATUS_COUNTS, bomAllocationListUrl, type BomAllocationListParams, type BomAllocationStatusCounts } from '../../lib/inventory/bomAllocationList';
 import { READ_ON_EVERY_OPENING } from './readOnEveryOpening';
 
@@ -69,7 +70,8 @@ export function useAllocationPageQuery(params: Required<Pick<BomAllocationListPa
 export function useRawMaterialOptionsQuery() {
   return useQuery<AllocationItemOption[]>({
     queryKey: [...QUERY_KEYS.items.all, 'options', 'raw-material'] as const,
-    queryFn: async ({ signal }) => listOf<AllocationItemOption>(await fetchJson(`${PICK_LIST_URLS.items}?type=raw_material`, { signal })),
+    // v11 phase 6.1ch (C13): at most the cap; the picker over a cut list also searches on the server
+    queryFn: async ({ signal }) => takePickList(listOf<AllocationItemOption>(await fetchJson(cappedPickListUrl(`${PICK_LIST_URLS.items}?type=raw_material`), { signal }))),
     staleTime: 60 * 1000,
   });
 }

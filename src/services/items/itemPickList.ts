@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, lte, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, lte, sql, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { items } from '../../db/schema.js';
 import { foldedContains } from '../../lib/search/searchSql.js';
@@ -62,6 +62,8 @@ export interface ItemPickListQuery {
   limit?: number;
   /** only this item's row */
   id?: number;
+  /** v11 phase 6.1ch (C13): only these items (`?ids=`), the chosen or stored ones a form's cut list lacks */
+  ids?: number[];
 }
 
 export async function listItemPicks(user: { role?: string } | undefined, query: ItemPickListQuery): Promise<ItemPick[]> {
@@ -82,7 +84,11 @@ export async function listItemPicks(user: { role?: string } | undefined, query: 
     currentStock: items.currentStock,
     weightedAverageCost: items.weightedAverageCost,
   }).from(items)
-    .where(and(itemListConditions(query.type, query.search), query.id ? eq(items.id, query.id) : undefined))
+    .where(and(
+      itemListConditions(query.type, query.search),
+      query.id ? eq(items.id, query.id) : undefined,
+      query.ids ? inArray(items.id, query.ids) : undefined,
+    ))
     .orderBy(desc(items.id))
     .$dynamic();
   const rows = query.limit && query.limit > 0 ? await base.limit(query.limit) : await base;

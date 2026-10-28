@@ -21,13 +21,16 @@ const server = {
   items: [{ id: 2, name: 'fresh item' }] as unknown[],
   settings: [{ key: 'project_workflow_presets', value: JSON.stringify([preset('necklace'), preset('tile_transfer')]) }] as unknown[],
 };
+// v11 phase 6.1ch (C13): the form reads at most the cap of each list
+const CUSTOMERS_URL = '/customers/options?limit=1001';
+const ITEMS_URL = '/items/options?limit=1001';
 const reads = { hold: null as string | null, fail: null as string | null, held: [] as Array<(answer: unknown) => void> };
 const fetchJson = vi.fn(async (url: string, opts?: Opts): Promise<unknown> => {
   if (opts?.method) return { success: true };
   if (reads.hold === url) { reads.hold = null; return new Promise(resolve => { reads.held.push(resolve); }); }
   if (reads.fail === url) { reads.fail = null; throw new Error('server refused the read'); }
-  if (url === '/customers/options') return server.customers;
-  if (url === '/items/options') return { data: server.items };
+  if (url === CUSTOMERS_URL) return server.customers;
+  if (url === ITEMS_URL) return { data: server.items };
   if (url === '/settings') return server.settings;
   return [];
 });
@@ -65,7 +68,7 @@ function formOf(client: QueryClient, isOpen = true) {
 const earlier = () => ({ updatedAt: Date.now() - 60_000 });
 const readsOf = (url: string) => fetchJson.mock.calls.filter(([u, o]) => u === url && !o?.method).length;
 const namesOf = (rows: Array<{ name?: string }>) => rows.map(r => r.name);
-const LISTS = ['/customers/options', '/items/options', '/settings'];
+const LISTS = [CUSTOMERS_URL, ITEMS_URL, '/settings'];
 
 describe('the project form reads its lists through the shared cache (10.3)', () => {
   it('reads its lists again on each opening, and never while closed', async () => {
@@ -75,7 +78,7 @@ describe('the project form reads its lists through the shared cache (10.3)', () 
     rerender({ open: true });
     await waitFor(() => expect(namesOf(result.current.activeCustomersList)).toEqual(['fresh customer']));
     rerender({ open: false });
-    reads.hold = '/customers/options';
+    reads.hold = CUSTOMERS_URL;
     rerender({ open: true });
     await waitFor(() => expect(reads.held).toHaveLength(1));
     // the first opening's list waits for this opening's answer
@@ -86,7 +89,7 @@ describe('the project form reads its lists through the shared cache (10.3)', () 
   });
 
   it.each([
-    ['items', '/items/options', () => { server.items = [{ id: 3, name: 'later item' }]; }, { data: [{ id: 3, name: 'later item' }] }],
+    ['items', ITEMS_URL, () => { server.items = [{ id: 3, name: 'later item' }]; }, { data: [{ id: 3, name: 'later item' }] }],
     ['templates', '/settings', () => { server.settings = [{ key: 'project_workflow_presets', value: JSON.stringify([preset('earring')]) }]; }, null],
   ] as const)('the first opening\'s %s wait for this opening\'s answer', async (name, url, change, answer) => {
     const { result, rerender } = formOf(newClient());
@@ -107,8 +110,8 @@ describe('the project form reads its lists through the shared cache (10.3)', () 
   it('offers the page\'s lists, never an earlier opening\'s, until this opening\'s answer', async () => {
     const client = newClient();
     client.setQueryData(QUERY_KEYS.customers.options({ all: true }), [{ id: 4, name: 'stale customer' }], earlier());
-    client.setQueryData([...QUERY_KEYS.items.all, 'options', 'project-workspace'], [{ id: 5, name: 'stale item' }], earlier());
-    reads.hold = '/customers/options';
+    client.setQueryData([...QUERY_KEYS.items.all, 'options', 'project-form'], [{ id: 5, name: 'stale item' }], earlier());
+    reads.hold = CUSTOMERS_URL;
     const { result } = formOf(client);
     await waitFor(() => expect(reads.held).toHaveLength(1));
     await waitFor(() => expect(namesOf(result.current.activeItemsList)).toEqual(['fresh item']));
@@ -118,8 +121,8 @@ describe('the project form reads its lists through the shared cache (10.3)', () 
   });
 
   it.each([
-    ['customers', '/customers/options', SHOWN.customersFailed, 'activeCustomersList', 'page customer'],
-    ['items', '/items/options', SHOWN.itemsFailed, 'activeItemsList', 'page item'],
+    ['customers', CUSTOMERS_URL, SHOWN.customersFailed, 'activeCustomersList', 'page customer'],
+    ['items', ITEMS_URL, SHOWN.itemsFailed, 'activeItemsList', 'page item'],
   ] as const)('a failed %s list says so once and keeps the page\'s list', async (_name, url, message, list, pageName) => {
     reads.fail = url;
     const { result } = formOf(newClient());
@@ -134,8 +137,8 @@ describe('the project form reads its lists through the shared cache (10.3)', () 
     server.items = [];
     const { result } = formOf(newClient());
     await waitFor(() => expect(result.current.availablePresets.map(p => p.id)).toEqual(['necklace']));
-    await waitFor(() => expect(readsOf('/customers/options')).toBe(1));
-    expect(readsOf('/items/options')).toBe(1);
+    await waitFor(() => expect(readsOf(CUSTOMERS_URL)).toBe(1));
+    expect(readsOf(ITEMS_URL)).toBe(1);
     await new Promise(resolve => setTimeout(resolve, 20));
     expect(namesOf(result.current.activeCustomersList)).toEqual(['page customer']);
     expect(namesOf(result.current.activeItemsList)).toEqual(['page item']);

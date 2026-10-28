@@ -6,6 +6,7 @@ import { listFromResponse } from '../../lib/invoices/invoiceForm';
 import { reorderItemsFromResponse, type ReorderItem } from '../../lib/reorderAlerts/reorderItems';
 import type { Customer } from '../../types';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { cappedPickListUrl, takePickList } from '../../lib/permissions/pickListCap';
 
 /**
  * صفحه نقطه سفارش: خواندنی‌های صفحه با React Query (FE-005) به‌جای fetchJson/useState دستی.
@@ -60,7 +61,8 @@ export function useReorderSuppliersQuery(enabled: boolean): Customer[] {
     enabled,
     queryFn: async ({ signal }) => {
       try {
-        return listFromResponse<Customer>(await fetchJson<unknown>(PICK_LIST_URLS.customers, { signal }));
+        // v11 phase 6.1ch (C13): at most the cap; the supplier picker over a cut list also searches on the server
+        return takePickList(listFromResponse<Customer>(await fetchJson<unknown>(cappedPickListUrl(PICK_LIST_URLS.customers), { signal })));
       } catch (err: unknown) {
         if (!signal.aborted) console.error('Error fetching suppliers:', err);
         throw err;
