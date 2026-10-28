@@ -8,7 +8,8 @@ import { authorizePermission } from '../middleware/authorize.js';
 import { validate } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { importTreasuryHistory } from '../services/historyImport/treasuryHistoryImport.service.js';
-import { treasuryHistoryImportSchema } from './historyImport.schemas.js';
+import { importStockHistory } from '../services/historyImport/stockHistoryImport.service.js';
+import { stockHistoryImportSchema, treasuryHistoryImportSchema } from './historyImport.schemas.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -20,6 +21,17 @@ router.post('/accounting/treasury/history-import', authorizePermission('accounti
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
     audit: { req, userFullName: req.user?.fullName },
+  });
+  res.json(result);
+}));
+
+// tool 2: opening stock, purchase and production receipts, consumption, waste and transfers; `commit: false` is the preview
+router.post('/inventory/history-import', authorizePermission('warehouse.history_import'), validate(stockHistoryImportSchema), asyncHandler(async (req, res) => {
+  const result = await importStockHistory(req.body.rows, {
+    commit: req.body.commit === true,
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+    audit: { req, userId: req.user?.id, username: req.user?.username, userFullName: req.user?.fullName },
   });
   res.json(result);
 }));

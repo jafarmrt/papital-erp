@@ -13,7 +13,7 @@ import { requireStorageDate } from '../../lib/storageDate.js';
 import { assertStockMovementDate } from './stockMovementDate.js';
 import { assertTransferKeepsReservations } from './transferReservations.js';
 import { DocumentRefNumberService } from '../documents/documentRefNumber.service.js';
-import { idempotentTransaction } from '../../middleware/idempotency.js';
+import { idempotentTransactionIn } from '../../middleware/idempotency.js';
 
 /** نوع سند حواله انتقال بین انبارها (documents.type و transactions.document_type) */
 export const TRANSFER_DOCUMENT_TYPE = 'transfer';
@@ -47,7 +47,7 @@ export class InventoryStockRepairService {
     user?: string;
     /** v8.0.4 (TD-257): کاربر مجوز «ثبت سند انبار با تاریخ گذشته» دارد (بررسی در مسیر) */
     allowBackdate?: boolean;
-  }): Promise<{
+  }, executor?: DbExecutor): Promise<{
     success: boolean;
     /** شناسه سند حواله انتقال (documents.id)؛ پیش از v9.0.80 شناسه ردیف خروج کاردکس بود */
     transferDocId: number;
@@ -69,7 +69,8 @@ export class InventoryStockRepairService {
     const txDate = params.date ? requireStorageDate(params.date, 'تاریخ انتقال') : await businessTodayIsoDate();
     const operatorName = params.user || params.createdBy || 'سیستم';
 
-    return await idempotentTransaction(async (txEngine) => {
+    // v11 history import: inside the import's transaction when one is passed (a savepoint of it)
+    return await idempotentTransactionIn(executor, async (txEngine) => {
       await withOrderedLocks(txEngine, [
         { table: items, id: params.itemId, name: 'items' }
       ], async () => true);

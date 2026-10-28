@@ -59,7 +59,7 @@ const COMPOSITION_ROOTS = new Set([
   'src/app.ts', 'src/server.ts', 'src/services/system/workflowDomainActions.ts',
   // v11 history import (1405 replay from Excel): like the workflow domain actions, it replays what a user does in each
   // package (treasury, payslip payment, documents) through that package's own service, in one transaction
-  'src/services/historyImport/treasuryHistoryImport.service.ts',
+  'src/services/historyImport/treasuryHistoryImport.service.ts', 'src/services/historyImport/stockHistoryImport.service.ts',
 ]);
 
 export interface MapRule { pkg: string; re: RegExp }
