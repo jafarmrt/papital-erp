@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import {
-  MESSENGER_BODY_MAX_CHARS, MESSENGER_PREFERENCE_CATEGORIES, messengerLinkPath, messengerMessageWithLink, messengerNotificationText,
+  MESSENGER_PREFERENCE_CATEGORIES, messengerLinkPath, messengerMessageWithLink, messengerNotificationText,
   NOTIFICATION_CATEGORIES, NOTIFICATION_CATEGORY_LABELS, notificationAbsoluteLink, type NotificationCategory,
 } from '../../lib/notifications/notificationCategories';
 import { deadLetterDeliveryJobId } from '../../services/events/deadLetterDelivery';
@@ -20,6 +20,8 @@ const CREATOR = 'src/services/notifications/notificationCreator.ts';
 const ALLOWED = (rel: string) => rel === CREATOR || rel.startsWith('src/tests/') || rel.startsWith('src/db/');
 const DRIZZLE_INSERT = /\.insert\(\s*(?:schema\.)?notifications\s*\)/g;
 const SQL_INSERT = /\binsert\s+into\s+"?notifications"?/gi;
+const WORKFLOW_TASK_SENTENCE = 'یک کار تازه در کارتابل تأیید منتظر شماست.';
+const WORKFLOW_SLA_SENTENCE = 'مهلت یکی از کارهای کارتابل تأیید شما گذشته است.';
 
 function productionFiles(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
@@ -56,20 +58,18 @@ describe('notifications are written only through createNotifications (messenger 
 });
 
 describe('messenger text of a notification', () => {
-  it('a full-text category greets the recipient by name, says what it is about and writes Persian digits', () => {
-    const text = messengerNotificationText({
-      recipientName: 'زهرا احمدی', category: 'workflow_sla', title: 'مهلت کار تاییدی گذشت', message: 'مهلت «بررسی» برای 12 به پایان رسید.',
+  it('a workflow category greets the recipient by name and sends its fixed sentence in Persian digits, never the step or workflow title (v11 6.4, C11)', () => {
+    const sla = messengerNotificationText({
+      recipientName: 'زهرا احمدی', category: 'workflow_sla', title: 'مهلت کار تاییدی گذشت', message: 'مهلت «تایید فاکتور احمدی 50 میلیون» در فرایند «فروش» برای 12 به پایان رسید.',
     });
-    expect(text.split('\n')).toEqual(['زهرا احمدی،', 'مهلت کار تاییدی گذشت', 'مهلت «بررسی» برای ۱۲ به پایان رسید.']);
-  });
-
-  it('a new inbox task sends its own notice: the step title and the record number, built by the code', () => {
-    const text = messengerNotificationText({ recipientName: 'x', category: 'workflow_task', title: 'کار تازه در کارتابل', message: 'کار «تأیید انبار» برای سند 123 در کارتابل شما منتظر است.' });
-    expect(text.split('\n')).toEqual(['x،', 'کار تازه در کارتابل', 'کار «تأیید انبار» برای سند ۱۲۳ در کارتابل شما منتظر است.']);
+    expect(sla.split('\n')).toEqual(['زهرا احمدی،', WORKFLOW_SLA_SENTENCE]);
+    const task = messengerNotificationText({ recipientName: 'x', category: 'workflow_task', title: 'کار تازه در کارتابل', message: 'کار «تایید فاکتور احمدی 50 میلیون» برای سند 123 در کارتابل شما منتظر است.' });
+    expect(task.split('\n')).toEqual(['x،', WORKFLOW_TASK_SENTENCE]);
+    for (const text of [sla, task]) expect(text).not.toMatch(/احمدی 50|۵۰|میلیون|123|۱۲۳|«/);
   });
 
   it('every other category, a future one included, sends only its fixed sentence, never the typed title or a name', () => {
-    for (const category of NOTIFICATION_CATEGORIES.filter(c => c !== 'workflow_sla' && c !== 'workflow_task')) {
+    for (const category of NOTIFICATION_CATEGORIES) {
       const text = messengerNotificationText({ recipientName: 'رضا', category, title: 'پرونده شرکت آلفا 1500000', message: 'علی رضایی در «سفارش 15» اشاره کرد' });
       expect(text.split('\n')[0]).toBe('رضا،');
       expect(text).not.toMatch(/آلفا|علی|سفارش|1500000|۱۵۰۰۰۰۰|15|۱۵/);
@@ -118,12 +118,6 @@ describe('messenger text of a notification', () => {
     const text = messengerNotificationText({ recipientName: 'رضا', category: 'event_rule', title: 'فاکتور 1500000 ریال', message: 'مبلغ 1500000' });
     expect(text).not.toMatch(/1500000|۱۵۰۰۰۰۰|ریال|مبلغ/);
     expect(text).toContain('رضا،');
-  });
-
-  it('clips a long body and drops a body equal to the title', () => {
-    const long = messengerNotificationText({ recipientName: 'x', category: 'workflow_sla', title: 't', message: 'ب'.repeat(2000) });
-    expect(long.split('\n')[2].length).toBe(MESSENGER_BODY_MAX_CHARS);
-    expect(messengerNotificationText({ recipientName: 'x', category: 'workflow_sla', title: 'همان', message: 'همان' }).split('\n')).toHaveLength(2);
   });
 
   it('links to the app address only when both the address and the path are known', () => {

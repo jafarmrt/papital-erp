@@ -49,6 +49,29 @@ export function findOverOrders(
   return result;
 }
 
+/**
+ * v11 phase 6.4 (C9): the quantity one order line adds to the requisition rows of its item, spread over them in order: each
+ * row takes what it still lacks (requested − ordered) and the last row takes what is left, the excess of an over-order
+ * included. Before, the whole quantity went to the first row: rows 5 + 5 ordered as 10 read «ordered 10» and «ordered 0,
+ * pending», and ordering the pending 5 asked for an over-order reason. `findOverOrders` and delivery already sum the rows.
+ */
+export function spreadOrderedQuantity<T extends Pick<PurchaseRequisitionItemRow, 'requestedQty' | 'orderedQty'>>(
+  rows: readonly T[],
+  quantity: number | string,
+): Array<{ row: T; added: number }> {
+  const result: Array<{ row: T; added: number }> = [];
+  let left = fin(quantity);
+  rows.forEach((row, index) => {
+    if (!left.isPositive()) return;
+    const room = fin(row.requestedQty || 0).subtract(row.orderedQty || 0);
+    const take = index === rows.length - 1 ? left : (room.isPositive() ? (room.lessThan(left) ? room : left) : fin(0));
+    if (!take.isPositive()) return;
+    result.push({ row, added: take.toNumber() });
+    left = left.subtract(take);
+  });
+  return result;
+}
+
 /** متن هشدار سفارش بیش از درخواست برای پیام خطا، یادداشت درخواست و گزارش فعالیت */
 /** v9.0.355 (TD-901، ت۵): مقدارها با رقم فارسی؛ پیش‌تر پیام سفارش بیش از درخواست رقم لاتین داشت */
 export function describeOverOrders(overOrders: OverOrderLine[]): string {
