@@ -30,6 +30,13 @@ async function stockOf(itemId: number): Promise<{ total: number; byCode: Record<
 
 const liveKardexRows = async (itemId: number) => Number(((await orm.execute(sql`
   SELECT count(*)::int AS n FROM transactions WHERE item_id = ${itemId} AND is_deleted = 0`)).rows[0] as { n: number }).n);
+/** v11 phase 7.2 (F5): Kardex rows that are a real movement (no voided row, no reversal of one), and the reversal rows */
+const ledgerKardexRows = async (itemId: number) => Number(((await orm.execute(sql`
+  SELECT count(*)::int AS n FROM transactions t WHERE t.item_id = ${itemId} AND t.is_deleted = 0
+     AND NOT EXISTS (SELECT 1 FROM transactions o WHERE o.id = t.reversal_of_id AND o.is_deleted = 1)`)).rows[0] as { n: number }).n);
+const reversalKardexRows = async (itemId: number) => Number(((await orm.execute(sql`
+  SELECT count(*)::int AS n FROM transactions t JOIN transactions o ON o.id = t.reversal_of_id
+   WHERE t.item_id = ${itemId} AND t.is_deleted = 0 AND o.is_deleted = 1 AND t.type = 'out' AND o.type = 'in' AND t.quantity = o.quantity`)).rows[0] as { n: number }).n);
 
 /** a final stock document through `POST /api/documents` */
 export async function stockDoc(admin: Admin, body: Record<string, unknown>): Promise<number> {
@@ -209,7 +216,10 @@ export async function runStockPathsV11Tests(shouldRun: ShouldRun): Promise<TestC
         const id = await define(stateKey.slice(0, 2));
         if ((await stockOf(id)).total !== 4) throw new Error(`setup: the opening stock is ${(await stockOf(id)).total}`);
         await step(id, stateKey);
-        if ((await stockOf(id)).total !== 0 || await liveKardexRows(id) !== 0) problems.push(`after «${stateKey}» the item keeps stock ${(await stockOf(id)).total} and ${await liveKardexRows(id)} Kardex row(s)`);
+        // v11 phase 7.2 (F5): the opening row is voided and gets one reversal row, as a document void does
+        if ((await stockOf(id)).total !== 0 || await ledgerKardexRows(id) !== 0 || await reversalKardexRows(id) !== 1) {
+          problems.push(`after «${stateKey}» the item keeps stock ${(await stockOf(id)).total}, ${await ledgerKardexRows(id)} Kardex movement(s) and ${await reversalKardexRows(id)} reversal row(s), expected 0, 0 and 1`);
+        }
       }
 
       const moved = await define('mv');

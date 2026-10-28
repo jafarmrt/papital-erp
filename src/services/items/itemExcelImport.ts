@@ -21,6 +21,7 @@ import {
 } from './itemExcelRow.js';
 import { withCodeCard } from '../media/productCardWrite.js';
 import { idempotentTransaction } from '../../middleware/idempotency.js';
+import { maybeStartEntityWorkflow } from '../system/entityWorkflowPort.js';
 
 /** v8.0.5 (TD-264): اختلاف کمتر از ۱ ریال میان WAC فایل اکسل و WAC فعلی «همان مقدار» شمرده می‌شود (WAC فعلی می‌ماند) */
 export const EXCEL_WAC_TOLERANCE = 1;
@@ -292,10 +293,20 @@ async function createNewItem(ctx: ImportContext, input: RowInput): Promise<numbe
   for (const change of opening) {
     await applyStockChange(tx, movement, change, { in: 'موجودی اولیه از فایل اکسل', out: '' });
   }
+  // v11 phase 7.2 (finding F3 of the v11 full test, card ت۶۲): a new item starts the «item» workflow as the item form does
+  // (`POST /items`), in the same transaction; with an active definition its opening voucher waits for the final approval
+  // and a rejection takes its opening stock back. Before, the import skipped the workflow and issued the voucher at once.
+  const workflow = await maybeStartEntityWorkflow({
+    entityType: 'item',
+    entityId: String(targetItemId),
+    userId: ctx.actor.id,
+    userName: ctx.actor.full_name || ctx.actor.username,
+    tx,
+  });
   // v8.0.3 (TD-262): کالای تازه با موجودی سند افتتاحیه می‌گیرد (ردیف‌های افتتاحیه کاردکس / سرمایه اولیه). v9.0.206
   // (TD-663، ت۱۰ بند ۳): یک سند برای همه کالاهای تازه فایل، پس از آخرین ردیف؛ ردیف بعدی همین فایل برای همین کد کالای
   // موجود است و اختلافش به سند اصلاح موجودی می‌رود، و ارزش سند فقط ردیف‌های افتتاحیه کاردکس را می‌شمارد
-  if (opening.length > 0) state.openingItemIds.push(targetItemId);
+  if (opening.length > 0 && !workflow) state.openingItemIds.push(targetItemId);
   state.createdCount++;
   return targetItemId;
 }

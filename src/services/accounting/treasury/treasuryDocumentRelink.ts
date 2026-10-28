@@ -7,7 +7,8 @@ import { LockHierarchyLevel, validateLockOrder } from '../../../lib/lockOrder.js
 import { assertTreasuryDocumentLink, resolveTreasuryPartyName } from './treasuryLinks.js';
 import { assertWithinDocumentRemaining, lockSettlementDocument } from './documentRemaining.js';
 import { idempotentTransaction } from '../../../middleware/idempotency.js';
-import { hasLiveSourceAllocations } from './settlementAllocationWrite.js';
+import { assertSettleableDocumentStatus, hasLiveSourceAllocations } from './settlementAllocationWrite.js';
+import { assertSettlementOutsideClosedYears } from './settlementClosedYear.js';
 
 /**
  * v9.0.272 (TD-779، تصمیم ت۴ «الف» بسته ۸): دریافت یا پرداخت ثبت‌شده خزانه از سندش جدا («علی‌الحساب») یا به سند فعال
@@ -88,6 +89,10 @@ export async function relinkTreasuryDocument(params: {
     if (previousDocumentId === params.documentId) {
       return { id: row.id, documentId: previousDocumentId, previousDocumentId, changed: false };
     }
+    // v11 phase 7.2 (F1): a new direct link goes only to an issued document (final invoice or proforma), as a part does
+    if (params.documentId !== null) await assertSettleableDocumentStatus(tx, { documentId: params.documentId, amount: row.amount }, undefined);
+    // v11 phase 7.2 (F2): a row dated in a closed year is not moved
+    await assertSettlementOutsideClosedYears(tx, { sourceDate: String(row.date), action: `انتقال تراکنش «${row.transactionNumber}»` });
     // v10.0.59 (TD-938، ت۸ الف): ردیف به سندی وصل نمی‌شود که مانده‌اش کمتر از مبلغ آن است
     if (params.documentId !== null) await assertWithinDocumentRemaining(tx, { documentId: params.documentId, amount: row.amount.toString() });
 

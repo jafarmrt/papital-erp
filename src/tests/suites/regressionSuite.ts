@@ -11166,6 +11166,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runReceiptsOnInvoicesV11Tests(shouldRun));
   const { runReceiptsOnInvoicesReviewV11Tests } = await import('../regression/receiptsOnInvoicesReviewV11Tests.js');
   results.push(...await runReceiptsOnInvoicesReviewV11Tests(shouldRun));
+  // v11 phase 7.2 (findings F1 to F6 of the v11 full test)
+  const { runClosingFindingsV11Tests } = await import('../regression/closingFindingsV11Tests.js');
+  results.push(...await runClosingFindingsV11Tests(shouldRun));
   // v11 phase 6.3p (U8, C12, U6, U17): one search rule, global search sections, workflow task notices, a proforma from any open lead
   const { runWorkflowPurchaseV11Tests } = await import('../regression/workflowPurchaseV11Tests.js');
   results.push(...await runWorkflowPurchaseV11Tests(shouldRun));

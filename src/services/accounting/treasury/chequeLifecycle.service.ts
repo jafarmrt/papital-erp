@@ -26,7 +26,8 @@ import { assertPersonnelPartyId, resolveTreasuryPartyName } from './treasuryLink
 import { chequePartyPosting, requireChequePartyAccount, resolveChequePartyAccountId } from './chequePartyAccount.js';
 import { activeChequeVoucherIds, auditChequeDelete, auditChequeStatusChange, type ChequeAuditActor } from './chequeAudit.js';
 import { auditChequeCreated } from './treasuryAudit.js';
-import { assertAllocatableParty, insertAllocations, lockAndCheckAllocationTargets, normalizeAllocations } from './settlementAllocationWrite.js';
+import { assertAllocatableParty, insertAllocations, lockAndCheckAllocationTargets, normalizeAllocations, sourceAllocationViews } from './settlementAllocationWrite.js';
+import { assertSettlementOutsideClosedYears } from './settlementClosedYear.js';
 import { LAPSED_CHEQUE_STATUSES, type SettlementAllocationInput } from '../../../lib/treasury/settlementAllocation.js';
 import { domainEventBus } from '../../events/domainEventBus.js';
 import { DomainEventType, type ChequeEventPayload } from '../../events/domainEvents.js';
@@ -857,6 +858,12 @@ export class ChequeLifecycleService {
       if (!existing) throw new NotFoundError('چک مورد نظر یافت نشد');
       if (existing.status === 'passed' || existing.status === 'spent') {
         throw new BusinessLogicError('چک وصول‌شده یا خرج‌شده قابل حذف نیست — اسناد مالی مربوط به آن صادر گردیده است');
+      }
+      // v11 phase 7.2 (F2): a cheque of a closed year that still settles documents is not deleted, since the delete takes its
+      // parts off those documents (`assertSettlementOutsideClosedYears`)
+      const liveParts = await sourceAllocationViews(txEngine, { kind: 'cheque', id, number: existing.chequeNumber, date: existing.issueDate, status: existing.status ?? '' });
+      if (liveParts.length > 0) {
+        await assertSettlementOutsideClosedYears(txEngine, { sourceDate: existing.issueDate, action: `حذف چک «${existing.chequeNumber}»` });
       }
 
       // P2-02 (AUD-ACC): شناسایی و ابطال اتمیک کلیه اسناد چرخه عمر چک (سند اولیه، در جریان وصول، واخواست و...)
