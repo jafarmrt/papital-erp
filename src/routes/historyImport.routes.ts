@@ -11,6 +11,7 @@ import { idempotency } from '../middleware/idempotency.js';
 import { ConflictError } from '../errors/customErrors.js';
 import { importTreasuryHistory } from '../services/historyImport/treasuryHistoryImport.service.js';
 import { importStockHistory } from '../services/historyImport/stockHistoryImport.service.js';
+import { permissionToCreateDocument } from '../services/documents/documentRecordRule.js';
 import { stockHistoryImportSchema, treasuryHistoryImportSchema } from './historyImport.schemas.js';
 
 const router = Router();
@@ -44,13 +45,17 @@ router.post('/accounting/treasury/history-import', authorizePermission('accounti
   sendImportResult(res, result, req.body.commit === true);
 }));
 
-// tool 2: opening stock, purchase and production receipts, consumption, waste and transfers; `commit: false` is the preview
+// tools 2 and 3: opening stock, purchase and production receipts, consumption, waste, transfers, past sales invoices and
+// their returns; `commit: false` is the preview
 router.post('/inventory/history-import', authorizePermission('warehouse.history_import'), importIdempotency, validate(stockHistoryImportSchema), asyncHandler(async (req, res) => {
   const result = await importStockHistory(req.body.rows, {
     commit: req.body.commit === true,
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
     audit: { req, userId: req.user?.id, username: req.user?.username, userFullName: req.user?.fullName },
+    // tool 3: a past sales invoice or return needs what the invoice form asks to record it final
+    canRecordSales: await can(req.user, permissionToCreateDocument({ docType: 'invoice', status: 'final' })),
+    canRecordReturns: await can(req.user, permissionToCreateDocument({ docType: 'return', status: 'final' })),
   });
   sendImportResult(res, result, req.body.commit === true);
 }));
