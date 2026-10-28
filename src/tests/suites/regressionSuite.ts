@@ -11172,6 +11172,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v11 phase 6.4 (C3, C4, C6, C9): a lead's status follows its stage, a final invoice is its lead's sale, open leads first, orders spread over duplicate rows
   const { runSalesCrmV11Tests } = await import('../regression/salesCrmV11Tests.js');
   results.push(...await runSalesCrmV11Tests(shouldRun));
+  // v11 phase 6.1ch (C13): pick lists hold at most the cap; the rows a form lacks are read by id
+  const { runPickListCapV11Tests } = await import('../regression/pickListCapV11Tests.js');
+  results.push(...await runPickListCapV11Tests(shouldRun));
 
   return results;
 }

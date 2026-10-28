@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { cappedPickListUrl, takePickList } from '../../lib/permissions/pickListCap';
 import type { Item, PieceworkLog, ProductionProject } from '../../types';
 import type { ProjectStepCounts } from '../../lib/projects/projectSteps';
 import type { ProductProgressResponse } from '../../lib/projects/progressTicks';
@@ -20,8 +21,11 @@ export function useProjectStepCounts(projectId: number | null) {
   });
 }
 
-/** the item pick list the materials and delivery tabs read (TD-888); under the items key, so a stock change refreshes it */
-export function useProjectItemOptions(enabled: boolean, options: { readOnEveryOpening?: boolean } = {}) {
+/**
+ * the item pick list the materials and delivery tabs read (TD-888); under the items key, so a stock change refreshes it.
+ * v11 phase 6.1ch (C13): the whole list, since those tabs match their rows to items by code and name
+ */
+export function useProjectItemOptions(enabled: boolean) {
   return useQuery<Item[]>({
     queryKey: [...QUERY_KEYS.items.all, 'options', 'project-workspace'] as const,
     queryFn: async ({ signal }) => {
@@ -32,8 +36,26 @@ export function useProjectItemOptions(enabled: boolean, options: { readOnEveryOp
     },
     enabled,
     staleTime: 60 * 1000,
+  });
+}
+
+/**
+ * v11 phase 6.1ch (C13): the item pick list of the project form, at most the cap (its picker also searches on the server
+ * and keeps a chosen row). The materials and delivery tabs keep the whole list: their rows match items by code and name
+ * (`findProjectItemMatch`), which a list cut at the cap cannot answer.
+ */
+export function useProjectFormItemOptions(enabled: boolean) {
+  return useQuery<Item[]>({
+    queryKey: [...QUERY_KEYS.items.all, 'options', 'project-form'] as const,
+    queryFn: async ({ signal }) => {
+      const res = await fetchJson<unknown>(cappedPickListUrl(PICK_LIST_URLS.items), { signal });
+      if (Array.isArray(res)) return takePickList(res as Item[]);
+      const data = (res as { data?: unknown } | null)?.data;
+      return Array.isArray(data) ? takePickList(data as Item[]) : [];
+    },
+    enabled,
     // 10.3 (part 16): the project form reads it again on each opening
-    ...(options.readOnEveryOpening ? READ_ON_EVERY_OPENING : {}),
+    ...READ_ON_EVERY_OPENING,
   });
 }
 

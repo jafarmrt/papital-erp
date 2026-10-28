@@ -11,6 +11,7 @@ import type { BankAccountOption } from '../../types';
 import { usePersonnelPickName } from '../../hooks/usePersonnelPickName';
 import { formatPersianCode } from '../../utils/persianNumber';
 import { personnelServerSearchUrl } from '../../lib/personnel/personnelList';
+import { pickListServerSearchUrl } from '../../lib/permissions/pickListCap';
 import { SearchableSelect } from '../SearchableSelect';
 
 /**
@@ -34,7 +35,7 @@ interface VoucherDetailedPickerProps {
   customers: readonly Party[];
   personnelList: readonly Person[];
   typeRef?: React.Ref<HTMLSelectElement>;
-  /** فیلد دوم (فهرست یا عنوان آزاد؛ پرسنلِ فهرستِ بریده‌شده: دکمه انتخابگر جست‌وجوپذیر) */
+  /** فیلد دوم (فهرست یا عنوان آزاد؛ پرسنل یا طرف حسابِ فهرستِ بریده‌شده: دکمه انتخابگر جست‌وجوپذیر) */
   pickerRef?: React.RefObject<HTMLSelectElement | HTMLInputElement | HTMLButtonElement | null>;
   /** Enter در فیلد دوم */
   onAdvance?: () => void;
@@ -49,6 +50,20 @@ function partiesOf(customers: readonly Party[], type: 'customer' | 'supplier'): 
     const pt = c.partyType || c.party_type || (type === 'customer' ? 'customer' : '');
     return pt === type || pt === 'both';
   });
+}
+
+function partyOption(c: Party, type: 'customer' | 'supplier'): { id: number; label: string; name: string } {
+  return {
+    id: c.id, name: c.name,
+    label: [c.name, type === 'supplier' && c.supplierCategory ? `[${c.supplierCategory}]` : '', c.city ? `(${c.city})` : ''].filter(Boolean).join(' '),
+  };
+}
+
+/** A row of the server search (personnel, or a party of the row's type) as the picker's option, one label for both */
+function serverRowOption(row: Person | Party, type: VoucherDetailedType): { id: number; label: string; name: string } {
+  if (type === 'customer' || type === 'supplier') return partyOption(row as Party, type);
+  const name = voucherPersonnelName(row as Person);
+  return { id: row.id, name, label: name };
 }
 
 export function VoucherDetailedPicker({
@@ -83,16 +98,16 @@ export function VoucherDetailedPicker({
   const buttonRef = pickerRef as React.Ref<HTMLButtonElement> | undefined;
   // 10.3 package 6 (TD-1362): a personnel list cut at the cap is a searchable picker that also searches on the server, so
   // an older personnel is found by name; Enter on it moves on as on the plain list, which a list under the cap keeps
+  // v11 phase 6.1ch (C13): the same for a party list cut at the cap (the customers or the suppliers of the server)
   const personnelSearchUrl = type === 'personnel' ? personnelServerSearchUrl(personnelList) : undefined;
+  const partySearchUrl = type === 'customer' || type === 'supplier'
+    ? pickListServerSearchUrl(customers, `${PICK_LIST_URLS.customers}?partyType=${type}`)
+    : undefined;
+  const serverSearchUrl = personnelSearchUrl ?? partySearchUrl;
   const searchPickerId = React.useId();
 
   const options: Array<{ id: number; label: string; name: string }> = (() => {
-    if (type === 'customer' || type === 'supplier') {
-      return partiesOf(customers, type).map(c => ({
-        id: c.id, name: c.name,
-        label: [c.name, type === 'supplier' && c.supplierCategory ? `[${c.supplierCategory}]` : '', c.city ? `(${c.city})` : ''].filter(Boolean).join(' '),
-      }));
-    }
+    if (type === 'customer' || type === 'supplier') return partiesOf(customers, type).map(c => partyOption(c, type));
     if (type === 'personnel') return personnelList.map(p => ({ id: p.id, name: voucherPersonnelName(p), label: voucherPersonnelName(p) }));
     if (type === 'project') return (projectsQuery.data ?? []).map(p => ({ id: p.id, name: voucherProjectLabel(p), label: voucherProjectLabel(p) }));
     if (type === 'bank_account') return (banksQuery.data ?? []).map(b => ({ id: b.id, name: b.title, label: b.bankName ? `${b.title} (${b.bankName})` : b.title }));
@@ -135,7 +150,7 @@ export function VoucherDetailedPicker({
         />
       )}
 
-      {personnelSearchUrl && (
+      {serverSearchUrl && (
         <SearchableSelect
           id={searchPickerId}
           ariaLabel={`انتخاب ${VOUCHER_DETAILED_TYPE_LABELS[type]}`}
@@ -145,18 +160,20 @@ export function VoucherDetailedPicker({
           value={value.detailedId ?? ''}
           placeholder={`انتخاب ${VOUCHER_DETAILED_TYPE_LABELS[type]}...`}
           options={options.map(o => ({ value: String(o.id), label: o.label }))}
-          serverSearchUrl={personnelSearchUrl}
-          mapResultToOption={(p: Person) => ({ value: String(p.id), label: voucherPersonnelName(p) })}
-          onChange={(val, raw?: Person) => {
-            const chosen = options.find(o => String(o.id) === val);
+          serverSearchUrl={serverSearchUrl}
+          mapResultToOption={(row: Person | Party) => {
+            const option = serverRowOption(row, type);
+            return { value: String(option.id), label: option.label };
+          }}
+          onChange={(val, raw?: Person | Party) => {
+            const chosen = options.find(o => String(o.id) === val) ?? (raw && String(raw.id) === val ? serverRowOption(raw, type) : null);
             if (chosen) pick(chosen.id, chosen.name);
-            else if (raw && String(raw.id) === val) pick(raw.id, voucherPersonnelName(raw));
             else pick(null, '');
           }}
         />
       )}
 
-      {type !== 'none' && type !== 'other' && !personnelSearchUrl && (
+      {type !== 'none' && type !== 'other' && !serverSearchUrl && (
         <select
           ref={selectRef}
           aria-label={`انتخاب ${VOUCHER_DETAILED_TYPE_LABELS[type]}`}

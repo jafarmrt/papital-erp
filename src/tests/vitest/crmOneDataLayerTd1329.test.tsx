@@ -16,13 +16,14 @@ vi.mock('react-hot-toast', () => {
 import { useCRMData } from '../../hooks/useCRMData';
 import { invalidatePreset } from '../../lib/queryInvalidation';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { cappedPickListUrl } from '../../lib/permissions/pickListCap';
 import { PERSONNEL_ACTIVE_PICK_URL } from '../../lib/personnel/personnelList';
 
 // v10.2 package 11 part 5a (TD-1329, OBS-R2-102): the sales page reads its statistics, board and pick lists through
 // React Query. Each test is red on the hook that kept them in its own state.
 
 const user = { id: 1, username: 'u' };
-const PICK_URLS = [PICK_LIST_URLS.customers, PERSONNEL_ACTIVE_PICK_URL, '/users/list-simple'];
+const PICK_URLS = [cappedPickListUrl(PICK_LIST_URLS.customers), PERSONNEL_ACTIVE_PICK_URL, '/users/list-simple'];
 
 function newClient() {
   // the app's freshness window (src/lib/queryClient.ts), so a test sees what a cached screen would
@@ -36,7 +37,7 @@ const leadCalls = () => fetchJson.mock.calls.filter(c => String(c[0]).startsWith
 
 function answer(parties: Array<{ id: number; name: string }>, leads: Array<{ id: number; stage: string }>) {
   fetchJson.mockImplementation((url: string) => {
-    if (url === PICK_LIST_URLS.customers) return Promise.resolve(parties);
+    if (url === cappedPickListUrl(PICK_LIST_URLS.customers)) return Promise.resolve(parties);
     if (url === '/crm/stats') return Promise.resolve({ totalLeads: leads.length });
     if (url.startsWith('/crm/leads?')) return Promise.resolve({ data: leads });
     return Promise.resolve([]);
