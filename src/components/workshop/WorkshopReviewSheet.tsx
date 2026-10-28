@@ -52,7 +52,7 @@ export function WorkshopReviewSheet({ item, mode, onClose, onApproved }: {
         onApproved(result?.matrixTickSuggestion ?? null);
       } else {
         await reject.mutateAsync({ id: item.report.id, version: item.report.version, reason: note });
-        toast.success('گزارش رد شد و به کارکن خبر داده شد.');
+        toast.success('گزارش رد شد و به همکار خبر داده شد.');
         onClose();
       }
     } catch (err) {
@@ -77,7 +77,7 @@ export function WorkshopReviewSheet({ item, mode, onClose, onApproved }: {
       </p>
       {mode === 'approve' && manualLogs.length > 0 && (
         <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-3 text-sm text-amber-900 dark:text-amber-100 space-y-2">
-          <p className="font-bold">برای همین کارکن و همین کار در این پروژه کارکرد دستی ثبت شده است:</p>
+          <p className="font-bold">برای همین همکار و همین کار در این پروژه کارکرد دستی ثبت شده است:</p>
           <ul className="list-disc pr-5 text-xs space-y-0.5">
             {manualLogs.map(log => (
               <li key={log.id}>کارکرد شماره {formatPersianCode(log.id)}، {formatPersianDate(log.date)}، تعداد {formatPersianNumber(log.quantity, 4)}</li>

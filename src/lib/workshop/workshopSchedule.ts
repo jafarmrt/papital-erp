@@ -134,7 +134,7 @@ export const WORKSHOP_ERRORS = {
   rowNoTask: { code: 'WORKSHOP_ROW_NO_TASK', message: 'عنوان کار این ردیف در برنامه پروژه مشخص نشده است؛ به مسئول پروژه بگویید.' },
   rowQuantityMissing: { code: 'WORKSHOP_ROW_QUANTITY_MISSING', message: 'تعداد برنامه این کار مشخص نیست؛ به مسئول پروژه بگویید.' },
   rowTaskChanged: { code: 'WORKSHOP_ROW_TASK_CHANGED', message: 'عنوان کار این ردیف پس از گزارش در برنامه پروژه عوض شده است؛ این گزارش باید رد یا پس گرفته شود و دوباره فرستاده شود.' },
-  manualLogsExist: { code: 'WORKSHOP_MANUAL_LOGS_EXIST', message: 'برای همین کارکن و همین کار در این پروژه کارکرد دستی ثبت شده است؛ آن را بررسی کنید و «بررسی کردم» را بزنید تا کارکرد دو بار ثبت نشود.' },
+  manualLogsExist: { code: 'WORKSHOP_MANUAL_LOGS_EXIST', message: 'برای همین همکار و همین کار در این پروژه کارکرد دستی ثبت شده است؛ آن را بررسی کنید و «بررسی کردم» را بزنید تا کارکرد دو بار ثبت نشود.' },
   projectClosed: { code: 'WORKSHOP_PROJECT_CLOSED', message: 'این پروژه بسته یا لغو شده است و گزارش کار نمی‌پذیرد.' },
   reportExists: { code: 'WORKSHOP_REPORT_EXISTS', message: 'برای این کار گزارشی در انتظار تأیید یا تأییدشده هست.' },
   quantityInvalid: { code: 'WORKSHOP_REPORT_QUANTITY_INVALID', message: 'تعداد باید عددی بزرگ‌تر از صفر و حداکثر با چهار رقم اعشار باشد.' },

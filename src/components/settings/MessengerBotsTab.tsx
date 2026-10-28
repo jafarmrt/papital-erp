@@ -35,7 +35,7 @@ function BotCard({ bot }: { bot: MessengerBotView }) {
       <div className="flex items-center justify-between gap-2">
         <h3 className="flex items-center gap-2 text-sm font-black text-slate-800">
           <MessageCircle className="w-4 h-4 text-sky-600" />
-          ربات {label} کارکنان
+          ربات {label} همکاران
         </h3>
         {bot.configured ? (
           <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">راه‌اندازی شده</span>
@@ -71,7 +71,7 @@ function BotCard({ bot }: { bot: MessengerBotView }) {
         />
         <p className="text-xs leading-6 text-slate-500">
           نشانه را از سازنده ربات {label} بگیرید (ربات تازه، جدا از ربات هشدار سرور) و همین‌جا وارد کنید؛ آن را برای کسی نفرستید.
-          اگر ربات دیگری جای ربات کنونی بنشیند، کارکنان باید دوباره وصل شوند.
+          اگر ربات دیگری جای ربات کنونی بنشیند، همکاران باید دوباره وصل شوند.
         </p>
         <div className="flex flex-wrap gap-2">
           <button type="submit" disabled={save.isPending || !token.trim()} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
