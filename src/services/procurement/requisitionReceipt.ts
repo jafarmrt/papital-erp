@@ -1,6 +1,6 @@
 import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import type { PurchaseRequisitionItemRow } from '../../types.js';
-import { spreadOrderedQuantity } from './requisitionOrder.js';
+import { isClosedRequisitionRow, rebuildOrderedQuantities } from '../../lib/procurement/requisitionRows.js';
 
 export type RequisitionItemWithReceipt = PurchaseRequisitionItemRow & { receivedQty?: number | string };
 
@@ -49,15 +49,8 @@ export function applyDeliveredLines(
 
 type SettlementRow = Pick<PurchaseRequisitionItemRow, 'itemId' | 'requestedQty' | 'orderedQty' | 'status' | 'closureNote' | 'closed'> & { receivedQty?: number | string };
 
-/**
- * v9.0.316 (TD-690، B10-03): ردیفی که هنگام صدور سفارش بسته شد و دیگر سفارش داده نمی‌شود: نشان `closed`، یا یادداشت
- * بستن، یا (ردیف‌های پیش از v9.0.316) وضعیت «سفارش‌شده» با سفارشی کمتر از درخواست، که تبدیل فقط هنگام بستن می‌نوشت.
- */
-export function isClosedRequisitionRow(row: SettlementRow): boolean {
-  return row.closed === true
-    || Boolean(String(row.closureNote ?? '').trim())
-    || (row.status === 'ordered' && fin(row.orderedQty || 0).lessThan(row.requestedQty || 0));
-}
+/** v11 phase 7.2 (TD-1391): the rule lives in `src/lib/procurement/requisitionRows.ts`, shared with the documents rebuild */
+export { isClosedRequisitionRow };
 
 /**
  * v9.0.316 (TD-690): ردیفی که کارش تمام است: کالای فهرست که به اندازه درخواست دریافت شده یا بسته شده است، و ردیف بی‌کالا
@@ -74,7 +67,7 @@ type OrderLine = { itemId: number | null; quantity: DecimalValue | null };
  * v10.0.237 (TD-912، تصمیم ت۹ الف): مقدار سفارش‌شده و دریافتی ردیف‌های کالاهای `itemIds` از نو، از سطرهای سفارش‌های زنده
  * (`ordered`: هر وضعیت) و سفارش‌های قطعی زنده (`received`). سفارش‌شده هر کالا، مانند «تبدیل به سفارش»، میان ردیف‌های همان
  * کالا به ترتیب پخش می‌شود (v11 phase 6.4, C9: `spreadOrderedQuantity`; پیش‌تر همه روی ردیف اول) و دریافتی میان ردیف‌ها به
- * ترتیب پر می‌شود (`applyDeliveredLines`). ردیف بسته‌شده (TD-690) بسته می‌ماند؛ ردیف
+ * ترتیب پر می‌شود (`applyDeliveredLines`). ردیف بسته‌شده (TD-690) بسته می‌ماند و مقدار سفارشش را نگه می‌دارد (TD-1391)؛ ردیف
  * دیگر مانده و وضعیتش را از همین دو مقدار می‌گیرد. کالاهای دیگر درخواست دست نمی‌خورند (دریافت‌های قدیمی بی سند پیوندی).
  */
 export function rebuildOrderRows(
@@ -83,19 +76,11 @@ export function rebuildOrderRows(
   ordered: OrderLine[],
   received: OrderLine[],
 ): RequisitionItemWithReceipt[] {
-  const orderedByItem = new Map<number, FinancialDecimal>();
-  for (const line of ordered) {
-    const itemId = Number(line.itemId);
-    if (itemIds.has(itemId)) orderedByItem.set(itemId, (orderedByItem.get(itemId) ?? fin(0)).add(line.quantity ?? 0));
-  }
   // v11 phase 6.4 (C9, review): a row's closure is read before the rebuild; with the lowered quantity the legacy rule
-  // (`ordered` below its request) would read a fully ordered row as closed and freeze it at «ordered» with nothing left
-  const closedBefore = rows.map(row => isClosedRequisitionRow(row));
-  const reset = rows.map(row => (itemIds.has(Number(row.itemId)) ? { ...row, orderedQty: 0, receivedQty: 0 } : row));
-  for (const [itemId, total] of orderedByItem) {
-    const itemRows = reset.filter(row => Number(row.itemId) === itemId);
-    for (const { row, added } of spreadOrderedQuantity(itemRows, total.toNumber())) row.orderedQty = added;
-  }
+  // (`ordered` below its request) would read a fully ordered row as closed and freeze it at «ordered» with nothing left.
+  // v11 phase 7.2 (TD-1391): a closed row keeps its ordered quantity and the spread skips it (`rebuildOrderedQuantities`)
+  const { rows: withOrdered, closed: closedBefore } = rebuildOrderedQuantities(rows, itemIds, ordered);
+  const reset = withOrdered.map(row => (itemIds.has(Number(row.itemId)) ? { ...row, receivedQty: 0 } : row));
   const filled = applyDeliveredLines(reset, received.filter(line => itemIds.has(Number(line.itemId))));
   return filled.map((row, index) => {
     if (!itemIds.has(Number(row.itemId))) return row;

@@ -21,7 +21,7 @@ const REQUISITION_APPROVE_PERMISSIONS = ['procurement.approve'];
 /** v8.0.71 (TD-326): درخواست ردشده دریافت یا سفارش داده نمی‌شود، مگر پس از بازگشایی */
 const CLOSED_REQUISITION_STATUSES = new Set(['rejected', 'cancelled']);
 import type { PurchaseRequisition, ProcurementOrder } from '../types.js';
-import { applyDeliveredLines, isSettledRequisitionRow, type RequisitionItemWithReceipt } from './procurement/requisitionReceipt.js';
+import { applyDeliveredLines, isClosedRequisitionRow, isSettledRequisitionRow, type RequisitionItemWithReceipt } from './procurement/requisitionReceipt.js';
 import { assertMayReceiveIntoStock, assertProcurementIncomingDocument, RECEIVED_REQUISITION_STATUSES, requisitionOrderDocuments } from './procurement/requisitionReceiveAction.js';
 import { describeOverOrders, findOverOrders, spreadOrderedQuantity } from './procurement/requisitionOrder.js';
 import { fin } from '../lib/financialDecimal.js';
@@ -652,6 +652,9 @@ export class ProcurementService {
         snapshotData: { id: req.id, code: req.code, totalAmount: Number(req.totalEstimatedAmount || 0), priority: req.priority, status: req.status },
       });
       const updatedItems = (Array.isArray(req.items) ? req.items : []).map(it => ({ ...it }));
+      // v11 phase 7.2 (TD-1391): rows closed before this conversion take no new quantity (read once, before any change)
+      const closedRows = new Set(updatedItems.filter(row => isClosedRequisitionRow(row)));
+      const lastTakerOfItem = new Map<number, (typeof updatedItems)[number]>();
 
       const overOrders = findOverOrders(updatedItems, orderGroups.flatMap(g => g.items || []));
       if (overOrders.length > 0 && !overOrderReason) {
@@ -734,13 +737,16 @@ export class ProcurementService {
             ? Number(r.itemId) === Number(groupItem.itemId)
             : Boolean(r.itemCode && groupItem.itemCode && r.itemCode === groupItem.itemCode)));
 
-          for (const { row: targetReqItem, added } of spreadOrderedQuantity(itemRows, groupItem.quantity)) {
+          for (const { row: targetReqItem, added } of spreadOrderedQuantity(itemRows, groupItem.quantity, row => closedRows.has(row))) {
             const ordQty = fin(targetReqItem.orderedQty || 0).add(added).toNumber();
+            const wasClosed = closedRows.has(targetReqItem);
             targetReqItem.orderedQty = ordQty;
-            targetReqItem.remainingQty = Math.max(0, fin(targetReqItem.requestedQty || 0).subtract(ordQty).toNumber());
+            targetReqItem.remainingQty = wasClosed ? 0 : Math.max(0, fin(targetReqItem.requestedQty || 0).subtract(ordQty).toNumber());
             targetReqItem.targetSupplierName = supplierName;
             targetReqItem.targetSupplierId = supplierId;
-            targetReqItem.status = targetReqItem.remainingQty <= 0 ? 'ordered' : 'pending';
+            targetReqItem.status = wasClosed || targetReqItem.remainingQty <= 0 ? 'ordered' : 'pending';
+            if (wasClosed) targetReqItem.closed = true;
+            if (groupItem.itemId) lastTakerOfItem.set(Number(groupItem.itemId), targetReqItem);
 
             if (!targetReqItem.linkedDocumentIds) targetReqItem.linkedDocumentIds = [];
             if (createdDocId && !targetReqItem.linkedDocumentIds.includes(createdDocId)) {
@@ -752,8 +758,9 @@ export class ProcurementService {
 
       // v8.0.38 (TD-289): هر سفارش بیش از درخواست با دلیل روی ردیف همان کالا ثبت می‌شود
       for (const over of overOrders) {
-        // v11 phase 6.4 (C9): the last row of the item, which holds the excess (`spreadOrderedQuantity`)
-        const row = [...updatedItems].reverse().find(r => Number(r.itemId) === over.itemId);
+        // v11 phase 6.4 (C9): the last row of the item, which holds the excess (`spreadOrderedQuantity`); v11 phase 7.2
+        // (TD-1391): the last open row, the one the spread gave the excess to
+        const row = lastTakerOfItem.get(over.itemId) ?? [...updatedItems].reverse().find(r => Number(r.itemId) === over.itemId);
         if (!row) continue;
         row.overOrders = [...(Array.isArray(row.overOrders) ? row.overOrders : []), {
           quantity: over.excess, reason: overOrderReason, user: username, date: today, documentIds: documentIdsByItem.get(over.itemId) ?? [],

@@ -1,6 +1,7 @@
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import type { PurchaseRequisitionItemRow } from '../../types.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
+import { isClosedRequisitionRow, spreadOrderedQuantity } from '../../lib/procurement/requisitionRows.js';
 
 export interface OverOrderLine {
   itemId: number;
@@ -15,7 +16,8 @@ export interface OverOrderLine {
 /**
  * v8.0.38 (TD-289، تصمیم مالک محصول — گزینه ب): کالاهایی که این تبدیل بیش از درخواست سفارش می‌دهد. برای هر کالا
  * درخواست‌شده و سفارش‌شده همه ردیف‌های آن جمع می‌شوند؛ مقدار بیش از درخواست = کمینه (مقدار همین سفارش، سفارش‌شده پیشین +
- * همین سفارش − درخواست‌شده). کالایی که در درخواست نیست همه مقدارش بیش از درخواست است.
+ * همین سفارش − درخواست‌شده). کالایی که در درخواست نیست همه مقدارش بیش از درخواست است. ردیف بسته فقط به اندازهٔ سفارش
+ * پیشینش درخواست شمرده می‌شود (TD-1391).
  */
 export function findOverOrders(
   reqItems: PurchaseRequisitionItemRow[],
@@ -32,7 +34,9 @@ export function findOverOrders(
   const result: OverOrderLine[] = [];
   for (const [itemId, order] of ordering) {
     const rows = reqItems.filter(r => Number(r.itemId) === itemId);
-    const requested = rows.reduce((sum, r) => sum.add(r.requestedQty || 0), fin(0));
+    // v11 phase 7.2 (TD-1391): a closed row needs no more than it had ordered (its closure cancelled the rest), so the
+    // spread, which skips it, and this check agree on how much the open rows may still take
+    const requested = rows.reduce((sum, r) => sum.add(isClosedRequisitionRow(r) ? (r.orderedQty || 0) : (r.requestedQty || 0)), fin(0));
     const orderedBefore = rows.reduce((sum, r) => sum.add(r.orderedQty || 0), fin(0));
     const beyond = orderedBefore.add(order.quantity).subtract(requested);
     if (!beyond.isPositive()) continue;
@@ -49,28 +53,8 @@ export function findOverOrders(
   return result;
 }
 
-/**
- * v11 phase 6.4 (C9): the quantity one order line adds to the requisition rows of its item, spread over them in order: each
- * row takes what it still lacks (requested − ordered) and the last row takes what is left, the excess of an over-order
- * included. Before, the whole quantity went to the first row: rows 5 + 5 ordered as 10 read «ordered 10» and «ordered 0,
- * pending», and ordering the pending 5 asked for an over-order reason. `findOverOrders` and delivery already sum the rows.
- */
-export function spreadOrderedQuantity<T extends Pick<PurchaseRequisitionItemRow, 'requestedQty' | 'orderedQty'>>(
-  rows: readonly T[],
-  quantity: number | string,
-): Array<{ row: T; added: number }> {
-  const result: Array<{ row: T; added: number }> = [];
-  let left = fin(quantity);
-  rows.forEach((row, index) => {
-    if (!left.isPositive()) return;
-    const room = fin(row.requestedQty || 0).subtract(row.orderedQty || 0);
-    const take = index === rows.length - 1 ? left : (room.isPositive() ? (room.lessThan(left) ? room : left) : fin(0));
-    if (!take.isPositive()) return;
-    result.push({ row, added: take.toNumber() });
-    left = left.subtract(take);
-  });
-  return result;
-}
+/** v11 phase 7.2 (TD-1391): the spread lives in `src/lib/procurement/requisitionRows.ts`, with the closed-row rule */
+export { spreadOrderedQuantity };
 
 /** متن هشدار سفارش بیش از درخواست برای پیام خطا، یادداشت درخواست و گزارش فعالیت */
 /** v9.0.355 (TD-901، ت۵): مقدارها با رقم فارسی؛ پیش‌تر پیام سفارش بیش از درخواست رقم لاتین داشت */
