@@ -158,7 +158,7 @@ export const SETTINGS_GROUPS: SettingCategoryGroup[] = [
         // v10.1.38 (messenger plan part 1, ت۱ الف): the staff bots of Bale and Telegram
         id: 'messenger',
         label: 'ربات‌های پیام‌رسان',
-        shortDesc: 'نشانه ربات‌های بله و تلگرام کارکنان و فهرست کاربران وصل',
+        shortDesc: 'نشانه ربات‌های بله و تلگرام همکاران و فهرست کاربران وصل',
         icon: MessageCircle,
         keywords: ['پیام‌رسان', 'بله', 'تلگرام', 'ربات', 'اعلان', 'نشانه', 'telegram', 'bale']
       }
