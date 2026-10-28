@@ -17,7 +17,7 @@ export async function issueApprovedItemOpening(tx: DbExecutor, event: WorkflowTr
   if (!Number.isInteger(itemId) || itemId <= 0) return;
   // v11 phase 6.1j (S13): a rejected or canceled definition takes back the opening stock that never got a voucher
   if (WITHDRAWING_STATE_KEYS.has(event.toStateKey)) {
-    await withdrawUnapprovedOpening(tx, itemId);
+    await withdrawUnapprovedOpening(tx, itemId, event.performedBy || undefined);
     return;
   }
   if (event.toStateKey !== 'approved') return;

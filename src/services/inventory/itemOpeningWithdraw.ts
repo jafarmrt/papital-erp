@@ -1,8 +1,10 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { documentItems, items, transactions } from '../../db/schema.js';
+import { documentItems, items, transactions, users } from '../../db/schema.js';
 import { ConflictError } from '../../errors/customErrors.js';
 import { nextVersion } from '../../lib/occHelper.js';
+import { money } from '../../lib/money.js';
+import { businessNowIsoDateTime } from '../../lib/businessClock.js';
 import { itemIdsWithOpeningVoucher } from './itemOpening.service.js';
 import { OPENING_KARDEX_ROW } from './itemOpeningValue.js';
 import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
@@ -19,9 +21,9 @@ import { formatPersianNumber } from '../../utils/persianNumber.js';
  * and its value is in the ledger; the rejection is then refused (409 `ITEM_OPENING_IN_USE`). An opening dated in a
  * closed fiscal year is not withdrawn either (409 `ITEM_OPENING_IN_CLOSED_YEAR`), as a void there is not (M10).
  */
-export async function withdrawUnapprovedOpening(tx: DbExecutor, itemId: number): Promise<number> {
+export async function withdrawUnapprovedOpening(tx: DbExecutor, itemId: number, performedByUserId?: number): Promise<number> {
   const [item] = await tx.select({ id: items.id, name: items.name, code: items.code, version: items.version })
-    .from(items).where(and(eq(items.id, itemId), eq(items.isDeleted, 0))).for('update');
+    .from(items).where(and(eq(items.id, itemId), eq(items.isDeleted, 0))).for('no key update');
   if (!item) return 0;
   if ((await itemIdsWithOpeningVoucher(tx, [itemId])).has(itemId)) return 0;
 
@@ -65,14 +67,41 @@ export async function withdrawUnapprovedOpening(tx: DbExecutor, itemId: number):
     );
   }
 
+  // v11 phase 7.2 (finding F5 of the v11 full test): as a document void does, the opening rows are soft-deleted and each
+  // gets an active reversal row (`reversal_of_id`), so the Kardex keeps the trace of what was entered and taken back;
+  // before, the rows were only soft-deleted. The item row is locked FOR NO KEY UPDATE, as every stock path locks it. The
+  // reversal rows carry the user who rejected the definition. The warehouse stock goes down with `applyMovement` directly,
+  // as the document void's `applyStockReversal` does: a withdrawal has no document to run through the stock engine.
+  const originals = await tx.select().from(transactions).where(inArray(transactions.id, openingIds));
+  const nowIso = await businessNowIsoDateTime();
+  // `transactions.created_by` holds the username, as the document void writes it
+  const [performer] = performedByUserId
+    ? await tx.select({ username: users.username }).from(users).where(eq(users.id, performedByUserId))
+    : [];
+  await tx.update(transactions).set({ isDeleted: 1 }).where(inArray(transactions.id, openingIds));
   let withdrawn = 0;
-  for (const row of rows) {
-    const warehouse = await ItemWarehouseStockService.resolveWarehouse(tx, row.location ?? '');
-    const quantity = Number(row.quantity);
+  for (const orig of originals) {
+    const warehouse = await ItemWarehouseStockService.resolveWarehouse(tx, orig.location ?? '');
+    const quantity = Number(orig.quantity);
     await ItemWarehouseStockService.applyMovement(tx, { itemId, warehouse, inOut: 'out', quantity });
+    await tx.insert(transactions).values({
+      itemId,
+      documentId: orig.documentId,
+      type: 'out',
+      quantity,
+      unitPrice: money(orig.unitPrice),
+      totalPrice: money(orig.totalPrice),
+      date: nowIso,
+      documentType: orig.documentType,
+      documentRef: `REV-${orig.documentRef ?? ''}`,
+      createdBy: performer?.username || orig.createdBy,
+      notes: `برگشت موجودی اول دوره با رد تعریف کالا (معکوس تراکنش #${orig.id})`,
+      location: warehouse.code,
+      reversalOfId: orig.id,
+      isDeleted: 0,
+    });
     withdrawn += quantity;
   }
-  await tx.update(transactions).set({ isDeleted: 1 }).where(inArray(transactions.id, openingIds));
   await tx.update(items).set({ version: nextVersion(item.version) }).where(eq(items.id, itemId));
   return withdrawn;
 }

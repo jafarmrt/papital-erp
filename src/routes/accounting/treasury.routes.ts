@@ -58,6 +58,8 @@ async function assertSettlementDocumentsReadable(user: { role?: string } | undef
 }
 
 const sendsAllocations = (body: { allocations?: unknown } | undefined) => Array.isArray(body?.allocations) && body.allocations.length > 0;
+// v11 phase 7.2 (finding F6 of the v11 full test): a direct link to one document asks the same document read as parts do
+const linksDocument = (body: { documentId?: unknown } | undefined) => body?.documentId !== undefined && body?.documentId !== null;
 
 // ==========================================
 // 4. BANK ACCOUNTS & TREASURY
@@ -158,7 +160,7 @@ router.get('/accounting/treasury', authorizePermission(...RECORD_READ_PERMISSION
 
 // V1.4.0: Idempotency — retry همین درخواست هرگز دوبار وجه ثبت نمی‌کند
 router.post('/accounting/treasury', authorizePermission('accounting.treasury'), idempotency({ scope: 'treasury' }), validate(createTreasuryTxSchema), asyncHandler(async (req, res) => {
-  if (sendsAllocations(req.body)) await assertSettlementDocumentsReadable(req.user);
+  if (sendsAllocations(req.body) || linksDocument(req.body)) await assertSettlementDocumentsReadable(req.user);
   const tx = await AccountingService.createTreasuryTransaction({
     ...req.body,
     // v8.0.118 (TD-409): «بدون سند حسابداری» فقط با مجوز جدا؛ از جلسه کاربر سنجیده می‌شود، نه بدنه درخواست
@@ -270,11 +272,13 @@ router.post('/accounting/treasury/:id/void', authorizePermission('accounting.tre
 
 // v10.0.123 (TD-1122): سندهای هم‌طرف، هم‌سو و هم‌ارزی که دریافت یا پرداخت به آن‌ها منتقل می‌شود (پنجره «انتقال به سند دیگر»)
 router.get('/accounting/treasury/:id/document-options', authorizePermission('accounting.treasury'), validate(treasuryRelinkOptionsSchema), asyncHandler(async (req, res) => {
+  await assertSettlementDocumentsReadable(req.user);
   res.json(await listTreasuryRelinkOptions(Number(req.params.id)));
 }));
 
 // v9.0.272 (TD-779، ت۴ الف): جدا کردن دریافت یا پرداخت از سندش («علی‌الحساب») یا وصل کردن به سند فعال دیگر
 router.put('/accounting/treasury/:id/document', authorizePermission('accounting.treasury'), idempotency({ scope: 'accounting' }), validate(relinkTreasuryDocumentSchema), asyncHandler(async (req, res) => {
+  if (linksDocument(req.body)) await assertSettlementDocumentsReadable(req.user);
   const result = await relinkTreasuryDocument({
     id: Number(req.params.id),
     documentId: req.body.documentId,

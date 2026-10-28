@@ -21,7 +21,7 @@ import type { TreasuryTransaction, Account } from '../../../types.js';
 import { NotFoundError, ValidationError, ConflictError, BusinessLogicError } from '../../../errors/customErrors.js';
 import { AttachmentStorageService } from '../../attachments/attachmentStorage.service.js';
 import { exactTreasuryAmount } from './treasuryAmount.js';
-import { assertAllocatableParty, insertAllocations, lockAndCheckAllocationTargets, normalizeAllocations } from './settlementAllocationWrite.js';
+import { assertAllocatableParty, assertSettleableDocumentStatus, insertAllocations, lockAndCheckAllocationTargets, normalizeAllocations } from './settlementAllocationWrite.js';
 import type { SettlementAllocationInput } from '../../../lib/treasury/settlementAllocation.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { normalizeTreasuryCurrency, sameTreasuryCurrency } from '../../../lib/treasury/treasuryCurrency.js';
@@ -300,6 +300,8 @@ export class TreasuryTransactionService {
         await assertTreasuryDocumentLink(txEngine, {
           type: data.type, documentId: data.documentId, partyType, partyId, partyName: partyCurrentName ?? partyName, currency: txCurrency,
         });
+        // v11 phase 7.2 (F1): a direct link goes only to an issued document (final invoice or proforma), as a part does
+        await assertSettleableDocumentStatus(txEngine, { documentId: data.documentId, amount }, undefined);
         // v10.0.59 (TD-938، ت۸ الف): بیش از مانده سند وصل نمی‌شود؛ مازاد علی‌الحساب است
         await assertWithinDocumentRemaining(txEngine, { documentId: data.documentId, amount });
       }

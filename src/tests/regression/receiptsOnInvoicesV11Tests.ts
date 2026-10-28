@@ -381,10 +381,13 @@ export async function runReceiptsOnInvoicesV11Tests(shouldRun: ShouldRun): Promi
       const pf = await w.state(proforma);
       if (pf.paid !== 600_000 || pf.remaining !== 200_000) problems.push(`the proforma shows paid ${pf.paid}, left ${pf.remaining}; expected 600000 and 200000`);
 
-      // 3) a draft linked directly (as before) keeps its party too
-      const direct = await w.receipt(300_000, { documentId: draft });
-      if (direct.status !== 201) problems.push(`a receipt linked to the draft returned ${brief(direct)}, expected 201 as before`);
-      else await locked('moving the directly settled draft to another customer', await w.editDoc(draft, { partyId: other.id, buyer_name: other.name, items: line(1_000_000) }), 'SETTLED_DOCUMENT_IDENTITY_LOCKED');
+      // 3) a draft linked directly (an old link: since v11 phase 7.2 a new direct link goes only to an issued document) keeps its party too
+      const direct = await w.receipt(300_000);
+      if (direct.status !== 201) problems.push(`a receipt on account returned ${brief(direct)}, expected 201`);
+      else {
+        await orm.update(treasuryTransactions).set({ documentId: draft }).where(eq(treasuryTransactions.id, Number(direct.body?.id)));
+        await locked('moving the directly settled draft to another customer', await w.editDoc(draft, { partyId: other.id, buyer_name: other.name, items: line(1_000_000) }), 'SETTLED_DOCUMENT_IDENTITY_LOCKED');
+      }
 
       // 4) a bounced cheque shows nothing on invoices, in the list and in its window
       const chequeRes = await w.cheque('received', 400_000, { allocations: [{ documentId: finalInv, amount: 400_000 }] });

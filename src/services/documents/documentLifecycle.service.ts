@@ -1,6 +1,6 @@
 import { terminateOpenWorkflows } from '../workflow/workflowTermination.js';
 import { assertProjectNotCancelled } from '../accounting/projectCancelledGuard.js';
-import { eq, and, inArray, isNull } from 'drizzle-orm';
+import { eq, and, inArray, isNull, sql } from 'drizzle-orm';
 import { type DbExecutor, type DbTransaction } from '../../db/drizzle.js';
 import { documents, documentItems, items, transactions, journalVouchers, productionProjects } from '../../db/schema.js';
 import { businessNowIsoDateTime, businessTodayIsoDate, resolveJalaliFiscalYear } from '../../lib/businessClock.js';
@@ -360,7 +360,10 @@ export class DocumentLifecycleService {
       const docLines = await tx.select().from(documentItems).where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
 
       // 1. Soft-delete document with deletedAt & deletedBy
-      await tx.update(documents).set({ isDeleted: 1, deletedAt: nowIso, deletedBy: deletedByUser }).where(eq(documents.id, id));
+      // v11 phase 7.2 (finding F4 of the v11 full test): `deleted_at` is a timestamptz server time, so it takes the real
+      // instant (`now()`); the business wall clock written before was read as UTC and stored 3.5 hours ahead (migration 0007
+      // repairs the old rows)
+      await tx.update(documents).set({ isDeleted: 1, deletedAt: sql`now()`, deletedBy: deletedByUser }).where(eq(documents.id, id));
 
       // v9.0.40 (TD-447، ت۵): فرایند تأیید در جریان سند در همان تراکنش ابطال بسته می‌شود (سند پیش از نمونه قفل شده است)
       await terminateOpenWorkflows(tx, { entityType: 'document', entityId: id, actionKey: 'terminate', actionTitle: 'بستن فرایند با ابطال سند', comment: 'ابطال سند', userName: deletedByUser });

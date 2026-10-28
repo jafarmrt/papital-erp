@@ -91,9 +91,11 @@ export async function runReceiptsOnInvoicesReviewV11Tests(shouldRun: ShouldRun):
 
       // 5) a receipt linked directly to a draft saves the same amount as a part, and its link is cleared
       const draft = await w.doc('invoice', w.customer, 1_000_000, 'draft');
-      const linked = await w.receipt(200_000, { documentId: draft });
+      // an old direct link: since v11 phase 7.2 a new direct link goes only to an issued document
+      const linked = await w.receipt(200_000);
       const linkedId = Number(linked.body?.id);
-      if (linked.status !== 201 || !linkedId) throw new Error(`setup: a receipt linked to a draft returned ${brief(linked)}`);
+      if (linked.status !== 201 || !linkedId) throw new Error(`setup: a receipt on account returned ${brief(linked)}`);
+      await orm.update(treasuryTransactions).set({ documentId: draft }).where(eq(treasuryTransactions.id, linkedId));
       const moved = await admin.put(`/api/accounting/treasury/${linkedId}/allocations`, { allocations: [{ documentId: draft, amount: 200_000 }] });
       if (moved.status !== 200) problems.push(`saving a draft's direct link as a part returned ${brief(moved)}, expected 200`);
       const [linkRow] = await orm.select({ documentId: treasuryTransactions.documentId }).from(treasuryTransactions).where(eq(treasuryTransactions.id, linkedId));

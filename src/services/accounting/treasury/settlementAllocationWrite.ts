@@ -4,6 +4,7 @@ import { cheques, documents, settlementAllocations, treasuryTransactions } from 
 import { ConflictError, NotFoundError, ValidationError } from '../../../errors/customErrors.js';
 import { logActivity } from '../../../lib/auditLogger.js';
 import { fin, type DecimalValue } from '../../../lib/financialDecimal.js';
+import { assertSettlementOutsideClosedYears, changedSettlementDocuments } from './settlementClosedYear.js';
 import { LockHierarchyLevel, validateLockOrder } from '../../../lib/lockOrder.js';
 import { money } from '../../../lib/money.js';
 import {
@@ -132,14 +133,14 @@ export async function lockAndCheckAllocationTargets(
  * already settles (a proforma sent back to draft, or an old direct link) keeps its part or a smaller one, so the window
  * still saves the set it opened on (review of M11).
  */
-async function assertSettleableDocumentStatus(tx: DbExecutor, part: SettlementAllocationInput, keptAmount: DecimalValue | undefined): Promise<void> {
+export async function assertSettleableDocumentStatus(tx: DbExecutor, part: { documentId: number; amount: DecimalValue }, keptAmount: DecimalValue | undefined): Promise<void> {
   const [doc] = await tx.select({ refNumber: documents.refNumber, status: documents.status }).from(documents).where(eq(documents.id, part.documentId));
   if (!doc || SETTLEABLE_DOCUMENT_STATUSES.includes(doc.status ?? '')) return;
   if (keptAmount !== undefined && fin(part.amount).lessThanOrEqual(keptAmount)) return;
   throw new ValidationError(
     keptAmount !== undefined
-      ? `سند «${formatPersianCode(doc.refNumber ?? part.documentId)}» پیش‌نویس است؛ سهم کنونی آن می‌ماند یا کم می‌شود اما بیشتر نمی‌شود.`
-      : `سند «${formatPersianCode(doc.refNumber ?? part.documentId)}» پیش‌نویس است؛ دریافت و چک فقط روی فاکتور نهایی یا پیش‌فاکتور می‌نشیند.`,
+      ? `سند «${formatPersianCode(doc.refNumber ?? part.documentId)}» پیش‌نویس است و صادر نشده؛ سهم کنونی آن می‌ماند یا کم می‌شود اما بیشتر نمی‌شود.`
+      : `سند «${formatPersianCode(doc.refNumber ?? part.documentId)}» پیش‌نویس است و صادر نشده؛ دریافت و چک فقط روی فاکتور نهایی یا پیش‌فاکتور می‌نشیند.`,
     { documentId: part.documentId, status: doc.status, kept: keptAmount === undefined ? null : fin(keptAmount).toNumber() },
     'SETTLEMENT_DOCUMENT_NOT_ISSUED',
   );
@@ -291,6 +292,12 @@ async function replaceTreasuryAllocations(
 
   const before = await sourceAllocationViews(tx, { kind: 'treasury', id: row.id, number: row.transactionNumber, date: String(row.date).slice(0, 10), status: row.method });
   const previousDocumentId = row.documentId ?? null;
+  // v11 phase 7.2 (F2): what a row dated in a closed year settles does not change
+  const beforeParts = previousDocumentId !== null ? [...before, { documentId: previousDocumentId, amount: row.amount }] : before;
+  const changedTreasuryDocuments = changedSettlementDocuments(beforeParts, parts);
+  if (changedTreasuryDocuments.length > 0) {
+    await assertSettlementOutsideClosedYears(tx, { sourceDate: String(row.date), action: `نشاندن تراکنش «${row.transactionNumber}» روی سندها` });
+  }
   await releaseSourceAllocations(tx, { treasuryTransactionId: row.id });
   if (previousDocumentId !== null) {
     // the direct link to one document gives way to the parts, in the same transaction
@@ -348,6 +355,11 @@ async function replaceChequeAllocations(
 
   const view = { kind: 'cheque' as const, id: cheque.id, number: cheque.chequeNumber, date: String(cheque.issueDate).slice(0, 10), status: cheque.status ?? '' };
   const before = await sourceAllocationViews(tx, view);
+  // v11 phase 7.2 (F2): as for a treasury row, with the cheque's issue date
+  const changedChequeDocuments = changedSettlementDocuments(before, parts);
+  if (changedChequeDocuments.length > 0) {
+    await assertSettlementOutsideClosedYears(tx, { sourceDate: cheque.issueDate, action: `نشاندن چک «${cheque.chequeNumber}» روی سندها` });
+  }
   await releaseSourceAllocations(tx, { chequeId: cheque.id });
   const partyName = (await resolveTreasuryPartyName(tx, partyType, cheque.partyId)) ?? cheque.partyName;
   await lockAndCheckAllocationTargets(tx, {
