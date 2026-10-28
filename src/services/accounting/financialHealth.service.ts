@@ -874,6 +874,32 @@ export class FinancialHealthService {
     });
 
     // =========================================================================
+    // آزمون ۱۰-پ: v11 phase 7.2 (F4) زمان حذف سندهای انبار که پس از مهاجرت 0001 با ساعت محلی ذخیره شده بود (مهاجرت 0007)
+    // =========================================================================
+    const timezoneRepairs = allDateRepairs.filter((r) => r.repairKind === 'timezone');
+    tests.push({
+      id: 'deleted_at_timezone_repair',
+      category: 'system',
+      title: 'اصلاح زمان حذف سندهای انبار',
+      description: 'زمان حذف برخی سندهای انبار با ساعت محلی به‌جای زمان جهانی ذخیره شده بود؛ زمانی که گزارش فعالیت همان حذف نشان می‌داد جایگزین شد و مقدار قبلی نگه داشته شد',
+      status: 'healthy',
+      scoreImpact: 0,
+      count: timezoneRepairs.length,
+      message: timezoneRepairs.length === 0
+        ? 'زمان حذفی برای اصلاح یافت نشد.'
+        : `زمان حذف ${timezoneRepairs.length} سند انبار اصلاح شد.`,
+      items: timezoneRepairs.map((r) => ({
+        id: r.id,
+        code: `${r.tableName} #${r.rowId}`,
+        title: `«${r.oldValue}» به «${r.newValue}» تبدیل شد`,
+        subtitle: `ستون: ${r.columnName}`,
+        date: r.newValue,
+        details: 'مقدار قبلی در جدول legacy_date_repairs نگه داشته شده است.',
+      })),
+      metrics: { corrected: timezoneRepairs.length },
+    });
+
+    // =========================================================================
     // آزمون ۱۱: v7.0.91 (TD-195) یکتایی شماره سند حسابداری (مهاجرت 0031)
     // =========================================================================
     const [duplicateNumbers, uniqueIndexPresent] = await Promise.all([findDuplicateVoucherNumbers(), hasVoucherNumberUniqueIndex()]);

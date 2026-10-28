@@ -21,7 +21,7 @@ import { formatPersianNumber } from '../../utils/persianNumber.js';
  * and its value is in the ledger; the rejection is then refused (409 `ITEM_OPENING_IN_USE`). An opening dated in a
  * closed fiscal year is not withdrawn either (409 `ITEM_OPENING_IN_CLOSED_YEAR`), as a void there is not (M10).
  */
-export async function withdrawUnapprovedOpening(tx: DbExecutor, itemId: number): Promise<number> {
+export async function withdrawUnapprovedOpening(tx: DbExecutor, itemId: number, performedBy?: string): Promise<number> {
   const [item] = await tx.select({ id: items.id, name: items.name, code: items.code, version: items.version })
     .from(items).where(and(eq(items.id, itemId), eq(items.isDeleted, 0))).for('no key update');
   if (!item) return 0;
@@ -69,7 +69,9 @@ export async function withdrawUnapprovedOpening(tx: DbExecutor, itemId: number):
 
   // v11 phase 7.2 (finding F5 of the v11 full test): as a document void does, the opening rows are soft-deleted and each
   // gets an active reversal row (`reversal_of_id`), so the Kardex keeps the trace of what was entered and taken back;
-  // before, the rows were only soft-deleted. The item row is locked FOR NO KEY UPDATE, as every stock path locks it.
+  // before, the rows were only soft-deleted. The item row is locked FOR NO KEY UPDATE, as every stock path locks it. The
+  // reversal rows carry the user who rejected the definition. The warehouse stock goes down with `applyMovement` directly,
+  // as the document void's `applyStockReversal` does: a withdrawal has no document to run through the stock engine.
   const originals = await tx.select().from(transactions).where(inArray(transactions.id, openingIds));
   const nowIso = await businessNowIsoDateTime();
   await tx.update(transactions).set({ isDeleted: 1 }).where(inArray(transactions.id, openingIds));
@@ -88,7 +90,7 @@ export async function withdrawUnapprovedOpening(tx: DbExecutor, itemId: number):
       date: nowIso,
       documentType: orig.documentType,
       documentRef: `REV-${orig.documentRef ?? ''}`,
-      createdBy: orig.createdBy,
+      createdBy: performedBy || orig.createdBy,
       notes: `برگشت موجودی اول دوره با رد تعریف کالا (معکوس تراکنش #${orig.id})`,
       location: warehouse.code,
       reversalOfId: orig.id,

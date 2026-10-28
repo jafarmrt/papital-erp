@@ -18,6 +18,7 @@ WITH matched AS (
     FROM documents d
     JOIN activity_logs l
       ON l.action = 'DELETE'
+     AND l.entity = 'اسناد انبار'
      AND l.entity_id = d.id::text
      AND l.details->>'deletedAt' = to_char(d.deleted_at AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
    WHERE d.deleted_at IS NOT NULL

@@ -4,6 +4,7 @@ import { documents, treasuryTransactions } from '../../../db/schema.js';
 import { NotFoundError } from '../../../errors/customErrors.js';
 import { PAYMENT_DOCUMENT_TYPES, RECEIPT_DOCUMENT_TYPES, resolveTreasuryPartyName } from './treasuryLinks.js';
 import type { TreasuryRelinkOption } from '../../../lib/treasury/treasuryRelink.js';
+import { SETTLEABLE_DOCUMENT_STATUSES } from '../../../lib/treasury/settlementAllocation.js';
 
 /**
  * v10.0.123 (TD-1122): سندهایی که یک دریافت یا پرداخت ثبت‌شده به آن‌ها منتقل می‌شود، با همان قاعده
@@ -37,6 +38,8 @@ export async function listTreasuryRelinkOptions(id: number): Promise<TreasuryRel
   }).from(documents).where(and(
     eq(documents.isDeleted, 0),
     inArray(documents.type, types),
+    // v11 phase 7.2 (F1): only an issued invoice can take the payment, as the relink itself checks
+    inArray(documents.status, [...SETTLEABLE_DOCUMENT_STATUSES]),
     sql`upper(coalesce(nullif(btrim(${documents.currency}), ''), 'IRR')) = ${currency}::text`,
     party,
     row.documentId ? ne(documents.id, row.documentId) : undefined,

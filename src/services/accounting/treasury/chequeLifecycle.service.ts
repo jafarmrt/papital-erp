@@ -860,8 +860,9 @@ export class ChequeLifecycleService {
         throw new BusinessLogicError('چک وصول‌شده یا خرج‌شده قابل حذف نیست — اسناد مالی مربوط به آن صادر گردیده است');
       }
       // v11 phase 7.2 (F2): a cheque of a closed year that still settles documents is not deleted, since the delete takes its
-      // parts off those documents (`assertSettlementOutsideClosedYears`)
-      const liveParts = await sourceAllocationViews(txEngine, { kind: 'cheque', id, number: existing.chequeNumber, date: existing.issueDate, status: existing.status ?? '' });
+      // parts off those documents (`assertSettlementOutsideClosedYears`); a bounced or returned cheque settles nothing
+      const lapsed = (LAPSED_CHEQUE_STATUSES as readonly string[]).includes(existing.status ?? '');
+      const liveParts = lapsed ? [] : await sourceAllocationViews(txEngine, { kind: 'cheque', id, number: existing.chequeNumber, date: existing.issueDate, status: existing.status ?? '' });
       if (liveParts.length > 0) {
         await assertSettlementOutsideClosedYears(txEngine, { sourceDate: existing.issueDate, action: `حذف چک «${existing.chequeNumber}»` });
       }

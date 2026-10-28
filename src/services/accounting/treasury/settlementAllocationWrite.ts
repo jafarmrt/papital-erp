@@ -139,8 +139,8 @@ export async function assertSettleableDocumentStatus(tx: DbExecutor, part: { doc
   if (keptAmount !== undefined && fin(part.amount).lessThanOrEqual(keptAmount)) return;
   throw new ValidationError(
     keptAmount !== undefined
-      ? `سند «${formatPersianCode(doc.refNumber ?? part.documentId)}» پیش‌نویس است؛ سهم کنونی آن می‌ماند یا کم می‌شود اما بیشتر نمی‌شود.`
-      : `سند «${formatPersianCode(doc.refNumber ?? part.documentId)}» پیش‌نویس است؛ دریافت و چک فقط روی فاکتور نهایی یا پیش‌فاکتور می‌نشیند.`,
+      ? `سند «${formatPersianCode(doc.refNumber ?? part.documentId)}» صادر نشده (پیش‌نویس) است؛ سهم کنونی آن می‌ماند یا کم می‌شود اما بیشتر نمی‌شود.`
+      : `سند «${formatPersianCode(doc.refNumber ?? part.documentId)}» صادر نشده (پیش‌نویس) است؛ دریافت و چک فقط روی فاکتور نهایی یا پیش‌فاکتور می‌نشیند.`,
     { documentId: part.documentId, status: doc.status, kept: keptAmount === undefined ? null : fin(keptAmount).toNumber() },
     'SETTLEMENT_DOCUMENT_NOT_ISSUED',
   );
