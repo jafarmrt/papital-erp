@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { historyImportAmount } from '../../lib/historyImport/historyImportAmount';
 import {
-  STOCK_OPENING_DAY, detectStockSheet, emptyStockMapping, parseStockSheet, resolveStockRow, salesInvoiceKey, unissuedSalesInvoices, unmappedStockNames,
+  STOCK_OPENING_DAY, detectStockSheet, emptyStockMapping, parseStockSheet, remapItemCode, resolveStockRow, salesInvoiceKey, unissuedSalesInvoices, unmappedStockNames,
   type StockImportMapping, type StockImportLookups,
 } from '../../lib/historyImport/stockSheet';
 import { excelInvoiceNumber, stockImportDocumentKey, stockImportNotes, stockImportOrder, type StockImportRow } from '../../lib/historyImport/stockHistoryImport';
@@ -29,7 +29,6 @@ const outs = parseStockSheet('خروج دستی', [
 
 const lookups: StockImportLookups = {
   warehouseCodeOf: name => (name === 'مرکزی' ? 'MAIN' : name === 'نمایش' ? 'SHOW' : null),
-  personnelIdOf: name => (name === 'همکار یک' ? 7 : null),
 };
 const mapping = (extra: Partial<StockImportMapping> = {}): StockImportMapping => ({
   ...emptyStockMapping(), suppliers: { 'فروشگاه رنگ': { kind: 'supplier', partyId: 3 } }, displayWarehouse: 'SHOW', ...extra,
@@ -54,7 +53,8 @@ describe('stock sheets', () => {
     expect(r[3]).toMatchObject({ status: 'ready', row: { kind: 'return', invoiceRef: '61', unitCost: null } }); // back on its invoice
     expect(r[4].status).toBe('unresolved'); // a workshop return is netted against its consumption row
     expect(r[5].status).toBe('unresolved'); // an unknown type
-    expect(r[6]).toMatchObject({ status: 'ready', row: { kind: 'consumption', recipientPersonnelId: 7, slipRef: '12' } });
+    expect(r[6]).toMatchObject({ status: 'ready', row: { kind: 'consumption', slipRef: '12', description: 'گیرنده: همکار یک — کارگاه' } });
+    expect(r[6].status === 'ready' && r[6].row.recipientPersonnelId).toBeFalsy(); // the recipient stays in the notes
     expect(r[7]).toMatchObject({ status: 'ready', row: { kind: 'transfer', toWarehouse: 'SHOW' } });
     expect(r[8]).toMatchObject({ status: 'ready', row: { kind: 'consumption' } });
   });
@@ -67,6 +67,15 @@ describe('stock sheets', () => {
     expect(mapped).toMatchObject({ status: 'ready', row: { itemCode: '888' } });
     expect(resolveStockRow(ins[2], mapping({ items: { 'P-001': { kind: 'skip' } } }), lookups).status).toBe('skipped');
     expect(resolveStockRow(outs[0], mapping(), lookups, new Set(['خروج دستی#2']))).toMatchObject({ row: { duplicateAccepted: true } });
+  });
+
+  it('corrects or leaves out a mistyped fix of a code by the Excel code the row came with', () => {
+    const typo = mapping({ items: { 'P-001': { kind: 'code', code: 'P-01X' } } });
+    const resolvedRows = [resolveStockRow(ins[2], typo, lookups)];
+    expect(resolvedRows[0]).toMatchObject({ row: { itemCode: 'P-01X' } });
+    const fixed = remapItemCode(typo, resolvedRows, 'P-01X', 'P-010');
+    expect(resolveStockRow(ins[2], fixed, lookups)).toMatchObject({ status: 'ready', row: { itemCode: 'P-010' } });
+    expect(resolveStockRow(ins[2], remapItemCode(typo, resolvedRows, 'P-01X', ''), lookups).status).toBe('skipped');
   });
 });
 

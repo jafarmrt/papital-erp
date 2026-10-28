@@ -165,8 +165,26 @@ export async function runHistoryImportStockV11Tests(shouldRun: ShouldRun): Promi
       const importer = await sandboxClientWith(['warehouse.view', 'warehouse.in', 'warehouse.out', 'warehouse.history_import']);
       const allowed = await importer.post(URL, { commit: false, rows: [{ ...rows[0], itemCode: moved.code }] });
       if (!ok(allowed)) problems.push(`a holder of the import permission got ${brief(allowed)}`);
+      // a production receipt and a transfer need what their hand forms ask, which this importer does not hold
+      const other = await createTestWarehouse();
+      const formRows: StockImportRow[] = [
+        { rowNo: 7, sheet: IN, date: '1405-01-06', kind: 'production', itemCode: material.code, quantity: '1', unitCost: '10' },
+        { rowNo: 5, sheet: OUT, date: '1405-01-06', kind: 'transfer', itemCode: material.code, quantity: '1', toWarehouse: other.code },
+      ];
+      const forms = (await importer.post(URL, { commit: false, rows: formRows })).body as StockImportResult;
+      for (const [rowNo, sheet] of [[7, IN], [5, OUT]] as const) {
+        const r = forms?.rows?.find(x => x.rowNo === rowNo && x.sheet === sheet);
+        if (r?.status !== 'error' || !String(r?.message).includes('مجوز')) problems.push(`row ${rowNo} of ${sheet} by an importer without its form's permission reads ${JSON.stringify(r)}, expected refused`);
+      }
+
+      // an opening is dated 1 Farvardin only, and never stacks on stock the Kardex does not hold
+      const late = await post(admin, [{ rowNo: 8, sheet: IN, date: '1405-01-05', kind: 'opening', itemCode: (await fresh('raw_material')).code, quantity: '1', unitCost: '10' }], false);
+      if (rowOf(late, 8)?.status !== 'error' || !String(rowOf(late, 8)?.message).includes('فقط با تاریخ')) problems.push(`an opening on 1405-01-05 reads ${JSON.stringify(late.rows)}, expected refused`);
+      const held = await createTestItem({ type: 'raw_material', stocks: { [main]: 7 }, weightedAverageCost: 900 });
+      const stacked = await post(admin, [{ rowNo: 9, sheet: IN, date: '1405-01-01', kind: 'opening', itemCode: held.code, quantity: '10', unitCost: '1000' }], false);
+      if (rowOf(stacked, 9)?.status !== 'error' || !String(rowOf(stacked, 9)?.message).includes('در کاردکس نیست')) problems.push(`an opening of an item holding stock without Kardex rows reads ${JSON.stringify(stacked.rows)}, expected refused`);
       if (problems.length > 0) throw new Error(problems.join(' | '));
-      return 'refused rows post nothing, duplicates wait for acceptance, the import needs its permission';
+      return 'refused rows post nothing, duplicates wait for acceptance, the import needs its permission and each form\'s';
     }));
   }
 

@@ -145,7 +145,7 @@ export async function runHistoryImportSalesV11Tests(shouldRun: ShouldRun): Promi
       const keeper = await sandboxClientWith(['warehouse.history_import', 'warehouse.in', 'warehouse.out']);
       const denied = await stockPost(keeper, [sale(2, '72', '1405-02-09')], false);
       const d = denied.rows[0];
-      if (d?.status !== 'error' || !String(d?.message).includes('فاکتور قطعی')) problems.push(`a sale by a user who may not record a final invoice reads ${JSON.stringify(denied.rows)}, expected refused`);
+      if (d?.status !== 'error' || !String(d?.message).includes('مجوز')) problems.push(`a sale by a user who may not record a final invoice reads ${JSON.stringify(denied.rows)}, expected refused`);
       if (problems.length > 0) throw new Error(problems.join(' | '));
       return 'an invoice is imported once, a return needs its invoice, an invoice has one day, a sale needs the invoice permission';
     }));

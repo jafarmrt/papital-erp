@@ -147,10 +147,9 @@ export const emptyStockMapping = (): StockImportMapping => ({ items: {}, warehou
 /** The key an invoice the user included although its Excel status is not «ثبت نهایی» is kept by in the accepted set. */
 export const salesInvoiceKey = (invoiceRef: string) => `invoice#${invoiceRef}`;
 
-/** The lists of the app the rows are matched with: warehouses by name or code, colleagues by name. */
+/** The lists of the app the rows are matched with: warehouses by name or code. */
 export interface StockImportLookups {
   warehouseCodeOf: (name: string) => string | null;
-  personnelIdOf: (name: string) => number | null;
 }
 
 export type ResolvedStockRow =
@@ -227,7 +226,7 @@ export function resolveStockRow(parsed: ParsedStockRow, mapping: StockImportMapp
     if (st?.kind !== 'supplier') return unresolved(`تأمین‌کننده «${parsed.supplierName}» را به یک تأمین‌کنندهٔ برنامه وصل کنید.`);
     row.supplierId = st.partyId;
   }
-  if (kind === 'consumption' && parsed.recipientName) row.recipientPersonnelId = lookups.personnelIdOf(parsed.recipientName);
+  // the recipient stays in the notes only: a past remittance with a recipient would ask them today to confirm the delivery
   if (kind === 'transfer') {
     if (!mapping.displayWarehouse) return unresolved('انبار «نمایش» را برای «انتقال به نمایش» انتخاب کنید.');
     row.toWarehouse = mapping.displayWarehouse;
@@ -291,4 +290,16 @@ export function unissuedSalesInvoices(rows: ParsedStockRow[]): Array<{ invoiceRe
     byRef.set(r.invoiceRef, seen);
   }
   return [...byRef.values()].sort((a, b) => Number(a.invoiceRef) - Number(b.invoiceRef) || a.invoiceRef.localeCompare(b.invoiceRef));
+}
+
+/**
+ * The mapping after the user fixed or left out a code the preview named. The server names the code it was sent, which may
+ * already be a mapped one (a mistyped first fix); the mapping is kept by the Excel code of the rows that sent it.
+ */
+export function remapItemCode(mapping: StockImportMapping, resolved: ResolvedStockRow[], sentCode: string, target: string): StockImportMapping {
+  const excelCodes = new Set(resolved.flatMap(r => (r.status === 'ready' && codeKey(r.row.itemCode) === codeKey(sentCode) ? [codeKey(r.parsed.code)] : [])));
+  if (excelCodes.size === 0) excelCodes.add(codeKey(sentCode));
+  const items = { ...mapping.items };
+  for (const key of excelCodes) items[key] = target ? { kind: 'code', code: target } : { kind: 'skip' };
+  return { ...mapping, items };
 }
