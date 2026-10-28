@@ -1,6 +1,6 @@
 import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import type { PurchaseRequisitionItemRow } from '../../types.js';
-import { spreadOrderedQuantity } from './requisitionOrder.js';
+import { isClosedRequisitionRow, rebuildOrderedQuantities } from '../../lib/procurement/requisitionRows.js';
 
 export type RequisitionItemWithReceipt = PurchaseRequisitionItemRow & { receivedQty?: number | string };
 
@@ -11,7 +11,9 @@ export type RequisitionItemWithReceipt = PurchaseRequisitionItemRow & { received
  */
 export function applyDeliveredLines(
   reqItems: RequisitionItemWithReceipt[],
-  docLines: Array<{ itemId: number | null; quantity: DecimalValue | null }>
+  docLines: Array<{ itemId: number | null; quantity: DecimalValue | null }>,
+  // the rebuild passes the closure it read before lowering the quantities (the legacy rule would misread them)
+  isClosed: (row: RequisitionItemWithReceipt, index: number) => boolean = row => isClosedRequisitionRow(row),
 ): RequisitionItemWithReceipt[] {
   const deliveredByItem = new Map<number, FinancialDecimal>();
   for (const line of docLines) {
@@ -20,11 +22,16 @@ export function applyDeliveredLines(
     deliveredByItem.set(itemId, (deliveredByItem.get(itemId) ?? fin(0)).add(line.quantity ?? 0));
   }
 
+  // the leftover goes on the last open row of the item, as in the spread; the last row only when all are closed
   const lastRowOfItem = new Map<number, number>();
+  const lastOpenRowOfItem = new Map<number, number>();
   reqItems.forEach((row, index) => {
     const itemId = Number(row.itemId);
-    if (deliveredByItem.has(itemId)) lastRowOfItem.set(itemId, index);
+    if (!deliveredByItem.has(itemId)) return;
+    lastRowOfItem.set(itemId, index);
+    if (!isClosed(row, index)) lastOpenRowOfItem.set(itemId, index);
   });
+  for (const [itemId, index] of lastOpenRowOfItem) lastRowOfItem.set(itemId, index);
 
   return reqItems.map((row, index) => {
     const itemId = Number(row.itemId);
@@ -32,7 +39,8 @@ export function applyDeliveredLines(
     if (!left || !left.isPositive()) return row;
     const requested = fin(row.requestedQty || 0);
     const previous = fin(row.receivedQty || 0);
-    const open = requested.subtract(previous);
+    // a closed row receives at most what it had ordered (TD-1391); the rest goes on to the next rows of the item
+    const open = (isClosed(row, index) ? fin(row.orderedQty || 0) : requested).subtract(previous);
     const share = lastRowOfItem.get(itemId) === index || left.lessThan(open) ? left : (open.isPositive() ? open : fin(0));
     deliveredByItem.set(itemId, left.subtract(share));
     if (share.isZero()) return row;
@@ -49,15 +57,8 @@ export function applyDeliveredLines(
 
 type SettlementRow = Pick<PurchaseRequisitionItemRow, 'itemId' | 'requestedQty' | 'orderedQty' | 'status' | 'closureNote' | 'closed'> & { receivedQty?: number | string };
 
-/**
- * v9.0.316 (TD-690، B10-03): ردیفی که هنگام صدور سفارش بسته شد و دیگر سفارش داده نمی‌شود: نشان `closed`، یا یادداشت
- * بستن، یا (ردیف‌های پیش از v9.0.316) وضعیت «سفارش‌شده» با سفارشی کمتر از درخواست، که تبدیل فقط هنگام بستن می‌نوشت.
- */
-export function isClosedRequisitionRow(row: SettlementRow): boolean {
-  return row.closed === true
-    || Boolean(String(row.closureNote ?? '').trim())
-    || (row.status === 'ordered' && fin(row.orderedQty || 0).lessThan(row.requestedQty || 0));
-}
+/** v11 phase 7.2 (TD-1391): the rule lives in `src/lib/procurement/requisitionRows.ts`, shared with the documents rebuild */
+export { isClosedRequisitionRow };
 
 /**
  * v9.0.316 (TD-690): ردیفی که کارش تمام است: کالای فهرست که به اندازه درخواست دریافت شده یا بسته شده است، و ردیف بی‌کالا
@@ -68,13 +69,13 @@ export function isSettledRequisitionRow(row: SettlementRow): boolean {
   return isClosedRequisitionRow(row) || fin(row.receivedQty || 0).greaterThanOrEqual(row.requestedQty || 0);
 }
 
-type OrderLine = { itemId: number | null; quantity: DecimalValue | null };
+type OrderLine = { itemId: number | null; quantity: DecimalValue | null; documentId?: number | null };
 
 /**
  * v10.0.237 (TD-912، تصمیم ت۹ الف): مقدار سفارش‌شده و دریافتی ردیف‌های کالاهای `itemIds` از نو، از سطرهای سفارش‌های زنده
  * (`ordered`: هر وضعیت) و سفارش‌های قطعی زنده (`received`). سفارش‌شده هر کالا، مانند «تبدیل به سفارش»، میان ردیف‌های همان
  * کالا به ترتیب پخش می‌شود (v11 phase 6.4, C9: `spreadOrderedQuantity`; پیش‌تر همه روی ردیف اول) و دریافتی میان ردیف‌ها به
- * ترتیب پر می‌شود (`applyDeliveredLines`). ردیف بسته‌شده (TD-690) بسته می‌ماند؛ ردیف
+ * ترتیب پر می‌شود (`applyDeliveredLines`). ردیف بسته‌شده (TD-690) بسته می‌ماند و مقدار سفارشش را نگه می‌دارد (TD-1391)؛ ردیف
  * دیگر مانده و وضعیتش را از همین دو مقدار می‌گیرد. کالاهای دیگر درخواست دست نمی‌خورند (دریافت‌های قدیمی بی سند پیوندی).
  */
 export function rebuildOrderRows(
@@ -83,20 +84,12 @@ export function rebuildOrderRows(
   ordered: OrderLine[],
   received: OrderLine[],
 ): RequisitionItemWithReceipt[] {
-  const orderedByItem = new Map<number, FinancialDecimal>();
-  for (const line of ordered) {
-    const itemId = Number(line.itemId);
-    if (itemIds.has(itemId)) orderedByItem.set(itemId, (orderedByItem.get(itemId) ?? fin(0)).add(line.quantity ?? 0));
-  }
   // v11 phase 6.4 (C9, review): a row's closure is read before the rebuild; with the lowered quantity the legacy rule
-  // (`ordered` below its request) would read a fully ordered row as closed and freeze it at «ordered» with nothing left
-  const closedBefore = rows.map(row => isClosedRequisitionRow(row));
-  const reset = rows.map(row => (itemIds.has(Number(row.itemId)) ? { ...row, orderedQty: 0, receivedQty: 0 } : row));
-  for (const [itemId, total] of orderedByItem) {
-    const itemRows = reset.filter(row => Number(row.itemId) === itemId);
-    for (const { row, added } of spreadOrderedQuantity(itemRows, total.toNumber())) row.orderedQty = added;
-  }
-  const filled = applyDeliveredLines(reset, received.filter(line => itemIds.has(Number(line.itemId))));
+  // (`ordered` below its request) would read a fully ordered row as closed and freeze it at «ordered» with nothing left.
+  // v11 phase 7.2 (TD-1391): a closed row keeps its ordered quantity and the spread skips it (`rebuildOrderedQuantities`)
+  const { rows: withOrdered, closed: closedBefore } = rebuildOrderedQuantities(rows, itemIds, ordered);
+  const reset = withOrdered.map(row => (itemIds.has(Number(row.itemId)) ? { ...row, receivedQty: 0 } : row));
+  const filled = applyDeliveredLines(reset, received.filter(line => itemIds.has(Number(line.itemId))), (_row, index) => closedBefore[index]);
   return filled.map((row, index) => {
     if (!itemIds.has(Number(row.itemId))) return row;
     const requested = fin(row.requestedQty || 0);

@@ -81,8 +81,10 @@ describe('a void or edit of an order rebuilds duplicate rows the same way (C9, r
   });
 
   it('keeps a row closed before the rebuild closed: by flag, by note or by the legacy rule (ordered below its request)', () => {
+    // TD-1391 (v11 phase 7.2): the closed row keeps what it had ordered and the open row gets the rest back to order
     for (const closed of [{ ...ordered(2), closed: true }, { ...ordered(2), closureNote: 'بسته شد' }, ordered(3)]) {
-      expect(shape(rebuildOrderRows([ordered(5), closed] as never, new Set([7]), [{ itemId: 7, quantity: 6 }], []))).toEqual([[5, 0, 0, 'ordered'], [1, 0, 0, 'ordered']]);
+      const kept = closed.orderedQty;
+      expect(shape(rebuildOrderRows([ordered(5), closed] as never, new Set([7]), [{ itemId: 7, quantity: 6 }], []))).toEqual([[6 - kept, 0, kept - 1, 'pending'], [kept, 0, 0, 'ordered']]);
     }
   });
 });

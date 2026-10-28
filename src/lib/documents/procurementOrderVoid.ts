@@ -1,4 +1,5 @@
-import { fin, type DecimalValue, type FinancialDecimal } from '../financialDecimal';
+import { fin, type DecimalValue } from '../financialDecimal';
+import { rebuildOrderedQuantities } from '../procurement/requisitionRows';
 
 /**
  * v10.0.99 (TD-1195، آزمون راهنما roles-b باگ ۲): مقدار سفارش‌شده ردیف‌های درخواست خرید پس از ابطال سفارشی که هنوز تحویل
@@ -6,6 +7,7 @@ import { fin, type DecimalValue, type FinancialDecimal } from '../financialDecim
  * ابطال سفارش پیش‌نویس مقدار سفارش‌شده ردیف را نگه می‌داشت: فرم تقسیم سفارش «تطابق کامل» نشان می‌داد و سفارش دوباره همان
  * مقدار ۴۲۲ «دلیل سفارش بیش از درخواست» می‌گرفت. فقط کالاهای سفارش باطل‌شده بازسازی می‌شوند؛ مقدار هر کالا میان ردیف‌های
  * همان کالا به ترتیب پر می‌شود (هر ردیف تا مقدار درخواستش، مازاد به ردیف آخر) و پیوند ردیف‌ها به سند باطل‌شده برداشته می‌شود.
+ * v11 فاز ۷.۲ (TD-1391): ردیف بسته (با نشان، یادداشت بستن یا شکل قدیمی) بسته می‌ماند و مقدار سفارشش را نگه می‌دارد.
  */
 export interface OrderedRow {
   itemId?: number | null;
@@ -14,41 +16,37 @@ export interface OrderedRow {
   remainingQty?: number;
   status?: string;
   closed?: boolean;
+  closureNote?: string;
   linkedDocumentIds?: number[];
 }
 
 export function rebuildOrderedRows<T extends OrderedRow>(
   rows: T[],
-  liveLines: Array<{ itemId: number | null; quantity: DecimalValue | null }>,
+  liveLines: Array<{ itemId: number | null; quantity: DecimalValue | null; documentId?: number | null }>,
   itemIds: ReadonlySet<number>,
   voidedDocumentId: number,
 ): T[] {
-  const left = new Map<number, FinancialDecimal>();
-  for (const id of itemIds) left.set(id, fin(0));
-  for (const line of liveLines) {
-    const id = Number(line.itemId);
-    if (left.has(id)) left.set(id, left.get(id)!.add(line.quantity ?? 0));
-  }
-  const lastRow = new Map<number, number>();
-  rows.forEach((row, index) => { if (left.has(Number(row.itemId))) lastRow.set(Number(row.itemId), index); });
-
-  return rows.map((row, index) => {
-    const linked = Array.isArray(row.linkedDocumentIds) && row.linkedDocumentIds.some(id => Number(id) === voidedDocumentId)
-      ? row.linkedDocumentIds.filter(id => Number(id) !== voidedDocumentId) : row.linkedDocumentIds;
-    const id = Number(row.itemId);
-    const total = left.get(id);
-    if (!total) return linked === row.linkedDocumentIds ? row : { ...row, linkedDocumentIds: linked };
-    const requested = fin(row.requestedQty || 0);
-    const share = lastRow.get(id) === index || total.lessThan(requested) ? total : requested;
-    left.set(id, total.subtract(share));
-    const remaining = requested.subtract(share);
-    const keepStatus = row.closed === true || row.status === 'received';
+  // v11 phase 7.2 (TD-1391): the same rule as the procurement rebuild (`rebuildOrderedQuantities`); a closed row, the
+  // legacy one without a flag included, keeps its closure and status
+  const rebuilt = rebuildOrderedQuantities(rows, itemIds, liveLines);
+  return unlinkVoidedOrder(rows, voidedDocumentId).map((unlinked, index) => {
+    const row = rows[index];
+    if (!itemIds.has(Number(row.itemId))) return unlinked;
+    const next = rebuilt.rows[index];
+    const remaining = fin(row.requestedQty || 0).subtract(next.orderedQty || 0);
+    const closed = rebuilt.closed[index];
+    const keepStatus = closed || row.status === 'received';
     return {
-      ...row,
-      linkedDocumentIds: linked,
-      orderedQty: share.toNumber(),
-      remainingQty: remaining.isPositive() ? remaining.toNumber() : 0,
+      ...next,
+      linkedDocumentIds: unlinked.linkedDocumentIds,
+      remainingQty: closed || !remaining.isPositive() ? 0 : remaining.toNumber(),
       status: keepStatus ? row.status : (remaining.isPositive() ? 'pending' : 'ordered'),
     };
   });
+}
+
+/** v11 phase 7.2 (TD-1391): the rows with the voided order taken out of their links; an untouched row stays the same object */
+export function unlinkVoidedOrder<T extends OrderedRow>(rows: T[], voidedDocumentId: number): T[] {
+  return rows.map(row => (Array.isArray(row.linkedDocumentIds) && row.linkedDocumentIds.some(id => Number(id) === voidedDocumentId)
+    ? { ...row, linkedDocumentIds: row.linkedDocumentIds.filter(id => Number(id) !== voidedDocumentId) } : row));
 }
