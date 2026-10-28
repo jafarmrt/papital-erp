@@ -3,6 +3,7 @@ import { orm } from '../../db/drizzle.js';
 import { accounts, bankAccounts, pieceworkPayrolls } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { BankAccountService } from '../../services/accounting/treasury/bankAccount.service.js';
+import { VoucherService } from '../../services/accounting/voucher.service.js';
 import type { TreasuryImportResult, TreasuryImportRow } from '../../lib/historyImport/treasuryHistoryImport.js';
 import { miscContraAccountId } from '../fixtures/treasuryParty.js';
 import { addLog, fundedBank, issueApproved, newTask, newWorker } from '../invariants/payrollScenarios.js';
@@ -43,7 +44,7 @@ async function emptyBank(): Promise<number> {
   const [ledger] = await orm.insert(accounts).values({
     code, name: 'بانک خالی آزمون ورود سابقه', level: 'subsidiary', parentId: parent?.id ?? null, accountType: 'asset', nature: 'debit', isSystem: 0, isActive: 1, isDeleted: 0,
   }).returning({ id: accounts.id });
-  const bank = await BankAccountService.createBankAccount({ title: `بانک خالی ${code}`, type: 'bank', accountId: ledger.id, initialBalance: 0, currency: 'IRR' });
+  const bank = await BankAccountService.createBankAccount({ title: `بانک خالی ${code}`, type: 'bank', accountId: ledger.id, initialBalance: 0, currency: 'IRR', openingDate: '2026-03-21' });
   return bank.id;
 }
 
@@ -64,7 +65,9 @@ export async function runHistoryImportTreasuryV11Tests(shouldRun: ShouldRun): Pr
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const w = await world(admin);
-      const invoice = await w.doc('invoice', w.customer, 1_000_000);
+      // the invoice of 1405-02-05 is settled by the receipt of 1405-02-10; one dated today is later than it and is left alone
+      const invoice = await w.doc('invoice', w.customer, 1_000_000, 'final', { date: '2026-04-25' });
+      const laterInvoice = await w.doc('invoice', w.customer, 700_000);
       const payable = (await w.state(invoice)).remaining;
       const bankB = await emptyBank();
       const misc = await miscContraAccountId();
@@ -106,6 +109,8 @@ export async function runHistoryImportTreasuryV11Tests(shouldRun: ShouldRun): Pr
       if (await balanceOf(bankB) !== bBefore + 2_000_000 - 300_000) problems.push(`the second bank ends at ${await balanceOf(bankB)}`);
       const s = await w.state(invoice);
       if (s.remaining !== 0 || s.parts.length !== 1) problems.push(`the invoice shows ${s.remaining} left with parts ${JSON.stringify(s.parts)}, expected settled by the receipt`);
+      const later = await w.state(laterInvoice);
+      if (later.parts.length !== 0) problems.push(`an invoice dated after the receipt was settled by it: ${JSON.stringify(later.parts)}`);
       const [paidSlip] = await orm.select({ paid: pieceworkPayrolls.paidAmount, status: pieceworkPayrolls.status }).from(pieceworkPayrolls).where(eq(pieceworkPayrolls.id, slip.payroll.id));
       if (fin(paidSlip?.paid ?? 0).toNumber() !== 600_000) problems.push(`the payslip shows ${paidSlip?.paid} paid (${paidSlip?.status}), expected 600,000`);
       const dated = (await orm.execute(sql`SELECT to_char(date::date, 'YYYY-MM-DD') AS d, description FROM treasury_transactions WHERE bank_account_id = ${bankB} AND type = 'payment' AND is_deleted = 0`)).rows as Array<{ d: string; description: string }>;
@@ -139,20 +144,25 @@ export async function runHistoryImportTreasuryV11Tests(shouldRun: ShouldRun): Pr
         pay(5, '1405-13-40', '1000'),
         pay(6, '1405-02-03', ''),
         { rowNo: 7, sheet: SHEET, date: '1405-02-04', kind: 'payslip', bankAccountId: bank, amount: '1000', personnelId: worker } as TreasuryImportRow,
+        pay(11, '', '1000'),
+        pay(12, '1405-02-05', '1e3'),
       ];
       const posted = await post(admin, rows, true);
       if (posted.committed) problems.push('a file with refused rows was posted');
-      const expectError = (rowNo: number, label: string, part: string) => {
+      const refusedWith = (rowNo: number, label: string, part: string) => {
         const r = rowOf(posted, rowNo);
         if (r?.status !== 'error' || !String(r?.message).includes(part)) problems.push(`${label}: row ${rowNo} reads ${JSON.stringify(r)}, expected an error naming «${part}»`);
       };
       if (rowOf(posted, 2)?.status !== 'ok') problems.push(`the good row reads ${JSON.stringify(rowOf(posted, 2))}`);
-      expectError(3, 'an overdrawn account', 'مانده');
-      expectError(4, 'a row before the last movement', 'گردشی با تاریخ');
-      expectError(5, 'an unreadable date', 'معتبر نیست');
-      expectError(6, 'an empty amount', 'مبلغ');
-      expectError(7, 'a payslip beyond what it has left', 'فیش');
-      const moved = sameFootprint(before, await footprint()).filter(m => !m.startsWith('voucherSeq') && !m.startsWith('treasurySeq'));
+      refusedWith(3, 'an overdrawn account', 'مانده');
+      refusedWith(4, 'a row before the last movement', 'گردشی با تاریخ');
+      refusedWith(5, 'an unreadable date', 'معتبر نیست');
+      refusedWith(6, 'an empty amount', 'مبلغ');
+      refusedWith(7, 'a payslip beyond what it has left', 'فیش');
+      refusedWith(11, 'an empty date (it was posted on today)', 'خالی');
+      refusedWith(12, 'an amount in exponent form', 'مبلغ');
+      // a refused post takes no voucher or treasury number either: it is tried as a preview first
+      const moved = sameFootprint(before, await footprint());
       if (moved.length > 0) problems.push(`a refused post left a trace: ${moved.join(', ')}`);
       if (await balanceOf(bank) !== 5_000_000) problems.push(`a refused post moved the bank to ${await balanceOf(bank)}`);
 
@@ -172,8 +182,49 @@ export async function runHistoryImportTreasuryV11Tests(shouldRun: ShouldRun): Pr
       const importer = await sandboxClientWith(['accounting.view', 'accounting.treasury', 'accounting.history_import']);
       const allowed = await importer.post(URL, { commit: false, rows: [pay(2, '1405-02-01', '1000')] });
       if (allowed.status !== 200) problems.push(`a holder of the import permission got ${brief(allowed)}, expected 200`);
+      // a payslip row needs «پرداخت حقوق», as the payslip payment form does
+      const slipRow = { rowNo: 13, sheet: SHEET, date: '1405-02-04', kind: 'payslip', bankAccountId: bank, amount: '1000', personnelId: worker } as TreasuryImportRow;
+      const noPay = (await importer.post(URL, { commit: false, rows: [slipRow] })).body as TreasuryImportResult;
+      if (rowOf(noPay, 13)?.status !== 'error' || !String(rowOf(noPay, 13)?.message).includes('پرداخت حقوق')) problems.push(`a payslip row without piecework.pay reads ${JSON.stringify(noPay?.rows)}, expected refused`);
       if (problems.length > 0) throw new Error(problems.join(' | '));
       return 'refused rows post nothing, duplicates wait for acceptance, the import needs its permission';
+    }));
+  }
+
+  const racing = 'reg_history_import_treasury_races_v11';
+  if (shouldRun(racing, 'v11', 'history_import', 'treasury', 'concurrency')) {
+    await runCase(results, racing, 'v11 history import (tool 1): two posts of the same file at once record it once (the second waits and finds every row recorded); a row before the account\'s opening day or before a voucher on its ledger account (a cleared cheque, a manual voucher) is refused, since that money had not arrived yet', () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const misc = await miscContraAccountId();
+      const receipt = (bankAccountId: number, rowNo: number, date: string, amount: string): TreasuryImportRow => ({
+        rowNo, sheet: SHEET, date, kind: 'receipt', bankAccountId, amount, partyType: 'other', partyName: 'واریز', contraAccountId: misc,
+      });
+
+      const bank = await emptyBank();
+      const file = [receipt(bank, 2, '1405-02-01', '400000'), receipt(bank, 3, '1405-02-02', '200000')];
+      const [a, b] = await Promise.all([post(admin, file, true), post(admin, file, true)]);
+      if ([a, b].filter(r => r.committed).length !== 1) problems.push(`two posts at once read ${JSON.stringify([a.committed, b.committed])}, expected exactly one committed`);
+      if (await balanceOf(bank) !== 600_000) problems.push(`after two posts at once the bank holds ${await balanceOf(bank)}, expected 600,000 (the file once)`);
+
+      const opened = await emptyBank();
+      await orm.update(bankAccounts).set({ openingDate: '2026-06-01' }).where(eq(bankAccounts.id, opened));
+      const early = await post(admin, [receipt(opened, 2, '1405-02-01', '1000')], false);
+      if (rowOf(early, 2)?.status !== 'error' || !String(rowOf(early, 2)?.message).includes('گردشی با تاریخ')) problems.push(`a row before the account's opening day reads ${JSON.stringify(early.rows)}, expected refused`);
+
+      const cleared = await emptyBank();
+      const [ledger] = await orm.select({ accountId: bankAccounts.accountId }).from(bankAccounts).where(eq(bankAccounts.id, cleared));
+      await VoucherService.createJournalVoucher({
+        date: '2026-07-01', voucherType: 'general', status: 'draft', description: 'وصول چک آزمون', currency: 'IRR',
+        items: [
+          { accountId: Number(ledger?.accountId), debit: 5000, credit: 0, currency: 'IRR', description: 'وصول' },
+          { accountId: misc, debit: 0, credit: 5000, currency: 'IRR', description: 'وصول' },
+        ],
+      });
+      const beforeVoucher = await post(admin, [receipt(cleared, 2, '1405-02-01', '1000')], false);
+      if (rowOf(beforeVoucher, 2)?.status !== 'error' || !String(rowOf(beforeVoucher, 2)?.message).includes('گردشی با تاریخ')) problems.push(`a row before a voucher on the account reads ${JSON.stringify(beforeVoucher.rows)}, expected refused`);
+      if (problems.length > 0) throw new Error(problems.join(' | '));
+      return 'concurrent posts record the file once; money that arrived later never pays an earlier row';
     }));
   }
 
