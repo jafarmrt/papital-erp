@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { bankAccounts, documents, pieceworkPayrolls, treasuryTransactions } from '../../db/schema.js';
-import { ValidationError } from '../../errors/customErrors.js';
+import { bankAccounts, documents, journalVoucherItems, journalVouchers, pieceworkPayrolls, treasuryTransactions } from '../../db/schema.js';
+import { ForbiddenError, ValidationError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
 import { isPayablePayrollStatus } from '../../lib/payroll/payrollPayable.js';
@@ -10,8 +10,11 @@ import {
   treasuryImportDescription, treasuryImportDuplicateKey, treasuryImportOrder,
   type TreasuryImportResult, type TreasuryImportRow, type TreasuryImportRowOutcome,
 } from '../../lib/historyImport/treasuryHistoryImport.js';
+import { historyImportAmount } from '../../lib/historyImport/historyImportAmount.js';
 import { formatPersianNumber, isoToJalaliDate, toPersianDigits } from '../../utils.js';
+import { toStorageDate } from '../../utils/calendarDate.js';
 import { TreasuryTransactionService } from '../accounting/treasury/treasuryTransaction.service.js';
+import { lockTreasuryBanks } from '../accounting/treasury/treasuryPosting.js';
 import type { TreasuryAuditActor } from '../accounting/treasury/treasuryAudit.js';
 import { PayrollPaymentService } from '../accounting/payrollPayment.service.js';
 import { readDocumentPayableAndSettled } from '../documents/documentRemainingAmount.js';
@@ -32,6 +35,8 @@ export interface TreasuryImportOptions {
   userId?: number;
   username?: string;
   audit?: TreasuryAuditActor;
+  /** the user holds «پرداخت حقوق» (`piecework.pay`), which a payslip row needs, as the payslip payment form does */
+  canPayPayslips?: boolean;
 }
 
 interface PreparedRow {
@@ -43,13 +48,21 @@ interface PreparedRow {
 
 const faDate = (iso: string) => toPersianDigits(isoToJalaliDate(iso));
 
-const RECEIPT_DOCUMENT_TYPES = ['invoice', 'proforma'];
+// a past receipt settles invoices only (never a quote), and only those dated on or before it
+const RECEIPT_DOCUMENT_TYPES = ['invoice'];
 const PAYMENT_DOCUMENT_TYPES = ['purchase', 'receipt'];
 
-/** The last day each account moved, by its live rows (a voided row and its reversal are not movements). */
+/**
+ * The last day each account moved: its live treasury rows (a voided row and its reversal are not movements), the lines of
+ * live vouchers on its ledger account (a cleared cheque, a void's reversal, a manual voucher), and its opening day. Money
+ * that reached the account later must not pay an earlier row.
+ */
 async function lastMovementDays(tx: DbExecutor, bankIds: number[]): Promise<Map<number, string>> {
   const days = new Map<number, string>();
   if (bankIds.length === 0) return days;
+  const later = (id: number, day: string | null | undefined) => {
+    if (day && day > (days.get(id) ?? '')) days.set(id, day);
+  };
   const rows = await tx.select({
     bankAccountId: treasuryTransactions.bankAccountId,
     day: sql<string>`to_char(max(${treasuryTransactions.date}::date), 'YYYY-MM-DD')`,
@@ -61,7 +74,25 @@ async function lastMovementDays(tx: DbExecutor, bankIds: number[]): Promise<Map<
       isNull(treasuryTransactions.reversalOfId),
     ))
     .groupBy(treasuryTransactions.bankAccountId);
-  for (const r of rows) if (r.bankAccountId && r.day) days.set(Number(r.bankAccountId), r.day);
+  for (const r of rows) if (r.bankAccountId) later(Number(r.bankAccountId), r.day);
+
+  const banks = await tx.select({ id: bankAccounts.id, accountId: bankAccounts.accountId, openingDate: bankAccounts.openingDate })
+    .from(bankAccounts).where(inArray(bankAccounts.id, bankIds));
+  for (const b of banks) later(b.id, toStorageDate(b.openingDate) || null);
+  const banksOfAccount = new Map<number, number[]>();
+  for (const b of banks) if (b.accountId) banksOfAccount.set(b.accountId, [...(banksOfAccount.get(b.accountId) ?? []), b.id]);
+  if (banksOfAccount.size > 0) {
+    // voucher dates are text (Jalali or ISO), so each distinct one is read here
+    const lines = await tx.selectDistinct({ accountId: journalVoucherItems.accountId, date: journalVouchers.date })
+      .from(journalVoucherItems)
+      .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
+      .where(and(
+        inArray(journalVoucherItems.accountId, [...banksOfAccount.keys()]),
+        eq(journalVoucherItems.isDeleted, 0),
+        eq(journalVouchers.isDeleted, 0),
+      ));
+    for (const l of lines) for (const id of banksOfAccount.get(l.accountId) ?? []) later(id, toStorageDate(l.date) || null);
+  }
   return days;
 }
 
@@ -92,10 +123,10 @@ const bookedKeyOf = (p: PreparedRow) =>
   [p.isoDate, p.row.bankAccountId, p.row.kind === 'receipt' ? 'receipt' : 'payment', fin(p.amount).round(4).toString()].join('|');
 
 /**
- * The open documents of a customer (receipt) or supplier (payment), oldest first, with what each has left, read in the
+ * The open documents of a customer (receipt) or supplier (payment) dated on or before the row, oldest first, with what each has left, read in the
  * import's transaction, so a document an earlier row of the same import settled shows what it still has left.
  */
-async function oldestFirstParts(tx: DbExecutor, row: TreasuryImportRow, amount: string): Promise<SettlementAllocationInput[]> {
+async function oldestFirstParts(tx: DbExecutor, row: TreasuryImportRow, isoDate: string, amount: string): Promise<SettlementAllocationInput[]> {
   const isReceipt = row.kind === 'receipt';
   if (!row.partyId || row.partyType !== (isReceipt ? 'customer' : 'supplier')) return [];
   const candidates = await tx.select({ id: documents.id }).from(documents)
@@ -105,6 +136,7 @@ async function oldestFirstParts(tx: DbExecutor, row: TreasuryImportRow, amount: 
       inArray(documents.type, isReceipt ? RECEIPT_DOCUMENT_TYPES : PAYMENT_DOCUMENT_TYPES),
       inArray(documents.status, [...SETTLEABLE_DOCUMENT_STATUSES]),
       sql`coalesce(nullif(trim(${documents.currency}), ''), 'IRR') = 'IRR'`,
+      sql`${documents.date}::date <= ${isoDate}::date`,
     ))
     .orderBy(asc(documents.date), asc(documents.id));
   const parts: SettlementAllocationInput[] = [];
@@ -195,10 +227,14 @@ async function postRow(tx: DbExecutor, p: PreparedRow, options: TreasuryImportOp
     }, tx);
     return { created: [res.payment.transactionNumber, res.receipt.transactionNumber].filter(Boolean) as string[] };
   }
-  if (row.kind === 'payslip') return { created: await payPayslips(tx, p, options, description) };
+  if (row.kind === 'payslip') {
+    // the payslip payment form needs «پرداخت حقوق»; the import does not open a way around it
+    if (!options.canPayPayslips) throw new ForbiddenError('پرداخت فیش حقوقی مجوز «پرداخت حقوق» را می‌خواهد؛ این ردیف بدون آن ثبت نمی‌شود.', undefined, 'HISTORY_IMPORT_PAYSLIP_FORBIDDEN');
+    return { created: await payPayslips(tx, p, options, description) };
+  }
 
   const partyType = row.partyType ?? 'other';
-  const parts = row.settleOldest ? await oldestFirstParts(tx, row, p.amount) : [];
+  const parts = row.settleOldest ? await oldestFirstParts(tx, row, p.isoDate, p.amount) : [];
   const created = await TreasuryTransactionService.createTreasuryTransaction({
     type: row.kind,
     date: p.isoDate,
@@ -233,14 +269,12 @@ function prepare(rows: TreasuryImportRow[]): PreparedRow[] {
     let amount = '';
     try {
       isoDate = requireStorageDate(row.date, `تاریخ ردیف ${toPersianDigits(String(row.rowNo))}`);
-      const value = fin(String(row.amount ?? '').trim() || 'NaN');
-      if (!value.greaterThan(0)) throw new ValidationError('مبلغ ردیف باید بزرگ‌تر از صفر باشد.');
-      amount = value.round(4).toString();
+      if (!isoDate) throw new ValidationError('تاریخ ردیف خالی است؛ هر ردیف با تاریخ خودش ثبت می‌شود.');
+      amount = historyImportAmount(row.amount) ?? '';
+      if (!amount) throw new ValidationError('مبلغ ردیف خالی یا نادرست است؛ یک مبلغ بزرگ‌تر از صفر بنویسید.');
     } catch (err) {
       outcome.status = 'error';
-      outcome.message = isoDate
-        ? 'مبلغ ردیف خالی یا نادرست است؛ یک مبلغ بزرگ‌تر از صفر بنویسید.'
-        : (err instanceof ValidationError ? err.message : 'تاریخ ردیف خوانده نشد.');
+      outcome.message = err instanceof ValidationError ? err.message : 'تاریخ ردیف خوانده نشد.';
     }
     return { row, isoDate, amount, outcome };
   });
@@ -253,6 +287,8 @@ export async function importTreasuryHistory(rows: TreasuryImportRow[], options: 
   await runImportRows({ commit: options.commit }, async (tx, attempt) => {
     // a row dated before the last movement of one of its accounts would be checked against a later balance
     const bankIds = [...new Set(ordered.flatMap(p => [p.row.bankAccountId, p.row.toBankAccountId ?? 0]).filter(id => id > 0))];
+    // the accounts are locked before they are read, so no hand entry or other import moves them between the check and the post
+    await lockTreasuryBanks(tx, bankIds);
     const lastDays = await lastMovementDays(tx, bankIds);
     const booked = await bookedKeys(tx, ordered);
     const inFile = new Map<string, number>();

@@ -62,7 +62,7 @@ export async function fundedBank(): Promise<number> {
   const [ledger] = await orm.insert(accounts).values({
     code: `1003${tag('')}`, name: 'بانک آزمون حقوق', level: 'subsidiary', parentId: parent?.id ?? null, accountType: 'asset', nature: 'debit', isSystem: 0, isActive: 1, isDeleted: 0,
   }).returning({ id: accounts.id });
-  const bank = await BankAccountService.createBankAccount({ title: `بانک آزمون حقوق ${tag('B')}`, type: 'bank', accountId: ledger.id, initialBalance: 0, currency: 'IRR' });
+  const bank = await BankAccountService.createBankAccount({ title: `بانک آزمون حقوق ${tag('B')}`, type: 'bank', accountId: ledger.id, initialBalance: 0, currency: 'IRR', openingDate: '2026-03-21' });
   await TreasuryTransactionService.createTreasuryTransaction({
     type: 'receipt', method: 'bank_transfer', amount: 5000000, bankAccountId: bank.id, partyType: 'other', contraAccountId: await miscContraAccountId(), partyName: 'واریز آزمون حقوق', date: '2026-04-01', username: 'inv',
   });
