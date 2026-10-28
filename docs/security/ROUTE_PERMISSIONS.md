@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 503
+تعداد مسیرها: 504
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -72,6 +72,7 @@
 | GET | `/api/accounting/treasury/:id/petty-cash-lines` | accounting.treasury \| accounting.reports \| accounting.view |
 | POST | `/api/accounting/treasury/:id/void` | accounting.treasury |
 | GET | `/api/accounting/treasury/contra-accounts` | accounting.treasury \| accounting.cheques |
+| POST | `/api/accounting/treasury/history-import` | accounting.history_import |
 | POST | `/api/accounting/treasury/petty-cash/:id/expenses` | accounting.treasury |
 | GET | `/api/accounting/treasury/petty-cash/expense-accounts` | accounting.treasury |
 | POST | `/api/accounting/treasury/preview-voucher` | accounting.treasury |

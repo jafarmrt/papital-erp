@@ -18,7 +18,7 @@ import { readDocumentPayableAndSettled } from '../documents/documentRemainingAmo
 import { runImportRows } from './importRunner.js';
 
 /**
- * v11 history import, tool 1: the treasury rows of 1405 from Excel (decision of the owner, 7 Aban 1405: all of 1405 is
+ * v11 history import, tool 1: the treasury rows of 1405 from Excel (decision of the owner, 6 Aban 1405: all of 1405 is
  * entered again from 1 Farvardin, each document on its own day). Each row goes through the service a user's form calls
  * (the treasury receipt or payment, the transfer between accounts, the payment of a payslip), so the rows, vouchers
  * (draft), audit rows and events are the ones a hand entry makes. Rows are posted in date order; a row dated before the
