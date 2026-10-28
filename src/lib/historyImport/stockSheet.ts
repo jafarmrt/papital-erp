@@ -122,8 +122,8 @@ export function parseStockSheet(sheet: string, rows: readonly (readonly unknown[
   return parsed;
 }
 
-/** The key an item code is compared and mapped by: letter case and spaces ignored. */
-export const codeKey = (code: string) => code.replace(/\s/g, '').toUpperCase();
+/** The key an item code is compared and mapped by: letter case and outer spaces ignored, as the database's unique code is. */
+export const codeKey = (code: string) => code.trim().toUpperCase();
 
 export type ItemTarget = { kind: 'code'; code: string } | { kind: 'skip' };
 export type WarehouseTarget = { kind: 'warehouse'; code: string } | { kind: 'skip' };
