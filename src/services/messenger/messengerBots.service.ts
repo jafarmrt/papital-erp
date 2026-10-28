@@ -93,8 +93,8 @@ export async function saveBotToken(params: { messenger: Messenger; token: string
       entity: MESSENGER_BOT_AUDIT_ENTITY,
       entityId: messenger,
       description: token
-        ? `ربات ${MESSENGER_LABELS[messenger]} کارکنان تنظیم شد (@${botUsername})`
-        : `ربات ${MESSENGER_LABELS[messenger]} کارکنان برداشته شد`,
+        ? `ربات ${MESSENGER_LABELS[messenger]} همکاران تنظیم شد (@${botUsername})`
+        : `ربات ${MESSENGER_LABELS[messenger]} همکاران برداشته شد`,
       details: { before: { botUsername: beforeUsername }, after: { botUsername }, closedLinks },
     });
   });

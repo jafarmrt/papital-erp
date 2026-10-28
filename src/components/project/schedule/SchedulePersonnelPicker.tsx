@@ -73,7 +73,7 @@ export function SchedulePersonnelPicker({ personnelList, onPick, onClose }: Sche
           {filteredPersonnel.length > 0 ? (
             filteredPersonnel.map((person) => {
               const fullName = personNameOf(person) || 'پرسنل';
-              const jobTitle = person.jobTitle || person.job_title || person.role || 'کارگر کارگاه';
+              const jobTitle = person.jobTitle || person.job_title || person.role || 'همکار کارگاه';
               const code = person.personnelCode || person.personnel_code || person.id;
 
               return (

@@ -47,7 +47,7 @@ export function WorkshopReviewList({ items, emptyText = 'گزارشی در ان�
               گزارش: <b>{formatPersianNumber(item.report.quantity, 4)}</b> از {formatPersianNumber(item.plannedQuantity, 4)} {item.unit}
               <span className="text-xs text-gray-500"> · {formatPersianDate(item.report.createdAt)}</span>
             </p>
-            {item.report.notes && <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">توضیح کارکن: {item.report.notes}</p>}
+            {item.report.notes && <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">توضیح همکار: {item.report.notes}</p>}
             {(item.manualLogs ?? []).length > 0 && (
               <p className="mt-2 text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
                 برای همین کار {formatPersianNumber((item.manualLogs ?? []).length)} کارکرد دستی ثبت شده است؛ پیش از تأیید بررسی کنید.
