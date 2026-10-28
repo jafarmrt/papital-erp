@@ -7,6 +7,7 @@ import { QUERY_KEYS } from '../../lib/queryKeys';
 import { normalizeLeadStage } from '../useCRMFilters';
 import { PERSONNEL_ACTIVE_PICK_URL, PERSONNEL_PICK_CAP_TOAST_ID, PERSONNEL_PICK_CAP_TOAST_MS, takePersonnelPick } from '../../lib/personnel/personnelList';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { cappedPickListUrl, takePickList } from '../../lib/permissions/pickListCap';
 import { crmAttachmentsPath, type CrmAttachmentOwner, type CrmAttachmentView } from '../../lib/crm/crmAttachments';
 import { READ_ON_EVERY_OPENING } from './readOnEveryOpening';
 
@@ -117,8 +118,27 @@ export function useCrmAttachmentsQuery(owner: CrmAttachmentOwner, ownerId: numbe
 export function useCrmStockItemsQuery(enabled: boolean) {
   return useQuery<Item[]>({
     queryKey: [...QUERY_KEYS.items.all, 'options', 'crm-stock'] as const,
-    queryFn: async ({ signal }) => rowsOf<Item>(await fetchJson(PICK_LIST_URLS.items, { signal })),
+    // v11 phase 6.1ch (C13): at most the cap; a search over a cut list also asks the server (`useCrmStockSearchQuery`)
+    queryFn: async ({ signal }) => takePickList(rowsOf<Item>(await fetchJson(cappedPickListUrl(PICK_LIST_URLS.items), { signal }))),
     enabled,
     ...READ_ON_EVERY_OPENING,
+  });
+}
+
+/** How many of the server's matches the stock tab lists, as many as it shows */
+export const CRM_STOCK_SEARCH_ROWS = 30;
+
+/**
+ * v11 phase 6.1ch (C13): the server's matches (name or code) for the stock tab's search when its item list was cut at the
+ * cap, so an item beyond the cap is found too; under the items key, so a stock change refreshes them
+ */
+export function useCrmStockSearchQuery(search: string, enabled: boolean) {
+  return useQuery<Item[]>({
+    queryKey: [...QUERY_KEYS.items.all, 'options', 'crm-stock-search', search] as const,
+    queryFn: async ({ signal }) => rowsOf<Item>(await fetchJson(
+      `${PICK_LIST_URLS.items}?${new URLSearchParams({ search, limit: String(CRM_STOCK_SEARCH_ROWS) }).toString()}`, { signal },
+    )),
+    enabled: enabled && search !== '',
+    staleTime: 30 * 1000,
   });
 }

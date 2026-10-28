@@ -6,6 +6,8 @@ import { Customer, FinancialAttachment } from '../../types';
 import { formatPersianCode } from '../../utils';
 import { FinancialAttachmentUploader } from '../accounting/FinancialAttachmentUploader';
 import { PROJECT_PRIORITIES, PROJECT_PRIORITY_LABELS } from '../../lib/projects/projectStatus';
+import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { pickListServerSearchUrl } from '../../lib/permissions/pickListCap';
 
 interface ProjectGeneralFormProps {
   projectCode: string;
@@ -24,9 +26,14 @@ interface ProjectGeneralFormProps {
   setPriority: (val: 'low' | 'medium' | 'high' | 'urgent') => void;
   description: string;
   setDescription: (val: string) => void;
-  onCustomerSelect: (id: number | null) => void;
+  /** `picked` is the party's row when it came from the server's matches (v11 phase 6.1ch, C13) */
+  onCustomerSelect: (id: number | null, picked?: Customer) => void;
   attachments?: FinancialAttachment[];
   setAttachments?: (val: FinancialAttachment[]) => void;
+}
+
+function projectCustomerOption(c: Customer): { value: string; label: string } {
+  return { value: String(c.id), label: `${c.name}${c.code ? ` (کد: ${formatPersianCode(c.code)})` : ''}${c.phone ? ` - ${c.phone}` : ''}` };
 }
 
 export const ProjectGeneralForm: React.FC<ProjectGeneralFormProps> = ({
@@ -97,12 +104,13 @@ export const ProjectGeneralForm: React.FC<ProjectGeneralFormProps> = ({
           </label>
           <SearchableSelect
             id={`${fieldId}-selected-customer-id`}
-            options={activeCustomersList.map((c) => ({
-              value: String(c.id),
-              label: `${c.name}${c.code ? ` (کد: ${formatPersianCode(c.code)})` : ''}${c.phone ? ` - ${c.phone}` : ''}`,
-            }))}
+            options={activeCustomersList.map(projectCustomerOption)}
+            // v11 phase 6.1ch (C13): a party list cut at the cap also searches on the server; the chosen row comes as `raw`
+            serverSearchUrl={pickListServerSearchUrl(activeCustomersList, PICK_LIST_URLS.customers)}
+            mapResultToOption={projectCustomerOption}
+            valueLabel={selectedCustomer?.name}
             value={selectedCustomerId ? String(selectedCustomerId) : ''}
-            onChange={(val) => onCustomerSelect(val ? Number(val) : null)}
+            onChange={(val, raw?: Customer) => onCustomerSelect(val ? Number(val) : null, raw)}
             placeholder="جست‌وجو و انتخاب مشتری..."
             className="w-full"
           />

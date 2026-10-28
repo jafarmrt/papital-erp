@@ -3,7 +3,8 @@ import { Customer, Personnel } from '../../../types';
 import { SearchableSelect } from '../../SearchableSelect';
 import { personnelById, personnelDisplayName } from '../../../lib/documents/stockDocumentParties';
 import type { StockDocumentForm } from '../../../hooks/documents/useStockDocumentForm';
-import { partyFitsDocument } from '../../../lib/documents/documentPartyKind';
+import { documentPartyPickListUrl, partyFitsDocument } from '../../../lib/documents/documentPartyKind';
+import { pickListServerSearchUrl } from '../../../lib/permissions/pickListCap';
 import { stockInLabels } from '../../../lib/documents/stockInLabels';
 
 interface StockCounterpartyFieldProps {
@@ -16,6 +17,11 @@ interface StockCounterpartyFieldProps {
  * TD-080 (بخش ۳): طرف حساب سند انبار — تامین‌کننده (رسید، با اطلاعات بانکی) یا پرسنل گیرنده (حواله) —
  * استخراج‌شده از DocumentsPage.
  */
+/** A party's option (its name is the value), one label for the list and the server's matches */
+function stockPartyOption(s: Customer): { value: string; label: string } {
+  return { value: s.name, label: `${s.name}${s.supplierCategory ? ` (${s.supplierCategory})` : ''}${s.phone ? ` - ${s.phone}` : ''}` };
+}
+
 export function StockCounterpartyField({ form, personnelList, suppliersList }: StockCounterpartyFieldProps) {
   const { actionType, docType, buyerName, setBuyerName, selectedSupplierObj, setSelectedSupplierObj, selectedPersonnelObj, setReceiverPersonnelId } = form;
   // v10.0.44 (TD-939): رسید و خرید فقط تأمین‌کننده، برگشت از فروش فقط مشتری (یا «هر دو»)؛ همان قاعده سرور
@@ -78,16 +84,18 @@ export function StockCounterpartyField({ form, personnelList, suppliersList }: S
         <div className="space-y-1.5">
           <SearchableSelect
             value={buyerName}
-            onChange={(val) => {
+            onChange={(val, raw?: Customer) => {
               setBuyerName(val);
-              const found = partyOptions.find(s => s.name.trim().toLowerCase() === val.trim().toLowerCase());
+              const sameName = (s: Customer) => s.name.trim().toLowerCase() === val.trim().toLowerCase();
+              // v11 phase 6.1ch (C13): a party chosen from the server's matches (the cut list lacks it) comes as `raw`
+              const found = partyOptions.find(sameName) ?? (raw && sameName(raw) && partyFitsDocument(docType, raw.partyType) ? raw : undefined);
               setSelectedSupplierObj(found || null);
             }}
             placeholder="انتخاب طرف‌حساب..."
-            options={partyOptions.map((s) => ({
-              value: s.name,
-              label: `${s.name}${s.supplierCategory ? ` (${s.supplierCategory})` : ''}${s.phone ? ` - ${s.phone}` : ''}`
-            }))}
+            options={partyOptions.map(stockPartyOption)}
+            serverSearchUrl={pickListServerSearchUrl(Array.isArray(suppliersList) ? suppliersList : [], documentPartyPickListUrl(docType))}
+            mapResultToOption={stockPartyOption}
+            valueLabel={buyerName || undefined}
           />
           {selectedSupplierObj?.bankInfo && (selectedSupplierObj.bankInfo.cardNumber || selectedSupplierObj.bankInfo.shaba) && (
             <div className="text-[11px] text-slate-600 bg-slate-100/80 px-2.5 py-1.5 rounded-lg border border-slate-200 flex flex-wrap items-center gap-x-3 gap-y-1">

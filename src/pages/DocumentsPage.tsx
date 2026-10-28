@@ -25,7 +25,8 @@ import { stockInLabels } from '../lib/documents/stockInLabels';
 export default function DocumentsPage({ user: currentUser }: { user: User }) {
   const refData = useStockDocumentReferenceData();
   const form = useStockDocumentForm(currentUser, refData);
-  const actions = createStockDocumentItemActions(form, refData.itemsList);
+  // v11 phase 6.1ch (C13): the item list with the selected project's reserved items it lacks (read by id)
+  const actions = createStockDocumentItemActions(form, form.itemsWithReserved);
   const { handleSubmit } = useStockDocumentSubmit(form, refData, currentUser);
   const { warehouses, personnelList, projectsList, suppliersList, categories } = refData;
   const { actionType, docItems, docType, setActionType, setDocType } = form;

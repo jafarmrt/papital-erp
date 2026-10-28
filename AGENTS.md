@@ -44,7 +44,7 @@ This is the short core of the project's rules: every agent and developer follows
 8. **Foreign currency:** a non-rial document or voucher row needs a positive exchange rate (never rate 1); rial cost rows in a foreign voucher carry their own row rate; reports convert a foreign row only at its own rate and never add a raw foreign amount to rials. Guard: `foreignCostScenarios`, `currencyReportScenarios`, `manualVoucherRowCurrency.test.tsx`.
 9. **A party's card and statement find rows by detailed type and id**, never by a name that «contains» the text. Guard: `partyTemporaryRowsTd915.test.tsx`.
 10. **An account used by any voucher row is never deleted**, and manual rows post only to posting accounts. Guard: `chartOfAccountsTests`.
-11. **Messenger messages never carry amounts**; payslip and treasury event payloads carry no name or amount. Guard: `treasuryEventPrivacyTests`.
+11. **Messenger messages never carry amounts or another person's name**: every notification category sends its fixed sentence and a link, never its own title or text (the workflow categories too since v11 phase 6.4, C11); payslip and treasury event payloads carry no name or amount. Guard: `treasuryEventPrivacyTests`, `messengerDelivery.test.ts`.
 
 ## 4. Inventory (`inventory.md`, `items-pricing.md`, `production-projects.md`, `procurement.md`, `documents.md`)
 

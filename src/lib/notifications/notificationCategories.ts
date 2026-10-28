@@ -56,14 +56,17 @@ export const isBellOnlyCategory = (category: NotificationCategory): boolean => B
 export const MESSENGER_PREFERENCE_CATEGORIES: readonly NotificationCategory[] = NOTIFICATION_CATEGORIES.filter(c => !isBellOnlyCategory(c));
 
 /**
- * Allowlist (security review of part 2): only a category whose title and text the code builds from fixed words, step and
- * workflow titles and document numbers, never an amount, a person's name or text a user typed, sends its own text. Every
- * other category, a future one included, sends its fixed sentence below (an automatic rule's template may carry any event
- * field, amounts included; a follow-up, mention or lead title is typed by a user).
+ * Every category sends a fixed sentence, never its own title and text (security review of part 2): an automatic rule's
+ * template may carry any event field, amounts included, and a follow-up, mention or lead title is typed by a user. v11
+ * phase 6.4 (C11): the workflow categories too, whose text carries the step and workflow titles an admin types in the
+ * designer («تایید فاکتور احمدی ۵۰ میلیون» would have reached Telegram or Bale with a name and an amount). They keep
+ * their own link, which opens the record in the approval inbox and carries only its number.
  */
-const FULL_TEXT_CATEGORIES: ReadonlySet<NotificationCategory> = new Set(['workflow_sla', 'workflow_task']);
+const OWN_LINK_CATEGORIES: ReadonlySet<NotificationCategory> = new Set(['workflow_sla', 'workflow_task']);
 
 const GENERIC_SENTENCES: Readonly<Partial<Record<NotificationCategory, string>>> = {
+  workflow_task: 'یک کار تازه در کارتابل تأیید منتظر شماست.',
+  workflow_sla: 'مهلت یکی از کارهای کارتابل تأیید شما گذشته است.',
   mention: 'در یک گزارش کار یا اقدام ارتباط با مشتری به شما اشاره شد.',
   daily_log_review: 'مدیر برای گزارش کار شما بازخورد ثبت کرد.',
   crm_followup: 'یک پیگیری ارتباط با مشتری برای شما ثبت شد یا سررسید آن رسید.',
@@ -75,30 +78,23 @@ const GENERIC_SENTENCES: Readonly<Partial<Record<NotificationCategory, string>>>
 const GENERIC_DEFAULT_SENTENCE = 'اعلان تازه‌ای در برنامه پاپیتال برای شما آمده است.';
 
 /**
- * The page a messenger link opens: a full-text category keeps the notification's own path; every other one opens a fixed
- * page of its section (never a rule template's link, which may carry amounts or ids), else the app's first page.
+ * The page a messenger link opens: a workflow category keeps the notification's own path (the inbox record); every other
+ * one opens a fixed page of its section (never a rule template's link, which may carry amounts or ids), else the app's
+ * first page.
  */
 const GENERIC_LINK_SECTIONS: readonly string[] = ['/daily-logs', '/crm', '/approval-inbox', '/workshop', '/my-payslips', '/settings'];
 
 export function messengerLinkPath(category: NotificationCategory, path: string | null | undefined): string {
   const target = String(path ?? '').trim();
-  if (FULL_TEXT_CATEGORIES.has(category)) return target;
+  if (OWN_LINK_CATEGORIES.has(category)) return target;
   if (category === 'event_rule') return '/';
   const section = target.split(/[?#]/)[0];
   return GENERIC_LINK_SECTIONS.includes(section) ? section : '/';
 }
 
-/** The longest notification body put in a message; the rest is in the app */
-export const MESSENGER_BODY_MAX_CHARS = 500;
-
 const PERSIAN_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
 function persianDigits(text: string): string {
   return text.replace(/[0-9]/g, d => PERSIAN_DIGITS[Number(d)]);
-}
-
-function clipped(text: string): string {
-  const flat = text.trim();
-  return flat.length > MESSENGER_BODY_MAX_CHARS ? `${flat.slice(0, MESSENGER_BODY_MAX_CHARS - 1)}…` : flat;
 }
 
 export interface MessengerTextInput {
@@ -112,13 +108,7 @@ export interface MessengerTextInput {
 export function messengerNotificationText(input: MessengerTextInput): string {
   const name = input.recipientName.trim();
   const greeting = name ? `${name}،` : 'سلام،';
-  if (!FULL_TEXT_CATEGORIES.has(input.category)) {
-    return persianDigits(`${greeting}\n${GENERIC_SENTENCES[input.category] ?? GENERIC_DEFAULT_SENTENCE}`);
-  }
-  const lines = [greeting, clipped(input.title)];
-  const body = clipped(input.message);
-  if (body && body !== lines[1]) lines.push(body);
-  return persianDigits(lines.join('\n'));
+  return persianDigits(`${greeting}\n${GENERIC_SENTENCES[input.category] ?? GENERIC_DEFAULT_SENTENCE}`);
 }
 
 /** The direct link of a notification: the app's address (APP_URL) and the notification's own path; none without either */

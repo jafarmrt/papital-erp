@@ -14,6 +14,14 @@ import { usePersonnelPickName } from '../../hooks/usePersonnelPickName';
 import { personnelSellerOption, personnelServerSearchUrl } from '../../lib/personnel/personnelList';
 import { RialEquivalent } from '../common/RialEquivalent';
 import { isRialCurrency } from '../../lib/rialDisplay';
+import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { pickListServerSearchUrl } from '../../lib/permissions/pickListCap';
+
+interface LeadCustomer { id: number; name: string; contactName?: string | null; phone?: string | null }
+
+function leadCustomerOption(c: LeadCustomer): { value: string; label: string } {
+  return { value: String(c.id), label: `${c.name}${c.contactName ? ` (${c.contactName})` : ''} - ${c.phone || 'بدون تلفن'}` };
+}
 
 interface CRMLeadModalProps {
   isLeadModalOpen: boolean;
@@ -96,13 +104,14 @@ export function CRMLeadModal({
               <label htmlFor={`${fieldId}-customer-id`} className="block text-xs font-bold text-slate-700 mb-1">انتخاب از لیست مشتریان / طرفین حساب (اختیاری)</label>
               <SearchableSelect
                 id={`${fieldId}-customer-id`}
-                options={customersList.map((c) => ({
-                  value: String(c.id),
-                  label: `${c.name}${c.contactName ? ` (${c.contactName})` : ''} - ${c.phone || 'بدون تلفن'}`
-                }))}
+                options={customersList.map(leadCustomerOption)}
+                // v11 phase 6.1ch (C13): a party list cut at the cap also searches on the server; the chosen row comes as `raw`
+                serverSearchUrl={pickListServerSearchUrl(customersList, PICK_LIST_URLS.customers)}
+                mapResultToOption={leadCustomerOption}
+                valueLabel={leadForm.company || leadForm.customerName || undefined}
                 value={leadForm.customerId}
-                onChange={(val) => {
-                  const sel = customersList.find((c) => String(c.id) === val);
+                onChange={(val, raw?: LeadCustomer) => {
+                  const sel = customersList.find((c) => String(c.id) === val) ?? (raw && String(raw.id) === val ? raw : undefined);
                   if (sel) {
                     setLeadForm({
                       ...leadForm,

@@ -6,7 +6,7 @@ import { authorizePermission, can } from '../middleware/authorize.js';
 import { OPENING_STOCK_PERMISSION } from '../lib/permissions/stockActionPermissions.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
+import { validate, paramsIdSchema, numericIdString, pickListIdsString } from '../middleware/validate.js';
 import { consumeNextItemCodeSchema, itemCodeChangeSchema, itemCreateUpdateSchema, itemUpdateSchema } from './items.schemas.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { MAX_PAGE_LIMIT, parsePageNumber, parsePickListLimit } from '../lib/pagination.js';
@@ -45,14 +45,17 @@ const itemPickListValidation = z.object({
     excludeDocumentId: numericIdString.optional(),
     // 10.3 (review of ARCH finding 3 part 8): one item's row, the stock a window that picked it checks against
     id: numericIdString.optional(),
+    // v11 phase 6.1ch (C13): the rows of chosen or stored items a form's cut list lacks
+    ids: pickListIdsString.optional(),
   }).optional(),
 });
 
 // v9.0.138 (TD-888، تصمیم ت۱۰ الف): فهرست انتخاب کالا برای فرم‌های بخش‌های دیگر؛ فهرست کامل پایین فقط با مجوز بخش کالا
 router.get('/items/options', authorizePermission(...READ_PERMISSIONS.itemOptions), validate(itemPickListValidation), asyncHandler(async (req, res) => {
-  const query = req.query as { type?: string; search?: string; limit?: string; reserved?: string; excludeDocumentId?: string; id?: string };
+  const query = req.query as { type?: string; search?: string; limit?: string; reserved?: string; excludeDocumentId?: string; id?: string; ids?: number[] };
   const picks = await listItemPicks(req.user, {
     type: query.type, search: query.search, limit: parsePickListLimit(query.limit), id: query.id ? Number(query.id) : undefined,
+    ids: query.ids,
   });
   // v10.0.258 (TD-1135): the sales invoice picker asks `reserved=1` for each item's reserved quantity; a reservation read
   // error refuses this request only (TD-821), the other forms never read reservations

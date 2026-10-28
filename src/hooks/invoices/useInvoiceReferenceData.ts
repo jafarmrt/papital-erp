@@ -9,6 +9,7 @@ import { listFromResponse, type InvoiceDocumentDetails } from '../../lib/invoice
 import type { InvoiceListDocument } from '../../lib/invoices/invoiceListDocuments';
 import { openProformasPageOf, openProformasUrl, type OpenProformasPage } from '../../lib/invoices/openProformas';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { cappedPickListUrl, takePickList } from '../../lib/permissions/pickListCap';
 
 /**
  * صفحه صدور فاکتور: خواندنی‌های صفحه با React Query (FE-005) به‌جای fetchJson/useState دستی.
@@ -60,7 +61,8 @@ export function useInvoiceReferenceData(docType: string) {
   const warehousesQuery = useWarehousesQuery();
   const customersQuery = useQuery<Customer[]>({
     queryKey: QUERY_KEYS.customers.options({ scope: 'invoice-buyers' }),
-    queryFn: async ({ signal }) => listFromResponse<Customer>(await fetchJson<unknown>(PICK_LIST_URLS.customers, { signal })),
+    // v11 phase 6.1ch (C13): at most the cap; the buyer's name and id are matched on the server beyond it (useInvoiceBuyer)
+    queryFn: async ({ signal }) => takePickList(listFromResponse<Customer>(await fetchJson<unknown>(cappedPickListUrl(PICK_LIST_URLS.customers), { signal }))),
     staleTime: FIVE_MINUTES,
   });
   const [proformasPage, setProformasPage] = useState(1);

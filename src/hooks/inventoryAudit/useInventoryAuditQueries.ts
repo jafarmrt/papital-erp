@@ -7,6 +7,7 @@ import { listFromResponse } from '../../lib/invoices/invoiceForm';
 import { normalizeAuditItems, type AuditItemRow } from '../../lib/inventoryAudit/auditSheet';
 import type { InventoryIntegrityReport } from '../../types';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { cappedPickListUrl, takePickList } from '../../lib/permissions/pickListCap';
 import { DOCUMENT_LIST_PAGE_SIZE, documentListPage, typedDocumentListUrl } from '../../lib/documents/documentListPage';
 
 /**
@@ -91,7 +92,8 @@ export function useInventoryAuditQueries(activeTab: InventoryAuditTab, selectedL
     queryKey: REBUILD_ITEMS_KEY,
     queryFn: async ({ signal }) => {
       try {
-        return listFromResponse<Record<string, unknown>>(await fetchJson<unknown>(PICK_LIST_URLS.items, { signal }));
+        // v11 phase 6.1ch (C13): at most the cap; the rebuild window's picker over a cut list also searches on the server
+        return takePickList(listFromResponse<Record<string, unknown>>(await fetchJson<unknown>(cappedPickListUrl(PICK_LIST_URLS.items), { signal })));
       } catch (err: unknown) {
         logUnlessAborted(signal, 'Error loading items:', err);
         throw err;

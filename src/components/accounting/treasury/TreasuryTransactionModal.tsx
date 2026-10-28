@@ -16,6 +16,9 @@ import { PartyPurposeFields } from './PartyPurposeFields';
 import { readTreasuryVoucherPreview, type TreasuryVoucherPreview } from '../../../lib/treasury/treasuryVoucherPreview';
 import { personnelPartyName, personnelPartyOption } from '../../../lib/treasury/personnelPartyName';
 import { personnelServerSearchUrl } from '../../../lib/personnel/personnelList';
+import { PICK_LIST_URLS } from '../../../lib/permissions/pickLists';
+import { pickListServerSearchUrl } from '../../../lib/permissions/pickListCap';
+import { customerPartyOption, supplierPartyOption } from '../../../lib/treasury/partyPickOption';
 import type { BankAccount, Customer, Personnel, FinancialAttachment } from '../../../types';
 import { DecimalInput } from '../../common/DecimalInput';
 import { DialogLayer } from '../../common/DialogLayer';
@@ -374,13 +377,15 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                 </label>
                 {formData.partyType === 'customer' ? (
                   <SearchableSelect
-                    options={customerList.map(c => ({
-                      value: String(c.id),
-                      label: `${c.name}${c.city ? ` (${c.city})` : ''}${c.phone ? ` - ${c.phone}` : ''}`,
-                    }))}
+                    options={customerList.map(customerPartyOption)}
+                    // v11 phase 6.1ch (C13): a party list cut at the cap also searches on the server; the chosen row comes as `raw`
+                    serverSearchUrl={pickListServerSearchUrl(safeCustomers, `${PICK_LIST_URLS.customers}?partyType=customer`)}
+                    mapResultToOption={customerPartyOption}
+                    valueLabel={formData.partyName || undefined}
                     value={formData.partyId ? String(formData.partyId) : ''}
-                    onChange={(val) => {
-                      const c = customerList.find(x => String(x.id) === val) || safeCustomers.find(x => String(x.id) === val);
+                    onChange={(val, raw?: Customer) => {
+                      const c = customerList.find(x => String(x.id) === val) || safeCustomers.find(x => String(x.id) === val)
+                        || (raw && String(raw.id) === val ? raw : undefined);
                       setFormData({ ...formData, partyId: c ? c.id : null, partyName: c ? c.name : '' });
                     }}
                     placeholder="جست‌وجو و انتخاب مشتری..."
@@ -389,13 +394,14 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                   />
                 ) : formData.partyType === 'supplier' ? (
                   <SearchableSelect
-                    options={actualSupplierList.map(s => ({
-                      value: String(s.id),
-                      label: `${s.name}${s.supplierCategory ? ` [${s.supplierCategory}]` : ''}${s.city ? ` (${s.city})` : ''}${s.phone ? ` - ${s.phone}` : ''}`,
-                    }))}
+                    options={actualSupplierList.map(supplierPartyOption)}
+                    serverSearchUrl={pickListServerSearchUrl(safeCustomers, `${PICK_LIST_URLS.customers}?partyType=supplier`)}
+                    mapResultToOption={supplierPartyOption}
+                    valueLabel={formData.partyName || undefined}
                     value={formData.partyId ? String(formData.partyId) : ''}
-                    onChange={(val) => {
-                      const s = actualSupplierList.find(x => String(x.id) === val) || safeCustomers.find(x => String(x.id) === val);
+                    onChange={(val, raw?: Customer) => {
+                      const s = actualSupplierList.find(x => String(x.id) === val) || safeCustomers.find(x => String(x.id) === val)
+                        || (raw && String(raw.id) === val ? raw : undefined);
                       setFormData({ ...formData, partyId: s ? s.id : null, partyName: s ? s.name : '' });
                     }}
                     placeholder="جست‌وجو و انتخاب تامین‌کننده..."

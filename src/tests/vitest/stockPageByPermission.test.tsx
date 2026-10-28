@@ -23,7 +23,7 @@ function apiResponse(url: string): unknown {
   if (url === '/warehouses') return [{ id: 1, name: 'انبار مرکزی', code: 'WH1', is_active: 1 }];
   if (url === '/personnel') return [];
   if (url === '/projects/options') return { success: true, data: [{ id: 7, projectCode: 'PRJ-7', project_code: 'PRJ-7', title: 'گردنبند سفارشی', status: 'in_progress' }] };
-  if (url.startsWith('/items/options')) return { data: url === '/items/options' ? [reservedItem] : [] };
+  if (url.startsWith('/items/options')) return { data: url === '/items/options?limit=1001' ? [reservedItem] : [] };
   if (url === '/inventory/reserved-items') {
     return {
       allReservationEntries: [

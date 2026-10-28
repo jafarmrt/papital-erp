@@ -5,14 +5,24 @@ import { Item } from '../../types';
 import { formatPersianNumber, toPersianDigits, formatPersianCode } from '../../utils';
 import { ProductRow } from './types';
 import { DecimalInput } from '../common/DecimalInput';
+import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { pickListServerSearchUrl } from '../../lib/permissions/pickListCap';
 
 interface ProjectProductsFormProps {
   productsList: ProductRow[];
   activeItemsList: Item[];
   getOptionalStageNames: () => string[];
   onAddProductRow: () => void;
-  onUpdateProductRow: (index: number, field: string, value: any) => void;
+  /** `picked` is the item's row when it came from the server's matches (v11 phase 6.1ch, C13) */
+  onUpdateProductRow: (index: number, field: string, value: any, picked?: Item) => void;
   onRemoveProductRow: (index: number) => void;
+}
+
+function projectItemOption(item: Item): { value: string; label: string } {
+  return {
+    value: String(item.id),
+    label: `${item.name} (کد: ${formatPersianCode(item.code)} | موجودی: ${formatPersianNumber(item.current_stock || 0)} ${item.unit || 'عدد'})`,
+  };
 }
 
 export const ProjectProductsForm: React.FC<ProjectProductsFormProps> = ({
@@ -82,12 +92,13 @@ export const ProjectProductsForm: React.FC<ProjectProductsFormProps> = ({
                       const isSelectedElsewhere = productsList.some((p, i) => i !== idx && p.item_id === item.id);
                       return !isSelectedElsewhere;
                     })
-                    .map((item) => ({
-                      value: String(item.id),
-                      label: `${item.name} (کد: ${formatPersianCode(item.code)} | موجودی: ${formatPersianNumber(item.current_stock || 0)} ${item.unit || 'عدد'})`,
-                    }))}
+                    .map(projectItemOption)}
+                  // v11 phase 6.1ch (C13): an item list cut at the cap also searches on the server; the chosen row comes as `raw`
+                  serverSearchUrl={pickListServerSearchUrl(activeItemsList, PICK_LIST_URLS.items)}
+                  mapResultToOption={projectItemOption}
+                  valueLabel={product.item_name || undefined}
                   value={product.item_id ? String(product.item_id) : ''}
-                  onChange={(val) => onUpdateProductRow(idx, 'item_id', val ? Number(val) : null)}
+                  onChange={(val, raw?: Item) => onUpdateProductRow(idx, 'item_id', val ? Number(val) : null, raw)}
                   placeholder="جست‌وجوی کالا بر اساس نام یا کد..."
                   className="w-full"
                 />

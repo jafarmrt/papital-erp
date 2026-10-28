@@ -9,6 +9,7 @@ import {
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { ReservedItemsResponse, StockDocProject } from '../../lib/documents/stockReservations';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { cappedPickListUrl, takePickList } from '../../lib/permissions/pickListCap';
 
 /**
  * TD-080 (بخش ۳): لیست‌های مرجع فرم رسید/حواله انبار با React Query — منتقل‌شده بدون تغییر از DocumentsPage.
@@ -26,11 +27,13 @@ export function useStockDocumentReferenceData() {
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
   });
+  // v11 phase 6.1ch (C13): the party and item lists hold at most the cap; the pickers over a cut list also search on the
+  // server, and the reserved or returned items they lack are read by id (useStockDocumentForm)
   const suppliersQuery = useQuery<Customer[]>({
     queryKey: QUERY_KEYS.customers.options({ scope: 'doc-suppliers' }),
     queryFn: async ({ signal }) => {
-      const res = await fetchJson(PICK_LIST_URLS.customers, { signal });
-      return Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+      const res = await fetchJson(cappedPickListUrl(PICK_LIST_URLS.customers), { signal });
+      return takePickList<Customer>(Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []));
     },
     staleTime: 2 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
@@ -39,8 +42,8 @@ export function useStockDocumentReferenceData() {
   const itemsQuery = useQuery<Item[]>({
     queryKey: QUERY_KEYS.items.list({ scope: 'doc-items-all' }),
     queryFn: async ({ signal }) => {
-      const res = await fetchJson(PICK_LIST_URLS.items, { signal });
-      return Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+      const res = await fetchJson(cappedPickListUrl(PICK_LIST_URLS.items), { signal });
+      return takePickList<Item>(Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []));
     },
     staleTime: 2 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
@@ -69,6 +72,8 @@ export function useStockDocumentReferenceData() {
     projectsList,
     suppliersList,
     itemsList,
+    /** the item list has arrived, so the rows it lacks may be read by id */
+    itemsReady: itemsQuery.isSuccess,
     reservedItemsData: reservedStockQuery.data,
     categories: categoriesQuery.data,
   };

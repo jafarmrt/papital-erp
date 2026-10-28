@@ -3,11 +3,17 @@ import { SearchableSelect } from '../SearchableSelect';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
 import { formatPersianCode } from '../../utils';
+import { supplierPickOptions, type PartyRow } from '../../lib/projects/projectPurchaseOrder';
 
 interface ProjectDirectOrderFieldsProps {
   supplierId: string;
-  onSupplierChange: (id: string) => void;
+  /** `picked` is the party's row when it came from the server's matches (v11 phase 6.1ch, C13) */
+  onSupplierChange: (id: string, picked?: PartyRow) => void;
   supplierOptions: Array<{ value: string; label: string }>;
+  /** The server search of a party list cut at the cap */
+  supplierSearchUrl?: string;
+  /** The chosen supplier's name, for a party the cut list lacks */
+  supplierLabel?: string;
   warehouses: WarehouseItem[];
   targetWarehouse: string;
   onWarehouseChange: (code: string) => void;
@@ -15,6 +21,12 @@ interface ProjectDirectOrderFieldsProps {
   onRequiredDateChange: (value: string) => void;
   notes: string;
   onNotesChange: (value: string) => void;
+}
+
+/** A supplier of the server's matches as the same option as the list's (v11 phase 6.1ch, C13) */
+function supplierPickOption(party: PartyRow): { value: string; label: string } {
+  const option = supplierPickOptions([party])[0];
+  return option ? { value: option.value, label: option.label } : { value: String(party.id), label: String(party.name ?? '') };
 }
 
 const fieldClass = 'w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none';
@@ -25,7 +37,7 @@ const fieldClass = 'w-full p-2 bg-white border border-slate-300 rounded-lg text-
  */
 export function ProjectDirectOrderFields(props: ProjectDirectOrderFieldsProps) {
   const fieldId = useId();
-  const { supplierId, onSupplierChange, supplierOptions, warehouses, targetWarehouse, onWarehouseChange } = props;
+  const { supplierId, onSupplierChange, supplierOptions, supplierSearchUrl, supplierLabel, warehouses, targetWarehouse, onWarehouseChange } = props;
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
       <div>
@@ -33,12 +45,15 @@ export function ProjectDirectOrderFields(props: ProjectDirectOrderFieldsProps) {
         <SearchableSelect
           id={`${fieldId}-supplier-id`}
           value={supplierId}
-          onChange={(val) => onSupplierChange(val)}
+          onChange={(val, raw?: PartyRow) => onSupplierChange(val, raw)}
           placeholder="-- انتخاب تأمین‌کننده --"
           options={supplierOptions}
+          serverSearchUrl={supplierSearchUrl}
+          mapResultToOption={supplierPickOption}
+          valueLabel={supplierLabel}
           className="w-full"
         />
-        {supplierOptions.length === 0 && (
+        {supplierOptions.length === 0 && !supplierSearchUrl && (
           <p className="mt-1 text-[11px] text-rose-700">هنوز طرف حسابی از نوع «تأمین‌کننده» تعریف نشده است.</p>
         )}
       </div>

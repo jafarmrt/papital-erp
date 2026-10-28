@@ -7,7 +7,10 @@ import { formatPersianNumber, formatPersianPhone, formatPersianDate, formatPersi
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { toast } from 'react-hot-toast';
 import { copyToClipboard } from '../../utils/clipboard';
-import { useCrmStockItemsQuery } from '../../hooks/queries/useCrmQueries';
+import { useCrmStockItemsQuery, useCrmStockSearchQuery } from '../../hooks/queries/useCrmQueries';
+import { useDebounce } from '../../hooks/useDebounce';
+import { isCutPickList } from '../../lib/permissions/pickListCap';
+import { withPickRows } from '../../hooks/queries/usePickListRows';
 import { useWarehousesQuery, type WarehouseItem } from '../../hooks/queries/useSettingsQueries';
 import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 import { DialogLayer } from '../common/DialogLayer';
@@ -70,6 +73,9 @@ export function CRMLeadDrawer({
   const itemsRead = useOpeningRead(useCrmStockItemsQuery(stockOpen), stockOpen);
   const warehousesRead = useOpeningRead(useWarehousesQuery({ enabled: stockOpen, readOnEveryOpening: true }), stockOpen);
   const items: Item[] = itemsRead.data ?? NO_ITEMS;
+  // v11 phase 6.1ch (C13): a list cut at the cap also lists the server's matches for the search
+  const stockSearch = useDebounce(stockSearchTerm.trim(), 300);
+  const stockServerSearch = useCrmStockSearchQuery(stockSearch, stockOpen && isCutPickList(items));
   const warehouses = warehousesRead.data ?? NO_WAREHOUSES;
   const stockFailedAt = Math.max(itemsRead.failedAt, warehousesRead.failedAt);
   const isLoadingStock = stockOpen && (itemsRead.data === undefined || warehousesRead.data === undefined) && stockFailedAt === 0;
@@ -82,7 +88,7 @@ export function CRMLeadDrawer({
   if (!selectedLeadDrawer) return null;
 
   const safeItemsList = Array.isArray(items) ? items : [];
-  const filteredItems = safeItemsList.filter((item) => {
+  const listedMatches = safeItemsList.filter((item) => {
     if (!stockSearchTerm.trim()) return true;
     // review of #406 (U21): a code typed in Persian digits is found too
     const term = normalizeSearchText(stockSearchTerm);
@@ -92,6 +98,8 @@ export function CRMLeadDrawer({
       (item.category && normalizeSearchText(item.category).includes(term))
     );
   });
+  const serverMatches = stockSearch !== '' && stockSearch === stockSearchTerm.trim() ? stockServerSearch.data ?? NO_ITEMS : NO_ITEMS;
+  const filteredItems = withPickRows(listedMatches, serverMatches);
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-[60] bg-slate-900/50 backdrop-blur-xs flex justify-end">
@@ -371,7 +379,7 @@ export function CRMLeadDrawer({
               />
             </div>
 
-            {isLoadingStock ? (
+            {isLoadingStock || (filteredItems.length === 0 && stockServerSearch.isFetching) ? (
               <div className="p-8 text-center text-slate-500 text-xs">در حال دریافت موجودی انبارها...</div>
             ) : filteredItems.length === 0 ? (
               <div className="p-8 text-center text-slate-400 text-xs bg-slate-50 rounded-xl border border-dashed border-slate-200">

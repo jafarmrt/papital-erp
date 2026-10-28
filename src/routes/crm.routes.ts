@@ -24,7 +24,7 @@ import { leadAuditDetails } from '../services/crm/crmLeadAudit.js';
 import { setFollowupCompleted } from '../services/crm/crmFollowupStatus.js';
 import { resolveActivityParents } from '../services/crm/crmActivityParents.js';
 import { notifyActivityMentions, resolveActivityMentions } from '../services/crm/crmActivityMentions.js';
-import { CRM_LEAD_CURRENCIES, CRM_LEAD_STAGES, CRM_LEAD_STATUSES, CRM_LOST_REASONS, CRM_LOST_REASON_NOTE_MAX, isLeadProbability, normalizeLeadCurrency } from '../lib/crm/leadFields.js';
+import { CRM_BOARD_LEAD_CAP, CRM_LEAD_CURRENCIES, CRM_LEAD_STAGES, CRM_LEAD_STATUSES, CRM_LOST_REASONS, CRM_LOST_REASON_NOTE_MAX, isLeadProbability, normalizeLeadCurrency } from '../lib/crm/leadFields.js';
 import { recordLeadStageChange } from '../services/crm/crmLeadStageHistory.js';
 import { crmFunnelReport } from '../services/crm/crmFunnelReport.js';
 import { resolveLeadLostReason } from '../services/crm/crmLeadLostReason.js';
@@ -32,12 +32,12 @@ import { activityPartyCondition, leadCustomerCondition } from '../services/crm/c
 import { CrmAttachmentService } from '../services/crm/crmAttachments.service.js';
 import { leadCustomerHasTagCondition } from '../services/customers/customerTags.service.js';
 import { canSeePartyBankInfo, withoutBankInfo } from '../services/customers/partyBankInfoAccess.js';
-import { permissionHolderUserIds } from '../services/notifications/notificationRecipients.js';
+import { permissionHolderUserIdsWith } from '../services/notifications/notificationRecipients.js';
+import { assertSoldLeadStaysWon, notifyLeadWon, openLeadsFirst, resolveLeadStageStatus } from '../services/crm/crmLeadOutcome.js';
 import { resolveAssignee } from '../services/crm/crmAssignee.js';
 import { activityAuditDetails, activityAuditSnapshot, softDeleteActivity, updateActivity } from '../services/crm/crmActivityEdit.js';
 import { foldedContains } from '../lib/search/searchSql.js';
 
-const WON_LEAD_NOTIFY_PERMISSION = 'crm.manage';
 
 const router = Router();
 router.use(authenticateToken);
@@ -311,11 +311,13 @@ router.get('/crm/leads', authorizePermission('crm.view', 'customers.view', 'cust
     });
   }
 
-  const safeLimit = Math.min(Number(req.query.limit) || 500, 500);
+  // v11 phase 6.4 (C6): the unpaged list (the board and the dashboard) takes the open files first, then the newest closed
+  // ones, so the cap drops old closed files and never an open deal or its close date; before, the newest 500 of every kind
+  const safeLimit = Math.min(Number(req.query.limit) || CRM_BOARD_LEAD_CAP, CRM_BOARD_LEAD_CAP);
   const leads = await orm.select()
     .from(crmLeads)
     .where(whereClause)
-    .orderBy(desc(crmLeads.updatedAt), desc(crmLeads.id))
+    .orderBy(openLeadsFirst, desc(crmLeads.updatedAt), desc(crmLeads.id))
     .limit(safeLimit);
 
   res.json(await withNextFollowups(leads));
@@ -352,19 +354,7 @@ router.get('/crm/leads/:id', authorizePermission('crm.view', 'customers.view', '
 // v9.0.127 (TD-883، مدل مجوز §۴.۲): «معامله موفق» به دارندگان «مدیریت فرصت‌های فروش» می‌رود؛ پیش‌تر به پنج کد نقش ثابت
 async function notifySalesOnWonLead(lead: (Partial<typeof crmLeads.$inferSelect> & Record<string, unknown>), authorName: string, senderId?: number) {
   try {
-    const targetUserIds = await permissionHolderUserIds(WON_LEAD_NOTIFY_PERMISSION);
-
-    const recipients = targetUserIds.filter(userId => !(senderId && userId === senderId));
-    await orm.transaction(tx => createNotifications(tx, recipients.map(userId => ({
-      userId,
-      category: 'crm_won' as const,
-      senderId: senderId || null,
-      senderName: authorName,
-      type: 'system',
-      title: `🎉 معامله موفق جدید: ${lead.title}`,
-      message: `پرونده فروش با موفقیت نهایی شد.`,
-      link: `/crm?leadId=${lead.id}`,
-    }))));
+    await orm.transaction(tx => notifyLeadWon(tx, { id: Number(lead.id), title: String(lead.title ?? '') }, { id: senderId, name: authorName }, permissionHolderUserIdsWith));
   } catch (err) {
     logger.error({ message: 'Error notifying managers and sales on won lead', error: err });
   }
@@ -507,8 +497,10 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
     lostReason,
     lostReasonNote,
   } = req.body;
-  // حوزه H (TD-309): وضعیت «won» بدون مرحله همان انتقال به «فروش موفق» است و از قاعده پیش‌فاکتور نمی‌گذرد
-  const stage: string | undefined = requestedStage !== undefined ? requestedStage : (status === 'won' && existing.stage !== 'won' ? 'won' : undefined);
+  // حوزه H (TD-309): وضعیت «won» بدون مرحله همان انتقال به «فروش موفق» است و از قاعده پیش‌فاکتور نمی‌گذرد. v11 phase 6.4
+  // (C4): the status follows the stage, and `lost` alone moves the stage too (its reason and history row below)
+  const resolved = resolveLeadStageStatus({ requestedStage, requestedStatus: status, existingStage: existing.stage, existingStatus: existing.status });
+  const stage: string | undefined = resolved.stage;
 
   // V10-4.1: ارجاع فروشنده — تنها وقتی مشتری جدید آمده بازresolve شود
   const assigneeProvided = assignedTo !== undefined || assignedPersonnelId !== undefined;
@@ -549,10 +541,9 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
     reason: lostReason, note: lostReasonNote,
   });
 
-  let newStatus = status || existing.status;
-  if (stage === 'won') newStatus = 'won';
-  else if (stage === 'lost') newStatus = 'lost';
-  else if (stage && stage !== 'won' && stage !== 'lost') newStatus = 'active';
+  // v11 phase 6.4 (C3): a lead whose proforma became a final invoice stays «فروش موفق» until that invoice is voided
+  if (stage !== undefined && stage !== existing.stage) await assertSoldLeadStaysWon(tx, existing, targetStage);
+  const newStatus = resolved.status;
 
   const [updated] = await tx.update(crmLeads).set({
     title: title !== undefined ? title.trim() : existing.title,

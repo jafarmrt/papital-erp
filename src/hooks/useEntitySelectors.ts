@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../api';
 import type { Customer } from '../types';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
+import { cappedPickListUrl, pickListServerSearchUrl, takePickList } from '../lib/permissions/pickListCap';
 import { supplierNameOptions } from '../lib/documents/documentPartyKind';
 
 export interface EntitySelectOption<T = string | number> {
@@ -33,10 +34,11 @@ export function useCustomerSelectOptions(config: CustomerSelectOptionsConfig = {
     refetch
   } = useQuery<Customer[]>({
     queryKey: QUERY_KEYS.customers.options({ scope: 'selector-list' }),
-    queryFn: async () => {
-      const res = await fetchJson(PICK_LIST_URLS.customers);
+    // v11 phase 6.1ch (C13): at most the cap; the pickers over a cut list also search on the server (`serverSearchUrl`)
+    queryFn: async ({ signal }) => {
+      const res = await fetchJson(cappedPickListUrl(PICK_LIST_URLS.customers), { signal });
       const raw = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-      return raw;
+      return takePickList<Customer>(raw);
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
@@ -84,9 +86,12 @@ export function useSupplierSelectOptions() {
   const { customers, isLoading, isFetching, error, refetch } = useCustomerSelectOptions();
 
   const options = useMemo(() => supplierNameOptions(Array.isArray(customers) ? customers : []), [customers]);
+  // v11 phase 6.1ch (C13): the server search of a supplier picker whose party list was cut at the cap
+  const serverSearchUrl = pickListServerSearchUrl(Array.isArray(customers) ? customers : [], `${PICK_LIST_URLS.customers}?partyType=supplier`);
 
   return {
     options,
+    serverSearchUrl,
     suppliers: customers,
     isLoading,
     isFetching,

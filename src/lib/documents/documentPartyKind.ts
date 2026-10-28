@@ -65,3 +65,8 @@ export function supplierNameOptions<T extends SupplierPartyRow>(parties: readonl
       _raw: p,
     }));
 }
+
+/** One supplier row of the server's matches as the same option (v11 phase 6.1ch, C13: a picker over a cut party list) */
+export function supplierNameOption<T extends SupplierPartyRow>(party: T): { value: string; label: string } {
+  return supplierNameOptions([party])[0] ?? { value: String(party.name ?? ''), label: String(party.name ?? '') };
+}
