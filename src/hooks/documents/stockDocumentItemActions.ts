@@ -22,10 +22,16 @@ export function createStockDocumentItemActions(form: StockDocumentForm, itemsLis
   const {
     actionType, docType, docItems, setDocItems, selectedItem, setSelectedItem, selectedItemObj, setSelectedItemObj,
     quantity, setQuantity, unitPrice, setUnitPrice, selectedProjectId, selectedProjectReservedItems,
-    getItemReservationSummary,
+    getItemReservationSummary, reservedItemsLoading,
   } = form;
+  // v11 phase 6.1ch (C13): reserved items the cut item list lacks are still being read by id
+  const reservedItemsPending = () => {
+    if (reservedItemsLoading) toast('کالاهای رزرو شده این پروژه هنوز خوانده می‌شوند؛ چند لحظه دیگر دوباره بزنید.', { icon: '⏳' });
+    return reservedItemsLoading;
+  };
 
   const handleAddAllProjectReservedItems = () => {
+    if (reservedItemsPending()) return;
     if (selectedProjectReservedItems.length === 0) {
       toast.error('هیچ کالای رزرو شده‌ای برای این پروژه یافت نشد.');
       return;
@@ -85,6 +91,7 @@ export function createStockDocumentItemActions(form: StockDocumentForm, itemsLis
   };
 
   const handleAddSingleProjectReservedItem = (rItem: GlobalReservation) => {
+    if (reservedItemsPending()) return;
     const matchedItem = itemsList.find(i => reservationMatchesListItem(rItem, i));
 
     if (!matchedItem) {

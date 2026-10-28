@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { sql, or, and, eq } from 'drizzle-orm';
+import { sql, and, eq } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { systemNowUtcIso } from '../lib/businessClock.js';
 import { customers } from '../db/schema.js';
@@ -7,7 +7,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString, storageDateParam } from '../middleware/validate.js';
+import { validate, paramsIdSchema, numericIdString, pickListIdsString, storageDateParam } from '../middleware/validate.js';
 import { accountCardPageQuery } from './accounting/reports.schemas.js';
 import type { ValidatedQuery } from './accounting/accounting.schemas.js';
 import { customerBulkImportSchema } from './importRows.schemas.js';
@@ -221,31 +221,22 @@ const customerPickListValidation = z.object({
     search: z.string().max(200).optional(),
     partyType: z.enum(['all', 'customer', 'supplier', 'both']).optional(),
     limit: z.union([z.string(), z.number()]).optional(),
+    // v11 phase 6.1ch (C13): the rows of chosen or stored parties a form's cut list lacks
+    ids: pickListIdsString.optional(),
   }).optional(),
 });
 
 // v9.0.137 (TD-887، تصمیم ت۱۰ الف): فهرست انتخاب طرف حساب‌ها برای فرم‌های بخش‌های دیگر؛ فهرست کامل بالا فقط با customers.view
 router.get('/customers/options', authorizePermission(...READ_PERMISSIONS.customerOptions), validate(customerPickListValidation), asyncHandler(async (req, res) => {
-  const query = req.query as { search?: string; partyType?: string; limit?: string };
-  res.json({ success: true, data: await listCustomerPicks(req.user, { search: query.search, partyType: query.partyType, limit: parsePickListLimit(query.limit) }) });
+  const { search, partyType, limit, ids } = req.query as { search?: string; partyType?: string; limit?: string; ids?: number[] };
+  res.json({ success: true, data: await listCustomerPicks(req.user, { search, partyType, limit: parsePickListLimit(limit), ids }) });
 }));
 
 // GET /api/customers/export-excel - Structured Excel export rows
 router.get('/customers/export-excel', authorizePermission(...READ_PERMISSIONS.customersExport), asyncHandler(async (req, res) => {
   const partyTypeFilter = (req.query.partyType || req.query.type) as string;
-  const conditionsList = [eq(customers.isDeleted, 0)];
-
-  if (partyTypeFilter && partyTypeFilter !== 'all') {
-    if (partyTypeFilter === 'supplier') {
-      conditionsList.push(or(eq(customers.partyType, 'supplier'), eq(customers.partyType, 'both')) as any);
-    } else if (partyTypeFilter === 'customer') {
-      conditionsList.push(or(eq(customers.partyType, 'customer'), eq(customers.partyType, 'both')) as any);
-    } else if (partyTypeFilter === 'both') {
-      conditionsList.push(eq(customers.partyType, 'both') as any);
-    }
-  }
-
-  const list = await orm.select().from(customers).where(and(...conditionsList)).orderBy(customers.id);
+  // v11 phase 6.1ch (C13, review): the list's own kind rule, so a party without a kind is exported with the customers
+  const list = await orm.select().from(customers).where(customerListConditions(undefined, partyTypeFilter)).orderBy(customers.id);
 
   const exportRows = list.map(c => {
     const pType = c.partyType === 'supplier' ? 'تامین‌کننده' : (c.partyType === 'both' ? 'هر دو' : 'مشتری');

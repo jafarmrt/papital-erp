@@ -20,6 +20,9 @@ import { CHEQUE_STATUS_LABELS, chequeHasNextStep, chequeNextStatuses, chequeStat
 import { needsChosenContraAccount, type PersonnelPurpose } from '../../lib/treasury/partyPurpose';
 import { personnelPartyName, personnelPartyOption } from '../../lib/treasury/personnelPartyName';
 import { personnelServerSearchUrl } from '../../lib/personnel/personnelList';
+import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { pickListServerSearchUrl } from '../../lib/permissions/pickListCap';
+import { customerPartyOption, supplierPartyOption } from '../../lib/treasury/partyPickOption';
 import { PartyPurposeFields } from './treasury/PartyPurposeFields';
 import { DialogLayer } from '../common/DialogLayer';
 import { SettlementAllocationField, useCanSettleOnDocuments, type SettlementFieldState } from './treasury/SettlementAllocationField';
@@ -119,6 +122,8 @@ export function ChequesTab({
   const [statusActionDate, setStatusActionDate] = useState('');
   const [targetBankAccountId, setTargetBankAccountId] = useState<number | null>(null);
   const [transfereePartyId, setTransfereePartyId] = useState<number | null>(null);
+  // v11 phase 6.1ch (C13): the chosen transferee's label, for a supplier picked from the server's matches
+  const [transfereeLabel, setTransfereeLabel] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   const [historyModalCheque, setHistoryModalCheque] = useState<Cheque | null>(null);
@@ -177,6 +182,7 @@ export function ChequesTab({
       const opts = chequeNextStatuses(statusModalCheque.status, statusModalCheque.type);
       setTargetStatus(opts[0] || ('passed' as ChequeStatus));
       setTransfereePartyId(null);
+      setTransfereeLabel('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusModalCheque?.id]);
@@ -902,28 +908,31 @@ export function ChequesTab({
                     {newFormData.partyType === 'customer' ? (
                       <SearchableSelect
                         value={String(newFormData.partyId || '')}
-                        onChange={(val) => {
-                          const c = customerList.find(x => x.id === Number(val)) || safeCustomers.find(x => x.id === Number(val));
+                        onChange={(val, raw?: Customer) => {
+                          const c = customerList.find(x => x.id === Number(val)) || safeCustomers.find(x => x.id === Number(val))
+                            || (raw && String(raw.id) === val ? raw : undefined);
                           setNewFormData({ ...newFormData, partyId: c ? c.id : null, partyName: c ? c.name : '' });
                         }}
                         placeholder="جست‌وجو و انتخاب مشتری..."
-                        options={customerList.map(c => ({
-                          value: String(c.id),
-                          label: `${c.name}${c.city ? ` (${c.city})` : ''}${c.phone ? ` - ${c.phone}` : ''}`
-                        }))}
+                        options={customerList.map(customerPartyOption)}
+                        // v11 phase 6.1ch (C13): a party list cut at the cap also searches on the server; the chosen row comes as `raw`
+                        serverSearchUrl={pickListServerSearchUrl(safeCustomers, `${PICK_LIST_URLS.customers}?partyType=customer`)}
+                        mapResultToOption={customerPartyOption}
+                        valueLabel={newFormData.partyName || undefined}
                       />
                     ) : newFormData.partyType === 'supplier' ? (
                       <SearchableSelect
                         value={String(newFormData.partyId || '')}
-                        onChange={(val) => {
-                          const s = supplierList.find(x => x.id === Number(val)) || safeCustomers.find(x => x.id === Number(val));
+                        onChange={(val, raw?: Customer) => {
+                          const s = supplierList.find(x => x.id === Number(val)) || safeCustomers.find(x => x.id === Number(val))
+                            || (raw && String(raw.id) === val ? raw : undefined);
                           setNewFormData({ ...newFormData, partyId: s ? s.id : null, partyName: s ? s.name : '' });
                         }}
                         placeholder="جست‌وجو و انتخاب تأمین‌کننده..."
-                        options={supplierList.map(s => ({
-                          value: String(s.id),
-                          label: `${s.name}${s.supplierCategory ? ` [${s.supplierCategory}]` : ''}${s.city ? ` (${s.city})` : ''}${s.phone ? ` - ${s.phone}` : ''}`
-                        }))}
+                        options={supplierList.map(supplierPartyOption)}
+                        serverSearchUrl={pickListServerSearchUrl(safeCustomers, `${PICK_LIST_URLS.customers}?partyType=supplier`)}
+                        mapResultToOption={supplierPartyOption}
+                        valueLabel={newFormData.partyName || undefined}
                       />
                     ) : newFormData.partyType === 'personnel' ? (
                       <SearchableSelect
@@ -1103,9 +1112,16 @@ export function ChequesTab({
                   <SearchableSelect
                     id={`${fieldId}-transferee-party-id`}
                     value={String(transfereePartyId || '')}
-                    onChange={(val) => setTransfereePartyId(Number(val) || null)}
+                    onChange={(val, raw?: Customer) => {
+                      const s = supplierList.find(x => String(x.id) === val) || (raw && String(raw.id) === val ? raw : undefined);
+                      setTransfereePartyId(s ? s.id : null);
+                      setTransfereeLabel(s ? supplierPartyOption(s).label : '');
+                    }}
                     placeholder="جست‌وجو و انتخاب تأمین‌کننده..."
-                    options={supplierList.map(s => ({ value: String(s.id), label: `${s.name}${s.phone ? ` - ${s.phone}` : ''}` }))}
+                    options={supplierList.map(supplierPartyOption)}
+                    serverSearchUrl={pickListServerSearchUrl(safeCustomers, `${PICK_LIST_URLS.customers}?partyType=supplier`)}
+                    mapResultToOption={supplierPartyOption}
+                    valueLabel={transfereeLabel || undefined}
                   />
                 </div>
               )}

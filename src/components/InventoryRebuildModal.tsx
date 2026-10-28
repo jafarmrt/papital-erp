@@ -6,6 +6,18 @@ import { formatPersianNumber, errorMessageOf, formatPersianCode } from '../utils
 import { KardexWacDifferencesPanel } from './inventory/KardexWacDifferencesPanel';
 import { wacDifferencesOf } from '../lib/inventoryAudit/wacCorrection';
 import { DialogLayer } from './common/DialogLayer';
+import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
+import { pickListServerSearchUrl } from '../lib/permissions/pickListCap';
+import { useMissingPickRows, withPickRows } from '../hooks/queries/usePickListRows';
+
+interface RebuildItem { id: number; name?: string; code?: string; unit?: string; current_stock?: number; currentStock?: number }
+
+function rebuildItemOption(it: RebuildItem): { value: number; label: string } {
+  return {
+    value: it.id,
+    label: `${it.name} (کد: ${formatPersianCode(it.code)}) - موجودی دفتری: ${formatPersianNumber(it.current_stock || it.currentStock || 0)} ${it.unit}`,
+  };
+}
 
 interface InventoryRebuildModalProps {
   isOpen: boolean;
@@ -25,6 +37,9 @@ export default function InventoryRebuildModal({
   const fieldId = useId();
   const [mode, setMode] = useState<'all' | 'single'>(defaultItemId ? 'single' : 'all');
   const [selectedItemId, setSelectedItemId] = useState<number | null>(defaultItemId || null);
+  // v11 phase 6.1ch (C13): the item a page opened this window for, read by id when the cut list lacks it (its label)
+  const defaultItem = useMissingPickRows<RebuildItem>('items', itemsList, [defaultItemId], isOpen && itemsList.length > 0);
+  const itemChoices = withPickRows<RebuildItem>(itemsList, defaultItem.rows);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [resultData, setResultData] = useState<any | null>(null);
@@ -222,10 +237,10 @@ export default function InventoryRebuildModal({
                   </label>
                   <SearchableSelect
                     id={`${fieldId}-selected-item-id`}
-                    options={itemsList.map(it => ({
-                      value: it.id,
-                      label: `${it.name} (کد: ${formatPersianCode(it.code)}) - موجودی دفتری: ${formatPersianNumber(it.current_stock || it.currentStock || 0)} ${it.unit}`
-                    }))}
+                    options={itemChoices.map(rebuildItemOption)}
+                    // v11 phase 6.1ch (C13): an item list cut at the cap also searches on the server
+                    serverSearchUrl={pickListServerSearchUrl(itemsList, PICK_LIST_URLS.items)}
+                    mapResultToOption={rebuildItemOption}
                     value={selectedItemId || ''}
                     onChange={(val) => setSelectedItemId(Number(val) || null)}
                     placeholder="جست‌وجو و انتخاب کالا جهت تطبیق کاردکس..."

@@ -7,6 +7,7 @@ import { formatPersianPrice, formatPersianNumber, parseCleanNumber, formatPersia
 import { SearchableSelect } from '../SearchableSelect';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import { useSupplierSelectOptions } from '../../hooks/useEntitySelectors';
+import { supplierNameOption } from '../../lib/documents/documentPartyKind';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { OverOrderWarning, type OverOrderedItem } from './OverOrderWarning';
 import { requisitionRowRemaining } from '../../lib/procurement/requisitionFields';
@@ -70,7 +71,7 @@ export function SplitOrderModal({
 }: SplitOrderModalProps) {
   const fieldId = useId();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { options: supplierOptions } = useSupplierSelectOptions();
+  const { options: supplierOptions, serverSearchUrl: supplierSearchUrl } = useSupplierSelectOptions();
 
   // Dynamic warehouses query
   const { data: warehouses = [] } = useWarehousesQuery();
@@ -612,6 +613,10 @@ export function SplitOrderModal({
                         onChange={(val) => handleUpdatePackageField(pkg.id, 'supplierName', val)}
                         placeholder="-- جست‌وجو یا انتخاب از طرفین حساب --"
                         options={supplierOptions}
+                        // v11 phase 6.1ch (C13): a party list cut at the cap also searches on the server (the option's value is the name)
+                        serverSearchUrl={supplierSearchUrl}
+                        mapResultToOption={supplierNameOption}
+                        valueLabel={pkg.supplierName || undefined}
                         className="w-full"
                       />
                     </div>

@@ -21,7 +21,7 @@ function apiResponse(url: string): unknown {
   if (url === '/personnel') return [{ id: 1, fullName: 'علی رضایی', personnelCode: 'P1', jobTitle: 'زرگر' }];
   if (url === '/projects/options') return { success: true, data: [{ id: 7, projectCode: 'PRJ-7', project_code: 'PRJ-7', title: 'گردنبند سفارشی', status: 'in_progress' }] };
   if (url === '/customers?limit=1000') return { data: [] };
-  if (url === '/items/options') return { data: [reservedItem] };
+  if (url === '/items/options?limit=1001') return { data: [reservedItem] };
   if (url === '/inventory/reserved-items') {
     return {
       allReservationEntries: [
@@ -119,7 +119,7 @@ describe('DocumentsPage — stock receipt / remittance form (TD-080 part 3 chara
     const splitItem = { ...reservedItem, stocks: { WH1: 0, WH2: 10 }, stock_WH1: 0, stock_WH2: 10 };
     fetchJson.mockImplementation((url: string) => Promise.resolve(
       url === '/warehouses' ? [{ id: 1, name: 'انبار مرکزی', code: 'WH1', is_active: 1 }, { id: 2, name: 'انبار دوم', code: 'WH2', is_active: 1 }]
-        : url === '/items/options' ? { data: [splitItem] }
+        : url === '/items/options?limit=1001' ? { data: [splitItem] }
           : apiResponse(url),
     ));
     renderPage();

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import AccountingPage from '../../pages/AccountingPage';
 import { PERSONNEL_PICK_URL } from '../../lib/personnel/personnelList';
+import { cappedPickListUrl } from '../../lib/permissions/pickListCap';
 
 // OBS-R2-105 (TD-1322): the accounting page reads only the lists of the tab on screen (and the voucher window's lists
 // while it is open); before, every tab mounted nine list queries, so the fiscal closing tab read accounts, bank
@@ -26,7 +27,8 @@ const LISTS = {
   bankAccounts: '/accounting/bank-accounts',
   bankAccountOptions: '/accounting/bank-accounts/options',
   cheques: '/accounting/cheques',
-  customers: '/customers/options',
+  // v11 phase 6.1ch (C13): the party list at most the cap
+  customers: cappedPickListUrl('/customers/options'),
   personnel: PERSONNEL_PICK_URL,
 } as const;
 type ListName = keyof typeof LISTS;

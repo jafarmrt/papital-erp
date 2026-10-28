@@ -1,6 +1,43 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { fetchJson } from '../../api';
 import type { Customer } from '../../types';
-import { buyerFieldsOf, type BuyerFields, type BuyerSource } from '../../lib/invoices/invoiceForm';
+import { buyerFieldsOf, listFromResponse, type BuyerFields, type BuyerSource } from '../../lib/invoices/invoiceForm';
+import { QUERY_KEYS } from '../../lib/queryKeys';
+import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { isCutPickList } from '../../lib/permissions/pickListCap';
+import { useMissingPickRows, withPickRows } from '../queries/usePickListRows';
+
+/** v11 phase 6.1ch (C13): how many of the server's matches for a buyer's name are read to find the party of that very name */
+const BUYER_NAME_MATCHES = 50;
+const NO_CUSTOMERS: Customer[] = [];
+
+function sameName(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/**
+ * v11 phase 6.1ch (C13): the parties the buyer fields match against: the pick list, and when it was cut at the cap, the
+ * chosen party read by id and the parties the server finds for the buyer's name (a draft keeps only the name)
+ */
+function useBuyerCandidates(customersList: Customer[], buyerName: string, selectedCustomerId: string): Customer[] {
+  const listCut = isCutPickList(customersList);
+  const name = buyerName.trim();
+  const listed = name !== '' && customersList.some(c => sameName(c.name, name));
+  const byName = useQuery<Customer[]>({
+    queryKey: QUERY_KEYS.customers.options({ buyerName: name.toLowerCase() }),
+    queryFn: async ({ signal }) => listFromResponse<Customer>(await fetchJson<unknown>(
+      `${PICK_LIST_URLS.customers}?${new URLSearchParams({ search: name, limit: String(BUYER_NAME_MATCHES) }).toString()}`, { signal },
+    )),
+    enabled: listCut && name !== '' && !listed && !selectedCustomerId,
+    staleTime: 60 * 1000,
+  });
+  const nameRows = listCut ? byName.data : undefined;
+  const withNames = useMemo(() => withPickRows(customersList, nameRows ?? NO_CUSTOMERS), [customersList, nameRows]);
+  // the party chosen from the name's matches is already held, so only a party chosen elsewhere is read by id
+  const byId = useMissingPickRows<Customer>('customers', withNames, [selectedCustomerId], customersList.length > 0);
+  return useMemo(() => withPickRows(withNames, byId.rows), [withNames, byId.rows]);
+}
 
 /**
  * صفحه صدور فاکتور: فیلدهای خریدار (طرف حساب) — منتقل‌شده از CreateInvoicePage.
@@ -21,10 +58,12 @@ export function useInvoiceBuyer(customersList: Customer[]) {
     setBuyerAddress(fields.buyerAddress);
   };
 
+  const candidates = useBuyerCandidates(customersList, buyerName, selectedCustomerId);
+
   // تکمیل فیلدهای خالی خریدار از پرونده مشتری هم‌نام
   useEffect(() => {
-    if (buyerName && customersList.length > 0) {
-      const match = customersList.find(c => c.name.trim().toLowerCase() === buyerName.trim().toLowerCase() || String(c.id) === String(selectedCustomerId));
+    if (buyerName && candidates.length > 0) {
+      const match = candidates.find(c => sameName(c.name, buyerName) || String(c.id) === String(selectedCustomerId));
       if (match) {
         if (!selectedCustomerId) {
           setSelectedCustomerId(match.id.toString());
@@ -37,7 +76,7 @@ export function useInvoiceBuyer(customersList: Customer[]) {
     } else if (!buyerName && selectedCustomerId) {
       setSelectedCustomerId('');
     }
-  }, [buyerName, customersList, selectedCustomerId, buyerCity, buyerPhone, buyerAddress]);
+  }, [buyerName, candidates, selectedCustomerId, buyerCity, buyerPhone, buyerAddress]);
 
   const handleCustomerSelect = (val: string, rawC?: BuyerSource) => {
     setSelectedCustomerId(val);
@@ -45,7 +84,7 @@ export function useInvoiceBuyer(customersList: Customer[]) {
       setBuyer({ buyerName: '', buyerCity: '', buyerPhone: '', buyerAddress: '' });
       return;
     }
-    const customer = rawC || customersList.find(c => String(c.id) === String(val));
+    const customer = rawC || candidates.find(c => String(c.id) === String(val));
     if (customer) setBuyer(buyerFieldsOf(customer));
   };
 

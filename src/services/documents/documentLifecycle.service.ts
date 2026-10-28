@@ -1,7 +1,7 @@
 import { terminateOpenWorkflows } from '../workflow/workflowTermination.js';
 import { assertProjectNotCancelled } from '../accounting/projectCancelledGuard.js';
 import { eq, and, inArray, isNull } from 'drizzle-orm';
-import { type DbExecutor } from '../../db/drizzle.js';
+import { type DbExecutor, type DbTransaction } from '../../db/drizzle.js';
 import { documents, documentItems, items, transactions, journalVouchers, productionProjects } from '../../db/schema.js';
 import { businessNowIsoDateTime, businessTodayIsoDate, resolveJalaliFiscalYear } from '../../lib/businessClock.js';
 import { resolveDocumentVat } from './documentVat.js';
@@ -38,6 +38,7 @@ import { assertOutflowWithinSellable } from './documentSellableGate.js';
 import { consumesProjectReservation } from '../../lib/transactions/projectIssueTypes.js';
 import { documentAuditSnapshot, type DocumentAuditChange, type DocumentAuditSnapshot, type DocumentVoidAudit } from './documentAudit.js';
 import { assertNameNotOtherKind, hasPricedLine, linkKnownDocumentParty } from './documentParty.js';
+import { assertLinkedLeadUnchanged, lockLinkedLead, markLinkedLeadSold } from './linkedLeadHooks.js';
 import { lockRequisitionOfOrder, releaseVoidedProcurementOrder } from './procurementOrderVoid.js';
 import { documentVoidVoucherReason } from '../../lib/documents/documentTypeName.js';
 import { idempotentTransaction } from '../../middleware/idempotency.js';
@@ -109,6 +110,9 @@ export class DocumentLifecycleService {
         }
       }
 
+      // v11 phase 6.4 (C3): the lead whose proforma this is, locked first like the void (lead → items → project → document)
+      const lead = await lockLinkedLead(tx, docPeek);
+
       // V6 Sub-phase 5.1 (TD-159): Enforce strict LockHierarchyLevel (ITEMS_STOCK: 40 -> DOCUMENTS: 60)
       // Sort item IDs in ascending order to prevent deadlocks when concurrent documents share items
       const sortedItemIds = sortIdsForLocking(rawLines.map(line => line.itemId));
@@ -136,6 +140,8 @@ export class DocumentLifecycleService {
           }
           // v10.0.184 (TD-921): پیش‌نویس روی پروژه‌ای که پس از آن لغو شد نهایی نمی‌شود
           if (doc.projectId) await assertProjectNotCancelled(tx, Number(doc.projectId), 'سند');
+          // v11 phase 6.4 (C3, review): the lead locked first still links this document
+          await assertLinkedLeadUnchanged(tx, doc, lead);
           auditBefore = await documentAuditSnapshot(tx, id);
 
           const docLines = await tx.select().from(documentItems)
@@ -264,6 +270,9 @@ export class DocumentLifecycleService {
           const isSales = targetType === 'invoice' || targetType === 'proforma';
           const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(targetType);
           const safeUser = user || doc.user || 'system';
+
+          // v11 phase 6.4 (C3): the final invoice is the lead's sale: the lead moves to «فروش موفق» in this transaction
+          if (targetType === 'invoice') await markLinkedLeadSold(tx as DbTransaction, lead, { id, refNumber: finalRefNumber }, user || doc.user || 'سیستم');
 
           // v9.0.407 (TD-713): رویداد نهایی‌سازی با مبلغ قابل پرداخت و شماره نهایی سند (documentFinalizeEvents.ts)
           await recordFinalizeEvent(tx, { id, type: targetType, refNumber: finalRefNumber, buyerName: doc.buyerName, currency: doc.currency, itemCount: docLines.length, user: safeUser });

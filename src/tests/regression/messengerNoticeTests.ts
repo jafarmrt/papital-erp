@@ -24,6 +24,7 @@ const idOf = (res: Res) => Number((res.body as { id?: unknown } | undefined)?.id
 const APPROVED_TITLE = 'فیش حقوق شما تأیید شد';
 const PAYSLIP_MONTH = 'اردیبهشت ۱۴۰۵';
 const TASK_TITLE = 'کار تازه در کارتابل';
+const WORKFLOW_TASK_SENTENCE = 'یک کار تازه در کارتابل تأیید منتظر شماست.';
 // v10.2.28: a seven-digit amount no payslip number or date can hold; the old check looked for «735» and failed whenever
 // the payslip number shown in the notice held those digits
 const PAYSLIP_AMOUNT = 7_351_973;
@@ -100,7 +101,7 @@ export async function runMessengerNoticeTests(shouldRun: ShouldRun): Promise<Tes
 
   const taskId = 'reg_messenger_workflow_task_notice';
   if (shouldRun(taskId, 'messenger', 'workflow', 'notice')) {
-    await runCase(results, taskId, 'v10.1.42: sending a sales proforma to the warehouse notifies the warehouse keeper who will see the task in the inbox, in the bell and on the linked messenger with the document number and no amount; the seller who sent it and a user without the step permission get nothing', async () => {
+    await runCase(results, taskId, 'v10.1.42: sending a sales proforma to the warehouse notifies the warehouse keeper who will see the task in the inbox, in the bell and on the linked messenger with a fixed sentence and its inbox link (v11 6.4, C11), no amount; the seller who sent it and a user without the step permission get nothing', async () => {
       const h = await createHarness();
       const users: number[] = [];
       try {
@@ -129,7 +130,10 @@ export async function runMessengerNoticeTests(shouldRun: ShouldRun): Promise<Tes
         // v11 phase 6.3p (U6): the notice opens its own task in the inbox
         if (bell[0]?.link !== approvalInboxInstanceLink(instanceId)) problems.push(`the notice links to ${String(bell[0]?.link)}`);
         const [job] = await jobsOf(linkId);
-        if (payloadOf(job).category !== 'workflow_task' || !String(payloadOf(job).text ?? '').includes(ref)) problems.push(`the keeper's messenger job is missing or wrong: ${JSON.stringify(payloadOf(job)).slice(0, 200)}`);
+        // v11 phase 6.4 (C11): the messenger gets the fixed sentence and the record's inbox link, never the step title typed in the designer
+        const sentText = String(payloadOf(job).text ?? '');
+        if (payloadOf(job).category !== 'workflow_task' || !sentText.endsWith(WORKFLOW_TASK_SENTENCE) || sentText.includes('«')
+          || payloadOf(job).link !== approvalInboxInstanceLink(instanceId)) problems.push(`the keeper's messenger job is missing or wrong: ${JSON.stringify(payloadOf(job)).slice(0, 200)}`);
         if ((await bellOf(seller.userId, TASK_TITLE)).length !== 0) problems.push('the seller who sent the proforma was notified of their own move');
         if ((await bellOf(bystander.userId, TASK_TITLE)).length !== 0) problems.push('a user without warehouse.out was notified');
 
