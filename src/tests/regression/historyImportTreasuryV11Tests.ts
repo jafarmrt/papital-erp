@@ -50,6 +50,8 @@ async function emptyBank(): Promise<number> {
 
 const post = async (client: Admin, rows: TreasuryImportRow[], commit: boolean) => {
   const res = await client.post(URL, { commit, rows });
+  // a post that recorded nothing answers 409 with its rows, so its key is released
+  if (commit && res.status === 409 && res.body?.code === 'HISTORY_IMPORT_NOT_POSTED') return res.body.details as TreasuryImportResult;
   if (!ok(res)) throw new Error(`the import (${commit ? 'post' : 'preview'}) returned ${brief(res)}`);
   return res.body as TreasuryImportResult;
 };
@@ -223,6 +225,24 @@ export async function runHistoryImportTreasuryV11Tests(shouldRun: ShouldRun): Pr
       });
       const beforeVoucher = await post(admin, [receipt(cleared, 2, '1405-02-01', '1000')], false);
       if (rowOf(beforeVoucher, 2)?.status !== 'error' || !String(rowOf(beforeVoucher, 2)?.message).includes('گردشی با تاریخ')) problems.push(`a row before a voucher on the account reads ${JSON.stringify(beforeVoucher.rows)}, expected refused`);
+
+      // two banks on one ledger account: money on the second today does not hold back the first
+      const [sharedLedger] = await orm.select({ accountId: bankAccounts.accountId }).from(bankAccounts).where(eq(bankAccounts.id, opened));
+      const first = await BankAccountService.createBankAccount({ title: `بانک هم‌حساب الف ${Date.now()}`, type: 'bank', accountId: Number(sharedLedger?.accountId), initialBalance: 0, currency: 'IRR', openingDate: '2026-03-21' });
+      const second = await BankAccountService.createBankAccount({ title: `بانک هم‌حساب ب ${Date.now()}`, type: 'bank', accountId: Number(sharedLedger?.accountId), initialBalance: 0, currency: 'IRR', openingDate: '2026-03-21' });
+      await orm.update(bankAccounts).set({ openingDate: '2026-03-21' }).where(eq(bankAccounts.id, opened));
+      await post(admin, [receipt(second.id, 2, '1405-08-01', '3000')], true);
+      const sharing = await post(admin, [receipt(first.id, 2, '1405-02-01', '1000')], false);
+      if (rowOf(sharing, 2)?.status !== 'ok') problems.push(`a row on a bank whose ledger account another bank shares reads ${JSON.stringify(sharing.rows)}, expected ok`);
+      const later = await post(admin, [receipt(second.id, 2, '1405-02-01', '1000')], false);
+      if (rowOf(later, 2)?.status !== 'error') problems.push(`a row before the same bank's own later receipt reads ${JSON.stringify(later.rows)}, expected refused`);
+
+      // a refused post releases its key: the same key sent again once fixed is posted, not answered from memory
+      const key = `history-import-${Date.now()}`;
+      const bad = await admin.post(URL, { commit: true, rows: [receipt(first.id, 2, '', '1000')] }).set('Idempotency-Key', key);
+      if (bad.status !== 409 || bad.body?.code !== 'HISTORY_IMPORT_NOT_POSTED') problems.push(`a refused post answered ${brief(bad)}, expected 409 HISTORY_IMPORT_NOT_POSTED`);
+      const fixed = await admin.post(URL, { commit: true, rows: [receipt(first.id, 2, '1405-02-02', '1000')] }).set('Idempotency-Key', key);
+      if (!ok(fixed) || !(fixed.body as TreasuryImportResult).committed) problems.push(`the fixed post with the same key answered ${brief(fixed)}, expected committed`);
       if (problems.length > 0) throw new Error(problems.join(' | '));
       return 'concurrent posts record the file once; money that arrived later never pays an earlier row';
     }));

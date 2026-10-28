@@ -79,11 +79,22 @@ async function lastMovementDays(tx: DbExecutor, bankIds: number[]): Promise<Map<
   const banks = await tx.select({ id: bankAccounts.id, accountId: bankAccounts.accountId, openingDate: bankAccounts.openingDate })
     .from(bankAccounts).where(inArray(bankAccounts.id, bankIds));
   for (const b of banks) later(b.id, toStorageDate(b.openingDate) || null);
+  // a voucher line names its bank by its detail (treasury rows, cleared cheques and opening vouchers do); a line without that
+  // detail counts only for a bank alone on its ledger account, since banks often share 1003 or 1001
   const banksOfAccount = new Map<number, number[]>();
   for (const b of banks) if (b.accountId) banksOfAccount.set(b.accountId, [...(banksOfAccount.get(b.accountId) ?? []), b.id]);
   if (banksOfAccount.size > 0) {
+    const sharing = await tx.select({ accountId: bankAccounts.accountId, n: sql<number>`count(*)::int` }).from(bankAccounts)
+      .where(and(inArray(bankAccounts.accountId, [...banksOfAccount.keys()]), eq(bankAccounts.isDeleted, 0)))
+      .groupBy(bankAccounts.accountId);
+    const shared = new Set(sharing.filter(r => Number(r.n) > 1).map(r => Number(r.accountId)));
     // voucher dates are text (Jalali or ISO), so each distinct one is read here
-    const lines = await tx.selectDistinct({ accountId: journalVoucherItems.accountId, date: journalVouchers.date })
+    const lines = await tx.selectDistinct({
+      accountId: journalVoucherItems.accountId,
+      detailedType: journalVoucherItems.detailedType,
+      detailedId: journalVoucherItems.detailedId,
+      date: journalVouchers.date,
+    })
       .from(journalVoucherItems)
       .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
       .where(and(
@@ -91,7 +102,15 @@ async function lastMovementDays(tx: DbExecutor, bankIds: number[]): Promise<Map<
         eq(journalVoucherItems.isDeleted, 0),
         eq(journalVouchers.isDeleted, 0),
       ));
-    for (const l of lines) for (const id of banksOfAccount.get(l.accountId) ?? []) later(id, toStorageDate(l.date) || null);
+    for (const l of lines) {
+      const day = toStorageDate(l.date) || null;
+      const ofAccount = banksOfAccount.get(l.accountId) ?? [];
+      if (l.detailedType === 'bank_account' && l.detailedId) {
+        if (ofAccount.includes(l.detailedId)) later(l.detailedId, day);
+      } else if (!shared.has(l.accountId)) {
+        for (const id of ofAccount) later(id, day);
+      }
+    }
   }
   return days;
 }

@@ -17,6 +17,11 @@ export interface IdempotencyMiddlewareOptions {
    * will be rejected with 400 Bad Request (fail-closed policy for sensitive financial/inventory routes).
    */
   required?: boolean;
+  /**
+   * v11 history import: the key is taken only for requests this says write (a preview of the import writes nothing, so it
+   * keeps no key and no answer)
+   */
+  onlyWhen?: (req: Request) => boolean;
 }
 
 /**
@@ -31,6 +36,7 @@ export function idempotency(options: IdempotencyMiddlewareOptions = {}) {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) {
       return next();
     }
+    if (options.onlyWhen && !options.onlyWhen(req)) return next();
 
     const key = (req.headers[headerName] || req.headers[altHeaderName] || req.body?.idempotencyKey) as string | undefined;
 
