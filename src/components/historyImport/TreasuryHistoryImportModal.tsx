@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { FileSpreadsheet } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Modal, ModalFooterActions } from '../common/Modal';
-import { fetchJson } from '../../api';
+import { ApiError, fetchJson } from '../../api';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { useContraAccountsQuery } from '../../hooks/accounting/useTreasuryQueries';
 import { invalidateAfterTreasuryChange } from '../../hooks/accounting/accountingInvalidation';
@@ -119,6 +119,12 @@ export function TreasuryHistoryImportModal({ isOpen, onClose, lists }: Props) {
         void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.documents.all });
       }
     } catch (err) {
+      // a post that recorded nothing comes back refused, with every row's outcome
+      if (err instanceof ApiError && err.code === 'HISTORY_IMPORT_NOT_POSTED' && err.details?.rows) {
+        setResult(err.details as TreasuryImportResult);
+        setStale(false);
+        setStep('preview');
+      }
       setError(errorMessageOf(err) || 'سرور پاسخ نداد؛ دوباره تلاش کنید.');
     } finally {
       busyRef.current = false;
