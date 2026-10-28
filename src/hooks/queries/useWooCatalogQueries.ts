@@ -66,6 +66,28 @@ export function useSetWcSkuRenameMutation() {
   });
 }
 
+/** v11 phase 6.5 (part D): «ارسال تصویر شاخص» on or off, with the program's public address to turn it on */
+export function useSetWcImagePushMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: { enabled: boolean; mediaBaseUrl?: string }) => (await fetchJson('/woocommerce/image-push', {
+      method: 'POST', body: JSON.stringify(body),
+    })) as WcRefreshResult,
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: WC_CATALOG_KEY }); },
+  });
+}
+
+/** part D: «ارسال کالکشن‌ها» on or off, the target state */
+export function useSetWcCollectionPushMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (enabled: boolean) => (await fetchJson('/woocommerce/collection-push', {
+      method: 'POST', body: JSON.stringify({ enabled }),
+    })) as WcRefreshResult,
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: WC_CATALOG_KEY }); },
+  });
+}
+
 /**
  * 10.3 (ARCH review finding 3, part 13): the invoices made from shop orders and the order log, read again on each opening
  * of the WooCommerce tab (v10.0.227, OBS-PR-17: only that tab reads them) and refreshed by an order fetched by hand

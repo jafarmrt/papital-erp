@@ -26,6 +26,8 @@ export const AUDIT_ACTION_LABELS = {
   WC_STOCK_PUSH: 'ارسال موجودی به سایت',
   WC_PRICE_PUSH: 'ارسال قیمت به سایت',
   WC_SKU_PUSH: 'تغییر کد محصول در سایت',
+  WC_IMAGE_PUSH: 'ارسال تصویر شاخص به سایت',
+  WC_COLLECTION_PUSH: 'ارسال کالکشن‌ها به سایت',
 } as const satisfies Record<string, string>;
 
 export type KnownAuditAction = keyof typeof AUDIT_ACTION_LABELS;

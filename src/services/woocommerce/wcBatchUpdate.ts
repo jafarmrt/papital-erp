@@ -1,5 +1,5 @@
 import { ValidationError } from '../../errors/customErrors.js';
-import { chunked } from '../../lib/woocommerce/wcCatalog.js';
+import { chunked, WC_BATCH_SIZE } from '../../lib/woocommerce/wcCatalog.js';
 import { wcRequest, type WcConnection } from './wcClient.js';
 import { isShopLevelFailure } from './wcStockPush.service.js';
 
@@ -11,7 +11,11 @@ import { isShopLevelFailure } from './wcStockPush.service.js';
  */
 export interface BatchLink { id: number; wcProductId: number; wcVariationId: number }
 
-export interface FieldOutcome<L extends BatchLink> { link: L; error: string; requestFailed?: boolean }
+export interface FieldOutcome<L extends BatchLink> {
+  link: L; error: string; requestFailed?: boolean;
+  /** v11 phase 6.5: the shop's answer row of a product it took (the image push reads the new image id from it) */
+  answer?: Record<string, unknown>;
+}
 
 interface BatchAnswerRow { id?: unknown; error?: { message?: unknown } }
 
@@ -28,7 +32,8 @@ async function sendBatch<L extends BatchLink>(
     return rows.map(r => {
       const a = byId.get(r.id);
       if (!a) return { link: r.link, error: 'سایت پاسخی برای این محصول نداد.' };
-      return { link: r.link, error: a.error ? String(a.error.message ?? 'خطای سایت').slice(0, 300) : '' };
+      if (a.error) return { link: r.link, error: String(a.error.message ?? 'خطای سایت').slice(0, 300) };
+      return { link: r.link, error: '', answer: a as Record<string, unknown> };
     });
   } catch (err) {
     const message = err instanceof ValidationError ? err.message : 'ارتباط با سایت ناموفق بود.';
@@ -37,19 +42,21 @@ async function sendBatch<L extends BatchLink>(
   }
 }
 
-/** Sends each link's fields; returns one outcome per link */
+/** Sends each link's fields, `batchSize` rows a request (100 unless given); returns one outcome per link */
 export async function sendLinkFields<L extends BatchLink>(
   conn: WcConnection, wanted: Array<{ link: L; fields: Record<string, unknown> }>, signal: AbortSignal,
+  options: { batchSize?: number } = {},
 ): Promise<Array<FieldOutcome<L>>> {
+  const size = options.batchSize ?? WC_BATCH_SIZE;
   const simple = wanted.filter(w => w.link.wcVariationId === 0).map(w => ({ ...w, id: w.link.wcProductId }));
   const byParent = new Map<number, Array<{ link: L; fields: Record<string, unknown>; id: number }>>();
   for (const w of wanted.filter(x => x.link.wcVariationId > 0)) {
     byParent.set(w.link.wcProductId, [...(byParent.get(w.link.wcProductId) ?? []), { ...w, id: w.link.wcVariationId }]);
   }
   const outcomes: Array<FieldOutcome<L>> = [];
-  for (const rows of chunked(simple)) outcomes.push(...await sendBatch(conn, 'products/batch', rows, signal));
+  for (const rows of chunked(simple, size)) outcomes.push(...await sendBatch(conn, 'products/batch', rows, signal));
   for (const [parent, rows] of byParent) {
-    for (const part of chunked(rows)) outcomes.push(...await sendBatch(conn, `products/${parent}/variations/batch`, part, signal));
+    for (const part of chunked(rows, size)) outcomes.push(...await sendBatch(conn, `products/${parent}/variations/batch`, part, signal));
   }
   return outcomes;
 }

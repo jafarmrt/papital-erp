@@ -4,18 +4,23 @@ import { runSyncSteps, type WcSyncStep } from '../../lib/woocommerce/wcSyncSteps
 import { runAutoPushOnce } from './wcAutoPush.service.js';
 import { runPricePushOnce, runSkuRenameOnce } from './wcFieldPush.service.js';
 import { runNightlyOnce } from './wcNightly.service.js';
+import { runImagePushOnce } from './wcImagePush.service.js';
+import { runCollectionPushOnce } from './wcCollectionPush.service.js';
 
 /**
  * 10.2 package 6 (D-04 parts B and C): the worker started and stopped by `server.ts`. Once a minute, after the stock writes
- * have committed and never inside them, it runs in turn the automatic stock push, the price push, the SKU rename and the
- * nightly re-read, each behind its own setting and each taking the `WOOCOMMERCE_SYNC` lock on its own (one exchange with
- * the shop at a time); one step's failure never skips the next, and a minute whose steps are still running is skipped.
+ * have committed and never inside them, it runs in turn the automatic stock push, the price push, the SKU rename, the
+ * image and tag pushes (v11 phase 6.5) and the nightly re-read, each behind its own setting and each taking the
+ * `WOOCOMMERCE_SYNC` lock on its own (one exchange with the shop at a time); one step's failure never skips the next, and a minute whose steps are still running is skipped.
  * Terminal output is English (AGENTS §6): the Persian reasons are on the run rows the WooCommerce tab shows.
  */
 const STEPS: WcSyncStep[] = [
   { name: 'auto push', run: () => runAutoPushOnce() },
   { name: 'price push', run: () => runPricePushOnce() },
   { name: 'SKU rename', run: () => runSkuRenameOnce() },
+  // v11 phase 6.5 (part D): the featured image and the product tags, each behind its own setting
+  { name: 'image push', run: () => runImagePushOnce() },
+  { name: 'collection push', run: () => runCollectionPushOnce() },
   { name: 'nightly re-read', run: () => runNightlyOnce() },
 ];
 

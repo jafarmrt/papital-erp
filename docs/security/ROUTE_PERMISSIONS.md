@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 495
+تعداد مسیرها: 503
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -34,6 +34,8 @@
 | GET | `/api/accounting/cheques` | accounting.cheques \| accounting.treasury \| accounting.reports \| accounting.view |
 | POST | `/api/accounting/cheques` | accounting.cheques |
 | DELETE | `/api/accounting/cheques/:id` | accounting.cheques |
+| GET | `/api/accounting/cheques/:id/allocations` | accounting.cheques |
+| PUT | `/api/accounting/cheques/:id/allocations` | accounting.cheques |
 | PATCH | `/api/accounting/cheques/:id/status` | accounting.cheques |
 | PUT | `/api/accounting/cheques/:id/status` | accounting.cheques |
 | GET | `/api/accounting/control-accounts` | accounting.vouchers |
@@ -63,6 +65,8 @@
 | GET | `/api/accounting/summary` | accounting.view |
 | GET | `/api/accounting/treasury` | accounting.treasury \| accounting.reports \| accounting.view |
 | POST | `/api/accounting/treasury` | accounting.treasury |
+| GET | `/api/accounting/treasury/:id/allocations` | accounting.treasury |
+| PUT | `/api/accounting/treasury/:id/allocations` | accounting.treasury |
 | PUT | `/api/accounting/treasury/:id/document` | accounting.treasury |
 | GET | `/api/accounting/treasury/:id/document-options` | accounting.treasury |
 | GET | `/api/accounting/treasury/:id/petty-cash-lines` | accounting.treasury \| accounting.reports \| accounting.view |
@@ -157,7 +161,7 @@
 | GET | `/api/dashboard-bi-stats` | reports.view \| warehouse.view |
 | GET | `/api/documents` | documents.view \| documents.create \| documents.edit \| audit.view |
 | POST | `/api/documents` | documents.create \| documents.finalize \| warehouse.in \| warehouse.out \| audit.apply \| warehouse.production_receipt |
-| DELETE | `/api/documents/:id` | documents.delete |
+| DELETE | `/api/documents/:id` | documents.delete \| documents.void_stock |
 | GET | `/api/documents/:id` | documents.view \| documents.create \| documents.edit \| workflow.view \| audit.view |
 | PUT | `/api/documents/:id` | documents.edit |
 | PUT | `/api/documents/:id/finalize` | documents.finalize \| warehouse.in \| warehouse.out |
@@ -166,6 +170,7 @@
 | GET | `/api/documents/audit-items` | audit.view |
 | GET | `/api/documents/by-ref/:ref` | documents.view \| documents.create \| documents.edit \| workflow.view \| audit.view |
 | GET | `/api/documents/next-ref` | documents.view \| documents.create \| documents.edit \| documents.finalize \| warehouse.in \| warehouse.out \| warehouse.transfer \| audit.view |
+| GET | `/api/documents/settlement-options` | accounting.treasury \| accounting.cheques |
 | GET | `/api/drafts` | login-only |
 | POST | `/api/drafts` | login-only |
 | DELETE | `/api/drafts/:entityType` | login-only |
@@ -452,9 +457,12 @@
 | POST | `/api/warehouses/:id/reactivate` | admin |
 | POST | `/api/woocommerce/auto-push` | woocommerce.manage |
 | GET | `/api/woocommerce/catalog` | woocommerce.view |
+| POST | `/api/woocommerce/collection-push` | woocommerce.manage |
+| POST | `/api/woocommerce/image-push` | woocommerce.manage |
 | GET | `/api/woocommerce/order-logs` | woocommerce.view |
 | POST | `/api/woocommerce/price-list` | woocommerce.manage |
 | POST | `/api/woocommerce/refresh-products` | woocommerce.manage |
+| GET | `/api/woocommerce/shop-image/:file` | public |
 | POST | `/api/woocommerce/sku-rename` | woocommerce.manage |
 | POST | `/api/woocommerce/sync-all-stocks` | woocommerce.manage |
 | POST | `/api/woocommerce/sync-item` | woocommerce.manage |

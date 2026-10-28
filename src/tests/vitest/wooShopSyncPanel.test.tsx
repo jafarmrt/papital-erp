@@ -21,7 +21,10 @@ vi.mock('../../api', async () => {
 });
 vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: vi.fn() }));
 const granted = new Set<string>();
-vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: (key: string) => granted.has(key) }));
+vi.mock('../../contexts/AuthContext', () => ({
+  useHasPermission: (key: string) => granted.has(key),
+  useHasAnyPermission: (keys: string[]) => keys.some(k => granted.has(k)),
+}));
 vi.mock('react-hot-toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 afterEach(() => { cleanup(); vi.mocked(fetchJson).mockReset(); vi.mocked(confirmAction).mockReset(); });
 
@@ -45,6 +48,8 @@ const view: WcShopSyncView = {
   siteDecimals: 0,
   price: { ...field, skipped: [{ itemId: 4, code: 'PR-4', name: DOLLAR_ITEM, reason: 'currency_mismatch' }], skippedTotal: 1 },
   sku: { ...field, pending: 2 },
+  image: { ...field, baseUrl: '', secretsReady: true, pending: 0, notRead: 0 },
+  collection: { ...field, pending: 0 },
   lastNightly: { at: '2026-10-18T00:30:00.000Z', status: 'ok', error: '', summary: {} },
   // review N-4: the nightly reading compared prices in the shop currency of that night, not the last one read
   differencesCurrency: 'IRHT',

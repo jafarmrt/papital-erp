@@ -5,6 +5,7 @@ import type { MockProduct } from '../fixtures/mockWooCatalogStore.js';
 import { brief, linksOf, newItem, withShop } from './wooCatalogTestKit.js';
 import { deadlineAndCapCase, emptyOrUnorderedCase, removedProductAndDeadlinesCase } from './wooCatalogReviewTests.js';
 import { catalogEmptyPagesCase, catalogGapCase, massCloseCase, partialVariationsCase, shiftedCatalogCase } from './wooCatalogReadEdgeTests.js';
+import { collectionPushCase, imagePushCase } from './wooMediaPushTests.js';
 import { autoPushBoundedFailuresCase, autoPushChangedTrackedCase, autoPushOpenOrdersCase, autoPushSwitchCase } from './wooAutoPushTests.js';
 import {
   autoPushCapCase, autoPushOrderListMovedCase, autoPushOrderPageEdgeCase, autoPushRefusedBatchCase, autoPushRunPurgeCase, autoPushWebhookAndHourlyCase,
@@ -62,6 +63,12 @@ export async function runWooCatalogSyncTests(shouldRun: ShouldRun): Promise<Test
     ['reg_wc_catalog_empty_pages_v11_6_5',
       'v11 phase 6.5 (PR #420 third review SF1): a list that comes empty page after page is read to its count and its gap asks, and one cut at the cap after short pages keeps every link it did not read',
       ['v11_6_5', 'd04', 'woocommerce', 'catalog'], catalogEmptyPagesCase],
+    ['reg_wc_image_push_v11_6_5',
+      'v11 phase 6.5 (D-04 part D, decisions 45 and 46): the image push is off by default and needs media.manage, the secrets key and a public address; a product with a shop image only takes a baseline, a changed cover replaces the featured image and keeps the gallery, a cover taken away removes nothing, and the signed address answers only a live cover in time',
+      ['v11_6_5', 'd04', 'woocommerce', 'media'], imagePushCase],
+    ['reg_wc_collection_push_v11_6_5',
+      'v11 phase 6.5 (D-04 part D, decision 44): the collection push is off by default and needs a key that edits collections; collections become tags of the simple or parent product, a missing tag is made, and only the tags the program added are taken away',
+      ['v11_6_5', 'd04', 'woocommerce', 'media'], collectionPushCase],
     ['reg_wc_auto_push_switch_d04',
       'D-04 part B: the automatic push is off by default, only woocommerce.manage turns it on or off with the target state, with an audit row and a complete connection',
       ['d04', 'woocommerce', 'auto'], autoPushSwitchCase],

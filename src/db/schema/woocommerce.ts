@@ -48,6 +48,20 @@ export const wcProductLinks = pgTable('wc_product_links', {
   priceFailureCount: integer('price_failure_count').notNull().default(0),
   skuError: text('sku_error').notNull().default(''),
   skuFailureCount: integer('sku_failure_count').notNull().default(0),
+  /**
+   * v11 phase 6.5 (D-04 part D, migration 0006): the shop product's featured image id as last read or written (0 none, null
+   * not read yet), the cover the image push last brought in line ('' never compared, 'none' compared without a cover), the
+   * tag ids the collection push added (none at first) and the collections it sent them for (null until compared), and each send's last
+   * refusal and refusals in a row
+   */
+  siteImageId: integer('site_image_id'),
+  coverSentSha256: text('cover_sent_sha256').notNull().default(''),
+  imageError: text('image_error').notNull().default(''),
+  imageFailureCount: integer('image_failure_count').notNull().default(0),
+  sentTagIds: jsonb('sent_tag_ids').notNull().default(sql`'[]'::jsonb`),
+  sentCollections: text('sent_collections'),
+  collectionError: text('collection_error').notNull().default(''),
+  collectionFailureCount: integer('collection_failure_count').notNull().default(0),
   isDeleted: integer('is_deleted').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
@@ -60,7 +74,7 @@ export const wcProductLinks = pgTable('wc_product_links', {
 /** 10.2 package 6 (migration 0128): one catalog refresh or stock push of the WooCommerce shop and its counts */
 export const wcSyncRuns = pgTable('wc_sync_runs', {
   id: serial('id').primaryKey(),
-  kind: text('kind').notNull(), // 'refresh' | 'stock_push' | 'price_push' | 'sku_push' (0131)
+  kind: text('kind').notNull(), // 'refresh' | 'stock_push' | 'price_push' | 'sku_push' | 'image_push' | 'collection_push' (0006)
   status: text('status').notNull(), // 'ok' | 'partial' | 'failed'
   userId: integer('user_id').references(() => users.id),
   startedAt: timestamp('started_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),

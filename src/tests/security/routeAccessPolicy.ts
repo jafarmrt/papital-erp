@@ -23,6 +23,9 @@ export const PUBLIC_ROUTES = new Set([
   // v11 phase 6.2 (X14): the `router.all` webhooks, now in the table: the shop's order webhook checks its own signature
   // and token, and the echo simulator answers 404 in production
   'ALL /api/woocommerce/webhook/order', 'ALL /api/events/webhook-echo',
+  // v11 phase 6.5 (D-04 part D, decision ت۴۶): the shop downloads an item's cover from a signed address that lives 15
+  // minutes; limited per address, and every refusal is the same 404
+  'GET /api/woocommerce/shop-image/:file',
 ]);
 
 /**

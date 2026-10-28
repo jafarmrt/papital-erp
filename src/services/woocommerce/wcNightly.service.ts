@@ -11,6 +11,8 @@ import { requireWcConnection } from './wcClient.js';
 import { liveLinks, refreshCatalogLocked, type WcRefreshSummary } from './wcCatalog.service.js';
 import { activeShopPriceList, isSkuRenameEnabled, wantedSitePrices } from './wcFieldPush.service.js';
 import { readSiteMoney } from './wcSiteCurrency.js';
+import { imagePushSettings } from './wcImagePush.service.js';
+import { isCollectionPushEnabled } from './wcCollectionPush.service.js';
 import type { WcSiteMoney } from '../../lib/woocommerce/wcShopSync.js';
 
 /**
@@ -21,7 +23,7 @@ import type { WcSiteMoney } from '../../lib/woocommerce/wcShopSync.js';
  * changed by hand in the shop). A stock difference is put right by the automatic stock push on its next run (the link's
  * shop stock changed, so it is compared again) and a price difference by the price push; nothing is sent here. A failed
  * reading is tried again at most `WC_NIGHTLY_MAX_ATTEMPTS` times that day, `WC_NIGHTLY_RETRY_MINUTES` apart, and a
- * successful one lets products stopped after repeated price or SKU refusals try again.
+ * successful one lets products stopped after repeated price, SKU, image or tag refusals try again.
  */
 export type NightlyState = 'off' | 'not_due' | 'busy' | 'read' | 'failed';
 
@@ -29,6 +31,8 @@ export async function anyAutoSendOn(): Promise<boolean> {
   const [auto] = await orm.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, WC_AUTO_PUSH_SETTING_KEY));
   if (isAutoPushOn(auto?.value)) return true;
   if ((await activeShopPriceList()).title !== '') return true;
+  // v11 phase 6.5 (part D): the image and tag sends need the nightly reading too (the shop's image ids, stopped products)
+  if ((await imagePushSettings()).enabled || await isCollectionPushEnabled()) return true;
   return isSkuRenameEnabled();
 }
 
@@ -76,8 +80,12 @@ export async function runNightlyOnce(
       const priced = await wantedPricesForNightly(prices.signal).catch(() => undefined);
       const summary = await refreshCatalogLocked({}, undefined, { run: { nightly: { businessDay: day }, ...priced } });
       // products stopped after repeated price or SKU refusals try again after a reading of the shop
-      await orm.update(wcProductLinks).set({ priceFailureCount: 0, skuFailureCount: 0, updatedAt: systemNowUtcIso() })
-        .where(and(eq(wcProductLinks.isDeleted, 0), or(gt(wcProductLinks.priceFailureCount, 0), gt(wcProductLinks.skuFailureCount, 0))));
+      await orm.update(wcProductLinks).set({
+        priceFailureCount: 0, skuFailureCount: 0, imageFailureCount: 0, collectionFailureCount: 0, updatedAt: systemNowUtcIso(),
+      }).where(and(eq(wcProductLinks.isDeleted, 0), or(
+        gt(wcProductLinks.priceFailureCount, 0), gt(wcProductLinks.skuFailureCount, 0),
+        gt(wcProductLinks.imageFailureCount, 0), gt(wcProductLinks.collectionFailureCount, 0),
+      )));
       return { state: 'read' as const, summary };
     } catch {
       // the failed run row (with its business day) was written by `refreshCatalogLocked`
