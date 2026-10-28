@@ -5,6 +5,7 @@ import { ValidationError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
+import { historyImportAmount } from '../../lib/historyImport/historyImportAmount.js';
 import {
   STOCK_IMPORT_INCOMING_KINDS, stockImportDocumentKey, stockImportDuplicateKey, stockImportNotes, stockImportOrder,
   type StockImportKind, type StockImportResult, type StockImportRow, type StockImportRowOutcome,
@@ -81,17 +82,6 @@ const DOC_TITLE_OF: Partial<Record<StockImportKind, string>> = {
   waste: 'سند ضایعات',
 };
 
-function decimalText(raw: unknown): string | null {
-  const text = String(raw ?? '').trim();
-  if (!text) return null;
-  try {
-    const value = fin(text);
-    return value.greaterThan(0) ? value.round(4).toString() : null;
-  } catch {
-    return null;
-  }
-}
-
 function prepare(rows: StockImportRow[]): PreparedRow[] {
   return rows.map(row => {
     const outcome: StockImportRowOutcome = { rowNo: row.rowNo, sheet: row.sheet, status: 'ok' };
@@ -102,11 +92,12 @@ function prepare(rows: StockImportRow[]): PreparedRow[] {
     let isoDate = '';
     try {
       isoDate = requireStorageDate(row.date, `تاریخ ردیف ${faRow(row.rowNo)}`);
+      if (!isoDate) fail('تاریخ ردیف خالی است؛ هر ردیف با تاریخ خودش ثبت می‌شود.');
     } catch (err) {
       fail(err instanceof ValidationError ? err.message : 'تاریخ ردیف خوانده نشد.');
     }
-    const quantity = decimalText(row.quantity) ?? '';
-    const unitCost = decimalText(row.unitCost);
+    const quantity = historyImportAmount(row.quantity) ?? '';
+    const unitCost = historyImportAmount(row.unitCost);
     if (outcome.status === 'ok') {
       if (!quantity) fail('تعداد ردیف خالی یا نادرست است؛ یک عدد بزرگ‌تر از صفر بنویسید.');
       else if (STOCK_IMPORT_INCOMING_KINDS.has(row.kind) && !unitCost) fail('قیمت واحد این ردیف خالی یا نادرست است؛ موجودی اولیه، خرید و تولید با بهای واحد (ریال) وارد انبار می‌شوند.');

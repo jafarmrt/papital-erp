@@ -104,7 +104,7 @@ export async function runHistoryImportStockV11Tests(shouldRun: ShouldRun): Promi
       if (receipt.length !== 1 || Number(receipt[0].partyId) !== supplier.id || receipt[0].day !== '2026-03-30' || !String(receipt[0].notes).includes('خ۱')) problems.push(`the receipt reads ${JSON.stringify(receipt)}, expected the supplier, 1405-01-10 (2026-03-30) and the Excel slip in its notes`);
       const opening = (await orm.execute(sql`SELECT t.document_ref AS ref, to_char(t.date, 'YYYY-MM-DD') AS day, t.unit_price::float AS price FROM transactions t
         WHERE t.item_id = ${material.id} AND t.document_type = 'audit' AND t.is_deleted = 0`)).rows as Array<{ ref: string; day: string; price: number }>;
-      if (opening.length !== 1 || opening[0].ref !== 'ثبت موجودی افتتاحیه' || opening[0].day !== '2026-03-21' || opening[0].price !== 1000) problems.push(`the material's opening Kardex row reads ${JSON.stringify(opening)}, expected «ثبت موجودی افتتاحیه» on 1405-01-01 (2026-03-21) at 1000`);
+      if (opening.length !== 1 || opening[0].ref !== 'ثبت موجودی افتتاحیه' || opening[0].day !== '2026-03-21' || opening[0].price !== 1000) problems.push(`the material's opening Kardex row reads ${JSON.stringify(opening)}, expected the opening reference on 1405-01-01 (2026-03-21) at 1000`);
       const vouchers = (await orm.execute(sql`SELECT jv.status, jv.date, (SELECT sum(ji.credit)::float FROM journal_voucher_items ji WHERE ji.voucher_id = jv.id) AS credit
         FROM journal_vouchers jv WHERE jv.id IN (SELECT voucher_id FROM item_opening_voucher_items WHERE item_id IN (${material.id}, ${product.id})) AND jv.is_deleted = 0`)).rows as Array<{ status: string; date: string; credit: number }>;
       if (vouchers.length !== 1 || vouchers[0].status !== 'draft' || fin(vouchers[0].credit).toNumber() !== 260_000 || !String(vouchers[0].date).startsWith('2026-03-21')) problems.push(`the opening vouchers read ${JSON.stringify(vouchers)}, expected one draft dated 1405-01-01 worth 260,000 (10 x 1000 + 5 x 50000)`);
@@ -117,7 +117,7 @@ export async function runHistoryImportStockV11Tests(shouldRun: ShouldRun): Promi
 
   const refusals = 'reg_history_import_stock_refusals_v11';
   if (shouldRun(refusals, 'v11', 'history_import', 'inventory', 'stock')) {
-    await runCase(results, refusals, 'v11 history import (tool 2): a consumption beyond the day\'s stock, an opening of an item that has moved, a row before an item\'s last movement and a purchase without cost and an unknown code are refused with their reason, and a post with any refused row keeps nothing; a row like another of the file waits until accepted; the import needs «ورود سابقهٔ گردش انبار از اکسل»', () => inFiscalSandbox(async () => {
+    await runCase(results, refusals, 'v11 history import (tool 2): a consumption beyond the day\'s stock, an opening of an item that has moved, a row before an item\'s last movement and a purchase without cost and an unknown code are refused with their reason, and a post with any refused row keeps nothing; a row like another of the file waits until accepted; the import needs warehouse.history_import', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const main = String(await getDefaultWarehouseCode(orm));

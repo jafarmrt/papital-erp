@@ -5,7 +5,8 @@
  * transaction that is rolled back) or posts them all in one transaction, day by day; one refused row posts nothing.
  */
 
-export const STOCK_IMPORT_MAX_ROWS = 1500;
+/** one month at a time, so a post (a preview pass, then the real one) answers well within the proxy's two minutes */
+export const STOCK_IMPORT_MAX_ROWS = 400;
 
 /**
  * What one Excel row becomes: opening stock on the first day (Dr inventory / Cr opening capital), a purchase receipt with

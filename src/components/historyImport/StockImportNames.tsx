@@ -1,0 +1,79 @@
+import type { ReactNode } from 'react';
+import type { Customer } from '../../types';
+import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
+import type { StockImportMapping, SupplierTarget, WarehouseTarget } from '../../lib/historyImport/stockSheet';
+
+/**
+ * v11 history import, tool 2: the warehouse and supplier names of the Excel file, each mapped once to the app, and the
+ * warehouse «انتقال به نمایش» moves to. Item codes are checked by the preview, which offers a code for each unknown one.
+ */
+interface Props {
+  names: { warehouses: string[]; suppliers: string[] };
+  mapping: StockImportMapping;
+  warehouses: WarehouseItem[];
+  suppliers: Customer[];
+  onChange: (mapping: StockImportMapping) => void;
+}
+
+const SELECT_CLASS = 'w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-2 py-1.5 text-xs';
+
+const encodeWarehouse = (t?: WarehouseTarget) => (!t ? '' : t.kind === 'skip' ? 'skip' : `wh:${t.code}`);
+const encodeSupplier = (t?: SupplierTarget) => (!t ? '' : t.kind === 'skip' ? 'skip' : `s:${t.partyId}`);
+
+export function StockImportNames({ names, mapping, warehouses, suppliers, onChange }: Props) {
+  const setWarehouse = (name: string, value: string) => {
+    const next = { ...mapping.warehouses };
+    if (!value) delete next[name];
+    else next[name] = value === 'skip' ? { kind: 'skip' } : { kind: 'warehouse', code: value.slice(3) };
+    onChange({ ...mapping, warehouses: next });
+  };
+  const setSupplier = (name: string, value: string) => {
+    const next = { ...mapping.suppliers };
+    if (!value) delete next[name];
+    else next[name] = value === 'skip' ? { kind: 'skip' } : { kind: 'supplier', partyId: Number(value.slice(2)) };
+    onChange({ ...mapping, suppliers: next });
+  };
+  const warehouseOptions = warehouses.map(w => <option key={w.code} value={`wh:${w.code}`}>{w.name || w.code}</option>);
+
+  const section = (title: string, hint: string, items: string[], render: (name: string) => ReactNode) => items.length === 0 ? null : (
+    <section className="space-y-2">
+      <h4 className="text-xs font-bold text-slate-700 dark:text-slate-200">{title}</h4>
+      <p className="text-[11px] text-slate-500">{hint}</p>
+      <div className="grid gap-2">
+        {items.map(name => (
+          <label key={name} className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center rounded-lg bg-slate-50 dark:bg-slate-800/60 p-2">
+            <span className="text-xs font-medium text-slate-800 dark:text-slate-100 break-words">{name}</span>
+            {render(name)}
+          </label>
+        ))}
+      </div>
+    </section>
+  );
+
+  return (
+    <div className="space-y-5">
+      {section('انبار', 'هر نام ستون «انبار» به یک انبار برنامه وصل شود؛ خانهٔ خالی یعنی انبار پیش‌فرض.', names.warehouses, name => (
+        <select aria-label={`انبار ${name}`} className={SELECT_CLASS} value={encodeWarehouse(mapping.warehouses[name])} onChange={e => setWarehouse(name, e.target.value)}>
+          <option value="">انتخاب کنید</option>
+          <option value="skip">کنار گذاشته شود</option>
+          {warehouseOptions}
+        </select>
+      ))}
+      {section('تأمین‌کننده', 'تأمین‌کنندهٔ هر خرید؛ همان نامی که در برگهٔ «هزینه‌ها» آمده تا پرداخت‌ها روی همین رسیدها بنشیند.', names.suppliers, name => (
+        <select aria-label={`تأمین‌کننده ${name}`} className={SELECT_CLASS} value={encodeSupplier(mapping.suppliers[name])} onChange={e => setSupplier(name, e.target.value)}>
+          <option value="">انتخاب کنید</option>
+          <option value="skip">کنار گذاشته شود</option>
+          {suppliers.map(s => <option key={s.id} value={`s:${s.id}`}>{s.name}</option>)}
+        </select>
+      ))}
+      <label className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
+        <span className="text-xs text-slate-700 dark:text-slate-200">انبار «نمایش» (مقصد ردیف‌های «انتقال به نمایش»)</span>
+        <select aria-label="انبار نمایش" className={SELECT_CLASS} value={mapping.displayWarehouse ?? ''}
+          onChange={e => onChange({ ...mapping, displayWarehouse: e.target.value || null })}>
+          <option value="">انتخاب کنید</option>
+          {warehouses.map(w => <option key={w.code} value={w.code}>{w.name || w.code}</option>)}
+        </select>
+      </label>
+    </div>
+  );
+}
