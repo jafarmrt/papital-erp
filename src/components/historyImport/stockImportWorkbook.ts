@@ -21,7 +21,7 @@ export async function readStockWorkbook(file: File): Promise<{ rows: ParsedStock
 
 /** The month a row is posted in: opening stock in the first month, whatever its cell says. */
 export function stockRowMonth(row: ParsedStockRow): string {
-  const opening = row.shape === 'in' && row.typeText.replace(/[‌\s]+/g, ' ').trim() === 'موجودی اولیه';
+  const opening = row.shape === 'in' && row.typeText.replace(/[‌\s]+/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim() === 'موجودی اولیه';
   return monthOf(opening ? STOCK_OPENING_DAY : row.date);
 }
 

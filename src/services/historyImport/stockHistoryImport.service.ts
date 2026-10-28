@@ -1,17 +1,19 @@
 import { eq, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { documents } from '../../db/schema.js';
-import { ValidationError } from '../../errors/customErrors.js';
+import { ForbiddenError, ValidationError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
 import { historyImportAmount } from '../../lib/historyImport/historyImportAmount.js';
+import { STOCK_OPENING_DAY } from '../../lib/historyImport/stockSheet.js';
 import {
   STOCK_IMPORT_INCOMING_KINDS, stockImportDocumentKey, stockImportDuplicateKey, stockImportNotes, stockImportOrder,
   type StockImportKind, type StockImportResult, type StockImportRow, type StockImportRowOutcome,
 } from '../../lib/historyImport/stockHistoryImport.js';
 import { isoToJalaliDate, toPersianDigits } from '../../utils.js';
 import { DocumentService } from '../document.service.js';
+import { permissionToCreateDocument } from '../documents/documentRecordRule.js';
 import type { DocumentAuditActor } from '../documents/documentAudit.js';
 import { FiscalPeriodService } from '../accounting/fiscalPeriod.service.js';
 import { ItemOpeningService, itemIdsWithOpeningVoucher } from '../inventory/itemOpening.service.js';
@@ -40,6 +42,11 @@ export interface StockImportOptions {
   userId?: number;
   username?: string;
   audit?: DocumentAuditActor & { req?: unknown };
+  /**
+   * the kinds the user may record by hand (computed in the route from the permission each form asks, never read from the
+   * body): a row of another kind is refused, as the hand entry would be
+   */
+  allowedKinds: ReadonlySet<StockImportKind>;
 }
 
 interface PreparedRow {
@@ -56,6 +63,8 @@ export const OPENING_KARDEX_REF = 'ثبت موجودی افتتاحیه';
 const OPENING_KARDEX_NOTES = 'موجودی اولیه از ورود سابقه اکسل';
 
 const faDate = (iso: string) => toPersianDigits(isoToJalaliDate(iso));
+/** opening stock is entered on the first day of 1405 only (owner's decision, 6 Aban 1405), as the window sends it */
+const OPENING_DAY_ISO = requireStorageDate(STOCK_OPENING_DAY, 'روز موجودی اولیه');
 const faRow = (n: number) => toPersianDigits(String(n));
 
 /** The Kardex row a kind writes: its direction and document type, for the duplicate check against the books. */
@@ -103,6 +112,7 @@ function prepare(rows: StockImportRow[]): PreparedRow[] {
       else if (STOCK_IMPORT_INCOMING_KINDS.has(row.kind) && !unitCost) fail('قیمت واحد این ردیف خالی یا نادرست است؛ موجودی اولیه، خرید و تولید با بهای واحد (ریال) وارد انبار می‌شوند.');
       else if (row.kind === 'purchase' && !row.supplierId) fail('تأمین‌کنندهٔ این خرید مشخص نیست.');
       else if (row.kind === 'transfer' && !(row.toWarehouse ?? '').trim()) fail('انبار مقصد این انتقال مشخص نیست.');
+      else if (row.kind === 'opening' && isoDate !== OPENING_DAY_ISO) fail(`موجودی اولیه فقط با تاریخ ${faDate(OPENING_DAY_ISO)} ثبت می‌شود.`);
     }
     return { row, itemId: 0, isoDate, quantity, unitCost, outcome };
   });
@@ -145,6 +155,17 @@ async function postOpening(tx: DbExecutor, p: PreparedRow, options: StockImportO
   const movedDay = (moved.rows?.[0] as { day?: string | null } | undefined)?.day;
   if (movedDay) {
     throw new ValidationError(`این کالا از ${faDate(movedDay)} در انبار گردش دارد؛ موجودی اولیه فقط برای کالایی ثبت می‌شود که هنوز گردشی ندارد. سندهای انبار پیشین این کالا را باطل کنید یا موجودی را با رسید وارد کنید.`);
+  }
+  // an old item can hold stock without Kardex rows (from before the Kardex backfill): an opening on top would part the
+  // stock and its average cost from the Kardex
+  // (the opening rows of other warehouses this import already wrote are on the Kardex)
+  const held = await tx.execute(sql`
+    SELECT (SELECT coalesce(sum(current_stock), 0) FROM item_warehouse_stocks WHERE item_id = ${p.itemId})
+         - (SELECT coalesce(sum(CASE WHEN t.type = 'in' THEN t.quantity ELSE -t.quantity END), 0) FROM transactions t
+             WHERE t.item_id = ${p.itemId} AND ${LEDGER_ROW_FILTER}) AS qty`);
+  const heldQty = fin(String((held.rows?.[0] as { qty?: string | number } | undefined)?.qty ?? 0));
+  if (!heldQty.isZero()) {
+    throw new ValidationError(`این کالا ${toPersianDigits(heldQty.toString())} واحد موجودی دارد که در کاردکس نیست؛ موجودی اولیه فقط برای کالایی با موجودی صفر ثبت می‌شود. موجودی آن را با انبارگردانی صفر کنید یا کاردکس آغازین را بسازید.`);
   }
   if ((await itemIdsWithOpeningVoucher(tx, [p.itemId])).size > 0) {
     throw new ValidationError('این کالا پیش‌تر سند افتتاحیهٔ موجودی دارد؛ موجودی اولیه دوباره ثبت نمی‌شود.');
@@ -258,7 +279,8 @@ async function resolveItems(tx: DbExecutor, rows: PreparedRow[]): Promise<Prepar
     }
     p.outcome.status = 'error';
     if (found.ambiguous.length > 0) {
-      p.outcome.message = `کد «${code}» به چند کالا می‌خورد (${found.ambiguous.join('، ')})؛ کد دقیق را بنویسید.`;
+      p.outcome.message = `کد «${code}» به چند کالا می‌خورد (${found.ambiguous.join('، ')})؛ آن را به کد دقیق وصل کنید.`;
+      p.outcome.unknownCode = code;
     } else {
       p.outcome.message = `کد «${code}» در برنامه نیست؛ آن را به کد کالای درست وصل کنید.`;
       p.outcome.unknownCode = code;
@@ -266,6 +288,23 @@ async function resolveItems(tx: DbExecutor, rows: PreparedRow[]): Promise<Prepar
     return false;
   });
 }
+
+/**
+ * The permission each kind of row needs: what its hand form asks to record it final (the document's create permission, the
+ * transfer form's `warehouse.transfer`); opening stock needs only the import's own permission (which requires warehouse.in).
+ */
+export const STOCK_IMPORT_KIND_PERMISSIONS: ReadonlyArray<readonly [StockImportKind, string | null]> = [
+  ['opening', null],
+  ['purchase', permissionToCreateDocument({ docType: 'receipt', status: 'final' })],
+  ['production', permissionToCreateDocument({ docType: 'production_receipt', status: 'final' })],
+  ['consumption', permissionToCreateDocument({ docType: 'remittance', status: 'final' })],
+  ['waste', permissionToCreateDocument({ docType: 'waste', status: 'final' })],
+  ['transfer', 'warehouse.transfer'],
+];
+
+const KIND_TITLE: Record<StockImportKind, string> = {
+  opening: 'موجودی اولیه', purchase: 'رسید خرید', production: 'رسید تولید', consumption: 'حواله مصرف', waste: 'سند ضایعات', transfer: 'انتقال بین انبارها',
+};
 
 async function postInOrder(tx: DbExecutor, attempt: RowAttempt, prepared: PreparedRow[], options: StockImportOptions): Promise<void> {
   const ordered = await resolveItems(tx, prepared);
@@ -295,6 +334,11 @@ async function postInOrder(tx: DbExecutor, attempt: RowAttempt, prepared: Prepar
     const group = docKey ? ready.filter(q => !done.has(q) && stockImportDocumentKey(q.isoDate, q.row) === docKey) : [p];
     for (const q of group) done.add(q);
 
+    if (!options.allowedKinds.has(p.row.kind)) {
+      const err = new ForbiddenError(`ثبت ${KIND_TITLE[p.row.kind]} مجوز همان فرم را می‌خواهد که شما ندارید.`, { kind: p.row.kind }, 'HISTORY_IMPORT_KIND_FORBIDDEN');
+      markError(group, err.message);
+      continue;
+    }
     if (p.row.kind === 'opening') {
       const result = await attempt(sp => postOpening(sp, p, options, defaultWarehouse));
       if (!result.ok) markError([p], result.message);

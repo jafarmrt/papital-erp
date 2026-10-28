@@ -4,10 +4,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Modal, ModalFooterActions } from '../common/Modal';
 import { ApiError, fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
-import type { Customer, Personnel } from '../../types';
+import type { Customer } from '../../types';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
 import { STOCK_IMPORT_MAX_ROWS, type StockImportResult } from '../../lib/historyImport/stockHistoryImport';
-import { codeKey, resolveStockRow, unmappedStockNames, type ParsedStockRow, type StockImportMapping } from '../../lib/historyImport/stockSheet';
+import { remapItemCode, resolveStockRow, unmappedStockNames, type ParsedStockRow, type StockImportMapping } from '../../lib/historyImport/stockSheet';
 import { errorMessageOf, formatPersianCode, formatPersianNumber } from '../../utils';
 import { StockImportNames } from './StockImportNames';
 import { StockImportPreview } from './StockImportPreview';
@@ -24,14 +24,13 @@ interface Props {
   onClose: () => void;
   warehouses: WarehouseItem[];
   suppliers: Customer[];
-  personnel: Personnel[];
 }
 
 type Step = 'file' | 'names' | 'preview';
 
 const nameKey = (s: string) => s.replace(/[‌\s]+/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim().toLowerCase();
 
-export function StockHistoryImportModal({ isOpen, onClose, warehouses, suppliers, personnel }: Props) {
+export function StockHistoryImportModal({ isOpen, onClose, warehouses, suppliers }: Props) {
   const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>('file');
   const [rows, setRows] = useState<ParsedStockRow[]>([]);
@@ -47,12 +46,10 @@ export function StockHistoryImportModal({ isOpen, onClose, warehouses, suppliers
   const lookups = useMemo(() => {
     const byName = new Map<string, string>();
     for (const w of warehouses) { byName.set(nameKey(w.name || ''), w.code); byName.set(nameKey(w.code), w.code); }
-    const people = new Map(personnel.map(p => [nameKey(p.fullName || ''), p.id]));
     return {
       warehouseCodeOf: (name: string) => byName.get(nameKey(name)) ?? null,
-      personnelIdOf: (name: string) => people.get(nameKey(name)) ?? null,
     };
-  }, [warehouses, personnel]);
+  }, [warehouses]);
   const months = useMemo(() => [...new Set(rows.map(stockRowMonth))].sort(), [rows]);
   const monthRows = useMemo(() => rows.filter(r => stockRowMonth(r) === month), [rows, month]);
   const resolved = useMemo(() => monthRows.map(r => resolveStockRow(r, mapping, lookups, accepted)), [monthRows, mapping, lookups, accepted]);
@@ -178,7 +175,7 @@ export function StockHistoryImportModal({ isOpen, onClose, warehouses, suppliers
         {step === 'preview' && (
           <StockImportPreview resolved={resolved} result={stale ? null : result} accepted={accepted} warehouseTitle={warehouseTitle}
             onAccept={(key, on) => { setAccepted(prev => { const next = new Set(prev); if (on) next.add(key); else next.delete(key); return next; }); setStale(true); }}
-            onMapCode={(code, target) => updateMapping({ ...mapping, items: { ...mapping.items, [codeKey(code)]: target ? { kind: 'code', code: target } : { kind: 'skip' } } })} />
+            onMapCode={(code, target) => updateMapping(remapItemCode(mapping, resolved, code, target))} />
         )}
       </div>
     </Modal>

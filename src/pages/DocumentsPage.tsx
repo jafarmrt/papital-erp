@@ -69,7 +69,7 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
       )}
       {canImportHistory && (
         <StockHistoryImportModal isOpen={historyOpen} onClose={() => setHistoryOpen(false)} warehouses={warehouses}
-          suppliers={suppliersList.filter(c => (c.partyType ?? c.party_type ?? 'customer') !== 'customer')} personnel={personnelList} />
+          suppliers={suppliersList.filter(c => (c.partyType ?? c.party_type ?? 'customer') !== 'customer')} />
       )}
 
       {/* V9 Phase 5.2: پنل رزروهای سراسری استخراج‌شده */}
