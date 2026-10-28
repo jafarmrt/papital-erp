@@ -132,13 +132,13 @@ export async function runHistoryImportSalesV11Tests(shouldRun: ShouldRun): Promi
         sale(3, '71', '1405-02-07'), sale(4, '71', '1405-02-08'),
       ], true);
       if (again.committed) problems.push('a file with refused rows was posted');
-      const expectError = (rowNo: number, sheet: string, part: string) => {
+      const refusedWith = (rowNo: number, sheet: string, part: string) => {
         const r = again.rows.find(x => x.rowNo === rowNo && x.sheet === sheet);
         if (r?.status !== 'error' || !String(r?.message).includes(part)) problems.push(`row ${rowNo} of ${sheet} reads ${JSON.stringify(r)}, expected an error naming «${part}»`);
       };
-      expectError(2, SALES, 'پیش‌تر');
-      expectError(5, IN, 'در برنامه نیست');
-      expectError(3, SALES, 'تاریخ‌های مختلف');
+      refusedWith(2, SALES, 'پیش‌تر');
+      refusedWith(5, IN, 'در برنامه نیست');
+      refusedWith(3, SALES, 'تاریخ‌های مختلف');
       const moved = sameFootprint(before, await footprint());
       if (moved.length > 0) problems.push(`a refused post left a trace: ${moved.join(', ')}`);
 
