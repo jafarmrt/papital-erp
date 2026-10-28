@@ -2,7 +2,8 @@ import { and, eq, inArray } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { documentItems, documents, purchaseRequisitions } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
-import { rebuildOrderedRows, type OrderedRow } from '../../lib/documents/procurementOrderVoid.js';
+import { rebuildOrderedRows, unlinkVoidedOrder, type OrderedRow } from '../../lib/documents/procurementOrderVoid.js';
+import { hasLinkedOrderHooks } from './linkedOrderHooks.js';
 
 /**
  * v10.0.99 (TD-1195): درخواست خرید سفارشی که ابطال می‌شود، پیش از کالاها و سند قفل می‌شود (همان ترتیب تحویل سفارش که
@@ -35,7 +36,25 @@ export async function releaseVoidedProcurementOrder(tx: DbExecutor, doc: {
   const itemIds = new Set(doc.lineItemIds.map(Number).filter(id => id > 0));
   const rows = (Array.isArray(req.items) ? req.items : []) as OrderedRow[];
   if (itemIds.size === 0 && !rows.some(r => r.linkedDocumentIds?.includes(doc.id))) return;
-  const liveLines = itemIds.size === 0 ? [] : await tx.select({ itemId: documentItems.itemId, quantity: documentItems.quantity })
+  // v11 phase 7.2 (TD-1391, review of #423): when the procurement package rebuilds the requisition later in this void
+  // (`voidLinkedOrder`, which also counts the orders linked only by row), this step only unlinks the voided order, so both
+  // never read different order sets and a closed row's quantity is never lost between them
+  if (hasLinkedOrderHooks()) {
+    const unlinked = unlinkVoidedOrder(rows, doc.id);
+    if (unlinked.every((row, i) => row === rows[i])) return;
+    await tx.update(purchaseRequisitions).set({ items: unlinked }).where(eq(purchaseRequisitions.id, req.id));
+    await logActivity({
+      tx,
+      username,
+      action: 'UPDATE',
+      entity: 'درخواست خرید',
+      entityId: req.id,
+      description: `برداشتن پیوند سفارش ${doc.refNumber || doc.id} از ردیف‌های درخواست خرید ${req.code} با ابطال آن`,
+      details: { operation: 'VOID_PROCUREMENT_ORDER_UNLINK', documentId: doc.id },
+    });
+    return;
+  }
+  const liveLines = itemIds.size === 0 ? [] : await tx.select({ itemId: documentItems.itemId, quantity: documentItems.quantity, documentId: documentItems.documentId })
     .from(documentItems)
     .innerJoin(documents, eq(documents.id, documentItems.documentId))
     .where(and(
