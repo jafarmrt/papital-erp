@@ -48,14 +48,14 @@ export async function emptyOrUnorderedCase(h: Harness, wrong: string[]): Promise
     // a reading cut at the cap and out of id order keeps every link it did not read, even below the largest id read, and says so
     await h.q(`INSERT INTO wc_product_links (item_id, wc_product_id, wc_variation_id, site_sku) VALUES ($1, 40, 41, $2)`, [two.id, two.code]);
     const read10 = [{ productId: 10, variationId: 0, name: 'o', sku: one.code, stock: null, manageStock: false, type: 'simple', regularPrice: null }];
-    const cut = await applyCatalogLinks({ site: read10, skipped: [], truncated: true, maxProductId: 90, unordered: true, repeated: false }, {});
+    const cut = await applyCatalogLinks({ site: read10, skipped: [], truncated: true, maxProductId: 90, unordered: true, repeated: false, shifted: false, incomplete: false, missing: 0, gapVariationProducts: [], missingVariations: 0, partialVariationProducts: [] }, {});
     if ((await linksOf(h, [two.id])).get(two.id)?.variation !== 41 || cut.closedCount !== 0 || !cut.catalogUnordered) {
       wrong.push(`a truncated unordered reading closed an unread variation link: ${JSON.stringify(cut).slice(0, 200)}`);
     }
     if (((await h.get('/api/woocommerce/catalog')).body as { catalogUnordered?: boolean }).catalogUnordered !== true) wrong.push('the tab does not say the last cut reading was out of id order');
 
     // the same reading read to the end closes it
-    const whole = await applyCatalogLinks({ site: read10, skipped: [], truncated: false, maxProductId: 90, unordered: true, repeated: false }, {});
+    const whole = await applyCatalogLinks({ site: read10, skipped: [], truncated: false, maxProductId: 90, unordered: true, repeated: false, shifted: false, incomplete: false, missing: 0, gapVariationProducts: [], missingVariations: 0, partialVariationProducts: [] }, {});
     if ((await linksOf(h, [two.id])).has(two.id) || whole.closedCount !== 1 || whole.catalogUnordered) {
       wrong.push(`a complete unordered reading kept an unread variation link: ${JSON.stringify(whole).slice(0, 200)}`);
     }
@@ -67,11 +67,14 @@ export async function emptyOrUnorderedCase(h: Harness, wrong: string[]): Promise
     products.splice(0, products.length, ...Array.from({ length: 150 }, (_, i) => ({ id: 1000 + i, sku: i === 49 ? dropped.code : `MR_${h.tag}_${i}` })));
     await refreshCatalogLocked({});
     if ((await linksOf(h, [dropped.id])).get(dropped.id)?.product !== 1049) wrong.push('the product of the tie case was not linked first');
+    // PR #420 review finding 5: without a count, only the repeated row can keep the link
+    store.omitTotalHeader = true;
     store.newestFirst = true;
     store.unstableOrder = 'swap_ties';
     const shaky = await refreshCatalogLocked({});
     store.newestFirst = false;
     store.unstableOrder = undefined;
+    store.omitTotalHeader = false;
     if ((await linksOf(h, [dropped.id])).get(dropped.id)?.product !== 1049) wrong.push('a reading that showed a row twice and left one out closed its link');
     if (!shaky.catalogUnordered || shaky.closedCount !== 0 || shaky.catalogTruncated) wrong.push(`repeated unordered summary ${JSON.stringify(shaky).slice(0, 200)}`);
     if (((await h.get('/api/woocommerce/catalog')).body as { catalogUnordered?: boolean }).catalogUnordered !== true) {
@@ -84,11 +87,18 @@ export async function emptyOrUnorderedCase(h: Harness, wrong: string[]): Promise
     products[100] = { id: 1100, sku: later.code };
     await refreshCatalogLocked({});
     if ((await linksOf(h, [later.id])).get(later.id)?.product !== 1100) wrong.push('the product of the ascending tie case was not linked first');
+    store.omitTotalHeader = true;
     store.unstableOrder = 'swap_ties';
     const ascending = await refreshCatalogLocked({});
     store.unstableOrder = undefined;
+    store.omitTotalHeader = false;
     if ((await linksOf(h, [later.id])).get(later.id)?.product !== 1100) wrong.push('an ascending reading that showed a row twice and left one out closed its link');
     if (!ascending.catalogUnordered || ascending.closedCount !== 0) wrong.push(`repeated ascending summary ${JSON.stringify(ascending).slice(0, 200)}`);
+    // PR #420 review nit 6: with the count sent, ties are not reported as a count that moved or as a gap
+    store.unstableOrder = 'swap_ties';
+    const counted = await refreshCatalogLocked({});
+    store.unstableOrder = undefined;
+    if (!counted.catalogUnordered || counted.catalogShifted || counted.catalogMissing !== 0) wrong.push(`ties with a count ${JSON.stringify(counted).slice(0, 240)}`);
     return 'empty and unordered catalogs';
   });
 }
@@ -105,7 +115,7 @@ export async function deadlineAndCapCase(h: Harness, wrong: string[]): Promise<s
         { productId: 1, variationId: 0, name: 'n', sku: near.code, stock: null, manageStock: false, type: 'simple', regularPrice: null },
         { productId: 2, variationId: 0, name: 'f', sku: far.code, stock: null, manageStock: false, type: 'simple', regularPrice: null },
       ],
-      skipped: [], truncated: true, maxProductId: 2, unordered: false, repeated: false,
+      skipped: [], truncated: true, maxProductId: 2, unordered: false, repeated: false, shifted: false, incomplete: false, missing: 0, gapVariationProducts: [], missingVariations: 0, partialVariationProducts: [],
     }, {});
     const links = await linksOf(h, [far.id, near.id]);
     if (links.get(far.id)?.product !== 999) wrong.push(`the link past the cap was changed: ${JSON.stringify(links.get(far.id) ?? null)}`);
@@ -165,7 +175,7 @@ export async function removedProductAndDeadlinesCase(h: Harness, wrong: string[]
     await h.q(`INSERT INTO wc_product_links (item_id, wc_product_id, wc_variation_id, site_sku) VALUES ($1, 5, 0, 'X5')`, [gone.id]);
     const capped = await applyCatalogLinks({
       site: [{ productId: 10, variationId: 0, name: 'k', sku: kept.code, stock: null, manageStock: false, type: 'simple', regularPrice: null }],
-      skipped: [], truncated: true, maxProductId: 10, unordered: false, repeated: false,
+      skipped: [], truncated: true, maxProductId: 10, unordered: false, repeated: false, shifted: false, incomplete: false, missing: 0, gapVariationProducts: [], missingVariations: 0, partialVariationProducts: [],
     }, {});
     if ((await linksOf(h, [gone.id])).has(gone.id)) wrong.push('a truncated reading kept the link of a missing product below the largest id read');
     if (capped.closedCount !== 1) wrong.push(`truncated summary ${JSON.stringify(capped).slice(0, 200)}`);

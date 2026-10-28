@@ -72,14 +72,14 @@ export async function makeWcRequest(
   return (await sendWcRequest(method, urlPath, storeUrl, key, secret, data, params, options)).data;
 }
 
-/** A list answer's `X-WP-Total` (the rows of every page), or null when the shop sent none */
-function totalHeader(headers: unknown): number | null {
-  const raw = (headers as Record<string, unknown> | undefined)?.['x-wp-total'];
+/** A list answer's `X-WP-Total` (the rows of every page) or `X-WP-TotalPages`, or null when the shop sent none */
+function totalHeader(headers: unknown, name: 'x-wp-total' | 'x-wp-totalpages' = 'x-wp-total'): number | null {
+  const raw = (headers as Record<string, unknown> | undefined)?.[name];
   const total = Number(Array.isArray(raw) ? raw[0] : raw);
   return raw !== undefined && raw !== null && raw !== '' && Number.isInteger(total) && total >= 0 ? total : null;
 }
 
-export interface WcAnswer { data: unknown; total: number | null }
+export interface WcAnswer { data: unknown; total: number | null; pages: number | null }
 
 async function sendWcRequest(
   method: 'GET' | 'POST' | 'PUT',
@@ -140,7 +140,7 @@ async function sendWcRequest(
         const location = response.headers?.location;
         return {
           status: response.status, location: location ? String(location) : undefined,
-          data: { data: response.data, total: totalHeader(response.headers) },
+          data: { data: response.data, total: totalHeader(response.headers), pages: totalHeader(response.headers, 'x-wp-totalpages') },
         };
       },
       (url) => assertSafeExternalUrl(url, { allowLocalEcho: false })

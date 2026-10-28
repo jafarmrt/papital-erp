@@ -1,7 +1,7 @@
 import { ValidationError } from '../../errors/customErrors.js';
 import { WC_BATCH_SIZE, WC_MAX_CATALOG_PAGES, type WcUnmatchedProduct } from '../../lib/woocommerce/wcCatalog.js';
 import { isVariableParentType } from '../../lib/woocommerce/wcShopSync.js';
-import { wcRequest, WC_SHOP_REQUEST_FAILED, type WcConnection } from './wcClient.js';
+import { wcListRequest, WC_SHOP_REQUEST_FAILED, type WcConnection } from './wcClient.js';
 
 /**
  * 10.2 package 6 (D-04 parts A and C): one reading of the shop's catalog, page by page in id order: the products, then the
@@ -51,6 +51,35 @@ export interface SiteCatalog {
    * out, so every link of a product not read is then left as it is
    */
   repeated: boolean;
+  /**
+   * v11 phase 6.5 (#322 review notes 1 and 4): the shop's count of products (`X-WP-Total`) changed between two pages, or
+   * more rows came than it counted: a product removed from a page already read moves the next pages up by one, so a
+   * product may have been skipped, and every link of a product not read is left as it is
+   */
+  shifted: boolean;
+  /**
+   * PR #420 third review SF1: the product list was cut at the cap after a short or empty page, so rows the shop hid may lie
+   * below the largest id read too; every link of a product not read is left as it is
+   */
+  incomplete: boolean;
+  /**
+   * v11 phase 6.5 (PR #420 review finding 1): products and variations the shop counted on every page alike but never
+   * listed (WooCommerce counts a row it then cannot show the key, and a plugin or a cache can do the same). A gap that does
+   * not move cannot be told from a removed product, so a refresh by hand asks before closing the links of products it did
+   * not read, and the nightly re-read and the stock push keep them
+   */
+  missing: number;
+  /**
+   * PR #420 delta review N1: the variable products whose own variation list had such a gap, and the variations it hid; a
+   * gap keeps only that product's unread variation links, like a list read in part, and a refresh by hand asks too
+   */
+  gapVariationProducts: number[];
+  missingVariations: number;
+  /**
+   * #322 review note 3: the variable products whose own variation list was not read whole (cut at the cap, a row shown
+   * twice, out of order and cut, or its count changed); the links of their variations not read are left as they are
+   */
+  partialVariationProducts: number[];
 }
 
 /** review M-6: one refresh never holds the lock longer than this (under the 60 s of a reverse proxy) */
@@ -76,12 +105,19 @@ function stockOf(raw: RawProduct): number | null {
   return raw.stock_quantity === null || raw.stock_quantity === undefined || !Number.isFinite(n) ? null : Math.trunc(n);
 }
 
-interface PagedRows { rows: RawProduct[]; truncated: boolean; unordered: boolean; repeated: boolean }
+interface PagedRows {
+  rows: RawProduct[]; truncated: boolean; unordered: boolean; repeated: boolean; shifted: boolean; missing: number; incomplete: boolean;
+}
 
 /**
  * Every page of a list in id order (review H-1: the default date order has no tie-breaker, so a product could be read on
  * two pages and be reported as a duplicate of itself); a row read twice is kept once and marks the list `repeated`
- * (review M-R), and a new id not above every id read before marks it `unordered` (review M-C)
+ * (review M-R), a new id not above every id read before marks it `unordered` (review M-C), and a list whose count
+ * (`X-WP-Total`) changed between two pages, or that ended with more rows than its count, is `shifted`; a count that stayed
+ * the same while fewer rows came is `missing` that many (PR #420 review finding 1; a list that showed a row twice lost rows
+ * to its ties, not to a gap). A short or empty page ends the list only once the count and `X-WP-TotalPages` are reached
+ * (finding 2 and delta review S1: a shop that drops rows it counted sends a short or empty page in the middle, and one
+ * that caps `per_page` sends more pages); a shop that sends no count is never marked either way
  */
 async function readPages(conn: WcConnection, path: string, fields: string, signal?: AbortSignal): Promise<PagedRows> {
   const rows: RawProduct[] = [];
@@ -89,10 +125,20 @@ async function readPages(conn: WcConnection, path: string, fields: string, signa
   let lastId = 0;
   let unordered = false;
   let repeated = false;
+  let shifted = false;
+  let count: number | null = null;
+  let pages: number | null = null;
+  let sawShort = false;
   for (let page = 1; page <= WC_MAX_CATALOG_PAGES; page++) {
-    const batch = asRows(await wcRequest(conn, 'GET', path, null, {
+    const answer = await wcListRequest(conn, path, {
       per_page: WC_BATCH_SIZE, page, status: 'any', orderby: 'id', order: 'asc', _fields: fields,
-    }, { signal }));
+    }, { signal });
+    const batch = asRows(answer.data);
+    if (answer.total !== null) {
+      if (count !== null && answer.total !== count) shifted = true;
+      count ??= answer.total;
+    }
+    if (answer.pages !== null) pages = Math.max(pages ?? 0, answer.pages);
     for (const row of batch) {
       const id = Number(row.id);
       if (seen.has(id)) {
@@ -104,9 +150,20 @@ async function readPages(conn: WcConnection, path: string, fields: string, signa
       lastId = Math.max(lastId, id);
       rows.push(row);
     }
-    if (batch.length < WC_BATCH_SIZE) return { rows, truncated: false, unordered, repeated };
+    // a short or even empty page ends the list only once the count and the shop's page total are reached (PR #420 delta
+    // review S1: a whole page the key may not read comes empty; a shop that caps `per_page` says so in `X-WP-TotalPages`),
+    // and never after every counted row was read (third review N-a: a page total larger than the rows)
+    const unreadCounted = count === null || shifted || rows.length < count;
+    const more = unreadCounted && ((count !== null && !shifted && page * WC_BATCH_SIZE < count) || (pages !== null && page < pages));
+    if (batch.length < WC_BATCH_SIZE) sawShort = true;
+    if (batch.length < WC_BATCH_SIZE && !more) {
+      if (count !== null && rows.length > count) shifted = true;
+      const missing = count !== null && !shifted && !repeated ? Math.max(0, count - rows.length) : 0;
+      return { rows, truncated: false, unordered, repeated, shifted, missing, incomplete: false };
+    }
   }
-  return { rows, truncated: true, unordered, repeated };
+  // third review SF1: a list cut at the cap after a short page may have hidden rows below the largest id read too
+  return { rows, truncated: true, unordered, repeated, shifted, missing: 0, incomplete: sawShort };
 }
 
 /**
@@ -147,7 +204,7 @@ export async function mapLimited<T, R>(
  * linked, so a push never changes how the shop keeps their stock (review M-1 / N-4).
  */
 export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal): Promise<SiteCatalog> {
-  const { rows: products, truncated, unordered: productsUnordered, repeated: productsRepeated } =
+  const { rows: products, truncated, unordered, repeated, shifted, missing: productsMissing, incomplete } =
     await readPages(conn, 'products', 'id,name,sku,type,stock_quantity,manage_stock,regular_price', signal);
   const site: SiteProduct[] = [];
   const skipped: WcUnmatchedProduct[] = [];
@@ -182,8 +239,18 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
   } finally {
     signal?.removeEventListener('abort', stopReaders);
   }
+  const partialVariationProducts: number[] = [];
+  const gapVariationProducts: number[] = [];
+  let missingVariations = 0;
   variable.forEach(({ productId, name, sku }, i) => {
-    for (const v of variationLists[i].rows) {
+    const list = variationLists[i];
+    if (list.missing > 0) {
+      gapVariationProducts.push(productId);
+      missingVariations += list.missing;
+    }
+    // #322 review note 3: a variation list read in part keeps the links of its own variations, never the whole catalog's
+    if (list.truncated || list.repeated || list.shifted || list.incomplete) partialVariationProducts.push(productId);
+    for (const v of list.rows) {
       const variationId = Number(v.id);
       const vSku = String(v.sku ?? '').trim();
       if (!Number.isInteger(variationId) || variationId <= 0 || (vSku !== '' && vSku === sku)) continue;
@@ -198,8 +265,7 @@ export async function readSiteCatalog(conn: WcConnection, signal?: AbortSignal):
     }
   });
   return {
-    site, skipped, truncated, maxProductId,
-    unordered: productsUnordered || variationLists.some(l => l.unordered),
-    repeated: productsRepeated || variationLists.some(l => l.repeated),
+    site, skipped, truncated, maxProductId, unordered, repeated, shifted, incomplete, missing: productsMissing, gapVariationProducts, missingVariations,
+    partialVariationProducts,
   };
 }
