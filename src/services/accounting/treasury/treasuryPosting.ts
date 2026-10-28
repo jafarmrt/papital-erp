@@ -1,3 +1,4 @@
+import { dryRunNumber } from '../../../lib/dryRunNumbering.js';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../../db/drizzle.js';
 import { bankAccounts, treasuryTransactions } from '../../../db/schema.js';
@@ -96,6 +97,9 @@ export async function lockTreasuryBanks(tx: DbExecutor, bankAccountIds: readonly
 
 /** شماره ردیف خزانه از دنباله اتمیک `treasury_tx_number_seq` (هرگز شمارش یا بیشینه + ۱) */
 export async function nextTreasuryTransactionNumber(type: 'receipt' | 'payment', tx: DbExecutor): Promise<string> {
+  // v11 history import: a preview takes a placeholder, so the rolled-back preview leaves no gap in the sequence
+  const placeholder = dryRunNumber();
+  if (placeholder !== null) return `${type === 'receipt' ? 'REC' : 'PAY'}-P${-placeholder}`;
   const result = await tx.execute(sql`SELECT nextval('treasury_tx_number_seq') AS num`);
   const seqNum = Number(result.rows?.[0]?.num);
   return `${type === 'receipt' ? 'REC' : 'PAY'}-${String(seqNum).padStart(6, '0')}`;

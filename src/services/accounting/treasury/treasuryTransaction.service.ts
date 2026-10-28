@@ -31,7 +31,7 @@ import { listTreasuryTransactions, pageTreasuryTransactions, type TreasuryListFi
 import {
   assertBankCurrency, lockTreasuryBank, lockTreasuryBanks, nextTreasuryTransactionNumber, postTreasuryRow, reverseTreasuryRow, treasuryEventPayload, isHighValueAmount, treasuryHighValueThreshold, type TreasuryBank, type TreasuryRow,
 } from './treasuryPosting.js';
-import { idempotentTransaction } from '../../../middleware/idempotency.js';
+import { idempotentTransaction, idempotentTransactionIn } from '../../../middleware/idempotency.js';
 
 /**
  * TD-105 (v4.0.31): تاریخ تراکنش‌های خزانه «سرور authoritative» است: خالی ← امروز کسب‌وکار، تاریخ آینده ← 422.
@@ -248,7 +248,7 @@ export class TreasuryTransactionService {
     audit?: TreasuryAuditActor;
     /** v11 phase 6.1t (M11): the documents this receipt or payment settles, in parts; never with `documentId` */
     allocations?: SettlementAllocationInput[];
-  }): Promise<TreasuryTransaction> {
+  }, executor?: DbExecutor): Promise<TreasuryTransaction> {
     const amount = exactTreasuryAmount(data.amount, 'مبلغ تراکنش');
     if (amount <= 0) throw new ValidationError('مبلغ تراکنش باید بزرگتر از صفر باشد');
     const parts = normalizeAllocations(data.allocations, amount);
@@ -273,7 +273,8 @@ export class TreasuryTransactionService {
     // TD-105: تاریخ سرور-authoritative — پیش‌فرض business clock + اعتبارسنجی بازه
     const resolvedDate = await resolveTreasuryBusinessDate(data.date);
 
-    return await idempotentTransaction(async (txEngine) => {
+    // v11 history import: inside the import's transaction a savepoint of it (`idempotentTransactionIn`)
+    return await idempotentTransactionIn(executor, async (txEngine) => {
       validateLockOrder([
         { name: 'bankAccount', hierarchyLevel: LockHierarchyLevel.BANK_ACCOUNTS },
         ...(data.documentId || parts.length > 0 ? [{ name: 'document', hierarchyLevel: LockHierarchyLevel.DOCUMENTS }] : []),
@@ -559,7 +560,7 @@ export class TreasuryTransactionService {
     exchangeRate?: number;
     /** v10.0.262 (TD-934): ممیزی انتقال با `tx` همین انتقال */
     audit?: TreasuryAuditActor;
-  }): Promise<{ payment: TreasuryTransaction; receipt: TreasuryTransaction; voucherId: number | null }> {
+  }, executor?: DbExecutor): Promise<{ payment: TreasuryTransaction; receipt: TreasuryTransaction; voucherId: number | null }> {
     const amount = exactTreasuryAmount(data.amount, 'مبلغ انتقال');
     if (amount <= 0) throw new ValidationError('مبلغ انتقال باید بزرگتر از صفر باشد');
     if (data.fromBankAccountId === data.toBankAccountId) {
@@ -569,7 +570,7 @@ export class TreasuryTransactionService {
     // TD-105: تاریخ سرور-authoritative — پیش‌فرض business clock + اعتبارسنجی بازه
     const resolvedDate = await resolveTreasuryBusinessDate(data.date);
 
-    return await idempotentTransaction(async (txEngine) => {
+    return await idempotentTransactionIn(executor, async (txEngine) => {
       // قفل هر دو حساب در ترتیب id صعودی (جلوگیری از deadlock در همان سطح سلسله‌مراتب)
       const locked = await lockTreasuryBanks(txEngine, [Number(data.fromBankAccountId), Number(data.toBankAccountId)]);
       const from = locked.find(b => b.id === Number(data.fromBankAccountId));

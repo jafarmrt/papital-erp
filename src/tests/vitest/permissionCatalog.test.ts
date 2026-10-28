@@ -46,7 +46,7 @@ describe('permission catalog (TD-880)', () => {
   });
 
   it('removes a permission with everything that depends on it', () => {
-    expect(dependentPermissionsOf('accounting.treasury')).toEqual(['accounting.treasury_no_voucher']);
+    expect(dependentPermissionsOf('accounting.treasury')).toEqual(['accounting.treasury_no_voucher', 'accounting.history_import']);
     const keys = withRequiredPermissions(['accounting.treasury_no_voucher', 'accounting.reports', 'crm.view']);
     expect(withoutPermission(keys, 'accounting.view')).toEqual(['crm.view']);
     expect(withoutPermission(keys, 'accounting.treasury_no_voucher')).toEqual(['accounting.reports', 'crm.view', 'accounting.view', 'accounting.treasury']);

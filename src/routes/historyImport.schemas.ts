@@ -1,0 +1,38 @@
+import { z } from 'zod';
+import { TREASURY_IMPORT_MAX_ROWS } from '../lib/historyImport/treasuryHistoryImport.js';
+
+const TEXT_MAX = 1000;
+const optionalId = z.coerce.number().int().positive().nullable().optional();
+
+// v11 history import (tool 1): one resolved Excel row; the window has already turned each name into an id
+const treasuryImportRowSchema = z.object({
+  rowNo: z.coerce.number().int().positive(),
+  sheet: z.string().trim().min(1).max(100),
+  date: z.string().max(40),
+  kind: z.enum(['receipt', 'payment', 'transfer', 'payslip']),
+  bankAccountId: z.coerce.number().int().positive('حساب نقد و بانک ردیف مشخص نیست'),
+  toBankAccountId: optionalId,
+  // the amount is read again by the service, which names the row in its message
+  amount: z.union([z.string().max(40), z.number()]).transform(v => String(v)),
+  partyType: z.enum(['customer', 'supplier', 'personnel', 'other']).optional(),
+  partyId: optionalId,
+  partyName: z.string().max(TEXT_MAX).optional(),
+  purpose: z.enum(['advance', 'other']).nullable().optional(),
+  contraAccountId: optionalId,
+  personnelId: optionalId,
+  invoiceRef: z.string().max(TEXT_MAX).optional(),
+  costCenter: z.string().max(TEXT_MAX).optional(),
+  description: z.string().max(TEXT_MAX).optional(),
+  settleOldest: z.boolean().optional(),
+  duplicateAccepted: z.boolean().optional(),
+}).strict();
+
+export const treasuryHistoryImportSchema = z.object({
+  body: z.object({
+    commit: z.boolean(),
+    rows: z.array(treasuryImportRowSchema)
+      .min(1, 'پرونده ردیفی برای ورود ندارد')
+      .max(TREASURY_IMPORT_MAX_ROWS, `هر بار حداکثر ${TREASURY_IMPORT_MAX_ROWS.toLocaleString('fa-IR')} ردیف وارد می‌شود؛ پرونده را ماه به ماه بدهید`),
+  }).strict(),
+});
+

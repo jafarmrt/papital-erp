@@ -202,6 +202,8 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
       { key: 'accounting.cheques', title: 'مدیریت دفتر چک صیادی', description: 'ثبت چک‌های دریافتی/پرداختی، تغییر وضعیت وصول، برگشت و واگذاری', requires: ['accounting.view'] },
       // v8.0.118 (TD-409، تصمیم مالک محصول): برای مانده‌های افتتاحیه؛ پیش‌فرض به هیچ نقشی داده نمی‌شود
       { key: 'accounting.treasury_no_voucher', title: 'ثبت خزانه و چک بدون سند حسابداری', description: 'ثبت دریافت، پرداخت، انتقال وجه یا چک بدون صدور سند حسابداری (مثلاً مانده افتتاحیه)؛ این موارد در بررسی سلامت مالی فهرست می‌شوند', requires: ['accounting.treasury'] },
+      // v11 history import (1405 replay): posting a month of past receipts and payments from Excel at once; given to no role by default
+      { key: 'accounting.history_import', title: 'ورود سابقهٔ دریافت و پرداخت از اکسل', description: 'ثبت یک‌جای دریافت‌ها، پرداخت‌ها، انتقال‌ها و پرداخت فیش‌های گذشته از پروندهٔ اکسل، پس از پیش‌نمایش؛ سندهای حسابداری پیش‌نویس می‌مانند', requires: ['accounting.treasury'] },
       { key: 'accounting.reports', title: 'مشاهده تراز آزمایشی و صورت‌های مالی', description: 'مشاهده تراز آزمایشی، ترازنامه، صورت سود و زیان و کارت حساب', requires: ['accounting.view'] },
       { key: 'accounting.fiscal_close', title: 'اجرای بستن سال مالی', description: 'بستن حساب‌های موقت و دائم سال مالی و صدور اسناد اختتامیه و افتتاحیه سال بعد', requires: ['accounting.view'] },
       // v9.0.161 (TD-543، تصمیم ت۲ مالک محصول): پیش‌فرض به هیچ نقشی داده نمی‌شود؛ مدیر سیستم آن را به نقشی می‌دهد

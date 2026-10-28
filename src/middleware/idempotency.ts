@@ -237,6 +237,14 @@ export async function idempotentTransaction<T>(fn: (tx: DbTransaction) => Promis
   return result;
 }
 
+/**
+ * v11 history import: `idempotentTransaction` when the caller passes no transaction, else a savepoint of the caller's
+ * transaction, which completes nothing (an Excel import posts many rows in one transaction of its own).
+ */
+export function idempotentTransactionIn<T>(executor: DbExecutor | undefined, fn: (tx: DbTransaction) => Promise<T>): Promise<T> {
+  return executor ? executor.transaction(fn) : idempotentTransaction(fn);
+}
+
 /** 10.3: `idempotentTransaction` on the pool; inside a caller's transaction a savepoint of it, which completes nothing */
 export function idempotentTransactionOn<T>(executor: DbExecutor, fn: (tx: DbTransaction) => Promise<T>): Promise<T> {
   return executor === orm ? idempotentTransaction(fn) : executor.transaction(fn);

@@ -5,7 +5,8 @@ import {
   ArrowUpRight, 
   ArrowLeftRight, 
   TrendingUp, 
-  RefreshCw 
+  RefreshCw,
+  FileSpreadsheet
 } from 'lucide-react';
 import { downloadSheet } from '../../lib/excel/downloadSheet';
 import { toast } from 'react-hot-toast';
@@ -33,6 +34,8 @@ import { useCanSettleOnDocuments } from './treasury/SettlementAllocationField';
 import { CashFlowModal } from './treasury/CashFlowModal';
 import { PettyCashExpenseModal } from './treasury/PettyCashExpenseModal';
 import { PettyCashLinesModal } from './treasury/PettyCashLinesModal';
+import { TreasuryHistoryImportModal } from '../historyImport/TreasuryHistoryImportModal';
+import { useHasPermission } from '../../contexts/AuthContext';
 import type { PettyCashAction } from './treasury/BankAccountCard';
 
 import type { 
@@ -83,6 +86,8 @@ export function BankAndTreasuryTab({
   const appCurrency = useAppCurrency();
 
   // Modals state
+  const canImportHistory = useHasPermission('accounting.history_import');
+  const [isHistoryImportOpen, setIsHistoryImportOpen] = useState(false);
   const [isBankModalOpen, setIsBankModalOpen] = useState(false);
   const [editingBank, setEditingBank] = useState<BankAccount | null>(null);
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
@@ -282,6 +287,16 @@ export function BankAndTreasuryTab({
             گزارش جریان نقدینگی
           </button>
 
+          {canImportHistory && (
+            <button
+              onClick={() => setIsHistoryImportOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 rounded-xl border border-emerald-200 dark:border-emerald-800/60 transition cursor-pointer"
+            >
+              <FileSpreadsheet size={14} />
+              ورود سابقه از اکسل
+            </button>
+          )}
+
           {onSyncAndReconcileBanks && (
             <button
               onClick={onSyncAndReconcileBanks}
@@ -406,6 +421,14 @@ export function BankAndTreasuryTab({
         onSave={handleSaveTransfer}
         preset={transferPreset}
       />
+
+      {canImportHistory && (
+        <TreasuryHistoryImportModal
+          isOpen={isHistoryImportOpen}
+          onClose={() => setIsHistoryImportOpen(false)}
+          lists={{ banks: safeBankAccounts, customers: Array.isArray(customers) ? customers : [], personnel: Array.isArray(personnelList) ? personnelList : [] }}
+        />
+      )}
 
       <PettyCashExpenseModal fund={pettyExpenseFund} appCurrency={appCurrency} onClose={() => setPettyExpenseFund(null)} />
       <PettyCashLinesModal transaction={pettyLinesTarget} appCurrency={appCurrency} onClose={() => setPettyLinesTarget(null)} />
