@@ -55,7 +55,7 @@ export const TreasuryRelinkModal: React.FC<{
           ) : options.isError ? (
             <p className="text-xs text-rose-600">{errorMessageOf(options.error) || 'سندها خوانده نشد؛ دوباره تلاش کنید.'}</p>
           ) : rows.length === 0 ? (
-            <p className="text-xs text-slate-500">سند فعال دیگری از همین طرف حساب و با همین ارز نیست.</p>
+            <p className="text-xs text-slate-500">سند صادرشدهٔ دیگری از همین طرف حساب و با همین ارز نیست.</p>
           ) : rows.map(doc => (
             <label key={doc.id} className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/40">
               <input type="radio" name="relink-document" checked={chosen === doc.id} onChange={() => setChosen(doc.id)} disabled={saving} />

@@ -893,7 +893,7 @@ export class FinancialHealthService {
         code: `${r.tableName} #${r.rowId}`,
         title: `«${r.oldValue}» به «${r.newValue}» تبدیل شد`,
         subtitle: `ستون: ${r.columnName}`,
-        date: r.newValue,
+        date: String(r.newValue ?? '').slice(0, 10),
         details: 'مقدار قبلی در جدول legacy_date_repairs نگه داشته شده است.',
       })),
       metrics: { corrected: timezoneRepairs.length },

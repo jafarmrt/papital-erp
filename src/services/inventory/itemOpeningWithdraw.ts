@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { documentItems, items, transactions } from '../../db/schema.js';
+import { documentItems, items, transactions, users } from '../../db/schema.js';
 import { ConflictError } from '../../errors/customErrors.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { money } from '../../lib/money.js';
@@ -21,7 +21,7 @@ import { formatPersianNumber } from '../../utils/persianNumber.js';
  * and its value is in the ledger; the rejection is then refused (409 `ITEM_OPENING_IN_USE`). An opening dated in a
  * closed fiscal year is not withdrawn either (409 `ITEM_OPENING_IN_CLOSED_YEAR`), as a void there is not (M10).
  */
-export async function withdrawUnapprovedOpening(tx: DbExecutor, itemId: number, performedBy?: string): Promise<number> {
+export async function withdrawUnapprovedOpening(tx: DbExecutor, itemId: number, performedByUserId?: number): Promise<number> {
   const [item] = await tx.select({ id: items.id, name: items.name, code: items.code, version: items.version })
     .from(items).where(and(eq(items.id, itemId), eq(items.isDeleted, 0))).for('no key update');
   if (!item) return 0;
@@ -74,6 +74,10 @@ export async function withdrawUnapprovedOpening(tx: DbExecutor, itemId: number, 
   // as the document void's `applyStockReversal` does: a withdrawal has no document to run through the stock engine.
   const originals = await tx.select().from(transactions).where(inArray(transactions.id, openingIds));
   const nowIso = await businessNowIsoDateTime();
+  // `transactions.created_by` holds the username, as the document void writes it
+  const [performer] = performedByUserId
+    ? await tx.select({ username: users.username }).from(users).where(eq(users.id, performedByUserId))
+    : [];
   await tx.update(transactions).set({ isDeleted: 1 }).where(inArray(transactions.id, openingIds));
   let withdrawn = 0;
   for (const orig of originals) {
@@ -90,7 +94,7 @@ export async function withdrawUnapprovedOpening(tx: DbExecutor, itemId: number, 
       date: nowIso,
       documentType: orig.documentType,
       documentRef: `REV-${orig.documentRef ?? ''}`,
-      createdBy: performedBy || orig.createdBy,
+      createdBy: performer?.username || orig.createdBy,
       notes: `برگشت موجودی اول دوره با رد تعریف کالا (معکوس تراکنش #${orig.id})`,
       location: warehouse.code,
       reversalOfId: orig.id,
