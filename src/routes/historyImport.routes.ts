@@ -45,14 +45,14 @@ router.post('/accounting/treasury/history-import', authorizePermission('accounti
 }));
 
 // tool 2: opening stock, purchase and production receipts, consumption, waste and transfers; `commit: false` is the preview
-router.post('/inventory/history-import', authorizePermission('warehouse.history_import'), idempotency({ scope: 'history-import' }), validate(stockHistoryImportSchema), asyncHandler(async (req, res) => {
+router.post('/inventory/history-import', authorizePermission('warehouse.history_import'), importIdempotency, validate(stockHistoryImportSchema), asyncHandler(async (req, res) => {
   const result = await importStockHistory(req.body.rows, {
     commit: req.body.commit === true,
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
     audit: { req, userId: req.user?.id, username: req.user?.username, userFullName: req.user?.fullName },
   });
-  res.json(result);
+  sendImportResult(res, result, req.body.commit === true);
 }));
 
 export default router;

@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { FileSpreadsheet } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Modal, ModalFooterActions } from '../common/Modal';
-import { fetchJson } from '../../api';
+import { ApiError, fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { Customer, Personnel } from '../../types';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
@@ -106,6 +106,12 @@ export function StockHistoryImportModal({ isOpen, onClose, warehouses, suppliers
         }
       }
     } catch (err) {
+      // a post that recorded nothing comes back refused, with every row's outcome
+      if (err instanceof ApiError && err.code === 'HISTORY_IMPORT_NOT_POSTED' && err.details?.rows) {
+        setResult(err.details as StockImportResult);
+        setStale(false);
+        setStep('preview');
+      }
       setError(errorMessageOf(err) || 'سرور پاسخ نداد؛ دوباره تلاش کنید.');
     } finally {
       busyRef.current = false;

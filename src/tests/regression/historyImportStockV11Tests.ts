@@ -46,6 +46,8 @@ async function stockOf(itemId: number): Promise<Record<string, number>> {
 
 const post = async (client: Admin, rows: StockImportRow[], commit: boolean) => {
   const res = await client.post(URL, { commit, rows });
+  // a post that recorded nothing answers 409 with its rows, so its key is released
+  if (commit && res.status === 409 && res.body?.code === 'HISTORY_IMPORT_NOT_POSTED') return res.body.details as StockImportResult;
   if (!ok(res)) throw new Error(`the import (${commit ? 'post' : 'preview'}) returned ${brief(res)}`);
   return res.body as StockImportResult;
 };
