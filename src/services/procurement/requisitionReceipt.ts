@@ -11,7 +11,9 @@ export type RequisitionItemWithReceipt = PurchaseRequisitionItemRow & { received
  */
 export function applyDeliveredLines(
   reqItems: RequisitionItemWithReceipt[],
-  docLines: Array<{ itemId: number | null; quantity: DecimalValue | null }>
+  docLines: Array<{ itemId: number | null; quantity: DecimalValue | null }>,
+  // the rebuild passes the closure it read before lowering the quantities (the legacy rule would misread them)
+  isClosed: (row: RequisitionItemWithReceipt, index: number) => boolean = row => isClosedRequisitionRow(row),
 ): RequisitionItemWithReceipt[] {
   const deliveredByItem = new Map<number, FinancialDecimal>();
   for (const line of docLines) {
@@ -20,11 +22,16 @@ export function applyDeliveredLines(
     deliveredByItem.set(itemId, (deliveredByItem.get(itemId) ?? fin(0)).add(line.quantity ?? 0));
   }
 
+  // the leftover goes on the last open row of the item, as in the spread; the last row only when all are closed
   const lastRowOfItem = new Map<number, number>();
+  const lastOpenRowOfItem = new Map<number, number>();
   reqItems.forEach((row, index) => {
     const itemId = Number(row.itemId);
-    if (deliveredByItem.has(itemId)) lastRowOfItem.set(itemId, index);
+    if (!deliveredByItem.has(itemId)) return;
+    lastRowOfItem.set(itemId, index);
+    if (!isClosed(row, index)) lastOpenRowOfItem.set(itemId, index);
   });
+  for (const [itemId, index] of lastOpenRowOfItem) lastRowOfItem.set(itemId, index);
 
   return reqItems.map((row, index) => {
     const itemId = Number(row.itemId);
@@ -33,7 +40,7 @@ export function applyDeliveredLines(
     const requested = fin(row.requestedQty || 0);
     const previous = fin(row.receivedQty || 0);
     // a closed row receives at most what it had ordered (TD-1391); the rest goes on to the next rows of the item
-    const open = (isClosedRequisitionRow(row) ? fin(row.orderedQty || 0) : requested).subtract(previous);
+    const open = (isClosed(row, index) ? fin(row.orderedQty || 0) : requested).subtract(previous);
     const share = lastRowOfItem.get(itemId) === index || left.lessThan(open) ? left : (open.isPositive() ? open : fin(0));
     deliveredByItem.set(itemId, left.subtract(share));
     if (share.isZero()) return row;
@@ -82,7 +89,7 @@ export function rebuildOrderRows(
   // v11 phase 7.2 (TD-1391): a closed row keeps its ordered quantity and the spread skips it (`rebuildOrderedQuantities`)
   const { rows: withOrdered, closed: closedBefore } = rebuildOrderedQuantities(rows, itemIds, ordered);
   const reset = withOrdered.map(row => (itemIds.has(Number(row.itemId)) ? { ...row, receivedQty: 0 } : row));
-  const filled = applyDeliveredLines(reset, received.filter(line => itemIds.has(Number(line.itemId))));
+  const filled = applyDeliveredLines(reset, received.filter(line => itemIds.has(Number(line.itemId))), (_row, index) => closedBefore[index]);
   return filled.map((row, index) => {
     if (!itemIds.has(Number(row.itemId))) return row;
     const requested = fin(row.requestedQty || 0);

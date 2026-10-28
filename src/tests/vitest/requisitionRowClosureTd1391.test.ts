@@ -70,6 +70,15 @@ describe('requisition row closure (TD-1391)', () => {
     expect(out[1].status).toBe('received');
   });
 
+  it('puts the receipt leftover on the last open row, not on a closed last row', () => {
+    const rows = [
+      row({ requestedQty: 5, orderedQty: 7, status: 'ordered' }),
+      row({ requestedQty: 10, orderedQty: 0, status: 'ordered', closed: true }),
+    ];
+    const out = applyDeliveredLines(rows, [{ itemId: 7, quantity: 7 }]);
+    expect(out.map(r => r.receivedQty ?? 0)).toEqual([7, 0]);
+  });
+
   it('spreads a new order over the open rows only, the last open row taking the excess', () => {
     const rows = [
       row({ requestedQty: 5, orderedQty: 0 }),
