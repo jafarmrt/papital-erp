@@ -30,6 +30,11 @@ export interface LinkedOrderHooks {
 
 let hooks: LinkedOrderHooks | null = null;
 
+/** v11 phase 7.2 (TD-1391): whether the procurement package rebuilds a linked requisition after a void */
+export function hasLinkedOrderHooks(): boolean {
+  return hooks !== null;
+}
+
 export function registerLinkedOrderHooks(next: LinkedOrderHooks): void {
   hooks = next;
 }

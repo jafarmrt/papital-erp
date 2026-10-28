@@ -9,7 +9,7 @@ import { rebuildOrderRows, type RequisitionItemWithReceipt } from './requisition
 import { requisitionOrderDocuments } from './requisitionReceiveAction.js';
 import { describeOverOrders, findOverOrders } from './requisitionOrder.js';
 
-type Line = { itemId: number | null; quantity: string | number | null };
+type Line = { itemId: number | null; quantity: string | number | null; documentId?: number };
 /** همان شکل `LinkedOrderLine` / `LinkedOrderEdit` بسته اسناد (تدارکات آن را import نمی‌کند؛ ریشه ترکیب این دو را وصل می‌کند) */
 type LinkedOrderLine = { itemId: number; quantity: number | string };
 interface LinkedOrderEdit {
@@ -44,9 +44,10 @@ async function liveOrderLines(
   }).from(documentItems)
     .innerJoin(documents, eq(documents.id, documentItems.documentId))
     .where(and(inArray(documentItems.documentId, ids), eq(documentItems.isDeleted, 0), eq(documents.isDeleted, 0)));
-  const ordered: Line[] = rows.map(r => ({ itemId: r.itemId, quantity: r.quantity.toString() }));
-  const received: Line[] = rows.filter(r => r.status === 'final').map(r => ({ itemId: r.itemId, quantity: r.quantity.toString() }));
-  if (replace) ordered.push(...replace.lines.map(l => ({ itemId: Number(l.itemId), quantity: l.quantity })));
+  // the document id lets a closed row keep only what its own orders hold (TD-1391, `rebuildOrderedQuantities`)
+  const ordered: Line[] = rows.map(r => ({ itemId: r.itemId, quantity: r.quantity.toString(), documentId: r.documentId }));
+  const received: Line[] = rows.filter(r => r.status === 'final').map(r => ({ itemId: r.itemId, quantity: r.quantity.toString(), documentId: r.documentId }));
+  if (replace) ordered.push(...replace.lines.map(l => ({ itemId: Number(l.itemId), quantity: l.quantity, documentId: replace.documentId })));
   return { ordered, received };
 }
 
@@ -98,8 +99,9 @@ async function editOrder(tx: DbExecutor, edit: LinkedOrderEdit): Promise<{ note:
   const others = await liveOrderLines(tx, { id: req.id, items }, { documentId: edit.documentId, lines: [] });
   const base = rowsWithOrdered(items, others.ordered);
   const asLines = (lines: LinkedOrderLine[]) => lines.map(l => ({ itemId: Number(l.itemId), quantity: l.quantity }));
-  const before = new Map(findOverOrders(base, asLines(edit.oldLines)).map(o => [o.itemId, o.excess]));
-  const increased = findOverOrders(base, asLines(edit.newLines))
+  // a closed row needs what it had ordered as stored, not what the other orders leave it (review of #423)
+  const before = new Map(findOverOrders(base, asLines(edit.oldLines), items).map(o => [o.itemId, o.excess]));
+  const increased = findOverOrders(base, asLines(edit.newLines), items)
     .filter(o => fin(o.excess).greaterThan(before.get(o.itemId) ?? 0))
     .map(o => ({ ...o, excess: fin(o.excess).subtract(before.get(o.itemId) ?? 0).toNumber() }));
   const reason = edit.overOrderReason?.trim() || '';

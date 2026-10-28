@@ -21,7 +21,8 @@ export interface OverOrderLine {
  */
 export function findOverOrders(
   reqItems: PurchaseRequisitionItemRow[],
-  lines: Array<{ itemId: number; itemName?: string; quantity: number | string }>
+  lines: Array<{ itemId: number; itemName?: string; quantity: number | string }>,
+  needRows: PurchaseRequisitionItemRow[] = reqItems,
 ): OverOrderLine[] {
   const ordering = new Map<number, { quantity: FinancialDecimal; name: string }>();
   for (const line of lines) {
@@ -35,8 +36,10 @@ export function findOverOrders(
   for (const [itemId, order] of ordering) {
     const rows = reqItems.filter(r => Number(r.itemId) === itemId);
     // v11 phase 7.2 (TD-1391): a closed row needs no more than it had ordered (its closure cancelled the rest), so the
-    // spread, which skips it, and this check agree on how much the open rows may still take
-    const requested = rows.reduce((sum, r) => sum.add(isClosedRequisitionRow(r) ? (r.orderedQty || 0) : (r.requestedQty || 0)), fin(0));
+    // spread, which skips it, and this check agree on how much the open rows may still take; `needRows` are the stored rows
+    // when `reqItems` were rebuilt from only some of the orders (an order edit)
+    const requested = needRows.filter(r => Number(r.itemId) === itemId)
+      .reduce((sum, r) => sum.add(isClosedRequisitionRow(r) ? (r.orderedQty || 0) : (r.requestedQty || 0)), fin(0));
     const orderedBefore = rows.reduce((sum, r) => sum.add(r.orderedQty || 0), fin(0));
     const beyond = orderedBefore.add(order.quantity).subtract(requested);
     if (!beyond.isPositive()) continue;

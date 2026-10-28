@@ -57,14 +57,15 @@ export function spreadOrderedQuantity<T extends Pick<RequisitionQuantityRow, 're
 
 /**
  * v11 phase 7.2 (TD-1391): the ordered quantity of the rows of `itemIds`, rebuilt from the live order lines. A row closed
- * before the rebuild keeps what it had ordered (at most what the live orders still hold), so its closure stays readable by
- * the legacy rule too (and gets the `closed` flag), and the rest is spread over the open rows of the item (`spreadOrderedQuantity`). Returns the rows
- * with `orderedQty` set (others unchanged) and which of them were closed.
+ * before the rebuild keeps what it had ordered (at most what its own linked live orders, and all live orders, still hold),
+ * so its closure stays readable by the legacy rule too (and gets the `closed` flag), and the rest is spread over the open
+ * rows of the item (`spreadOrderedQuantity`). Returns the rows with `orderedQty` set (others unchanged) and which of them
+ * were closed.
  */
-export function rebuildOrderedQuantities<T extends RequisitionQuantityRow>(
+export function rebuildOrderedQuantities<T extends RequisitionQuantityRow & { linkedDocumentIds?: number[] }>(
   rows: readonly T[],
   itemIds: ReadonlySet<number>,
-  orderedLines: ReadonlyArray<{ itemId: number | null; quantity: DecimalValue | null }>,
+  orderedLines: ReadonlyArray<{ itemId: number | null; quantity: DecimalValue | null; documentId?: number | null }>,
 ): { rows: T[]; closed: boolean[] } {
   const closed = rows.map(row => isClosedRequisitionRow(row));
   const totals = new Map<number, FinancialDecimal>();
@@ -81,8 +82,17 @@ export function rebuildOrderedQuantities<T extends RequisitionQuantityRow>(
     const indexes = out.flatMap((row, index) => (Number(row.itemId) === itemId ? [index] : []));
     for (const index of indexes) {
       if (!closed[index]) continue;
-      const before = fin(rows[index].orderedQty || 0);
-      const keep = before.lessThan(left) ? before : left;
+      let keep = fin(rows[index].orderedQty || 0);
+      // review of #423: a closed row keeps only what its own live orders still hold, so voiding the order that held its
+      // quantity frees it instead of taking it from an open row; lines without a document id cannot tell and do not cap
+      const links = Array.isArray(rows[index].linkedDocumentIds) ? rows[index].linkedDocumentIds!.map(Number) : null;
+      if (links && orderedLines.every(line => line.documentId != null)) {
+        const own = orderedLines
+          .filter(line => Number(line.itemId) === itemId && links.includes(Number(line.documentId)))
+          .reduce((sum, line) => sum.add(line.quantity ?? 0), fin(0));
+        if (own.lessThan(keep)) keep = own;
+      }
+      if (left.lessThan(keep)) keep = left;
       out[index].orderedQty = keep.toNumber();
       left = left.subtract(keep);
     }

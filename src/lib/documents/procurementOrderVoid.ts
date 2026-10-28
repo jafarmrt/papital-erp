@@ -22,26 +22,31 @@ export interface OrderedRow {
 
 export function rebuildOrderedRows<T extends OrderedRow>(
   rows: T[],
-  liveLines: Array<{ itemId: number | null; quantity: DecimalValue | null }>,
+  liveLines: Array<{ itemId: number | null; quantity: DecimalValue | null; documentId?: number | null }>,
   itemIds: ReadonlySet<number>,
   voidedDocumentId: number,
 ): T[] {
   // v11 phase 7.2 (TD-1391): the same rule as the procurement rebuild (`rebuildOrderedQuantities`); a closed row, the
   // legacy one without a flag included, keeps its closure and status
   const rebuilt = rebuildOrderedQuantities(rows, itemIds, liveLines);
-  return rows.map((row, index) => {
-    const linked = Array.isArray(row.linkedDocumentIds) && row.linkedDocumentIds.some(id => Number(id) === voidedDocumentId)
-      ? row.linkedDocumentIds.filter(id => Number(id) !== voidedDocumentId) : row.linkedDocumentIds;
-    if (!itemIds.has(Number(row.itemId))) return linked === row.linkedDocumentIds ? row : { ...row, linkedDocumentIds: linked };
+  return unlinkVoidedOrder(rows, voidedDocumentId).map((unlinked, index) => {
+    const row = rows[index];
+    if (!itemIds.has(Number(row.itemId))) return unlinked;
     const next = rebuilt.rows[index];
     const remaining = fin(row.requestedQty || 0).subtract(next.orderedQty || 0);
     const closed = rebuilt.closed[index];
     const keepStatus = closed || row.status === 'received';
     return {
       ...next,
-      linkedDocumentIds: linked,
+      linkedDocumentIds: unlinked.linkedDocumentIds,
       remainingQty: closed || !remaining.isPositive() ? 0 : remaining.toNumber(),
       status: keepStatus ? row.status : (remaining.isPositive() ? 'pending' : 'ordered'),
     };
   });
+}
+
+/** v11 phase 7.2 (TD-1391): the rows with the voided order taken out of their links; an untouched row stays the same object */
+export function unlinkVoidedOrder<T extends OrderedRow>(rows: T[], voidedDocumentId: number): T[] {
+  return rows.map(row => (Array.isArray(row.linkedDocumentIds) && row.linkedDocumentIds.some(id => Number(id) === voidedDocumentId)
+    ? { ...row, linkedDocumentIds: row.linkedDocumentIds.filter(id => Number(id) !== voidedDocumentId) } : row));
 }

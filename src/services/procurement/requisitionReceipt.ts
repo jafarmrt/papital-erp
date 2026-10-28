@@ -32,7 +32,8 @@ export function applyDeliveredLines(
     if (!left || !left.isPositive()) return row;
     const requested = fin(row.requestedQty || 0);
     const previous = fin(row.receivedQty || 0);
-    const open = requested.subtract(previous);
+    // a closed row receives at most what it had ordered (TD-1391); the rest goes on to the next rows of the item
+    const open = (isClosedRequisitionRow(row) ? fin(row.orderedQty || 0) : requested).subtract(previous);
     const share = lastRowOfItem.get(itemId) === index || left.lessThan(open) ? left : (open.isPositive() ? open : fin(0));
     deliveredByItem.set(itemId, left.subtract(share));
     if (share.isZero()) return row;
@@ -61,7 +62,7 @@ export function isSettledRequisitionRow(row: SettlementRow): boolean {
   return isClosedRequisitionRow(row) || fin(row.receivedQty || 0).greaterThanOrEqual(row.requestedQty || 0);
 }
 
-type OrderLine = { itemId: number | null; quantity: DecimalValue | null };
+type OrderLine = { itemId: number | null; quantity: DecimalValue | null; documentId?: number | null };
 
 /**
  * v10.0.237 (TD-912، تصمیم ت۹ الف): مقدار سفارش‌شده و دریافتی ردیف‌های کالاهای `itemIds` از نو، از سطرهای سفارش‌های زنده
