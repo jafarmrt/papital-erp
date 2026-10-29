@@ -1,4 +1,5 @@
 import type { FinancialAttachment } from '../../types/accounting.types';
+import { documentTypeRecordPermission, type DocumentRecordStatus } from '../permissions/documentPermissions';
 
 /**
  * v11 (owner's decision 7 Aban 1405, after the 1405 replay): «افزودن پیوست» on a recorded warehouse or sales document, a
@@ -36,4 +37,14 @@ export function recordAttachmentRuleText(state: Pick<RecordAttachmentState, 'app
   if (state.yearClosed) return 'سال مالی این سند بسته شده است؛ پیوست‌ها فقط دیده می‌شوند.';
   if (state.approved) return 'سند تأیید شده است: می‌توانید پیوست بیفزایید (با نام و زمان افزودن نگه داشته می‌شود)، ولی پیوستی برداشته نمی‌شود.';
   return 'تا پیش از تأیید سند می‌توانید پیوست بیفزایید یا بردارید.';
+}
+
+/**
+ * The keys that change a document's files, for the server and the details window: «ویرایش اسناد» or the key that records
+ * that type of document in its status (a receipt clerk does not change a sales invoice's files); a transfer also with
+ * «جابجایی بین انبارها».
+ */
+export function documentAttachmentWriters(docType: string, status: string | null | undefined): string[] {
+  const recordStatus = (['draft', 'proforma', 'final'].includes(String(status)) ? status : 'final') as DocumentRecordStatus;
+  return ['documents.edit', documentTypeRecordPermission(docType, recordStatus), ...(docType === 'transfer' ? ['warehouse.transfer'] : [])];
 }

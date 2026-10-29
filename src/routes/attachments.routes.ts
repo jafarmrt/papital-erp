@@ -13,8 +13,8 @@ import { RECORD_READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { AttachmentStorageService, INLINE_SAFE_MIME_TYPES } from '../services/attachments/attachmentStorage.service.js';
 import { AttachmentOrphanCleanupService, MIN_ORPHAN_AGE_MINUTES } from '../services/attachments/attachmentOrphanCleanup.service.js';
 import { addRecordAttachment, recordAttachmentDocumentKind, recordAttachments, removeRecordAttachment } from '../services/attachments/recordAttachments.service.js';
-import { RECORD_ATTACHMENT_ENTITIES, type RecordAttachmentEntity } from '../lib/attachments/recordAttachments.js';
-import { PRODUCTION_RECEIPT_PERMISSION, documentTypeRecordPermission, type DocumentRecordStatus } from '../lib/permissions/documentPermissions.js';
+import { RECORD_ATTACHMENT_ENTITIES, documentAttachmentWriters, type RecordAttachmentEntity } from '../lib/attachments/recordAttachments.js';
+import { PRODUCTION_RECEIPT_PERMISSION } from '../lib/permissions/documentPermissions.js';
 import type { AuthUserPayload } from '../types/auth.types.js';
 
 const MIN_ORPHAN_AGE_MINUTES_FA = '۵';
@@ -134,7 +134,7 @@ const RECORD_ATTACHMENT_WRITERS: Record<RecordAttachmentEntity, readonly string[
   journal_voucher: ['accounting.vouchers'],
   treasury_transaction: ['accounting.treasury'],
   cheque: ['accounting.cheques', 'accounting.treasury'],
-  document: ['documents.edit', 'documents.create', 'documents.finalize', 'warehouse.in', 'warehouse.out', PRODUCTION_RECEIPT_PERMISSION],
+  document: ['documents.edit', 'documents.create', 'documents.finalize', 'warehouse.in', 'warehouse.out', 'warehouse.transfer', PRODUCTION_RECEIPT_PERMISSION],
 };
 const ALL_RECORD_ATTACHMENT_READERS = [...new Set(RECORD_ATTACHMENT_ENTITIES.flatMap(e => [...RECORD_READ_PERMISSIONS[e]]))];
 const ALL_RECORD_ATTACHMENT_WRITERS = [...new Set(RECORD_ATTACHMENT_ENTITIES.flatMap(e => [...RECORD_ATTACHMENT_WRITERS[e]]))];
@@ -161,9 +161,7 @@ const recordAttachmentRemoveSchema = z.object({
  */
 async function documentWriters(id: number): Promise<readonly string[]> {
   const kind = await recordAttachmentDocumentKind(id);
-  if (!kind) return RECORD_ATTACHMENT_WRITERS.document;
-  const status = (['draft', 'proforma', 'final'].includes(kind.status) ? kind.status : 'final') as DocumentRecordStatus;
-  return ['documents.edit', documentTypeRecordPermission(kind.type, status)];
+  return kind ? documentAttachmentWriters(kind.type, kind.status) : RECORD_ATTACHMENT_WRITERS.document;
 }
 
 async function assertRecordAttachmentAccess(user: AuthUserPayload | undefined, entity: RecordAttachmentEntity, write: boolean, id?: number): Promise<void> {
