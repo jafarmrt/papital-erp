@@ -22,6 +22,7 @@ import { pickListServerSearchUrl } from '../../../lib/permissions/pickListCap';
 import { customerPartyOption, supplierPartyOption } from '../../../lib/treasury/partyPickOption';
 import type { BankAccount, Customer, Personnel, FinancialAttachment } from '../../../types';
 import { DecimalInput } from '../../common/DecimalInput';
+import { RialEquivalent } from '../../common/RialEquivalent';
 import { DialogLayer } from '../../common/DialogLayer';
 import { SettlementAllocationField, useCanSettleOnDocuments, type SettlementFieldState } from './SettlementAllocationField';
 import { PAYMENT_METHOD_LABELS } from '../../../lib/treasury/treasuryExport';
@@ -351,6 +352,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                   onValueChange={(v) => setFormData({ ...formData, exchangeRate: Number(v) || 0 })}
                   className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono"
                 />
+                <RialEquivalent value={formData.exchangeRate || ''} />
               </div>
             )}
 

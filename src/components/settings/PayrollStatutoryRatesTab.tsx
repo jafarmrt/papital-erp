@@ -13,6 +13,8 @@ import { useSeededForm } from '../../hooks/useSeededForm';
 import { invalidateDomain } from '../../lib/queryInvalidation';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { RialEquivalent } from '../common/RialEquivalent';
+import { DecimalInput, refuseInvalidDecimalInputs } from '../common/DecimalInput';
+import { rowKeyOf, withFreshRowKeys, withRowKey, type KeyedRow } from '../../lib/rowKey';
 
 /**
  * v10.0.210 (TD-1087، طرح حقوق §۳.۳ بند ۱، تصمیم ت۴ الف): «نرخ‌های بیمه و مالیات حقوق» هر سال جلالی. حسابدار اعداد را از
@@ -36,7 +38,8 @@ interface FormState {
   employeeInsurancePercent: string;
   employerInsurancePercent: string;
   insuranceWageCap: string;
-  taxBrackets: Array<{ from: string; to: string; rate: string }>;
+  /** each bracket keeps a browser-only key, so removing one never hands its typed (or wrong) field text to the next */
+  taxBrackets: Array<{ from: string; to: string; rate: string } & KeyedRow>;
   deductInsuranceFromTax: boolean;
   version?: number;
 }
@@ -47,12 +50,12 @@ const inputClass = 'w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded
 const clean = (v: string) => normalizeDecimalString(v) || '0';
 
 function formOf(view: RatesView | undefined): FormState {
-  if (!view) return EMPTY_FORM;
+  if (!view) return { ...EMPTY_FORM, taxBrackets: withFreshRowKeys(EMPTY_FORM.taxBrackets) };
   return {
     employeeInsurancePercent: view.employeeInsurancePercent,
     employerInsurancePercent: view.employerInsurancePercent,
     insuranceWageCap: view.insuranceWageCap,
-    taxBrackets: view.taxBrackets.map(b => ({ from: b.from, to: b.to ?? '', rate: b.rate })),
+    taxBrackets: withFreshRowKeys(view.taxBrackets.map(b => ({ from: b.from, to: b.to ?? '', rate: b.rate }))),
     deductInsuranceFromTax: view.deductInsuranceFromTax,
     version: view.version,
   };
@@ -89,7 +92,8 @@ export function PayrollStatutoryRatesTab() {
   const body = payload();
   const formError = statutoryRatesError({ jalaliYear: year, ...body });
 
-  const save = async () => {
+  const save = async (from: Element) => {
+    if (refuseInvalidDecimalInputs(from)) return;
     if (formError) { toast.error(formError); return; }
     setSaving(true);
     try {
@@ -109,7 +113,7 @@ export function PayrollStatutoryRatesTab() {
     setForm(prev => ({ ...prev, taxBrackets: prev.taxBrackets.map((b, j) => (j === i ? { ...b, [key]: value } : b)) }));
   const addBracket = () => setForm(prev => {
     const last = prev.taxBrackets[prev.taxBrackets.length - 1];
-    return { ...prev, taxBrackets: [...prev.taxBrackets, { from: last?.to ?? '', to: '', rate: '' }] };
+    return { ...prev, taxBrackets: [...prev.taxBrackets, withRowKey({ from: last?.to ?? '', to: '', rate: '' })] };
   });
   const removeBracket = (i: number) => setForm(prev => ({ ...prev, taxBrackets: prev.taxBrackets.filter((_, j) => j !== i) }));
   const yearOptions = [...new Set([thisYear - 1, thisYear, thisYear + 1, ...years.map(r => r.jalaliYear)])].sort((a, b) => b - a);
@@ -125,7 +129,7 @@ export function PayrollStatutoryRatesTab() {
         سال بی نرخ یعنی فیش بیمه و مالیات را حساب نمی‌کند. پله‌های مالیات ماهانه‌اند و فیش کوتاه‌تر یا بلندتر از یک ماه به نسبت روزها حساب می‌شود.
       </p>
 
-      <fieldset disabled={!ready} className="space-y-5 min-w-0">
+      <fieldset disabled={!ready} data-decimal-scope="" className="space-y-5 min-w-0">
         <div className="flex items-center gap-2">
           <label htmlFor={`${fieldId}-year`} className="text-xs font-bold text-slate-700">سال جلالی</label>
           <select id={`${fieldId}-year`} value={year} onChange={(e) => pickYear(Number(e.target.value))} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold">
@@ -138,15 +142,15 @@ export function PayrollStatutoryRatesTab() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label htmlFor={`${fieldId}-employee-insurance-percent`} className="block text-xs font-bold text-slate-700 mb-1">درصد بیمه سهم کارگر</label>
-            <input id={`${fieldId}-employee-insurance-percent`} inputMode="decimal" value={form.employeeInsurancePercent} onChange={(e) => setForm(p => ({ ...p, employeeInsurancePercent: e.target.value }))} className={inputClass} />
+            <DecimalInput id={`${fieldId}-employee-insurance-percent`} value={form.employeeInsurancePercent} onValueChange={(v) => setForm(p => ({ ...p, employeeInsurancePercent: v }))} className={inputClass} />
           </div>
           <div>
             <label htmlFor={`${fieldId}-employer-insurance-percent`} className="block text-xs font-bold text-slate-700 mb-1">درصد بیمه سهم کارفرما (همراه بیمه بیکاری)</label>
-            <input id={`${fieldId}-employer-insurance-percent`} inputMode="decimal" value={form.employerInsurancePercent} onChange={(e) => setForm(p => ({ ...p, employerInsurancePercent: e.target.value }))} className={inputClass} />
+            <DecimalInput id={`${fieldId}-employer-insurance-percent`} value={form.employerInsurancePercent} onValueChange={(v) => setForm(p => ({ ...p, employerInsurancePercent: v }))} className={inputClass} />
           </div>
           <div>
             <label htmlFor={`${fieldId}-insurance-wage-cap`} className="block text-xs font-bold text-slate-700 mb-1">سقف ماهانه دستمزد مشمول بیمه (ریال)</label>
-            <input id={`${fieldId}-insurance-wage-cap`} inputMode="decimal" value={form.insuranceWageCap} placeholder="خالی یعنی بی سقف" onChange={(e) => setForm(p => ({ ...p, insuranceWageCap: e.target.value }))} className={inputClass} />
+            <DecimalInput id={`${fieldId}-insurance-wage-cap`} value={form.insuranceWageCap} placeholder="خالی یعنی بی سقف" onValueChange={(v) => setForm(p => ({ ...p, insuranceWageCap: v }))} className={inputClass} />
             <RialEquivalent value={form.insuranceWageCap} />
           </div>
         </div>
@@ -162,10 +166,18 @@ export function PayrollStatutoryRatesTab() {
             <button type="button" onClick={addBracket} className="text-[11px] font-bold text-indigo-600 flex items-center gap-1 cursor-pointer"><Plus size={13} /> افزودن پله</button>
           </div>
           {form.taxBrackets.map((b, i) => (
-            <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center">
-              <input inputMode="decimal" aria-label={`آغاز پله ${toPersianDigits(String(i + 1))}`} value={b.from} onChange={(e) => setBracket(i, 'from', e.target.value)} placeholder="از (ریال)" className={inputClass} />
-              <input inputMode="decimal" aria-label={`پایان پله ${toPersianDigits(String(i + 1))}`} value={b.to} onChange={(e) => setBracket(i, 'to', e.target.value)} placeholder="تا (ریال)؛ خالی یعنی بی‌پایان" className={inputClass} />
-              <input inputMode="decimal" aria-label={`نرخ پله ${toPersianDigits(String(i + 1))}`} value={b.rate} onChange={(e) => setBracket(i, 'rate', e.target.value)} placeholder="نرخ (درصد)" className={inputClass} />
+            <div key={rowKeyOf(b, i)} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-start">
+              <div>
+                <DecimalInput aria-label={`آغاز پله ${toPersianDigits(String(i + 1))}`} value={b.from} onValueChange={(v) => setBracket(i, 'from', v)} placeholder="از (ریال)" className={inputClass} />
+                <RialEquivalent value={b.from} />
+              </div>
+              <div>
+                <DecimalInput aria-label={`پایان پله ${toPersianDigits(String(i + 1))}`} value={b.to} onValueChange={(v) => setBracket(i, 'to', v)} placeholder="تا (ریال)؛ خالی یعنی بی‌پایان" className={inputClass} />
+                <RialEquivalent value={b.to} />
+              </div>
+              <div>
+                <DecimalInput aria-label={`نرخ پله ${toPersianDigits(String(i + 1))}`} value={b.rate} onValueChange={(v) => setBracket(i, 'rate', v)} placeholder="نرخ (درصد)" className={inputClass} />
+              </div>
               <button type="button" onClick={() => removeBracket(i)} aria-label="حذف پله" className="p-2 text-rose-600 cursor-pointer"><Trash2 size={14} /></button>
             </div>
           ))}
@@ -173,7 +185,7 @@ export function PayrollStatutoryRatesTab() {
 
         {formError && <p className="text-[11px] font-bold text-rose-700">{formError}</p>}
         <div className="flex justify-end">
-          <button type="button" onClick={() => void save()} disabled={saving || !!formError}
+          <button type="button" onClick={(e) => void save(e.currentTarget)} disabled={saving || !!formError}
             className="px-5 py-2 bg-indigo-600 text-white rounded-xl font-bold text-xs disabled:opacity-50 cursor-pointer">
             {saving ? 'در حال ذخیره...' : `ذخیره نرخ‌های سال ${toPersianDigits(String(year))}`}
           </button>

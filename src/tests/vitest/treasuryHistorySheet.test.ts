@@ -80,6 +80,10 @@ describe('treasury history import sheets', () => {
     expect(e(0)).toMatchObject({ status: 'ready', row: { kind: 'payment', partyType: 'supplier', partyId: 40, settleOldest: true, purchaseRef: '1' } });
     const refOf = (x: ReturnType<typeof resolveTreasuryRow>) => (x.status === 'ready' ? x.row.purchaseRef : 'not ready');
     expect(refOf(resolveTreasuryRow({ ...expenses[0], invoiceRef: '' }, mapping))).toBeUndefined();
+    // several numbers reach the server split exactly as the stock import split the receipt's cell (a line break is not lost)
+    for (const [cell, keys] of [['9\n10', '9+10'], ['9\r\n10', '9+10'], ['A-100 و B-200', 'a-100+b-200'], ['9‌و‌10', '9+10'], ['۷۱ + 72', '71+72']]) {
+      expect(refOf(resolveTreasuryRow({ ...expenses[0], invoiceRef: cell }, mapping))).toBe(keys);
+    }
     expect(refOf(e(1))).toBeUndefined();
     expect(e(1)).toMatchObject({ status: 'ready', row: { kind: 'payment', partyType: 'other', partyName: 'باربری', contraAccountId: 75 } });
     expect(e(2)).toMatchObject({ status: 'skipped' });

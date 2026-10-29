@@ -3,9 +3,10 @@ import type { Item } from '../../types';
 import { formatPersianCode, formatPersianNumber, formatPersianPrice } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
-import { currencyScale } from '../../lib/currencyScale';
 import { lineAmount, REQUISITION_QTY_SCALE } from '../../lib/procurement/procurementNumbers';
 import { RequisitionDecimalInput } from './RequisitionDecimalInput';
+import { DecimalInput } from '../common/DecimalInput';
+import { RialEquivalent } from '../common/RialEquivalent';
 
 /** یک ردیف فرم ثبت درخواست خرید */
 export interface NewRequisitionRow {
@@ -92,17 +93,19 @@ export function RequisitionItemRowEditor({ row, index, errors, onSelectItem, onC
         />
       </td>
       <td className="p-2.5 text-center">
-        <RequisitionDecimalInput
-          value={row.unitPriceEstimate}
-          onChange={price => onChange(row.id, 'unitPriceEstimate', price)}
-          scale={currencyScale('IRR')}
-          noun="برآورد قیمت"
-          ariaLabel={`برآورد قیمت واحد ردیف ${formatPersianNumber(index + 1)}`}
+        {/* v11: the shared rial field (grouped Persian digits, a misplaced «٬» is an error) with its toman equivalent */}
+        <DecimalInput
+          value={row.unitPriceEstimate || ''}
+          onValueChange={price => onChange(row.id, 'unitPriceEstimate', Number(price) || 0)}
+          min="0"
+          step="1"
+          aria-label={`برآورد قیمت واحد ردیف ${formatPersianNumber(index + 1)}`}
           placeholder="۰"
-          externalError={errorOf('unitPriceEstimate')}
-          errorId={errorId('unitPriceEstimate')}
+          aria-describedby={errorOf('unitPriceEstimate') ? errorId('unitPriceEstimate') : undefined}
           className={`w-28 text-center ${inputClass(Boolean(errorOf('unitPriceEstimate')))}`}
         />
+        <FieldError id={errorId('unitPriceEstimate')} message={errorOf('unitPriceEstimate')} />
+        <RialEquivalent value={row.unitPriceEstimate || ''} />
       </td>
       <td className="p-2.5 text-center font-bold text-amber-700">
         {formatPersianPrice(lineAmount(row.requestedQty, row.unitPriceEstimate))}

@@ -7,6 +7,7 @@ import {
 import { useStatutoryPreviewQuery } from '../../hooks/queries/usePayrollWindowQueries';
 import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 import { RialEquivalent } from '../common/RialEquivalent';
+import { DecimalInput } from '../common/DecimalInput';
 
 /**
  * v10.0.210 (TD-1087، طرح حقوق §۳.۳ بندهای ۳ و ۴، تصمیم ت۶ الف): بیمه سهم کارگر، سهم کارفرما و مالیات حقوق فرم صدور و ویرایش
@@ -67,12 +68,12 @@ export function PayrollStatutoryFields({ personnelId, startDate, endDate, gross,
         {STATUTORY_ENTRY_KEYS.map(key => (
           <div key={key}>
             <label htmlFor={`payroll-statutory-${key}`} className="block text-[11px] font-bold text-slate-700 mb-1">{`${LABELS[key]} (${cur})`}</label>
-            <input
+            <DecimalInput
               id={`payroll-statutory-${key}`}
-              inputMode="decimal"
+              min="0"
               value={entry[key]}
               placeholder={suggestion ? formatPersianPrice(Number(suggestion[key])) : ''}
-              onChange={(e) => onChange({ ...entry, [key]: e.target.value })}
+              onValueChange={(v) => onChange({ ...entry, [key]: v })}
               className={fieldClass}
             />
             <RialEquivalent value={entry[key]} />

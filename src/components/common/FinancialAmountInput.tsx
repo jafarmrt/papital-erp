@@ -12,6 +12,7 @@ import {
   caretAfterSignificant, editWithoutFieldSeparators, persianDigitsOf, significantCharsBefore, stepOverGroupSeparator
 } from '../../lib/numberFieldDisplay';
 import { groupSeparatorError } from '../../lib/decimalInputText';
+import { RialEquivalent } from './RialEquivalent';
 
 export interface FinancialAmountInputProps {
   /** مقدار عددی مبلغ به واحد پولی مشخص‌شده (مثلاً ریال یا دلار) */
@@ -316,6 +317,12 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
             </button>
           )}
         </div>
+      )}
+
+      {/* v11: the compact and table fields have no words badge; a rial amount still shows its toman equivalent under the
+          toman display unit, like every other field that takes a rial amount (`RialEquivalent`) */}
+      {!shouldShowWords && isRial && showTomanEquivalent && (
+        <RialEquivalent value={numericValue || ''} className={isTable ? 'mt-0.5 text-[10px] text-left' : undefined} />
       )}
 
       {inputError && (
