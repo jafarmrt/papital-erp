@@ -1,7 +1,8 @@
 import React from 'react';
 import type { BankAccount, Customer, Personnel } from '../../types';
 import type { ContraAccountOption } from '../../hooks/accounting/useTreasuryQueries';
-import type { BankTarget, ExpenseTarget, PartyTarget, TreasuryImportMapping } from '../../lib/historyImport/treasurySheet';
+import type { BankTarget, CostCentreTarget, ExpenseTarget, PartyTarget, TreasuryImportMapping } from '../../lib/historyImport/treasurySheet';
+import type { ProjectPick } from '../../lib/permissions/pickLists';
 import { formatPersianCode } from '../../utils';
 
 /**
@@ -13,10 +14,12 @@ export interface TreasuryImportLists {
   customers: Customer[];
   personnel: Personnel[];
   accounts: ContraAccountOption[];
+  /** tool 5: the production projects a cost centre maps to */
+  projects: ProjectPick[];
 }
 
 interface Props {
-  names: { banks: string[]; parties: string[]; expenses: string[] };
+  names: { banks: string[]; parties: string[]; expenses: string[]; costCentres: string[] };
   mapping: TreasuryImportMapping;
   lists: TreasuryImportLists;
   onChange: (mapping: TreasuryImportMapping) => void;
@@ -38,6 +41,8 @@ const encodeParty = (t?: PartyTarget) => {
   }
 };
 const encodeExpense = (t?: ExpenseTarget) => (!t ? '' : t.kind === 'account' ? `account:${t.accountId}` : t.kind);
+const encodeCentre = (t?: CostCentreTarget) => (!t ? '' : t.kind === 'project' ? `project:${t.projectId}` : 'none');
+const projectLabel = (p: ProjectPick) => `${formatPersianCode(p.projectCode || p.project_code)} - ${p.title}`;
 
 export function TreasuryImportNames({ names, mapping, lists, onChange }: Props) {
   const banks = Array.isArray(lists.banks) ? lists.banks : [];
@@ -77,6 +82,16 @@ export function TreasuryImportNames({ names, mapping, lists, onChange }: Props) 
     else if (value === 'skip' || value === 'supplier') expenses[name] = { kind: value };
     else expenses[name] = { kind: 'account', accountId: Number(value.split(':')[1]) };
     onChange({ ...mapping, expenses });
+  };
+
+  const projects = Array.isArray(lists.projects) ? lists.projects : [];
+  const setCentre = (name: string, value: string) => {
+    const costCentres = { ...(mapping.costCentres ?? {}) };
+    const project = projects.find(p => `project:${p.id}` === value);
+    if (!value) delete costCentres[name];
+    else if (value === 'none') costCentres[name] = { kind: 'none' };
+    else if (project) costCentres[name] = { kind: 'project', projectId: project.id, name: projectLabel(project) };
+    onChange({ ...mapping, costCentres });
   };
 
   const bankOptions = banks.map(b => <option key={`b${b.id}`} value={`bank:${b.id}`}>{b.title}</option>);
@@ -123,6 +138,13 @@ export function TreasuryImportNames({ names, mapping, lists, onChange }: Props) 
           <option value="skip">کنار گذاشته شود</option>
           <option value="supplier">پرداخت به تأمین‌کننده (خرید مواد)</option>
           <optgroup label="حساب هزینه">{accountOptions}</optgroup>
+        </select>
+      ))}
+      {section('مرکز هزینه', 'هر مرکز هزینه به پروژهٔ تولیدی‌اش وصل شود تا هزینه‌هایش در گزارش پروژه بیاید؛ هزینه‌های عمومی، دفتر و فروش «بدون پروژه» می‌مانند. پروژه‌ها باید پیش‌تر در «کنترل پروژه» تعریف شده باشند.', names.costCentres, name => (
+        <select aria-label={`مرکز هزینه ${name}`} className={SELECT_CLASS} value={encodeCentre(mapping.costCentres?.[name])} onChange={e => setCentre(name, e.target.value)}>
+          <option value="">انتخاب کنید</option>
+          <option value="none">بدون پروژه</option>
+          <optgroup label="پروژه">{projects.map(p => <option key={`pr${p.id}`} value={`project:${p.id}`}>{projectLabel(p)}</option>)}</optgroup>
         </select>
       ))}
       <label className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">

@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 
 vi.mock('../../api', () => ({ fetchJson: vi.fn(async () => ({})) }));
 vi.mock('react-hot-toast', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock('../../hooks/queries/useProjectQueries', async (importOriginal) => ({ ...(await importOriginal<object>()), useProjectPickQuery: () => ({ data: [], isLoading: false }) }));
 vi.mock('../../hooks/accounting/useTreasuryQueries', () => ({
   useContraAccountsQuery: () => ({ data: [{ id: 76, code: '7002', name: 'هزینه اجاره کارگاه و دفتر', accountType: 'expense' }], isLoading: false }),
 }));

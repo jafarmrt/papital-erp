@@ -12,6 +12,7 @@ const PREVIEW = {
 const fetchJson = vi.fn(async (url: string) => (url === '/api/accounting/treasury/preview-voucher' ? PREVIEW : {}));
 vi.mock('../../api', () => ({ fetchJson: (url: string) => fetchJson(url) }));
 vi.mock('react-hot-toast', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock('../../hooks/queries/useProjectQueries', async (importOriginal) => ({ ...(await importOriginal<object>()), useProjectPickQuery: () => ({ data: [], isLoading: false }) }));
 vi.mock('../../hooks/accounting/useTreasuryQueries', () => ({ useContraAccountsQuery: () => ({ data: [], isLoading: false }) }));
 
 import { TreasuryTransactionModal } from '../../components/accounting/treasury/TreasuryTransactionModal';
