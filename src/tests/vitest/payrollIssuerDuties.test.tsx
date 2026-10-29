@@ -25,9 +25,9 @@ import type { PieceworkPayroll } from '../../types';
 afterEach(cleanup);
 
 const noop = () => undefined;
-const payslip = (id: number, status: PieceworkPayroll['status'], createdById: number | null): PieceworkPayroll => ({
+const payslip = (id: number, status: PieceworkPayroll['status'], createdById: number | null, approvedById: number | null = status === 'draft' ? null : 4): PieceworkPayroll => ({
   id, payrollNumber: `PAY-${id}`, personnelId: 5, personnelName: 'کارگر', startDate: '2026-08-23', endDate: '2026-09-22', title: 'فیش',
-  totalPieceworkAmount: 1000000, totalBonuses: 0, totalDeductions: 0, netPayable: 1000000, paidAmount: 0, status, createdById,
+  totalPieceworkAmount: 1000000, totalBonuses: 0, totalDeductions: 0, netPayable: 1000000, paidAmount: 0, status, createdById, approvedById,
 });
 const button = (text: string) => screen.getByText(text).closest('button') as HTMLButtonElement;
 
@@ -38,8 +38,11 @@ describe('the issuer of a payslip does not approve it, and pays it only once ano
     expect(payrollIssuerDutyRefusal(own, { id: 9, isAdmin: false }, 'approve')).toContain('تأیید آن با کاربر دیگری است');
     expect(payrollIssuerDutyRefusal({ ...own, status: 'draft' }, { id: 9, isAdmin: false }, 'pay')).toContain('پس از تأیید کاربر دیگری');
     // v11: once another user approved it, the issuer pays it and voids its payment
-    expect(payrollIssuerDutyRefusal({ ...own, status: 'approved' }, { id: 9, isAdmin: false }, 'pay')).toBeNull();
-    expect(payrollIssuerDutyRefusal({ ...own, status: 'partially_paid' }, { id: 9, isAdmin: false }, 'pay')).toBeNull();
+    expect(payrollIssuerDutyRefusal({ ...own, status: 'approved', approvedById: 4 }, { id: 9, isAdmin: false }, 'pay')).toBeNull();
+    expect(payrollIssuerDutyRefusal({ ...own, status: 'partially_paid', approvedById: 4 }, { id: 9, isAdmin: false }, 'pay')).toBeNull();
+    // not one with no approver kept (approved before v11), nor one they approved themselves (as system admin)
+    expect(payrollIssuerDutyRefusal({ ...own, status: 'approved', approvedById: null }, { id: 9, isAdmin: false }, 'pay')).toContain('تأییدکنندهٔ این فیش ثبت نشده');
+    expect(payrollIssuerDutyRefusal({ ...own, status: 'approved', approvedById: 9 }, { id: 9, isAdmin: false }, 'pay')).toContain('خودتان صادر و تأیید کرده‌اید');
     expect(payrollIssuerDutyRefusal(own, { id: 4, isAdmin: false }, 'approve')).toBeNull();
     expect(payrollIssuerDutyRefusal(own, { id: 9, isAdmin: true }, 'pay')).toBeNull();
     expect(payrollIssuerDutyRefusal({ createdById: null }, { id: 9, isAdmin: false }, 'pay')).toBeNull();
@@ -71,5 +74,13 @@ describe('the issuer of a payslip does not approve it, and pays it only once ano
     expect(button('ثبت پرداخت (از خزانه)').disabled).toBe(false);
     button('بازگشت به پیش‌نویس').click();
     expect(onUpdateStatus).toHaveBeenCalledWith(4, 'draft');
+  });
+
+  it('an approval sends the net the approver sees', () => {
+    viewer.current = { id: 4, isAdmin: false };
+    const onUpdateStatus = vi.fn();
+    renderWithQuery(<PieceworkPayslipModal viewingPayroll={payslip(5, 'draft', 9)} onClose={noop} onUpdateStatus={onUpdateStatus} onDeletePayroll={noop} />);
+    button('تأیید فیش').click();
+    expect(onUpdateStatus).toHaveBeenCalledWith(5, 'approved', 1000000);
   });
 });

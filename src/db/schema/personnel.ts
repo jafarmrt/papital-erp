@@ -181,6 +181,8 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   eidiYear: integer('eidi_year'),
   isEidi: integer('is_eidi').notNull().default(0),
   createdById: integer('created_by_id').references(() => users.id),
+  // v11 (migration 0012): the user who moved the payslip out of draft; empty on a payslip approved before it was kept
+  approvedById: integer('approved_by_id').references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
@@ -190,6 +192,7 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   idx_ppay_deleted: index('idx_ppay_deleted').on(table.isDeleted),
   // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_piecework_payrolls_created_by_id: index('idx_piecework_payrolls_created_by_id').on(table.createdById).where(sql`${table.createdById} IS NOT NULL`),
+  idx_piecework_payrolls_approved_by_id: index('idx_piecework_payrolls_approved_by_id').on(table.approvedById).where(sql`${table.approvedById} IS NOT NULL`),
   idx_ppay_eidi_year: index('idx_ppay_eidi_year').on(table.personnelId, table.eidiYear).where(sql`${table.eidiYear} IS NOT NULL`),
 }));
 registerColumnRef('pieceworkPayrolls.id', () => pieceworkPayrolls.id);

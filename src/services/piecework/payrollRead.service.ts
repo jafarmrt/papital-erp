@@ -64,6 +64,8 @@ const payrollPaymentColumns = {
   createdAt: pieceworkPayrolls.createdAt,
   // v10.0.193 (TD-1084): صادرکننده فیش، تا صفحه دکمه تأیید و پرداخت او را با دلیل غیرفعال کند
   createdById: pieceworkPayrolls.createdById,
+  // v11: who approved it; its issuer pays it only when another user did
+  approvedById: pieceworkPayrolls.approvedById,
   // v10.0.199 (TD-1085): فیش پیش‌پرداخت و دلیلش در فهرست و چاپ
   isPrepayment: pieceworkPayrolls.isPrepayment,
   prepaymentReason: pieceworkPayrolls.prepaymentReason,

@@ -29,7 +29,7 @@ const STATUS_BADGE_CLASS: Record<string, string> = {
 interface PieceworkPayslipModalProps {
   viewingPayroll: PieceworkPayroll | null;
   onClose: () => void;
-  onUpdateStatus: (id: number, status: 'draft' | 'approved' | 'paid') => void;
+  onUpdateStatus: (id: number, status: 'draft' | 'approved' | 'paid', expectedNetPayable?: number | string) => void;
   onDeletePayroll: (id: number) => void;
   onReload?: () => void;
   /** مشاهده صرفاً برای پرسنل (بدون دکمه‌های پرداخت/ابطال) */
@@ -80,7 +80,7 @@ export function PieceworkPayslipModal({
             {/* v9.0.269 (TD-816): فیش پیش‌نویس پرداخت نمی‌شود؛ نخست تأیید می‌شود */}
             {!readOnly && canApprovePayroll && viewingPayroll.status === 'draft' && (
               <button
-                onClick={() => onUpdateStatus(viewingPayroll.id, 'approved')}
+                onClick={() => onUpdateStatus(viewingPayroll.id, 'approved', viewingPayroll.netPayable)}
                 disabled={!!approveRefusal || writesWait}
                 title={approveRefusal ?? undefined}
                 className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"

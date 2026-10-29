@@ -670,12 +670,13 @@ export function usePiecework() {
     setViewingPayrollId(null);
   };
 
-  const handleUpdatePayrollStatus = async (id: number, status: 'draft' | 'approved' | 'paid') => {
+  /** v11: an approval sends the net the user saw, so a payslip changed since is not approved */
+  const handleUpdatePayrollStatus = async (id: number, status: 'draft' | 'approved' | 'paid', expectedNetPayable?: number | string) => {
     try {
       await fetchJson(`/piecework/payrolls/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
+        body: JSON.stringify(status === 'approved' && expectedNetPayable !== undefined ? { status, expectedNetPayable } : { status })
       });
       hotToast.success(status === 'approved' ? 'فیش تأیید شد و آماده پرداخت است.' : 'فیش به پیش‌نویس برگشت.');
       reloadAfterPayrollChange();

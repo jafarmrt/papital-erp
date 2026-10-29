@@ -18,7 +18,7 @@ interface PieceworkPayrollsTabProps {
   payrollsList: PieceworkPayroll[];
   onOpenPayrollModal: () => void;
   onViewPayslip: (id: number) => void;
-  onUpdateStatus: (id: number, status: 'draft' | 'approved' | 'paid') => void;
+  onUpdateStatus: (id: number, status: 'draft' | 'approved' | 'paid', expectedNetPayable?: number | string) => void;
   onDeletePayroll: (id: number) => void;
   onReload?: () => void;
   /** پس از صدور سند فیش: فهرست فیش‌ها و حافظه سندهای حسابداری دوباره خوانده می‌شوند (OBS-R2-104؛ پیش‌تر کل صفحه بارگذاری دوباره می‌شد) */
@@ -184,7 +184,7 @@ export function PieceworkPayrollsTab({
                           payroll={payroll}
                           paidAmount={paidAmount}
                           remainingAmount={remainingAmount}
-                          onApprove={() => onUpdateStatus(payroll.id, 'approved')}
+                          onApprove={() => onUpdateStatus(payroll.id, 'approved', payroll.netPayable)}
                           onOpenPayment={() => setPaymentTarget(payroll)}
                         />
                       </td>
