@@ -290,7 +290,7 @@ export function resolveTreasuryRow(
       if (use === 'colleague_account') return ready({ kind, partyType: 'personnel', partyId: party.personnelId, partyName: party.name, purpose: 'colleague_account' }, true);
       // «پرداخت دیگر» to a colleague (a loan, a repayment) takes the account its own row names, never a shared fallback
       if (!rowContra) {
-        return { ...UNRESOLVED(parsed, '«پرداخت دیگر» به همکار حساب مقابل خودش را می‌خواهد: «کد حساب مقابل» همین ردیف را در اکسل بنویسید، یا کاربرد ردیف را از فهرست کنارش عوض کنید (حقوق، مساعده یا حساب جاری همکار).'), personnel: true };
+        return { status: 'unresolved', parsed, personnel: true, reason: '«پرداخت دیگر» به همکار حساب مقابل خودش را می‌خواهد: «کد حساب مقابل» همین ردیف را در اکسل بنویسید، یا کاربرد ردیف را از فهرست کنارش عوض کنید (حقوق، مساعده یا حساب جاری همکار).' };
       }
       return ready({ kind, partyType: 'personnel', partyId: party.personnelId, partyName: party.name, purpose: 'other', contraAccountId: rowContra }, true);
     }
