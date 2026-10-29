@@ -7,7 +7,7 @@
 
 /** one month at a time: a month of 1405 has about 150 rows, and a post (a preview pass, then the real one) must answer
  * well within the proxy's two minutes */
-export const TREASURY_IMPORT_MAX_ROWS = 400;
+export const TREASURY_IMPORT_MAX_ROWS = 250;
 
 /**
  * What one Excel row becomes: a receipt or payment of the treasury form, a transfer between two of our accounts, or a
