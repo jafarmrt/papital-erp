@@ -1,6 +1,6 @@
 import type { PgTable } from 'drizzle-orm/pg-core';
 import {
-  transactions, documentItems, documents, historyImportRefs, items,
+  transactions, documentItems, documents, historyImportRefs, historyImportPurchaseRefs, items,
   warehouses, itemPrices, customers, activityLogs, productionProjects, categories,
   projectStages, projectProductStageProgress, dailyWorkLogs, transfers, notifications, crmLeads, crmActivities, crmLeadStageHistory, customerTagLinks, customerTags,
   stockReceiptConfirmations, workshopTaskReports, projectManagers,
@@ -85,6 +85,7 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   { name: 'production_receipt_costs', table: productionReceiptCosts },
   { name: 'document_items', table: documentItems },
   { name: 'history_import_refs', table: historyImportRefs },
+  { name: 'history_import_purchase_refs', table: historyImportPurchaseRefs },
   { name: 'project_bom_allocations', table: projectBomAllocations },
   { name: 'transactions', table: transactions },
   { name: 'documents', table: documents },
