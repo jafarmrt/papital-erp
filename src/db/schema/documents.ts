@@ -121,3 +121,17 @@ export const historyImportRefs = pgTable('history_import_refs', {
   pk: primaryKey({ name: 'history_import_refs_pkey', columns: [t.kind, t.excelRef] }),
   idx_document: index('idx_history_import_refs_document').on(t.documentId),
 }));
+
+/**
+ * v11 history import, tool 6 (migration 0011): the supplier's invoice number of each past purchase receipt the import
+ * recorded, so a past supplier payment that names it settles that receipt first. Keyed by the document: one supplier and
+ * number can be several receipts (one per day and warehouse).
+ */
+export const historyImportPurchaseRefs = pgTable('history_import_purchase_refs', {
+  documentId: integer('document_id').primaryKey().references(() => documents.id),
+  supplierId: integer('supplier_id').notNull().references(baseRelations.customersId),
+  excelRef: text('excel_ref').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+}, (t) => ({
+  idx_supplier_ref: index('idx_history_import_purchase_refs_supplier_ref').on(t.supplierId, t.excelRef),
+}));

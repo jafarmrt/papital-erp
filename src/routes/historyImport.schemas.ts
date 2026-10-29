@@ -27,6 +27,7 @@ const treasuryImportRowSchema = z.object({
   projectId: optionalId,
   description: z.string().max(TEXT_MAX).optional(),
   settleOldest: z.boolean().optional(),
+  purchaseRef: z.string().max(TEXT_MAX).optional(),
   duplicateAccepted: z.boolean().optional(),
 }).strict().refine(row => (row.kind === 'colleague_expense') === (row.bankAccountId === 0), {
   message: 'حساب نقد و بانک ردیف مشخص نیست', path: ['bankAccountId'],

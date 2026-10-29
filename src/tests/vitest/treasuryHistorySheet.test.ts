@@ -76,7 +76,11 @@ describe('treasury history import sheets', () => {
     expect(r(7)).toMatchObject({ status: 'ready', row: { kind: 'payment', partyType: 'personnel', purpose: 'other', contraAccountId: 99 } });
     expect(r(7, { [rowKey(moves[7])]: 'payslip' })).toMatchObject({ row: { kind: 'payslip' } });
     const e = (i: number) => resolveTreasuryRow(expenses[i], mapping);
-    expect(e(0)).toMatchObject({ status: 'ready', row: { kind: 'payment', partyType: 'supplier', partyId: 40, settleOldest: true } });
+    // tool 6: the row's «شماره مرجع-فاکتور» names the warehouse receipt it pays
+    expect(e(0)).toMatchObject({ status: 'ready', row: { kind: 'payment', partyType: 'supplier', partyId: 40, settleOldest: true, purchaseRef: '1' } });
+    const refOf = (x: ReturnType<typeof resolveTreasuryRow>) => (x.status === 'ready' ? x.row.purchaseRef : 'not ready');
+    expect(refOf(resolveTreasuryRow({ ...expenses[0], invoiceRef: '' }, mapping))).toBeUndefined();
+    expect(refOf(e(1))).toBeUndefined();
     expect(e(1)).toMatchObject({ status: 'ready', row: { kind: 'payment', partyType: 'other', partyName: 'باربری', contraAccountId: 75 } });
     expect(e(2)).toMatchObject({ status: 'skipped' });
   });
