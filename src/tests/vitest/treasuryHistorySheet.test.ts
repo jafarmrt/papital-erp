@@ -114,6 +114,10 @@ describe('treasury history import sheets', () => {
     // a loan repaid is not the running account; it waits for the user's choice
     expect(guessPersonnelUse({ description: 'بازپرداخت وام', partyName: 'x', typeText: 'دریافت' })).toBe('other');
     expect(guessPersonnelUse({ description: 'بازپرداخت هزینه از جیب', partyName: 'x', typeText: 'پرداخت' })).toBe('colleague_account');
+    // a word ending in «و» before one starting with «ام» is not a loan
+    expect(guessPersonnelUse({ description: 'تنخواه', partyName: 'خسرو امیری', typeText: 'پرداخت' })).toBe('colleague_account');
+    expect(guessPersonnelUse({ description: 'تنخواه و امور دفتر', partyName: 'x', typeText: 'پرداخت' })).toBe('colleague_account');
+    expect(guessPersonnelUse({ description: 'قسط‌ وام', partyName: 'x', typeText: 'پرداخت' })).toBe('other');
     const lists = { parties: [{ id: 3, name: 'گالری آزمون', type: 'customer' }, { id: 4, name: 'فروشگاه رنگ', type: 'supplier' }], personnel: [{ id: 9, name: 'همکار يک' }], banks: [{ id: 1, title: 'بانک الف' }] };
     expect(suggestPartyTarget('مساعده - همکار یک', lists)).toEqual({ kind: 'personnel', personnelId: 9, name: 'همکار يک' });
     expect(suggestPartyTarget('بانک الف', lists)).toEqual({ kind: 'bank', bankAccountId: 1 });

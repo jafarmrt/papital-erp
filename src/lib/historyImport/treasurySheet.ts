@@ -151,12 +151,14 @@ export type PersonnelUse = 'payslip' | 'advance' | 'colleague_account' | 'other'
 
 /** The default use of a colleague's row, read from its description; the user can change it row by row. */
 export function guessPersonnelUse(row: Pick<ParsedTreasuryRow, 'description' | 'partyName' | 'typeText'>): PersonnelUse {
-  // compared without spaces and ZWNJ, so «تن خواه», «خرج‌کرد» and «هزینه کرد» read as written together
-  const text = `${row.description} ${row.partyName}`.replace(/[\s‌]+/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک');
+  const spaced = `${row.description} ${row.partyName}`.replace(/ي/g, 'ی').replace(/ك/g, 'ک');
+  // phrases compared without spaces and ZWNJ, so «تن خواه», «خرج‌کرد» and «هزینه کرد» read as written together
+  const text = spaced.replace(/[\s‌]+/g, '');
   if (text.includes('مساعده')) return 'advance';
   if (row.typeText === 'پرداخت' && /حقوق|دستمزد/.test(text)) return 'payslip';
-  // a loan repaid («بازپرداخت وام») is not the running account; such a row waits for the user's choice
-  if (/وام|قسط/.test(text)) return 'other';
+  // a loan repaid («بازپرداخت وام») is not the running account; such a row waits for the user's choice. «وام» and «قسط»
+  // are read as words of the spaced text, so «خسرو امیری» or «تنخواه و امور» do not read as «وام»
+  if (/(?<![\u0600-\u06FF])(وام|قسط)/.test(spaced)) return 'other';
   if (/تنخواه|بازپرداخت|ازجیب|خرجکرد|هزینهکرد/.test(text)) return 'colleague_account';
   return 'other';
 }
