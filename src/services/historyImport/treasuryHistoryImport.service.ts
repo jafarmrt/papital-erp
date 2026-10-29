@@ -11,7 +11,7 @@ import {
   type TreasuryImportResult, type TreasuryImportRow, type TreasuryImportRowOutcome,
 } from '../../lib/historyImport/treasuryHistoryImport.js';
 import { historyImportAmount } from '../../lib/historyImport/historyImportAmount.js';
-import { purchaseRefKey } from '../../lib/historyImport/purchaseRef.js';
+import { purchaseRefKeys } from '../../lib/historyImport/purchaseRef.js';
 import { formatPersianNumber, isoToJalaliDate, toPersianDigits } from '../../utils.js';
 import { toStorageDate } from '../../utils/calendarDate.js';
 import { excelInvoiceNumber } from '../../lib/historyImport/stockHistoryImport.js';
@@ -168,15 +168,15 @@ async function invoiceOfExcelRef(tx: DbExecutor, invoiceRef: string | undefined)
 }
 
 /**
- * The live purchase receipts the stock import recorded for a supplier and the supplier's invoice number (tool 6), oldest
+ * The live purchase receipts the stock import recorded for a supplier and one supplier invoice number (tool 6), oldest
  * first, whatever their day.
  */
-async function purchaseReceiptsOfRef(tx: DbExecutor, supplierId: number, ref: string): Promise<number[]> {
+async function purchaseReceiptsOfRef(tx: DbExecutor, supplierId: number, key: string): Promise<number[]> {
   const found = await tx.select({ id: documents.id }).from(historyImportPurchaseRefs)
     .innerJoin(documents, eq(documents.id, historyImportPurchaseRefs.documentId))
     .where(and(
       eq(historyImportPurchaseRefs.supplierId, supplierId),
-      eq(historyImportPurchaseRefs.excelRef, purchaseRefKey(ref)),
+      eq(historyImportPurchaseRefs.excelRef, key),
       eq(documents.partyId, supplierId),
       eq(documents.isDeleted, 0),
       eq(documents.type, 'receipt'),
@@ -185,6 +185,11 @@ async function purchaseReceiptsOfRef(tx: DbExecutor, supplierId: number, ref: st
     ))
     .orderBy(asc(documents.date), asc(documents.id));
   return found.map(f => Number(f.id));
+}
+
+/** A supplier payment names a supplier invoice number no live purchase receipt of the supplier carries (tool 6). */
+function unknownPurchaseRef(key: string): ValidationError {
+  return new ValidationError(`رسید خرید باز و ثبت‌شده‌ای با «شماره فاکتور مرجع» ${toPersianDigits(key)} از این تأمین‌کننده در برنامه نیست (رسیدی با این شماره وارد نشده، یا باطل یا پیش‌نویس شده، یا تأمین‌کننده‌اش عوض شده است). هر خرید مواد باید در اکسل انبار یک ردیف «خرید جدید» داشته باشد که در «شماره فاکتور مرجع» همین عدد ستون «شماره مرجع-فاکتور» این ردیف را دارد (نه شمارهٔ سطر برگه)، و آن ماه انبار پیش از این وارد شده باشد؛ اگر این خرید به انبار نمی‌آید، شمارهٔ ستون «شماره مرجع-فاکتور» این ردیف را پاک کنید تا از قدیمی‌ترین بدهی این تأمین‌کننده کم شود.`, undefined, 'HISTORY_IMPORT_PURCHASE_REF_UNKNOWN');
 }
 
 /** Of these documents, the purchase receipts that carry a supplier invoice number of the stock import (tool 6). */
@@ -223,10 +228,14 @@ async function oldestFirstParts(tx: DbExecutor, row: TreasuryImportRow, isoDate:
   }
   // tool 6: a supplier payment that names the supplier's invoice settles its receipts first (oldest of them first), also
   // a receipt dated after the payment (goods paid before they came in); what is left goes to the oldest open documents
-  if (!isReceipt && purchaseRefKey(row.purchaseRef)) {
-    const receipts = await purchaseReceiptsOfRef(tx, row.partyId, row.purchaseRef!);
-    if (receipts.length === 0) {
-      throw new ValidationError(`رسید خرید باز و ثبت‌شده‌ای با «شماره فاکتور مرجع» ${toPersianDigits(row.purchaseRef!)} از این تأمین‌کننده در برنامه نیست (رسیدی با این شماره وارد نشده، یا باطل یا پیش‌نویس شده، یا تأمین‌کننده‌اش عوض شده است). هر خرید مواد باید در اکسل انبار یک ردیف «خرید جدید» داشته باشد که در «شماره فاکتور مرجع» همین عدد ستون «شماره مرجع-فاکتور» این ردیف را دارد (نه شمارهٔ سطر برگه)، و آن ماه انبار پیش از این وارد شده باشد؛ اگر این خرید به انبار نمی‌آید، شمارهٔ ستون «شماره مرجع-فاکتور» این ردیف را پاک کنید تا از قدیمی‌ترین بدهی این تأمین‌کننده کم شود.`, undefined, 'HISTORY_IMPORT_PURCHASE_REF_UNKNOWN');
+  // one payment may pay several receipts («71+72»): each number must name a receipt, and they are settled in the cell's order
+  const refKeys = isReceipt ? [] : purchaseRefKeys(row.purchaseRef);
+  if (refKeys.length > 0) {
+    const receipts: number[] = [];
+    for (const key of refKeys) {
+      const ofKey = await purchaseReceiptsOfRef(tx, row.partyId, key);
+      if (ofKey.length === 0) throw unknownPurchaseRef(key);
+      for (const id of ofKey) if (!receipts.includes(id)) receipts.push(id);
     }
     const named = new Set(receipts);
     candidates.splice(0, candidates.length, ...receipts.map(id => ({ id })), ...candidates.filter(c => !named.has(c.id)));

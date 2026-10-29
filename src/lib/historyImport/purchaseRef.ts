@@ -12,8 +12,9 @@ export function purchaseRefKey(value: unknown): string {
 
 /**
  * The numbers of a purchase receipt's «شماره فاکتور مرجع» cell: one purchase paid in several «هزینه‌ها» rows (a deposit and
- * the rest, or two accounts) names each row, separated by «،», «,», «;», «+» or a line break. Each in its key form, once.
+ * the rest, or two accounts) names each row, separated by «،», «,», «;», «+», a line break or «و» between two numbers. A payment row's «شماره مرجع-فاکتور» cell
+ * that pays several receipts at once is read the same way. Each in its key form, once.
  */
 export function purchaseRefKeys(value: unknown): string[] {
-  return [...new Set(String(value ?? '').split(/[،,;+\n]/).map(purchaseRefKey).filter(Boolean))];
+  return [...new Set(String(value ?? '').split(/[،,;+\n]|(?<=[0-9۰-۹٠-٩])\s*و\s*(?=[0-9۰-۹٠-٩])|\s+و\s+/).map(purchaseRefKey).filter(Boolean))];
 }

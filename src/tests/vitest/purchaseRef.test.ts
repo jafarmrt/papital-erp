@@ -8,6 +8,9 @@ describe('history import purchase numbers (tool 6)', () => {
 
   it('reads the rows that paid one purchase from one cell, each once', () => {
     expect(purchaseRefKeys('۹، 10;11 + 12\n9')).toEqual(['9', '10', '11', '12']);
+    expect(purchaseRefKeys('9 و 10')).toEqual(['9', '10']);
+    expect(purchaseRefKeys('۹و۱۰')).toEqual(['9', '10']);
+    expect(purchaseRefKeys('خسرو')).toEqual(['خسرو']);
     expect(purchaseRefKeys('  ')).toEqual([]);
     expect(purchaseRefKeys(undefined)).toEqual([]);
   });
