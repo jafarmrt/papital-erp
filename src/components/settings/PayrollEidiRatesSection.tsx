@@ -13,6 +13,7 @@ import { useSeededForm } from '../../hooks/useSeededForm';
 import { invalidateDomain } from '../../lib/queryInvalidation';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { RialEquivalent } from '../common/RialEquivalent';
+import { DecimalInput, refuseInvalidDecimalInputs } from '../common/DecimalInput';
 
 /**
  * v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۴ تا ت۱۶ الف): روش و نرخ عیدی هر سال جلالی، کنار نرخ‌های بیمه و مالیات. هیچ نرخ
@@ -92,7 +93,8 @@ export function PayrollEidiRatesSection() {
   };
   const formError = eidiRatesError({ jalaliYear: year, ...body });
 
-  const save = async () => {
+  const save = async (from: Element) => {
+    if (refuseInvalidDecimalInputs(from)) return;
     if (formError) { toast.error(formError); return; }
     setSaving(true);
     try {
@@ -116,7 +118,7 @@ export function PayrollEidiRatesSection() {
         <Gift className="w-5 h-5 text-emerald-600" />
         <h3 className="text-sm font-black text-slate-900">عیدی و پاداش سالانه</h3>
       </div>
-      <fieldset disabled={!ready} className="space-y-4 min-w-0">
+      <fieldset disabled={!ready} data-decimal-scope="" className="space-y-4 min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <label className="text-xs font-bold text-slate-700" htmlFor="eidi-year">سال جلالی</label>
           <select id="eidi-year" value={year} onChange={(e) => pickYear(Number(e.target.value))} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold">
@@ -134,14 +136,14 @@ export function PayrollEidiRatesSection() {
           {FIELDS[form.method].map(f => (
             <div key={f.key}>
               <label className="block text-xs font-bold text-slate-700 mb-1" htmlFor={`eidi-${f.key}`}>{f.label}</label>
-              <input id={`eidi-${f.key}`} inputMode="decimal" value={form[f.key]} onChange={(e) => setForm(p => ({ ...p, [f.key]: e.target.value }))} className={inputClass} />
+              <DecimalInput id={`eidi-${f.key}`} value={form[f.key]} onValueChange={(v) => setForm(p => ({ ...p, [f.key]: v }))} className={inputClass} />
               {f.isRial && <RialEquivalent value={form[f.key]} />}
             </div>
           ))}
         </div>
         {formError && <p className="text-[11px] font-bold text-rose-700">{formError}</p>}
         <div className="flex justify-end">
-          <button type="button" onClick={() => void save()} disabled={saving || !!formError}
+          <button type="button" onClick={(e) => void save(e.currentTarget)} disabled={saving || !!formError}
             className="px-5 py-2 bg-emerald-600 text-white rounded-xl font-bold text-xs disabled:opacity-50 cursor-pointer">
             {saving ? 'در حال ذخیره...' : `ذخیره روش عیدی سال ${toPersianDigits(String(year))}`}
           </button>

@@ -576,7 +576,7 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
                 <MaterialNameField label="عنوان کامل ماده اولیه *" value={approveForm.name} onChange={(v) => setApproveForm({ ...approveForm, name: v })} />
                 <MaterialUnitSelect value={approveForm.unit} onChange={(v) => setApproveForm({ ...approveForm, unit: v })} units={materialUnitOptions(approveForm.unit)} />
                 <MaterialNumberField label="نقطه سفارش اولیه" value={approveForm.reorderPoint} onChange={(v) => setApproveForm({ ...approveForm, reorderPoint: v })} />
-                <MaterialNumberField label="قیمت / هزینه واحد تخمینی" value={approveForm.weightedAverageCost} onChange={(v) => setApproveForm({ ...approveForm, weightedAverageCost: v })} />
+                <MaterialNumberField rial label="قیمت / هزینه واحد تخمینی (ریال)" value={approveForm.weightedAverageCost} onChange={(v) => setApproveForm({ ...approveForm, weightedAverageCost: v })} />
                 <MaterialAttributeFields
                   color={approveForm.color}
                   material={approveForm.material}
