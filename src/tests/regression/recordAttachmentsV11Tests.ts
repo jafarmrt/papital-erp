@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { fiscalPeriods, journalVouchers } from '../../db/schema.js';
+import { documents, fiscalPeriods, journalVouchers } from '../../db/schema.js';
 import { businessTodayIsoDate, resolveJalaliFiscalYear } from '../../lib/businessClock.js';
 import { FiscalPeriodService } from '../../services/accounting/fiscalPeriod.service.js';
 import { VoucherService } from '../../services/accounting/voucher.service.js';
@@ -49,6 +49,9 @@ export async function runRecordAttachmentsV11Tests(shouldRun: ShouldRun): Promis
       const added = await admin.post(URL, { name: 'invoice.png', dataUrl: PNG });
       const first = filesOf(added)[0];
       if (added.status !== 200 || filesOf(added).length !== 1 || !first?.uploadedAt || !first?.uploadedBy) problems.push(`adding to a draft answered ${brief(added)}, expected one file with its time and user`);
+      // the voucher's version moves, so its form opened before the change cannot save the old list back
+      const [afterAdd] = await orm.select({ version: journalVouchers.version }).from(journalVouchers).where(eq(journalVouchers.id, voucherId));
+      if (afterAdd?.version !== 2) problems.push(`the voucher's version after a window change is ${afterAdd?.version}, expected 2`);
       const removed = await admin.del(`${URL}/${first?.id}`);
       if (removed.status !== 200 || filesOf(removed).length !== 0) problems.push(`removing from a draft answered ${brief(removed)}, expected none left`);
 
@@ -82,6 +85,32 @@ export async function runRecordAttachmentsV11Tests(shouldRun: ShouldRun): Promis
 
       assertNoProblems(problems);
       return 'a draft took and gave back a file; an approved voucher only took files; a closed year and a reader were refused; a deleted voucher was 404; four audit rows';
+    }));
+  }
+
+  const docId = 'reg_record_attachments_documents_v11';
+  if (shouldRun(docId, 'v11', 'attachments', 'documents')) {
+    await runCase(results, docId, 'v11 add attachment on documents: a receipt clerk is refused a change on a sales invoice (403) while the sales clerk adds; a final transfer, which never gets a voucher, counts as approved (removal 409 RECORD_ATTACHMENT_APPROVED)', () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const receiptClerk = await sandboxClientWith(['documents.view', 'warehouse.in']);
+      const salesClerk = await sandboxClientWith(['documents.view', 'documents.create']);
+      const today = await businessTodayIsoDate();
+      const [invoice] = await orm.insert(documents).values({ type: 'invoice', refNumber: `RA-INV-${Date.now()}`, date: `${today} 00:00:00`, status: 'draft' }).returning({ id: documents.id });
+      const [transfer] = await orm.insert(documents).values({ type: 'transfer', refNumber: `RA-TR-${Date.now()}`, date: `${today} 00:00:00`, status: 'final' }).returning({ id: documents.id });
+
+      const byReceiptClerk = await receiptClerk.post(`/api/record-attachments/document/${invoice.id}`, { name: 'x.png', dataUrl: PNG });
+      if (byReceiptClerk.status !== 403) problems.push(`a receipt clerk adding to a sales invoice answered ${brief(byReceiptClerk)}, expected 403`);
+      const bySalesClerk = await salesClerk.post(`/api/record-attachments/document/${invoice.id}`, { name: 'x.png', dataUrl: PNG });
+      if (bySalesClerk.status !== 200) problems.push(`a sales clerk adding to a draft sales invoice answered ${brief(bySalesClerk)}, expected 200`);
+
+      const onTransfer = await admin.post(`/api/record-attachments/document/${transfer.id}`, { name: 't.png', dataUrl: PNG });
+      if (onTransfer.status !== 200) problems.push(`adding to a final transfer answered ${brief(onTransfer)}, expected 200`);
+      const offTransfer = await admin.del(`/api/record-attachments/document/${transfer.id}/${filesOf(onTransfer)[0]?.id}`);
+      if (offTransfer.status !== 409 || codeOf(offTransfer) !== 'RECORD_ATTACHMENT_APPROVED') problems.push(`removing from a final transfer answered ${brief(offTransfer)}, expected 409 RECORD_ATTACHMENT_APPROVED`);
+
+      assertNoProblems(problems);
+      return 'the receipt clerk was refused on a sales invoice, the sales clerk added; a final transfer kept its file';
     }));
   }
 

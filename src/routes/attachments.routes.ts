@@ -12,9 +12,9 @@ import { errorMessageOf } from '../utils.js';
 import { RECORD_READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { AttachmentStorageService, INLINE_SAFE_MIME_TYPES } from '../services/attachments/attachmentStorage.service.js';
 import { AttachmentOrphanCleanupService, MIN_ORPHAN_AGE_MINUTES } from '../services/attachments/attachmentOrphanCleanup.service.js';
-import { addRecordAttachment, recordAttachments, removeRecordAttachment } from '../services/attachments/recordAttachments.service.js';
+import { addRecordAttachment, recordAttachmentDocumentKind, recordAttachments, removeRecordAttachment } from '../services/attachments/recordAttachments.service.js';
 import { RECORD_ATTACHMENT_ENTITIES, type RecordAttachmentEntity } from '../lib/attachments/recordAttachments.js';
-import { PRODUCTION_RECEIPT_PERMISSION } from '../lib/permissions/documentPermissions.js';
+import { PRODUCTION_RECEIPT_PERMISSION, documentTypeRecordPermission, type DocumentRecordStatus } from '../lib/permissions/documentPermissions.js';
 import type { AuthUserPayload } from '../types/auth.types.js';
 
 const MIN_ORPHAN_AGE_MINUTES_FA = '۵';
@@ -155,9 +155,21 @@ const recordAttachmentRemoveSchema = z.object({
   params: z.object({ ...recordParams, attachmentId: z.string().min(1).max(64) }),
 });
 
-async function assertRecordAttachmentAccess(user: AuthUserPayload | undefined, entity: RecordAttachmentEntity, write: boolean): Promise<void> {
+/**
+ * A document's files change with «ویرایش اسناد» or the key that records that type of document in its status (a receipt
+ * clerk does not change a sales invoice's files); a missing document is the service's 404.
+ */
+async function documentWriters(id: number): Promise<readonly string[]> {
+  const kind = await recordAttachmentDocumentKind(id);
+  if (!kind) return RECORD_ATTACHMENT_WRITERS.document;
+  const status = (['draft', 'proforma', 'final'].includes(kind.status) ? kind.status : 'final') as DocumentRecordStatus;
+  return ['documents.edit', documentTypeRecordPermission(kind.type, status)];
+}
+
+async function assertRecordAttachmentAccess(user: AuthUserPayload | undefined, entity: RecordAttachmentEntity, write: boolean, id?: number): Promise<void> {
   const reads = await userHasRoleOrPermission(user, ...RECORD_READ_PERMISSIONS[entity]);
-  if (!reads || (write && !(await can(user, ...RECORD_ATTACHMENT_WRITERS[entity])))) {
+  const writers = write && entity === 'document' && id ? await documentWriters(id) : RECORD_ATTACHMENT_WRITERS[entity];
+  if (!reads || (write && !(await can(user, ...writers)))) {
     throw new ForbiddenError(write ? 'افزودن یا برداشتن پیوست این سند مجوز ثبت همین نوع سند را می‌خواهد.' : 'دسترسی به پیوست‌های این سند مجاز نیست.', undefined, 'RECORD_ATTACHMENT_FORBIDDEN');
   }
 }
@@ -173,14 +185,14 @@ router.get('/record-attachments/:entityType/:id', authorizePermission(...ALL_REC
 router.post('/record-attachments/:entityType/:id', authorizePermission(...ALL_RECORD_ATTACHMENT_WRITERS), idempotency({ scope: 'record-attachments' }),
   validate(recordAttachmentAddSchema), asyncHandler(async (req, res) => {
     const entity = req.params.entityType as RecordAttachmentEntity;
-    await assertRecordAttachmentAccess(req.user, entity, true);
+    await assertRecordAttachmentAccess(req.user, entity, true, Number(req.params.id));
     res.json(await addRecordAttachment(entity, Number(req.params.id), { name: req.body.name, dataUrl: req.body.dataUrl }, actorOf(req, req)));
   }));
 
 router.delete('/record-attachments/:entityType/:id/:attachmentId', authorizePermission(...ALL_RECORD_ATTACHMENT_WRITERS), idempotency({ scope: 'record-attachments' }),
   validate(recordAttachmentRemoveSchema), asyncHandler(async (req, res) => {
     const entity = req.params.entityType as RecordAttachmentEntity;
-    await assertRecordAttachmentAccess(req.user, entity, true);
+    await assertRecordAttachmentAccess(req.user, entity, true, Number(req.params.id));
     res.json(await removeRecordAttachment(entity, Number(req.params.id), String(req.params.attachmentId), actorOf(req, req)));
   }));
 

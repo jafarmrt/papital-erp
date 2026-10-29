@@ -320,7 +320,8 @@ export class AttachmentStorageService {
     const table = ENTITY_TABLES[entityType];
     if (!table) throw new ValidationError('این نوع رکورد پیوست فهرستی ندارد');
     const stored = await this.normalizeForRecord(executor, entityType, entityId, input, actor);
-    await executor.update(table).set({ attachments: stored }).where(eq(table.id, entityId));
+    // the record's version moves, so its form opened before this change gets 409 instead of saving the old list back
+    await executor.update(table).set({ attachments: stored, version: sql`${table.version} + 1` }).where(eq(table.id, entityId));
     return stored;
   }
 

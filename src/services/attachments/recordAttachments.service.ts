@@ -43,6 +43,11 @@ interface RecordRow {
   date: string;
   /** a voucher's own status, or the statuses of the record's live vouchers */
   voucherStatuses: string[];
+  /**
+   * a record that is final without any voucher (a transfer, a treasury row or cheque recorded with none): it never gets
+   * an approved voucher, so it counts as approved once recorded (owner's decision 7 Aban 1405)
+   */
+  postedWithoutVoucher: boolean;
   label: string;
 }
 
@@ -59,7 +64,7 @@ async function readRecord(tx: DbExecutor, entity: RecordAttachmentEntity, id: nu
     const q = tx.select({ attachments: journalVouchers.attachments, date: journalVouchers.date, status: journalVouchers.status, no: journalVouchers.voucherNumber })
       .from(journalVouchers).where(and(eq(journalVouchers.id, id), eq(journalVouchers.isDeleted, 0)));
     const [row] = lock ? await q.for('update') : await q;
-    return row ? { attachments: listOf(row.attachments), date: row.date, voucherStatuses: [String(row.status ?? 'draft')], label: `سند حسابداری ${row.no}` } : null;
+    return row ? { attachments: listOf(row.attachments), date: row.date, voucherStatuses: [String(row.status ?? 'draft')], postedWithoutVoucher: false, label: `سند حسابداری ${row.no}` } : null;
   }
   if (entity === 'treasury_transaction') {
     const q = tx.select({ attachments: treasuryTransactions.attachments, date: treasuryTransactions.date, voucherId: treasuryTransactions.voucherId, no: treasuryTransactions.transactionNumber })
@@ -67,7 +72,7 @@ async function readRecord(tx: DbExecutor, entity: RecordAttachmentEntity, id: nu
     const [row] = lock ? await q.for('update') : await q;
     if (!row) return null;
     const statuses = row.voucherId ? await liveVoucherStatuses(tx, eq(journalVouchers.id, row.voucherId)) : [];
-    return { attachments: listOf(row.attachments), date: row.date, voucherStatuses: statuses, label: `تراکنش ${row.no}` };
+    return { attachments: listOf(row.attachments), date: row.date, voucherStatuses: statuses, postedWithoutVoucher: statuses.length === 0, label: `تراکنش ${row.no}` };
   }
   if (entity === 'cheque') {
     const q = tx.select({ attachments: cheques.attachments, date: cheques.issueDate, voucherId: cheques.voucherId, no: cheques.chequeNumber })
@@ -77,17 +82,20 @@ async function readRecord(tx: DbExecutor, entity: RecordAttachmentEntity, id: nu
     const statuses = await liveVoucherStatuses(tx, row.voucherId
       ? or(eq(journalVouchers.sourceChequeId, id), eq(journalVouchers.id, row.voucherId))
       : eq(journalVouchers.sourceChequeId, id));
-    return { attachments: listOf(row.attachments), date: row.date, voucherStatuses: statuses, label: `چک ${row.no}` };
+    return { attachments: listOf(row.attachments), date: row.date, voucherStatuses: statuses, postedWithoutVoucher: statuses.length === 0, label: `چک ${row.no}` };
   }
-  const q = tx.select({ attachments: documents.attachments, date: documents.date, no: documents.refNumber })
+  const q = tx.select({ attachments: documents.attachments, date: documents.date, no: documents.refNumber, status: documents.status })
     .from(documents).where(and(eq(documents.id, id), eq(documents.isDeleted, 0)));
   const [row] = lock ? await q.for('update') : await q;
   if (!row) return null;
   const statuses = await liveVoucherStatuses(tx, eq(journalVouchers.sourceDocumentId, id));
-  return { attachments: listOf(row.attachments), date: String(row.date ?? '').slice(0, 10), voucherStatuses: statuses, label: `سند ${row.no ?? id}` };
+  return {
+    attachments: listOf(row.attachments), date: String(row.date ?? '').slice(0, 10), voucherStatuses: statuses,
+    postedWithoutVoucher: statuses.length === 0 && row.status === 'final', label: `سند ${row.no ?? id}`,
+  };
 }
 
-const isApproved = (row: RecordRow) => row.voucherStatuses.some(s => s !== 'draft' && s !== 'voided');
+const isApproved = (row: RecordRow) => row.postedWithoutVoucher || row.voucherStatuses.some(s => s !== 'draft' && s !== 'voided');
 
 async function stateOf(tx: DbExecutor, row: RecordRow, shared: boolean): Promise<RecordAttachmentState> {
   const yearClosed = shared ? await FiscalPeriodService.isClosedShared(row.date, tx) : await FiscalPeriodService.isClosed(row.date, tx);
@@ -103,6 +111,13 @@ export interface RecordAttachmentActor {
   username?: string;
   userFullName?: string;
   req?: unknown;
+}
+
+/** A document's type and status, for the key a change of its files asks (null when it does not exist). */
+export async function recordAttachmentDocumentKind(id: number): Promise<{ type: string; status: string } | null> {
+  const [row] = await orm.select({ type: documents.type, status: documents.status }).from(documents)
+    .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)));
+  return row ? { type: String(row.type), status: String(row.status ?? 'draft') } : null;
 }
 
 /** The record's files and whether it is approved or its year closed (what the window offers). */
