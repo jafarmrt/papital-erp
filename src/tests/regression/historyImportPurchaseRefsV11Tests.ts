@@ -115,6 +115,9 @@ export async function runHistoryImportPurchaseRefsV11Tests(shouldRun: ShouldRun)
       // one known and one unknown number: refused as a whole
       const mixed = await postTo<TreasuryImportResult>(admin, URL, [payment(9, '1405-03-05', '100000', 'B-200، X-2')], true);
       if (mixed.committed || mixed.rows[0]?.status !== 'error') problems.push(`a payment naming a known and an unknown invoice read ${JSON.stringify(mixed.rows)}, expected refused`);
+      // E is paid in full: a second payment naming it is refused, not pushed onto other documents
+      const again = await postTo<TreasuryImportResult>(admin, URL, [payment(10, '1405-03-05', '100000', '71')], true);
+      if (again.committed || again.rows[0]?.status !== 'error' || !String(again.rows[0]?.message).includes('کامل پرداخت')) problems.push(`a payment naming a paid purchase read ${JSON.stringify(again.rows)}, expected refused`);
       if (await count(sql`SELECT count(*)::int AS n FROM treasury_transactions`) !== before) problems.push('a refused payment left a treasury row');
 
       if (problems.length > 0) throw new Error(problems.join(' | '));

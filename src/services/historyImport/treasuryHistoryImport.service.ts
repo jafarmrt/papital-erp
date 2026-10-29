@@ -192,6 +192,20 @@ function unknownPurchaseRef(key: string): ValidationError {
   return new ValidationError(`رسید خرید باز و ثبت‌شده‌ای با «شماره فاکتور مرجع» ${toPersianDigits(key)} از این تأمین‌کننده در برنامه نیست (رسیدی با این شماره وارد نشده، یا باطل یا پیش‌نویس شده، یا تأمین‌کننده‌اش عوض شده است). هر خرید مواد باید در اکسل انبار یک ردیف «خرید جدید» داشته باشد که در «شماره فاکتور مرجع» همین عدد ستون «شماره مرجع-فاکتور» این ردیف را دارد (نه شمارهٔ سطر برگه)، و آن ماه انبار پیش از این وارد شده باشد؛ اگر این خرید به انبار نمی‌آید، شمارهٔ ستون «شماره مرجع-فاکتور» این ردیف را پاک کنید تا از قدیمی‌ترین بدهی این تأمین‌کننده کم شود.`, undefined, 'HISTORY_IMPORT_PURCHASE_REF_UNKNOWN');
 }
 
+/** Whether any of these documents still has something left to pay. */
+async function anyLeftToPay(tx: DbExecutor, ids: number[]): Promise<boolean> {
+  for (const id of ids) {
+    const doc = await readDocumentPayableAndSettled(tx, id);
+    if (doc && doc.payable.subtract(doc.settled.isNegative() ? 0 : doc.settled).subtract(doc.returned).round(4).greaterThan(0)) return true;
+  }
+  return false;
+}
+
+/** A supplier payment names a purchase whose receipts are already paid in full (tool 6). */
+function paidPurchaseRef(key: string): ValidationError {
+  return new ValidationError(`رسید خرید با «شماره فاکتور مرجع» ${toPersianDigits(key)} از این تأمین‌کننده پیش‌تر کامل پرداخت شده است؛ اگر این ردیف پرداخت دوباره یا پرداخت خرید دیگری است، عدد ستون «شماره مرجع-فاکتور» آن را درست کنید یا پاک کنید تا از قدیمی‌ترین بدهی این تأمین‌کننده کم شود.`, undefined, 'HISTORY_IMPORT_PURCHASE_REF_PAID');
+}
+
 /** Of these documents, the purchase receipts that carry a supplier invoice number of the stock import (tool 6). */
 async function receiptsWithPurchaseRef(tx: DbExecutor, ids: number[]): Promise<Set<number>> {
   if (ids.length === 0) return new Set();
@@ -235,6 +249,8 @@ async function oldestFirstParts(tx: DbExecutor, row: TreasuryImportRow, isoDate:
     for (const key of refKeys) {
       const ofKey = await purchaseReceiptsOfRef(tx, row.partyId, key);
       if (ofKey.length === 0) throw unknownPurchaseRef(key);
+      // a named purchase already paid in full would push this payment onto other documents unnoticed
+      if (!(await anyLeftToPay(tx, ofKey))) throw paidPurchaseRef(key);
       for (const id of ofKey) if (!receipts.includes(id)) receipts.push(id);
     }
     const named = new Set(receipts);

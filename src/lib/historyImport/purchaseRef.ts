@@ -16,5 +16,5 @@ export function purchaseRefKey(value: unknown): string {
  * that pays several receipts at once is read the same way. Each in its key form, once.
  */
 export function purchaseRefKeys(value: unknown): string[] {
-  return [...new Set(String(value ?? '').split(/[،,;+\n]|(?<=[0-9۰-۹٠-٩])\s*و\s*(?=[0-9۰-۹٠-٩])|\s+و\s+/).map(purchaseRefKey).filter(Boolean))];
+  return [...new Set(String(value ?? '').replace(/‌/g, '').split(/[،,;+\n]|(?<=[0-9۰-۹٠-٩])\s*و\s*(?=[0-9۰-۹٠-٩])|\s+و\s+/).map(purchaseRefKey).filter(Boolean))];
 }

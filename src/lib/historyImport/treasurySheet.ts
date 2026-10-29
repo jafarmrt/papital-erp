@@ -1,6 +1,6 @@
 import { toEnglishDigits } from '../../utils/persianNumber.js';
 import type { TreasuryImportRow } from './treasuryHistoryImport.js';
-import { purchaseRefKey } from './purchaseRef.js';
+import { purchaseRefKeys } from './purchaseRef.js';
 
 /**
  * v11 history import, tool 1: reading the two Excel sheets of past money and turning each row, through the names the user
@@ -254,7 +254,8 @@ export function resolveTreasuryRow(
     }
     const seller = mapping.parties[parsed.partyName];
     if (!seller || seller.kind !== 'supplier') return UNRESOLVED(parsed, `فروشندهٔ «${parsed.partyName}» باید به یک تأمین‌کننده وصل شود (خرید مواد، رسید انبار آن را ثبت کرده است).`);
-    const purchaseRef = purchaseRefKey(parsed.invoiceRef);
+    // each number in its key form, joined by «+», so the server splits the cell exactly as the stock import split the receipt's
+    const purchaseRef = purchaseRefKeys(parsed.invoiceRef).join('+');
     return ready({ kind: 'payment', partyType: 'supplier', partyId: seller.partyId, partyName: seller.name, settleOldest: true, ...(purchaseRef ? { purchaseRef } : {}) });
   }
 
