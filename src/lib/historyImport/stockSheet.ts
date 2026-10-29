@@ -239,6 +239,8 @@ export function resolveStockRow(parsed: ParsedStockRow, mapping: StockImportMapp
     if (!invoiceRef) return unresolved('شمارهٔ فاکتور مرجع این برگشت خالی است؛ شمارهٔ فاکتور اکسلی را که کالا با آن فروخته شده بنویسید.');
     row.invoiceRef = invoiceRef;
     row.unitCost = null;
+    // sold from the sales warehouse, so with no warehouse named it comes back there
+    if (!parsed.warehouseName) row.warehouse = mapping.salesWarehouse || null;
   }
   return { status: 'ready', parsed, row };
 }
@@ -283,13 +285,24 @@ function resolveSalesRow(parsed: ParsedStockRow, mapping: StockImportMapping, ac
   return { status: 'ready', parsed, row };
 }
 
+const salesDayKey = (date: string): string => date.trim().split(/[-/.]/).map(part => part.padStart(2, '0')).join('-');
+
 /**
  * An Excel invoice is imported whole or not at all: when a line of it is left out (its code or customer left out, its
  * status not «ثبت نهایی») or waits for a fix, its other lines wait too, since a part of an invoice recorded under its
  * Excel number could never be completed (the number is then taken). Lines of an invoice left out as a whole stay left out.
  */
-export function wholeSalesInvoices(resolved: ResolvedStockRow[]): ResolvedStockRow[] {
+export function wholeSalesInvoices(resolved: ResolvedStockRow[], allRows: ParsedStockRow[] = []): ResolvedStockRow[] {
   const blocked = new Map<string, string>();
+  // an invoice has one date: lines of one Excel number on two days (perhaps in two months, imported apart) are a data error
+  const daysOf = new Map<string, Set<string>>();
+  for (const p of allRows) {
+    if (p.shape !== 'sales' || !p.invoiceRef || !p.date) continue;
+    daysOf.set(p.invoiceRef, (daysOf.get(p.invoiceRef) ?? new Set()).add(salesDayKey(p.date)));
+  }
+  for (const [ref, days] of daysOf) {
+    if (days.size > 1) blocked.set(ref, `ردیف‌های آن تاریخ‌های مختلف دارند (${[...days].sort().join('، ')})؛ همه را تاریخ خود فاکتور بزنید`);
+  }
   for (const r of resolved) {
     if (r.parsed.shape !== 'sales' || r.status === 'ready' || !r.parsed.invoiceRef) continue;
     if (!blocked.has(r.parsed.invoiceRef)) blocked.set(r.parsed.invoiceRef, `ردیف ${r.parsed.rowNo}: ${r.reason}`);

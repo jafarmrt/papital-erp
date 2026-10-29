@@ -122,6 +122,22 @@ describe('sales sheet (tool 3)', () => {
     const bothSkipped = wholeSalesInvoices(two.map(p => resolveStockRow(p, salesMapping({ customers: { 'گالری الف': { kind: 'skip' } } }), lookups)));
     expect(bothSkipped.map(r => r.status)).toEqual(['skipped', 'skipped']);
   });
+  it('holds back an invoice whose lines carry two dates, even when the other line is in another month', () => {
+    const split = parseStockSheet('اقلام فاکتور', [
+      SALES_HEADER,
+      ['60', '1405-03-31', 'گالری الف', 'P-001', 'دستبند', 1, '', 1000, 1000, 'ثبت نهایی', ''],
+      ['60', '1405/4/1', 'گالری الف', 'P-002', 'گوشواره', 1, '', 1000, 1000, 'ثبت نهایی', ''],
+      ['61', '1405/3/31', 'گالری الف', 'P-001', 'دستبند', 1, '', 1000, 1000, 'ثبت نهایی', ''],
+      ['61', '1405-03-31', 'گالری الف', 'P-002', 'گوشواره', 1, '', 1000, 1000, 'ثبت نهایی', ''],
+    ]);
+    const month3 = split.filter(p => p.date.replace(/\//g, '-').startsWith('1405-03') || p.date.startsWith('1405/3'));
+    const out = wholeSalesInvoices(month3.map(p => resolveStockRow(p, salesMapping(), lookups)), split);
+    expect(out.map(r => r.status)).toEqual(['unresolved', 'ready', 'ready']);
+  });
+  it('brings a sales return with no warehouse back to the sales warehouse', () => {
+    expect(resolveStockRow(ins[3], mapping({ salesWarehouse: 'SHOW' }), lookups)).toMatchObject({ status: 'ready', row: { kind: 'return', warehouse: 'SHOW' } });
+    expect(resolveStockRow(ins[3], mapping(), lookups)).toMatchObject({ status: 'ready', row: { kind: 'return', warehouse: null } });
+  });
 });
 
 describe('stock import order and documents', () => {

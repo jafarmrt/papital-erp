@@ -100,7 +100,7 @@ export function StockImportNames({ names, mapping, warehouses, suppliers, custom
       )}
       {names.customers.length + unissued.length > 0 || Object.keys(mapping.customers ?? {}).length > 0 ? (
         <label className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
-          <span className="text-xs text-slate-700 dark:text-slate-200">انبار فروش (کالای فاکتورهای فروش از این انبار خارج می‌شود)</span>
+          <span className="text-xs text-slate-700 dark:text-slate-200">انبار فروش (کالای فاکتورهای فروش از این انبار خارج می‌شود و مرجوعیِ بی انبار به آن برمی‌گردد)</span>
           <select aria-label="انبار فروش" className={SELECT_CLASS} value={mapping.salesWarehouse ?? ''}
             onChange={e => onChange({ ...mapping, salesWarehouse: e.target.value || null })}>
             <option value="">انبار پیش‌فرض</option>

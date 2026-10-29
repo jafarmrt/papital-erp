@@ -146,7 +146,7 @@ const bookedKeyOf = (p: PreparedRow) =>
 async function invoiceOfExcelRef(tx: DbExecutor, invoiceRef: string | undefined): Promise<number | null> {
   // only a cell that is the invoice number itself («61») or names an invoice («فاکتور 61»): a cheque or tracking number in
   // the same column must not pick an invoice
-  const cell = (invoiceRef ?? '').trim();
+  const cell = (invoiceRef ?? '').trim().replace(/ك/g, 'ک');
   if (!/^[\d۰-۹٠-٩]{1,8}$/.test(cell) && !cell.includes('فاکتور')) return null;
   const ref = excelInvoiceNumber(cell);
   if (!ref || !/^\d{1,12}$/.test(ref)) return null;

@@ -99,11 +99,11 @@ export async function runHistoryImportSalesV11Tests(shouldRun: ShouldRun): Promi
       if (await stockOf(a.id) !== 9) problems.push(`item a ends at ${await stockOf(a.id)}, expected 9 (20 - 1 - 11 + 1)`);
       if (await stockOf(b.id) !== 3) problems.push(`item b ends at ${await stockOf(b.id)}, expected 3`);
 
-      // a receipt that names «فاکتور ۵۰» settles invoice 50 although invoice 49 of the same customer is older and open
+      // a receipt that names «فاكتور ۵۰» (Arabic kaf, as Excel often has it) settles invoice 50 although invoice 49 of the same customer is older and open
       const bank = await emptyBank();
       const receipt: TreasuryImportRow = {
         rowNo: 2, sheet: 'دریافت و پرداخت', date: '1405-04-01', kind: 'receipt', bankAccountId: bank, amount: '5000000',
-        partyType: 'customer', partyId: customer.id, partyName: customer.name, invoiceRef: 'فاکتور ۵۰', settleOldest: true,
+        partyType: 'customer', partyId: customer.id, partyName: customer.name, invoiceRef: 'فاكتور ۵۰', settleOldest: true,
       };
       const paid = await postTo<TreasuryImportResult>(admin, TREASURY_URL, [receipt], true);
       const settled = paid.rows[0]?.settled ?? [];

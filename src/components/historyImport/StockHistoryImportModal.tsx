@@ -53,7 +53,7 @@ export function StockHistoryImportModal({ isOpen, onClose, warehouses, suppliers
   }, [warehouses]);
   const months = useMemo(() => [...new Set(rows.map(stockRowMonth))].sort(), [rows]);
   const monthRows = useMemo(() => rows.filter(r => stockRowMonth(r) === month), [rows, month]);
-  const resolved = useMemo(() => wholeSalesInvoices(monthRows.map(r => resolveStockRow(r, mapping, lookups, accepted))), [monthRows, mapping, lookups, accepted]);
+  const resolved = useMemo(() => wholeSalesInvoices(monthRows.map(r => resolveStockRow(r, mapping, lookups, accepted)), rows), [monthRows, rows, mapping, lookups, accepted]);
   const names = useMemo(() => unmappedStockNames(monthRows, { ...mapping, warehouses: {}, suppliers: {}, customers: {} }, lookups), [monthRows, mapping, lookups]);
   const unissued = useMemo(() => unissuedSalesInvoices(monthRows), [monthRows]);
   const ready = resolved.flatMap(r => (r.status === 'ready' ? [r.row] : []));
