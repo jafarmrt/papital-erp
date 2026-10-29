@@ -60,6 +60,8 @@ const COMPOSITION_ROOTS = new Set([
   // v11 history import (1405 replay from Excel): like the workflow domain actions, it replays what a user does in each
   // package (treasury, payslip payment, documents) through that package's own service, in one transaction
   'src/services/historyImport/treasuryHistoryImport.service.ts', 'src/services/historyImport/stockHistoryImport.service.ts',
+  // its sales invoices close their CRM sales file (tool 3, «شماره پرونده»)
+  'src/services/historyImport/historyImportSalesLinks.ts',
 ]);
 
 export interface MapRule { pkg: string; re: RegExp }

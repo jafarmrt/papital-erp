@@ -45,6 +45,8 @@ export interface StockImportRow {
   customerId?: number | null;
   /** sale only: the unit price in rials, as decimal text */
   unitPrice?: string | null;
+  /** sale only: the sales file («پرونده» of «ارتباط با مشتری») this invoice closed, from the «شماره پرونده» column */
+  leadId?: number | null;
   /** the Excel slip or invoice number (شماره فاکتور / شماره قبض), kept in the notes; rows of one slip share a document */
   slipRef?: string;
   description?: string;
@@ -139,3 +141,18 @@ export function excelInvoiceNumber(cell: string | null | undefined): string {
   // leading zeros dropped on the digits themselves (a long number would lose digits through a float)
   return numbers.length === 1 ? numbers[0].replace(/^0+(?=\d)/, '') : text;
 }
+
+/**
+ * A sales line's unit price below this many rials is taken for a price in euros or thousands of tomans (Excel invoice 55
+ * was priced in euros under «قیمت یورویی»): the import records rials only, so it asks for the rial price.
+ */
+export const SALE_MIN_UNIT_PRICE_RIAL = 1000;
+
+export const SALE_PRICE_TOO_LOW_MESSAGE = (price: string) =>
+  `قیمت واحد ${price} ریال برای فروش یک کالا بسیار کم است و احتمالاً به یورو یا هزار تومان نوشته شده؛ قیمت ریالی واحد را در ستون «قیمت» بنویسید.`;
+
+export const SALE_EURO_POLICY_MESSAGE =
+  'سیاست قیمتی این ردیف «قیمت یورویی» است و ورود سابقه فقط ریال ثبت می‌کند؛ قیمت ریالی واحد را در ستون «قیمت» بنویسید و «سیاست قیمتی» را به ریالی تغییر دهید یا خالی بگذارید.';
+
+/** «قیمت یورویی» (or any policy naming the euro) */
+export const isEuroPricePolicy = (policy: string): boolean => /یورو|euro|eur\b/i.test(policy);

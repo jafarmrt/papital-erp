@@ -1,5 +1,6 @@
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
+import { crmLeads } from '../../db/schema.js';
 import type { StockImportResult, StockImportRow } from '../../lib/historyImport/stockHistoryImport.js';
 import type { TreasuryImportResult, TreasuryImportRow } from '../../lib/historyImport/treasuryHistoryImport.js';
 import { createTestCustomer, createTestItem, createTestWarehouse } from '../fixtures/factories.js';
@@ -162,6 +163,65 @@ export async function runHistoryImportSalesV11Tests(shouldRun: ShouldRun): Promi
       if (d?.status !== 'error' || !String(d?.message).includes('مجوز')) problems.push(`a sale by a user who may not record a final invoice reads ${JSON.stringify(denied.rows)}, expected refused`);
       if (problems.length > 0) throw new Error(problems.join(' | '));
       return 'an invoice is imported once, a return needs its invoice, an invoice has one day, a sale needs the invoice permission';
+    }));
+  }
+
+  const leadsId = 'reg_history_import_sales_leads_v11';
+  if (shouldRun(leadsId, 'v11', 'history_import', 'sales', 'crm')) {
+    await runCase(results, leadsId, 'v11 history import (tool 3, sales file column): an Excel invoice that names its sales file links to it and moves it to won, as a proforma becoming an invoice does; a missing file, a file of another customer, a lost file (left lost), a won file, a file that already has an invoice (by its proforma mark or by an invoice naming it) and a user without the CRM permission are refused; a sales line priced under 1,000 rials (a euro price) is refused', () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const a = await fresh();
+      const customer = await createTestCustomer({ partyType: 'customer' });
+      const other = await createTestCustomer({ partyType: 'customer' });
+      const lead = async (title: string, customerId: number, extra: Partial<typeof crmLeads.$inferInsert> = {}) =>
+        (await orm.insert(crmLeads).values({ title, customerId, stage: 'lead', status: 'active', ...extra }).returning({ id: crmLeads.id }))[0].id;
+      const open = await lead('open file', customer.id);
+      const lost = await lead('lost file', customer.id, { stage: 'lost', status: 'lost' });
+      const ofOther = await lead('other customer file', other.id);
+      const withProforma = await lead('file with a proforma', customer.id, { hasProforma: 1, proformaId: 2147480000 });
+
+      const opening = await stockPost(admin, [{ rowNo: 2, sheet: IN, date: '1405-01-01', kind: 'opening', itemCode: a.code, quantity: '50', unitCost: '50000' }], true);
+      if (!opening.committed) throw new Error(`setup: opening ${JSON.stringify(opening.rows)}`);
+      const sale = (rowNo: number, invoiceRef: string, extra: Partial<StockImportRow> = {}): StockImportRow =>
+        ({ rowNo, sheet: SALES, date: '1405-02-10', kind: 'sale', itemCode: a.code, quantity: '1', unitPrice: '2000000', invoiceRef, customerId: customer.id, ...extra });
+
+      const linked = await stockPost(admin, [sale(2, '60', { leadId: open })], true);
+      const [inv] = await invoiceOfRef(rowOf(linked, 2)?.created?.[0]);
+      const [row] = (await orm.select().from(crmLeads).where(eq(crmLeads.id, open)));
+      const docLead = inv ? await count(sql`SELECT coalesce(crm_lead_id, 0)::int AS n FROM documents WHERE id = ${inv.id}`) : 0;
+      if (!linked.committed || !inv || row?.stage !== 'won' || row?.status !== 'won' || row?.proformaId !== inv.id || docLead !== open) {
+        problems.push(`the invoice naming the open file read ${JSON.stringify(linked.rows)}, file ${JSON.stringify({ stage: row?.stage, status: row?.status, proformaId: row?.proformaId })}, document lead ${docLead}; expected linked and won`);
+      }
+
+      // a file a final invoice already names (linked by hand, no proforma mark) and a file already won without one
+      const viaDoc = await lead('file named by an invoice', customer.id);
+      if (inv) await orm.execute(sql`UPDATE documents SET crm_lead_id = ${viaDoc} WHERE id = ${inv.id}`);
+      const wonAlready = await lead('won file', customer.id, { stage: 'won', status: 'won' });
+      const refusals: Array<[string, StockImportRow, string]> = [
+        ['a missing file', sale(2, '61', { quantity: '2', leadId: 2147480001 }), 'در برنامه نیست'],
+        ['a file of another customer', sale(2, '62', { quantity: '3', leadId: ofOther }), 'مشتری دیگری'],
+        ['a lost file', sale(2, '63', { quantity: '4', leadId: lost }), 'از دست رفته'],
+        ['a file with a proforma', sale(2, '64', { quantity: '5', leadId: withProforma }), 'فاکتور دیگری'],
+        ['a second invoice of the won file', sale(2, '65', { quantity: '6', leadId: open }), 'بسته'],
+        ['a file an invoice already names', sale(2, '67', { quantity: '8', leadId: viaDoc }), 'فاکتور دیگری'],
+        ['a file already won', sale(2, '68', { quantity: '9', leadId: wonAlready }), 'بسته'],
+        ['a euro price', sale(2, '66', { quantity: '7', unitPrice: '5.5' }), 'بسیار کم'],
+      ];
+      for (const [name, r, text] of refusals) {
+        const res = await stockPost(admin, [r], true);
+        const out = rowOf(res, 2);
+        if (res.committed || out?.status !== 'error' || !String(out?.message).includes(text)) problems.push(`${name} read ${JSON.stringify(res.rows)}, expected the matching refusal`);
+      }
+      // linking needs the CRM permission the invoice form asks
+      const clerk = await sandboxClientWith(['warehouse.history_import', 'documents.create', 'documents.finalize']);
+      const forbidden = await stockPost(clerk, [sale(2, '69', { quantity: '10', leadId: viaDoc })], true);
+      if (forbidden.committed || rowOf(forbidden, 2)?.status !== 'error' || !String(rowOf(forbidden, 2)?.message).includes('مجوز')) problems.push(`a clerk without the CRM permission read ${JSON.stringify(forbidden.rows)}, expected refused`);
+      const [lostRow] = await orm.select({ stage: crmLeads.stage, status: crmLeads.status }).from(crmLeads).where(eq(crmLeads.id, lost));
+      if (lostRow?.stage !== 'lost' || lostRow?.status !== 'lost') problems.push(`the lost file became ${JSON.stringify(lostRow)}`);
+
+      if (problems.length > 0) throw new Error(problems.join(' | '));
+      return 'the invoice closed its file; the wrong links, the clerk and the euro price were refused; the lost file stayed lost';
     }));
   }
 

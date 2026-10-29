@@ -5,6 +5,7 @@
 import { Router, type Response } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission, can, requireSystemAdmin } from '../middleware/authorize.js';
+import { CRM_LEAD_LINK_PERMISSION } from '../lib/permissions/documentPermissions.js';
 import { validate } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { idempotency } from '../middleware/idempotency.js';
@@ -64,6 +65,7 @@ router.post('/inventory/history-import', authorizePermission('warehouse.history_
     username: req.user?.fullName || req.user?.username,
     audit: { req, userId: req.user?.id, username: req.user?.username, userFullName: req.user?.fullName },
     allowedKinds: await allowedStockKinds(req.user),
+    mayLinkLeads: await can(req.user, CRM_LEAD_LINK_PERMISSION),
   });
   sendImportResult(res, result, req.body.commit === true);
 }));
