@@ -46,7 +46,7 @@ export function StockImportNames({ names, mapping, warehouses, suppliers, custom
     else next[name] = value === 'skip' ? { kind: 'skip' } : { kind: 'supplier', partyId: Number(value.slice(2)) };
     onChange({ ...mapping, suppliers: next });
   };
-  const warehouseOptions = warehouses.map(w => <option key={w.code} value={`wh:${w.code}`}>{w.name || w.code}</option>);
+  const warehouseOptions = warehouses.map(w => <option key={w.code} value={`wh:${w.code}`}>{w.name || formatPersianCode(w.code)}</option>);
 
   const section = (title: string, hint: string, items: string[], render: (name: string) => ReactNode) => items.length === 0 ? null : (
     <section className="space-y-2">
@@ -103,7 +103,7 @@ export function StockImportNames({ names, mapping, warehouses, suppliers, custom
         <select aria-label="انبار نمایش" className={SELECT_CLASS} value={mapping.displayWarehouse ?? ''}
           onChange={e => onChange({ ...mapping, displayWarehouse: e.target.value || null })}>
           <option value="">انتخاب کنید</option>
-          {warehouses.map(w => <option key={w.code} value={w.code}>{w.name || w.code}</option>)}
+          {warehouses.map(w => <option key={w.code} value={w.code}>{w.name || formatPersianCode(w.code)}</option>)}
         </select>
       </label>
     </div>

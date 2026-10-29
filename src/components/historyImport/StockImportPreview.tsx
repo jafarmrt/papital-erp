@@ -107,7 +107,7 @@ export function StockImportPreview({ resolved, result, accepted, warehouseTitle,
                   {r.status === 'ready' ? KIND_LABEL[r.row.kind] : r.parsed.typeText}
                   {r.status === 'ready' && r.row.invoiceRef && ` ${formatPersianCode(r.row.invoiceRef)} اکسل`}
                 </td>
-                <td className="p-2 whitespace-nowrap" dir="ltr">{r.status === 'ready' ? r.row.itemCode : r.parsed.code}</td>
+                <td className="p-2 whitespace-nowrap" dir="ltr">{formatPersianCode(r.status === 'ready' ? r.row.itemCode : r.parsed.code)}</td>
                 <td className="p-2 font-bold whitespace-nowrap">{formatPersianCode(r.parsed.quantity)}</td>
                 <td className="p-2">
                   {r.status === 'ready' ? warehouseTitle(r.row.warehouse) : r.parsed.warehouseName}
