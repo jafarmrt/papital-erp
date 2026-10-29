@@ -17,6 +17,11 @@ export interface IdempotencyMiddlewareOptions {
    * will be rejected with 400 Bad Request (fail-closed policy for sensitive financial/inventory routes).
    */
   required?: boolean;
+  /**
+   * v11 history import: the key is taken only for requests this says write (a preview of the import writes nothing, so it
+   * keeps no key and no answer)
+   */
+  onlyWhen?: (req: Request) => boolean;
 }
 
 /**
@@ -31,6 +36,7 @@ export function idempotency(options: IdempotencyMiddlewareOptions = {}) {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) {
       return next();
     }
+    if (options.onlyWhen && !options.onlyWhen(req)) return next();
 
     const key = (req.headers[headerName] || req.headers[altHeaderName] || req.body?.idempotencyKey) as string | undefined;
 
@@ -235,6 +241,14 @@ export async function idempotentTransaction<T>(fn: (tx: DbTransaction) => Promis
   });
   if (pending && completed) pending.completedInTx = true;
   return result;
+}
+
+/**
+ * v11 history import: `idempotentTransaction` when the caller passes no transaction, else a savepoint of the caller's
+ * transaction, which completes nothing (an Excel import posts many rows in one transaction of its own).
+ */
+export function idempotentTransactionIn<T>(executor: DbExecutor | undefined, fn: (tx: DbTransaction) => Promise<T>): Promise<T> {
+  return executor ? executor.transaction(fn) : idempotentTransaction(fn);
 }
 
 /** 10.3: `idempotentTransaction` on the pool; inside a caller's transaction a savepoint of it, which completes nothing */

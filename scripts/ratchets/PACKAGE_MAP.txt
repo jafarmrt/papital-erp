@@ -26,6 +26,12 @@ G  scripts/check-version-sync.ts
 
 # ───────── استثناهای دامنه‌ای درون پوشه‌های بسته‌های دیگر (پیش از قاعده‌های کلی) ─────────
 # ۴ خزانه درون پوشه حسابداری
+# 17 v11 history import (1405 replay from Excel): replays documents of several packages through their services
+17 src/services/historyImport/**
+17 src/routes/historyImport.routes.ts
+17 src/routes/historyImport.schemas.ts
+17 src/lib/historyImport/**
+17 src/components/historyImport/**
 4  src/routes/accounting/treasury.routes.ts
 4  src/routes/accounting/pettyCash.schemas.ts
 4  src/routes/accounting/statutoryRemittance.schemas.ts
@@ -89,6 +95,7 @@ G  scripts/check-version-sync.ts
 1  src/lib/processErrorPolicy.ts
 1  src/lib/processTimezone.ts
 1  src/lib/requestContext.ts
+1  src/lib/dryRunNumbering.ts
 1  src/lib/version.ts
 1  install.sh
 1  update.sh

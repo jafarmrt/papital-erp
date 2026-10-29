@@ -11166,6 +11166,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runReceiptsOnInvoicesV11Tests(shouldRun));
   const { runReceiptsOnInvoicesReviewV11Tests } = await import('../regression/receiptsOnInvoicesReviewV11Tests.js');
   results.push(...await runReceiptsOnInvoicesReviewV11Tests(shouldRun));
+  // v11 history import (1405 replay from Excel), tool 1: treasury rows
+  const { runHistoryImportTreasuryV11Tests } = await import('../regression/historyImportTreasuryV11Tests.js');
+  results.push(...await runHistoryImportTreasuryV11Tests(shouldRun));
   // v11 phase 7.2 (findings F1 to F6 of the v11 full test)
   const { runClosingFindingsV11Tests } = await import('../regression/closingFindingsV11Tests.js');
   results.push(...await runClosingFindingsV11Tests(shouldRun));

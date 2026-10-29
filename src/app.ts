@@ -47,6 +47,7 @@ import payrollStatutoryRoutes from './routes/payrollStatutory.routes.js';
 import pendingMaterialsRoutes from './routes/pendingMaterials.routes.js';
 import mediaRoutes from './routes/media.routes.js';
 import accountingRoutes from './routes/accounting.routes.js';
+import historyImportRoutes from './routes/historyImport.routes.js';
 import workflowRoutes from './routes/workflow.routes.js';
 import inventoryRoutes from './routes/inventory.routes.js';
 import eventsRoutes from './routes/events.routes.js';
@@ -388,6 +389,8 @@ export async function createApp(): Promise<express.Express> {
   app.use('/api', workshopRoutes);
   app.use('/api', pendingMaterialsRoutes);
   app.use('/api', accountingRoutes);
+  // v11 history import from Excel (1405 replay): replays rows through the services of several packages
+  app.use('/api', historyImportRoutes);
   app.use('/api', reportsRoutes);
   app.use('/api/workflow', workflowRoutes);
   app.use('/api/inventory', inventoryRoutes);

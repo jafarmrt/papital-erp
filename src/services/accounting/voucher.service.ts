@@ -1,3 +1,4 @@
+import { dryRunNumber } from '../../lib/dryRunNumbering.js';
 import { maybeStartEntityWorkflow, terminateEntityWorkflows } from '../system/entityWorkflowPort.js';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { accounts, journalVouchers, journalVoucherItems } from '../../db/schema.js';
@@ -49,6 +50,9 @@ async function terminateVoucherWorkflows(tx: DbExecutor, voucherId: number, comm
 
 export class VoucherService {
   static async getNextVoucherNumber(tx?: DbExecutor): Promise<number> {
+    // v11 history import: a preview takes a placeholder below zero, so the rolled-back preview leaves no gap in the sequence
+    const placeholder = dryRunNumber();
+    if (placeholder !== null) return placeholder;
     const executor = tx || orm;
     const result = await executor.execute(sql`SELECT nextval('journal_voucher_number_seq') AS num`);
     return Number(result.rows?.[0]?.num);
