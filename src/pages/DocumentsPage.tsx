@@ -1,4 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { FileSpreadsheet } from 'lucide-react';
+import { useHasPermission } from '../contexts/AuthContext';
+import { StockHistoryImportModal } from '../components/historyImport/StockHistoryImportModal';
 import { User } from '../types';
 import GlobalReservationsPanel from '../components/documents/GlobalReservationsPanel';
 import DocItemsTable from '../components/documents/DocItemsTable';
@@ -42,6 +45,9 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
     if (allowed.length > 0 && !allowed.includes(docType)) setDocType(allowed[0]);
   }, [access, actionType, docType, setActionType, setDocType]);
   const blockedReason = stockPageBlockedReason(access, actionType, docType);
+  // v11 history import (1405 replay, tool 2): past warehouse movements from Excel, for the holder of its key only
+  const canImportHistory = useHasPermission('warehouse.history_import');
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -51,6 +57,20 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
         totalReservedItemsCount={form.totalReservedItemsCount}
         onToggleReservations={() => form.setShowGlobalReservationsModal(!form.showGlobalReservationsModal)}
       />
+
+      {canImportHistory && (
+        <div className="flex justify-end">
+          <button type="button" onClick={() => setHistoryOpen(true)}
+            className="flex items-center gap-2 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-emerald-900 font-bold text-xs">
+            <FileSpreadsheet size={15} />
+            ورود سابقهٔ انبار از اکسل
+          </button>
+        </div>
+      )}
+      {canImportHistory && (
+        <StockHistoryImportModal isOpen={historyOpen} onClose={() => setHistoryOpen(false)} warehouses={warehouses}
+          suppliers={suppliersList.filter(c => (c.partyType ?? c.party_type ?? 'customer') !== 'customer')} />
+      )}
 
       {/* V9 Phase 5.2: پنل رزروهای سراسری استخراج‌شده */}
       <GlobalReservationsPanel

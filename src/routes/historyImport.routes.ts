@@ -10,9 +10,19 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { ConflictError } from '../errors/customErrors.js';
 import { importTreasuryHistory } from '../services/historyImport/treasuryHistoryImport.service.js';
-import { treasuryHistoryImportSchema } from './historyImport.schemas.js';
+import { STOCK_IMPORT_KIND_PERMISSIONS, importStockHistory } from '../services/historyImport/stockHistoryImport.service.js';
+import type { StockImportKind } from '../lib/historyImport/stockHistoryImport.js';
+import type { AuthUserPayload } from '../types/auth.types.js';
+import { stockHistoryImportSchema, treasuryHistoryImportSchema } from './historyImport.schemas.js';
 
 const router = Router();
+
+/** The kinds of warehouse row a user may import: each needs what its hand form asks (the transfer form, a production receipt). */
+async function allowedStockKinds(user: AuthUserPayload | undefined): Promise<Set<StockImportKind>> {
+  const kinds = new Set<StockImportKind>();
+  for (const [kind, permission] of STOCK_IMPORT_KIND_PERMISSIONS) if (permission === null || await can(user, permission)) kinds.add(kind);
+  return kinds;
+}
 
 /**
  * A post takes an Idempotency-Key (a resend after a timeout gets the first answer, a second post at once 409); a preview
@@ -39,6 +49,18 @@ router.post('/accounting/treasury/history-import', authorizePermission('accounti
     username: req.user?.fullName || req.user?.username,
     audit: { req, userFullName: req.user?.fullName },
     canPayPayslips: await can(req.user, 'piecework.pay'),
+  });
+  sendImportResult(res, result, req.body.commit === true);
+}));
+
+// tool 2: opening stock, purchase and production receipts, consumption, waste and transfers; `commit: false` is the preview
+router.post('/inventory/history-import', authorizePermission('warehouse.history_import'), importIdempotency, validate(stockHistoryImportSchema), asyncHandler(async (req, res) => {
+  const result = await importStockHistory(req.body.rows, {
+    commit: req.body.commit === true,
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+    audit: { req, userId: req.user?.id, username: req.user?.username, userFullName: req.user?.fullName },
+    allowedKinds: await allowedStockKinds(req.user),
   });
   sendImportResult(res, result, req.body.commit === true);
 }));

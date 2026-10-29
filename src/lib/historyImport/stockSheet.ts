@@ -1,0 +1,211 @@
+import { toEnglishDigits } from '../../utils/persianNumber.js';
+import type { StockImportKind, StockImportRow } from './stockHistoryImport.js';
+import { amountText, headerKey } from './treasurySheet.js';
+
+/**
+ * v11 history import, tool 2: reading the two cleaned warehouse sheets and turning each row, through the codes and names
+ * the user mapped once, into a row the server takes. Pure functions shared by the import window and its tests.
+ *
+ * Sheet «ورود به انبار»: تاریخ · کد کالا · نوع ورود · تعداد · قیمت واحد · تأمین‌کننده · شماره فاکتور مرجع · انبار ·
+ * توضیحات. Sheet «خروج دستی»: تاریخ · شماره · کد کالا · نوع خروج · تعداد · گیرنده · انبار · توضیحات. Columns are
+ * found by their header, so their order and extra columns (نام محصول، واحد شمارش) do not matter.
+ */
+
+/** Opening stock is dated on the first day of 1405, whatever the Excel cell says (owner's decision, 6 Aban 1405). */
+export const STOCK_OPENING_DAY = '1405-01-01';
+
+export type StockSheetShape = 'in' | 'out';
+
+export interface ParsedStockRow {
+  sheet: string;
+  rowNo: number;
+  shape: StockSheetShape;
+  date: string;
+  code: string;
+  typeText: string;
+  quantity: string;
+  unitCost: string;
+  supplierName: string;
+  slipRef: string;
+  warehouseName: string;
+  recipientName: string;
+  description: string;
+}
+
+const HEADERS = {
+  date: ['تاریخ'],
+  code: ['کد کالا'],
+  inType: ['نوع ورود'],
+  outType: ['نوع خروج'],
+  quantity: ['تعداد'],
+  unitCost: ['قیمت واحد (ریال)', 'قیمت واحد'],
+  supplier: ['تأمین‌کننده', 'تامین کننده'],
+  invoiceRef: ['شماره فاکتور مرجع'],
+  slip: ['شماره', 'شماره فاکتور/شماره قبض'],
+  warehouse: ['انبار'],
+  recipient: ['گیرنده'],
+  description: ['توضیحات'],
+} as const;
+
+export function detectStockSheet(header: readonly unknown[]): StockSheetShape | null {
+  const keys = header.map(headerKey);
+  const has = (names: readonly string[]) => names.some(h => keys.includes(headerKey(h)));
+  if (!has(HEADERS.date) || !has(HEADERS.code) || !has(HEADERS.quantity)) return null;
+  if (has(HEADERS.inType)) return 'in';
+  if (has(HEADERS.outType)) return 'out';
+  return null;
+}
+
+const cellText = (value: unknown): string => (value === null || value === undefined ? '' : String(value).trim());
+
+/** The rows of one sheet (the first row is the header); a row with no date, code and quantity is left out. */
+export function parseStockSheet(sheet: string, rows: readonly (readonly unknown[])[]): ParsedStockRow[] {
+  const header = rows[0] ?? [];
+  const shape = detectStockSheet(header);
+  if (!shape) return [];
+  const keys = header.map(headerKey);
+  const col = (names: readonly string[]) => {
+    for (const h of names) {
+      const i = keys.indexOf(headerKey(h));
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+  const at = (row: readonly unknown[], names: readonly string[]) => {
+    const i = col(names);
+    return i < 0 ? '' : row[i];
+  };
+  const parsed: ParsedStockRow[] = [];
+  rows.slice(1).forEach((row, i) => {
+    const out: ParsedStockRow = {
+      sheet,
+      rowNo: i + 2,
+      shape,
+      date: toEnglishDigits(cellText(at(row, HEADERS.date))),
+      code: toEnglishDigits(cellText(at(row, HEADERS.code))),
+      typeText: cellText(at(row, shape === 'in' ? HEADERS.inType : HEADERS.outType)),
+      quantity: amountText(at(row, HEADERS.quantity)),
+      unitCost: amountText(at(row, HEADERS.unitCost)),
+      supplierName: cellText(at(row, HEADERS.supplier)),
+      slipRef: toEnglishDigits(cellText(at(row, shape === 'in' ? HEADERS.invoiceRef : HEADERS.slip))),
+      warehouseName: cellText(at(row, HEADERS.warehouse)),
+      recipientName: cellText(at(row, HEADERS.recipient)),
+      description: cellText(at(row, HEADERS.description)),
+    };
+    if (out.date || out.code || out.quantity) parsed.push(out);
+  });
+  return parsed;
+}
+
+/** The key an item code is compared and mapped by: letter case and outer spaces ignored, as the database's unique code is. */
+export const codeKey = (code: string) => code.trim().toUpperCase();
+
+export type ItemTarget = { kind: 'code'; code: string } | { kind: 'skip' };
+export type WarehouseTarget = { kind: 'warehouse'; code: string } | { kind: 'skip' };
+export type SupplierTarget = { kind: 'supplier'; partyId: number } | { kind: 'skip' };
+
+export interface StockImportMapping {
+  /** by `codeKey`: an Excel code the app does not have, mapped to the app's code (the server finds the item by code) */
+  items: Record<string, ItemTarget>;
+  /** by the «انبار» text; an empty cell is the default warehouse */
+  warehouses: Record<string, WarehouseTarget>;
+  suppliers: Record<string, SupplierTarget>;
+  /** the warehouse «انتقال به نمایش» moves to */
+  displayWarehouse?: string | null;
+}
+
+export const emptyStockMapping = (): StockImportMapping => ({ items: {}, warehouses: {}, suppliers: {}, displayWarehouse: null });
+
+/** The lists of the app the rows are matched with: warehouses by name or code. */
+export interface StockImportLookups {
+  warehouseCodeOf: (name: string) => string | null;
+}
+
+export type ResolvedStockRow =
+  | { status: 'ready'; parsed: ParsedStockRow; row: StockImportRow }
+  | { status: 'skipped'; parsed: ParsedStockRow; reason: string }
+  | { status: 'unresolved'; parsed: ParsedStockRow; reason: string };
+
+const IN_KINDS: Record<string, StockImportKind> = { 'موجودی اولیه': 'opening', 'خرید جدید': 'purchase', 'خرید': 'purchase', 'تولید': 'production' };
+const OUT_KINDS: Record<string, StockImportKind> = { 'مصرف داخلی': 'consumption', 'تبدیل': 'consumption', 'ضایعات': 'waste', 'انتقال به نمایش': 'transfer' };
+
+const typeKey = (text: string) => text.replace(/[‌\s]+/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim();
+
+/**
+ * The names of the file the user still has to map: warehouses and suppliers. Item codes are checked by the server's
+ * preview, which names each code it does not know (`unknownCode`).
+ */
+export function unmappedStockNames(rows: ParsedStockRow[], mapping: StockImportMapping, lookups: Pick<StockImportLookups, 'warehouseCodeOf'>) {
+  const warehouses = new Set<string>();
+  const suppliers = new Set<string>();
+  for (const r of rows) {
+    if (r.warehouseName && !mapping.warehouses[r.warehouseName] && lookups.warehouseCodeOf(r.warehouseName) === null) warehouses.add(r.warehouseName);
+    if (r.shape === 'in' && IN_KINDS[typeKey(r.typeText)] === 'purchase' && r.supplierName && !mapping.suppliers[r.supplierName]) suppliers.add(r.supplierName);
+  }
+  const sorted = (s: Set<string>) => [...s].sort((a, b) => a.localeCompare(b, 'fa'));
+  return { warehouses: sorted(warehouses), suppliers: sorted(suppliers) };
+}
+
+/** One parsed row through the mapping: ready for the server, left out on purpose, or waiting for a mapping or a fix. */
+export function resolveStockRow(parsed: ParsedStockRow, mapping: StockImportMapping, lookups: StockImportLookups, accepted?: ReadonlySet<string>): ResolvedStockRow {
+  const unresolved = (reason: string): ResolvedStockRow => ({ status: 'unresolved', parsed, reason });
+  const skipped = (reason: string): ResolvedStockRow => ({ status: 'skipped', parsed, reason });
+  const type = typeKey(parsed.typeText);
+  if (parsed.shape === 'in' && type === 'مرجوعی') return skipped('برگشت از فروش با فاکتورهای فروش گذشته وارد می‌شود، چون به فاکتور خودش وصل است.');
+  if (parsed.shape === 'in' && type === 'برگشت از کارگاه') return unresolved('برگشت از کارگاه را از تعداد همان ردیف «خروج دستی» کم کنید و این ردیف را بردارید؛ سندی برای آن نیست.');
+  const kind = (parsed.shape === 'in' ? IN_KINDS : OUT_KINDS)[type];
+  if (!kind) return unresolved(`نوع «${parsed.typeText || 'خالی'}» شناخته نیست؛ یکی از ${Object.keys(parsed.shape === 'in' ? IN_KINDS : OUT_KINDS).map(k => `«${k}»`).join('، ')} بنویسید.`);
+
+  if (!parsed.code) return unresolved('کد کالا خالی است.');
+  const itemTarget = mapping.items[codeKey(parsed.code)];
+  if (itemTarget?.kind === 'skip') return skipped(`کد «${parsed.code}» کنار گذاشته شد.`);
+  const itemCode = itemTarget?.kind === 'code' ? itemTarget.code : parsed.code;
+
+  let warehouse: string | null = null;
+  if (parsed.warehouseName) {
+    const wt = mapping.warehouses[parsed.warehouseName];
+    if (wt?.kind === 'skip') return skipped(`انبار «${parsed.warehouseName}» کنار گذاشته شد.`);
+    warehouse = wt?.kind === 'warehouse' ? wt.code : lookups.warehouseCodeOf(parsed.warehouseName);
+    if (!warehouse) return unresolved(`انبار «${parsed.warehouseName}» را به یک انبار برنامه وصل کنید.`);
+  }
+
+  const row: StockImportRow = {
+    rowNo: parsed.rowNo,
+    sheet: parsed.sheet,
+    date: kind === 'opening' ? STOCK_OPENING_DAY : parsed.date,
+    kind,
+    itemCode,
+    quantity: parsed.quantity,
+    unitCost: parsed.unitCost || null,
+    warehouse,
+    slipRef: parsed.slipRef,
+    description: [parsed.recipientName && `گیرنده: ${parsed.recipientName}`, parsed.description].filter(Boolean).join(' — '),
+    duplicateAccepted: accepted?.has(`${parsed.sheet}#${parsed.rowNo}`) || undefined,
+  };
+  if (kind !== 'opening' && !parsed.date) return unresolved('تاریخ ردیف خالی است.');
+  if (kind === 'purchase') {
+    const st = mapping.suppliers[parsed.supplierName];
+    if (!parsed.supplierName) return unresolved('تأمین‌کنندهٔ این خرید خالی است.');
+    if (st?.kind === 'skip') return skipped(`تأمین‌کننده «${parsed.supplierName}» کنار گذاشته شد.`);
+    if (st?.kind !== 'supplier') return unresolved(`تأمین‌کننده «${parsed.supplierName}» را به یک تأمین‌کنندهٔ برنامه وصل کنید.`);
+    row.supplierId = st.partyId;
+  }
+  // the recipient stays in the notes only: a past remittance with a recipient would ask them today to confirm the delivery
+  if (kind === 'transfer') {
+    if (!mapping.displayWarehouse) return unresolved('انبار «نمایش» را برای «انتقال به نمایش» انتخاب کنید.');
+    row.toWarehouse = mapping.displayWarehouse;
+  }
+  return { status: 'ready', parsed, row };
+}
+
+/**
+ * The mapping after the user fixed or left out a code the preview named. The server names the code it was sent, which may
+ * already be a mapped one (a mistyped first fix); the mapping is kept by the Excel code of the rows that sent it.
+ */
+export function remapItemCode(mapping: StockImportMapping, resolved: ResolvedStockRow[], sentCode: string, target: string): StockImportMapping {
+  const excelCodes = new Set(resolved.flatMap(r => (r.status === 'ready' && codeKey(r.row.itemCode) === codeKey(sentCode) ? [codeKey(r.parsed.code)] : [])));
+  if (excelCodes.size === 0) excelCodes.add(codeKey(sentCode));
+  const items = { ...mapping.items };
+  for (const key of excelCodes) items[key] = target ? { kind: 'code', code: target } : { kind: 'skip' };
+  return { ...mapping, items };
+}

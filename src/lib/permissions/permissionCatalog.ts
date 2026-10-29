@@ -57,6 +57,8 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
       { key: 'warehouse.production_receipt', title: 'ثبت تولید بدون پروژه', description: 'ورود محصول ساخته‌شده بی پروژه به انبار از صفحه «ورود و خروج انبار»، با سند حسابداری در برابر «مصرف مواد بی پروژه»', requires: ['warehouse.in'] },
       { key: 'warehouse.out', title: 'ثبت خروج کالا (حواله)', description: 'کاهش موجودی و ثبت حواله‌های خروجی', requires: ['warehouse.view'] },
       { key: 'warehouse.transfer', title: 'جابجایی بین انبارها', description: 'انتقال کالا از یک انبار به انبار دیگر', requires: ['warehouse.view'] },
+      // v11 history import (1405 replay, tool 2): posting a month of past warehouse movements from Excel at once; given to no role by default
+      { key: 'warehouse.history_import', title: 'ورود سابقهٔ گردش انبار از اکسل', description: 'ثبت یک‌جای موجودی اولیه، رسیدهای خرید و تولید، حواله‌های مصرف، ضایعات و انتقال‌های گذشته از پروندهٔ اکسل، به ترتیب روز و پس از پیش‌نمایش؛ سندهای حسابداری پیش‌نویس می‌مانند', requires: ['warehouse.in', 'warehouse.out'] },
       // v8.0.4 (TD-257، تصمیم مالک محصول): استثنای قاعده تاریخ سند انبار؛ پیش‌فرض به هیچ نقشی داده نمی‌شود
       { key: 'warehouse.backdate', title: 'ثبت سند انبار با تاریخ گذشته', description: 'ثبت گردش با تاریخی پیش از آخرین گردش کالا، فقط وقتی موجودی انبار در آن تاریخ و پس از آن منفی نشود', requires: ['warehouse.view'] },
       { key: 'inventory.reconcile', title: 'ممیزی کاردکس و بازسازی انبار', description: 'اجرای بازسازی انبار و تطبیق تراکنش‌ها با دفتر کاردکس', requires: ['warehouse.view'] },

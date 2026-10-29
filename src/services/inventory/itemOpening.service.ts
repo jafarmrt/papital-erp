@@ -112,7 +112,18 @@ export class ItemOpeningService {
    * جدا می‌گرفت و فایل ۱٬۰۰۰ ردیفی ۹۹۹ سند می‌ساخت که حسابدار یکی‌یکی تأیید می‌کرد. کالایی که سند فعال دارد یا ردیف
    * افتتاحیه با بها ندارد کنار می‌ماند؛ بی هیچ کالای با ارزش، سندی صادر نمی‌شود.
    */
-  static async issueImportOpeningVoucher(tx: DbExecutor, itemIds: number[], params: { userId?: number; username?: string } = {}): Promise<JournalVoucher | null> {
+  static async issueImportOpeningVoucher(
+    tx: DbExecutor,
+    itemIds: number[],
+    params: {
+      userId?: number;
+      username?: string;
+      /** v11 history import (1405 replay): the opening day (Jalali, `1405-01-01`) and the voucher's text; default today */
+      date?: string;
+      description?: string;
+      referenceNumber?: string;
+    } = {},
+  ): Promise<JournalVoucher | null> {
     const ids = [...new Set(itemIds)].sort((a, b) => a - b);
     if (ids.length === 0) return null;
     const alreadyIssued = await itemIdsWithOpeningVoucher(tx, ids);
@@ -144,13 +155,13 @@ export class ItemOpeningService {
       description: `موجودی اولیه ${l.quantity.toString()} ${l.item.unit} × ${l.value.divide(l.quantity).round(4).toString()} — ${l.item.name} (${l.item.code})`,
     }));
     const voucher = await VoucherService.createJournalVoucher({
-      date: await businessTodayJalaliDash(),
+      date: params.date ?? await businessTodayJalaliDash(),
       voucherType: 'opening',
       status: 'draft',
-      description: `سند افتتاحیه موجودی اولیه ${lines.length} کالای تازه از ورود اکسل`,
+      description: params.description ?? `سند افتتاحیه موجودی اولیه ${lines.length} کالای تازه از ورود اکسل`,
       referenceModule: 'item_opening',
       referenceId: null,
-      referenceNumber: 'درون‌ریزی اکسل',
+      referenceNumber: params.referenceNumber ?? 'درون‌ریزی اکسل',
       currency: 'IRR',
       userId: params.userId,
       username: params.username,
