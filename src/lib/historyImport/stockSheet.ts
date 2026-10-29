@@ -1,5 +1,8 @@
 import { toEnglishDigits } from '../../utils/persianNumber.js';
-import { excelInvoiceNumber, type StockImportKind, type StockImportRow } from './stockHistoryImport.js';
+import {
+  SALE_EURO_POLICY_MESSAGE, SALE_MIN_UNIT_PRICE_RIAL, SALE_PRICE_TOO_LOW_MESSAGE, excelInvoiceNumber, isEuroPricePolicy,
+  type StockImportKind, type StockImportRow,
+} from './stockHistoryImport.js';
 import { amountText, headerKey } from './treasurySheet.js';
 
 /**
@@ -42,6 +45,8 @@ export interface ParsedStockRow {
   lineTotal: string;
   statusText: string;
   pricePolicy: string;
+  /** sales sheet: «شماره پرونده», the sales file this invoice closed (empty for single and event sales) */
+  leadRef: string;
 }
 
 const HEADERS = {
@@ -63,6 +68,7 @@ const HEADERS = {
   lineTotal: ['جمع کل'],
   status: ['وضعیت'],
   pricePolicy: ['سیاست قیمتی'],
+  leadRef: ['شماره پرونده'],
 } as const;
 
 export function detectStockSheet(header: readonly unknown[]): StockSheetShape | null {
@@ -116,6 +122,7 @@ export function parseStockSheet(sheet: string, rows: readonly (readonly unknown[
       lineTotal: shape === 'sales' ? amountText(at(row, HEADERS.lineTotal)) : '',
       statusText: shape === 'sales' ? cellText(at(row, HEADERS.status)) : '',
       pricePolicy: shape === 'sales' ? cellText(at(row, HEADERS.pricePolicy)) : '',
+      leadRef: shape === 'sales' ? toEnglishDigits(cellText(at(row, HEADERS.leadRef))) : '',
     };
     if (out.date || out.code || out.quantity) parsed.push(out);
   });
@@ -261,6 +268,12 @@ function resolveSalesRow(parsed: ParsedStockRow, mapping: StockImportMapping, ac
   if (!parsed.date) return unresolved('تاریخ فاکتور خالی است.');
   if (!parsed.quantity) return unresolved('تعداد خالی است.');
   if (!parsed.unitPrice) return unresolved('قیمت این ردیف خالی است.');
+  if (isEuroPricePolicy(parsed.pricePolicy)) return unresolved(SALE_EURO_POLICY_MESSAGE);
+  if (Number(parsed.unitPrice) < SALE_MIN_UNIT_PRICE_RIAL) return unresolved(SALE_PRICE_TOO_LOW_MESSAGE(parsed.unitPrice));
+  const leadId = parsed.leadRef ? Number(parsed.leadRef) : null;
+  if (parsed.leadRef && !(Number.isInteger(leadId) && (leadId as number) > 0 && (leadId as number) <= 2147483647)) {
+    return unresolved(`«شماره پرونده» (${parsed.leadRef}) یک عدد درست نیست؛ شمارهٔ پرونده‌ای که این فاکتور آن را بسته بنویسید یا خالی بگذارید.`);
+  }
   if (parsed.lineTotal && Math.abs(decimalTimes(parsed.quantity, parsed.unitPrice) - Number(parsed.lineTotal)) > 1) {
     return unresolved(`جمع کل (${parsed.lineTotal}) با تعداد × قیمت نمی‌خواند؛ یکی را درست کنید.`);
   }
@@ -278,6 +291,7 @@ function resolveSalesRow(parsed: ParsedStockRow, mapping: StockImportMapping, ac
     unitPrice: parsed.unitPrice,
     invoiceRef: parsed.invoiceRef,
     customerId: ct.partyId,
+    ...(leadId ? { leadId } : {}),
     warehouse: mapping.salesWarehouse || null,
     description: parsed.pricePolicy ? `سیاست قیمتی: ${parsed.pricePolicy}` : '',
     duplicateAccepted: accepted?.has(`${parsed.sheet}#${parsed.rowNo}`) || undefined,
@@ -307,6 +321,15 @@ export function wholeSalesInvoices(resolved: ResolvedStockRow[], allRows: Parsed
   }
   for (const [ref, days] of daysOf) {
     if (days.size > 1) blocked.set(ref, `ردیف‌های آن تاریخ‌های مختلف دارند (${[...days].sort().join('، ')})؛ همه را تاریخ خود فاکتور بزنید`);
+  }
+  // one invoice closes at most one sales file: its lines name one «شماره پرونده» or none
+  const leadsOf = new Map<string, Set<string>>();
+  for (const p of allRows) {
+    if (p.shape !== 'sales' || !p.invoiceRef) continue;
+    leadsOf.set(p.invoiceRef, (leadsOf.get(p.invoiceRef) ?? new Set()).add(p.leadRef.trim()));
+  }
+  for (const [ref, leads] of leadsOf) {
+    if (leads.size > 1 && !blocked.has(ref)) blocked.set(ref, `ردیف‌های آن «شماره پرونده»های مختلف دارند (${[...leads].map(l => l || 'خالی').join('، ')})؛ شماره را در همهٔ ردیف‌های فاکتور یکسان بنویسید`);
   }
   for (const r of resolved) {
     if (r.parsed.shape !== 'sales' || r.status === 'ready' || !r.parsed.invoiceRef) continue;

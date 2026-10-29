@@ -66,6 +66,7 @@ const stockImportRowSchema = z.object({
   invoiceRef: z.string().max(100).optional(),
   customerId: optionalId,
   unitPrice: decimalText.nullable().optional(),
+  leadId: optionalId,
   slipRef: z.string().max(TEXT_MAX).optional(),
   description: z.string().max(TEXT_MAX).optional(),
   duplicateAccepted: z.boolean().optional(),

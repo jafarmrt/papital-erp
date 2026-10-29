@@ -1,6 +1,8 @@
-import { eq, sql } from 'drizzle-orm';
-import type { DbExecutor } from '../../db/drizzle.js';
-import { documents, historyImportPurchaseRefs, historyImportRefs } from '../../db/schema.js';
+import { and, eq, sql } from 'drizzle-orm';
+import type { DbExecutor, DbTransaction } from '../../db/drizzle.js';
+import { crmLeads, documents, historyImportPurchaseRefs, historyImportRefs } from '../../db/schema.js';
+import { markLeadWonByInvoice } from '../crm/crmLeadOutcome.js';
+import { permissionHolderUserIdsWith } from '../notifications/notificationRecipients.js';
 import { ForbiddenError, ValidationError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { logActivity } from '../../lib/auditLogger.js';
@@ -9,7 +11,8 @@ import { historyImportAmount } from '../../lib/historyImport/historyImportAmount
 import { purchaseRefKeys } from '../../lib/historyImport/purchaseRef.js';
 import { STOCK_OPENING_DAY } from '../../lib/historyImport/stockSheet.js';
 import {
-  STOCK_IMPORT_INCOMING_KINDS, excelInvoiceNumber, stockImportDocumentKey, stockImportDuplicateKey, stockImportNotes, stockImportOrder,
+  SALE_MIN_UNIT_PRICE_RIAL, SALE_PRICE_TOO_LOW_MESSAGE, STOCK_IMPORT_INCOMING_KINDS, excelInvoiceNumber, stockImportDocumentKey,
+  stockImportDuplicateKey, stockImportNotes, stockImportOrder,
   type StockImportKind, type StockImportResult, type StockImportRow, type StockImportRowOutcome,
 } from '../../lib/historyImport/stockHistoryImport.js';
 import { isoToJalaliDate, toPersianDigits } from '../../utils.js';
@@ -135,6 +138,8 @@ function prepare(rows: StockImportRow[]): PreparedRow[] {
       else if ((row.kind === 'sale' || row.kind === 'return') && !invoiceRef) fail('شمارهٔ فاکتور اکسل این ردیف خالی است.');
       else if (row.kind === 'sale' && !row.customerId) fail('مشتری این فاکتور مشخص نیست.');
       else if (row.kind === 'sale' && !unitPrice) fail('قیمت این ردیف فاکتور خالی یا نادرست است؛ یک عدد بزرگ‌تر از صفر (ریال) بنویسید.');
+      else if (row.kind === 'sale' && Number(unitPrice) < SALE_MIN_UNIT_PRICE_RIAL) fail(SALE_PRICE_TOO_LOW_MESSAGE(toPersianDigits(String(unitPrice))));
+      else if (row.kind !== 'sale' && row.leadId) fail('«شماره پرونده» فقط برای فاکتور فروش است.');
       else if (row.kind === 'opening' && isoDate !== OPENING_DAY_ISO) fail(`موجودی اولیه فقط با تاریخ ${faDate(OPENING_DAY_ISO)} ثبت می‌شود.`);
     }
     return { row, itemId: 0, isoDate, quantity, unitCost, unitPrice, outcome };
@@ -238,8 +243,43 @@ async function recordExcelRef(tx: DbExecutor, excelRef: string, documentId: numb
 function assertOneInvoice(group: PreparedRow[]): void {
   const days = new Set(group.map(p => p.isoDate));
   const customers = new Set(group.map(p => p.row.customerId ?? 0));
+  const leads = new Set(group.map(p => p.row.leadId ?? 0));
   if (days.size > 1) throw new ValidationError(`ردیف‌های فاکتور ${toPersianDigits(String(group[0].row.invoiceRef))} اکسل تاریخ‌های مختلف دارند (${[...days].map(faDate).join('، ')})؛ یک فاکتور یک تاریخ دارد.`);
   if (customers.size > 1) throw new ValidationError(`ردیف‌های فاکتور ${toPersianDigits(String(group[0].row.invoiceRef))} اکسل مشتری‌های مختلف دارند؛ یک فاکتور یک مشتری دارد.`);
+  if (leads.size > 1) throw new ValidationError(`ردیف‌های فاکتور ${toPersianDigits(String(group[0].row.invoiceRef))} اکسل «شماره پرونده»های مختلف دارند؛ یک فاکتور حداکثر یک پرونده فروش را می‌بندد.`);
+}
+
+/**
+ * «شماره پرونده» of the sales sheet (owner's decision 7 Aban 1405): the invoice closed that sales file, so it is linked to
+ * it and the file moves to «فروش موفق», as when the file's proforma becomes a final invoice (the invoice takes the file's
+ * proforma place, so voiding it releases the file the same way). Only by the number the user wrote, never by the customer's
+ * name. Refused: a file that does not exist, of another customer, already «از دست رفته» (left as it is), or that already
+ * has a proforma or invoice (one invoice per file).
+ */
+async function closeLeadWithImportedInvoice(
+  tx: DbExecutor,
+  leadId: number,
+  invoice: { id: number; customerId: number | null; excelRef: string },
+  options: StockImportOptions,
+): Promise<void> {
+  const [lead] = await tx.select().from(crmLeads).where(and(eq(crmLeads.id, leadId), eq(crmLeads.isDeleted, 0))).for('update');
+  const fa = toPersianDigits(String(leadId));
+  const invoiceFa = toPersianDigits(invoice.excelRef);
+  if (!lead) throw new ValidationError(`پرونده فروش شمارهٔ ${fa} (ستون «شماره پرونده» فاکتور ${invoiceFa}) در برنامه نیست.`, undefined, 'HISTORY_IMPORT_LEAD_NOT_FOUND');
+  if (!lead.customerId || lead.customerId !== invoice.customerId) {
+    throw new ValidationError(`پرونده فروش شمارهٔ ${fa} مال مشتری دیگری است؛ «شماره پرونده» فاکتور ${invoiceFa} را درست کنید.`, undefined, 'HISTORY_IMPORT_LEAD_OTHER_CUSTOMER');
+  }
+  if (lead.stage === 'lost' || lead.status === 'lost') {
+    throw new ValidationError(`پرونده فروش شمارهٔ ${fa} «از دست رفته» است و فاکتور ${invoiceFa} به آن وصل نمی‌شود؛ اگر این فروش همان پرونده است، اول پرونده را در «ارتباط با مشتری» باز کنید، وگرنه «شماره پرونده» را خالی بگذارید.`, undefined, 'HISTORY_IMPORT_LEAD_LOST');
+  }
+  if (Number(lead.hasProforma) === 1 && lead.proformaId) {
+    throw new ValidationError(`پرونده فروش شمارهٔ ${fa} پیش‌فاکتور یا فاکتور دیگری دارد؛ هر پرونده فقط یک فاکتور می‌گیرد.`, undefined, 'HISTORY_IMPORT_LEAD_HAS_INVOICE');
+  }
+  const [doc] = await tx.select({ refNumber: documents.refNumber }).from(documents).where(eq(documents.id, invoice.id));
+  await tx.update(documents).set({ crmLeadId: lead.id }).where(eq(documents.id, invoice.id));
+  await tx.update(crmLeads).set({ hasProforma: 1, proformaId: invoice.id }).where(eq(crmLeads.id, lead.id));
+  await markLeadWonByInvoice(tx as DbTransaction, lead, { id: invoice.id, refNumber: doc?.refNumber ?? null },
+    { id: options.userId ?? null, name: options.username || 'سیستم' }, permissionHolderUserIdsWith);
 }
 
 /** One document of the warehouse form (or a sales invoice or return) from the rows that share it. */
@@ -286,6 +326,9 @@ async function postDocument(tx: DbExecutor, group: PreparedRow[], options: Stock
     createdAudit: options.audit ? { actor: options.audit, note: `${DOC_TITLE_OF[kind]} از ورود سابقه اکسل` } : undefined,
   });
   if (kind === 'sale') await recordExcelRef(tx, excelRef, docId);
+  if (kind === 'sale' && first.row.leadId) {
+    await closeLeadWithImportedInvoice(tx, first.row.leadId, { id: docId, customerId: first.row.customerId ?? null, excelRef }, options);
+  }
   // tool 6: a past supplier payment that names one of these numbers settles this receipt first
   const purchaseRefs = kind === 'purchase' ? purchaseRefKeys(first.row.slipRef) : [];
   if (purchaseRefs.length > 0 && first.row.supplierId) {
