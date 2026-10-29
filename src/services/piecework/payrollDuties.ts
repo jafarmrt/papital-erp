@@ -11,13 +11,13 @@ import {
 } from '../../lib/payroll/payrollDuties.js';
 
 /**
- * v10.0.193 (TD-1084, payroll duties plan decisions t2 / t3 «الف»): the issuer of a payslip (`created_by_id`) neither
- * approves it nor pays it nor voids its payment; the system admin is exempt. Read inside the caller's transaction, after
- * the payslip row lock.
+ * v10.0.193 (TD-1084, payroll duties plan decisions t2 / t3 «الف»): the issuer of a payslip (`created_by_id`) does not
+ * approve it; v11: they pay it and void its payment only once another user has approved it (`approvedById`). The system admin
+ * is exempt. Read inside the caller's transaction, after the payslip row lock.
  */
 export async function assertPayrollDutyNotByIssuer(
   tx: DbExecutor,
-  payroll: { id: number; createdById: number | null },
+  payroll: { id: number; createdById: number | null; approvedById?: number | null; status?: string | null },
   actorId: number | undefined | null,
   duty: PayrollDuty,
 ): Promise<void> {

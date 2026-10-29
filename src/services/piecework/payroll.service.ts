@@ -73,6 +73,8 @@ export interface GeneratePayrollInput extends StatutoryEntryInput {
 export interface UpdatePayrollStatusInput {
   status?: string;
   notes?: string;
+  /** v11: the net the approver saw; an approval of a payslip whose net is now another is refused */
+  expectedNetPayable?: number | string;
   userId?: number;
   username: string;
   req?: unknown;
@@ -357,10 +359,17 @@ export class PieceworkPayrollService {
       // v10.0.193 (TD-1084، طرح حقوق ت۲ و ت۳ الف): صادرکننده فیش آن را تأیید نمی‌کند؛ مدیر سیستم مستثناست
       if (targetStatus === 'approved' && pay.status === 'draft') {
         await assertPayrollDutyNotByIssuer(tx, pay, currentUserId, 'approve');
+        // v11: the issuer may pay what another user approved, so the approval is of the net that user saw
+        if (input.expectedNetPayable !== undefined && !fin(input.expectedNetPayable).equals(fin(pay.netPayable ?? 0))) {
+          throw new ConflictError(`خالص فیش ${pay.payrollNumber} پس از باز کردن آن عوض شده است؛ فیش را دوباره باز کنید و ببینید، سپس تأیید کنید.`, undefined, 'PAYROLL_CHANGED_SINCE_VIEWED');
+        }
       }
 
       const updates: Partial<typeof pieceworkPayrolls.$inferInsert> = {};
       if (targetStatus) updates.status = targetStatus;
+      // v11: who approved it, read by the issuer's pay rule; back to draft forgets it
+      if (targetStatus === 'approved' && pay.status === 'draft') updates.approvedById = currentUserId ?? null;
+      if (targetStatus === 'draft') updates.approvedById = null;
       if (notes !== undefined) updates.notes = String(notes).trim();
 
       await tx.update(pieceworkPayrolls).set(updates).where(eq(pieceworkPayrolls.id, id));

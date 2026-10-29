@@ -203,6 +203,8 @@ const updatePieceworkPayrollStatusSchema = z.object({
   body: z.object({
     status: z.string().optional(),
     notes: z.string().optional(),
+    // v11: the net the approver saw (an approval of a payslip changed since is refused)
+    expectedNetPayable: z.union([z.number(), z.string().max(40)]).optional(),
     paymentDate: z.unknown().optional(),
     paymentMethod: z.unknown().optional(),
     paymentReference: z.unknown().optional(),
@@ -745,7 +747,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
 router.put('/piecework/payrolls/:id/status', requirePermission(PIECEWORK_PAYROLL_PERMISSION, PIECEWORK_PAYROLL_APPROVE_PERMISSION), idempotency({ scope: 'piecework' }), validate(updatePieceworkPayrollStatusSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { status, notes } = req.body;
+    const { status, notes, expectedNetPayable } = req.body;
     const changesStatus = status !== undefined && String(status).trim() !== '';
     if (changesStatus && !(await can(req.user, PIECEWORK_PAYROLL_APPROVE_PERMISSION))) {
       throw new ForbiddenError('تأیید فیش یا بازگرداندن آن به پیش‌نویس مجوز «تأیید فیش حقوق» را می‌خواهد.', undefined, 'PAYROLL_APPROVE_PERMISSION_REQUIRED');
@@ -760,6 +762,7 @@ router.put('/piecework/payrolls/:id/status', requirePermission(PIECEWORK_PAYROLL
     const result = await PieceworkPayrollService.updatePayrollStatus(id, {
       status,
       notes,
+      expectedNetPayable,
       userId: currentUserId,
       username: currentUsername,
       req
