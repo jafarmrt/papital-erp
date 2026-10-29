@@ -37,6 +37,7 @@ import { PettyCashExpenseModal } from './treasury/PettyCashExpenseModal';
 import { ColleagueExpenseModal } from './treasury/ColleagueExpenseModal';
 import { PettyCashLinesModal } from './treasury/PettyCashLinesModal';
 import { TreasuryHistoryImportModal } from '../historyImport/TreasuryHistoryImportModal';
+import { useHistoryImportOpen } from '../../hooks/queries/useHistoryImportStatusQuery';
 import { useHasPermission } from '../../contexts/AuthContext';
 import type { PettyCashAction } from './treasury/BankAccountCard';
 
@@ -88,7 +89,9 @@ export function BankAndTreasuryTab({
   const appCurrency = useAppCurrency();
 
   // Modals state
-  const canImportHistory = useHasPermission('accounting.history_import');
+  // tool 9: only until «پایان ورود سابقه» closed the imports
+  const mayImportHistory = useHasPermission('accounting.history_import');
+  const canImportHistory = useHistoryImportOpen(mayImportHistory);
   const [isHistoryImportOpen, setIsHistoryImportOpen] = useState(false);
   const [isBankModalOpen, setIsBankModalOpen] = useState(false);
   const [editingBank, setEditingBank] = useState<BankAccount | null>(null);

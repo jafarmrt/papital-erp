@@ -17,6 +17,7 @@ import { errorMessageOf, formatPersianCode, formatPersianNumber } from '../../ut
 import { TreasuryImportNames, type TreasuryImportLists } from './TreasuryImportNames';
 import { TreasuryImportPreview, USE_LABEL } from './TreasuryImportPreview';
 import { loadSavedMapping, monthOf, readTreasuryWorkbook, saveMapping } from './treasuryImportWorkbook';
+import { HistoryImportCloseButton } from './HistoryImportCloseButton';
 
 /**
  * v11 history import, tool 1 (1405 replay): past receipts, payments, transfers and wages from the old Excel. The user picks
@@ -173,6 +174,7 @@ export function TreasuryHistoryImportModal({ isOpen, onClose, lists }: Props) {
             <p>پرونده اکسل را انتخاب کنید. هر ردیف همان سندی می‌شود که با دست ثبت می‌شد و سند حسابداری آن پیش‌نویس می‌ماند. پیش از هر ثبت، پیش‌نمایش همه ردیف‌ها را امتحان می‌کند و چیزی نگه نمی‌دارد.</p>
             <p>دریافت و پرداخت هر ماه را پس از ورود انبار و فاکتورهای فروش همان ماه وارد کنید، و حقوق را پس از صدور و تأیید فیش‌های آن ماه.</p>
             <input type="file" accept=".xlsx,.xls" aria-label="پرونده اکسل" onChange={e => { void onFile(e.target.files?.[0]); e.target.value = ''; }} />
+            <div className="border-t border-slate-200 pt-2 dark:border-slate-700"><HistoryImportCloseButton onClosed={() => { reset(); onClose(); }} /></div>
           </div>
         )}
         {step !== 'file' && (
