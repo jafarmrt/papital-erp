@@ -52,9 +52,8 @@ export const LOGIN_ONLY_ROUTES = new Set([
   'GET /api/messenger/links/mine', 'POST /api/messenger/links/:messenger/code', 'POST /api/messenger/links/:messenger/test',
   'DELETE /api/messenger/links/:messenger',
   // v10.1.41 (messenger plan part 2): the user's own «در پیام‌رسان هم بفرست» choices
-  'GET /api/messenger/preferences/mine', 'PUT /api/messenger/preferences/mine',
   // v11 history import, tool 9: whether «پایان ورود سابقه» closed the imports (a flag the menus read, no data)
-  'GET /api/history-import/status',
+  'GET /api/messenger/preferences/mine', 'PUT /api/messenger/preferences/mine', 'GET /api/history-import/status',
 ]);
 
 /**
@@ -72,9 +71,8 @@ export const SYSTEM_ADMIN_ONLY_ROUTES = new Set([
   // v9.0.427 (TD-589، تصمیم ت۵ الف): فهرست و ساختن دستی قیدهای شرطی جاافتاده مهاجرت‌ها
   'GET /api/system/conditional-constraints', 'POST /api/system/conditional-constraints/build', 'POST /api/system/orphan-uploads',
   // v10.1.38 (messenger plan part 1, ت۱ الف): the staff bots' tokens and the list of linked users
-  'GET /api/messenger/bots', 'PUT /api/messenger/bots/:messenger', 'GET /api/messenger/links',
   // v11 history import, tool 9 (owner's decision 7 Aban 1405): «پایان ورود سابقه», one-way, by the system admin only
-  'POST /api/history-import/close',
+  'GET /api/messenger/bots', 'PUT /api/messenger/bots/:messenger', 'GET /api/messenger/links', 'POST /api/history-import/close',
 ]);
 
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE', 'ALL']);
