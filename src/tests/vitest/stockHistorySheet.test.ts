@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { historyImportAmount } from '../../lib/historyImport/historyImportAmount';
 import {
-  STOCK_OPENING_DAY, detectStockSheet, emptyStockMapping, parseStockSheet, remapItemCode, resolveStockRow, salesInvoiceKey, unissuedSalesInvoices, unmappedStockNames,
+  STOCK_OPENING_DAY, detectStockSheet, emptyStockMapping, parseStockSheet, remapItemCode, resolveStockRow, salesInvoiceKey, unissuedSalesInvoices, unmappedStockNames, wholeSalesInvoices,
   type StockImportMapping, type StockImportLookups,
 } from '../../lib/historyImport/stockSheet';
 import { excelInvoiceNumber, stockImportDocumentKey, stockImportNotes, stockImportOrder, type StockImportRow } from '../../lib/historyImport/stockHistoryImport';
@@ -110,6 +110,17 @@ describe('sales sheet (tool 3)', () => {
     expect(excelInvoiceNumber(' 061 ')).toBe('61');
     expect(excelInvoiceNumber('61-62')).toBe('61-62');
     expect(excelInvoiceNumber('')).toBe('');
+    expect(excelInvoiceNumber('12345678901234567891')).toBe('12345678901234567891'); // never through a float
+  });
+
+  it('imports an Excel invoice whole: a line left out or waiting holds back the other lines, and the sales warehouse is the mapped one', () => {
+    const two = [sales[0], sales[1]];
+    const ready = wholeSalesInvoices(two.map(p => resolveStockRow(p, salesMapping({ salesWarehouse: 'SHOW' }), lookups)));
+    expect(ready.every(r => r.status === 'ready' && r.row.warehouse === 'SHOW')).toBe(true);
+    const oneSkipped = wholeSalesInvoices(two.map(p => resolveStockRow(p, salesMapping({ items: { 'P-002': { kind: 'skip' } } }), lookups)));
+    expect(oneSkipped.map(r => r.status)).toEqual(['unresolved', 'skipped']);
+    const bothSkipped = wholeSalesInvoices(two.map(p => resolveStockRow(p, salesMapping({ customers: { 'گالری الف': { kind: 'skip' } } }), lookups)));
+    expect(bothSkipped.map(r => r.status)).toEqual(['skipped', 'skipped']);
   });
 });
 

@@ -136,5 +136,6 @@ export function stockImportNotes(slipRef: string | undefined, descriptions: Arra
 export function excelInvoiceNumber(cell: string | null | undefined): string {
   const text = String(cell ?? '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).trim();
   const numbers = text.match(/\d+/g) ?? [];
-  return numbers.length === 1 ? String(Number(numbers[0])) : text;
+  // leading zeros dropped on the digits themselves (a long number would lose digits through a float)
+  return numbers.length === 1 ? numbers[0].replace(/^0+(?=\d)/, '') : text;
 }

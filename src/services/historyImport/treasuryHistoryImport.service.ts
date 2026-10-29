@@ -144,8 +144,12 @@ const bookedKeyOf = (p: PreparedRow) =>
 
 /** The sales invoice the stock import recorded for an Excel invoice number (`history_import_refs`), if any. */
 async function invoiceOfExcelRef(tx: DbExecutor, invoiceRef: string | undefined): Promise<number | null> {
-  const ref = excelInvoiceNumber(invoiceRef);
-  if (!ref) return null;
+  // only a cell that is the invoice number itself («61») or names an invoice («فاکتور 61»): a cheque or tracking number in
+  // the same column must not pick an invoice
+  const cell = (invoiceRef ?? '').trim();
+  if (!/^[\d۰-۹٠-٩]{1,8}$/.test(cell) && !cell.includes('فاکتور')) return null;
+  const ref = excelInvoiceNumber(cell);
+  if (!ref || !/^\d{1,12}$/.test(ref)) return null;
   const [found] = await tx.select({ id: historyImportRefs.documentId }).from(historyImportRefs)
     .where(and(eq(historyImportRefs.kind, 'sales_invoice'), eq(historyImportRefs.excelRef, ref)));
   return found ? Number(found.id) : null;

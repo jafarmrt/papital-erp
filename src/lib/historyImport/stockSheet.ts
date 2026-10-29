@@ -138,6 +138,8 @@ export interface StockImportMapping {
   suppliers: Record<string, SupplierTarget>;
   /** tool 3: the customer of each name of the sales sheet (one customer is often typed several ways) */
   customers?: Record<string, CustomerTarget>;
+  /** tool 3: the warehouse past sales leave (empty = the default warehouse) */
+  salesWarehouse?: string | null;
   /** the warehouse «انتقال به نمایش» moves to */
   displayWarehouse?: string | null;
 }
@@ -274,10 +276,29 @@ function resolveSalesRow(parsed: ParsedStockRow, mapping: StockImportMapping, ac
     unitPrice: parsed.unitPrice,
     invoiceRef: parsed.invoiceRef,
     customerId: ct.partyId,
+    warehouse: mapping.salesWarehouse || null,
     description: parsed.pricePolicy ? `سیاست قیمتی: ${parsed.pricePolicy}` : '',
     duplicateAccepted: accepted?.has(`${parsed.sheet}#${parsed.rowNo}`) || undefined,
   };
   return { status: 'ready', parsed, row };
+}
+
+/**
+ * An Excel invoice is imported whole or not at all: when a line of it is left out (its code or customer left out, its
+ * status not «ثبت نهایی») or waits for a fix, its other lines wait too, since a part of an invoice recorded under its
+ * Excel number could never be completed (the number is then taken). Lines of an invoice left out as a whole stay left out.
+ */
+export function wholeSalesInvoices(resolved: ResolvedStockRow[]): ResolvedStockRow[] {
+  const blocked = new Map<string, string>();
+  for (const r of resolved) {
+    if (r.parsed.shape !== 'sales' || r.status === 'ready' || !r.parsed.invoiceRef) continue;
+    if (!blocked.has(r.parsed.invoiceRef)) blocked.set(r.parsed.invoiceRef, `ردیف ${r.parsed.rowNo}: ${r.reason}`);
+  }
+  return resolved.map(r => {
+    if (r.parsed.shape !== 'sales' || r.status !== 'ready') return r;
+    const why = blocked.get(r.parsed.invoiceRef);
+    return why ? { status: 'unresolved', parsed: r.parsed, reason: `فاکتور ${r.parsed.invoiceRef} یک‌جا ثبت می‌شود و ردیف دیگری از آن آماده نیست (${why})؛ آن ردیف را درست کنید یا کل فاکتور را کنار بگذارید.` } : r;
+  });
 }
 
 /** Invoices of the sales sheet whose Excel status is not «ثبت نهایی»: the user decides, one by one, whether each was sold. */

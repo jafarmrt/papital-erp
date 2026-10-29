@@ -7,7 +7,7 @@ import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { Customer } from '../../types';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
 import { STOCK_IMPORT_MAX_ROWS, type StockImportResult } from '../../lib/historyImport/stockHistoryImport';
-import { remapItemCode, resolveStockRow, salesInvoiceKey, unissuedSalesInvoices, unmappedStockNames, type ParsedStockRow, type StockImportMapping } from '../../lib/historyImport/stockSheet';
+import { remapItemCode, resolveStockRow, salesInvoiceKey, wholeSalesInvoices, unissuedSalesInvoices, unmappedStockNames, type ParsedStockRow, type StockImportMapping } from '../../lib/historyImport/stockSheet';
 import { errorMessageOf, formatPersianCode, formatPersianNumber } from '../../utils';
 import { StockImportNames } from './StockImportNames';
 import { StockImportPreview } from './StockImportPreview';
@@ -53,7 +53,7 @@ export function StockHistoryImportModal({ isOpen, onClose, warehouses, suppliers
   }, [warehouses]);
   const months = useMemo(() => [...new Set(rows.map(stockRowMonth))].sort(), [rows]);
   const monthRows = useMemo(() => rows.filter(r => stockRowMonth(r) === month), [rows, month]);
-  const resolved = useMemo(() => monthRows.map(r => resolveStockRow(r, mapping, lookups, accepted)), [monthRows, mapping, lookups, accepted]);
+  const resolved = useMemo(() => wholeSalesInvoices(monthRows.map(r => resolveStockRow(r, mapping, lookups, accepted))), [monthRows, mapping, lookups, accepted]);
   const names = useMemo(() => unmappedStockNames(monthRows, { ...mapping, warehouses: {}, suppliers: {}, customers: {} }, lookups), [monthRows, mapping, lookups]);
   const unissued = useMemo(() => unissuedSalesInvoices(monthRows), [monthRows]);
   const ready = resolved.flatMap(r => (r.status === 'ready' ? [r.row] : []));
@@ -163,7 +163,7 @@ export function StockHistoryImportModal({ isOpen, onClose, warehouses, suppliers
               </select>
             </label>
             <span>{formatPersianNumber(ready.length)} ردیف آماده، {formatPersianNumber(unresolved.length)} ردیف نیازمند اصلاح، {formatPersianNumber(resolved.length - ready.length - unresolved.length)} ردیف کنار گذاشته</span>
-            {ready.length > STOCK_IMPORT_MAX_ROWS && <span className="text-rose-600 font-bold">بیش از {formatPersianNumber(STOCK_IMPORT_MAX_ROWS)} ردیف؛ پرونده را کوچک‌تر کنید.</span>}
+            {ready.length > STOCK_IMPORT_MAX_ROWS && <span className="text-rose-600 font-bold">بیش از {formatPersianNumber(STOCK_IMPORT_MAX_ROWS)} ردیف؛ ماه را به دو پرونده بر پایهٔ روز تقسیم کنید (همهٔ برگه‌های روزهای اول در یکی، بقیه در دیگری).</span>}
             {result && !stale && !result.committed && (
               <span className="font-bold">{formatPersianNumber(result.okCount)} درست، {formatPersianNumber(result.errorCount)} خطا، {formatPersianNumber(result.duplicateCount)} شبیه ثبت‌های قبلی</span>
             )}

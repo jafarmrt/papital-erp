@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import type { StockImportResult, StockImportRow } from '../../lib/historyImport/stockHistoryImport.js';
 import type { TreasuryImportResult, TreasuryImportRow } from '../../lib/historyImport/treasuryHistoryImport.js';
-import { createTestCustomer, createTestItem } from '../fixtures/factories.js';
+import { createTestCustomer, createTestItem, createTestWarehouse } from '../fixtures/factories.js';
 import { TestCaseResult } from '../types.js';
 import { type ShouldRun, inFiscalSandbox, runCase, sandboxAdminClient, sandboxClientWith } from './fiscalClosingTests.js';
 import { brief, ok } from './receiptsOnInvoicesV11Tests.js';
@@ -108,6 +108,10 @@ export async function runHistoryImportSalesV11Tests(shouldRun: ShouldRun): Promi
       const paid = await postTo<TreasuryImportResult>(admin, TREASURY_URL, [receipt], true);
       const settled = paid.rows[0]?.settled ?? [];
       if (!paid.committed || settled.length !== 1 || settled[0].refNumber !== ref50 || settled[0].amount !== 5_000_000) problems.push(`the receipt read ${JSON.stringify(paid.rows)}, expected 5,000,000 settled on invoice ${ref50}`);
+      // a cheque number in the reference column names no invoice: the oldest open invoice (49) is settled
+      const cheque = await postTo<TreasuryImportResult>(admin, TREASURY_URL, [{ ...receipt, rowNo: 3, date: '1405-04-02', amount: '1000', invoiceRef: 'چک 50' }], true);
+      const ref49 = rowOf(posted, 4)?.created?.[0];
+      if (!cheque.committed || cheque.rows[0]?.settled?.[0]?.refNumber !== ref49) problems.push(`a receipt referring to a cheque number read ${JSON.stringify(cheque.rows)}, expected the oldest invoice ${ref49} settled`);
       if (problems.length > 0) throw new Error(problems.join(' | '));
       return 'past invoices are final on their days, a return goes back on its Excel invoice, a receipt settles the invoice it names';
     }));
@@ -141,6 +145,16 @@ export async function runHistoryImportSalesV11Tests(shouldRun: ShouldRun): Promi
       refusedWith(3, SALES, 'تاریخ‌های مختلف');
       const moved = sameFootprint(before, await footprint());
       if (moved.length > 0) problems.push(`a refused post left a trace: ${moved.join(', ')}`);
+
+      // a sale leaves the warehouse the row names (the window's «انبار فروش»), not the default one
+      const show = await createTestWarehouse();
+      const b = await fresh();
+      const shown = await stockPost(admin, [
+        { rowNo: 6, sheet: IN, date: '1405-01-01', kind: 'opening', itemCode: b.code, quantity: '3', unitCost: '50000', warehouse: show.code },
+        { ...sale(5, '73', '1405-02-10'), itemCode: b.code, warehouse: show.code },
+      ], true);
+      const left = await count(sql`SELECT coalesce(sum(current_stock), 0)::int AS n FROM item_warehouse_stocks WHERE item_id = ${b.id} AND warehouse_code = ${show.code}`);
+      if (!shown.committed || left !== 2) problems.push(`a sale from the display warehouse read ${JSON.stringify(shown.rows)} and left ${left} there, expected committed and 2`);
 
       const keeper = await sandboxClientWith(['warehouse.history_import', 'warehouse.in', 'warehouse.out']);
       const denied = await stockPost(keeper, [sale(2, '72', '1405-02-09')], false);

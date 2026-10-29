@@ -98,6 +98,16 @@ export function StockImportNames({ names, mapping, warehouses, suppliers, custom
           ))}
         </section>
       )}
+      {names.customers.length + unissued.length > 0 || Object.keys(mapping.customers ?? {}).length > 0 ? (
+        <label className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
+          <span className="text-xs text-slate-700 dark:text-slate-200">انبار فروش (کالای فاکتورهای فروش از این انبار خارج می‌شود)</span>
+          <select aria-label="انبار فروش" className={SELECT_CLASS} value={mapping.salesWarehouse ?? ''}
+            onChange={e => onChange({ ...mapping, salesWarehouse: e.target.value || null })}>
+            <option value="">انبار پیش‌فرض</option>
+            {warehouses.map(w => <option key={w.code} value={w.code}>{w.name || formatPersianCode(w.code)}</option>)}
+          </select>
+        </label>
+      ) : null}
       <label className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
         <span className="text-xs text-slate-700 dark:text-slate-200">انبار «نمایش» (مقصد ردیف‌های «انتقال به نمایش»)</span>
         <select aria-label="انبار نمایش" className={SELECT_CLASS} value={mapping.displayWarehouse ?? ''}
