@@ -10,10 +10,11 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { ConflictError } from '../errors/customErrors.js';
 import { importTreasuryHistory } from '../services/historyImport/treasuryHistoryImport.service.js';
-import { STOCK_IMPORT_KIND_PERMISSIONS, importStockHistory } from '../services/historyImport/stockHistoryImport.service.js';
+import { STOCK_IMPORT_KIND_PERMISSIONS, importStockHistory, oldOpeningsBeforeReplay, withdrawOpeningsBeforeReplay } from '../services/historyImport/stockHistoryImport.service.js';
+import { OPENING_STOCK_PERMISSION } from '../lib/permissions/stockActionPermissions.js';
 import type { StockImportKind } from '../lib/historyImport/stockHistoryImport.js';
 import type { AuthUserPayload } from '../types/auth.types.js';
-import { stockHistoryImportSchema, treasuryHistoryImportSchema } from './historyImport.schemas.js';
+import { oldOpeningWithdrawSchema, stockHistoryImportSchema, treasuryHistoryImportSchema } from './historyImport.schemas.js';
 
 const router = Router();
 
@@ -65,5 +66,21 @@ router.post('/inventory/history-import', authorizePermission('warehouse.history_
   });
   sendImportResult(res, result, req.body.commit === true);
 }));
+
+// tool 8: the openings entered before the replay (the item form's opening, with a draft voucher), taken back first; taking
+// back needs the opening stock permission, as entering it does
+router.get('/inventory/history-import/old-openings', authorizePermission('warehouse.history_import'), asyncHandler(async (_req, res) => {
+  res.json(await oldOpeningsBeforeReplay());
+}));
+
+router.post('/inventory/history-import/old-openings/withdraw', authorizePermission('warehouse.history_import'), authorizePermission(OPENING_STOCK_PERMISSION),
+  idempotency({ scope: 'history-import' }), validate(oldOpeningWithdrawSchema), asyncHandler(async (req, res) => {
+    res.json(await withdrawOpeningsBeforeReplay(req.body.itemIds, {
+      userId: req.user?.id,
+      username: req.user?.username,
+      userFullName: req.user?.fullName,
+      req,
+    }));
+  }));
 
 export default router;

@@ -11,6 +11,7 @@ import { remapItemCode, resolveStockRow, salesInvoiceKey, wholeSalesInvoices, un
 import { errorMessageOf, formatPersianCode, formatPersianNumber } from '../../utils';
 import { StockImportNames } from './StockImportNames';
 import { StockImportPreview } from './StockImportPreview';
+import { OldOpeningsStep } from './OldOpeningsStep';
 import { loadSavedStockMapping, readStockWorkbook, saveStockMapping, stockRowMonth } from './stockImportWorkbook';
 
 /**
@@ -146,6 +147,7 @@ export function StockHistoryImportModal({ isOpen, onClose, warehouses, suppliers
       icon={<FileSpreadsheet className="w-5 h-5 text-emerald-600" />}>
       <div className="space-y-4">
         {error && <p role="alert" className="text-xs font-bold text-rose-600">{error}</p>}
+        {step === 'file' && <OldOpeningsStep />}
         {step === 'file' && (
           <div className="space-y-2 text-xs text-slate-600 dark:text-slate-300">
             <p>پروندهٔ اکسل اصلاح‌شدهٔ انبار را انتخاب کنید. هر ردیف همان سندی می‌شود که با دست ثبت می‌شد و سند حسابداری آن پیش‌نویس می‌ماند. موجودی اولیه با تاریخ ۱ فروردین ۱۴۰۵ ثبت می‌شود. پیش از هر ثبت، پیش‌نمایش همهٔ ردیف‌ها را امتحان می‌کند و چیزی نگه نمی‌دارد.</p>
