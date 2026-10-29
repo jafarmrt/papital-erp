@@ -119,11 +119,9 @@ export interface TreasuryImportMapping {
   expenses: Record<string, ExpenseTarget>;
   /** tool 5: each cost centre once (kept by the browser with the rest) */
   costCentres?: Record<string, CostCentreTarget>;
-  /** the counter account of a colleague's payment that is neither wages nor an advance (e.g. paying back their expenses) */
-  personnelOtherAccountId?: number | null;
 }
 
-export const emptyTreasuryMapping = (): TreasuryImportMapping => ({ banks: {}, parties: {}, expenses: {}, costCentres: {}, personnelOtherAccountId: null });
+export const emptyTreasuryMapping = (): TreasuryImportMapping => ({ banks: {}, parties: {}, expenses: {}, costCentres: {} });
 
 /** Cost centres of the company as a whole, not of one project (the owner's list, 7 Aban 1405): offered as «بدون پروژه». */
 export const GENERAL_COST_CENTRES = ['عمومی و مشترک', 'هزینه های دفتر', 'فروش ایران'];
@@ -153,12 +151,13 @@ export type PersonnelUse = 'payslip' | 'advance' | 'colleague_account' | 'other'
 
 /** The default use of a colleague's row, read from its description; the user can change it row by row. */
 export function guessPersonnelUse(row: Pick<ParsedTreasuryRow, 'description' | 'partyName' | 'typeText'>): PersonnelUse {
-  const text = `${row.description} ${row.partyName}`;
+  // compared without spaces and ZWNJ, so «تن خواه», «خرج‌کرد» and «هزینه کرد» read as written together
+  const text = `${row.description} ${row.partyName}`.replace(/[\s‌]+/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک');
   if (text.includes('مساعده')) return 'advance';
   if (row.typeText === 'پرداخت' && /حقوق|دستمزد/.test(text)) return 'payslip';
   // a loan repaid («بازپرداخت وام») is not the running account; such a row waits for the user's choice
   if (/وام|قسط/.test(text)) return 'other';
-  if (/تنخواه|بازپرداخت|از جیب/.test(text)) return 'colleague_account';
+  if (/تنخواه|بازپرداخت|ازجیب|خرجکرد|هزینهکرد/.test(text)) return 'colleague_account';
   return 'other';
 }
 
@@ -168,7 +167,8 @@ export const rowKey = (row: Pick<ParsedTreasuryRow, 'sheet' | 'rowNo'>) => `${ro
 export type ResolvedTreasuryRow =
   | { status: 'ready'; parsed: ParsedTreasuryRow; row: TreasuryImportRow; personnel: boolean }
   | { status: 'skipped'; parsed: ParsedTreasuryRow; reason: string }
-  | { status: 'unresolved'; parsed: ParsedTreasuryRow; reason: string };
+  /** `personnel`: a colleague row held back for its use, so the window still offers the use select on it */
+  | { status: 'unresolved'; parsed: ParsedTreasuryRow; reason: string; personnel?: boolean };
 
 /** The names of a set of rows that still need a mapping: banks, parties and expense types. */
 export function unmappedNames(rows: readonly ParsedTreasuryRow[], mapping: TreasuryImportMapping) {
@@ -288,9 +288,11 @@ export function resolveTreasuryRow(
       if (use === 'payslip' && kind === 'payment') return ready({ kind: 'payslip', personnelId: party.personnelId }, true);
       if (use === 'advance') return ready({ kind, partyType: 'personnel', partyId: party.personnelId, partyName: party.name, purpose: 'advance' }, true);
       if (use === 'colleague_account') return ready({ kind, partyType: 'personnel', partyId: party.personnelId, partyName: party.name, purpose: 'colleague_account' }, true);
-      const contra = rowContra ?? mapping.personnelOtherAccountId ?? null;
-      if (!contra) return UNRESOLVED(parsed, 'برای پرداخت‌های دیگر همکاران (نه حقوق و نه مساعده) حساب مقابل را در مرحلهٔ نام‌ها انتخاب کنید.');
-      return ready({ kind, partyType: 'personnel', partyId: party.personnelId, partyName: party.name, purpose: 'other', contraAccountId: contra }, true);
+      // «پرداخت دیگر» to a colleague (a loan, a repayment) takes the account its own row names, never a shared fallback
+      if (!rowContra) {
+        return { ...UNRESOLVED(parsed, '«پرداخت دیگر» به همکار حساب مقابل خودش را می‌خواهد: «کد حساب مقابل» همین ردیف را در اکسل بنویسید، یا کاربرد ردیف را از فهرست کنارش عوض کنید (حقوق، مساعده یا حساب جاری همکار).'), personnel: true };
+      }
+      return ready({ kind, partyType: 'personnel', partyId: party.personnelId, partyName: party.name, purpose: 'other', contraAccountId: rowContra }, true);
     }
   }
 }

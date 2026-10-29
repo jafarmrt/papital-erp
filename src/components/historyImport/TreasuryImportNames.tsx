@@ -147,14 +147,6 @@ export function TreasuryImportNames({ names, mapping, lists, onChange }: Props) 
           <optgroup label="پروژه">{projects.map(p => <option key={`pr${p.id}`} value={`project:${p.id}`}>{projectLabel(p)}</option>)}</optgroup>
         </select>
       ))}
-      <label className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
-        <span className="text-xs text-slate-700 dark:text-slate-200">حساب مقابل برای پرداخت‌های دیگر به همکاران (نه حقوق، نه مساعده و نه حساب جاری همکار)</span>
-        <select aria-label="حساب مقابل پرداخت‌های دیگر همکاران" className={SELECT_CLASS} value={mapping.personnelOtherAccountId ? String(mapping.personnelOtherAccountId) : ''}
-          onChange={e => onChange({ ...mapping, personnelOtherAccountId: e.target.value ? Number(e.target.value) : null })}>
-          <option value="">انتخاب کنید</option>
-          {accounts.map(a => <option key={a.id} value={a.id}>{accountLabel(a)}</option>)}
-        </select>
-      </label>
     </div>
   );
 }
