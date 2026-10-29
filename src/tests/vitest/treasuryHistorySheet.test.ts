@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  amountText, detectTreasurySheet, emptyTreasuryMapping, guessPersonnelUse, parseTreasurySheet, resolveTreasuryRow, suggestCostCentre, unmappedNames,
+  amountText, detectTreasurySheet, emptyTreasuryMapping, guessPersonnelUse, parseTreasurySheet, resolveTreasuryRow, suggestCostCentre,
   rowKey, suggestPartyTarget, unmappedNames, type TreasuryImportMapping,
 } from '../../lib/historyImport/treasurySheet';
 import { treasuryImportDescription, treasuryImportDuplicateKey, treasuryImportOrder } from '../../lib/historyImport/treasuryHistoryImport';
