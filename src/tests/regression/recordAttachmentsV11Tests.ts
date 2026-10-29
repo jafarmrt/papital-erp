@@ -38,7 +38,7 @@ export async function runRecordAttachmentsV11Tests(shouldRun: ShouldRun): Promis
 
   const id = 'reg_record_attachments_v11';
   if (shouldRun(id, 'v11', 'attachments', 'voucher', 'fiscal')) {
-    await runCase(results, id, 'v11 «افزودن پیوست»: a draft voucher takes a file and gives it back; an approved one only takes files (409 RECORD_ATTACHMENT_APPROVED on removal); a voucher of a closed year takes nothing (409 RECORD_ATTACHMENT_YEAR_CLOSED); a reader sees the files but is refused a change (403); a deleted voucher is 404; each change is audited with its user', () => inFiscalSandbox(async () => {
+    await runCase(results, id, 'v11 add attachment: a draft voucher takes a file and gives it back; an approved one only takes files (409 RECORD_ATTACHMENT_APPROVED on removal); a voucher of a closed year takes nothing (409 RECORD_ATTACHMENT_YEAR_CLOSED); a reader sees the files but is refused a change (403); a deleted voucher is 404; each change is audited with its user', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const reader = await sandboxClientWith(['accounting.view']);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { recordAttachmentRefusal, recordAttachmentRuleText } from '../../lib/attachments/recordAttachments';
 
-describe('«افزودن پیوست» rule (v11)', () => {
+describe('add-attachment rule (v11)', () => {
   it('adds and removes before approval, only adds after, and nothing in a closed year', () => {
     const draft = { approved: false, yearClosed: false };
     const approved = { approved: true, yearClosed: false };
