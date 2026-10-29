@@ -4,6 +4,8 @@ import { cn, formatPersianPrice, formatPersianNumber, formatPersianCode } from '
 import { Item } from '../../types';
 import { COST_CURRENCY, markupPrice } from '../../lib/items/priceMargin';
 import { DecimalInput } from '../common/DecimalInput';
+import { RialEquivalent } from '../common/RialEquivalent';
+import { isRialCurrency } from '../../lib/rialDisplay';
 
 interface PricingViewsShared {
   items: Item[];
@@ -110,6 +112,7 @@ export function PricingGridView(props: PricingViewsShared) {
                         </select>
                       </div>
                     </div>
+                    {isRialCurrency(fieldVal.currency) && <RialEquivalent value={fieldVal.price} className="mt-0 pr-26" />}
 
                     {/* Markup Suggestions & Margin Badge */}
                     <div className="flex items-center justify-between gap-1 pr-26 text-[10px]">
@@ -232,6 +235,7 @@ export function PricingTableView(props: PricingViewsShared) {
                             <option value="GBP">پوند</option>
                           </select>
                         </div>
+                        {isRialCurrency(fieldVal.currency) && <RialEquivalent value={fieldVal.price} className="mt-0" />}
                         {marginBadge && <div className="mt-0.5">{marginBadge}</div>}
                       </div>
                     </td>

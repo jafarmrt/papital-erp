@@ -104,7 +104,8 @@ describe('OBS-R2-26 customer form and sales file', () => {
     const modal = source('src/components/crm/CRMLeadModal.tsx');
     expect(modal).not.toMatch(/probability: parseInt\(v\) \|\| 50/);
     expect(modal).not.toContain("toLocaleString('en-US')");
-    expect(modal).toContain('normalizeDecimalString(e.target.value)');
+    // v11: the estimated value is the shared number field, which reads Persian digits and refuses a misplaced «٬»
+    expect(modal).toMatch(/<DecimalInput\s+id=\{`\$\{fieldId\}-us`\}/);
     expect(source('src/hooks/useCRMData.ts')).not.toMatch(/probability \|\| 50/);
     expect(source('src/components/crm/CRMLeadDrawer.tsx')).not.toContain('sales_price');
   });

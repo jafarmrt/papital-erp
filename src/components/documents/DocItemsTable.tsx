@@ -3,6 +3,8 @@ import { formatCurrencyLabel, formatPersianNumber, formatPersianPrice, formatPer
 import { Item } from '../../types';
 import { STOCK_OUT_EMPTY_HINT, STOCK_VOUCHER_DRAFT_NOTE, stockInLabels } from '../../lib/documents/stockInLabels';
 import { DecimalInput } from '../common/DecimalInput';
+import { RialEquivalent } from '../common/RialEquivalent';
+import { isRialCurrency } from '../../lib/rialDisplay';
 
 export interface DocItemRow {
   item: Item;
@@ -163,6 +165,9 @@ export function DocItemsTable({
                             />
                           )}
                         </div>
+                        {!priceLocked && isRialCurrency(currencyLabel) && (
+                          <RialEquivalent value={d.unitPrice} className="text-center" />
+                        )}
                       </td>
                       <td className="p-3 text-center font-mono font-bold text-slate-900">
                         {formatPersianPrice(lineTotal, currencyLabel)}

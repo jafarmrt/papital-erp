@@ -1,6 +1,8 @@
 import React, { useId } from 'react';
 import { formatCurrencyLabel } from '../../../utils';
 import { DecimalInput } from '../../common/DecimalInput';
+import { RialEquivalent } from '../../common/RialEquivalent';
+import { isRialCurrency } from '../../../lib/rialDisplay';
 
 interface InvoiceServiceChargeFieldProps {
   value: string;
@@ -28,6 +30,7 @@ export const InvoiceServiceChargeField: React.FC<InvoiceServiceChargeFieldProps>
             placeholder="۰"
             className="w-32 border rounded px-2 py-1 text-center text-xs font-bold tabular-nums bg-slate-50 focus:bg-white"
           />
+          {isRialCurrency(currency) && <RialEquivalent value={value} className="mt-0.5 font-normal" />}
         </div>
         <span className="text-xs text-slate-500">{formatCurrencyLabel(currency)}</span>
       </div>

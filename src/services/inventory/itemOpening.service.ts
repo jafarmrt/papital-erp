@@ -6,7 +6,7 @@ import { VoucherService } from '../accounting/voucher.service.js';
 import { businessTodayJalaliDash } from '../../lib/businessClock.js';
 import type { JournalVoucher } from '../../types.js';
 import { openingKardexValue, openingKardexValues } from './itemOpeningValue.js';
-import { ValidationError } from '../../errors/customErrors.js';
+import { ConflictError, ValidationError } from '../../errors/customErrors.js';
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 
@@ -181,5 +181,22 @@ export class ItemOpeningService {
 
     await tx.insert(itemOpeningVoucherItems).values(lines.map(l => ({ voucherId: voucher.id, itemId: l.item.id, amount: money(l.value) })));
     return voucher;
+  }
+
+  /**
+   * v11 history import (1405 replay, tool 8): the draft opening voucher of items whose old opening is taken back before the
+   * replay enters the stock of 1 Farvardin again. A draft never reached the approved books, so it is soft-deleted (the
+   * source-void path, with its open fiscal year check); a voucher approved meanwhile is refused.
+   */
+  static async deleteDraftOpeningVoucher(tx: DbExecutor, voucherId: number, actor: { userId?: number; username?: string }): Promise<void> {
+    const [voucher] = await tx.select({ id: journalVouchers.id, status: journalVouchers.status, voucherNumber: journalVouchers.voucherNumber })
+      .from(journalVouchers)
+      .where(and(eq(journalVouchers.id, voucherId), eq(journalVouchers.isDeleted, 0), eq(journalVouchers.referenceModule, 'item_opening')))
+      .for('update');
+    if (!voucher) return;
+    if (voucher.status !== 'draft') {
+      throw new ConflictError(`سند افتتاحیهٔ شماره ${voucher.voucherNumber} دیگر پیش‌نویس نیست؛ موجودی اولیهٔ کالاهایش برداشته نمی‌شود.`, { voucherId }, 'OLD_OPENING_VOUCHER_NOT_DRAFT');
+    }
+    await VoucherService.voidSourceVoucher({ voucherId, reason: 'برداشتن موجودی اولیهٔ قبلی پیش از ورود سابقه ۱۴۰۵', userId: actor.userId, username: actor.username, externalTx: tx });
   }
 }

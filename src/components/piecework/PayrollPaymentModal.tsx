@@ -8,6 +8,7 @@ import { PayrollPaymentHistory } from './PayrollPaymentHistory';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { DecimalInput } from '../common/DecimalInput';
+import { RialEquivalent } from '../common/RialEquivalent';
 import { DialogLayer } from '../common/DialogLayer';
 import { isPayrollBankCurrency } from '../../lib/payroll/payrollCurrency';
 import { PAYMENT_METHOD_LABELS } from '../../lib/treasury/treasuryExport';
@@ -232,6 +233,7 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
                     placeholder="مبلغ پرداختی..."
                     className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono font-bold text-slate-900 bg-white outline-none focus:ring-2 focus:ring-blue-500"
                   />
+                  <RialEquivalent value={payAmount || ''} />
                   {/* پیش‌بینی وضعیت پس از پرداخت */}
                   <div className="mt-1.5 text-[11px] font-bold">
                     {payAmount > remainingPayable ? (

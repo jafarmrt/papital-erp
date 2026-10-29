@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { TREASURY_IMPORT_MAX_ROWS } from '../lib/historyImport/treasuryHistoryImport.js';
 import { STOCK_IMPORT_MAX_ROWS } from '../lib/historyImport/stockHistoryImport.js';
+import { OLD_OPENING_WITHDRAW_MAX_ITEMS } from '../lib/historyImport/oldOpening.js';
 
 const TEXT_MAX = 1000;
 const optionalId = z.coerce.number().int().positive().max(2147483647).nullable().optional();
@@ -77,4 +78,11 @@ export const stockHistoryImportSchema = z.object({
       .min(1, 'پرونده ردیفی برای ورود ندارد')
       .max(STOCK_IMPORT_MAX_ROWS, `هر بار حداکثر ${STOCK_IMPORT_MAX_ROWS.toLocaleString('fa-IR')} ردیف وارد می‌شود؛ پرونده را ماه به ماه بدهید`),
   }).strict(),
+});
+
+/** tool 8: the items whose old opening is taken back before the replay */
+export const oldOpeningWithdrawSchema = z.object({
+  body: z.object({
+    itemIds: z.array(z.number().int().positive()).min(1).max(OLD_OPENING_WITHDRAW_MAX_ITEMS),
+  }),
 });

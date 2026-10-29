@@ -238,7 +238,7 @@ export function AddMaterialModal({
                 />
                 <MaterialUnitSelect value={customMaterialForm.unit} onChange={(v) => setCustomMaterialForm({ ...customMaterialForm, unit: v })} units={COMMON_UNITS} />
                 <MaterialNumberField label="نقطه سفارش" value={customMaterialForm.reorderPoint} onChange={(v) => setCustomMaterialForm({ ...customMaterialForm, reorderPoint: v })} />
-                <MaterialNumberField label="قیمت تخمینی / هزینه واحد" value={customMaterialForm.weightedAverageCost} onChange={(v) => setCustomMaterialForm({ ...customMaterialForm, weightedAverageCost: v })} />
+                <MaterialNumberField rial label="قیمت تخمینی / هزینه واحد (ریال)" value={customMaterialForm.weightedAverageCost} onChange={(v) => setCustomMaterialForm({ ...customMaterialForm, weightedAverageCost: v })} />
                 <MaterialAttributeFields
                   color={customMaterialForm.color}
                   material={customMaterialForm.material}
