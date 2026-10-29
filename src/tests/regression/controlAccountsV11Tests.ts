@@ -229,12 +229,12 @@ export async function runControlAccountsV11Tests(shouldRun: ShouldRun): Promise<
 
   const m6 = 'reg_treasury_contra_control_v11_6_1b_m6';
   if (shouldRun(m6, 'v11', 'phase6', 'm6', 'treasury', 'contra')) {
-    await runCase(results, m6, 'v11 phase 6.1b (M6): a treasury miscellaneous payment refuses a control account as its counter account (insurance and payroll tax payables, eidi, other deductions, advances, inventory) with 422 naming the book, and the counter account list leaves them out', () => inFiscalSandbox(async () => {
+    await runCase(results, m6, 'v11 phase 6.1b (M6): a treasury miscellaneous payment refuses a control account as its counter account (insurance and payroll tax payables, eidi, other deductions, the colleague running account, advances, inventory) with 422 naming the book, and the counter account list leaves them out', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const today = await businessTodayIsoDate();
       const admin = await sandboxAdminClient();
       const bank = await fundedBank();
-      const refusedCodes = ['3204', '3205', '3206', '3207', '1301', '1404'];
+      const refusedCodes = ['3204', '3205', '3206', '3207', '3208', '1301', '1404'];
       const acc = await accountIdsByCode(...refusedCodes, '7009');
       const pay = (contraAccountId: number) => admin.post('/api/accounting/treasury', {
         type: 'payment', method: 'bank_transfer', amount: 1000, bankAccountId: bank, partyType: 'other',
@@ -257,7 +257,7 @@ export async function runControlAccountsV11Tests(shouldRun: ShouldRun): Promise<
       for (const code of refusedCodes) if (codes.has(code)) problems.push(`the counter account list offers ${code}`);
       if (!codes.has('7009')) problems.push('the counter account list lacks 7009');
       assertNoProblems(problems);
-      return 'six control accounts refused with 422 and left out of the list; 7009 accepted';
+      return 'seven control accounts refused with 422 and left out of the list; 7009 accepted';
     }));
   }
 

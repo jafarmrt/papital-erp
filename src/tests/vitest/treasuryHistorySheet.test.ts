@@ -99,11 +99,37 @@ describe('treasury history import sheets', () => {
     expect(guessPersonnelUse({ description: 'پرداخت دستمزد', partyName: 'x', typeText: 'پرداخت' })).toBe('payslip');
     expect(guessPersonnelUse({ description: 'تسویه', partyName: 'مساعده - x', typeText: 'پرداخت' })).toBe('advance');
     expect(guessPersonnelUse({ description: 'هزینه کرد', partyName: 'x', typeText: 'پرداخت' })).toBe('other');
+    // a loan repaid is not the running account; it waits for the user's choice
+    expect(guessPersonnelUse({ description: 'بازپرداخت وام', partyName: 'x', typeText: 'دریافت' })).toBe('other');
+    expect(guessPersonnelUse({ description: 'بازپرداخت هزینه از جیب', partyName: 'x', typeText: 'پرداخت' })).toBe('colleague_account');
     const lists = { parties: [{ id: 3, name: 'گالری آزمون', type: 'customer' }, { id: 4, name: 'فروشگاه رنگ', type: 'supplier' }], personnel: [{ id: 9, name: 'همکار يک' }], banks: [{ id: 1, title: 'بانک الف' }] };
     expect(suggestPartyTarget('مساعده - همکار یک', lists)).toEqual({ kind: 'personnel', personnelId: 9, name: 'همکار يک' });
     expect(suggestPartyTarget('بانک الف', lists)).toEqual({ kind: 'bank', bankAccountId: 1 });
     expect(suggestPartyTarget('فروشگاه رنگ', lists)).toEqual({ kind: 'supplier', partyId: 4, name: 'فروشگاه رنگ' });
     expect(suggestPartyTarget('سایر اشخاص', lists)).toBeNull();
+  });
+
+  it('turns an expense a colleague paid from their own pocket into a colleague expense, and holds back the same name on both sides', () => {
+    const own = parseTreasurySheet('هزینه‌ها', [
+      EXPENSES_HEADER,
+      ['1405-02-07', 1405, 2, 7, '', '8', 'حمل و نقل', '', 'تاکسی', '400000', 'همکار دو', 'رفت و آمد'],
+      ['1405-02-08', 1405, 2, 8, '', '', 'حمل و نقل', '', 'همکار دو', '9000000', 'همکار دو', 'حقوق'],
+      ['1405-02-09', 1405, 2, 9, '', '', 'هزینه مواداولیه', '', 'فروشگاه رنگ', '100000', 'همکار دو', 'مواد'],
+    ]);
+    const paidBy: TreasuryImportMapping = { ...mapping, banks: { ...mapping.banks, 'همکار دو': { kind: 'personnel', personnelId: 8, name: 'همکار دو' } } };
+    expect(resolveTreasuryRow(own[0], paidBy)).toMatchObject({
+      status: 'ready', row: { kind: 'colleague_expense', bankAccountId: 0, personnelId: 8, contraAccountId: 75, partyName: 'تاکسی', invoiceRef: '8' },
+    });
+    expect(resolveTreasuryRow(own[1], paidBy).status).toBe('unresolved');
+    expect(resolveTreasuryRow(own[2], paidBy).status).toBe('unresolved');
+    // a colleague is never the account of a money move
+    const move = parseTreasurySheet('دریافت و پرداخت', [MOVES_HEADER, ['1405-02-07', 1405, 2, 7, '', 'پرداخت', 'همکار دو', 'باربری', '1000', '', '', '']]);
+    expect(resolveTreasuryRow(move[0], paidBy).status).toBe('unresolved');
+    // the running account: petty cash given or a payback, guessed from the text and chosen per row
+    const pay = parseTreasurySheet('دریافت و پرداخت', [MOVES_HEADER, ['1405-02-10', 1405, 2, 10, '', 'پرداخت', 'بانک الف', 'همکار یک', '500000', '', '', 'تنخواه']]);
+    expect(guessPersonnelUse(pay[0])).toBe('colleague_account');
+    expect(resolveTreasuryRow(pay[0], mapping)).toMatchObject({ status: 'ready', row: { kind: 'payment', partyType: 'personnel', partyId: 7, purpose: 'colleague_account' } });
+    expect(resolveTreasuryRow(pay[0], mapping, { uses: { [rowKey(pay[0])]: 'other' } })).toMatchObject({ status: 'ready', row: { purpose: 'other', contraAccountId: 99 } });
   });
 
   it('orders rows by day, money in before money out, and keeps the reference and cost centre in the description', () => {

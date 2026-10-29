@@ -46,7 +46,7 @@ export interface PettyCashExpenseInput {
 
 export type PettyCashExpenseResult = TreasuryTransaction & { lines: PettyCashExpenseLine[] };
 
-/** حساب‌هایی که فرم صورت‌هزینه پیشنهاد می‌دهد: سرفصل طرف مقابل مجاز، از نوع هزینه و بی زیرحساب فعال (قابل ثبت) */
+/** حساب‌هایی که فرم صورت‌هزینه (و «هزینهٔ پرداختی همکار») پیشنهاد می‌دهد: سرفصل طرف مقابل مجاز، از نوع هزینه و بی زیرحساب فعال (قابل ثبت) */
 export function pettyCashExpenseAccounts(): Promise<ContraAccountOption[]> {
   return expenseAccountsWith(orm);
 }
@@ -61,7 +61,7 @@ async function expenseAccountsWith(executor: DbExecutor): Promise<ContraAccountO
   return options.filter(a => !parents.has(a.id));
 }
 
-async function assertExpenseAccounts(tx: DbExecutor, accountIds: number[]): Promise<Map<number, { code: string; name: string }>> {
+export async function assertExpenseAccounts(tx: DbExecutor, accountIds: number[]): Promise<Map<number, { code: string; name: string }>> {
   // قفل اشتراکی حساب‌ها مانند سند دستی؛ فهرست مجاز فقط حساب‌های معین فعال هزینه‌ای بی زیرحساب فعال (قابل ثبت) را دارد
   await tx.select({ id: accounts.id }).from(accounts)
     .where(inArray(accounts.id, [...new Set(accountIds)])).orderBy(asc(accounts.id)).for('share');

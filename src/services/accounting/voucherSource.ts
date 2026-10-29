@@ -46,6 +46,7 @@ export async function voucherSourceKinds(executor: DbExecutor, voucherIds: numbe
              WHEN x.source_bom_allocation_id IS NOT NULL THEN 'bom_allocation'
              WHEN EXISTS (SELECT 1 FROM treasury_transactions t WHERE t.voucher_id = x.id) THEN 'treasury'
              WHEN ${TREASURY_OPENING_SQL} THEN 'treasury_opening'
+             WHEN EXISTS (SELECT 1 FROM colleague_expenses e WHERE e.voucher_id = x.id) THEN 'colleague_expense'
            END AS kind
       FROM chain c
       JOIN journal_vouchers x ON x.id = c.cur_id
@@ -54,6 +55,7 @@ export async function voucherSourceKinds(executor: DbExecutor, voucherIds: numbe
         OR EXISTS (SELECT 1 FROM cheques ch WHERE ch.voucher_id = x.id)
         OR EXISTS (SELECT 1 FROM treasury_transactions t WHERE t.voucher_id = x.id)
         OR ${TREASURY_OPENING_SQL}
+        OR EXISTS (SELECT 1 FROM colleague_expenses e WHERE e.voucher_id = x.id)
      ORDER BY c.voucher_id, c.depth`);
   for (const row of res.rows as Array<{ voucher_id: number | string; kind: string | null }>) {
     if (row.kind && (VOUCHER_SOURCE_KINDS as readonly string[]).includes(row.kind)) kinds.set(Number(row.voucher_id), row.kind as VoucherSourceKind);

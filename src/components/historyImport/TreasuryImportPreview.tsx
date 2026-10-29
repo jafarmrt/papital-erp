@@ -18,8 +18,8 @@ interface Props {
   onAccept: (key: string, accepted: boolean) => void;
 }
 
-const KIND_LABEL: Record<string, string> = { receipt: 'دریافت', payment: 'پرداخت', transfer: 'انتقال', payslip: 'پرداخت فیش حقوق' };
-const USE_LABEL: Record<PersonnelUse, string> = { payslip: 'حقوق (از فیش)', advance: 'مساعده', other: 'پرداخت دیگر' };
+const KIND_LABEL: Record<string, string> = { receipt: 'دریافت', payment: 'پرداخت', transfer: 'انتقال', payslip: 'پرداخت فیش حقوق', colleague_expense: 'هزینهٔ پرداختی همکار' };
+const USE_LABEL: Record<PersonnelUse, string> = { payslip: 'حقوق (از فیش)', advance: 'مساعده', colleague_account: 'حساب جاری همکار (تنخواه یا بازپرداخت)', other: 'پرداخت دیگر' };
 
 export function TreasuryImportPreview({ resolved, result, uses, accepted, bankTitle, amountText, onUse, onAccept }: Props) {
   const [onlyProblems, setOnlyProblems] = useState(false);
@@ -93,12 +93,12 @@ export function TreasuryImportPreview({ resolved, result, uses, accepted, bankTi
                 <tr key={key} className="align-top">
                   <td className="p-2 whitespace-nowrap">{r.parsed.sheet} — {formatPersianNumber(r.parsed.rowNo)}</td>
                   <td className="p-2 whitespace-nowrap">{formatPersianCode(r.parsed.date)}</td>
-                  <td className="p-2">{r.status === 'ready' ? bankTitle(r.row.bankAccountId) : r.parsed.bankName}</td>
+                  <td className="p-2">{r.status === 'ready' && r.row.kind !== 'colleague_expense' ? bankTitle(r.row.bankAccountId) : r.parsed.bankName}</td>
                   <td className="p-2">
                     {whatCell(r)}
-                    {r.status === 'ready' && r.personnel && (
+                    {r.status === 'ready' && r.personnel && r.row.kind !== 'colleague_expense' && (
                       <select aria-label={`کاربرد ردیف ${formatPersianNumber(r.parsed.rowNo)}`} className="block mt-1 rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-[11px]"
-                        value={uses[key] ?? (r.row.kind === 'payslip' ? 'payslip' : r.row.purpose === 'advance' ? 'advance' : 'other')}
+                        value={uses[key] ?? (r.row.kind === 'payslip' ? 'payslip' : r.row.purpose === 'advance' ? 'advance' : r.row.purpose === 'colleague_account' ? 'colleague_account' : 'other')}
                         onChange={e => onUse(key, e.target.value as PersonnelUse)}>
                         {(Object.keys(USE_LABEL) as PersonnelUse[]).map(u => <option key={u} value={u}>{USE_LABEL[u]}</option>)}
                       </select>

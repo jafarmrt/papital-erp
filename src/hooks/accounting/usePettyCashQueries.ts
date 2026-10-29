@@ -3,6 +3,7 @@ import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { safeExtractArray } from '../../utils';
 import type { PettyCashExpenseLine, TreasuryTransaction } from '../../types';
+import type { ColleagueExpense, ColleagueExpenseList } from '../../lib/treasury/colleagueExpense';
 import { ACCOUNTING_LIST_QUERY_OPTIONS, fetchAccountingList, silentMutationError } from './accountingQueryConfig';
 import { invalidateAfterTreasuryChange } from './accountingInvalidation';
 import type { ContraAccountOption } from './useTreasuryQueries';
@@ -44,6 +45,37 @@ export function usePettyCashExpenseMutation() {
       method: 'POST', body: JSON.stringify(payload),
     }),
     onSuccess: () => { void invalidateAfterTreasuryChange(queryClient); },
+    onError: silentMutationError,
+  });
+}
+
+/** v11 (tool 4): an expense a colleague paid from their own pocket; the lines are a petty cash statement's */
+export interface ColleagueExpensePayload extends PettyCashExpensePayload {
+  personnelId: number;
+}
+
+export function useColleagueExpensesQuery(enabled: boolean) {
+  return useQuery<ColleagueExpenseList>({
+    queryKey: QUERY_KEYS.accounting.colleagueExpenses(),
+    queryFn: ({ signal }) => fetchJson<{ data: ColleagueExpenseList }>('/accounting/treasury/colleague-expenses', { signal }).then(r => r.data),
+    enabled,
+  });
+}
+
+export function useColleagueExpenseMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<ColleagueExpense, unknown, ColleagueExpensePayload>({
+    mutationFn: payload => fetchJson<ColleagueExpense>('/accounting/treasury/colleague-expenses', { method: 'POST', body: JSON.stringify(payload) }),
+    onSuccess: () => { void invalidateAfterTreasuryChange(queryClient); void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.accounting.colleagueExpenses() }); },
+    onError: silentMutationError,
+  });
+}
+
+export function useVoidColleagueExpenseMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, unknown, { id: number; reason: string }>({
+    mutationFn: ({ id, reason }) => fetchJson(`/accounting/treasury/colleague-expenses/${id}/void`, { method: 'POST', body: JSON.stringify({ reason }) }),
+    onSuccess: () => { void invalidateAfterTreasuryChange(queryClient); void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.accounting.colleagueExpenses() }); },
     onError: silentMutationError,
   });
 }

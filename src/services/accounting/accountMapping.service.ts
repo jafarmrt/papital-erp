@@ -84,6 +84,7 @@ const MAPPED_CONTROL_CONCEPTS: ReadonlyArray<[keyof ConceptualAccountMappingConf
   ['payrollTaxPayableAccountCode', 'statutory'],
   ['eidiPayableAccountCode', 'eidi'],
   ['employeeAdvanceAccountCode', 'advance'],
+  ['colleagueCurrentAccountCode', 'colleague_account'],
   ['chequeReceivableAccountCode', 'cheque'],
   ['chequeInCollectionAccountCode', 'cheque'],
   ['chequeProtestAccountCode', 'cheque'],
@@ -131,6 +132,16 @@ export class AccountMappingService {
         }
       }
       const updated = { ...current, ...incoming };
+      // v11 tool 4: the colleague running account shares no account with another control concept (wages payable, the
+      // advance account...), or the colleague's balances and those of payroll mix on the same personnel detail
+      const colleagueCode = updated.colleagueCurrentAccountCode || DEFAULT_ACCOUNT_MAPPINGS.colleagueCurrentAccountCode;
+      if (Object.keys(incoming).some(key => MAPPED_CONTROL_CONCEPTS.some(([concept]) => concept === key))) {
+        const clash = MAPPED_CONTROL_CONCEPTS.find(([concept]) => concept !== 'colleagueCurrentAccountCode'
+          && (updated[concept] || DEFAULT_ACCOUNT_MAPPINGS[concept]) === colleagueCode);
+        if (clash) {
+          throw new ValidationError(`نگاشت حساب ذخیره نشد؛ «حساب جاری همکاران» (کد ${toPersianDigits(colleagueCode)}) با «${accountMappingConcept(clash[0])?.label ?? clash[0]}» یکی است؛ برای هر کدام حساب جدا بگذارید.`, { concept: clash[0] }, 'ACCOUNT_MAPPING_INVALID');
+        }
+      }
       await tx.insert(appSettings).values({
         key: SETTINGS_KEY,
         value: JSON.stringify(updated)
@@ -344,6 +355,11 @@ export class AccountMappingService {
   }
 
   /** v10.0.222 (TD-1089): هزینه عیدی و پاداش؛ پیش‌فرض ۷۰۱۴ */
+  /** v11 (the 1405 replay, tool 4): each colleague's running account (out-of-pocket expenses, petty cash, paybacks); default 3208 */
+  static async getColleagueCurrentAccount(tx?: DbExecutor): Promise<Account | null> {
+    return this.resolveAccount('colleagueCurrentAccountCode', tx);
+  }
+
   static async getEidiExpenseAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('eidiExpenseAccountCode', tx);
   }

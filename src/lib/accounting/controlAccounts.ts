@@ -11,7 +11,7 @@
 
 export const CONTROL_ADJUSTMENT_PERMISSION = 'accounting.control_adjustment';
 
-export const CONTROL_ACCOUNT_KINDS = ['treasury', 'party', 'payroll', 'statutory', 'eidi', 'advance', 'cheque', 'inventory'] as const;
+export const CONTROL_ACCOUNT_KINDS = ['treasury', 'party', 'payroll', 'statutory', 'eidi', 'advance', 'colleague_account', 'cheque', 'inventory'] as const;
 export type ControlAccountKind = typeof CONTROL_ACCOUNT_KINDS[number];
 
 /** where the entries of each kind are made (read after «از») */
@@ -22,6 +22,7 @@ export const CONTROL_ACCOUNT_PATHS: Record<ControlAccountKind, string> = {
   statutory: '«فهرست بیمه و مالیات ماهانه»',
   eidi: 'فیش عیدی و پرداخت آن',
   advance: 'پرداخت مساعده به پرسنل در خزانه',
+  colleague_account: '«هزینهٔ پرداختی همکار» و دریافت و پرداخت «حساب جاری همکار» در خزانه',
   cheque: 'دفتر چک',
   inventory: 'اسناد انبار (رسید، حواله، شمارش و رسید تولید)',
 };

@@ -217,6 +217,10 @@ export class ChequeLifecycleService {
     // بی نوع: دریافتی از مشتری و پرداختی به تأمین‌کننده (همان سندی که پیش از v9.0.84 برای هر چک صادر می‌شد)
     const partyType = data.partyType || (data.type === 'paid' ? 'supplier' : 'customer');
     const party = normalizePartyPurpose(partyType, data.purpose, data.contraAccountId);
+    // v11 (tool 4): a colleague's running account moves only through the treasury form (the cheque book keeps its older purposes)
+    if (party.purpose === 'colleague_account') {
+      throw new ValidationError('حساب جاری همکار با چک ثبت نمی‌شود؛ آن را در خزانه با نوع «حساب جاری همکار» ثبت کنید.', undefined, 'CHEQUE_COLLEAGUE_ACCOUNT');
+    }
     // v8.0.23 (TD-275، تصمیم مالک محصول — گزینه ج): چک ارزی پذیرفته نمی‌شود. جدول چک نرخ تسعیر ندارد و اسناد چک ارزی
     // با نرخ ۱ ثبت می‌شدند (۵۰ دلار = ۵۰ ریال). چک‌های ارزی ثبت‌شده پیش از این نسخه چرخه عمر خود را ادامه می‌دهند.
     if ((data.currency || 'IRR').toUpperCase() !== 'IRR') {

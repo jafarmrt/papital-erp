@@ -69,6 +69,8 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   { table: 'cheques', group: 'accounting' },
   { table: 'treasury_transactions', group: 'accounting' },
   { table: 'petty_cash_expense_lines', group: 'accounting' },
+  { table: 'colleague_expenses', group: 'accounting' },
+  { table: 'colleague_expense_lines', group: 'accounting' },
   { table: 'statutory_remittance_lines', group: 'accounting' },
   { table: 'settlement_allocations', group: 'accounting' },
   { table: 'accounting_settings', group: 'accounting' },

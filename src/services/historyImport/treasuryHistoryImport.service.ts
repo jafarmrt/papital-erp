@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { bankAccounts, documents, historyImportRefs, journalVoucherItems, journalVouchers, pieceworkPayrolls, treasuryTransactions } from '../../db/schema.js';
+import { bankAccounts, colleagueExpenses, documents, historyImportRefs, journalVoucherItems, journalVouchers, pieceworkPayrolls, treasuryTransactions } from '../../db/schema.js';
 import { ForbiddenError, ValidationError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
@@ -15,6 +15,7 @@ import { formatPersianNumber, isoToJalaliDate, toPersianDigits } from '../../uti
 import { toStorageDate } from '../../utils/calendarDate.js';
 import { excelInvoiceNumber } from '../../lib/historyImport/stockHistoryImport.js';
 import { TreasuryTransactionService } from '../accounting/treasury/treasuryTransaction.service.js';
+import { createColleagueExpense } from '../accounting/treasury/colleagueExpense.service.js';
 import { lockTreasuryBanks } from '../accounting/treasury/treasuryPosting.js';
 import type { TreasuryAuditActor } from '../accounting/treasury/treasuryAudit.js';
 import { PayrollPaymentService } from '../accounting/payrollPayment.service.js';
@@ -119,9 +120,9 @@ async function lastMovementDays(tx: DbExecutor, bankIds: number[]): Promise<Map<
 /** Rows already in the books that look like an imported row: same day, account, kind and amount. */
 async function bookedKeys(tx: DbExecutor, prepared: PreparedRow[]): Promise<Set<string>> {
   const keys = new Set<string>();
-  const bankIds = [...new Set(prepared.map(p => p.row.bankAccountId))];
+  const bankIds = [...new Set(prepared.map(p => p.row.bankAccountId).filter(id => id > 0))];
   const days = [...new Set(prepared.map(p => p.isoDate))];
-  if (bankIds.length === 0 || days.length === 0) return keys;
+  if (days.length === 0) return keys;
   const rows = await tx.select({
     bankAccountId: treasuryTransactions.bankAccountId,
     type: treasuryTransactions.type,
@@ -136,11 +137,20 @@ async function bookedKeys(tx: DbExecutor, prepared: PreparedRow[]): Promise<Set<
       isNull(treasuryTransactions.reversalOfId),
     ));
   for (const r of rows) keys.add([r.day, r.bankAccountId, r.type, fin(r.amount).round(4).toString()].join('|'));
+  // tool 4: a colleague's expense like one already recorded (same day, colleague and total)
+  const colleagueIds = [...new Set(prepared.filter(p => p.row.kind === 'colleague_expense').map(p => Number(p.row.personnelId)).filter(id => id > 0))];
+  if (colleagueIds.length > 0) {
+    const expenses = await tx.select({ personnelId: colleagueExpenses.personnelId, total: colleagueExpenses.total, day: colleagueExpenses.date })
+      .from(colleagueExpenses)
+      .where(and(inArray(colleagueExpenses.personnelId, colleagueIds), inArray(colleagueExpenses.date, days), eq(colleagueExpenses.status, 'active')));
+    for (const e of expenses) keys.add([e.day, 'colleague', Number(e.personnelId), fin(e.total).round(4).toString()].join('|'));
+  }
   return keys;
 }
 
-const bookedKeyOf = (p: PreparedRow) =>
-  [p.isoDate, p.row.bankAccountId, p.row.kind === 'receipt' ? 'receipt' : 'payment', fin(p.amount).round(4).toString()].join('|');
+const bookedKeyOf = (p: PreparedRow) => (p.row.kind === 'colleague_expense'
+  ? [p.isoDate, 'colleague', Number(p.row.personnelId), fin(p.amount).round(4).toString()]
+  : [p.isoDate, p.row.bankAccountId, p.row.kind === 'receipt' ? 'receipt' : 'payment', fin(p.amount).round(4).toString()]).join('|');
 
 /** The sales invoice the stock import recorded for an Excel invoice number (`history_import_refs`), if any. */
 async function invoiceOfExcelRef(tx: DbExecutor, invoiceRef: string | undefined): Promise<number | null> {
@@ -262,6 +272,19 @@ async function postRow(tx: DbExecutor, p: PreparedRow, options: TreasuryImportOp
       ...actor,
     }, tx);
     return { created: [res.payment.transactionNumber, res.receipt.transactionNumber].filter(Boolean) as string[] };
+  }
+  if (row.kind === 'colleague_expense') {
+    // tool 4: an expense a colleague paid from their own pocket, through the service the treasury page uses
+    const expense = await createColleagueExpense({
+      personnelId: Number(row.personnelId),
+      date: p.isoDate,
+      description,
+      lines: [{ accountId: Number(row.contraAccountId), amount: p.amount, sellerName: (row.partyName ?? '').trim(), invoiceNumber: (row.invoiceRef ?? '').trim() }],
+      userId: options.userId,
+      username: options.username,
+      audit: options.audit,
+    }, tx);
+    return { created: expense.voucherNumber ? [`سند ${expense.voucherNumber}`] : [] };
   }
   if (row.kind === 'payslip') {
     // the payslip payment form needs «پرداخت حقوق»; the import does not open a way around it

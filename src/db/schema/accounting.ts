@@ -323,6 +323,46 @@ export const pettyCashExpenseLines = pgTable('petty_cash_expense_lines', {
 }));
 
 /**
+ * v11 (the 1405 replay, tool 4): an expense a colleague paid for the company from their own pocket (migration 0009). Its
+ * draft voucher debits each line's expense account and credits the staff expenses payable account on the colleague's
+ * detail; it is changed only by voiding it (`colleagueExpense.service.ts`).
+ */
+export const colleagueExpenses = pgTable('colleague_expenses', {
+  id: serial('id').primaryKey(),
+  personnelId: integer('personnel_id').notNull().references(baseRelations.personnelId),
+  date: text('date').notNull(),
+  description: text('description').notNull().default(''),
+  total: moneyNumeric('total').notNull(),
+  voucherId: integer('voucher_id').references(() => journalVouchers.id),
+  status: text('status').notNull().default('active'),
+  voidReason: text('void_reason').notNull().default(''),
+  voidedAt: timestamp('voided_at', { withTimezone: true, mode: 'string' }),
+  voidedById: integer('voided_by_id').references(() => users.id),
+  createdById: integer('created_by_id').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+}, (table) => ({
+  idx_colleague_expenses_personnel: index('idx_colleague_expenses_personnel').on(table.personnelId, table.date),
+  uq_colleague_expenses_voucher: uniqueIndex('uq_colleague_expenses_voucher').on(table.voucherId).where(sql`voucher_id IS NOT NULL`),
+  idx_colleague_expenses_created_by_id: index('idx_colleague_expenses_created_by_id').on(table.createdById).where(sql`${table.createdById} IS NOT NULL`),
+  idx_colleague_expenses_voided_by_id: index('idx_colleague_expenses_voided_by_id').on(table.voidedById).where(sql`${table.voidedById} IS NOT NULL`),
+}));
+
+export const colleagueExpenseLines = pgTable('colleague_expense_lines', {
+  id: serial('id').primaryKey(),
+  colleagueExpenseId: integer('colleague_expense_id').notNull().references(() => colleagueExpenses.id),
+  lineNo: integer('line_no').notNull(),
+  accountId: integer('account_id').notNull().references(() => accounts.id),
+  amount: moneyNumeric('amount').notNull(),
+  description: text('description').notNull().default(''),
+  sellerName: text('seller_name').notNull().default(''),
+  invoiceNumber: text('invoice_number').notNull().default(''),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+}, (table) => ({
+  uq_colleague_expense_lines_expense_line: uniqueIndex('uq_colleague_expense_lines_expense_line').on(table.colleagueExpenseId, table.lineNo),
+  idx_colleague_expense_lines_account: index('idx_colleague_expense_lines_account').on(table.accountId),
+}));
+
+/**
  * v10.1.36 (TD-1243، تصمیم ت۳۳ الف): ردیف هر نفر در پرداخت یکجای بیمه یا مالیات حقوق یک ماه از خزانه. یک ردیف خزانه
  * (همان یک واریز بانکی) چند ردیف دارد؛ ردیف تا وقتی زنده است که ردیف خزانه‌اش «completed» و معکوس نشده باشد.
  */

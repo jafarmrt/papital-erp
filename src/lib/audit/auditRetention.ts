@@ -62,6 +62,7 @@ export const CRITICAL_AUDIT_ENTITIES = [
   'treasury_transaction',
   'treasury_transfer',
   'treasury_reconciliation',
+  'colleague_expense',
   'حسابداری:کدینگ_پیش‌فرض',
   'حسابداری:نگاشت_مفهومی_سرفصل‌ها',
   'سال مالی',

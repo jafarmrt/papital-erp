@@ -6,7 +6,7 @@ import { VoucherService } from '../voucher.service.js';
 import { resolveTreasuryExchangeRate } from './treasuryExchangeRate.js';
 import { assertNoVoucherAllowed } from './noVoucherTreasury.js';
 import { needsChosenContraAccount, normalizePartyPurpose, requireChoosableContraAccount } from './partyContraAccount.js';
-import { isSalarySettlementPayment, SALARY_SETTLEMENT_VIA_PAYSLIP_MESSAGE } from '../../../lib/treasury/partyPurpose.js';
+import { isColleagueAccountMove, isSalarySettlementPayment, SALARY_SETTLEMENT_VIA_PAYSLIP_MESSAGE } from '../../../lib/treasury/partyPurpose.js';
 import { assertWithinDocumentRemaining, lockSettlementDocument } from './documentRemaining.js';
 import { assertAdvanceVoidKeepsBalance, isAdvancePayment, lockAdvancePersonnel } from './advanceVoidGuard.js';
 import { assertPersonnelPartyId, assertTreasuryDocumentLink, documentPartyOfTreasuryLink, resolveTreasuryPartyName } from './treasuryLinks.js';
@@ -49,6 +49,24 @@ export class TreasuryTransactionService {
     txEngine: DbExecutor,
   ) {
     return VoucherService.createJournalVoucher({ ...data, voucherType: 'treasury', referenceModule: 'treasury' }, txEngine);
+  }
+
+  /** v11 (tool 4): the draft voucher of an expense a colleague paid from their own pocket (`colleagueExpense.service.ts`) */
+  static createColleagueExpenseVoucher(
+    data: Omit<Parameters<typeof VoucherService.createJournalVoucher>[0], 'voucherType' | 'referenceModule'>,
+    txEngine: DbExecutor,
+  ) {
+    return VoucherService.createJournalVoucher({ ...data, voucherType: 'general', referenceModule: 'colleague_expense' }, txEngine);
+  }
+
+  /** v11 (tool 4): a voided colleague expense takes its voucher off: a draft is soft-deleted, an approved one reversed */
+  static voidColleagueExpenseVoucher(params: Parameters<typeof VoucherService.voidSourceVoucher>[0]) {
+    return VoucherService.voidSourceVoucher(params);
+  }
+
+  /** v11 (tool 4): each colleague's running account (mapped, 3208) */
+  static colleagueCurrentAccount(tx?: DbExecutor) {
+    return AccountMappingService.getColleagueCurrentAccount(tx);
   }
 
   /**
@@ -100,6 +118,10 @@ export class TreasuryTransactionService {
       if (purpose === 'advance') {
         account = await AccountMappingService.getEmployeeAdvanceAccount(tx);
         conceptLabel = 'مساعده و وام پرسنل';
+      } else if (purpose === 'colleague_account') {
+        // v11 (the 1405 replay, tool 4): the colleague's running account, on their detail
+        account = await AccountMappingService.getColleagueCurrentAccount(tx);
+        conceptLabel = 'حساب جاری همکاران';
       } else if (purpose === 'deductions') {
         // v10.0.257 (TD-952، ت۵ الف): واریز کسورات فیش با تفصیلی پرسنل، همان حسابی که فیش بستانکار می‌کند
         account = await AccountMappingService.getEmployeeDeductionsPayableAccount(tx);
@@ -316,6 +338,10 @@ export class TreasuryTransactionService {
 
       // V1.4.0: گارد هم‌ارزی ارز، پیش از نرخ تسعیر تا ارز ناهم‌خوان پیام خودش را بگیرد (`postTreasuryRow` هم آن را می‌سنجد)
       assertBankCurrency(bank, txCurrency);
+      // v11 (tool 4): a colleague's running account is in rials, as their out-of-pocket expenses are
+      if (isColleagueAccountMove(partyType, party.purpose) && txCurrency.toUpperCase() !== 'IRR') {
+        throw new ValidationError('حساب جاری همکار فقط ریالی است؛ آن را از حساب ریالی پرداخت یا دریافت کنید.', undefined, 'TREASURY_COLLEAGUE_ACCOUNT_CURRENCY');
+      }
       // v8.0.20 (TD-274): نرخ تسعیر تراکنش ارزی (صریح، فاکتور تسویه‌شده، تنظیمات)؛ بدون نرخ رد می‌شود، هرگز نرخ ۱
       const txExchangeRate = await resolveTreasuryExchangeRate(txEngine, txCurrency, data.exchangeRate, data.documentId);
 
