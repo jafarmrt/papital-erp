@@ -1,4 +1,7 @@
-import { formatCurrencyLabel, formatPersianNumber, toEnglishDigits } from '../../utils';
+import { useId } from 'react';
+import { formatCurrencyLabel, formatPersianNumber } from '../../utils';
+import { DecimalInput } from '../common/DecimalInput';
+import { RialEquivalent } from '../common/RialEquivalent';
 import { VOUCHER_CURRENCIES, type VoucherHeaderCurrency, type VoucherRowCurrencyDraft } from '../../lib/accounting/voucherFormCurrency';
 import { voucherRowCurrency } from '../../lib/accounting/voucherCurrencyBalance';
 
@@ -7,11 +10,6 @@ import { voucherRowCurrency } from '../../lib/accounting/voucherCurrencyBalance'
  */
 
 const currencyOption = (code: string) => `${formatCurrencyLabel(code)} (${code})`;
-
-/** متن نرخ با رقم لاتین، بی جداکننده هزارگان و با ممیز «.»؛ نویسه غیرعددی کنار گذاشته می‌شود */
-function rateFromInput(value: string): string {
-  return toEnglishDigits(value).replace(/[,٬\s]/g, '').replace('٫', '.').replace(/[^0-9.]/g, '');
-}
 
 const inputClass = 'px-2 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white';
 
@@ -22,8 +20,9 @@ export function VoucherHeaderCurrencyFields({ value, onChange, currencyLocked = 
   currencyLocked?: boolean;
 }) {
   const currency = voucherRowCurrency(value.currency);
+  const rateId = useId();
   return (
-    <div className="flex items-end gap-2">
+    <div className="flex items-start gap-2">
       <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300">
         ارز سند
         <select
@@ -36,17 +35,22 @@ export function VoucherHeaderCurrencyFields({ value, onChange, currencyLocked = 
         </select>
       </label>
       {currency !== 'IRR' && (
-        <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300">
-          نرخ {formatCurrencyLabel(currency)} به ریال *
-          <input
-            type="text"
-            inputMode="decimal"
-            value={value.rate === '' || value.rate === undefined ? '' : String(value.rate)}
-            onChange={e => onChange({ currency, rate: rateFromInput(e.target.value) })}
+        <div className="flex flex-col gap-1">
+          {/* the field's error stays outside its label, so it never becomes part of the field's name */}
+          <label htmlFor={rateId} className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+            نرخ {formatCurrencyLabel(currency)} به ریال *
+          </label>
+          <DecimalInput
+            id={rateId}
+            min="0"
+            step="any"
+            value={value.rate ?? ''}
+            onValueChange={rate => onChange({ currency, rate })}
             placeholder="نرخ تبدیل"
             className={`${inputClass} w-32 font-mono text-left`}
           />
-        </label>
+          <RialEquivalent value={value.rate} className="mt-0" />
+        </div>
       )}
     </div>
   );
@@ -73,16 +77,17 @@ export function VoucherRowCurrencyCell({ row, header, onChange }: {
         {VOUCHER_CURRENCIES.filter(code => code !== headerCurrency).map(code => <option key={code} value={code}>{currencyOption(code)}</option>)}
       </select>
       {currency !== 'IRR' && (
-        <input
-          type="text"
-          inputMode="decimal"
+        <DecimalInput
+          min="0"
+          step="any"
           aria-label="نرخ ردیف به ریال"
-          value={row.exchangeRate === '' || row.exchangeRate === undefined ? '' : String(row.exchangeRate)}
-          onChange={e => onChange({ exchangeRate: rateFromInput(e.target.value) })}
+          value={row.exchangeRate ?? ''}
+          onValueChange={exchangeRate => onChange({ exchangeRate })}
           placeholder={inherited ? `نرخ سند: ${formatPersianNumber(header.rate, 4)}` : 'نرخ به ریال *'}
           className={`${inputClass} w-28 text-[11px] font-mono text-left`}
         />
       )}
+      {currency !== 'IRR' && <RialEquivalent value={row.exchangeRate} className="mt-0 text-[10px]" />}
     </div>
   );
 }

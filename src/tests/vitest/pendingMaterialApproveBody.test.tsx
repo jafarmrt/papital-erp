@@ -41,7 +41,7 @@ describe('pending material approval body (TD-824)', () => {
     render(<QueryClientProvider client={client}><MemoryRouter><PendingMaterialsPage user={{ id: 1, username: 'keeper' } as never} /></MemoryRouter></QueryClientProvider>);
 
     fireEvent.click(await screen.findByText('تأیید'));
-    fireEvent.change(fieldOf('قیمت / هزینه واحد تخمینی'), { target: { value: '75000' } });
+    fireEvent.change(fieldOf('قیمت / هزینه واحد تخمینی (ریال)'), { target: { value: '75000' } });
     fireEvent.change(fieldOf('نقطه سفارش اولیه'), { target: { value: '12' } });
     fireEvent.click(screen.getByText('تأیید و افزودن به انبار'));
 

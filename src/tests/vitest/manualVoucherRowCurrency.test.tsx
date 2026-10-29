@@ -105,7 +105,8 @@ describe('manual voucher row currency and rate (TD-564)', () => {
     const { container } = render(<QueryClientProvider client={client()}><VoucherCorrectionModal isOpen onClose={() => {}}
       voucher={voucher(72, { status: 'approved', items: usdRows(7) })} accounts={accounts as never} customers={[]} personnelList={[]}
       onCorrect={onCorrect} /></QueryClientProvider>);
-    expect((screen.getByLabelText('نرخ دلار به ریال *') as HTMLInputElement).value).toBe('600000');
+    // v11: the rate is the shared number field, shown with Persian digits and thousands separators
+    expect((screen.getByLabelText('نرخ دلار به ریال *') as HTMLInputElement).value).toBe('۶۰۰٬۰۰۰');
     fireEvent.click(screen.getByText('تصحیح مبالغ بدهکار و بستانکار'));
     fireEvent.submit(container.querySelector('form')!);
     await waitFor(() => expect(onCorrect).toHaveBeenCalledTimes(1));

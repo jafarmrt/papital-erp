@@ -2,6 +2,7 @@ import { CheckSquare, Square, AlertCircle, DollarSign, RefreshCw, ArrowDownRight
 import type { Item, ProjectProductItem } from '../../../types';
 import { formatPersianNumber, toPersianDigits, formatPersianCode } from '../../../utils';
 import { DecimalInput } from '../../common/DecimalInput';
+import { RialEquivalent } from '../../common/RialEquivalent';
 import type { ProjectDelivery } from './useProjectDelivery';
 
 interface DeliveryProductRowProps {
@@ -103,6 +104,7 @@ export function DeliveryProductRow({ product: p, index: idx, projectItemId, cata
             className="w-24 px-1.5 py-1 bg-white border border-slate-300 rounded-lg text-center font-mono font-bold text-xs focus:ring-2 focus:ring-amber-400 focus:outline-none placeholder:text-slate-400"
           />
           <span className="text-slate-400 text-[10px]">ریال</span>
+          <RialEquivalent inline value={enteredCost !== undefined && enteredCost > 0 ? enteredCost : ''} className="text-[10px]" />
         </div>
 
         {/* Single Delivery Button */}

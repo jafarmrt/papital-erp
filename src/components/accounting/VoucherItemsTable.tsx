@@ -175,6 +175,7 @@ export function VoucherItemsTable({
                         ref={itemRefs.current[idx]?.debitRef}
                         value={it.debit}
                         variant="table"
+                        showTomanEquivalent={rowCurrency === 'IRR'}
                         onFocus={() => setActiveRowIndex(idx)}
                         onKeyDown={(e) => {
                           // Space key in empty debit: auto-balance
@@ -218,6 +219,7 @@ export function VoucherItemsTable({
                         ref={itemRefs.current[idx]?.creditRef}
                         value={it.credit}
                         variant="table"
+                        showTomanEquivalent={rowCurrency === 'IRR'}
                         onFocus={() => setActiveRowIndex(idx)}
                         onKeyDown={(e) => {
                           // Space key in empty credit: auto-balance

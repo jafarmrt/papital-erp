@@ -1,5 +1,6 @@
 import { useId } from 'react';
 import { DecimalInput } from '../common/DecimalInput';
+import { RialEquivalent } from '../common/RialEquivalent';
 import { toPersianDigits } from '../../utils/persianNumber';
 import type { RialDisplay } from '../../lib/rialDisplay';
 import type { StatutoryRemittanceDraftLine } from '../../lib/treasury/statutoryRemittance';
@@ -46,6 +47,7 @@ export function StatutoryRemittanceLines({ lines, rial, disabled, onChange }: Pr
                 <DecimalInput id={amountId} value={line.amount} min={0} disabled={disabled || !line.include}
                   onValueChange={text => onChange(line.personnelId, { amount: text })}
                   className="w-32 px-2 py-1.5 text-xs font-mono bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg disabled:opacity-50" />
+                <RialEquivalent value={line.amount} className="mt-0.5" />
               </td>
             </tr>
           );
