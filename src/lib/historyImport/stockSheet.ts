@@ -285,7 +285,11 @@ function resolveSalesRow(parsed: ParsedStockRow, mapping: StockImportMapping, ac
   return { status: 'ready', parsed, row };
 }
 
-const salesDayKey = (date: string): string => date.trim().split(/[-/.]/).map(part => part.padStart(2, '0')).join('-');
+/** The day of a sales line as the window reads it; an empty or unreadable date (which the window puts in no month) is a day of its own. */
+const salesDayKey = (date: string): string => {
+  const m = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(date.trim());
+  return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : `«${date.trim() || 'خالی'}»`;
+};
 
 /**
  * An Excel invoice is imported whole or not at all: when a line of it is left out (its code or customer left out, its
@@ -294,10 +298,11 @@ const salesDayKey = (date: string): string => date.trim().split(/[-/.]/).map(par
  */
 export function wholeSalesInvoices(resolved: ResolvedStockRow[], allRows: ParsedStockRow[] = []): ResolvedStockRow[] {
   const blocked = new Map<string, string>();
-  // an invoice has one date: lines of one Excel number on two days (perhaps in two months, imported apart) are a data error
+  // an invoice has one date: lines of one Excel number on two days (perhaps in two months, imported apart) or with an empty
+  // or unreadable date (in no month's view) are a data error
   const daysOf = new Map<string, Set<string>>();
   for (const p of allRows) {
-    if (p.shape !== 'sales' || !p.invoiceRef || !p.date) continue;
+    if (p.shape !== 'sales' || !p.invoiceRef) continue;
     daysOf.set(p.invoiceRef, (daysOf.get(p.invoiceRef) ?? new Set()).add(salesDayKey(p.date)));
   }
   for (const [ref, days] of daysOf) {

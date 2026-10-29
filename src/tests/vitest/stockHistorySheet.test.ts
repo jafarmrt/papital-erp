@@ -133,6 +133,15 @@ describe('sales sheet (tool 3)', () => {
     const month3 = split.filter(p => p.date.replace(/\//g, '-').startsWith('1405-03') || p.date.startsWith('1405/3'));
     const out = wholeSalesInvoices(month3.map(p => resolveStockRow(p, salesMapping(), lookups)), split);
     expect(out.map(r => r.status)).toEqual(['unresolved', 'ready', 'ready']);
+    // a line with no date, or a date the window cannot place in a month, holds its invoice back too
+    for (const second of ['', '1405.03.31']) {
+      const lines = parseStockSheet('اقلام فاکتور', [
+        SALES_HEADER,
+        ['62', '1405-03-31', 'گالری الف', 'P-001', 'دستبند', 1, '', 1000, 1000, 'ثبت نهایی', ''],
+        ['62', second, 'گالری الف', 'P-002', 'گوشواره', 1, '', 1000, 1000, 'ثبت نهایی', ''],
+      ]);
+      expect(wholeSalesInvoices([resolveStockRow(lines[0], salesMapping(), lookups)], lines).map(r => r.status)).toEqual(['unresolved']);
+    }
   });
   it('brings a sales return with no warehouse back to the sales warehouse', () => {
     expect(resolveStockRow(ins[3], mapping({ salesWarehouse: 'SHOW' }), lookups)).toMatchObject({ status: 'ready', row: { kind: 'return', warehouse: 'SHOW' } });
