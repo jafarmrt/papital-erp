@@ -25,7 +25,7 @@ import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { getDefaultWarehouseCode } from '../inventory/warehouseResolver.js';
 import { ImportItemIndex } from '../items/itemImportIndex.js';
 import { lockHistoryImport, runImportRows, type RowAttempt } from './importRunner.js';
-import { listOldOpenings, withdrawOldOpenings } from '../inventory/itemOpeningReplay.js';
+import { REPLAY_OPENING_NOTES, listOldOpenings, withdrawOldOpenings } from '../inventory/itemOpeningReplay.js';
 import { orm } from '../../db/drizzle.js';
 import { idempotentTransaction } from '../../middleware/idempotency.js';
 import type { OldOpeningList, OldOpeningWithdrawResult } from '../../lib/historyImport/oldOpening.js';
@@ -69,7 +69,8 @@ interface PreparedRow {
 }
 
 export const OPENING_KARDEX_REF = 'ثبت موجودی افتتاحیه';
-const OPENING_KARDEX_NOTES = 'موجودی اولیه از ورود سابقه اکسل';
+/** the replay's opening rows carry these notes, so tool 8 never takes them back as an old opening */
+const OPENING_KARDEX_NOTES = REPLAY_OPENING_NOTES;
 
 const faDate = (iso: string) => toPersianDigits(isoToJalaliDate(iso));
 /** opening stock is entered on the first day of 1405 only (owner's decision, 6 Aban 1405), as the window sends it */

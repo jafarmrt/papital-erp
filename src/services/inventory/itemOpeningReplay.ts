@@ -37,10 +37,18 @@ interface OpeningRow extends Record<string, unknown> {
   lastDay: string;
   moved: boolean;
   onDocument: boolean;
+  inWorkflow: boolean;
   vouchers: Array<{ id: number; number: string | number; status: string }> | null;
 }
 
 const faDate = (iso: string) => toPersianDigits(isoToJalaliDate(iso));
+
+/**
+ * The old openings only: the replay's own opening rows (written by the stock import on 1 Farvardin with these notes) are
+ * the data the replay entered, not an old opening, so this step never lists or takes them back.
+ */
+export const REPLAY_OPENING_NOTES = 'موجودی اولیه از ورود سابقه اکسل';
+const OLD_OPENING_ROW = sql`(${OPENING_KARDEX_ROW} AND t.notes IS DISTINCT FROM ${REPLAY_OPENING_NOTES})`;
 
 async function openingRows(tx: DbExecutor, itemIds?: number[]): Promise<OpeningRow[]> {
   const only = itemIds ? sql`AND t.item_id IN (${sql.join(itemIds.map(id => sql`${id}`), sql`, `)})` : sql``;
@@ -49,14 +57,16 @@ async function openingRows(tx: DbExecutor, itemIds?: number[]): Promise<OpeningR
       SELECT t.item_id, SUM(t.quantity) AS quantity, SUM(t.quantity * t.unit_price) AS value,
              to_char(MIN(t.date), 'YYYY-MM-DD') AS day, to_char(MAX(t.date), 'YYYY-MM-DD') AS last_day
         FROM transactions t
-       WHERE ${OPENING_KARDEX_ROW} ${only}
+       WHERE ${OLD_OPENING_ROW} ${only}
        GROUP BY t.item_id
     )
     SELECT op.item_id AS "itemId", i.code, i.name, i.unit, op.quantity::text AS quantity, round(op.value, 4)::text AS value,
            op.day, op.last_day AS "lastDay",
            EXISTS (SELECT 1 FROM transactions t
-                    WHERE t.item_id = op.item_id AND ${LEDGER_ROW_FILTER} AND NOT ${OPENING_KARDEX_ROW}) AS moved,
+                    WHERE t.item_id = op.item_id AND ${LEDGER_ROW_FILTER} AND NOT ${OLD_OPENING_ROW}) AS moved,
            EXISTS (SELECT 1 FROM document_items di WHERE di.item_id = op.item_id AND di.is_deleted = 0) AS "onDocument",
+           EXISTS (SELECT 1 FROM workflow_instances w
+                    WHERE w.entity_type = 'item' AND w.entity_id = op.item_id::text AND w.status = 'IN_PROGRESS') AS "inWorkflow",
            (SELECT json_agg(json_build_object('id', jv.id, 'number', jv.voucher_number, 'status', jv.status) ORDER BY jv.id)
               FROM item_opening_voucher_items l
               JOIN journal_vouchers jv ON jv.id = l.voucher_id AND jv.is_deleted = 0
@@ -90,7 +100,9 @@ async function classify(tx: DbExecutor, rows: OpeningRow[]): Promise<OldOpeningI
     };
     const refuse = (reason: string) => { item.withdrawable = false; item.reason = reason; };
     if (r.moved || r.onDocument) refuse('این کالا گردش یا سند دیگری هم دارد؛ موجودی اولیه‌اش برداشته نمی‌شود.');
-    else if (vouchers.length === 0) refuse('موجودی اولیهٔ این کالا سند افتتاحیه ندارد (شاید تعریفش هنوز در گردش کار است)؛ با دست بررسی شود.');
+    // an opening without a voucher (a zero cost, a voucher deleted by hand) is taken back too, unless the item's definition
+    // still waits in its workflow: its approval issues the voucher, its rejection takes the opening back
+    else if (vouchers.length === 0 && r.inWorkflow) refuse('تعریف این کالا هنوز در گردش کار است؛ اول آن را تأیید یا رد کنید.');
     else if (vouchers.some(v => v.status !== 'draft')) refuse(`سند افتتاحیهٔ ${toPersianDigits(vouchers.filter(v => v.status !== 'draft').map(v => v.number).join('، '))} تأیید شده است؛ اول آن را به پیش‌نویس برگردانید.`);
     else if (await FiscalPeriodService.isClosedShared(r.day, tx) || await FiscalPeriodService.isClosedShared(r.lastDay, tx)) refuse(`موجودی اولیهٔ این کالا (${faDate(r.day)}) در سال مالی بسته است.`);
     list.push(item);
@@ -101,14 +113,17 @@ async function classify(tx: DbExecutor, rows: OpeningRow[]): Promise<OldOpeningI
   for (let changed = true; changed;) {
     changed = false;
     for (const [voucherId, ids] of shared) {
-      const blocker = ids.map(id => byId.get(id)).find(i => !i || !i.withdrawable);
-      if (!blocker && ids.every(id => byId.has(id))) continue;
+      const blocker = ids.map(id => byId.get(id)).find(i => i !== undefined && !i.withdrawable);
+      const missing = ids.filter(id => !byId.has(id));
+      if (!blocker && missing.length === 0) continue;
       for (const id of ids) {
         const i = byId.get(id);
         if (i?.withdrawable) {
           i.withdrawable = false;
-          const number = i.vouchers.find(v => v.id === voucherId)?.number ?? String(voucherId);
-          i.reason = `سند افتتاحیهٔ ${toPersianDigits(number)} کالای دیگری هم دارد${blocker ? ` («${blocker.name}»)` : ''} که موجودی‌اش برداشته نمی‌شود.`;
+          const number = toPersianDigits(i.vouchers.find(v => v.id === voucherId)?.number ?? String(voucherId));
+          i.reason = blocker
+            ? `سند افتتاحیهٔ ${number} کالای «${blocker.name}» را هم دارد که موجودی‌اش برداشته نمی‌شود.`
+            : `سند افتتاحیهٔ ${number} ${toPersianDigits(String(missing.length))} کالای دیگر هم دارد که انتخاب نشده‌اند؛ همهٔ کالاهای یک سند با هم برداشته می‌شوند.`;
           changed = true;
         }
       }
@@ -149,7 +164,7 @@ export async function withdrawOldOpenings(
   const voucherIds = [...new Set(list.flatMap(i => i.vouchers.map(v => v.id)))].sort((a, b) => a - b);
   for (const voucherId of voucherIds) await ItemOpeningService.deleteDraftOpeningVoucher(tx, voucherId, actor);
   for (const item of list) {
-    const opening = await tx.execute(sql`SELECT t.id FROM transactions t WHERE t.item_id = ${item.itemId} AND ${OPENING_KARDEX_ROW} ORDER BY t.id`);
+    const opening = await tx.execute(sql`SELECT t.id FROM transactions t WHERE t.item_id = ${item.itemId} AND ${OLD_OPENING_ROW} ORDER BY t.id`);
     const openingIds = ((opening.rows ?? []) as Array<{ id: number }>).map(r => Number(r.id));
     const quantity = await reverseOpeningRows(tx, item.itemId, openingIds, {
       performedByUserId: actor.userId,
@@ -165,7 +180,7 @@ export async function withdrawOldOpenings(
       action: 'UPDATE',
       entity: 'کالا',
       entityId: String(item.itemId),
-      description: `برداشتن موجودی اولیهٔ قبلی کالای «${item.name}» (${item.code})، ${quantity} واحد از ${faDate(item.day)}، پیش از ورود سابقه اکسل؛ سند افتتاحیهٔ پیش‌نویس ${item.vouchers.map(v => v.number).join('، ')} حذف شد`,
+      description: `برداشتن موجودی اولیهٔ قبلی کالای «${item.name}» (${item.code})، ${quantity} واحد از ${faDate(item.day)}، پیش از ورود سابقه اکسل${item.vouchers.length > 0 ? `؛ سند افتتاحیهٔ پیش‌نویس ${item.vouchers.map(v => v.number).join('، ')} حذف شد` : ''}`,
       details: { quantity: item.quantity, value: item.value, day: item.day, vouchers: item.vouchers.map(v => v.id) },
     });
   }

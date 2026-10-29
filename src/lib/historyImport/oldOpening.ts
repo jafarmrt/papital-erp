@@ -32,4 +32,5 @@ export interface OldOpeningWithdrawResult {
   vouchers: number;
 }
 
-export const OLD_OPENING_WITHDRAW_MAX_ITEMS = 500;
+/** an item Excel import (up to 5,000 rows) issues one voucher, taken back whole in one request */
+export const OLD_OPENING_WITHDRAW_MAX_ITEMS = 5000;

@@ -56,6 +56,8 @@ export async function runHistoryImportOldOpeningsV11Tests(shouldRun: ShouldRun):
       });
       const approved = await createItem('approved');
       await orm.execute(sql`UPDATE journal_vouchers SET status = 'approved' WHERE id IN (SELECT voucher_id FROM item_opening_voucher_items WHERE item_id = ${approved.id})`);
+      // an opening without a voucher (zero cost, or its draft deleted by hand) is taken back too
+      const bare = await createItem('bare', false);
       const e = await createItem('e', false);
       const f = await createItem('f', false);
       await orm.transaction(tx => ItemOpeningService.issueImportOpeningVoucher(tx, [e.id, f.id], { userId: user.id, username: user.username }));
@@ -64,7 +66,7 @@ export async function runHistoryImportOldOpeningsV11Tests(shouldRun: ShouldRun):
       if (!ok(listRes)) throw new Error(`the list returned ${brief(listRes)}`);
       const list = listRes.body as OldOpeningList;
       const entry = (itemId: number) => list.items.find(i => i.itemId === itemId);
-      for (const it of [a, b, e, f]) if (!entry(it.id)?.withdrawable) problems.push(`item ${it.code} listed ${JSON.stringify(entry(it.id))}, expected withdrawable`);
+      for (const it of [a, b, e, f, bare]) if (!entry(it.id)?.withdrawable) problems.push(`item ${it.code} listed ${JSON.stringify(entry(it.id))}, expected withdrawable`);
       for (const it of [moved, approved]) if (entry(it.id)?.withdrawable !== false || !entry(it.id)?.reason) problems.push(`item ${it.code} listed ${JSON.stringify(entry(it.id))}, expected refused with a reason`);
       if (entry(a.id)?.quantity !== '10' || entry(a.id)?.value !== '1000' || entry(a.id)?.day !== today) problems.push(`item a listed ${JSON.stringify(entry(a.id))}, expected 10 worth 1000 on ${today}`);
 
@@ -75,9 +77,9 @@ export async function runHistoryImportOldOpeningsV11Tests(shouldRun: ShouldRun):
       }
       if (await stockOf(a.id) !== 10 || await liveVouchers(a.id) !== 1) problems.push('a refused request changed item a');
 
-      const done = await admin.post(WITHDRAW, { itemIds: [a.id, b.id, e.id, f.id] });
-      if (!ok(done) || done.body.items !== 4 || done.body.vouchers !== 3) problems.push(`the withdrawal returned ${brief(done)}, expected 4 items and 3 vouchers`);
-      for (const it of [a, b, e, f]) {
+      const done = await admin.post(WITHDRAW, { itemIds: [a.id, b.id, e.id, f.id, bare.id] });
+      if (!ok(done) || done.body.items !== 5 || done.body.vouchers !== 3) problems.push(`the withdrawal returned ${brief(done)}, expected 5 items and 3 vouchers`);
+      for (const it of [a, b, e, f, bare]) {
         if (await stockOf(it.id) !== 0) problems.push(`item ${it.code} holds ${await stockOf(it.id)} after the withdrawal`);
         if (await liveVouchers(it.id) !== 0) problems.push(`item ${it.code} still has a live opening voucher`);
       }
@@ -98,10 +100,10 @@ export async function runHistoryImportOldOpeningsV11Tests(shouldRun: ShouldRun):
       if (!ok(posted) || !result.committed) problems.push(`the replay returned ${brief(posted)}, expected both rows committed`);
       if (await stockOf(a.id) !== 10) problems.push(`item a holds ${await stockOf(a.id)} after the replay, expected 10 (7 + 3)`);
 
-      // the replay's own opening is listed again but now refused: the item has moved since
+      // the replay's own opening is never listed as an old opening (review of #431: it could undo the replay)
       const again = (await admin.get(LIST)).body as OldOpeningList;
       const aAgain = again.items.find(i => i.itemId === a.id);
-      if (aAgain?.withdrawable !== false) problems.push(`after the replay item a lists ${JSON.stringify(aAgain)}, expected refused (it moved)`);
+      if (aAgain) problems.push(`after the replay item a lists ${JSON.stringify(aAgain)}, expected the replay's opening left out`);
       if (again.items.some(i => i.itemId === b.id)) problems.push('item b is listed again after its opening was taken back');
       if (problems.length > 0) throw new Error(problems.join(' | '));
       return 'old openings are taken back all or nothing and the replay then enters them on 1 Farvardin';
