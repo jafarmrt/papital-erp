@@ -682,6 +682,8 @@ export function usePiecework() {
       reloadAfterPayrollChange();
     } catch (err) {
       hotToast.error(errorMessageOf(err) || 'خطا در به‌روزرسانی وضعیت فیش');
+      // the payslip may have changed since the list was read (409): reload it so the next try sends the current net
+      reloadAfterPayrollChange();
     }
   };
 
