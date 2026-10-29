@@ -271,7 +271,7 @@ function resolveSalesRow(parsed: ParsedStockRow, mapping: StockImportMapping, ac
   if (isEuroPricePolicy(parsed.pricePolicy)) return unresolved(SALE_EURO_POLICY_MESSAGE);
   if (Number(parsed.unitPrice) < SALE_MIN_UNIT_PRICE_RIAL) return unresolved(SALE_PRICE_TOO_LOW_MESSAGE(parsed.unitPrice));
   const leadId = parsed.leadRef ? Number(parsed.leadRef) : null;
-  if (parsed.leadRef && !(Number.isInteger(leadId) && (leadId as number) > 0 && (leadId as number) <= 2147483647)) {
+  if (parsed.leadRef && !(/^\d+$/.test(parsed.leadRef.trim()) && (leadId as number) > 0 && (leadId as number) <= 2147483647)) {
     return unresolved(`«شماره پرونده» (${parsed.leadRef}) یک عدد درست نیست؛ شمارهٔ پرونده‌ای که این فاکتور آن را بسته بنویسید یا خالی بگذارید.`);
   }
   if (parsed.lineTotal && Math.abs(decimalTimes(parsed.quantity, parsed.unitPrice) - Number(parsed.lineTotal)) > 1) {

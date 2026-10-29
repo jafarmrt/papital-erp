@@ -1,7 +1,8 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { DbExecutor, DbTransaction } from '../../db/drizzle.js';
 import { crmLeads, documents, historyImportPurchaseRefs, historyImportRefs } from '../../db/schema.js';
 import { markLeadWonByInvoice } from '../crm/crmLeadOutcome.js';
+import { isClosedLead } from '../../lib/crm/leadProformaRule.js';
 import { permissionHolderUserIdsWith } from '../notifications/notificationRecipients.js';
 import { ForbiddenError, ValidationError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
@@ -34,6 +35,8 @@ import { orm } from '../../db/drizzle.js';
 import { idempotentTransaction } from '../../middleware/idempotency.js';
 import type { OldOpeningList, OldOpeningWithdrawResult } from '../../lib/historyImport/oldOpening.js';
 
+type Lead = typeof crmLeads.$inferSelect;
+
 /**
  * v11 history import, tool 2: the warehouse rows of 1405 from Excel (decision of the owner, 6 Aban 1405: all of 1405 is
  * entered again from 1 Farvardin, each movement on its own day). Each document goes through the service the warehouse
@@ -56,6 +59,8 @@ export interface StockImportOptions {
    * body): a row of another kind is refused, as the hand entry would be
    */
   allowedKinds: ReadonlySet<StockImportKind>;
+  /** whether the user may link a document to a sales file (`crm.manage`, as the invoice form asks); computed in the route */
+  mayLinkLeads?: boolean;
 }
 
 /** The kind of `history_import_refs` row a past sales invoice is recorded under. */
@@ -253,32 +258,46 @@ function assertOneInvoice(group: PreparedRow[]): void {
  * «شماره پرونده» of the sales sheet (owner's decision 7 Aban 1405): the invoice closed that sales file, so it is linked to
  * it and the file moves to «فروش موفق», as when the file's proforma becomes a final invoice (the invoice takes the file's
  * proforma place, so voiding it releases the file the same way). Only by the number the user wrote, never by the customer's
- * name. Refused: a file that does not exist, of another customer, already «از دست رفته» (left as it is), or that already
- * has a proforma or invoice (one invoice per file).
+ * name. The file is locked and checked before the invoice is written (the order the invoice form locks in). Refused: a file
+ * that does not exist, without a customer or of another customer, closed («از دست رفته» left as it is, or already won) or
+ * archived, or that already has a proforma or invoice (one invoice per file).
  */
-async function closeLeadWithImportedInvoice(
+async function lockLeadForImportedInvoice(
   tx: DbExecutor,
   leadId: number,
-  invoice: { id: number; customerId: number | null; excelRef: string },
-  options: StockImportOptions,
-): Promise<void> {
+  invoice: { customerId: number | null; excelRef: string },
+): Promise<Lead> {
   const [lead] = await tx.select().from(crmLeads).where(and(eq(crmLeads.id, leadId), eq(crmLeads.isDeleted, 0))).for('update');
   const fa = toPersianDigits(String(leadId));
   const invoiceFa = toPersianDigits(invoice.excelRef);
   if (!lead) throw new ValidationError(`پرونده فروش شمارهٔ ${fa} (ستون «شماره پرونده» فاکتور ${invoiceFa}) در برنامه نیست.`, undefined, 'HISTORY_IMPORT_LEAD_NOT_FOUND');
-  if (!lead.customerId || lead.customerId !== invoice.customerId) {
+  if (!lead.customerId) {
+    throw new ValidationError(`پرونده فروش شمارهٔ ${fa} مشتری ندارد؛ اول مشتری پرونده را در «ارتباط با مشتری» تعیین کنید، یا «شماره پرونده» فاکتور ${invoiceFa} را خالی بگذارید.`, undefined, 'HISTORY_IMPORT_LEAD_OTHER_CUSTOMER');
+  }
+  if (lead.customerId !== invoice.customerId) {
     throw new ValidationError(`پرونده فروش شمارهٔ ${fa} مال مشتری دیگری است؛ «شماره پرونده» فاکتور ${invoiceFa} را درست کنید.`, undefined, 'HISTORY_IMPORT_LEAD_OTHER_CUSTOMER');
   }
   if (lead.stage === 'lost' || lead.status === 'lost') {
     throw new ValidationError(`پرونده فروش شمارهٔ ${fa} «از دست رفته» است و فاکتور ${invoiceFa} به آن وصل نمی‌شود؛ اگر این فروش همان پرونده است، اول پرونده را در «ارتباط با مشتری» باز کنید، وگرنه «شماره پرونده» را خالی بگذارید.`, undefined, 'HISTORY_IMPORT_LEAD_LOST');
   }
-  if (Number(lead.hasProforma) === 1 && lead.proformaId) {
+  if (isClosedLead(lead) || lead.status === 'archived') {
+    throw new ValidationError(`پرونده فروش شمارهٔ ${fa} بسته یا بایگانی است و فاکتور ${invoiceFa} به آن وصل نمی‌شود؛ «شماره پرونده» را درست کنید یا خالی بگذارید.`, undefined, 'HISTORY_IMPORT_LEAD_CLOSED');
+  }
+  const [linked] = await tx.select({ id: documents.id }).from(documents)
+    .where(and(eq(documents.crmLeadId, lead.id), eq(documents.isDeleted, 0), inArray(documents.type, ['invoice', 'proforma']), ne(documents.status, 'voided')))
+    .limit(1);
+  if ((Number(lead.hasProforma) === 1 && lead.proformaId) || linked) {
     throw new ValidationError(`پرونده فروش شمارهٔ ${fa} پیش‌فاکتور یا فاکتور دیگری دارد؛ هر پرونده فقط یک فاکتور می‌گیرد.`, undefined, 'HISTORY_IMPORT_LEAD_HAS_INVOICE');
   }
-  const [doc] = await tx.select({ refNumber: documents.refNumber }).from(documents).where(eq(documents.id, invoice.id));
-  await tx.update(documents).set({ crmLeadId: lead.id }).where(eq(documents.id, invoice.id));
-  await tx.update(crmLeads).set({ hasProforma: 1, proformaId: invoice.id }).where(eq(crmLeads.id, lead.id));
-  await markLeadWonByInvoice(tx as DbTransaction, lead, { id: invoice.id, refNumber: doc?.refNumber ?? null },
+  return lead;
+}
+
+/** The imported invoice takes the locked file's proforma place and the file moves to «فروش موفق». */
+async function closeLeadWithImportedInvoice(tx: DbExecutor, lead: Lead, invoiceId: number, options: StockImportOptions): Promise<void> {
+  const [doc] = await tx.select({ refNumber: documents.refNumber }).from(documents).where(eq(documents.id, invoiceId));
+  await tx.update(documents).set({ crmLeadId: lead.id }).where(eq(documents.id, invoiceId));
+  await tx.update(crmLeads).set({ hasProforma: 1, proformaId: invoiceId }).where(eq(crmLeads.id, lead.id));
+  await markLeadWonByInvoice(tx as DbTransaction, lead, { id: invoiceId, refNumber: doc?.refNumber ?? null },
     { id: options.userId ?? null, name: options.username || 'سیستم' }, permissionHolderUserIdsWith);
 }
 
@@ -295,6 +314,9 @@ async function postDocument(tx: DbExecutor, group: PreparedRow[], options: Stock
     const recorded = await documentOfExcelRef(tx, excelRef);
     if (recorded) throw new ValidationError(`فاکتور ${toPersianDigits(excelRef)} اکسل پیش‌تر با شمارهٔ ${toPersianDigits(recorded.refNumber)} در برنامه ثبت شده است.`, undefined, 'HISTORY_IMPORT_INVOICE_RECORDED');
   }
+  const lead = kind === 'sale' && first.row.leadId
+    ? await lockLeadForImportedInvoice(tx, first.row.leadId, { customerId: first.row.customerId ?? null, excelRef })
+    : null;
   if (kind === 'return') {
     const invoice = await documentOfExcelRef(tx, excelRef);
     if (!invoice) throw new ValidationError(`فاکتور ${toPersianDigits(excelRef)} اکسل در برنامه نیست؛ برگشت پس از ثبت فاکتورش وارد می‌شود.`, undefined, 'HISTORY_IMPORT_INVOICE_MISSING');
@@ -326,9 +348,7 @@ async function postDocument(tx: DbExecutor, group: PreparedRow[], options: Stock
     createdAudit: options.audit ? { actor: options.audit, note: `${DOC_TITLE_OF[kind]} از ورود سابقه اکسل` } : undefined,
   });
   if (kind === 'sale') await recordExcelRef(tx, excelRef, docId);
-  if (kind === 'sale' && first.row.leadId) {
-    await closeLeadWithImportedInvoice(tx, first.row.leadId, { id: docId, customerId: first.row.customerId ?? null, excelRef }, options);
-  }
+  if (lead) await closeLeadWithImportedInvoice(tx, lead, docId, options);
   // tool 6: a past supplier payment that names one of these numbers settles this receipt first
   const purchaseRefs = kind === 'purchase' ? purchaseRefKeys(first.row.slipRef) : [];
   if (purchaseRefs.length > 0 && first.row.supplierId) {
@@ -457,6 +477,11 @@ async function postInOrder(tx: DbExecutor, attempt: RowAttempt, prepared: Prepar
 
     if (!options.allowedKinds.has(p.row.kind)) {
       const err = new ForbiddenError(`ثبت ${KIND_TITLE[p.row.kind]} مجوز همان فرم را می‌خواهد که شما ندارید.`, { kind: p.row.kind }, 'HISTORY_IMPORT_KIND_FORBIDDEN');
+      markError(group, err.message);
+      continue;
+    }
+    if (group.some(q => q.row.leadId) && !options.mayLinkLeads) {
+      const err = new ForbiddenError('وصل کردن فاکتور به پرونده فروش («شماره پرونده») مجوز مدیریت ارتباط با مشتری را می‌خواهد که شما ندارید؛ ستون را خالی بگذارید یا از مدیر بخواهید.', undefined, 'HISTORY_IMPORT_LEAD_FORBIDDEN');
       markError(group, err.message);
       continue;
     }
