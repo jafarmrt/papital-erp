@@ -19,6 +19,8 @@ const ATTACHMENT_BODY_ROUTES: Array<[string, RegExp]> = [
   ['POST', /^\/api\/accounting\/cheques\/?$/],
   ['POST', /^\/api\/projects\/?$/],
   ['PUT', /^\/api\/projects\/\d+\/?$/],
+  // v11 «افزودن پیوست»: one file onto a recorded document, treasury row, cheque or voucher
+  ['POST', /^\/api\/record-attachments\/[a-z_]+\/\d+\/?$/],
 ];
 
 export function acceptsAttachmentBody(method: string, path: string): boolean {

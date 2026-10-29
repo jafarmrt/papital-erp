@@ -22,6 +22,7 @@ under «### Unreleased», then one section per released version.
 ## Version 11.x Series (Active — see `src/data/changelogs/11.ts`)
 
 ### Unreleased
+- «افزودن پیوست» on recorded records (v11, owner decision 7 Aban 1405): a recorded document, treasury row, cheque or voucher takes files after it is saved, from its list or details window; before approval a file can be added or removed, after approval only added (kept with name and time), and in a closed fiscal year nothing changes; every change is audited and no amount is touched.
 - History import of sales (tool 3): optional «شماره پرونده» column links an invoice to its CRM lead and marks it won (one invoice per lead, never by name, lost leads refused); sale lines with a euro price policy or a unit price under 1,000 rial are refused.
 - «پایان ورود سابقه» (v11, tool 9 of the 1405 replay, owner decision 7 Aban 1405): once the replay is done the system admin closes the Excel history imports for good from the import windows, after a warning; the import buttons leave the menus and the server refuses every import call, preview included.
 - Treasury history import, colleague rows (v11, tool 1 of the 1405 replay): a payment to a colleague with use «پرداخت دیگر» now asks for its own counter account (the window lists those rows with a use picker, or the Excel «کد حساب مقابل» column fills it) instead of one shared account, and the running-account guess also reads «ازجیب», «خرجکرد» and «هزینه‌کرد» whatever the spacing.

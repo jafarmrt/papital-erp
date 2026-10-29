@@ -50,6 +50,8 @@ interface TreasuryTransactionsTableProps {
   onCopy: (text: string, id: string) => void;
   onExportExcel: () => void;
   onViewAttachments: (info: { title: string; attachments: FinancialAttachment[] }) => void;
+  /** v11 «افزودن پیوست»: the row's files window (see, add, and remove before approval); without it the files only open */
+  onOpenAttachments?: (tx: TreasuryTransaction) => void;
   onVoidTransaction: (tx: TreasuryTransaction) => void;
   /** v9.0.272 (TD-779): جدا کردن دریافت یا پرداخت از سندش («علی‌الحساب») */
   onDetachDocument?: (tx: TreasuryTransaction) => void;
@@ -86,6 +88,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
   onCopy,
   onExportExcel,
   onViewAttachments,
+  onOpenAttachments,
   onVoidTransaction,
   onDetachDocument,
   onRelinkDocument,
@@ -324,16 +327,17 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                       <div className="truncate text-slate-600 dark:text-slate-300 text-[11px]" title={tx.description || undefined}>
                         {tx.description || '—'}
                       </div>
-                      {Array.isArray(tx.attachments) && tx.attachments.length > 0 && (
+                      {((Array.isArray(tx.attachments) && tx.attachments.length > 0) || onOpenAttachments) && (
                         <button
-                          onClick={() => onViewAttachments({
+                          type="button"
+                          onClick={() => (onOpenAttachments ? onOpenAttachments(tx) : onViewAttachments({
                             title: `پیوست‌های سند ${tx.transactionNumber}`,
                             attachments: tx.attachments as FinancialAttachment[],
-                          })}
+                          }))}
                           className="inline-flex items-center gap-1 text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline mt-0.5 font-bold cursor-pointer"
                         >
                           <Paperclip size={10} />
-                          {formatPersianNumber(tx.attachments.length)} فایل پیوست
+                          {Array.isArray(tx.attachments) && tx.attachments.length > 0 ? `${formatPersianNumber(tx.attachments.length)} فایل پیوست` : 'افزودن پیوست'}
                         </button>
                       )}
                     </td>
