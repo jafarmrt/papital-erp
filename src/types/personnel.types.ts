@@ -160,8 +160,10 @@ export interface PieceworkPayroll {
   notes?: string;
   items?: PieceworkLog[];
   createdAt?: string;
-  /** v10.0.193 (TD-1084): صادرکننده فیش؛ او فیش را تأیید و پرداخت نمی‌کند */
+  /** v10.0.193 (TD-1084): صادرکننده فیش؛ او فیش را تأیید نمی‌کند و v11: پس از تأیید کاربر دیگری آن را می‌پردازد */
   createdById?: number | null;
+  /** v11: کاربری که فیش را تأیید کرد؛ فیش تأییدشده پیش از v11 آن را ندارد */
+  approvedById?: number | null;
   isPrepayment?: number | null;
   prepaymentReason?: string | null;
   voucherId?: number | null;

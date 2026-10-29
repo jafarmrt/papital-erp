@@ -1,11 +1,12 @@
 import { eq, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { documents, historyImportRefs } from '../../db/schema.js';
+import { documents, historyImportPurchaseRefs, historyImportRefs } from '../../db/schema.js';
 import { ForbiddenError, ValidationError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
 import { historyImportAmount } from '../../lib/historyImport/historyImportAmount.js';
+import { purchaseRefKeys } from '../../lib/historyImport/purchaseRef.js';
 import { STOCK_OPENING_DAY } from '../../lib/historyImport/stockSheet.js';
 import {
   STOCK_IMPORT_INCOMING_KINDS, excelInvoiceNumber, stockImportDocumentKey, stockImportDuplicateKey, stockImportNotes, stockImportOrder,
@@ -285,6 +286,13 @@ async function postDocument(tx: DbExecutor, group: PreparedRow[], options: Stock
     createdAudit: options.audit ? { actor: options.audit, note: `${DOC_TITLE_OF[kind]} از ورود سابقه اکسل` } : undefined,
   });
   if (kind === 'sale') await recordExcelRef(tx, excelRef, docId);
+  // tool 6: a past supplier payment that names one of these numbers settles this receipt first
+  const purchaseRefs = kind === 'purchase' ? purchaseRefKeys(first.row.slipRef) : [];
+  if (purchaseRefs.length > 0 && first.row.supplierId) {
+    await tx.insert(historyImportPurchaseRefs)
+      .values(purchaseRefs.map(excelRef => ({ documentId: docId, supplierId: first.row.supplierId!, excelRef })))
+      .onConflictDoNothing();
+  }
   return refOf(tx, docId);
 }
 

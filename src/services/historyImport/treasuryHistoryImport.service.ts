@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { bankAccounts, colleagueExpenses, documents, historyImportRefs, journalVoucherItems, journalVouchers, pieceworkPayrolls, treasuryTransactions } from '../../db/schema.js';
+import { bankAccounts, colleagueExpenses, documents, historyImportPurchaseRefs, historyImportRefs, journalVoucherItems, journalVouchers, pieceworkPayrolls, treasuryTransactions } from '../../db/schema.js';
 import { ForbiddenError, ValidationError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
@@ -11,6 +11,7 @@ import {
   type TreasuryImportResult, type TreasuryImportRow, type TreasuryImportRowOutcome,
 } from '../../lib/historyImport/treasuryHistoryImport.js';
 import { historyImportAmount } from '../../lib/historyImport/historyImportAmount.js';
+import { purchaseRefKeys } from '../../lib/historyImport/purchaseRef.js';
 import { formatPersianNumber, isoToJalaliDate, toPersianDigits } from '../../utils.js';
 import { toStorageDate } from '../../utils/calendarDate.js';
 import { excelInvoiceNumber } from '../../lib/historyImport/stockHistoryImport.js';
@@ -167,6 +168,53 @@ async function invoiceOfExcelRef(tx: DbExecutor, invoiceRef: string | undefined)
 }
 
 /**
+ * The live purchase receipts the stock import recorded for a supplier and one supplier invoice number (tool 6), oldest
+ * first, whatever their day.
+ */
+async function purchaseReceiptsOfRef(tx: DbExecutor, supplierId: number, key: string): Promise<number[]> {
+  const found = await tx.select({ id: documents.id }).from(historyImportPurchaseRefs)
+    .innerJoin(documents, eq(documents.id, historyImportPurchaseRefs.documentId))
+    .where(and(
+      eq(historyImportPurchaseRefs.supplierId, supplierId),
+      eq(historyImportPurchaseRefs.excelRef, key),
+      eq(documents.partyId, supplierId),
+      eq(documents.isDeleted, 0),
+      eq(documents.type, 'receipt'),
+      inArray(documents.status, [...SETTLEABLE_DOCUMENT_STATUSES]),
+      sql`coalesce(nullif(trim(${documents.currency}), ''), 'IRR') = 'IRR'`,
+    ))
+    .orderBy(asc(documents.date), asc(documents.id));
+  return found.map(f => Number(f.id));
+}
+
+/** A supplier payment names a supplier invoice number no live purchase receipt of the supplier carries (tool 6). */
+function unknownPurchaseRef(key: string): ValidationError {
+  return new ValidationError(`رسید خرید باز و ثبت‌شده‌ای با «شماره فاکتور مرجع» ${toPersianDigits(key)} از این تأمین‌کننده در برنامه نیست (رسیدی با این شماره وارد نشده، یا باطل یا پیش‌نویس شده، یا تأمین‌کننده‌اش عوض شده است). هر خرید مواد باید در اکسل انبار یک ردیف «خرید جدید» داشته باشد که در «شماره فاکتور مرجع» همین عدد ستون «شماره مرجع-فاکتور» این ردیف را دارد (نه شمارهٔ سطر برگه)، و آن ماه انبار پیش از این وارد شده باشد؛ اگر این خرید به انبار نمی‌آید، شمارهٔ ستون «شماره مرجع-فاکتور» این ردیف را پاک کنید تا از قدیمی‌ترین بدهی این تأمین‌کننده کم شود.`, undefined, 'HISTORY_IMPORT_PURCHASE_REF_UNKNOWN');
+}
+
+/** Whether any of these documents still has something left to pay. */
+async function anyLeftToPay(tx: DbExecutor, ids: number[]): Promise<boolean> {
+  for (const id of ids) {
+    const doc = await readDocumentPayableAndSettled(tx, id);
+    if (doc && doc.payable.subtract(doc.settled.isNegative() ? 0 : doc.settled).subtract(doc.returned).round(4).greaterThan(0)) return true;
+  }
+  return false;
+}
+
+/** A supplier payment names a purchase whose receipts are already paid in full (tool 6). */
+function paidPurchaseRef(key: string): ValidationError {
+  return new ValidationError(`رسید خرید با «شماره فاکتور مرجع» ${toPersianDigits(key)} از این تأمین‌کننده پیش‌تر کامل پرداخت شده است؛ اگر این ردیف پرداخت دوباره یا پرداخت خرید دیگری است، عدد ستون «شماره مرجع-فاکتور» آن را درست کنید یا پاک کنید تا از قدیمی‌ترین بدهی این تأمین‌کننده کم شود.`, undefined, 'HISTORY_IMPORT_PURCHASE_REF_PAID');
+}
+
+/** Of these documents, the purchase receipts that carry a supplier invoice number of the stock import (tool 6). */
+async function receiptsWithPurchaseRef(tx: DbExecutor, ids: number[]): Promise<Set<number>> {
+  if (ids.length === 0) return new Set();
+  const found = await tx.selectDistinct({ id: historyImportPurchaseRefs.documentId }).from(historyImportPurchaseRefs)
+    .where(inArray(historyImportPurchaseRefs.documentId, ids));
+  return new Set(found.map(f => Number(f.id)));
+}
+
+/**
  * The open documents of a customer (receipt) or supplier (payment) dated on or before the row, oldest first, with what each has left, read in the
  * import's transaction, so a document an earlier row of the same import settled shows what it still has left.
  */
@@ -186,6 +234,28 @@ async function oldestFirstParts(tx: DbExecutor, row: TreasuryImportRow, isoDate:
   // tool 3: a receipt that names a past sales invoice by its Excel number settles that invoice first
   const named = isReceipt ? await invoiceOfExcelRef(tx, row.invoiceRef) : null;
   if (named !== null) candidates.sort((a, b) => Number(b.id === named) - Number(a.id === named));
+  if (!isReceipt) {
+    // tool 6: a receipt that carries a supplier invoice number waits for the payment row that names it, so a payment
+    // with no number (or what a named payment has left) goes to the oldest documents without a number first
+    const numbered = await receiptsWithPurchaseRef(tx, candidates.map(c => c.id));
+    candidates.sort((a, b) => Number(numbered.has(a.id)) - Number(numbered.has(b.id)));
+  }
+  // tool 6: a supplier payment that names the supplier's invoice settles its receipts first (oldest of them first), also
+  // a receipt dated after the payment (goods paid before they came in); what is left goes to the oldest open documents
+  // one payment may pay several receipts («71+72»): each number must name a receipt, and they are settled in the cell's order
+  const refKeys = isReceipt ? [] : purchaseRefKeys(row.purchaseRef);
+  if (refKeys.length > 0) {
+    const receipts: number[] = [];
+    for (const key of refKeys) {
+      const ofKey = await purchaseReceiptsOfRef(tx, row.partyId, key);
+      if (ofKey.length === 0) throw unknownPurchaseRef(key);
+      // a named purchase already paid in full would push this payment onto other documents unnoticed
+      if (!(await anyLeftToPay(tx, ofKey))) throw paidPurchaseRef(key);
+      for (const id of ofKey) if (!receipts.includes(id)) receipts.push(id);
+    }
+    const named = new Set(receipts);
+    candidates.splice(0, candidates.length, ...receipts.map(id => ({ id })), ...candidates.filter(c => !named.has(c.id)));
+  }
   const parts: SettlementAllocationInput[] = [];
   let left = fin(amount);
   for (const c of candidates) {
