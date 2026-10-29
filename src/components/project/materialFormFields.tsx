@@ -1,5 +1,6 @@
 import { useId } from 'react';
 import { DecimalInput } from '../common/DecimalInput';
+import { RialEquivalent } from '../common/RialEquivalent';
 
 /**
  * v7.0.140: فیلدهای مشترک فرم ماده اولیه — پیش‌تر در مودال تأیید «مواد در انتظار» (PendingMaterialsPage) و
@@ -35,8 +36,8 @@ export function MaterialUnitSelect({ value, onChange, units }: { value: string; 
   );
 }
 
-/** عدد نامنفی (مقدار، قیمت، نقطه سفارش، وزن) */
-export function MaterialNumberField({ label, value, onChange, bold = true }: { label: string; value: number; onChange: (v: number) => void; bold?: boolean }) {
+/** عدد نامنفی (مقدار، قیمت، نقطه سفارش، وزن)؛ `rial` برای قیمت ریالی: معادل تومانی زیر کادر */
+export function MaterialNumberField({ label, value, onChange, bold = true, rial = false }: { label: string; value: number; onChange: (v: number) => void; bold?: boolean; rial?: boolean }) {
   const fieldId = useId();
   return (
     <div className="space-y-1">
@@ -49,6 +50,7 @@ export function MaterialNumberField({ label, value, onChange, bold = true }: { l
         onValueChange={(v) => onChange(Number(v))}
         className={bold ? NUMBER_INPUT : 'w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-800 focus:outline-none'}
       />
+      {rial && <RialEquivalent value={value || ''} />}
     </div>
   );
 }

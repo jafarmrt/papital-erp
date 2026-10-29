@@ -11,6 +11,7 @@ import { RequisitionHeaderFields } from './RequisitionHeaderFields';
 import { lineAmount, sumAmounts } from '../../lib/procurement/procurementNumbers';
 import { DialogLayer } from '../common/DialogLayer';
 import { RialEquivalent } from '../common/RialEquivalent';
+import { refuseInvalidDecimalInputs } from '../common/DecimalInput';
 
 interface CreateRequisitionModalProps {
   isOpen: boolean;
@@ -87,6 +88,8 @@ export function CreateRequisitionModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // the form takes no browser validation (noValidate); a price typed wrong («۱۲٬۵») is refused here, under its field
+    if (refuseInvalidDecimalInputs(e.currentTarget as HTMLFormElement)) return;
     const errors = requisitionFormErrors(title, items);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
@@ -152,7 +155,7 @@ export function CreateRequisitionModal({
         </div>
 
         {/* Form Content */}
-        <form onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto p-5 space-y-5">
+        <form onSubmit={handleSubmit} noValidate data-decimal-scope="" className="flex-1 overflow-y-auto p-5 space-y-5">
           <RequisitionHeaderFields
             title={title}
             onTitleChange={v => { setTitle(v); clearError('title'); }}

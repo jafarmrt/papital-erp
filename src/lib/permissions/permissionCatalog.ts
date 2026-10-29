@@ -154,7 +154,7 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
       { key: 'piecework.log', title: 'ثبت و ویرایش کارکرد پرسنل', description: 'ثبت، ویرایش و حذف کارکردی که هنوز در فیشی نیامده، و تخصیص آن به پروژه', requires: ['piecework.view'] },
       { key: 'piecework.payroll', title: 'محاسبه و صدور فیش حقوقی', description: 'صدور فیش پیش‌نویس با کسر مساعده، ثبت سند حسابداری و ابطال فیش', requires: ['piecework.view'] },
       // v10.0.193 (TD-1083، طرح حقوق ت۱ الف): تأیید جدا از صدور؛ مهاجرت 0101 آن را به هر نقش دارای piecework.payroll داد
-      { key: 'piecework.payroll_approve', title: 'تأیید فیش حقوق', description: 'تأیید فیش پیش‌نویس و بازگرداندن فیش تأییدشده بی پرداخت به پیش‌نویس؛ صادرکننده فیش آن را تأیید و پرداخت نمی‌کند', requires: ['piecework.view'] },
+      { key: 'piecework.payroll_approve', title: 'تأیید فیش حقوق', description: 'تأیید فیش پیش‌نویس و بازگرداندن فیش تأییدشده بی پرداخت به پیش‌نویس؛ صادرکننده فیش آن را تأیید نمی‌کند و پس از تأیید کاربر دیگری آن را می‌پردازد', requires: ['piecework.view'] },
       { key: 'piecework.pay', title: 'پرداخت و ابطال پرداخت فیش', description: 'ثبت پرداخت خزانه‌ای فیش تأییدشده و ابطال پرداخت آن', requires: ['piecework.view'] },
       // v9.0.126 (TD-882): پیش‌تر بیرون از کاتالوگ بود و کد نقش «مدیر» جای آن را می‌گرفت
       // v10.0.210 (TD-1087، طرح حقوق ت۴ الف): نرخ‌های سالانه بیمه و مالیات حقوق؛ روز انتشار به هیچ نقشی داده نمی‌شود
