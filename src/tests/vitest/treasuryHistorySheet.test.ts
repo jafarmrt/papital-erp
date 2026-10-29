@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  amountText, detectTreasurySheet, emptyTreasuryMapping, guessPersonnelUse, parseTreasurySheet, resolveTreasuryRow,
+  amountText, detectTreasurySheet, emptyTreasuryMapping, guessPersonnelUse, parseTreasurySheet, resolveTreasuryRow, suggestCostCentre, unmappedNames,
   rowKey, suggestPartyTarget, unmappedNames, type TreasuryImportMapping,
 } from '../../lib/historyImport/treasurySheet';
 import { treasuryImportDescription, treasuryImportDuplicateKey, treasuryImportOrder } from '../../lib/historyImport/treasuryHistoryImport';
@@ -42,6 +42,8 @@ const mapping: TreasuryImportMapping = {
     'فروشگاه رنگ': { kind: 'supplier', partyId: 40, name: 'فروشگاه رنگ' },
   },
   expenses: { 'هزینه مواداولیه': { kind: 'supplier' }, 'حمل و نقل': { kind: 'account', accountId: 75 }, 'اداری و تشکیلاتی': { kind: 'skip' } },
+  // tool 5: each cost centre once
+  costCentres: { 'پروژه': { kind: 'project', projectId: 5, name: 'PRJ-5' }, 'عمومی': { kind: 'none' }, 'فروش ایران': { kind: 'none' } },
   personnelOtherAccountId: 99,
 };
 
@@ -130,6 +132,25 @@ describe('treasury history import sheets', () => {
     expect(guessPersonnelUse(pay[0])).toBe('colleague_account');
     expect(resolveTreasuryRow(pay[0], mapping)).toMatchObject({ status: 'ready', row: { kind: 'payment', partyType: 'personnel', partyId: 7, purpose: 'colleague_account' } });
     expect(resolveTreasuryRow(pay[0], mapping, { uses: { [rowKey(pay[0])]: 'other' } })).toMatchObject({ status: 'ready', row: { purpose: 'other', contraAccountId: 99 } });
+  });
+
+  it('maps each cost centre once to a project or none, and holds back an expense whose cost centre is not mapped (tool 5)', () => {
+    const rows = parseTreasurySheet('هزینه‌ها', [
+      EXPENSES_HEADER,
+      ['1405-02-07', 1405, 2, 7, '', '', 'حمل و نقل', 'پروژه نیاوران', 'تاکسی', '400000', 'بانک الف', ''],
+      ['1405-02-07', 1405, 2, 7, '', '', 'حمل و نقل', 'هزینه های دفتر', 'تاکسی', '1000', 'بانک الف', ''],
+      ['1405-02-07', 1405, 2, 7, '', '', 'حمل و نقل', '', 'تاکسی', '2000', 'بانک الف', ''],
+    ]);
+    expect(unmappedNames(rows, mapping).costCentres).toEqual(['پروژه نیاوران', 'هزینه های دفتر']);
+    expect(resolveTreasuryRow(rows[0], mapping).status).toBe('unresolved');
+    expect(resolveTreasuryRow(rows[2], mapping)).toMatchObject({ status: 'ready', row: { projectId: null } });
+    const projects = [{ id: 5, projectCode: 'PRJ-5', title: 'پروژه نیاوران' }];
+    expect(suggestCostCentre('هزینه های دفتر', projects)).toEqual({ kind: 'none' });
+    expect(suggestCostCentre('پروژه نیاوران', projects)).toEqual({ kind: 'project', projectId: 5, name: 'PRJ-5 - پروژه نیاوران' });
+    expect(suggestCostCentre('کارگاه', projects)).toBeNull();
+    const mapped: TreasuryImportMapping = { ...mapping, costCentres: { 'پروژه نیاوران': { kind: 'project', projectId: 5, name: 'PRJ-5' }, 'هزینه های دفتر': { kind: 'none' } } };
+    expect(resolveTreasuryRow(rows[0], mapped)).toMatchObject({ status: 'ready', row: { kind: 'payment', partyType: 'other', projectId: 5 } });
+    expect(resolveTreasuryRow(rows[1], mapped)).toMatchObject({ status: 'ready', row: { projectId: null } });
   });
 
   it('orders rows by day, money in before money out, and keeps the reference and cost centre in the description', () => {

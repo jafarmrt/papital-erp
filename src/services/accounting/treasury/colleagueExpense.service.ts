@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../../db/drizzle.js';
-import { accounts, colleagueExpenseLines, colleagueExpenses, journalVouchers, personnel } from '../../../db/schema.js';
+import { accounts, colleagueExpenseLines, colleagueExpenses, journalVouchers, personnel, productionProjects } from '../../../db/schema.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../../errors/customErrors.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
@@ -16,6 +16,7 @@ import { colleagueAccountBalance } from './colleagueAccountBalance.js';
 import type { TreasuryAuditActor } from './treasuryAudit.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { TreasuryTransactionService } from './treasuryTransaction.service.js';
+import { expenseLineDetail, projectTitleOf, resolveExpenseProjects } from './expenseProject.js';
 
 /**
  * v11 (the 1405 replay, tool 4; owner's decisions 7 Aban 1405): an expense a colleague paid for the company from their own
@@ -73,6 +74,7 @@ export async function createColleagueExpense(input: ColleagueExpenseInput, execu
     description: (line.description ?? '').trim(),
     sellerName: (line.sellerName ?? '').trim(),
     invoiceNumber: toLatinDigits(line.invoiceNumber ?? '').trim(),
+    projectId: line.projectId ?? null,
   }));
   const total = lines.reduce((sum, line) => sum.add(line.amount), fin(0)).round(4);
   const date = await resolveTreasuryWriteDate(input.date, 'تاریخ هزینه');
@@ -85,6 +87,7 @@ export async function createColleagueExpense(input: ColleagueExpenseInput, execu
     ]);
     const colleague = await lockColleague(tx, input.personnelId);
     const accountNames = await assertExpenseAccounts(tx, lines.map(l => l.accountId));
+    const projects = await resolveExpenseProjects(tx, lines.map(l => l.projectId));
     const payable = await currentAccount(tx);
     const voucherDescription = description || `هزینهٔ پرداختی ${colleague.name} از جیب خود`;
     const voucher = await TreasuryTransactionService.createColleagueExpenseVoucher({
@@ -97,7 +100,7 @@ export async function createColleagueExpense(input: ColleagueExpenseInput, execu
       items: [
         ...lines.map(line => ({
           accountId: line.accountId,
-          detailedType: 'none',
+          ...expenseLineDetail(projects.get(line.projectId ?? 0)),
           debit: line.amount,
           credit: 0,
           currency: CURRENCY,
@@ -133,6 +136,7 @@ export async function createColleagueExpense(input: ColleagueExpenseInput, execu
       description: line.description,
       sellerName: line.sellerName,
       invoiceNumber: line.invoiceNumber,
+      projectId: line.projectId,
     })));
     const created: ColleagueExpense = {
       id: row.id,
@@ -154,6 +158,8 @@ export async function createColleagueExpense(input: ColleagueExpenseInput, execu
         description: line.description,
         sellerName: line.sellerName,
         invoiceNumber: line.invoiceNumber,
+        projectId: line.projectId,
+        projectTitle: projectTitleOf(projects.get(line.projectId ?? 0)),
       })),
     };
     await logActivity({
@@ -226,8 +232,10 @@ export async function listColleagueExpenses(filters: { personnelId?: number; lim
     colleagueExpenseId: colleagueExpenseLines.colleagueExpenseId, lineNo: colleagueExpenseLines.lineNo, accountId: colleagueExpenseLines.accountId,
     accountCode: accounts.code, accountName: accounts.name, amount: colleagueExpenseLines.amount, description: colleagueExpenseLines.description,
     sellerName: colleagueExpenseLines.sellerName, invoiceNumber: colleagueExpenseLines.invoiceNumber,
+    projectId: colleagueExpenseLines.projectId, projectCode: productionProjects.projectCode, projectName: productionProjects.title,
   }).from(colleagueExpenseLines)
     .innerJoin(accounts, eq(accounts.id, colleagueExpenseLines.accountId))
+    .leftJoin(productionProjects, eq(productionProjects.id, colleagueExpenseLines.projectId))
     .where(inArray(colleagueExpenseLines.colleagueExpenseId, ids)).orderBy(colleagueExpenseLines.colleagueExpenseId, colleagueExpenseLines.lineNo);
   const account = await TreasuryTransactionService.colleagueCurrentAccount();
   const people = new Map(rows.map(r => [r.personnelId, r.personnelName]));
@@ -242,6 +250,7 @@ export async function listColleagueExpenses(filters: { personnelId?: number; lim
       lines: lineRows.filter(l => l.colleagueExpenseId === r.id).map(l => ({
         lineNo: l.lineNo, accountId: l.accountId, accountCode: l.accountCode, accountName: l.accountName, amount: Number(l.amount),
         description: l.description, sellerName: l.sellerName, invoiceNumber: l.invoiceNumber,
+        projectId: l.projectId, projectTitle: l.projectCode ? projectTitleOf({ code: l.projectCode, title: l.projectName ?? '' }) : '',
       })),
     })),
     owed,

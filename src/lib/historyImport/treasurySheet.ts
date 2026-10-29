@@ -109,16 +109,40 @@ export type PartyTarget =
   | { kind: 'account'; accountId: number }
   | { kind: 'skip' };
 export type ExpenseTarget = { kind: 'account'; accountId: number } | { kind: 'supplier' } | { kind: 'skip' };
+/** tool 5: «مرکز هزینه» → the production project its expenses were spent on, or none (general and office costs) */
+export type CostCentreTarget = { kind: 'project'; projectId: number; name: string } | { kind: 'none' };
 
 export interface TreasuryImportMapping {
   banks: Record<string, BankTarget>;
   parties: Record<string, PartyTarget>;
   expenses: Record<string, ExpenseTarget>;
+  /** tool 5: each cost centre once (kept by the browser with the rest) */
+  costCentres?: Record<string, CostCentreTarget>;
   /** the counter account of a colleague's payment that is neither wages nor an advance (e.g. paying back their expenses) */
   personnelOtherAccountId?: number | null;
 }
 
-export const emptyTreasuryMapping = (): TreasuryImportMapping => ({ banks: {}, parties: {}, expenses: {}, personnelOtherAccountId: null });
+export const emptyTreasuryMapping = (): TreasuryImportMapping => ({ banks: {}, parties: {}, expenses: {}, costCentres: {}, personnelOtherAccountId: null });
+
+/** Cost centres of the company as a whole, not of one project (the owner's list, 7 Aban 1405): offered as «بدون پروژه». */
+export const GENERAL_COST_CENTRES = ['عمومی و مشترک', 'هزینه های دفتر', 'فروش ایران'];
+
+/** The cost centre a later import offers by itself: a general one as none, a project whose code or title is the same text. */
+export function suggestCostCentre(name: string, projects: ReadonlyArray<{ id: number; projectCode: string; title: string }>): CostCentreTarget | null {
+  const key = headerKey(name);
+  if (GENERAL_COST_CENTRES.some(g => headerKey(g) === key)) return { kind: 'none' };
+  const project = projects.find(p => headerKey(p.projectCode) === key || headerKey(p.title) === key);
+  return project ? { kind: 'project', projectId: project.id, name: `${project.projectCode} - ${project.title}` } : null;
+}
+
+/** A row's project from its cost centre: none when the cell is empty or the centre maps to none, `undefined` while unmapped. */
+function projectOfRow(parsed: ParsedTreasuryRow, mapping: TreasuryImportMapping): number | null | undefined {
+  const centre = parsed.costCenter.trim();
+  if (!centre) return null;
+  const target = mapping.costCentres?.[centre];
+  if (!target) return undefined;
+  return target.kind === 'project' ? target.projectId : null;
+}
 
 /**
  * What a colleague's row is: wages paid through their payslips, an advance, their running account (petty cash given, their
@@ -150,8 +174,10 @@ export function unmappedNames(rows: readonly ParsedTreasuryRow[], mapping: Treas
   const banks = new Set<string>();
   const parties = new Set<string>();
   const expenses = new Set<string>();
+  const costCentres = new Set<string>();
   for (const r of rows) {
     if (r.bankName && !mapping.banks[r.bankName]) banks.add(r.bankName);
+    if (r.costCenter.trim() && !mapping.costCentres?.[r.costCenter.trim()] && takesProject(r, mapping)) costCentres.add(r.costCenter.trim());
     if (r.shape === 'expenses') {
       if (r.typeText && !mapping.expenses[r.typeText]) expenses.add(r.typeText);
       if (mapping.expenses[r.typeText]?.kind === 'supplier' && r.partyName && !mapping.parties[r.partyName]) parties.add(r.partyName);
@@ -159,9 +185,18 @@ export function unmappedNames(rows: readonly ParsedTreasuryRow[], mapping: Treas
       parties.add(r.partyName);
     }
   }
-  return { banks: [...banks], parties: [...parties], expenses: [...expenses] };
+  return { banks: [...banks], parties: [...parties], expenses: [...expenses], costCentres: [...costCentres] };
 }
 
+/** Whether a row can carry a project: an expense posted to an account (from our account or a colleague's pocket), or a row of
+ * «دریافت و پرداخت» whose party is an account. A supplier payment, a customer receipt or a colleague's move carries none. */
+function takesProject(r: ParsedTreasuryRow, mapping: TreasuryImportMapping): boolean {
+  if (r.shape === 'expenses') return mapping.expenses[r.typeText]?.kind !== 'supplier';
+  const party = mapping.parties[r.partyName];
+  return !party || party.kind === 'account';
+}
+
+const unmappedCentre = (parsed: ParsedTreasuryRow) => `مرکز هزینهٔ «${parsed.costCenter.trim()}» هنوز به پروژه‌ای (یا «بدون پروژه») وصل نشده است.`;
 const SKIP = (parsed: ParsedTreasuryRow, reason: string): ResolvedTreasuryRow => ({ status: 'skipped', parsed, reason });
 const UNRESOLVED = (parsed: ParsedTreasuryRow, reason: string): ResolvedTreasuryRow => ({ status: 'unresolved', parsed, reason });
 
@@ -207,10 +242,14 @@ export function resolveTreasuryRow(
       if (expense.kind !== 'account') {
         return UNRESOLVED(parsed, `خرید از تأمین‌کننده با پول همکار («${parsed.bankName}») از این ابزار ثبت نمی‌شود؛ آن را دستی ثبت کنید یا نوع هزینه را به یک حساب وصل کنید.`);
       }
-      return ready({ kind: 'colleague_expense', personnelId: bank.personnelId, partyName: parsed.partyName, contraAccountId: rowContra ?? expense.accountId });
+      const projectId = projectOfRow(parsed, mapping);
+      if (projectId === undefined) return UNRESOLVED(parsed, unmappedCentre(parsed));
+      return ready({ kind: 'colleague_expense', personnelId: bank.personnelId, partyName: parsed.partyName, contraAccountId: rowContra ?? expense.accountId, projectId });
     }
     if (expense.kind === 'account') {
-      return ready({ kind: 'payment', partyType: 'other', partyName: parsed.partyName || parsed.typeText, contraAccountId: rowContra ?? expense.accountId });
+      const projectId = projectOfRow(parsed, mapping);
+      if (projectId === undefined) return UNRESOLVED(parsed, unmappedCentre(parsed));
+      return ready({ kind: 'payment', partyType: 'other', partyName: parsed.partyName || parsed.typeText, contraAccountId: rowContra ?? expense.accountId, projectId });
     }
     const seller = mapping.parties[parsed.partyName];
     if (!seller || seller.kind !== 'supplier') return UNRESOLVED(parsed, `فروشندهٔ «${parsed.partyName}» باید به یک تأمین‌کننده وصل شود (خرید مواد، رسید انبار آن را ثبت کرده است).`);
@@ -237,8 +276,11 @@ export function resolveTreasuryRow(
       return kind === 'payment'
         ? ready({ kind: 'transfer', toBankAccountId: party.bankAccountId })
         : { status: 'ready', parsed, personnel: false, row: { ...base, kind: 'transfer', bankAccountId: party.bankAccountId, toBankAccountId: bank.bankAccountId } };
-    case 'account':
-      return ready({ kind, partyType: 'other', partyName: parsed.partyName, contraAccountId: rowContra ?? party.accountId });
+    case 'account': {
+      const projectId = projectOfRow(parsed, mapping);
+      if (projectId === undefined) return UNRESOLVED(parsed, unmappedCentre(parsed));
+      return ready({ kind, partyType: 'other', partyName: parsed.partyName, contraAccountId: rowContra ?? party.accountId, projectId });
+    }
     case 'personnel': {
       const use = options.uses?.[rowKey(parsed)] ?? guessPersonnelUse(parsed);
       if (use === 'payslip' && kind === 'payment') return ready({ kind: 'payslip', personnelId: party.personnelId }, true);

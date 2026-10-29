@@ -32,6 +32,7 @@ import {
   assertBankCurrency, lockTreasuryBank, lockTreasuryBanks, nextTreasuryTransactionNumber, postTreasuryRow, reverseTreasuryRow, treasuryEventPayload, isHighValueAmount, treasuryHighValueThreshold, type TreasuryBank, type TreasuryRow,
 } from './treasuryPosting.js';
 import { idempotentTransaction, idempotentTransactionIn } from '../../../middleware/idempotency.js';
+import { expenseLineDetail, resolveExpenseProjects } from './expenseProject.js';
 
 /**
  * TD-105 (v4.0.31): تاریخ تراکنش‌های خزانه «سرور authoritative» است: خالی ← امروز کسب‌وکار، تاریخ آینده ← 422.
@@ -270,6 +271,8 @@ export class TreasuryTransactionService {
     audit?: TreasuryAuditActor;
     /** v11 phase 6.1t (M11): the documents this receipt or payment settles, in parts; never with `documentId` */
     allocations?: SettlementAllocationInput[];
+    /** v11 tool 5: a miscellaneous («متفرقه») receipt or payment spent on a production project; its counter line's detail */
+    projectId?: number | null;
   }, executor?: DbExecutor): Promise<TreasuryTransaction> {
     const amount = exactTreasuryAmount(data.amount, 'مبلغ تراکنش');
     if (amount <= 0) throw new ValidationError('مبلغ تراکنش باید بزرگتر از صفر باشد');
@@ -288,6 +291,9 @@ export class TreasuryTransactionService {
     // v9.0.82 (TD-507، ت۴ الف): پرسنل هدف می‌خواهد و «متفرقه» و «سایر» سرفصل طرف مقابل؛ هر دو روی ردیف ذخیره می‌شوند
     const partyType = data.partyType || 'other';
     const party = normalizePartyPurpose(partyType, data.purpose, data.contraAccountId);
+    if (data.projectId && (partyType !== 'other' || data.createVoucher === false)) {
+      throw new ValidationError('پروژه فقط روی دریافت و پرداخت «متفرقه» با سند حسابداری می‌نشیند (ردیف حساب مقابل).', undefined, 'TREASURY_PROJECT_NOT_ALLOWED');
+    }
     // v10.0.57 (TD-925، ت۸ الف): تسویه حقوق فقط از «پرداخت فیش»؛ پرداخت خزانه «تسویه حقوق» همان فیش را دو بار می‌پرداخت
     if (isSalarySettlementPayment(data.type, partyType, party.purpose)) {
       throw new ValidationError(SALARY_SETTLEMENT_VIA_PAYSLIP_MESSAGE, undefined, 'TREASURY_PAYROLL_SETTLEMENT_VIA_PAYSLIP');
@@ -360,7 +366,11 @@ export class TreasuryTransactionService {
 
       const descText = data.description || `${data.type === 'receipt' ? 'دریافت' : 'پرداخت'} ${data.method === 'cash' ? 'نقدی' : data.method === 'pos' ? 'کارتخوان' : 'حواله بانکی'} از/به ${partyName}`;
       const treasuryRow = (accountId: number) => ({ accountId, detailedType: 'bank_account', detailedId: bank.id, detailedName: bank.title });
-      const partyRow = (accountId: number) => ({ accountId, detailedType: data.partyType || 'other', detailedId: partyId, detailedName: partyName });
+      // v11 tool 5: a miscellaneous expense spent on a project carries the project as its counter line's detail
+      const project = data.projectId ? (await resolveExpenseProjects(txEngine, [data.projectId])).get(data.projectId) : undefined;
+      const partyRow = (accountId: number) => (project
+        ? { accountId, ...expenseLineDetail(project) }
+        : { accountId, detailedType: data.partyType || 'other', detailedId: partyId, detailedName: partyName });
 
       // OBS-R2-52: مانده، شماره، سند، ردیف و رویداد از راه یگانه خزانه
       const { row: tx } = await postTreasuryRow(txEngine, bank, {

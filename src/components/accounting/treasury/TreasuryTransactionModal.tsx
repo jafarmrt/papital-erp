@@ -13,6 +13,7 @@ import { useHasPermission } from '../../../contexts/AuthContext';
 import { NO_VOUCHER_TREASURY_PERMISSION } from '../../../lib/noVoucherPermission';
 import { needsChosenContraAccount, type PersonnelPurpose } from '../../../lib/treasury/partyPurpose';
 import { PartyPurposeFields } from './PartyPurposeFields';
+import { useProjectPickQuery } from '../../../hooks/queries/useProjectQueries';
 import { readTreasuryVoucherPreview, type TreasuryVoucherPreview } from '../../../lib/treasury/treasuryVoucherPreview';
 import { personnelPartyName, personnelPartyOption } from '../../../lib/treasury/personnelPartyName';
 import { personnelServerSearchUrl } from '../../../lib/personnel/personnelList';
@@ -50,6 +51,8 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
   const rial = useMemo(() => rialDisplayOf(appCurrency), [appCurrency]);
   const canSkipVoucher = useHasPermission(NO_VOUCHER_TREASURY_PERMISSION);
   const canSettleOnDocuments = useCanSettleOnDocuments();
+  const projectsQuery = useProjectPickQuery();
+  const projects = Array.isArray(projectsQuery.data) ? projectsQuery.data : [];
   const [formData, setFormData] = useState({
     type,
     date: '',
@@ -60,6 +63,8 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
     // v9.0.82 (TD-507، ت۴ الف): هدف پرسنل پیش‌فرض ندارد و الزامی است؛ «متفرقه» و «سایر» سرفصل طرف مقابل می‌خواهند
     purpose: '' as PersonnelPurpose | '',
     contraAccountId: null as number | null,
+    // v11 tool 5: a miscellaneous expense may name the production project it was spent on
+    projectId: null as number | null,
     // v8.0.26 (TD-278، تصمیم مالک محصول): روش «چک» حذف شد؛ چک فقط از «مدیریت چک‌های صیادی» ثبت می‌شود
     method: 'bank_transfer' as 'bank_transfer' | 'pos' | 'cash',
     amount: 0,
@@ -193,6 +198,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
         ...formData,
         purpose: formData.partyType === 'personnel' ? formData.purpose : undefined,
         contraAccountId: needsContra ? formData.contraAccountId : null,
+        projectId: formData.partyType === 'other' && formData.projectId ? formData.projectId : undefined,
         currency: bankCurrency,
         exchangeRate: bankCurrency !== 'IRR' && formData.exchangeRate > 0 ? formData.exchangeRate : undefined,
         createVoucher: canSkipVoucher ? formData.createVoucher : true,
@@ -446,6 +452,20 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
               settlementViaPayslipOnly
               onChange={patch => setFormData(prev => ({ ...prev, ...patch }))}
             />
+            {formData.partyType === 'other' && projects.length > 0 && (
+              <div>
+                <label htmlFor={`${fieldId}-project`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">پروژه (اختیاری)</label>
+                <select
+                  id={`${fieldId}-project`}
+                  value={formData.projectId ?? ''}
+                  onChange={e => setFormData(prev => ({ ...prev, projectId: e.target.value ? Number(e.target.value) : null }))}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+                >
+                  <option value="">بدون پروژه</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{formatPersianCode(p.projectCode || p.project_code)} - {p.title}</option>)}
+                </select>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3 items-start">
               <div>

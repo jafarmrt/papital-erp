@@ -6,6 +6,7 @@ import { FinancialAmountInput } from '../../components/common/FinancialAmountInp
 import { refuseInvalidDecimalInputs } from '../../components/common/DecimalInput';
 
 vi.mock('react-hot-toast', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock('../../hooks/queries/useProjectQueries', async (importOriginal) => ({ ...(await importOriginal<object>()), useProjectPickQuery: () => ({ data: [], isLoading: false }) }));
 vi.mock('../../api', () => ({ fetchJson: vi.fn(async () => ({})) }));
 vi.mock('../../hooks/accounting/useTreasuryQueries', () => ({ useContraAccountsQuery: () => ({ data: [], isLoading: false }) }));
 

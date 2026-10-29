@@ -30,6 +30,8 @@ export interface PettyCashLineInput {
   description?: string;
   sellerName?: string;
   invoiceNumber?: string;
+  /** v11 tool 5: the production project the line was spent on (its voucher line's detail), optional */
+  projectId?: number | null;
 }
 
 /** مبلغ ردیف: متن با ارقام فارسی یا عدد؛ نامعتبر یا تهی null است، هرگز صفر */
@@ -47,6 +49,7 @@ export function pettyCashLineError(line: PettyCashLineInput, lineNo: number): st
   if (!amount || !amount.isPositive()) return `${label}: مبلغ باید عددی بزرگ‌تر از صفر باشد.`;
   // مبلغ با چهار رقم اعشار ذخیره می‌شود؛ رقم بیشتر رد می‌شود تا مبلغی مانند ۰٫۰۰۰۰۴ صفر و رد پایگاه‌داده نشود
   if (!amount.round(4).equals(amount)) return `${label}: مبلغ حداکثر چهار رقم اعشار دارد.`;
+  if (line.projectId !== undefined && line.projectId !== null && (!Number.isInteger(line.projectId) || line.projectId <= 0)) return `${label}: پروژه نامعتبر است.`;
   for (const text of [line.description, line.sellerName, line.invoiceNumber]) {
     if ((text ?? '').length > PETTY_CASH_TEXT_MAX) return `${label}: هر متن ردیف حداکثر ${PETTY_CASH_TEXT_MAX.toLocaleString('fa-IR')} نویسه است.`;
   }
@@ -91,10 +94,11 @@ export interface PettyCashLineDraft {
   description: string;
   sellerName: string;
   invoiceNumber: string;
+  projectId: number | null;
 }
 
 export const emptyPettyCashLine = (key: number): PettyCashLineDraft => ({
-  key, accountId: null, amount: '', description: '', sellerName: '', invoiceNumber: '',
+  key, accountId: null, amount: '', description: '', sellerName: '', invoiceNumber: '', projectId: null,
 });
 
 /** بدنه `POST /accounting/treasury/petty-cash/:id/expenses`: متن‌های خالی فرستاده نمی‌شوند */
@@ -109,6 +113,7 @@ export function pettyCashExpensePayload(form: { date: string; description: strin
       description: text(line.description),
       sellerName: text(line.sellerName),
       invoiceNumber: text(line.invoiceNumber),
+      projectId: line.projectId ?? undefined,
     })),
     attachments: form.attachments.length > 0 ? form.attachments : undefined,
   };

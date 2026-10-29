@@ -24,6 +24,7 @@ const treasuryImportRowSchema = z.object({
   personnelId: optionalId,
   invoiceRef: z.string().max(TEXT_MAX).optional(),
   costCenter: z.string().max(TEXT_MAX).optional(),
+  projectId: optionalId,
   description: z.string().max(TEXT_MAX).optional(),
   settleOldest: z.boolean().optional(),
   duplicateAccepted: z.boolean().optional(),

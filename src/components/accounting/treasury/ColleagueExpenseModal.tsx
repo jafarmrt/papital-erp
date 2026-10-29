@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useProjectPickQuery } from '../../../hooks/queries/useProjectQueries';
 import { Plus, Wallet } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Modal } from '../../common/Modal';
@@ -51,6 +52,9 @@ export const ColleagueExpenseModal: React.FC<ColleagueExpenseModalProps> = ({ is
   const [formError, setFormError] = useState('');
   const [voiding, setVoiding] = useState<{ id: number; reason: string } | null>(null);
   const accountsQuery = usePettyCashExpenseAccountsQuery(isOpen);
+  // v11 tool 5: a line may name the production project it was spent on
+  const projectsQuery = useProjectPickQuery();
+  const projects = Array.isArray(projectsQuery.data) ? projectsQuery.data : [];
   const listQuery = useColleagueExpensesQuery(isOpen);
   const mutation = useColleagueExpenseMutation();
   const voidMutation = useVoidColleagueExpenseMutation();
@@ -189,6 +193,7 @@ export const ColleagueExpenseModal: React.FC<ColleagueExpenseModalProps> = ({ is
               accounts={accounts}
               accountsLoading={accountsQuery.isLoading}
               canRemove={lines.length > 1}
+              projects={projects}
               onChange={change => changeLine(line.key, change)}
               onRemove={() => removeLine(line.key)}
             />

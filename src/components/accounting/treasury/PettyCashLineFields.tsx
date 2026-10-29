@@ -5,6 +5,8 @@ import { DecimalInput } from '../../common/DecimalInput';
 import { formatPersianNumber } from '../../../utils';
 import type { PettyCashLineDraft } from '../../../lib/treasury/pettyCash';
 import type { Account } from '../../../types';
+import type { ProjectPick } from '../../../lib/permissions/pickLists';
+import { formatPersianCode } from '../../../utils/persianNumber';
 import { RialEquivalent } from '../../common/RialEquivalent';
 
 interface PettyCashLineFieldsProps {
@@ -13,6 +15,8 @@ interface PettyCashLineFieldsProps {
   accounts: Account[];
   accountsLoading: boolean;
   canRemove: boolean;
+  /** v11 tool 5: the production projects a line may be spent on (no select when the list is empty) */
+  projects?: ProjectPick[];
   onChange: (change: Partial<PettyCashLineDraft>) => void;
   onRemove: () => void;
 }
@@ -24,7 +28,7 @@ const fieldClass = 'w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 borde
  * مالیات بر ارزش افزوده ردیف جدایی ندارد (در مبلغ همان هزینه است).
  */
 export const PettyCashLineFields: React.FC<PettyCashLineFieldsProps> = ({
-  line, lineNo, accounts, accountsLoading, canRemove, onChange, onRemove,
+  line, lineNo, accounts, accountsLoading, canRemove, projects = [], onChange, onRemove,
 }) => (
   <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 space-y-2" data-testid="petty-cash-line">
     <div className="flex items-center justify-between">
@@ -91,5 +95,16 @@ export const PettyCashLineFields: React.FC<PettyCashLineFieldsProps> = ({
         placeholder="شماره فاکتور (اختیاری)"
       />
     </div>
+    {projects.length > 0 && (
+      <select
+        aria-label={`پروژه ردیف ${formatPersianNumber(lineNo)}`}
+        value={line.projectId ?? ''}
+        onChange={e => onChange({ projectId: e.target.value ? Number(e.target.value) : null })}
+        className={fieldClass}
+      >
+        <option value="">بدون پروژه</option>
+        {projects.map(p => <option key={p.id} value={p.id}>{formatPersianCode(p.projectCode || p.project_code)} - {p.title}</option>)}
+      </select>
+    )}
   </div>
 );
