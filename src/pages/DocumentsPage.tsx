@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { FileSpreadsheet } from 'lucide-react';
 import { useHasPermission } from '../contexts/AuthContext';
 import { StockHistoryImportModal } from '../components/historyImport/StockHistoryImportModal';
+import { useHistoryImportOpen } from '../hooks/queries/useHistoryImportStatusQuery';
 import { User } from '../types';
 import GlobalReservationsPanel from '../components/documents/GlobalReservationsPanel';
 import DocItemsTable from '../components/documents/DocItemsTable';
@@ -46,7 +47,9 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
   }, [access, actionType, docType, setActionType, setDocType]);
   const blockedReason = stockPageBlockedReason(access, actionType, docType);
   // v11 history import (1405 replay, tool 2): past warehouse movements from Excel, for the holder of its key only
-  const canImportHistory = useHasPermission('warehouse.history_import');
+  // tool 9: and only until «پایان ورود سابقه» closed the imports
+  const mayImportHistory = useHasPermission('warehouse.history_import');
+  const canImportHistory = useHistoryImportOpen(mayImportHistory);
   const [historyOpen, setHistoryOpen] = useState(false);
 
   return (

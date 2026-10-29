@@ -66,6 +66,7 @@ const stockImportRowSchema = z.object({
   invoiceRef: z.string().max(100).optional(),
   customerId: optionalId,
   unitPrice: decimalText.nullable().optional(),
+  leadId: optionalId,
   slipRef: z.string().max(TEXT_MAX).optional(),
   description: z.string().max(TEXT_MAX).optional(),
   duplicateAccepted: z.boolean().optional(),
@@ -85,4 +86,9 @@ export const oldOpeningWithdrawSchema = z.object({
   body: z.object({
     itemIds: z.array(z.number().int().positive()).min(1).max(OLD_OPENING_WITHDRAW_MAX_ITEMS),
   }),
+});
+
+/** Tool 9: «پایان ورود سابقه» is sent only with the confirmation the window asks for. */
+export const historyImportCloseSchema = z.object({
+  body: z.object({ confirm: z.literal(true) }).strict(),
 });

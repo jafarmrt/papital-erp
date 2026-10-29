@@ -91,6 +91,12 @@ export const QUERY_KEYS = {
     detail: (entityType: string, id: number) => ['record-attachments', entityType, id] as const,
   },
 
+  /** v11 history import, tool 9: whether «پایان ورود سابقه» closed the Excel imports (`GET /history-import/status`) */
+  historyImport: {
+    all: ['history-import'] as const,
+    status: () => ['history-import', 'status'] as const,
+  },
+
   projects: {
     all: ['projects'] as const,
     list: () => ['projects', 'list'] as const,

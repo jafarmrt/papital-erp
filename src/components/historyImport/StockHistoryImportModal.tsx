@@ -13,6 +13,7 @@ import { StockImportNames } from './StockImportNames';
 import { StockImportPreview } from './StockImportPreview';
 import { OldOpeningsStep } from './OldOpeningsStep';
 import { loadSavedStockMapping, readStockWorkbook, saveStockMapping, stockRowMonth } from './stockImportWorkbook';
+import { HistoryImportCloseButton } from './HistoryImportCloseButton';
 
 /**
  * v11 history import, tool 2 (1405 replay): past warehouse movements from the cleaned sheets «ورود به انبار» and «خروج
@@ -153,6 +154,7 @@ export function StockHistoryImportModal({ isOpen, onClose, warehouses, suppliers
             <p>پروندهٔ اکسل اصلاح‌شدهٔ انبار را انتخاب کنید. هر ردیف همان سندی می‌شود که با دست ثبت می‌شد و سند حسابداری آن پیش‌نویس می‌ماند. موجودی اولیه با تاریخ ۱ فروردین ۱۴۰۵ ثبت می‌شود. پیش از هر ثبت، پیش‌نمایش همهٔ ردیف‌ها را امتحان می‌کند و چیزی نگه نمی‌دارد.</p>
             <p>گردش انبار و فاکتورهای فروش هر ماه با هم و پیش از دریافت و پرداخت همان ماه وارد می‌شوند. هر فاکتور اکسل یک فاکتور فروش قطعی در تاریخ خودش می‌شود و شمارهٔ اکسلش نگه داشته می‌شود؛ برگشت از فروش («مرجوعی») با «شماره فاکتور مرجع» به همان فاکتور وصل می‌شود و دریافتی که شمارهٔ فاکتور اکسل را دارد اول همان فاکتور را تسویه می‌کند. در «شماره فاکتور مرجع» هر «خرید جدید» عدد ستون «شماره مرجع-فاکتور» ردیف پرداخت همان خرید در برگهٔ «هزینه‌ها» را بنویسید (همان عددی که در آن ستون است، نه شمارهٔ سطر برگه) تا پرداختش به همین رسید بنشیند؛ اگر در چند ردیف پرداخت شده (پیش‌پرداخت و باقی، یا از دو حساب)، همهٔ این عددها را با «،» جدا کنید. خریدی که ردیفی در «هزینه‌ها» ندارد (نسیه، با چک یا از «دریافت و پرداخت») را خالی بگذارید؛ پرداختش مثل قبل از قدیمی‌ترین بدهی آن تأمین‌کننده کم می‌شود.</p>
             <input type="file" accept=".xlsx,.xls" aria-label="پرونده اکسل" onChange={e => { void onFile(e.target.files?.[0]); e.target.value = ''; }} />
+            <div className="border-t border-slate-200 pt-2 dark:border-slate-700"><HistoryImportCloseButton onClosed={() => { reset(); onClose(); }} /></div>
           </div>
         )}
         {step !== 'file' && (

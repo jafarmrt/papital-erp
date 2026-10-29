@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { documents, historyImportPurchaseRefs, historyImportRefs } from '../../db/schema.js';
+import { documents, historyImportPurchaseRefs } from '../../db/schema.js';
 import { ForbiddenError, ValidationError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { logActivity } from '../../lib/auditLogger.js';
@@ -9,7 +9,8 @@ import { historyImportAmount } from '../../lib/historyImport/historyImportAmount
 import { purchaseRefKeys } from '../../lib/historyImport/purchaseRef.js';
 import { STOCK_OPENING_DAY } from '../../lib/historyImport/stockSheet.js';
 import {
-  STOCK_IMPORT_INCOMING_KINDS, excelInvoiceNumber, stockImportDocumentKey, stockImportDuplicateKey, stockImportNotes, stockImportOrder,
+  SALE_MIN_UNIT_PRICE_RIAL, SALE_PRICE_TOO_LOW_MESSAGE, STOCK_IMPORT_INCOMING_KINDS, excelInvoiceNumber, stockImportDocumentKey,
+  stockImportDuplicateKey, stockImportNotes, stockImportOrder,
   type StockImportKind, type StockImportResult, type StockImportRow, type StockImportRowOutcome,
 } from '../../lib/historyImport/stockHistoryImport.js';
 import { isoToJalaliDate, toPersianDigits } from '../../utils.js';
@@ -26,6 +27,7 @@ import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { getDefaultWarehouseCode } from '../inventory/warehouseResolver.js';
 import { ImportItemIndex } from '../items/itemImportIndex.js';
 import { lockHistoryImport, runImportRows, type RowAttempt } from './importRunner.js';
+import { closeLeadWithImportedInvoice, documentOfExcelRef, lockLeadForImportedInvoice, recordExcelRef } from './historyImportSalesLinks.js';
 import { REPLAY_OPENING_NOTES, listOldOpenings, withdrawOldOpenings } from '../inventory/itemOpeningReplay.js';
 import { orm } from '../../db/drizzle.js';
 import { idempotentTransaction } from '../../middleware/idempotency.js';
@@ -53,10 +55,9 @@ export interface StockImportOptions {
    * body): a row of another kind is refused, as the hand entry would be
    */
   allowedKinds: ReadonlySet<StockImportKind>;
+  /** whether the user may link a document to a sales file (`crm.manage`, as the invoice form asks); computed in the route */
+  mayLinkLeads?: boolean;
 }
-
-/** The kind of `history_import_refs` row a past sales invoice is recorded under. */
-export const SALES_INVOICE_REF_KIND = 'sales_invoice';
 
 interface PreparedRow {
   row: StockImportRow;
@@ -135,6 +136,8 @@ function prepare(rows: StockImportRow[]): PreparedRow[] {
       else if ((row.kind === 'sale' || row.kind === 'return') && !invoiceRef) fail('شمارهٔ فاکتور اکسل این ردیف خالی است.');
       else if (row.kind === 'sale' && !row.customerId) fail('مشتری این فاکتور مشخص نیست.');
       else if (row.kind === 'sale' && !unitPrice) fail('قیمت این ردیف فاکتور خالی یا نادرست است؛ یک عدد بزرگ‌تر از صفر (ریال) بنویسید.');
+      else if (row.kind === 'sale' && Number(unitPrice) < SALE_MIN_UNIT_PRICE_RIAL) fail(SALE_PRICE_TOO_LOW_MESSAGE(toPersianDigits(String(unitPrice))));
+      else if (row.kind !== 'sale' && row.leadId) fail('«شماره پرونده» فقط برای فاکتور فروش است.');
       else if (row.kind === 'opening' && isoDate !== OPENING_DAY_ISO) fail(`موجودی اولیه فقط با تاریخ ${faDate(OPENING_DAY_ISO)} ثبت می‌شود.`);
     }
     return { row, itemId: 0, isoDate, quantity, unitCost, unitPrice, outcome };
@@ -212,25 +215,6 @@ async function refOf(tx: DbExecutor, docId: number): Promise<string> {
   return doc?.refNumber ?? String(docId);
 }
 
-/** The live document an Excel invoice number was recorded as, if any (locked, so two imports never both take a number). */
-async function documentOfExcelRef(tx: DbExecutor, excelRef: string): Promise<{ id: number; refNumber: string } | null> {
-  const res = await tx.execute(sql`
-    SELECT d.id, d.ref_number AS "refNumber"
-      FROM history_import_refs r
-      JOIN documents d ON d.id = r.document_id
-     WHERE r.kind = ${SALES_INVOICE_REF_KIND} AND r.excel_ref = ${excelRef}
-       AND d.is_deleted = 0 AND d.type = 'invoice' AND d.status = 'final'
-       FOR UPDATE OF r`);
-  const row = res.rows?.[0] as { id: number; refNumber: string } | undefined;
-  return row ? { id: Number(row.id), refNumber: String(row.refNumber) } : null;
-}
-
-/** Records the Excel number of a past sales invoice; the row of a voided invoice with that number is taken over. */
-async function recordExcelRef(tx: DbExecutor, excelRef: string, documentId: number): Promise<void> {
-  await tx.insert(historyImportRefs).values({ kind: SALES_INVOICE_REF_KIND, excelRef, documentId })
-    .onConflictDoUpdate({ target: [historyImportRefs.kind, historyImportRefs.excelRef], set: { documentId, createdAt: sql`now()` } });
-}
-
 /**
  * The lines of one Excel invoice must be one invoice as a hand entry makes it: one day and one customer. Lines of another
  * day would otherwise be posted out of the day order.
@@ -238,8 +222,10 @@ async function recordExcelRef(tx: DbExecutor, excelRef: string, documentId: numb
 function assertOneInvoice(group: PreparedRow[]): void {
   const days = new Set(group.map(p => p.isoDate));
   const customers = new Set(group.map(p => p.row.customerId ?? 0));
+  const leads = new Set(group.map(p => p.row.leadId ?? 0));
   if (days.size > 1) throw new ValidationError(`ردیف‌های فاکتور ${toPersianDigits(String(group[0].row.invoiceRef))} اکسل تاریخ‌های مختلف دارند (${[...days].map(faDate).join('، ')})؛ یک فاکتور یک تاریخ دارد.`);
   if (customers.size > 1) throw new ValidationError(`ردیف‌های فاکتور ${toPersianDigits(String(group[0].row.invoiceRef))} اکسل مشتری‌های مختلف دارند؛ یک فاکتور یک مشتری دارد.`);
+  if (leads.size > 1) throw new ValidationError(`ردیف‌های فاکتور ${toPersianDigits(String(group[0].row.invoiceRef))} اکسل «شماره پرونده»های مختلف دارند؛ یک فاکتور حداکثر یک پرونده فروش را می‌بندد.`);
 }
 
 /** One document of the warehouse form (or a sales invoice or return) from the rows that share it. */
@@ -255,6 +241,9 @@ async function postDocument(tx: DbExecutor, group: PreparedRow[], options: Stock
     const recorded = await documentOfExcelRef(tx, excelRef);
     if (recorded) throw new ValidationError(`فاکتور ${toPersianDigits(excelRef)} اکسل پیش‌تر با شمارهٔ ${toPersianDigits(recorded.refNumber)} در برنامه ثبت شده است.`, undefined, 'HISTORY_IMPORT_INVOICE_RECORDED');
   }
+  const lead = kind === 'sale' && first.row.leadId
+    ? await lockLeadForImportedInvoice(tx, first.row.leadId, { customerId: first.row.customerId ?? null, excelRef })
+    : null;
   if (kind === 'return') {
     const invoice = await documentOfExcelRef(tx, excelRef);
     if (!invoice) throw new ValidationError(`فاکتور ${toPersianDigits(excelRef)} اکسل در برنامه نیست؛ برگشت پس از ثبت فاکتورش وارد می‌شود.`, undefined, 'HISTORY_IMPORT_INVOICE_MISSING');
@@ -286,6 +275,7 @@ async function postDocument(tx: DbExecutor, group: PreparedRow[], options: Stock
     createdAudit: options.audit ? { actor: options.audit, note: `${DOC_TITLE_OF[kind]} از ورود سابقه اکسل` } : undefined,
   });
   if (kind === 'sale') await recordExcelRef(tx, excelRef, docId);
+  if (lead) await closeLeadWithImportedInvoice(tx, lead, docId, { id: options.userId ?? null, name: options.username || 'سیستم' });
   // tool 6: a past supplier payment that names one of these numbers settles this receipt first
   const purchaseRefs = kind === 'purchase' ? purchaseRefKeys(first.row.slipRef) : [];
   if (purchaseRefs.length > 0 && first.row.supplierId) {
@@ -414,6 +404,11 @@ async function postInOrder(tx: DbExecutor, attempt: RowAttempt, prepared: Prepar
 
     if (!options.allowedKinds.has(p.row.kind)) {
       const err = new ForbiddenError(`ثبت ${KIND_TITLE[p.row.kind]} مجوز همان فرم را می‌خواهد که شما ندارید.`, { kind: p.row.kind }, 'HISTORY_IMPORT_KIND_FORBIDDEN');
+      markError(group, err.message);
+      continue;
+    }
+    if (group.some(q => q.row.leadId) && !options.mayLinkLeads) {
+      const err = new ForbiddenError('وصل کردن فاکتور به پرونده فروش («شماره پرونده») مجوز مدیریت ارتباط با مشتری را می‌خواهد که شما ندارید؛ ستون را خالی بگذارید یا از مدیر بخواهید.', undefined, 'HISTORY_IMPORT_LEAD_FORBIDDEN');
       markError(group, err.message);
       continue;
     }
