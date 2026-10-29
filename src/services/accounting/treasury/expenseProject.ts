@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import type { DbExecutor } from '../../../db/drizzle.js';
-import { productionProjects } from '../../../db/schema.js';
+import { accounts, productionProjects } from '../../../db/schema.js';
 import { ValidationError } from '../../../errors/customErrors.js';
 
 /**
@@ -9,6 +9,18 @@ import { ValidationError } from '../../../errors/customErrors.js';
  * voucher line then carries the project as its detail, so the project summary report counts it with the project's other
  * costs. Any project that is not deleted may be named (a past expense of a project finished since included).
  */
+/** The account types an expense line (and so a project) may sit on: expense and cost of sales. */
+export const EXPENSE_ACCOUNT_TYPES = ['expense', 'cost_of_sales'] as const;
+
+/**
+ * Whether a counter account takes a project: only an expense or cost-of-sales account. A project on a liability, asset,
+ * revenue or equity line would count as the project's cost and take the line off its party's statement.
+ */
+export async function isExpenseAccount(tx: DbExecutor, accountId: number): Promise<boolean> {
+  const [row] = await tx.select({ accountType: accounts.accountType }).from(accounts).where(eq(accounts.id, accountId));
+  return !!row && (EXPENSE_ACCOUNT_TYPES as readonly string[]).includes(String(row.accountType));
+}
+
 export interface ExpenseProject {
   id: number;
   code: string;
