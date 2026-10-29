@@ -10,12 +10,12 @@ import { invalidateAfterTreasuryChange } from '../../hooks/accounting/accounting
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { TREASURY_IMPORT_MAX_ROWS, type TreasuryImportResult } from '../../lib/historyImport/treasuryHistoryImport';
 import {
-  resolveTreasuryRow, suggestCostCentre, suggestPartyTarget, unmappedNames,
+  resolveTreasuryRow, rowKey, suggestCostCentre, suggestPartyTarget, unmappedNames,
   type ParsedTreasuryRow, type PersonnelUse, type TreasuryImportMapping,
 } from '../../lib/historyImport/treasurySheet';
 import { errorMessageOf, formatPersianCode, formatPersianNumber } from '../../utils';
 import { TreasuryImportNames, type TreasuryImportLists } from './TreasuryImportNames';
-import { TreasuryImportPreview } from './TreasuryImportPreview';
+import { TreasuryImportPreview, USE_LABEL } from './TreasuryImportPreview';
 import { loadSavedMapping, monthOf, readTreasuryWorkbook, saveMapping } from './treasuryImportWorkbook';
 
 /**
@@ -197,8 +197,26 @@ export function TreasuryHistoryImportModal({ isOpen, onClose, lists }: Props) {
         )}
         {step === 'names' && unresolved.length > 0 && (
           <ul className="text-[11px] text-rose-600 list-disc pr-4">
-            {unresolved.slice(0, 5).map(r => <li key={`${r.parsed.sheet}#${r.parsed.rowNo}`}>{r.parsed.sheet} — ردیف {formatPersianNumber(r.parsed.rowNo)}: {r.reason}</li>)}
+            {unresolved.filter(r => r.status !== 'unresolved' || !r.personnel).slice(0, 5).map(r => <li key={`${r.parsed.sheet}#${r.parsed.rowNo}`}>{r.parsed.sheet} — ردیف {formatPersianNumber(r.parsed.rowNo)}: {r.reason}</li>)}
           </ul>
+        )}
+        {/* a colleague row held back for its use: its use is chosen here, since the preview opens only when no row waits */}
+        {step === 'names' && unresolved.some(r => r.status === 'unresolved' && r.personnel) && (
+          <div className="space-y-1">
+            <p className="text-[11px] text-slate-600 dark:text-slate-300">ردیف‌های همکار با «پرداخت دیگر» حساب مقابل خودشان را می‌خواهند؛ کاربرد هر ردیف را انتخاب کنید یا «کد حساب مقابل» آن را در اکسل بنویسید:</p>
+            {unresolved.filter(r => r.status === 'unresolved' && r.personnel).map(r => {
+              const key = rowKey(r.parsed);
+              return (
+                <label key={key} className="flex flex-wrap items-center gap-2 text-[11px] text-slate-700 dark:text-slate-200">
+                  <span>{r.parsed.sheet} — ردیف {formatPersianNumber(r.parsed.rowNo)} — {r.parsed.partyName} — {r.parsed.description}</span>
+                  <select aria-label={`کاربرد ردیف ${formatPersianNumber(r.parsed.rowNo)}`} className="rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-[11px]"
+                    value={uses[key] ?? 'other'} onChange={e => { setUses(u => ({ ...u, [key]: e.target.value as PersonnelUse })); setStale(true); }}>
+                    {(Object.keys(USE_LABEL) as PersonnelUse[]).map(u => <option key={u} value={u}>{USE_LABEL[u]}</option>)}
+                  </select>
+                </label>
+              );
+            })}
+          </div>
         )}
         {step === 'preview' && (
           <TreasuryImportPreview resolved={resolved} result={stale ? null : result} uses={uses} accepted={accepted}
