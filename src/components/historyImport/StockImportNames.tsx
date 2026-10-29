@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { Customer } from '../../types';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
 import type { StockImportMapping, SupplierTarget, WarehouseTarget } from '../../lib/historyImport/stockSheet';
+import { formatPersianCode } from '../../utils';
 
 /**
  * v11 history import, tool 2: the warehouse and supplier names of the Excel file, each mapped once to the app, and the
@@ -33,7 +34,7 @@ export function StockImportNames({ names, mapping, warehouses, suppliers, onChan
     else next[name] = value === 'skip' ? { kind: 'skip' } : { kind: 'supplier', partyId: Number(value.slice(2)) };
     onChange({ ...mapping, suppliers: next });
   };
-  const warehouseOptions = warehouses.map(w => <option key={w.code} value={`wh:${w.code}`}>{w.name || w.code}</option>);
+  const warehouseOptions = warehouses.map(w => <option key={w.code} value={`wh:${w.code}`}>{w.name || formatPersianCode(w.code)}</option>);
 
   const section = (title: string, hint: string, items: string[], render: (name: string) => ReactNode) => items.length === 0 ? null : (
     <section className="space-y-2">
@@ -71,7 +72,7 @@ export function StockImportNames({ names, mapping, warehouses, suppliers, onChan
         <select aria-label="انبار نمایش" className={SELECT_CLASS} value={mapping.displayWarehouse ?? ''}
           onChange={e => onChange({ ...mapping, displayWarehouse: e.target.value || null })}>
           <option value="">انتخاب کنید</option>
-          {warehouses.map(w => <option key={w.code} value={w.code}>{w.name || w.code}</option>)}
+          {warehouses.map(w => <option key={w.code} value={w.code}>{w.name || formatPersianCode(w.code)}</option>)}
         </select>
       </label>
     </div>
