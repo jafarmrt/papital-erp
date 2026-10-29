@@ -130,8 +130,10 @@ export type PersonnelUse = 'payslip' | 'advance' | 'colleague_account' | 'other'
 export function guessPersonnelUse(row: Pick<ParsedTreasuryRow, 'description' | 'partyName' | 'typeText'>): PersonnelUse {
   const text = `${row.description} ${row.partyName}`;
   if (text.includes('مساعده')) return 'advance';
-  if (/تنخواه|بازپرداخت|از جیب/.test(text)) return 'colleague_account';
   if (row.typeText === 'پرداخت' && /حقوق|دستمزد/.test(text)) return 'payslip';
+  // a loan repaid («بازپرداخت وام») is not the running account; such a row waits for the user's choice
+  if (/وام|قسط/.test(text)) return 'other';
+  if (/تنخواه|بازپرداخت|از جیب/.test(text)) return 'colleague_account';
   return 'other';
 }
 

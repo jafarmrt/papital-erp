@@ -42,10 +42,11 @@ export interface ColleagueExpenseInput {
   audit?: TreasuryAuditActor;
 }
 
-async function lockColleague(tx: DbExecutor, personnelId: number): Promise<{ id: number; name: string }> {
+/** Locks the colleague; a void also takes a colleague deleted since (their expense can still turn out wrong). */
+async function lockColleague(tx: DbExecutor, personnelId: number, options: { allowDeleted?: boolean } = {}): Promise<{ id: number; name: string }> {
   await lockAdvancePersonnel(tx, personnelId);
   const [row] = await tx.select({ id: personnel.id, name: personnel.fullName }).from(personnel)
-    .where(and(eq(personnel.id, personnelId), eq(personnel.isDeleted, 0)));
+    .where(options.allowDeleted ? eq(personnel.id, personnelId) : and(eq(personnel.id, personnelId), eq(personnel.isDeleted, 0)));
   if (!row) throw new NotFoundError('همکار یافت نشد یا حذف شده است.', undefined, 'COLLEAGUE_EXPENSE_PERSONNEL_INVALID');
   return row;
 }
@@ -176,7 +177,7 @@ export async function voidColleagueExpense(id: number, params: { reason: string;
   return await idempotentTransactionIn(undefined, async (tx) => {
     const [peek] = await tx.select({ personnelId: colleagueExpenses.personnelId }).from(colleagueExpenses).where(eq(colleagueExpenses.id, id));
     if (!peek) throw new NotFoundError('هزینهٔ پرداختی همکار یافت نشد.');
-    const colleague = await lockColleague(tx, peek.personnelId);
+    const colleague = await lockColleague(tx, peek.personnelId, { allowDeleted: true });
     const [row] = await tx.select().from(colleagueExpenses).where(eq(colleagueExpenses.id, id)).for('update');
     if (row.status !== 'active') throw new ConflictError('این هزینه پیش‌تر ابطال شده است.', undefined, 'COLLEAGUE_EXPENSE_ALREADY_VOIDED');
     let voucherAction: 'deleted' | 'reversed' = 'deleted';

@@ -55,3 +55,14 @@ CREATE INDEX IF NOT EXISTS idx_colleague_expense_lines_account ON colleague_expe
 ALTER TABLE treasury_transactions DROP CONSTRAINT IF EXISTS chk_treasury_transactions_purpose;
 --> statement-breakpoint
 ALTER TABLE treasury_transactions ADD CONSTRAINT chk_treasury_transactions_purpose CHECK ((purpose IS NULL) OR (purpose = ANY (ARRAY['settlement'::text, 'advance'::text, 'deductions'::text, 'colleague_account'::text, 'other'::text])));
+--> statement-breakpoint
+-- The colleague running account under «سایر حساب‌ها و اسناد پرداختنی» (32), for an install whose chart already has its group;
+-- a new install gets it from the standard chart. An install that already uses code 3208 keeps its account (the mapping page
+-- can point «حساب جاری همکاران» elsewhere), as migration 0004 does for 6005.
+INSERT INTO accounts (code, name, level, parent_id, account_type, nature, is_system, is_active, is_deleted)
+SELECT '3208', 'حساب جاری همکاران', 'subsidiary', parent.id, 'liability', 'credit', 1, 1, 0
+FROM accounts parent
+WHERE parent.code = '32' AND parent.is_deleted = 0
+  AND NOT EXISTS (SELECT 1 FROM accounts existing WHERE existing.code = '3208' AND existing.is_deleted = 0)
+ORDER BY parent.id
+LIMIT 1;

@@ -91,6 +91,17 @@ export async function runColleagueAccountV11Tests(shouldRun: ShouldRun): Promise
       if (await runningAccount(running, colleague) !== -350000) problems.push(`the running account is ${await runningAccount(running, colleague)} after the void, expected -350,000`);
       const again = await admin.post(`${EXPENSES_URL}/${expense.id}/void`, { reason: 'دوباره' });
       if (again.status !== 409) problems.push(`a second void returned ${brief(again)}, expected 409`);
+
+      // review of #430: an expense of a colleague deleted since can still be voided
+      const gone = await newWorker('همکار حذف‌شده');
+      const late = await admin.post(EXPENSES_URL, { personnelId: gone, date: '2026-04-10', description: 'خرید', lines: [{ accountId: expenseAccount, amount: '1000' }] });
+      if (late.status !== 201) problems.push(`the second colleague's expense returned ${brief(late)}`);
+      await orm.execute(sql`UPDATE personnel SET is_deleted = 1 WHERE id = ${gone}`);
+      const lateVoid = await admin.post(`${EXPENSES_URL}/${(late.body as ColleagueExpense).id}/void`, { reason: 'تکراری' });
+      if (!ok(lateVoid)) problems.push(`voiding the expense of a deleted colleague returned ${brief(lateVoid)}, expected success`);
+      // the colleague running account shares no account with another control concept (wages payable 3201)
+      const clash = await admin.post('/api/accounting/mappings', { colleagueCurrentAccountCode: '3201' });
+      if (clash.status !== 422 || clash.body?.code !== 'ACCOUNT_MAPPING_INVALID') problems.push(`mapping the running account to 3201 returned ${brief(clash)}, expected 422 ACCOUNT_MAPPING_INVALID`);
       if (problems.length > 0) throw new Error(problems.join(' | '));
       return 'the expense voucher credits the colleague, the running account moves both ways with no cap, a control account stays closed to «other», and the void takes the draft voucher off';
     }));
