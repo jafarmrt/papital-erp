@@ -52,6 +52,10 @@ export async function runExpenseProjectsV11Tests(shouldRun: ShouldRun): Promise<
         type: 'payment', method: 'bank_transfer', amount: 1000, bankAccountId: bank, partyType: 'personnel', partyId: await newWorker('همکار پروژه'), partyName: 'همکار', purpose: 'advance', projectId: project.id, date: '2026-04-05',
       });
       if (onCustomer.status !== 422 || onCustomer.body?.code !== 'TREASURY_PROJECT_NOT_ALLOWED') problems.push(`a project on a colleague's advance returned ${brief(onCustomer)}, expected 422 TREASURY_PROJECT_NOT_ALLOWED`);
+      // a project only sits on an expense line: not on a liability such as customer prepayments (3202)
+      const liability = await accountId('3202');
+      const onLiability = await pay({ projectId: project.id, contraAccountId: liability });
+      if (onLiability.status !== 422 || onLiability.body?.code !== 'TREASURY_PROJECT_NOT_ALLOWED') problems.push(`a project on a liability counter line returned ${brief(onLiability)}, expected 422 TREASURY_PROJECT_NOT_ALLOWED`);
 
       // 2. a petty cash statement line
       const fundRes = await admin.post('/api/accounting/bank-accounts', { title: `تنخواه پروژه ${tag}`, type: 'petty_cash', accountId: await accountId('1006') });
@@ -91,6 +95,18 @@ export async function runExpenseProjectsV11Tests(shouldRun: ShouldRun): Promise<
         const [tx] = (await orm.execute(sql`SELECT id FROM treasury_transactions WHERE bank_account_id = ${bank} AND amount = 4000 AND is_deleted = 0`)).rows as Array<{ id: number }>;
         if (!tx || !isProject(await detailOn(await voucherOfTreasury(Number(tx.id)), expense))) problems.push('the imported expense does not carry the project');
       }
+      // a cost centre mapped to a project leaves a row on a non-expense account (here a liability) without it
+      const loan = await admin.post('/api/accounting/treasury/history-import', { commit: true, rows: [{ ...rows[0], rowNo: 3, amount: '4100', contraAccountId: liability }] });
+      if (!ok(loan) || !(loan.body as TreasuryImportResult).committed) problems.push(`the import of a liability row returned ${brief(loan)}`);
+      else {
+        const [tx] = (await orm.execute(sql`SELECT id FROM treasury_transactions WHERE bank_account_id = ${bank} AND amount = 4100 AND is_deleted = 0`)).rows as Array<{ id: number }>;
+        const lines = tx ? await detailOn(await voucherOfTreasury(Number(tx.id)), liability) : [];
+        if (lines.length === 0 || lines.some(r => r.type === 'project')) problems.push(`the imported liability line reads ${JSON.stringify(lines)}, expected no project`);
+      }
+
+      // a project with expenses booked on it is not deleted
+      const del = await admin.del(`/api/projects/${project.id}`);
+      if (del.status !== 409 || del.body?.code !== 'PROJECT_HAS_LEDGER_ITEMS') problems.push(`deleting a project with expenses returned ${brief(del)}, expected 409 PROJECT_HAS_LEDGER_ITEMS`);
       if (problems.length > 0) throw new Error(problems.join(' | '));
       return 'a project named on an expense travels to its voucher line, from the forms and from the import';
     }));

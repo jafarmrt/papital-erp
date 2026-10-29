@@ -32,7 +32,7 @@ import {
   assertBankCurrency, lockTreasuryBank, lockTreasuryBanks, nextTreasuryTransactionNumber, postTreasuryRow, reverseTreasuryRow, treasuryEventPayload, isHighValueAmount, treasuryHighValueThreshold, type TreasuryBank, type TreasuryRow,
 } from './treasuryPosting.js';
 import { idempotentTransaction, idempotentTransactionIn } from '../../../middleware/idempotency.js';
-import { expenseLineDetail, resolveExpenseProjects } from './expenseProject.js';
+import { expenseLineDetail, isExpenseAccount, resolveExpenseProjects } from './expenseProject.js';
 
 /**
  * TD-105 (v4.0.31): تاریخ تراکنش‌های خزانه «سرور authoritative» است: خالی ← امروز کسب‌وکار، تاریخ آینده ← 422.
@@ -361,6 +361,9 @@ export class TreasuryTransactionService {
         contraAccountId = contra?.account?.id || null;
         if (!contraAccountId) {
           throw new NotFoundError('حساب معین طرف حساب در چارت حساب‌ها یافت نشد (آن را از تنظیمات ← تنظیمات حسابداری پیکربندی کنید)');
+        }
+        if (data.projectId && !(await isExpenseAccount(txEngine, contraAccountId))) {
+          throw new ValidationError('پروژه فقط روی حساب مقابلی می‌نشیند که حساب هزینه یا بهای تمام‌شده است؛ پروژه را بردارید یا حساب مقابل را درست کنید.', undefined, 'TREASURY_PROJECT_NOT_ALLOWED');
         }
       }
 

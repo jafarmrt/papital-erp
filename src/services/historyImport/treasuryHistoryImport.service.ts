@@ -16,6 +16,7 @@ import { toStorageDate } from '../../utils/calendarDate.js';
 import { excelInvoiceNumber } from '../../lib/historyImport/stockHistoryImport.js';
 import { TreasuryTransactionService } from '../accounting/treasury/treasuryTransaction.service.js';
 import { createColleagueExpense } from '../accounting/treasury/colleagueExpense.service.js';
+import { isExpenseAccount } from '../accounting/treasury/expenseProject.js';
 import { lockTreasuryBanks } from '../accounting/treasury/treasuryPosting.js';
 import type { TreasuryAuditActor } from '../accounting/treasury/treasuryAudit.js';
 import { PayrollPaymentService } from '../accounting/payrollPayment.service.js';
@@ -305,7 +306,9 @@ async function postRow(tx: DbExecutor, p: PreparedRow, options: TreasuryImportOp
     partyName: (row.partyName ?? '').trim(),
     purpose: row.purpose ?? undefined,
     contraAccountId: row.contraAccountId ?? null,
-    projectId: row.projectId ?? null,
+    // tool 5: a cost centre mapped to a project only applies to an expense line; a loan, an advance or an owner's
+    // movement under the same cost centre takes no project
+    projectId: row.projectId && row.contraAccountId && await isExpenseAccount(tx, row.contraAccountId) ? row.projectId : null,
     trackingNumber: (row.invoiceRef ?? '').trim(),
     description,
     allocations: parts.length > 0 ? parts : undefined,

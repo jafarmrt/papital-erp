@@ -3,7 +3,7 @@ import { TREASURY_IMPORT_MAX_ROWS } from '../lib/historyImport/treasuryHistoryIm
 import { STOCK_IMPORT_MAX_ROWS } from '../lib/historyImport/stockHistoryImport.js';
 
 const TEXT_MAX = 1000;
-const optionalId = z.coerce.number().int().positive().nullable().optional();
+const optionalId = z.coerce.number().int().positive().max(2147483647).nullable().optional();
 
 // v11 history import (tool 1): one resolved Excel row; the window has already turned each name into an id
 const treasuryImportRowSchema = z.object({

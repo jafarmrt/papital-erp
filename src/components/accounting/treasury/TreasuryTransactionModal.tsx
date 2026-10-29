@@ -111,6 +111,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
         amount: 0,
         trackingNumber: '',
         description: '',
+        projectId: null,
         attachments: [],
       }));
     }
@@ -198,7 +199,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
         ...formData,
         purpose: formData.partyType === 'personnel' ? formData.purpose : undefined,
         contraAccountId: needsContra ? formData.contraAccountId : null,
-        projectId: formData.partyType === 'other' && formData.projectId ? formData.projectId : undefined,
+        projectId: formData.partyType === 'other' && formData.createVoucher && formData.projectId ? formData.projectId : undefined,
         currency: bankCurrency,
         exchangeRate: bankCurrency !== 'IRR' && formData.exchangeRate > 0 ? formData.exchangeRate : undefined,
         createVoucher: canSkipVoucher ? formData.createVoucher : true,
@@ -452,7 +453,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
               settlementViaPayslipOnly
               onChange={patch => setFormData(prev => ({ ...prev, ...patch }))}
             />
-            {formData.partyType === 'other' && projects.length > 0 && (
+            {formData.partyType === 'other' && formData.createVoucher && projects.length > 0 && (
               <div>
                 <label htmlFor={`${fieldId}-project`} className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">پروژه (اختیاری)</label>
                 <select
@@ -464,6 +465,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                   <option value="">بدون پروژه</option>
                   {projects.map(p => <option key={p.id} value={p.id}>{formatPersianCode(p.projectCode || p.project_code)} - {p.title}</option>)}
                 </select>
+                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">فقط وقتی حساب مقابل حساب هزینه یا بهای تمام‌شده است.</p>
               </div>
             )}
 

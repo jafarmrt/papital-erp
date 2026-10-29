@@ -17,7 +17,7 @@ import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { TreasuryTransactionService } from './treasuryTransaction.service.js';
 import { lockTreasuryBankRow, postTreasuryRow } from './treasuryPosting.js';
 import { idempotentTransaction } from '../../../middleware/idempotency.js';
-import { expenseLineDetail, projectTitleOf, resolveExpenseProjects } from './expenseProject.js';
+import { EXPENSE_ACCOUNT_TYPES, expenseLineDetail, projectTitleOf, resolveExpenseProjects } from './expenseProject.js';
 
 /**
  * v10.1.32 (D-16، تصمیم مالک محصول ت۳۰ «متغیر»): صورت‌هزینه تنخواه‌گردان. یک پرداخت خزانه از حساب تنخواه (نوع
@@ -29,7 +29,7 @@ import { expenseLineDetail, projectTitleOf, resolveExpenseProjects } from './exp
  */
 
 /** انواع حسابی که ردیف صورت‌هزینه می‌پذیرد: هزینه و بهای تمام‌شده (گروه «هزینه» نگاشت حساب‌ها) */
-export const PETTY_CASH_EXPENSE_ACCOUNT_TYPES = ['expense', 'cost_of_sales'] as const;
+export const PETTY_CASH_EXPENSE_ACCOUNT_TYPES = EXPENSE_ACCOUNT_TYPES;
 
 const FUND_INVALID = 'PETTY_CASH_FUND_INVALID';
 const ACCOUNT_INVALID = 'PETTY_CASH_EXPENSE_ACCOUNT_INVALID';
