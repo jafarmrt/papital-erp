@@ -25,7 +25,11 @@ import { LEDGER_ROW_FILTER } from '../inventory/stockMovementDate.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { getDefaultWarehouseCode } from '../inventory/warehouseResolver.js';
 import { ImportItemIndex } from '../items/itemImportIndex.js';
-import { runImportRows, type RowAttempt } from './importRunner.js';
+import { lockHistoryImport, runImportRows, type RowAttempt } from './importRunner.js';
+import { REPLAY_OPENING_NOTES, listOldOpenings, withdrawOldOpenings } from '../inventory/itemOpeningReplay.js';
+import { orm } from '../../db/drizzle.js';
+import { idempotentTransaction } from '../../middleware/idempotency.js';
+import type { OldOpeningList, OldOpeningWithdrawResult } from '../../lib/historyImport/oldOpening.js';
 
 /**
  * v11 history import, tool 2: the warehouse rows of 1405 from Excel (decision of the owner, 6 Aban 1405: all of 1405 is
@@ -66,7 +70,8 @@ interface PreparedRow {
 }
 
 export const OPENING_KARDEX_REF = 'ثبت موجودی افتتاحیه';
-const OPENING_KARDEX_NOTES = 'موجودی اولیه از ورود سابقه اکسل';
+/** the replay's opening rows carry these notes, so tool 8 never takes them back as an old opening */
+const OPENING_KARDEX_NOTES = REPLAY_OPENING_NOTES;
 
 const faDate = (iso: string) => toPersianDigits(isoToJalaliDate(iso));
 /** opening stock is entered on the first day of 1405 only (owner's decision, 6 Aban 1405), as the window sends it */
@@ -449,4 +454,23 @@ export async function importStockHistory(rows: StockImportRow[], options: StockI
   const committed = options.commit && okCount === outcomes.length;
   if (!committed) for (const o of outcomes) delete o.created;
   return { committed, rows: outcomes, okCount, errorCount: count('error'), duplicateCount: count('duplicate') };
+}
+
+/** Tool 8, the first step of the stock import: the openings entered before the replay, and whether each can be taken back. */
+export async function oldOpeningsBeforeReplay(): Promise<OldOpeningList> {
+  return orm.transaction(async (tx) => {
+    await lockHistoryImport(tx);
+    return listOldOpenings(tx);
+  });
+}
+
+/** Tool 8: takes back the chosen items' old openings and deletes their draft opening vouchers, all or nothing. */
+export async function withdrawOpeningsBeforeReplay(
+  itemIds: number[],
+  actor: { userId?: number; username?: string; userFullName?: string; req?: unknown },
+): Promise<OldOpeningWithdrawResult> {
+  return idempotentTransaction(async (tx) => {
+    await lockHistoryImport(tx);
+    return withdrawOldOpenings(tx, itemIds, actor);
+  });
 }

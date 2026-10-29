@@ -24,6 +24,11 @@ class ImportRollback extends Error {
 
 const HISTORY_IMPORT_LOCK = 'papital.history_import';
 
+/** One history import step at a time (an import, a preview, taking back old openings): a second one waits for the first. */
+export async function lockHistoryImport(tx: DbExecutor): Promise<void> {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${HISTORY_IMPORT_LOCK}))`);
+}
+
 export const UNEXPECTED_ROW_MESSAGE = 'این ردیف با خطای پیش‌بینی‌نشده‌ای روبه‌رو شد و ثبت نمی‌شود؛ آن را با دست ثبت کنید یا به پشتیبانی خبر دهید.';
 
 /** The message of a refused row: a business refusal says why in Persian; anything else is logged and named as unexpected. */
@@ -47,7 +52,7 @@ export async function runImportRows(
   const inTransaction = (commit: boolean, fn: (tx: DbExecutor) => Promise<void>) => (commit ? idempotentTransaction(fn) : orm.transaction(fn));
   const run = (commit: boolean) => inTransaction(commit, async (tx) => {
     // one import at a time: a second one (a resend, another month) waits and then reads what the first one posted
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${HISTORY_IMPORT_LOCK}))`);
+    await lockHistoryImport(tx);
     const attempt: RowAttempt = async (fn) => {
       try {
         const value = await tx.transaction(sp => fn(sp));

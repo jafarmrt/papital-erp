@@ -70,13 +70,34 @@ export async function withdrawUnapprovedOpening(tx: DbExecutor, itemId: number, 
   // v11 phase 7.2 (finding F5 of the v11 full test): as a document void does, the opening rows are soft-deleted and each
   // gets an active reversal row (`reversal_of_id`), so the Kardex keeps the trace of what was entered and taken back;
   // before, the rows were only soft-deleted. The item row is locked FOR NO KEY UPDATE, as every stock path locks it. The
-  // reversal rows carry the user who rejected the definition. The warehouse stock goes down with `applyMovement` directly,
-  // as the document void's `applyStockReversal` does: a withdrawal has no document to run through the stock engine.
+  // reversal rows carry the user who rejected the definition.
+  const withdrawn = await reverseOpeningRows(tx, itemId, openingIds, {
+    performedByUserId,
+    notes: id => `برگشت موجودی اول دوره با رد تعریف کالا (معکوس تراکنش #${id})`,
+    date: 'now',
+  });
+  return withdrawn;
+}
+
+
+/**
+ * Soft-deletes an item's opening Kardex rows and writes an active reversal row for each, taking the warehouse stock back
+ * down with `applyMovement` directly, as the document void's `applyStockReversal` does: a withdrawal has no document to
+ * run through the stock engine. A reversal of a deleted row is not a movement (`LEDGER_ROW_FILTER`), so its date only
+ * places it on the Kardex view: `now` (a rejected definition) or the opening row's own day (the 1405 replay). The caller
+ * has locked the item.
+ */
+export async function reverseOpeningRows(
+  tx: DbExecutor,
+  itemId: number,
+  openingIds: number[],
+  options: { performedByUserId?: number; notes: (originalId: number) => string; date: 'now' | 'sameDay' },
+): Promise<number> {
   const originals = await tx.select().from(transactions).where(inArray(transactions.id, openingIds));
-  const nowIso = await businessNowIsoDateTime();
+  const nowIso = options.date === 'now' ? await businessNowIsoDateTime() : '';
   // `transactions.created_by` holds the username, as the document void writes it
-  const [performer] = performedByUserId
-    ? await tx.select({ username: users.username }).from(users).where(eq(users.id, performedByUserId))
+  const [performer] = options.performedByUserId
+    ? await tx.select({ username: users.username }).from(users).where(eq(users.id, options.performedByUserId))
     : [];
   await tx.update(transactions).set({ isDeleted: 1 }).where(inArray(transactions.id, openingIds));
   let withdrawn = 0;
@@ -91,18 +112,18 @@ export async function withdrawUnapprovedOpening(tx: DbExecutor, itemId: number, 
       quantity,
       unitPrice: money(orig.unitPrice),
       totalPrice: money(orig.totalPrice),
-      date: nowIso,
+      date: options.date === 'now' ? nowIso : orig.date,
       documentType: orig.documentType,
       documentRef: `REV-${orig.documentRef ?? ''}`,
       createdBy: performer?.username || orig.createdBy,
-      notes: `برگشت موجودی اول دوره با رد تعریف کالا (معکوس تراکنش #${orig.id})`,
+      notes: options.notes(orig.id),
       location: warehouse.code,
       reversalOfId: orig.id,
       isDeleted: 0,
     });
     withdrawn += quantity;
   }
-  await tx.update(items).set({ version: nextVersion(item.version) }).where(eq(items.id, itemId));
+  const [item] = await tx.select({ version: items.version }).from(items).where(eq(items.id, itemId));
+  await tx.update(items).set({ version: nextVersion(item?.version) }).where(eq(items.id, itemId));
   return withdrawn;
 }
-
