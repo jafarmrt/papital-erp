@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { bankAccounts, colleagueExpenses, documents, historyImportRefs, journalVoucherItems, journalVouchers, pieceworkPayrolls, treasuryTransactions } from '../../db/schema.js';
+import { bankAccounts, colleagueExpenses, documents, historyImportPurchaseRefs, historyImportRefs, journalVoucherItems, journalVouchers, pieceworkPayrolls, treasuryTransactions } from '../../db/schema.js';
 import { ForbiddenError, ValidationError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
@@ -11,11 +11,13 @@ import {
   type TreasuryImportResult, type TreasuryImportRow, type TreasuryImportRowOutcome,
 } from '../../lib/historyImport/treasuryHistoryImport.js';
 import { historyImportAmount } from '../../lib/historyImport/historyImportAmount.js';
+import { purchaseRefKey } from '../../lib/historyImport/purchaseRef.js';
 import { formatPersianNumber, isoToJalaliDate, toPersianDigits } from '../../utils.js';
 import { toStorageDate } from '../../utils/calendarDate.js';
 import { excelInvoiceNumber } from '../../lib/historyImport/stockHistoryImport.js';
 import { TreasuryTransactionService } from '../accounting/treasury/treasuryTransaction.service.js';
 import { createColleagueExpense } from '../accounting/treasury/colleagueExpense.service.js';
+import { isExpenseAccount } from '../accounting/treasury/expenseProject.js';
 import { lockTreasuryBanks } from '../accounting/treasury/treasuryPosting.js';
 import type { TreasuryAuditActor } from '../accounting/treasury/treasuryAudit.js';
 import { PayrollPaymentService } from '../accounting/payrollPayment.service.js';
@@ -166,6 +168,34 @@ async function invoiceOfExcelRef(tx: DbExecutor, invoiceRef: string | undefined)
 }
 
 /**
+ * The live purchase receipts the stock import recorded for a supplier and the supplier's invoice number (tool 6), oldest
+ * first, whatever their day.
+ */
+async function purchaseReceiptsOfRef(tx: DbExecutor, supplierId: number, ref: string): Promise<number[]> {
+  const found = await tx.select({ id: documents.id }).from(historyImportPurchaseRefs)
+    .innerJoin(documents, eq(documents.id, historyImportPurchaseRefs.documentId))
+    .where(and(
+      eq(historyImportPurchaseRefs.supplierId, supplierId),
+      eq(historyImportPurchaseRefs.excelRef, purchaseRefKey(ref)),
+      eq(documents.partyId, supplierId),
+      eq(documents.isDeleted, 0),
+      eq(documents.type, 'receipt'),
+      inArray(documents.status, [...SETTLEABLE_DOCUMENT_STATUSES]),
+      sql`coalesce(nullif(trim(${documents.currency}), ''), 'IRR') = 'IRR'`,
+    ))
+    .orderBy(asc(documents.date), asc(documents.id));
+  return found.map(f => Number(f.id));
+}
+
+/** Of these documents, the purchase receipts that carry a supplier invoice number of the stock import (tool 6). */
+async function receiptsWithPurchaseRef(tx: DbExecutor, ids: number[]): Promise<Set<number>> {
+  if (ids.length === 0) return new Set();
+  const found = await tx.selectDistinct({ id: historyImportPurchaseRefs.documentId }).from(historyImportPurchaseRefs)
+    .where(inArray(historyImportPurchaseRefs.documentId, ids));
+  return new Set(found.map(f => Number(f.id)));
+}
+
+/**
  * The open documents of a customer (receipt) or supplier (payment) dated on or before the row, oldest first, with what each has left, read in the
  * import's transaction, so a document an earlier row of the same import settled shows what it still has left.
  */
@@ -185,6 +215,22 @@ async function oldestFirstParts(tx: DbExecutor, row: TreasuryImportRow, isoDate:
   // tool 3: a receipt that names a past sales invoice by its Excel number settles that invoice first
   const named = isReceipt ? await invoiceOfExcelRef(tx, row.invoiceRef) : null;
   if (named !== null) candidates.sort((a, b) => Number(b.id === named) - Number(a.id === named));
+  if (!isReceipt) {
+    // tool 6: a receipt that carries a supplier invoice number waits for the payment row that names it, so a payment
+    // with no number (or what a named payment has left) goes to the oldest documents without a number first
+    const numbered = await receiptsWithPurchaseRef(tx, candidates.map(c => c.id));
+    candidates.sort((a, b) => Number(numbered.has(a.id)) - Number(numbered.has(b.id)));
+  }
+  // tool 6: a supplier payment that names the supplier's invoice settles its receipts first (oldest of them first), also
+  // a receipt dated after the payment (goods paid before they came in); what is left goes to the oldest open documents
+  if (!isReceipt && purchaseRefKey(row.purchaseRef)) {
+    const receipts = await purchaseReceiptsOfRef(tx, row.partyId, row.purchaseRef!);
+    if (receipts.length === 0) {
+      throw new ValidationError(`رسید خرید باز و ثبت‌شده‌ای با «شماره فاکتور مرجع» ${toPersianDigits(row.purchaseRef!)} از این تأمین‌کننده در برنامه نیست (رسیدی با این شماره وارد نشده، یا باطل یا پیش‌نویس شده، یا تأمین‌کننده‌اش عوض شده است). هر خرید مواد باید در اکسل انبار یک ردیف «خرید جدید» با همین شماره داشته باشد و آن ماه انبار پیش از این وارد شده باشد؛ اگر این خرید به انبار نمی‌آید، شمارهٔ ستون «شماره مرجع-فاکتور» این ردیف را پاک کنید تا از قدیمی‌ترین بدهی این تأمین‌کننده کم شود.`, undefined, 'HISTORY_IMPORT_PURCHASE_REF_UNKNOWN');
+    }
+    const named = new Set(receipts);
+    candidates.splice(0, candidates.length, ...receipts.map(id => ({ id })), ...candidates.filter(c => !named.has(c.id)));
+  }
   const parts: SettlementAllocationInput[] = [];
   let left = fin(amount);
   for (const c of candidates) {
@@ -279,7 +325,7 @@ async function postRow(tx: DbExecutor, p: PreparedRow, options: TreasuryImportOp
       personnelId: Number(row.personnelId),
       date: p.isoDate,
       description,
-      lines: [{ accountId: Number(row.contraAccountId), amount: p.amount, sellerName: (row.partyName ?? '').trim(), invoiceNumber: (row.invoiceRef ?? '').trim() }],
+      lines: [{ accountId: Number(row.contraAccountId), amount: p.amount, sellerName: (row.partyName ?? '').trim(), invoiceNumber: (row.invoiceRef ?? '').trim(), projectId: row.projectId ?? null }],
       userId: options.userId,
       username: options.username,
       audit: options.audit,
@@ -305,6 +351,9 @@ async function postRow(tx: DbExecutor, p: PreparedRow, options: TreasuryImportOp
     partyName: (row.partyName ?? '').trim(),
     purpose: row.purpose ?? undefined,
     contraAccountId: row.contraAccountId ?? null,
+    // tool 5: a cost centre mapped to a project only applies to an expense line; a loan, an advance or an owner's
+    // movement under the same cost centre takes no project
+    projectId: row.projectId && row.contraAccountId && await isExpenseAccount(tx, row.contraAccountId) ? row.projectId : null,
     trackingNumber: (row.invoiceRef ?? '').trim(),
     description,
     allocations: parts.length > 0 ? parts : undefined,

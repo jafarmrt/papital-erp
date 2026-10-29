@@ -46,9 +46,19 @@ export interface TreasuryImportRow {
   invoiceRef?: string;
   /** the Excel cost centre (مرکز هزینه), kept in the description */
   costCenter?: string;
+  /**
+   * tool 5: the production project the cost centre was mapped to, on a miscellaneous receipt or payment (party «other») or
+   * a colleague's out-of-pocket expense; its voucher's expense line carries the project
+   */
+  projectId?: number | null;
   description?: string;
   /** a customer receipt or supplier payment settles that party's open documents, oldest first */
   settleOldest?: boolean;
+  /**
+   * tool 6: a supplier payment of the «هزینه‌ها» sheet that names the supplier's invoice («شماره مرجع-فاکتور»): it settles
+   * the purchase receipts the warehouse import recorded with that number first; a number with no receipt is refused
+   */
+  purchaseRef?: string;
   /** the user has seen that this row looks like one already recorded and wants it recorded again */
   duplicateAccepted?: boolean;
 }

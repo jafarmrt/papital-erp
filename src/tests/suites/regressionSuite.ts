@@ -11174,9 +11174,13 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runHistoryImportStockV11Tests(shouldRun));
   const { runHistoryImportSalesV11Tests } = await import('../regression/historyImportSalesV11Tests.js');
   results.push(...await runHistoryImportSalesV11Tests(shouldRun));
+  const { runHistoryImportPurchaseRefsV11Tests } = await import('../regression/historyImportPurchaseRefsV11Tests.js');
+  results.push(...await runHistoryImportPurchaseRefsV11Tests(shouldRun));
   // v11 tool 4: each colleague's running account (out-of-pocket expenses, petty cash in hand, paybacks)
   const { runColleagueAccountV11Tests } = await import('../regression/colleagueAccountV11Tests.js');
   results.push(...await runColleagueAccountV11Tests(shouldRun));
+  const { runExpenseProjectsV11Tests } = await import('../regression/expenseProjectsV11Tests.js');
+  results.push(...await runExpenseProjectsV11Tests(shouldRun));
   // v11 phase 7.2 (findings F1 to F6 of the v11 full test)
   const { runClosingFindingsV11Tests } = await import('../regression/closingFindingsV11Tests.js');
   results.push(...await runClosingFindingsV11Tests(shouldRun));

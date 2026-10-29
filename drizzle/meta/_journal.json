@@ -71,6 +71,20 @@
       "when": 1796799600000,
       "tag": "0009_colleague_expenses",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1796803200000,
+      "tag": "0010_expense_line_projects",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1796889600000,
+      "tag": "0011_history_import_purchase_refs",
+      "breakpoints": true
     }
   ]
 }

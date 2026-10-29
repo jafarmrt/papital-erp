@@ -5,6 +5,7 @@ const mutateAsync = vi.fn(async (_vars: unknown) => ({ id: 1 }));
 
 vi.mock('../../api', () => ({ fetchJson: vi.fn(async () => ({})) }));
 vi.mock('react-hot-toast', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock('../../hooks/queries/useProjectQueries', async (importOriginal) => ({ ...(await importOriginal<object>()), useProjectPickQuery: () => ({ data: [], isLoading: false }) }));
 vi.mock('../../hooks/accounting/usePettyCashQueries', () => ({
   usePettyCashExpenseAccountsQuery: () => ({
     data: [{ id: 76, code: '7002', name: 'هزینه اجاره کارگاه و دفتر', accountType: 'expense' }],
