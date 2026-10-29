@@ -46,6 +46,11 @@ export interface TreasuryImportRow {
   invoiceRef?: string;
   /** the Excel cost centre (مرکز هزینه), kept in the description */
   costCenter?: string;
+  /**
+   * tool 5: the production project the cost centre was mapped to, on a miscellaneous receipt or payment (party «other») or
+   * a colleague's out-of-pocket expense; its voucher's expense line carries the project
+   */
+  projectId?: number | null;
   description?: string;
   /** a customer receipt or supplier payment settles that party's open documents, oldest first */
   settleOldest?: boolean;

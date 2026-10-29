@@ -4,7 +4,7 @@ import { STOCK_IMPORT_MAX_ROWS } from '../lib/historyImport/stockHistoryImport.j
 import { OLD_OPENING_WITHDRAW_MAX_ITEMS } from '../lib/historyImport/oldOpening.js';
 
 const TEXT_MAX = 1000;
-const optionalId = z.coerce.number().int().positive().nullable().optional();
+const optionalId = z.coerce.number().int().positive().max(2147483647).nullable().optional();
 
 // v11 history import (tool 1): one resolved Excel row; the window has already turned each name into an id
 const treasuryImportRowSchema = z.object({
@@ -25,6 +25,7 @@ const treasuryImportRowSchema = z.object({
   personnelId: optionalId,
   invoiceRef: z.string().max(TEXT_MAX).optional(),
   costCenter: z.string().max(TEXT_MAX).optional(),
+  projectId: optionalId,
   description: z.string().max(TEXT_MAX).optional(),
   settleOldest: z.boolean().optional(),
   duplicateAccepted: z.boolean().optional(),

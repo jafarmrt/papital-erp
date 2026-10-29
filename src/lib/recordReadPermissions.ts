@@ -35,6 +35,8 @@ export const READ_PERMISSIONS = {
   projectOptions: [
     'projects.view', 'documents.view', 'documents.create', 'documents.finalize', 'warehouse.view', 'warehouse.in', 'warehouse.out',
     'piecework.view', 'piecework.log', 'daily_logs.view', 'daily_logs.create', 'accounting.vouchers', 'reports.sales',
+    // v11 tool 5: the project of a treasury expense, a petty cash line or a colleague's expense line
+    'accounting.treasury',
   ],
   /** فهرست کامل طرف حساب‌ها (با یادداشت و نسخه رکورد) فقط با مجوز مشاهده همان بخش (v9.0.137، TD-887، ت۱۰ الف) */
   customers: ['customers.view'],

@@ -5,11 +5,12 @@ import { Modal, ModalFooterActions } from '../common/Modal';
 import { ApiError, fetchJson } from '../../api';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { useContraAccountsQuery } from '../../hooks/accounting/useTreasuryQueries';
+import { useProjectPickQuery } from '../../hooks/queries/useProjectQueries';
 import { invalidateAfterTreasuryChange } from '../../hooks/accounting/accountingInvalidation';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { TREASURY_IMPORT_MAX_ROWS, type TreasuryImportResult } from '../../lib/historyImport/treasuryHistoryImport';
 import {
-  resolveTreasuryRow, suggestPartyTarget, unmappedNames,
+  resolveTreasuryRow, suggestCostCentre, suggestPartyTarget, unmappedNames,
   type ParsedTreasuryRow, type PersonnelUse, type TreasuryImportMapping,
 } from '../../lib/historyImport/treasurySheet';
 import { errorMessageOf, formatPersianCode, formatPersianNumber } from '../../utils';
@@ -25,7 +26,7 @@ import { loadSavedMapping, monthOf, readTreasuryWorkbook, saveMapping } from './
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  lists: Omit<TreasuryImportLists, 'accounts'>;
+  lists: Omit<TreasuryImportLists, 'accounts' | 'projects'>;
 }
 
 type Step = 'file' | 'names' | 'preview';
@@ -35,6 +36,9 @@ export function TreasuryHistoryImportModal({ isOpen, onClose, lists }: Props) {
   const queryClient = useQueryClient();
   const accountsQuery = useContraAccountsQuery(isOpen);
   const accounts = useMemo(() => (Array.isArray(accountsQuery.data) ? accountsQuery.data : []), [accountsQuery.data]);
+  // tool 5: the production projects a cost centre maps to
+  const projectsQuery = useProjectPickQuery();
+  const projects = useMemo(() => (Array.isArray(projectsQuery.data) ? projectsQuery.data : []), [projectsQuery.data]);
   const [step, setStep] = useState<Step>('file');
   const [rows, setRows] = useState<ParsedTreasuryRow[]>([]);
   const [month, setMonth] = useState('');
@@ -57,7 +61,7 @@ export function TreasuryHistoryImportModal({ isOpen, onClose, lists }: Props) {
     () => monthRows.map(r => resolveTreasuryRow(r, mapping, { uses, accountIdOfCode, accepted })),
     [monthRows, mapping, uses, accountIdOfCode, accepted],
   );
-  const allNames = useMemo(() => unmappedNames(monthRows, { ...mapping, banks: {}, parties: {} }), [monthRows, mapping]);
+  const allNames = useMemo(() => unmappedNames(monthRows, { ...mapping, banks: {}, parties: {}, costCentres: {} }), [monthRows, mapping]);
   const ready = resolved.flatMap(r => (r.status === 'ready' ? [r.row] : []));
   const unresolved = resolved.filter(r => r.status === 'unresolved');
   const bankTitle = (id: number) => lists.banks.find(b => b.id === id)?.title ?? `#${id}`;
@@ -94,7 +98,15 @@ export function TreasuryHistoryImportModal({ isOpen, onClose, lists }: Props) {
         const bank = lists.banks.find(b => b.title.trim() === r.bankName);
         if (r.bankName && !banks[r.bankName] && bank) banks[r.bankName] = { kind: 'bank', bankAccountId: bank.id };
       }
-      updateMapping({ ...mapping, parties, banks });
+      // tool 5: a general cost centre is offered as «بدون پروژه», a project's code or title as that project
+      const costCentres = { ...(mapping.costCentres ?? {}) };
+      for (const r of read.rows) {
+        const centre = r.costCenter.trim();
+        if (!centre || costCentres[centre]) continue;
+        const suggested = suggestCostCentre(centre, projects.map(p => ({ id: p.id, projectCode: p.projectCode || p.project_code, title: p.title })));
+        if (suggested) costCentres[centre] = suggested;
+      }
+      updateMapping({ ...mapping, parties, banks, costCentres });
       setRows(read.rows);
       const first = [...new Set(read.rows.map(r => monthOf(r.date)))].sort()[0] ?? '';
       setMonth(first);
@@ -181,7 +193,7 @@ export function TreasuryHistoryImportModal({ isOpen, onClose, lists }: Props) {
           </div>
         )}
         {step === 'names' && (
-          <TreasuryImportNames names={allNames} mapping={mapping} lists={{ ...lists, accounts }} onChange={updateMapping} />
+          <TreasuryImportNames names={allNames} mapping={mapping} lists={{ ...lists, accounts, projects }} onChange={updateMapping} />
         )}
         {step === 'names' && unresolved.length > 0 && (
           <ul className="text-[11px] text-rose-600 list-disc pr-4">

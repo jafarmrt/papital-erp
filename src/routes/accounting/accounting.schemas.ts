@@ -356,6 +356,8 @@ export const createTreasuryTxSchema = z.object({
     // v9.0.82 (TD-507): سرفصل طرف مقابل «متفرقه» و «سایر» پرسنل
     contraAccountId: z.coerce.number().int().positive().nullable().optional(),
     allocations: settlementParts.optional(),
+    // v11 tool 5: a miscellaneous receipt or payment spent on a production project
+    projectId: z.coerce.number().int().positive().max(2147483647).nullable().optional(),
   })
 });
 

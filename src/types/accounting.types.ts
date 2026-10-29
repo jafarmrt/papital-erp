@@ -342,6 +342,9 @@ export interface PettyCashExpenseLine {
   description: string;
   sellerName: string;
   invoiceNumber: string;
+  /** v11 tool 5: the production project of the line, or null */
+  projectId: number | null;
+  projectTitle: string;
 }
 
 export interface TrialBalanceRow {

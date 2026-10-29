@@ -11,6 +11,8 @@ const pettyCashLineSchema = z.object({
   description: z.string().max(PETTY_CASH_TEXT_MAX).optional(),
   sellerName: z.string().max(PETTY_CASH_TEXT_MAX).optional(),
   invoiceNumber: z.string().max(PETTY_CASH_TEXT_MAX).optional(),
+  // v11 tool 5: the production project the line was spent on
+  projectId: z.number().int().positive().max(2147483647).nullable().optional(),
 }).strict();
 
 export const pettyCashExpenseSchema = z.object({

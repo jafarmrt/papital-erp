@@ -316,10 +316,13 @@ export const pettyCashExpenseLines = pgTable('petty_cash_expense_lines', {
   description: text('description').notNull().default(''),
   sellerName: text('seller_name').notNull().default(''),
   invoiceNumber: text('invoice_number').notNull().default(''),
+  /** v11 tool 5 (migration 0010): the production project the line was spent on, its voucher line's detail */
+  projectId: integer('project_id').references(baseRelations.productionProjectsId),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (table) => ({
   uq_petty_cash_expense_lines_transaction_line: uniqueIndex('uq_petty_cash_expense_lines_transaction_line').on(table.treasuryTransactionId, table.lineNo),
   idx_petty_cash_expense_lines_account: index('idx_petty_cash_expense_lines_account').on(table.accountId),
+  idx_petty_cash_expense_lines_project_id: index('idx_petty_cash_expense_lines_project_id').on(table.projectId).where(sql`${table.projectId} IS NOT NULL`),
 }));
 
 /**
@@ -356,8 +359,11 @@ export const colleagueExpenseLines = pgTable('colleague_expense_lines', {
   description: text('description').notNull().default(''),
   sellerName: text('seller_name').notNull().default(''),
   invoiceNumber: text('invoice_number').notNull().default(''),
+  /** v11 tool 5 (migration 0010): the production project the line was spent on, its voucher line's detail */
+  projectId: integer('project_id').references(baseRelations.productionProjectsId),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (table) => ({
+  idx_colleague_expense_lines_project_id: index('idx_colleague_expense_lines_project_id').on(table.projectId).where(sql`${table.projectId} IS NOT NULL`),
   uq_colleague_expense_lines_expense_line: uniqueIndex('uq_colleague_expense_lines_expense_line').on(table.colleagueExpenseId, table.lineNo),
   idx_colleague_expense_lines_account: index('idx_colleague_expense_lines_account').on(table.accountId),
 }));

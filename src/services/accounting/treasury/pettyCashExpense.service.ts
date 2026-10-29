@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../../db/drizzle.js';
-import { accounts, pettyCashExpenseLines, treasuryTransactions } from '../../../db/schema.js';
+import { accounts, pettyCashExpenseLines, productionProjects, treasuryTransactions } from '../../../db/schema.js';
 import { NotFoundError, ValidationError } from '../../../errors/customErrors.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
@@ -17,6 +17,7 @@ import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { TreasuryTransactionService } from './treasuryTransaction.service.js';
 import { lockTreasuryBankRow, postTreasuryRow } from './treasuryPosting.js';
 import { idempotentTransaction } from '../../../middleware/idempotency.js';
+import { EXPENSE_ACCOUNT_TYPES, expenseLineDetail, projectTitleOf, resolveExpenseProjects } from './expenseProject.js';
 
 /**
  * v10.1.32 (D-16، تصمیم مالک محصول ت۳۰ «متغیر»): صورت‌هزینه تنخواه‌گردان. یک پرداخت خزانه از حساب تنخواه (نوع
@@ -28,7 +29,7 @@ import { idempotentTransaction } from '../../../middleware/idempotency.js';
  */
 
 /** انواع حسابی که ردیف صورت‌هزینه می‌پذیرد: هزینه و بهای تمام‌شده (گروه «هزینه» نگاشت حساب‌ها) */
-export const PETTY_CASH_EXPENSE_ACCOUNT_TYPES = ['expense', 'cost_of_sales'] as const;
+export const PETTY_CASH_EXPENSE_ACCOUNT_TYPES = EXPENSE_ACCOUNT_TYPES;
 
 const FUND_INVALID = 'PETTY_CASH_FUND_INVALID';
 const ACCOUNT_INVALID = 'PETTY_CASH_EXPENSE_ACCOUNT_INVALID';
@@ -104,6 +105,7 @@ export async function createPettyCashExpense(input: PettyCashExpenseInput): Prom
     sellerName: (line.sellerName ?? '').trim(),
     // شماره فاکتور مانند شماره چک با ارقام لاتین ذخیره می‌شود (TD-385)
     invoiceNumber: toLatinDigits(line.invoiceNumber ?? '').trim(),
+    projectId: line.projectId ?? null,
   }));
   const total = lines.reduce((sum, line) => sum.add(line.amount), fin(0)).round(4);
   const date = await resolveTreasuryWriteDate(input.date, 'تاریخ صورت‌هزینه');
@@ -117,6 +119,7 @@ export async function createPettyCashExpense(input: PettyCashExpenseInput): Prom
     ]);
     const fund = await lockFund(tx, input.fundId);
     const accountNames = await assertExpenseAccounts(tx, lines.map(l => l.accountId));
+    const projects = await resolveExpenseProjects(tx, lines.map(l => l.projectId));
 
     const voucherDescription = description || `صورت‌هزینه تنخواه ${fund.title}`;
     // v10.2.2 (OBS-R2-52): از راه مشترک خزانه (`postTreasuryRow`): مانده تنخواه با همان نگهبان مانده منفی (پیام و کد
@@ -147,7 +150,7 @@ export async function createPettyCashExpense(input: PettyCashExpenseInput): Prom
         items: [
           ...lines.map(line => ({
             accountId: line.accountId,
-            detailedType: 'none',
+            ...expenseLineDetail(projects.get(line.projectId ?? 0)),
             debit: line.amount,
             credit: 0,
             currency: PETTY_CASH_CURRENCY,
@@ -186,6 +189,7 @@ export async function createPettyCashExpense(input: PettyCashExpenseInput): Prom
       description: line.description,
       sellerName: line.sellerName,
       invoiceNumber: line.invoiceNumber,
+      projectId: line.projectId,
     })));
     row.attachments = await TreasuryTransactionService.attachTreasuryRowFiles(tx, row.id, input.attachments, input.username);
 
@@ -198,6 +202,8 @@ export async function createPettyCashExpense(input: PettyCashExpenseInput): Prom
       description: line.description,
       sellerName: line.sellerName,
       invoiceNumber: line.invoiceNumber,
+      projectId: line.projectId,
+      projectTitle: projectTitleOf(projects.get(line.projectId ?? 0)),
     }));
     const created = {
       ...row,
@@ -230,14 +236,19 @@ export async function listPettyCashExpenseLines(transactionId: number): Promise<
     description: pettyCashExpenseLines.description,
     sellerName: pettyCashExpenseLines.sellerName,
     invoiceNumber: pettyCashExpenseLines.invoiceNumber,
+    projectId: pettyCashExpenseLines.projectId,
+    projectCode: productionProjects.projectCode,
+    projectName: productionProjects.title,
   }).from(pettyCashExpenseLines)
     .leftJoin(accounts, eq(accounts.id, pettyCashExpenseLines.accountId))
+    .leftJoin(productionProjects, eq(productionProjects.id, pettyCashExpenseLines.projectId))
     .where(eq(pettyCashExpenseLines.treasuryTransactionId, transactionId))
     .orderBy(asc(pettyCashExpenseLines.lineNo));
-  return rows.map(r => ({
+  return rows.map(({ projectCode, projectName, ...r }) => ({
     ...r,
     accountCode: r.accountCode ?? '',
     accountName: r.accountName ?? '',
     amount: r.amount.toNumber(),
+    projectTitle: projectCode ? projectTitleOf({ code: projectCode, title: projectName ?? '' }) : '',
   }));
 }
