@@ -4,17 +4,18 @@
  */
 import { Router, type Response } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
-import { authorizePermission, can } from '../middleware/authorize.js';
+import { authorizePermission, can, requireSystemAdmin } from '../middleware/authorize.js';
 import { validate } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { ConflictError } from '../errors/customErrors.js';
 import { importTreasuryHistory } from '../services/historyImport/treasuryHistoryImport.service.js';
 import { STOCK_IMPORT_KIND_PERMISSIONS, importStockHistory, oldOpeningsBeforeReplay, withdrawOpeningsBeforeReplay } from '../services/historyImport/stockHistoryImport.service.js';
+import { closeHistoryImport, historyImportStatus } from '../services/historyImport/historyImportClose.service.js';
 import { OPENING_STOCK_PERMISSION } from '../lib/permissions/stockActionPermissions.js';
 import type { StockImportKind } from '../lib/historyImport/stockHistoryImport.js';
 import type { AuthUserPayload } from '../types/auth.types.js';
-import { oldOpeningWithdrawSchema, stockHistoryImportSchema, treasuryHistoryImportSchema } from './historyImport.schemas.js';
+import { historyImportCloseSchema, oldOpeningWithdrawSchema, stockHistoryImportSchema, treasuryHistoryImportSchema } from './historyImport.schemas.js';
 
 const router = Router();
 
@@ -81,6 +82,17 @@ router.post('/inventory/history-import/old-openings/withdraw', authorizePermissi
       userFullName: req.user?.fullName,
       req,
     }));
+  }));
+
+// tool 9: «پایان ورود سابقه». Every user's menus read whether the imports are closed (a flag, no data); only the system
+// admin closes them, for good, after confirming
+router.get('/history-import/status', asyncHandler(async (_req, res) => {
+  res.json(await historyImportStatus());
+}));
+
+router.post('/history-import/close', requireSystemAdmin, idempotency({ scope: 'history-import' }), validate(historyImportCloseSchema),
+  asyncHandler(async (req, res) => {
+    res.json(await closeHistoryImport({ userId: req.user?.id, username: req.user?.username, userFullName: req.user?.fullName, req }));
   }));
 
 export default router;

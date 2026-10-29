@@ -1,6 +1,8 @@
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { AppError } from '../../errors/customErrors.js';
+import { appSettings } from '../../db/schema.js';
+import { AppError, ConflictError } from '../../errors/customErrors.js';
+import { HISTORY_IMPORT_CLOSED, HISTORY_IMPORT_CLOSED_KEY, historyImportStatusOf, type HistoryImportStatus } from '../../lib/historyImport/historyImportClose.js';
 import { withDryRunNumbering } from '../../lib/dryRunNumbering.js';
 import { idempotentTransaction } from '../../middleware/idempotency.js';
 import { logger } from '../../middleware/logger.js';
@@ -24,9 +26,26 @@ class ImportRollback extends Error {
 
 const HISTORY_IMPORT_LOCK = 'papital.history_import';
 
-/** One history import step at a time (an import, a preview, taking back old openings): a second one waits for the first. */
-export async function lockHistoryImport(tx: DbExecutor): Promise<void> {
+/** The import lock alone; the close (tool 9) takes it too, so it waits for an import that is running. */
+export async function takeHistoryImportLock(tx: DbExecutor): Promise<void> {
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${HISTORY_IMPORT_LOCK}))`);
+}
+
+/** Tool 9: whether «پایان ورود سابقه» closed the imports, read with the caller's transaction. */
+export async function readHistoryImportStatus(tx: DbExecutor): Promise<HistoryImportStatus> {
+  const [row] = await tx.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, HISTORY_IMPORT_CLOSED_KEY));
+  return historyImportStatusOf(row?.value);
+}
+
+/**
+ * One history import step at a time (an import, a preview, taking back old openings): a second one waits for the first.
+ * Tool 9: read after the lock, so a step that waited for the close is refused.
+ */
+export async function lockHistoryImport(tx: DbExecutor): Promise<void> {
+  await takeHistoryImportLock(tx);
+  if ((await readHistoryImportStatus(tx)).closed) {
+    throw new ConflictError('ورود سابقه از اکسل با «پایان ورود سابقه» بسته شده است؛ از این پس هر سند با دست ثبت می‌شود.', undefined, HISTORY_IMPORT_CLOSED);
+  }
 }
 
 export const UNEXPECTED_ROW_MESSAGE = 'این ردیف با خطای پیش‌بینی‌نشده‌ای روبه‌رو شد و ثبت نمی‌شود؛ آن را با دست ثبت کنید یا به پشتیبانی خبر دهید.';
