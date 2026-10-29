@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { DollarSign, Save } from 'lucide-react';
 import { PieceworkTask } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
@@ -5,6 +6,8 @@ import { formatCurrencyLabel } from '../../utils';
 import { normalizeDecimalString } from '../../lib/numericInput';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
+import { DecimalInput } from '../common/DecimalInput';
+import { RialEquivalent } from '../common/RialEquivalent';
 
 interface PieceworkRatesTabProps {
   personnelSelectOptions: { value: string; label: string }[];
@@ -13,6 +16,33 @@ interface PieceworkRatesTabProps {
   tasksList: PieceworkTask[];
   customRatesMap: Record<number, number>;
   onSaveCustomRate: (taskId: number, rate: string) => void;
+}
+
+/**
+ * نرخ اختصاصی یک عنوان کاری؛ دکمه «ثبت نرخ» متن کادر را می‌خواند. کادر عدد مشترک است (ارقام فارسی، «٬» میان دسته‌های
+ * سه‌رقمی، «٬» نابه‌جا خطا) و معادل تومانی زیر آن می‌آید.
+ */
+function CustomRateInput({ taskId, title, initial, readOnly, className }: {
+  taskId: number;
+  title: string;
+  initial: number;
+  readOnly: boolean;
+  className: string;
+}) {
+  const [value, setValue] = useState<number | string>(initial);
+  return (
+    <>
+      <DecimalInput
+        aria-label={`نرخ اختصاصی ${title}`}
+        id={`custom-rate-${taskId}`}
+        value={value}
+        onValueChange={setValue}
+        readOnly={readOnly}
+        className={className}
+      />
+      <RialEquivalent value={value} />
+    </>
+  );
 }
 
 export function PieceworkRatesTab({
@@ -89,15 +119,11 @@ export function PieceworkRatesTab({
                         {rial.number(task.defaultRate)}
                       </td>
                       <td className="p-3 text-center">
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          dir="ltr"
-                          autoComplete="off"
-                          aria-label={`نرخ اختصاصی ${task.title}`}
-                          defaultValue={currentVal}
+                        <CustomRateInput
+                          taskId={task.id}
+                          title={task.title}
+                          initial={currentVal}
                           key={`${task.id}-${currentVal}`}
-                          id={`custom-rate-${task.id}`}
                           readOnly={!canManageTasks}
                           className={`w-36 px-2.5 py-1 text-center font-mono rounded-lg border text-xs font-bold ${
                             hasCustom
@@ -112,7 +138,11 @@ export function PieceworkRatesTab({
                             type="button"
                             onClick={() => {
                               const input = document.getElementById(`custom-rate-${task.id}`) as HTMLInputElement;
-                              if (input) {
+                              // نرخ نادرست یا نیمه‌کاره («۱۲٬۵») فرستاده نمی‌شود؛ پیام همان کادر دیده می‌شود
+                              if (input && !input.validity.valid) {
+                                input.reportValidity();
+                                input.focus();
+                              } else if (input) {
                                 // v9.0.284 (TD-809): متن خام به سرور می‌رود تا خالی یا منفی رد شود، نه صفر؛ v10.1.22 (TD-1273): با
                                 // ارقام لاتین، چون کادر عدد دیگر ارقام فارسی را دور نمی‌ریزد
                                 onSaveCustomRate(task.id, normalizeDecimalString(input.value));
