@@ -226,7 +226,7 @@ async function oldestFirstParts(tx: DbExecutor, row: TreasuryImportRow, isoDate:
   if (!isReceipt && purchaseRefKey(row.purchaseRef)) {
     const receipts = await purchaseReceiptsOfRef(tx, row.partyId, row.purchaseRef!);
     if (receipts.length === 0) {
-      throw new ValidationError(`رسید خرید باز و ثبت‌شده‌ای با «شماره فاکتور مرجع» ${toPersianDigits(row.purchaseRef!)} از این تأمین‌کننده در برنامه نیست (رسیدی با این شماره وارد نشده، یا باطل یا پیش‌نویس شده، یا تأمین‌کننده‌اش عوض شده است). هر خرید مواد باید در اکسل انبار یک ردیف «خرید جدید» با همین شماره داشته باشد و آن ماه انبار پیش از این وارد شده باشد؛ اگر این خرید به انبار نمی‌آید، شمارهٔ ستون «شماره مرجع-فاکتور» این ردیف را پاک کنید تا از قدیمی‌ترین بدهی این تأمین‌کننده کم شود.`, undefined, 'HISTORY_IMPORT_PURCHASE_REF_UNKNOWN');
+      throw new ValidationError(`رسید خرید باز و ثبت‌شده‌ای با «شماره فاکتور مرجع» ${toPersianDigits(row.purchaseRef!)} از این تأمین‌کننده در برنامه نیست (رسیدی با این شماره وارد نشده، یا باطل یا پیش‌نویس شده، یا تأمین‌کننده‌اش عوض شده است). هر خرید مواد باید در اکسل انبار یک ردیف «خرید جدید» داشته باشد که در «شماره فاکتور مرجع» همین عدد ستون «شماره مرجع-فاکتور» این ردیف را دارد (نه شمارهٔ سطر برگه)، و آن ماه انبار پیش از این وارد شده باشد؛ اگر این خرید به انبار نمی‌آید، شمارهٔ ستون «شماره مرجع-فاکتور» این ردیف را پاک کنید تا از قدیمی‌ترین بدهی این تأمین‌کننده کم شود.`, undefined, 'HISTORY_IMPORT_PURCHASE_REF_UNKNOWN');
     }
     const named = new Set(receipts);
     candidates.splice(0, candidates.length, ...receipts.map(id => ({ id })), ...candidates.filter(c => !named.has(c.id)));
