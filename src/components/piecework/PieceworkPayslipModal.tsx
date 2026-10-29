@@ -29,7 +29,7 @@ const STATUS_BADGE_CLASS: Record<string, string> = {
 interface PieceworkPayslipModalProps {
   viewingPayroll: PieceworkPayroll | null;
   onClose: () => void;
-  onUpdateStatus: (id: number, status: 'draft' | 'approved' | 'paid') => void;
+  onUpdateStatus: (id: number, status: 'draft' | 'approved' | 'paid', expectedNetPayable?: number | string) => void;
   onDeletePayroll: (id: number) => void;
   onReload?: () => void;
   /** مشاهده صرفاً برای پرسنل (بدون دکمه‌های پرداخت/ابطال) */
@@ -59,7 +59,7 @@ export function PieceworkPayslipModal({
   const companyName = useCompanyName();
   const viewer = useViewerIdentity();
   if (!viewingPayroll) return null;
-  // v10.0.193 (TD-1083 / TD-1084): تأیید با «تأیید فیش حقوق»؛ صادرکننده تأیید و پرداخت نمی‌کند و دلیل را می‌بیند
+  // v10.0.193 (TD-1083 / TD-1084): تأیید با «تأیید فیش حقوق»؛ صادرکننده تأیید نمی‌کند و دلیل را می‌بیند؛ v11: پس از تأیید دیگری می‌پردازد
   const approveRefusal = payrollIssuerDutyRefusal(viewingPayroll, viewer, 'approve');
   const payRefusal = payrollIssuerDutyRefusal(viewingPayroll, viewer, 'pay');
   const canReturnToDraft = viewingPayroll.status === 'approved' && !(Number(viewingPayroll.paidAmount ?? 0) > 0);
@@ -80,7 +80,7 @@ export function PieceworkPayslipModal({
             {/* v9.0.269 (TD-816): فیش پیش‌نویس پرداخت نمی‌شود؛ نخست تأیید می‌شود */}
             {!readOnly && canApprovePayroll && viewingPayroll.status === 'draft' && (
               <button
-                onClick={() => onUpdateStatus(viewingPayroll.id, 'approved')}
+                onClick={() => onUpdateStatus(viewingPayroll.id, 'approved', viewingPayroll.netPayable)}
                 disabled={!!approveRefusal || writesWait}
                 title={approveRefusal ?? undefined}
                 className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
