@@ -79,7 +79,7 @@ export async function runPayrollApprovalDutiesTests(shouldRun: ShouldRun): Promi
 
   const dutiesId = 'reg_payroll_issuer_cannot_approve_or_pay_td_1084';
   if (shouldRun(dutiesId, 'td1084', 'payroll', 'approve', 'pay', 'duties')) {
-    await runCase(results, dutiesId, 'v10.0.193: the issuer of a payslip neither approves it nor pays it nor voids its payment (403 PAYROLL_ISSUER_CANNOT_APPROVE / PAYROLL_ISSUER_CANNOT_PAY); another user does; the system admin is exempt (TD-1084)', async () => inFiscalSandbox(async () => {
+    await runCase(results, dutiesId, 'v10.0.193: the issuer of a payslip does not approve it (403 PAYROLL_ISSUER_CANNOT_APPROVE), another user does; v11: once approved by another user the issuer pays it and voids that payment; the system admin is exempt (TD-1084)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const all = [VIEW, ISSUE, APPROVE, PAY];
       const issuer = await sandboxClientWith(all);
@@ -98,17 +98,16 @@ export async function runPayrollApprovalDutiesTests(shouldRun: ShouldRun): Promi
       const approved = await colleague.put(`/api/piecework/payrolls/${payrollId}/status`, { status: 'approved' });
       if (approved.status !== 200) problems.push(`a colleague approving answered ${brief(approved)}, expected 200`);
 
+      // v11 (owner's decision 7 Aban 1405): once a colleague approved it, the issuer pays it and voids that payment
       const selfPay = await issuer.post(`/api/piecework/payrolls/${payrollId}/register-payment`, { bankAccountId: bankId, method: 'bank_transfer', amount: 300_000 });
-      if (selfPay.status !== 403 || codeOf(selfPay) !== 'PAYROLL_ISSUER_CANNOT_PAY') problems.push(`the issuer paying answered ${brief(selfPay)}, expected 403 PAYROLL_ISSUER_CANNOT_PAY`);
-      if (await payrollState(payrollId) !== 'approved paid=0 logs=approved') problems.push(`the refused payment left ${await payrollState(payrollId)}`);
+      const transactionId = Number((selfPay.body as { transactionId?: unknown } | undefined)?.transactionId);
+      if (selfPay.status !== 200 || !transactionId) problems.push(`the issuer paying the approved payslip answered ${brief(selfPay)}, expected 200`);
+      if (await payrollState(payrollId) !== 'partially_paid paid=300000 logs=approved') problems.push(`the issuer's payment left ${await payrollState(payrollId)}`);
+      const selfVoid = await issuer.post(`/api/piecework/payrolls/${payrollId}/payments/${transactionId}/void`, { reason: 'issuer void after approval' });
+      if (selfVoid.status !== 200) problems.push(`the issuer voiding that payment answered ${brief(selfVoid)}, expected 200`);
+      if (await payrollState(payrollId) !== 'approved paid=0 logs=approved') problems.push(`the issuer's void left ${await payrollState(payrollId)}`);
       const paid = await colleague.post(`/api/piecework/payrolls/${payrollId}/register-payment`, { bankAccountId: bankId, method: 'bank_transfer', amount: 300_000 });
-      const transactionId = Number((paid.body as { transactionId?: unknown } | undefined)?.transactionId);
-      if (paid.status !== 200 || !transactionId) problems.push(`a colleague paying answered ${brief(paid)}, expected 200`);
-      const selfVoid = await issuer.post(`/api/piecework/payrolls/${payrollId}/payments/${transactionId}/void`, { reason: 'TD-1084 issuer void' });
-      if (selfVoid.status !== 403 || codeOf(selfVoid) !== 'PAYROLL_ISSUER_CANNOT_PAY') problems.push(`the issuer voiding the payment answered ${brief(selfVoid)}, expected 403 PAYROLL_ISSUER_CANNOT_PAY`);
-      if (await payrollState(payrollId) !== 'partially_paid paid=300000 logs=approved') problems.push(`the refused void left ${await payrollState(payrollId)}`);
-      const voided = await colleague.post(`/api/piecework/payrolls/${payrollId}/payments/${transactionId}/void`, { reason: 'TD-1084 colleague void' });
-      if (voided.status !== 200) problems.push(`a colleague voiding the payment answered ${brief(voided)}, expected 200`);
+      if (paid.status !== 200) problems.push(`a colleague paying answered ${brief(paid)}, expected 200`);
 
       // the system admin issues, approves and pays their own payslip
       const admin = await sandboxAdminClient();
@@ -122,7 +121,63 @@ export async function runPayrollApprovalDutiesTests(shouldRun: ShouldRun): Promi
       }
 
       assertNoProblems(problems);
-      return 'The issuer was refused approve, pay and void with 403 and nothing changed; a colleague approved, paid and voided; the system admin approved and paid their own payslip.';
+      return 'The issuer was refused approval with 403 and nothing changed; a colleague approved; the issuer then paid and voided the payment; the system admin approved and paid their own payslip.';
+    }));
+  }
+
+  const approverId = 'reg_payroll_issuer_pays_only_what_another_approved_v11';
+  if (shouldRun(approverId, 'v11', 'payroll', 'approve', 'pay', 'duties')) {
+    await runCase(results, approverId, 'v11: the payslip keeps who approved it; its issuer pays only a payslip another user approved, not one with no approver (approved before v11) or one they approved themselves (as system admin, since demoted); an approval names the net the approver saw and is refused with 409 when the payslip has another; back to draft forgets the approver', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const all = [VIEW, ISSUE, APPROVE, PAY];
+      const issuer = await sandboxClientWith(all);
+      const colleague = await sandboxClientWith(all);
+      const bankId = await fundedBank();
+      const issue = async (name: string) => {
+        const res = await issuer.post('/api/piecework/payrolls/generate', { personnelId: await workerWithLog(name, 500_000), startDate: '2026-04-01', endDate: '2026-04-30' });
+        const id = idOf(res);
+        if (res.status !== 201 || !id) throw new Error(`setup: payslip ${brief(res)}`);
+        return id;
+      };
+      const approverOf = async (payrollId: number) => {
+        const [row] = await q('SELECT approved_by_id AS "approvedById", net_payable::text AS net FROM piecework_payrolls WHERE id = $1', [payrollId]);
+        return { approvedById: row?.approvedById == null ? null : Number(row.approvedById), net: String(row?.net) };
+      };
+      const pay = (client: typeof issuer, payrollId: number) => client.post(`/api/piecework/payrolls/${payrollId}/register-payment`, { bankAccountId: bankId, method: 'bank_transfer', amount: 100_000 });
+
+      // the approval names the net the approver saw
+      const a = await issue('v11 approver A');
+      const { net } = await approverOf(a);
+      const stale = await colleague.put(`/api/piecework/payrolls/${a}/status`, { status: 'approved', expectedNetPayable: Number(net) + 1_000_000 });
+      if (stale.status !== 409 || codeOf(stale) !== 'PAYROLL_CHANGED_SINCE_VIEWED') problems.push(`an approval of another net answered ${brief(stale)}, expected 409 PAYROLL_CHANGED_SINCE_VIEWED`);
+      if (!(await payrollState(a)).startsWith('draft')) problems.push(`the refused approval left ${await payrollState(a)}`);
+      const approved = await colleague.put(`/api/piecework/payrolls/${a}/status`, { status: 'approved', expectedNetPayable: net });
+      if (approved.status !== 200 || (await approverOf(a)).approvedById !== colleague.userId) problems.push(`a colleague approving the net they saw answered ${brief(approved)}, approver ${(await approverOf(a)).approvedById}, expected 200 and ${colleague.userId}`);
+      const detail = await issuer.get(`/api/piecework/payrolls/${a}`);
+      if (Number((detail.body as { approvedById?: unknown } | undefined)?.approvedById) !== colleague.userId) problems.push(`the payslip detail does not carry its approver: ${brief(detail)}`);
+      const issuerPays = await pay(issuer, a);
+      if (issuerPays.status !== 200) problems.push(`the issuer paying what a colleague approved answered ${brief(issuerPays)}, expected 200`);
+
+      // approved before v11 (no approver kept), or approved by the issuer themselves: the issuer does not pay it
+      for (const [name, approvedBy] of [['no approver', null], ['issuer approved', issuer.userId]] as const) {
+        const id = await issue(`v11 approver ${name}`);
+        await q(`UPDATE piecework_payrolls SET status = 'approved', approved_by_id = $2 WHERE id = $1`, [id, approvedBy]);
+        await q(`UPDATE piecework_logs SET status = 'approved' WHERE payroll_id = $1`, [id]);
+        const refused = await pay(issuer, id);
+        if (refused.status !== 403 || codeOf(refused) !== 'PAYROLL_ISSUER_CANNOT_PAY') problems.push(`the issuer paying a payslip with ${name} answered ${brief(refused)}, expected 403 PAYROLL_ISSUER_CANNOT_PAY`);
+        if (!(await payrollState(id)).startsWith('approved paid=0')) problems.push(`the refused payment of ${name} left ${await payrollState(id)}`);
+        const byColleague = await pay(colleague, id);
+        if (byColleague.status !== 200) problems.push(`a colleague paying the payslip with ${name} answered ${brief(byColleague)}, expected 200`);
+      }
+
+      // back to draft forgets the approver
+      const c = await issue('v11 approver C');
+      await colleague.put(`/api/piecework/payrolls/${c}/status`, { status: 'approved' });
+      const back = await colleague.put(`/api/piecework/payrolls/${c}/status`, { status: 'draft' });
+      if (back.status !== 200 || (await approverOf(c)).approvedById !== null) problems.push(`back to draft answered ${brief(back)} and kept approver ${(await approverOf(c)).approvedById}, expected 200 and none`);
+
+      assertNoProblems(problems);
+      return 'An approval of another net was refused with 409; the colleague who approved is kept and the issuer paid; with no approver or a self approval the issuer was refused with 403 and a colleague paid; back to draft cleared the approver.';
     }));
   }
 

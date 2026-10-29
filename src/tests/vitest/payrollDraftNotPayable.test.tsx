@@ -33,7 +33,7 @@ describe('a draft payslip is not payable (TD-816)', () => {
       onUpdateStatus={onUpdateStatus} onDeletePayroll={noop} />);
     expect(screen.getAllByText('ثبت پرداخت')).toHaveLength(1);
     fireEvent.click(screen.getByText('تأیید فیش'));
-    expect(onUpdateStatus).toHaveBeenCalledWith(1, 'approved');
+    expect(onUpdateStatus).toHaveBeenCalledWith(1, 'approved', 1000000);
   });
 
   it('offers no payment on a draft payslip and one on an approved payslip', () => {
@@ -41,7 +41,7 @@ describe('a draft payslip is not payable (TD-816)', () => {
     const { unmount } = renderWithQuery(<PieceworkPayslipModal viewingPayroll={payslip(3, 'draft')} onClose={noop} onUpdateStatus={onUpdateStatus} onDeletePayroll={noop} />);
     expect(screen.queryByText('ثبت پرداخت (از خزانه)')).toBeNull();
     fireEvent.click(screen.getByText('تأیید فیش'));
-    expect(onUpdateStatus).toHaveBeenCalledWith(3, 'approved');
+    expect(onUpdateStatus).toHaveBeenCalledWith(3, 'approved', 1000000);
     unmount();
     renderWithQuery(<PieceworkPayslipModal viewingPayroll={payslip(4, 'approved')} onClose={noop} onUpdateStatus={onUpdateStatus} onDeletePayroll={noop} />);
     expect(screen.getByText('ثبت پرداخت (از خزانه)')).toBeTruthy();

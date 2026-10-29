@@ -58,6 +58,9 @@ export async function runHistoryImportPurchaseRefsV11Tests(shouldRun: ShouldRun)
         { rowNo: 4, sheet: IN, date: '1405-02-03', kind: 'purchase', itemCode: item.code, quantity: '2', unitCost: '100000', supplierId: supplier.id },
         // paid in two «هزینه‌ها» rows
         { rowNo: 5, sheet: IN, date: '1405-02-06', kind: 'purchase', itemCode: item.code, quantity: '3', unitCost: '100000', supplierId: supplier.id, slipRef: '۹، 10' },
+        // two purchases paid in one «هزینه‌ها» row
+        { rowNo: 6, sheet: IN, date: '1405-02-07', kind: 'purchase', itemCode: item.code, quantity: '2', unitCost: '100000', supplierId: supplier.id, slipRef: '71' },
+        { rowNo: 7, sheet: IN, date: '1405-02-08', kind: 'purchase', itemCode: item.code, quantity: '1', unitCost: '100000', supplierId: supplier.id, slipRef: '72' },
       ];
       const stock = await postTo<StockImportResult>(admin, '/api/inventory/history-import', receipts, true);
       if (!stock.committed) throw new Error(`the receipts read ${JSON.stringify(stock.rows)}, expected committed`);
@@ -65,10 +68,12 @@ export async function runHistoryImportPurchaseRefsV11Tests(shouldRun: ShouldRun)
       const refB = stock.rows.find(r => r.rowNo === 3)?.created?.[0];
       const refC = stock.rows.find(r => r.rowNo === 4)?.created?.[0];
       const refD = stock.rows.find(r => r.rowNo === 5)?.created?.[0];
+      const refE = stock.rows.find(r => r.rowNo === 6)?.created?.[0];
+      const refF = stock.rows.find(r => r.rowNo === 7)?.created?.[0];
       const linked = await orm.execute(sql`SELECT r.excel_ref AS ref, d.ref_number AS "refNumber" FROM history_import_purchase_refs r JOIN documents d ON d.id = r.document_id
         WHERE r.supplier_id = ${supplier.id} ORDER BY r.excel_ref`);
       const pairs = (linked.rows as Array<{ ref: string; refNumber: string }>).map(r => `${r.ref}=${r.refNumber}`).join(',');
-      const expectedPairs = `10=${refD},9=${refD},a-100=${refA},b-200=${refB}`;
+      const expectedPairs = `10=${refD},71=${refE},72=${refF},9=${refD},a-100=${refA},b-200=${refB}`;
       if (pairs !== expectedPairs) problems.push(`the receipts are linked as ${pairs}, expected ${expectedPairs}`);
 
       const bank = await fundedBank();
@@ -98,10 +103,21 @@ export async function runHistoryImportPurchaseRefsV11Tests(shouldRun: ShouldRun)
       const s3 = split.rows.map(row => (row.settled ?? []).map(x => `${x.refNumber}:${x.amount}`).join(',')).join(' ');
       if (!split.committed || s3 !== `${refD}:100000 ${refD}:200000`) problems.push(`the two payments of one purchase read ${JSON.stringify(split.rows)}, expected both on ${refD}`);
 
+      // one row pays E and F: «71+72» settles each named receipt in turn
+      const both = await postTo<TreasuryImportResult>(admin, URL, [payment(8, '1405-03-04', '300000', '71 + ۷۲')], true);
+      const s4 = (both.rows[0]?.settled ?? []).map(x => `${x.refNumber}:${x.amount}`).join(',');
+      if (!both.committed || s4 !== `${refE}:200000,${refF}:100000`) problems.push(`the payment naming 71+72 read ${JSON.stringify(both.rows)}, expected ${refE}:200000,${refF}:100000`);
+
       const before = await count(sql`SELECT count(*)::int AS n FROM treasury_transactions`);
       const unknown = await postTo<TreasuryImportResult>(admin, URL, [payment(5, '1405-03-05', '100000', 'X-1')], true);
       const r = unknown.rows[0];
       if (unknown.committed || r?.status !== 'error' || !String(r?.message).includes('رسید خرید')) problems.push(`a payment naming an unknown invoice read ${JSON.stringify(unknown.rows)}, expected refused`);
+      // one known and one unknown number: refused as a whole
+      const mixed = await postTo<TreasuryImportResult>(admin, URL, [payment(9, '1405-03-05', '100000', 'B-200، X-2')], true);
+      if (mixed.committed || mixed.rows[0]?.status !== 'error') problems.push(`a payment naming a known and an unknown invoice read ${JSON.stringify(mixed.rows)}, expected refused`);
+      // E is paid in full: a second payment naming it is refused, not pushed onto other documents
+      const again = await postTo<TreasuryImportResult>(admin, URL, [payment(10, '1405-03-05', '100000', '71')], true);
+      if (again.committed || again.rows[0]?.status !== 'error' || !String(again.rows[0]?.message).includes('کامل پرداخت')) problems.push(`a payment naming a paid purchase read ${JSON.stringify(again.rows)}, expected refused`);
       if (await count(sql`SELECT count(*)::int AS n FROM treasury_transactions`) !== before) problems.push('a refused payment left a treasury row');
 
       if (problems.length > 0) throw new Error(problems.join(' | '));

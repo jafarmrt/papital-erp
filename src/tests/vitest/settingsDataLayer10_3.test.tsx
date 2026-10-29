@@ -35,6 +35,7 @@ import { useSeededForm } from '../../hooks/useSeededForm';
 import { PayrollStatutoryRatesTab } from '../../components/settings/PayrollStatutoryRatesTab';
 import { PayrollEidiRatesSection } from '../../components/settings/PayrollEidiRatesSection';
 import { QUERY_KEYS } from '../../lib/queryKeys';
+import { toLatinDigits } from '../../lib/numericInput';
 
 afterEach(() => {
   cleanup();
@@ -46,6 +47,8 @@ afterEach(() => {
 const RATES = '/piecework/statutory-rates';
 const EIDI = '/piecework/eidi-rates';
 const field = (label: string) => screen.getByLabelText(label) as HTMLInputElement;
+/** the number a rates field shows, in Latin digits (the shared number field shows Persian digits) */
+const shown = (label: string) => toLatinDigits(field(label).value);
 /** disabled itself or by its fieldset */
 const locked = (el: Element) => el.matches(':disabled');
 const saveRates = () => fireEvent.click(screen.getByText(SHOWN.saveRates));
@@ -92,11 +95,11 @@ describe('the payroll rates read through the shared cache (10.3)', () => {
     reads.holdNext = RATES;
     render(<PayrollStatutoryRatesTab />, { wrapper: wrapperOf(client) });
     await waitFor(() => expect(reads.held).toHaveLength(1));
-    expect(field(SHOWN.employeeInsurance).value).toBe('');
+    expect(shown(SHOWN.employeeInsurance)).toBe('');
     expect(locked(field(SHOWN.employeeInsurance))).toBe(true);
     expect(locked(screen.getByText(SHOWN.saveRates))).toBe(true);
     await act(async () => { reads.held[0]?.({ data: server.rates }); });
-    await waitFor(() => expect(field(SHOWN.employeeInsurance).value).toBe('7'));
+    await waitFor(() => expect(shown(SHOWN.employeeInsurance)).toBe('7'));
     expect(locked(field(SHOWN.employeeInsurance))).toBe(false);
   });
 
@@ -104,15 +107,15 @@ describe('the payroll rates read through the shared cache (10.3)', () => {
     const client = newClient();
     server.rates = [ratesRow(thisYear, '7')];
     render(<PayrollStatutoryRatesTab />, { wrapper: wrapperOf(client) });
-    await waitFor(() => expect(field(SHOWN.employeeInsurance).value).toBe('7'));
+    await waitFor(() => expect(shown(SHOWN.employeeInsurance)).toBe('7'));
     server.rates = [ratesRow(thisYear, '8', 2)];
     await invalidate(client, QUERY_KEYS.piecework.all);
-    await waitFor(() => expect(field(SHOWN.employeeInsurance).value).toBe('8'));
+    await waitFor(() => expect(shown(SHOWN.employeeInsurance)).toBe('8'));
 
     fireEvent.change(field(SHOWN.employeeInsurance), { target: { value: '6' } });
     server.rates = [ratesRow(thisYear, '5', 3)];
     await invalidate(client, QUERY_KEYS.piecework.all);
-    expect(field(SHOWN.employeeInsurance).value).toBe('6');
+    expect(shown(SHOWN.employeeInsurance)).toBe('6');
   });
 
   it('a save refreshes every payroll read and fills the form from the saved row, so the next save sends its new version', async () => {
@@ -120,17 +123,17 @@ describe('the payroll rates read through the shared cache (10.3)', () => {
     const invalidated = vi.spyOn(client, 'invalidateQueries');
     server.rates = [ratesRow(thisYear, '7')];
     render(<PayrollStatutoryRatesTab />, { wrapper: wrapperOf(client) });
-    await waitFor(() => expect(field(SHOWN.employeeInsurance).value).toBe('7'));
+    await waitFor(() => expect(shown(SHOWN.employeeInsurance)).toBe('7'));
     fireEvent.change(field(SHOWN.employeeInsurance), { target: { value: '6' } });
     saveRates();
     await waitFor(() => expect(keysOf(invalidated)).toContain(JSON.stringify(QUERY_KEYS.piecework.all)));
     expect(sentBody(`${RATES}/${thisYear}`, 'PUT', 0).version).toBe(1);
-    expect(field(SHOWN.employeeInsurance).value).toBe('6');
+    expect(shown(SHOWN.employeeInsurance)).toBe('6');
 
     // someone else's later save shows: the form follows reads again after its own save
     server.rates = [ratesRow(thisYear, '5', 3)];
     await invalidate(client, QUERY_KEYS.piecework.all);
-    await waitFor(() => expect(field(SHOWN.employeeInsurance).value).toBe('5'));
+    await waitFor(() => expect(shown(SHOWN.employeeInsurance)).toBe('5'));
     saveRates();
     await waitFor(() => expect(writesTo(`${RATES}/${thisYear}`, 'PUT')).toHaveLength(2));
     expect(sentBody(`${RATES}/${thisYear}`, 'PUT', 1).version).toBe(3);
@@ -139,13 +142,13 @@ describe('the payroll rates read through the shared cache (10.3)', () => {
   it('a save whose refresh fails keeps the saved values, and the next save sends their new version', async () => {
     server.rates = [ratesRow(thisYear, '7')];
     render(<PayrollStatutoryRatesTab />, { wrapper: wrapperOf(newClient()) });
-    await waitFor(() => expect(field(SHOWN.employeeInsurance).value).toBe('7'));
+    await waitFor(() => expect(shown(SHOWN.employeeInsurance)).toBe('7'));
     fireEvent.change(field(SHOWN.employeeInsurance), { target: { value: '6' } });
     reads.failNext = RATES;
     saveRates();
     await waitFor(() => expect(reads.failNext).toBeNull());
     await settle();
-    expect(field(SHOWN.employeeInsurance).value).toBe('6');
+    expect(shown(SHOWN.employeeInsurance)).toBe('6');
     saveRates();
     await waitFor(() => expect(writesTo(`${RATES}/${thisYear}`, 'PUT')).toHaveLength(2));
     expect(sentBody(`${RATES}/${thisYear}`, 'PUT', 1).version).toBe(2);
@@ -159,7 +162,7 @@ describe('the payroll rates read through the shared cache (10.3)', () => {
     saveRates();
     await waitFor(() => expect(reads.failNext).toBeNull());
     await settle();
-    expect(field(SHOWN.employeeInsurance).value).toBe('6');
+    expect(shown(SHOWN.employeeInsurance)).toBe('6');
     saveRates();
     await waitFor(() => expect(writesTo(`${RATES}/${thisYear}`, 'PUT')).toHaveLength(2));
     expect(sentBody(`${RATES}/${thisYear}`, 'PUT', 1).version).toBe(1);
@@ -177,10 +180,10 @@ describe('the payroll rates read through the shared cache (10.3)', () => {
   it('picking another year fills the form from that year, an edit of the first year set aside', async () => {
     server.rates = [ratesRow(thisYear, '7'), ratesRow(thisYear - 1, '4')];
     render(<PayrollStatutoryRatesTab />, { wrapper: wrapperOf(newClient()) });
-    await waitFor(() => expect(field(SHOWN.employeeInsurance).value).toBe('7'));
+    await waitFor(() => expect(shown(SHOWN.employeeInsurance)).toBe('7'));
     fireEvent.change(field(SHOWN.employeeInsurance), { target: { value: '6' } });
     pickYear(thisYear - 1);
-    expect(field(SHOWN.employeeInsurance).value).toBe('4');
+    expect(shown(SHOWN.employeeInsurance)).toBe('4');
   });
 });
 
@@ -192,10 +195,10 @@ describe('the eidi section reads through the shared cache (10.3)', () => {
     reads.holdNext = EIDI;
     render(<PayrollEidiRatesSection />, { wrapper: wrapperOf(client) });
     await waitFor(() => expect(reads.held).toHaveLength(1));
-    expect(field(SHOWN.eidiPercent).value).toBe('');
+    expect(shown(SHOWN.eidiPercent)).toBe('');
     expect(locked(field(SHOWN.eidiPercent))).toBe(true);
     await act(async () => { reads.held[0]?.({ data: server.eidi }); });
-    await waitFor(() => expect(field(SHOWN.eidiPercent).value).toBe('15'));
+    await waitFor(() => expect(shown(SHOWN.eidiPercent)).toBe('15'));
     expect(locked(field(SHOWN.eidiPercent))).toBe(false);
   });
 
@@ -204,15 +207,15 @@ describe('the eidi section reads through the shared cache (10.3)', () => {
     const invalidated = vi.spyOn(client, 'invalidateQueries');
     server.eidi = [eidiRow(thisYear, '15')];
     render(<PayrollEidiRatesSection />, { wrapper: wrapperOf(client) });
-    await waitFor(() => expect(field(SHOWN.eidiPercent).value).toBe('15'));
+    await waitFor(() => expect(shown(SHOWN.eidiPercent)).toBe('15'));
     server.eidi = [eidiRow(thisYear, '12', 2)];
     await invalidate(client, QUERY_KEYS.piecework.all);
-    await waitFor(() => expect(field(SHOWN.eidiPercent).value).toBe('12'));
+    await waitFor(() => expect(shown(SHOWN.eidiPercent)).toBe('12'));
     fireEvent.change(field(SHOWN.eidiPercent), { target: { value: '14' } });
     invalidated.mockClear();
     saveEidi();
     await waitFor(() => expect(keysOf(invalidated)).toContain(JSON.stringify(QUERY_KEYS.piecework.all)));
-    expect(field(SHOWN.eidiPercent).value).toBe('14');
+    expect(shown(SHOWN.eidiPercent)).toBe('14');
     saveEidi();
     await waitFor(() => expect(writesTo(`${EIDI}/${thisYear}`, 'PUT')).toHaveLength(2));
     expect(sentBody(`${EIDI}/${thisYear}`, 'PUT', 1).version).toBe(3);
@@ -221,13 +224,13 @@ describe('the eidi section reads through the shared cache (10.3)', () => {
   it('a save whose refresh fails keeps the saved values, and the next save sends their new version', async () => {
     server.eidi = [eidiRow(thisYear, '15')];
     render(<PayrollEidiRatesSection />, { wrapper: wrapperOf(newClient()) });
-    await waitFor(() => expect(field(SHOWN.eidiPercent).value).toBe('15'));
+    await waitFor(() => expect(shown(SHOWN.eidiPercent)).toBe('15'));
     fireEvent.change(field(SHOWN.eidiPercent), { target: { value: '14' } });
     reads.failNext = EIDI;
     saveEidi();
     await waitFor(() => expect(reads.failNext).toBeNull());
     await settle();
-    expect(field(SHOWN.eidiPercent).value).toBe('14');
+    expect(shown(SHOWN.eidiPercent)).toBe('14');
     saveEidi();
     await waitFor(() => expect(writesTo(`${EIDI}/${thisYear}`, 'PUT')).toHaveLength(2));
     expect(sentBody(`${EIDI}/${thisYear}`, 'PUT', 1).version).toBe(2);
@@ -236,10 +239,10 @@ describe('the eidi section reads through the shared cache (10.3)', () => {
   it('picking another year fills the form from that year, an edit of the first year set aside', async () => {
     server.eidi = [eidiRow(thisYear, '15'), eidiRow(thisYear - 1, '4')];
     render(<PayrollEidiRatesSection />, { wrapper: wrapperOf(newClient()) });
-    await waitFor(() => expect(field(SHOWN.eidiPercent).value).toBe('15'));
+    await waitFor(() => expect(shown(SHOWN.eidiPercent)).toBe('15'));
     fireEvent.change(field(SHOWN.eidiPercent), { target: { value: '14' } });
     pickYear(thisYear - 1);
-    expect(field(SHOWN.eidiPercent).value).toBe('4');
+    expect(shown(SHOWN.eidiPercent)).toBe('4');
   });
 
   it('a failed first read is said once and leaves the form open to fill', async () => {
