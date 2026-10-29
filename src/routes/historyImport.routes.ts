@@ -53,7 +53,8 @@ router.post('/accounting/treasury/history-import', authorizePermission('accounti
   sendImportResult(res, result, req.body.commit === true);
 }));
 
-// tool 2: opening stock, purchase and production receipts, consumption, waste and transfers; `commit: false` is the preview
+// tools 2 and 3: opening stock, purchase and production receipts, consumption, waste, transfers, past sales invoices and
+// their returns; `commit: false` is the preview
 router.post('/inventory/history-import', authorizePermission('warehouse.history_import'), importIdempotency, validate(stockHistoryImportSchema), asyncHandler(async (req, res) => {
   const result = await importStockHistory(req.body.rows, {
     commit: req.body.commit === true,

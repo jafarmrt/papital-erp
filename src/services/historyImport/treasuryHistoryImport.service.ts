@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { bankAccounts, documents, journalVoucherItems, journalVouchers, pieceworkPayrolls, treasuryTransactions } from '../../db/schema.js';
+import { bankAccounts, documents, historyImportRefs, journalVoucherItems, journalVouchers, pieceworkPayrolls, treasuryTransactions } from '../../db/schema.js';
 import { ForbiddenError, ValidationError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
@@ -13,6 +13,7 @@ import {
 import { historyImportAmount } from '../../lib/historyImport/historyImportAmount.js';
 import { formatPersianNumber, isoToJalaliDate, toPersianDigits } from '../../utils.js';
 import { toStorageDate } from '../../utils/calendarDate.js';
+import { excelInvoiceNumber } from '../../lib/historyImport/stockHistoryImport.js';
 import { TreasuryTransactionService } from '../accounting/treasury/treasuryTransaction.service.js';
 import { lockTreasuryBanks } from '../accounting/treasury/treasuryPosting.js';
 import type { TreasuryAuditActor } from '../accounting/treasury/treasuryAudit.js';
@@ -141,6 +142,19 @@ async function bookedKeys(tx: DbExecutor, prepared: PreparedRow[]): Promise<Set<
 const bookedKeyOf = (p: PreparedRow) =>
   [p.isoDate, p.row.bankAccountId, p.row.kind === 'receipt' ? 'receipt' : 'payment', fin(p.amount).round(4).toString()].join('|');
 
+/** The sales invoice the stock import recorded for an Excel invoice number (`history_import_refs`), if any. */
+async function invoiceOfExcelRef(tx: DbExecutor, invoiceRef: string | undefined): Promise<number | null> {
+  // only a cell that is the invoice number itself («61») or names an invoice («فاکتور 61»): a cheque or tracking number in
+  // the same column must not pick an invoice
+  const cell = (invoiceRef ?? '').trim().replace(/ك/g, 'ک');
+  if (!/^[\d۰-۹٠-٩]{1,8}$/.test(cell) && !cell.includes('فاکتور')) return null;
+  const ref = excelInvoiceNumber(cell);
+  if (!ref || !/^\d{1,12}$/.test(ref)) return null;
+  const [found] = await tx.select({ id: historyImportRefs.documentId }).from(historyImportRefs)
+    .where(and(eq(historyImportRefs.kind, 'sales_invoice'), eq(historyImportRefs.excelRef, ref)));
+  return found ? Number(found.id) : null;
+}
+
 /**
  * The open documents of a customer (receipt) or supplier (payment) dated on or before the row, oldest first, with what each has left, read in the
  * import's transaction, so a document an earlier row of the same import settled shows what it still has left.
@@ -158,6 +172,9 @@ async function oldestFirstParts(tx: DbExecutor, row: TreasuryImportRow, isoDate:
       sql`${documents.date}::date <= ${isoDate}::date`,
     ))
     .orderBy(asc(documents.date), asc(documents.id));
+  // tool 3: a receipt that names a past sales invoice by its Excel number settles that invoice first
+  const named = isReceipt ? await invoiceOfExcelRef(tx, row.invoiceRef) : null;
+  if (named !== null) candidates.sort((a, b) => Number(b.id === named) - Number(a.id === named));
   const parts: SettlementAllocationInput[] = [];
   let left = fin(amount);
   for (const c of candidates) {

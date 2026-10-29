@@ -38,7 +38,7 @@ const balanceOf = async (id: number) => {
 };
 
 /** A bank account with its own ledger account under 1003 and no balance */
-async function emptyBank(): Promise<number> {
+export async function emptyBank(): Promise<number> {
   const [parent] = await orm.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.code, '1003'), eq(accounts.isDeleted, 0)));
   const code = `1003${String(Date.now()).slice(-6)}${Math.floor(Math.random() * 90 + 10)}`;
   const [ledger] = await orm.insert(accounts).values({

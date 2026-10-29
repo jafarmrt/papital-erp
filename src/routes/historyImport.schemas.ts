@@ -41,12 +41,12 @@ export const treasuryHistoryImportSchema = z.object({
 const decimalText = z.union([z.string().max(40), z.number()]).transform(v => String(v));
 const warehouseCode = z.string().trim().max(100).nullable().optional();
 
-// v11 history import (tool 2): one resolved warehouse Excel row; the window has already turned each code and name into an id
+// v11 history import (tools 2 and 3): one resolved warehouse or sales Excel row; the window has already turned each code and name into an id
 const stockImportRowSchema = z.object({
   rowNo: z.coerce.number().int().positive(),
   sheet: z.string().trim().min(1).max(100),
   date: z.string().max(40),
-  kind: z.enum(['opening', 'purchase', 'production', 'consumption', 'waste', 'transfer']),
+  kind: z.enum(['opening', 'purchase', 'production', 'consumption', 'waste', 'transfer', 'sale', 'return']),
   itemCode: z.string().trim().min(1, 'کد کالای ردیف خالی است').max(100),
   // the quantity and cost are read again by the service, which names the row in its message
   quantity: decimalText,
@@ -55,6 +55,9 @@ const stockImportRowSchema = z.object({
   toWarehouse: warehouseCode,
   supplierId: optionalId,
   recipientPersonnelId: optionalId,
+  invoiceRef: z.string().max(100).optional(),
+  customerId: optionalId,
+  unitPrice: decimalText.nullable().optional(),
   slipRef: z.string().max(TEXT_MAX).optional(),
   description: z.string().max(TEXT_MAX).optional(),
   duplicateAccepted: z.boolean().optional(),

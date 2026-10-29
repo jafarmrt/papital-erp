@@ -41,6 +41,7 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   { table: 'transfers', group: 'inventory' },
   { table: 'documents', group: 'documents' },
   { table: 'document_items', group: 'documents' },
+  { table: 'history_import_refs', group: 'documents' },
   { table: 'customers', group: 'customers' },
   { table: 'crm_leads', group: 'customers' },
   { table: 'crm_activities', group: 'customers' },

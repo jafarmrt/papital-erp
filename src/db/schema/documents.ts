@@ -106,3 +106,18 @@ export const documentItems = pgTable('document_items', {
   idx_doc_items_deleted: index('idx_doc_items_deleted').on(table.isDeleted),
 }));
 
+
+/**
+ * v11 history import, tool 3 (migration 0008): the Excel number of each past sales invoice the import recorded, so a past
+ * return is linked to its invoice and a past receipt settles that invoice first. One row per kind and Excel number; a
+ * voided document's row is taken over by the next import of the number.
+ */
+export const historyImportRefs = pgTable('history_import_refs', {
+  kind: text('kind').notNull(),
+  excelRef: text('excel_ref').notNull(),
+  documentId: integer('document_id').notNull().references(() => documents.id),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+}, (t) => ({
+  pk: primaryKey({ name: 'history_import_refs_pkey', columns: [t.kind, t.excelRef] }),
+  idx_document: index('idx_history_import_refs_document').on(t.documentId),
+}));

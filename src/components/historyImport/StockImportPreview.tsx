@@ -20,6 +20,7 @@ interface Props {
 
 const KIND_LABEL: Record<string, string> = {
   opening: 'موجودی اولیه', purchase: 'رسید خرید', production: 'رسید تولید', consumption: 'حواله مصرف', waste: 'ضایعات', transfer: 'انتقال',
+  sale: 'فاکتور فروش', return: 'برگشت از فروش',
 };
 
 function CodeFix({ code, onMap }: { code: string; onMap: (target: string) => void }) {
@@ -102,7 +103,10 @@ export function StockImportPreview({ resolved, result, accepted, warehouseTitle,
               <tr key={rowKey(r.parsed)} className="align-top">
                 <td className="p-2 whitespace-nowrap">{r.parsed.sheet} — {formatPersianNumber(r.parsed.rowNo)}</td>
                 <td className="p-2 whitespace-nowrap">{formatPersianCode(r.status === 'ready' ? r.row.date : r.parsed.date)}</td>
-                <td className="p-2">{r.status === 'ready' ? KIND_LABEL[r.row.kind] : r.parsed.typeText}</td>
+                <td className="p-2">
+                  {r.status === 'ready' ? KIND_LABEL[r.row.kind] : r.parsed.typeText}
+                  {r.status === 'ready' && r.row.invoiceRef && ` ${formatPersianCode(r.row.invoiceRef)} اکسل`}
+                </td>
                 <td className="p-2 whitespace-nowrap" dir="ltr">{formatPersianCode(r.status === 'ready' ? r.row.itemCode : r.parsed.code)}</td>
                 <td className="p-2 font-bold whitespace-nowrap">{formatPersianCode(r.parsed.quantity)}</td>
                 <td className="p-2">

@@ -57,6 +57,13 @@
       "when": 1796626800000,
       "tag": "0007_document_deleted_at_instant",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1796713200000,
+      "tag": "0008_history_import_refs",
+      "breakpoints": true
     }
   ]
 }

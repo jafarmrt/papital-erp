@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { documents } from '../../db/schema.js';
+import { documents, historyImportRefs } from '../../db/schema.js';
 import { ForbiddenError, ValidationError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { logActivity } from '../../lib/auditLogger.js';
@@ -8,7 +8,7 @@ import { requireStorageDate } from '../../lib/storageDate.js';
 import { historyImportAmount } from '../../lib/historyImport/historyImportAmount.js';
 import { STOCK_OPENING_DAY } from '../../lib/historyImport/stockSheet.js';
 import {
-  STOCK_IMPORT_INCOMING_KINDS, stockImportDocumentKey, stockImportDuplicateKey, stockImportNotes, stockImportOrder,
+  STOCK_IMPORT_INCOMING_KINDS, excelInvoiceNumber, stockImportDocumentKey, stockImportDuplicateKey, stockImportNotes, stockImportOrder,
   type StockImportKind, type StockImportResult, type StockImportRow, type StockImportRowOutcome,
 } from '../../lib/historyImport/stockHistoryImport.js';
 import { isoToJalaliDate, toPersianDigits } from '../../utils.js';
@@ -50,6 +50,9 @@ export interface StockImportOptions {
   allowedKinds: ReadonlySet<StockImportKind>;
 }
 
+/** The kind of `history_import_refs` row a past sales invoice is recorded under. */
+export const SALES_INVOICE_REF_KIND = 'sales_invoice';
+
 interface PreparedRow {
   row: StockImportRow;
   /** the item the row's code names, found in the import's transaction (0 until then) */
@@ -57,6 +60,7 @@ interface PreparedRow {
   isoDate: string;
   quantity: string;
   unitCost: string | null;
+  unitPrice: string | null;
   outcome: StockImportRowOutcome;
 }
 
@@ -76,6 +80,8 @@ const KARDEX_OF: Record<StockImportKind, { type: 'in' | 'out'; documentType: str
   transfer: { type: 'out', documentType: 'transfer' },
   consumption: { type: 'out', documentType: 'remittance' },
   waste: { type: 'out', documentType: 'waste' },
+  sale: { type: 'out', documentType: 'invoice' },
+  return: { type: 'in', documentType: 'return' },
 };
 
 const DOC_TYPE_OF: Partial<Record<StockImportKind, string>> = {
@@ -83,6 +89,8 @@ const DOC_TYPE_OF: Partial<Record<StockImportKind, string>> = {
   production: 'production_receipt',
   consumption: 'remittance',
   waste: 'waste',
+  sale: 'invoice',
+  return: 'return',
 };
 
 const DOC_TITLE_OF: Partial<Record<StockImportKind, string>> = {
@@ -90,6 +98,8 @@ const DOC_TITLE_OF: Partial<Record<StockImportKind, string>> = {
   production: 'رسید تولید',
   consumption: 'حواله مصرف',
   waste: 'سند ضایعات',
+  sale: 'فاکتور فروش',
+  return: 'برگشت از فروش',
 };
 
 function prepare(rows: StockImportRow[]): PreparedRow[] {
@@ -108,14 +118,20 @@ function prepare(rows: StockImportRow[]): PreparedRow[] {
     }
     const quantity = historyImportAmount(row.quantity) ?? '';
     const unitCost = historyImportAmount(row.unitCost);
+    const unitPrice = historyImportAmount(row.unitPrice);
+    const invoiceRef = excelInvoiceNumber(row.invoiceRef);
+    row.invoiceRef = invoiceRef;
     if (outcome.status === 'ok') {
       if (!quantity) fail('تعداد ردیف خالی یا نادرست است؛ یک عدد بزرگ‌تر از صفر بنویسید.');
       else if (STOCK_IMPORT_INCOMING_KINDS.has(row.kind) && !unitCost) fail('قیمت واحد این ردیف خالی یا نادرست است؛ موجودی اولیه، خرید و تولید با بهای واحد (ریال) وارد انبار می‌شوند.');
       else if (row.kind === 'purchase' && !row.supplierId) fail('تأمین‌کنندهٔ این خرید مشخص نیست.');
       else if (row.kind === 'transfer' && !(row.toWarehouse ?? '').trim()) fail('انبار مقصد این انتقال مشخص نیست.');
+      else if ((row.kind === 'sale' || row.kind === 'return') && !invoiceRef) fail('شمارهٔ فاکتور اکسل این ردیف خالی است.');
+      else if (row.kind === 'sale' && !row.customerId) fail('مشتری این فاکتور مشخص نیست.');
+      else if (row.kind === 'sale' && !unitPrice) fail('قیمت این ردیف فاکتور خالی یا نادرست است؛ یک عدد بزرگ‌تر از صفر (ریال) بنویسید.');
       else if (row.kind === 'opening' && isoDate !== OPENING_DAY_ISO) fail(`موجودی اولیه فقط با تاریخ ${faDate(OPENING_DAY_ISO)} ثبت می‌شود.`);
     }
-    return { row, itemId: 0, isoDate, quantity, unitCost, outcome };
+    return { row, itemId: 0, isoDate, quantity, unitCost, unitPrice, outcome };
   });
 }
 
@@ -190,13 +206,55 @@ async function refOf(tx: DbExecutor, docId: number): Promise<string> {
   return doc?.refNumber ?? String(docId);
 }
 
-/** One document of the warehouse form from the rows that share it. */
+/** The live document an Excel invoice number was recorded as, if any (locked, so two imports never both take a number). */
+async function documentOfExcelRef(tx: DbExecutor, excelRef: string): Promise<{ id: number; refNumber: string } | null> {
+  const res = await tx.execute(sql`
+    SELECT d.id, d.ref_number AS "refNumber"
+      FROM history_import_refs r
+      JOIN documents d ON d.id = r.document_id
+     WHERE r.kind = ${SALES_INVOICE_REF_KIND} AND r.excel_ref = ${excelRef}
+       AND d.is_deleted = 0 AND d.type = 'invoice' AND d.status = 'final'
+       FOR UPDATE OF r`);
+  const row = res.rows?.[0] as { id: number; refNumber: string } | undefined;
+  return row ? { id: Number(row.id), refNumber: String(row.refNumber) } : null;
+}
+
+/** Records the Excel number of a past sales invoice; the row of a voided invoice with that number is taken over. */
+async function recordExcelRef(tx: DbExecutor, excelRef: string, documentId: number): Promise<void> {
+  await tx.insert(historyImportRefs).values({ kind: SALES_INVOICE_REF_KIND, excelRef, documentId })
+    .onConflictDoUpdate({ target: [historyImportRefs.kind, historyImportRefs.excelRef], set: { documentId, createdAt: sql`now()` } });
+}
+
+/**
+ * The lines of one Excel invoice must be one invoice as a hand entry makes it: one day and one customer. Lines of another
+ * day would otherwise be posted out of the day order.
+ */
+function assertOneInvoice(group: PreparedRow[]): void {
+  const days = new Set(group.map(p => p.isoDate));
+  const customers = new Set(group.map(p => p.row.customerId ?? 0));
+  if (days.size > 1) throw new ValidationError(`ردیف‌های فاکتور ${toPersianDigits(String(group[0].row.invoiceRef))} اکسل تاریخ‌های مختلف دارند (${[...days].map(faDate).join('، ')})؛ یک فاکتور یک تاریخ دارد.`);
+  if (customers.size > 1) throw new ValidationError(`ردیف‌های فاکتور ${toPersianDigits(String(group[0].row.invoiceRef))} اکسل مشتری‌های مختلف دارند؛ یک فاکتور یک مشتری دارد.`);
+}
+
+/** One document of the warehouse form (or a sales invoice or return) from the rows that share it. */
 async function postDocument(tx: DbExecutor, group: PreparedRow[], options: StockImportOptions): Promise<string> {
   const first = group[0];
   const kind = first.row.kind;
   const docType = DOC_TYPE_OF[kind] as string;
   const warehouse = (first.row.warehouse ?? '').trim();
-  const notes = stockImportNotes(first.row.slipRef, group.map(p => p.row.description));
+  const excelRef = (first.row.invoiceRef ?? '').trim();
+  let returnOfDocumentId: number | undefined;
+  if (kind === 'sale') {
+    assertOneInvoice(group);
+    const recorded = await documentOfExcelRef(tx, excelRef);
+    if (recorded) throw new ValidationError(`فاکتور ${toPersianDigits(excelRef)} اکسل پیش‌تر با شمارهٔ ${toPersianDigits(recorded.refNumber)} در برنامه ثبت شده است.`, undefined, 'HISTORY_IMPORT_INVOICE_RECORDED');
+  }
+  if (kind === 'return') {
+    const invoice = await documentOfExcelRef(tx, excelRef);
+    if (!invoice) throw new ValidationError(`فاکتور ${toPersianDigits(excelRef)} اکسل در برنامه نیست؛ برگشت پس از ثبت فاکتورش وارد می‌شود.`, undefined, 'HISTORY_IMPORT_INVOICE_MISSING');
+    returnOfDocumentId = invoice.id;
+  }
+  const notes = stockImportNotes(kind === 'sale' || kind === 'return' ? `فاکتور ${excelRef}` : first.row.slipRef, group.map(p => p.row.description));
   const { docId } = await DocumentService.createDocumentWithDetails({
     docType,
     status: 'final',
@@ -204,12 +262,14 @@ async function postDocument(tx: DbExecutor, group: PreparedRow[], options: Stock
     currency: 'IRR',
     notes,
     location: warehouse || undefined,
-    partyId: kind === 'purchase' ? first.row.supplierId ?? null : undefined,
+    partyId: kind === 'purchase' ? first.row.supplierId ?? null : kind === 'sale' ? first.row.customerId ?? null : undefined,
     recipientPersonnelId: kind === 'consumption' ? first.row.recipientPersonnelId ?? null : undefined,
+    returnOfDocumentId,
     items: group.map(p => ({
       itemId: p.itemId,
       quantity: p.quantity,
       ...(p.unitCost ? { unit_price: p.unitCost } : {}),
+      ...(kind === 'sale' && p.unitPrice ? { unit_price: p.unitPrice } : {}),
       ...(warehouse ? { location: warehouse } : {}),
     })),
     user: options.username || 'سیستم',
@@ -219,6 +279,7 @@ async function postDocument(tx: DbExecutor, group: PreparedRow[], options: Stock
     allowBackdate: false,
     createdAudit: options.audit ? { actor: options.audit, note: `${DOC_TITLE_OF[kind]} از ورود سابقه اکسل` } : undefined,
   });
+  if (kind === 'sale') await recordExcelRef(tx, excelRef, docId);
   return refOf(tx, docId);
 }
 
@@ -301,10 +362,13 @@ export const STOCK_IMPORT_KIND_PERMISSIONS: ReadonlyArray<readonly [StockImportK
   ['consumption', permissionToCreateDocument({ docType: 'remittance', status: 'final' })],
   ['waste', permissionToCreateDocument({ docType: 'waste', status: 'final' })],
   ['transfer', 'warehouse.transfer'],
+  ['sale', permissionToCreateDocument({ docType: 'invoice', status: 'final' })],
+  ['return', permissionToCreateDocument({ docType: 'return', status: 'final' })],
 ];
 
 const KIND_TITLE: Record<StockImportKind, string> = {
   opening: 'موجودی اولیه', purchase: 'رسید خرید', production: 'رسید تولید', consumption: 'حواله مصرف', waste: 'سند ضایعات', transfer: 'انتقال بین انبارها',
+  sale: 'فاکتور فروش قطعی', return: 'برگشت از فروش قطعی',
 };
 
 async function postInOrder(tx: DbExecutor, attempt: RowAttempt, prepared: PreparedRow[], options: StockImportOptions): Promise<void> {

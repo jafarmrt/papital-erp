@@ -1,19 +1,21 @@
 /**
- * v11 history import (tool 2 of the 1405 replay): the contract between the warehouse Excel import window and the server.
- * The window reads the cleaned sheets «ورود به انبار» and «خروج دستی», the user maps each item code, warehouse and
- * supplier once, and the window sends one resolved row per Excel row. The server previews them (the real services in a
+ * v11 history import (tools 2 and 3 of the 1405 replay): the contract between the warehouse Excel import window and the
+ * server. The window reads the cleaned sheets «ورود به انبار», «خروج دستی» and «اقلام فاکتور», the user maps each item
+ * code, warehouse, supplier and customer once, and the window sends one resolved row per Excel row. The server previews them (the real services in a
  * transaction that is rolled back) or posts them all in one transaction, day by day; one refused row posts nothing.
  */
 
-/** one month at a time, so a post (a preview pass, then the real one) answers well within the proxy's two minutes */
+/** one month at a time (warehouse and sales rows together), so a post (a preview pass, then the real one) answers well
+ * within the proxy's two minutes and holds its locks briefly */
 export const STOCK_IMPORT_MAX_ROWS = 400;
 
 /**
  * What one Excel row becomes: opening stock on the first day (Dr inventory / Cr opening capital), a purchase receipt with
  * its price and supplier, a production receipt with its cost, a consumption remittance, a waste document, or a transfer
- * between two warehouses. A sales return comes in with the past sales invoices (tool 3), which it refers to.
+ * between two warehouses (tool 2); a final sales invoice, one per Excel invoice number, or a sales return of an invoice
+ * the import recorded, found by its Excel number (tool 3).
  */
-export type StockImportKind = 'opening' | 'purchase' | 'production' | 'consumption' | 'waste' | 'transfer';
+export type StockImportKind = 'opening' | 'purchase' | 'production' | 'consumption' | 'waste' | 'transfer' | 'sale' | 'return';
 
 export interface StockImportRow {
   /** the Excel row number, for messages */
@@ -37,6 +39,12 @@ export interface StockImportRow {
   supplierId?: number | null;
   /** consumption only: the colleague who received the goods */
   recipientPersonnelId?: number | null;
+  /** sale and return: the Excel invoice number; the lines of one number are one invoice, and a return names its invoice */
+  invoiceRef?: string;
+  /** sale only: the customer (a party of type customer or both) */
+  customerId?: number | null;
+  /** sale only: the unit price in rials, as decimal text */
+  unitPrice?: string | null;
   /** the Excel slip or invoice number (شماره فاکتور / شماره قبض), kept in the notes; rows of one slip share a document */
   slipRef?: string;
   description?: string;
@@ -67,8 +75,11 @@ export interface StockImportResult {
   duplicateCount: number;
 }
 
-/** Within a day: stock comes in first (opening, purchases, production), then moves between warehouses, then leaves. */
-const KIND_ORDER: Record<StockImportKind, number> = { opening: 0, purchase: 1, production: 2, transfer: 3, consumption: 4, waste: 5 };
+/**
+ * Within a day: stock comes in first (opening, purchases, production), then moves between warehouses, then leaves (sales
+ * first); a return comes last, since it may return what was sold the same day.
+ */
+const KIND_ORDER: Record<StockImportKind, number> = { opening: 0, purchase: 1, production: 2, transfer: 3, sale: 4, consumption: 5, waste: 6, return: 7 };
 
 export const STOCK_IMPORT_INCOMING_KINDS: ReadonlySet<StockImportKind> = new Set(['opening', 'purchase', 'production']);
 
@@ -89,7 +100,8 @@ export function stockImportOrder<T extends { isoDate: string; row: Pick<StockImp
 /**
  * Rows that become one document, as a hand entry would make them: a purchase per supplier, day, warehouse and slip; a
  * production receipt per day, warehouse and slip; a consumption or waste per day, warehouse, slip and recipient. Opening
- * rows and transfers have no shared document (each opening row is its own Kardex row; a transfer has one line).
+ * rows and transfers have no shared document (each opening row is its own Kardex row; a transfer has one line). A sale is
+ * one invoice per Excel number (its lines must share the day and the customer); a return one per day, invoice and warehouse.
  */
 export function stockImportDocumentKey(isoDate: string, row: StockImportRow): string | null {
   const wh = (row.warehouse ?? '').trim();
@@ -99,13 +111,15 @@ export function stockImportDocumentKey(isoDate: string, row: StockImportRow): st
     case 'production': return ['production', isoDate, wh, slip].join('|');
     case 'consumption': return ['consumption', isoDate, wh, slip, row.recipientPersonnelId ?? ''].join('|');
     case 'waste': return ['waste', isoDate, wh, slip].join('|');
+    case 'sale': return ['sale', (row.invoiceRef ?? '').trim()].join('|');
+    case 'return': return ['return', isoDate, (row.invoiceRef ?? '').trim(), wh].join('|');
     default: return null;
   }
 }
 
-/** Two rows are the same movement when they have the same day, kind, item, quantity and warehouses. */
+/** Two rows are the same movement when they have the same day, kind, item, quantity, warehouses and invoice. */
 export function stockImportDuplicateKey(isoDate: string, row: StockImportRow, itemId: number, quantity: string): string {
-  return [isoDate, row.kind, itemId, quantity, (row.warehouse ?? '').trim(), (row.toWarehouse ?? '').trim()].join('|');
+  return [isoDate, row.kind, itemId, quantity, (row.warehouse ?? '').trim(), (row.toWarehouse ?? '').trim(), (row.invoiceRef ?? '').trim()].join('|');
 }
 
 /** The notes a document is recorded with: the Excel slip number and the rows' texts. */
@@ -113,4 +127,15 @@ export function stockImportNotes(slipRef: string | undefined, descriptions: Arra
   const texts = [...new Set(descriptions.map(d => (d ?? '').trim()).filter(Boolean))];
   const slip = (slipRef ?? '').trim();
   return ['ورود سابقه از اکسل', slip ? `(شماره اکسل: ${slip})` : '', texts.join('؛ ')].filter(Boolean).join(' ');
+}
+
+/**
+ * The Excel invoice number a cell names: the cell holds «61», «۶۱» or «فاکتور 61»; one number in it is the invoice number,
+ * anything else is kept as written. Shared by the sales rows, the returns and the treasury receipts that name an invoice.
+ */
+export function excelInvoiceNumber(cell: string | null | undefined): string {
+  const text = String(cell ?? '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).trim();
+  const numbers = text.match(/\d+/g) ?? [];
+  // leading zeros dropped on the digits themselves (a long number would lose digits through a float)
+  return numbers.length === 1 ? numbers[0].replace(/^0+(?=\d)/, '') : text;
 }
