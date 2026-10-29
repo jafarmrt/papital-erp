@@ -64,6 +64,13 @@
       "when": 1796713200000,
       "tag": "0008_history_import_refs",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1796799600000,
+      "tag": "0009_colleague_expenses",
+      "breakpoints": true
     }
   ]
 }

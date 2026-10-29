@@ -37,6 +37,7 @@ export const PartyPurposeFields: React.FC<PartyPurposeFieldsProps> = ({ partyTyp
           {offerSettlement && <option value="settlement">تسویه حقوق و دستمزد ← «حقوق پرداختنی»</option>}
           <option value="advance">مساعده / وام ← «مساعده و وام پرسنل»</option>
           {!isReceipt && <option value="deductions">واریز کسورات حقوق ← «سایر کسورات حقوق پرداختنی»</option>}
+          <option value="colleague_account">{isReceipt ? 'حساب جاری همکار (پس دادن تنخواه)' : 'حساب جاری همکار (تنخواه یا بازپرداخت هزینه‌ای که از جیب داده)'} ← «حساب جاری همکاران»</option>
           <option value="other">سایر ← سرفصلی که انتخاب می‌کنید</option>
         </select>
         {!offerSettlement && <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{SALARY_SETTLEMENT_VIA_PAYSLIP_MESSAGE}</p>}

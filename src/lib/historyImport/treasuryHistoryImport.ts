@@ -10,10 +10,11 @@
 export const TREASURY_IMPORT_MAX_ROWS = 250;
 
 /**
- * What one Excel row becomes: a receipt or payment of the treasury form, a transfer between two of our accounts, or a
- * payment of the payslips of a colleague (wages are paid only through a payslip).
+ * What one Excel row becomes: a receipt or payment of the treasury form, a transfer between two of our accounts, a
+ * payment of the payslips of a colleague (wages are paid only through a payslip), or (tool 4) an expense a colleague paid
+ * from their own pocket («هزینهٔ پرداختی همکار»: no account of ours moves, `bankAccountId` is 0).
  */
-export type TreasuryImportKind = 'receipt' | 'payment' | 'transfer' | 'payslip';
+export type TreasuryImportKind = 'receipt' | 'payment' | 'transfer' | 'payslip' | 'colleague_expense';
 
 export type TreasuryImportPartyType = 'customer' | 'supplier' | 'personnel' | 'other';
 
@@ -35,11 +36,11 @@ export interface TreasuryImportRow {
   partyType?: TreasuryImportPartyType;
   partyId?: number | null;
   partyName?: string;
-  /** a colleague's receipt or payment: `advance` (مساعده) or `other` (with a counter account) */
-  purpose?: 'advance' | 'other' | null;
-  /** party «other» and a colleague's `other`: the counter account */
+  /** a colleague's receipt or payment: `advance` (مساعده), `colleague_account` (their running account) or `other` (with a counter account) */
+  purpose?: 'advance' | 'colleague_account' | 'other' | null;
+  /** party «other», a colleague's `other`, and the expense account of a `colleague_expense` */
   contraAccountId?: number | null;
-  /** payslip only: the colleague whose payslips are paid */
+  /** payslip: the colleague whose payslips are paid; colleague_expense: the colleague who paid */
   personnelId?: number | null;
   /** the Excel reference or invoice number (شماره مرجع-فاکتور), kept in the description */
   invoiceRef?: string;
@@ -75,7 +76,7 @@ export interface TreasuryImportResult {
   duplicateCount: number;
 }
 
-const KIND_ORDER: Record<TreasuryImportKind, number> = { receipt: 0, transfer: 1, payment: 2, payslip: 3 };
+const KIND_ORDER: Record<TreasuryImportKind, number> = { receipt: 0, transfer: 1, payment: 2, colleague_expense: 2, payslip: 3 };
 
 /**
  * The order rows are posted in: by day, and within a day money in first, then transfers, then money out, then the Excel
@@ -110,6 +111,6 @@ export function treasuryImportDuplicateKey(
   row: Pick<TreasuryImportRow, 'kind' | 'bankAccountId' | 'toBankAccountId' | 'amount' | 'partyName' | 'personnelId'>,
   normalizedAmount: string,
 ): string {
-  const party = row.kind === 'payslip' ? `p${row.personnelId ?? ''}` : (row.partyName ?? '').trim();
+  const party = row.kind === 'payslip' || row.kind === 'colleague_expense' ? `p${row.personnelId ?? ''}` : (row.partyName ?? '').trim();
   return [isoDate, row.kind, row.bankAccountId, row.toBankAccountId ?? '', normalizedAmount, party].join('|');
 }

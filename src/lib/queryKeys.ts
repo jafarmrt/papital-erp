@@ -121,6 +121,7 @@ export const QUERY_KEYS = {
     // v10.1.32 (D-16): حساب‌های هزینه صورت‌هزینه تنخواه و ردیف‌های یک صورت‌هزینه
     pettyCashExpenseAccounts: () => ['accounting', 'treasury', 'petty-cash-expense-accounts'] as const,
     pettyCashLines: (id: number) => ['accounting', 'treasury', 'petty-cash-lines', id] as const,
+    colleagueExpenses: () => ['accounting', 'treasury', 'colleague-expenses'] as const,
     /** 10.3 (ARCH review finding 3): who has approved insurance or tax in a Jalali month, and what each one still owes (statutory remittance form) */
     statutoryRemittanceOptions: (kind: string, year: number, month: number) => ['accounting', 'treasury', 'statutory-remittance-options', kind, year, month] as const,
     // گزارش‌های مالی (تراز آزمایشی، دفتر کل، صورت‌ها، جریان نقد، ...): پارامترها بخشی از کلیدند

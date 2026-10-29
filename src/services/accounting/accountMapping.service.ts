@@ -84,6 +84,7 @@ const MAPPED_CONTROL_CONCEPTS: ReadonlyArray<[keyof ConceptualAccountMappingConf
   ['payrollTaxPayableAccountCode', 'statutory'],
   ['eidiPayableAccountCode', 'eidi'],
   ['employeeAdvanceAccountCode', 'advance'],
+  ['colleagueCurrentAccountCode', 'colleague_account'],
   ['chequeReceivableAccountCode', 'cheque'],
   ['chequeInCollectionAccountCode', 'cheque'],
   ['chequeProtestAccountCode', 'cheque'],
@@ -344,6 +345,11 @@ export class AccountMappingService {
   }
 
   /** v10.0.222 (TD-1089): هزینه عیدی و پاداش؛ پیش‌فرض ۷۰۱۴ */
+  /** v11 (the 1405 replay, tool 4): each colleague's running account (out-of-pocket expenses, petty cash, paybacks); default 3208 */
+  static async getColleagueCurrentAccount(tx?: DbExecutor): Promise<Account | null> {
+    return this.resolveAccount('colleagueCurrentAccountCode', tx);
+  }
+
   static async getEidiExpenseAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('eidiExpenseAccountCode', tx);
   }
