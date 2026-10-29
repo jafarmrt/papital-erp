@@ -11171,6 +11171,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runHistoryImportTreasuryV11Tests(shouldRun));
   const { runHistoryImportStockV11Tests } = await import('../regression/historyImportStockV11Tests.js');
   results.push(...await runHistoryImportStockV11Tests(shouldRun));
+  const { runHistoryImportOldOpeningsV11Tests } = await import('../regression/historyImportOldOpeningsV11Tests.js');
+  results.push(...await runHistoryImportOldOpeningsV11Tests(shouldRun));
   const { runHistoryImportSalesV11Tests } = await import('../regression/historyImportSalesV11Tests.js');
   results.push(...await runHistoryImportSalesV11Tests(shouldRun));
   // v11 phase 7.2 (findings F1 to F6 of the v11 full test)
