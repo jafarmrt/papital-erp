@@ -72,7 +72,7 @@ export class PayrollPaymentVoidService {
       if (payment.status === 'voided') throw new ConflictError(`پرداخت ${payment.transactionNumber} قبلاً ابطال شده است`);
 
       if (!payroll) throw new NotFoundError('فیش حقوقی یافت نشد');
-      // v10.0.193 (TD-1084): صادرکننده فیش پرداخت آن را ابطال هم نمی‌کند؛ مدیر سیستم مستثناست
+      // v10.0.193 (TD-1084): قاعدهٔ پرداخت؛ v11: صادرکننده پس از تأیید کاربر دیگری پرداخت را ابطال هم می‌کند
       await assertPayrollDutyNotByIssuer(tx, payroll, input.userId, 'pay');
 
       const amount = fin(payment.amount);

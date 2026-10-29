@@ -79,7 +79,7 @@ export async function runPayrollApprovalDutiesTests(shouldRun: ShouldRun): Promi
 
   const dutiesId = 'reg_payroll_issuer_cannot_approve_or_pay_td_1084';
   if (shouldRun(dutiesId, 'td1084', 'payroll', 'approve', 'pay', 'duties')) {
-    await runCase(results, dutiesId, 'v10.0.193: the issuer of a payslip neither approves it nor pays it nor voids its payment (403 PAYROLL_ISSUER_CANNOT_APPROVE / PAYROLL_ISSUER_CANNOT_PAY); another user does; the system admin is exempt (TD-1084)', async () => inFiscalSandbox(async () => {
+    await runCase(results, dutiesId, 'v10.0.193: the issuer of a payslip does not approve it (403 PAYROLL_ISSUER_CANNOT_APPROVE), another user does; v11: once approved by another user the issuer pays it and voids that payment; the system admin is exempt (TD-1084)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const all = [VIEW, ISSUE, APPROVE, PAY];
       const issuer = await sandboxClientWith(all);
@@ -98,17 +98,16 @@ export async function runPayrollApprovalDutiesTests(shouldRun: ShouldRun): Promi
       const approved = await colleague.put(`/api/piecework/payrolls/${payrollId}/status`, { status: 'approved' });
       if (approved.status !== 200) problems.push(`a colleague approving answered ${brief(approved)}, expected 200`);
 
+      // v11 (owner's decision 7 Aban 1405): once a colleague approved it, the issuer pays it and voids that payment
       const selfPay = await issuer.post(`/api/piecework/payrolls/${payrollId}/register-payment`, { bankAccountId: bankId, method: 'bank_transfer', amount: 300_000 });
-      if (selfPay.status !== 403 || codeOf(selfPay) !== 'PAYROLL_ISSUER_CANNOT_PAY') problems.push(`the issuer paying answered ${brief(selfPay)}, expected 403 PAYROLL_ISSUER_CANNOT_PAY`);
-      if (await payrollState(payrollId) !== 'approved paid=0 logs=approved') problems.push(`the refused payment left ${await payrollState(payrollId)}`);
+      const transactionId = Number((selfPay.body as { transactionId?: unknown } | undefined)?.transactionId);
+      if (selfPay.status !== 200 || !transactionId) problems.push(`the issuer paying the approved payslip answered ${brief(selfPay)}, expected 200`);
+      if (await payrollState(payrollId) !== 'partially_paid paid=300000 logs=approved') problems.push(`the issuer's payment left ${await payrollState(payrollId)}`);
+      const selfVoid = await issuer.post(`/api/piecework/payrolls/${payrollId}/payments/${transactionId}/void`, { reason: 'issuer void after approval' });
+      if (selfVoid.status !== 200) problems.push(`the issuer voiding that payment answered ${brief(selfVoid)}, expected 200`);
+      if (await payrollState(payrollId) !== 'approved paid=0 logs=approved') problems.push(`the issuer's void left ${await payrollState(payrollId)}`);
       const paid = await colleague.post(`/api/piecework/payrolls/${payrollId}/register-payment`, { bankAccountId: bankId, method: 'bank_transfer', amount: 300_000 });
-      const transactionId = Number((paid.body as { transactionId?: unknown } | undefined)?.transactionId);
-      if (paid.status !== 200 || !transactionId) problems.push(`a colleague paying answered ${brief(paid)}, expected 200`);
-      const selfVoid = await issuer.post(`/api/piecework/payrolls/${payrollId}/payments/${transactionId}/void`, { reason: 'TD-1084 issuer void' });
-      if (selfVoid.status !== 403 || codeOf(selfVoid) !== 'PAYROLL_ISSUER_CANNOT_PAY') problems.push(`the issuer voiding the payment answered ${brief(selfVoid)}, expected 403 PAYROLL_ISSUER_CANNOT_PAY`);
-      if (await payrollState(payrollId) !== 'partially_paid paid=300000 logs=approved') problems.push(`the refused void left ${await payrollState(payrollId)}`);
-      const voided = await colleague.post(`/api/piecework/payrolls/${payrollId}/payments/${transactionId}/void`, { reason: 'TD-1084 colleague void' });
-      if (voided.status !== 200) problems.push(`a colleague voiding the payment answered ${brief(voided)}, expected 200`);
+      if (paid.status !== 200) problems.push(`a colleague paying answered ${brief(paid)}, expected 200`);
 
       // the system admin issues, approves and pays their own payslip
       const admin = await sandboxAdminClient();
@@ -122,7 +121,7 @@ export async function runPayrollApprovalDutiesTests(shouldRun: ShouldRun): Promi
       }
 
       assertNoProblems(problems);
-      return 'The issuer was refused approve, pay and void with 403 and nothing changed; a colleague approved, paid and voided; the system admin approved and paid their own payslip.';
+      return 'The issuer was refused approval with 403 and nothing changed; a colleague approved; the issuer then paid and voided the payment; the system admin approved and paid their own payslip.';
     }));
   }
 
