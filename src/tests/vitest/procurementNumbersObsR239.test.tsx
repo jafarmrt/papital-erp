@@ -21,6 +21,7 @@ const QTY_LABEL = 'مقدار درخواستی ردیف ۱';
 const PRICE_LABEL = 'برآورد قیمت واحد ردیف ۱';
 const TOMAN_TOTAL = '۱۲٬۵۰۰ تومان';
 const RIAL_TOTAL = '۱۲۵٬۰۰۰ ریال';
+const MISPLACED_SEPARATOR = '۱۲٬۵';
 
 const row: NewRequisitionRow = { id: 'r1', itemId: null, itemCode: '', itemName: 'سنگ', unit: 'عدد', requestedQty: 0, unitPriceEstimate: 0, notes: '' };
 
@@ -61,8 +62,11 @@ describe('requisition quantity and price are read as text (OBS-R2-39)', () => {
     const changes: [string, unknown][] = [];
     renderRow((f, v) => changes.push([f, v]));
     fireEvent.change(screen.getByLabelText(QTY_LABEL), { target: { value: '2x' } });
-    fireEvent.change(screen.getByLabelText(PRICE_LABEL), { target: { value: '12.5' } });
-    expect(changes).toEqual([]);
+    fireEvent.change(screen.getByLabelText(PRICE_LABEL), { target: { value: MISPLACED_SEPARATOR } });
+    // v11: the price is the shared rial field; a wrong entry stays on the field as an error and the form refuses it
+    // (`refuseInvalidDecimalInputs` in the requisition form), so its empty value is never sent
+    expect(changes.filter(([field]) => field === 'requestedQty')).toEqual([]);
+    expect((screen.getByLabelText(PRICE_LABEL) as HTMLInputElement).validity.valid).toBe(false);
     expect(screen.getAllByRole('alert').length).toBe(2);
     expect(readDecimalText('1.23456', 4, 'مقدار').ok).toBe(false);
   });

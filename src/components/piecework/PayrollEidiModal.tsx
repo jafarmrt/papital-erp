@@ -10,6 +10,8 @@ import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
 import { EIDI_METHOD_LABELS, EIDI_NOT_COVERED_NOTE, EIDI_OVERRIDE_REASON_MAX, type EidiPayslipSuggestion } from '../../lib/payroll/eidi';
 import { SearchableSelect } from '../SearchableSelect';
 import { DialogLayer } from '../common/DialogLayer';
+import { DecimalInput, refuseInvalidDecimalInputs } from '../common/DecimalInput';
+import { RIAL_INPUT_UNIT, RialEquivalent } from '../common/RialEquivalent';
 import { idempotentReplayMessage, isIdempotentReplay } from '../../lib/idempotentReplay';
 import { useEidiPreviewQuery } from '../../hooks/queries/usePayrollWindowQueries';
 import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
@@ -59,8 +61,8 @@ export function PayrollEidiModal({ personnelSelectOptions, onClose, onIssued }: 
   const finalAmount = entered !== '' ? Number(entered) : Number(suggested);
   const blocked = !preview || finalAmount <= 0 || (overridden && !reason.trim()) || saving || !online;
 
-  const submit = async () => {
-    if (blocked) return;
+  const submit = async (from: Element) => {
+    if (blocked || refuseInvalidDecimalInputs(from)) return;
     setSaving(true);
     try {
       const res = await fetchJson('/piecework/eidi-payslips', {
@@ -84,7 +86,7 @@ export function PayrollEidiModal({ personnelSelectOptions, onClose, onIssued }: 
   const years = [thisYear - 1, thisYear];
   const s = preview?.suggestion;
   return (
-    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+    <div role="dialog" aria-modal="true" data-decimal-scope="" className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
       <DialogLayer onClose={onClose} disabled={saving} />
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
         <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
@@ -109,8 +111,9 @@ export function PayrollEidiModal({ personnelSelectOptions, onClose, onIssued }: 
               {preview.draftWarning && <p className="text-amber-700">{preview.draftWarning}</p>}
             </div>
           )}
-          <label className="block font-bold text-slate-700" htmlFor="eidi-amount">مبلغ عیدی (خالی یعنی مبلغ پیشنهادی)</label>
-          <input id="eidi-amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold" />
+          <label className="block font-bold text-slate-700" htmlFor="eidi-amount">{`مبلغ عیدی (${RIAL_INPUT_UNIT}؛ خالی یعنی مبلغ پیشنهادی)`}</label>
+          <DecimalInput id="eidi-amount" min="0" value={amount} onValueChange={setAmount} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold" />
+          <RialEquivalent value={amount} />
           {overridden && (
             <>
               <label className="block font-bold text-slate-700" htmlFor="eidi-reason">شرح مبلغ دستی *</label>
@@ -120,7 +123,7 @@ export function PayrollEidiModal({ personnelSelectOptions, onClose, onIssued }: 
         </div>
         <div className="p-4 border-t border-slate-200 flex justify-end gap-2 shrink-0">
           <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-100 rounded-xl font-bold text-xs cursor-pointer">انصراف</button>
-          <button type="button" onClick={() => void submit()} disabled={blocked} className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold text-xs disabled:opacity-50 cursor-pointer">
+          <button type="button" onClick={(e) => void submit(e.currentTarget)} disabled={blocked} className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold text-xs disabled:opacity-50 cursor-pointer">
             {saving ? 'در حال صدور...' : 'صدور فیش عیدی'}
           </button>
         </div>
