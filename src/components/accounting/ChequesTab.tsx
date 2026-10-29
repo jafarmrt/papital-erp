@@ -13,6 +13,9 @@ import { JalaliDateInput } from '../common/JalaliDateInput';
 import { FinancialAttachmentUploader } from './FinancialAttachmentUploader';
 import { FinancialAttachmentBadge } from './FinancialAttachmentBadge';
 import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal';
+import { RecordAttachmentsButton } from '../attachments/RecordAttachmentsButton';
+import { RecordAttachmentsWindow } from '../attachments/RecordAttachmentsWindow';
+import { useHasAnyPermission } from '../../contexts/AuthContext';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { useChequeReconciliationReport } from '../../hooks/accounting/useChequeQueries';
 import { copyToClipboard } from '../../utils/clipboard';
@@ -115,6 +118,9 @@ export function ChequesTab({
   const [settlementTarget, setSettlementTarget] = useState<SettlementWindowTarget | null>(null);
   const canSettleOnDocuments = useCanSettleOnDocuments();
   const [viewingAttachments, setViewingAttachments] = useState<{ title: string; attachments: FinancialAttachment[] } | null>(null);
+  // v11 «افزودن پیوست»: the files window of a cheque, for the holder of the cheque book or treasury key
+  const canWriteCheques = useHasAnyPermission(['accounting.cheques', 'accounting.treasury']);
+  const [attachmentsOf, setAttachmentsOf] = useState<{ id: number; number: string } | null>(null);
   const [statusModalCheque, setStatusModalCheque] = useState<Cheque | null>(null);
   const [targetStatus, setTargetStatus] = useState<ChequeStatus>('passed');
   const [statusDescription, setStatusDescription] = useState('');
@@ -592,7 +598,10 @@ export function ChequesTab({
                           <div className="font-mono font-bold text-slate-900 dark:text-white">
                             {toPersianDigits(c.chequeNumber)}
                           </div>
-                          {c.attachments && c.attachments.length > 0 && (
+                          {canWriteCheques ? (
+                            <RecordAttachmentsButton count={c.attachments?.length ?? 0}
+                              onClick={() => setAttachmentsOf({ id: c.id, number: c.chequeNumber })} />
+                          ) : c.attachments && c.attachments.length > 0 && (
                             <FinancialAttachmentBadge
                               count={c.attachments.length}
                               onClick={() => setViewingAttachments({
@@ -1215,6 +1224,11 @@ export function ChequesTab({
             </div>
           </div>
         </div>
+      )}
+
+      {attachmentsOf && (
+        <RecordAttachmentsWindow entityType="cheque" entityId={attachmentsOf.id} title={`پیوست‌های چک ${toPersianDigits(attachmentsOf.number)}`}
+          canWrite={canWriteCheques} onClose={() => setAttachmentsOf(null)} />
       )}
 
       {/* مدال پیش‌نمایش و دانلود تصاویر پیوست چک‌ها */}

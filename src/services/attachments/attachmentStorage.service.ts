@@ -311,6 +311,20 @@ export class AttachmentStorageService {
   }
 
   /**
+   * v11 «افزودن پیوست»: the whole list of a saved record's files, after one was added or removed outside its form (an
+   * empty list too); the caller holds the record's row lock.
+   */
+  static async replaceRecordAttachments(
+    executor: DbExecutor, entityType: AttachmentEntityType, entityId: number, input: unknown[], actor = ''
+  ): Promise<FinancialAttachment[]> {
+    const table = ENTITY_TABLES[entityType];
+    if (!table) throw new ValidationError('این نوع رکورد پیوست فهرستی ندارد');
+    const stored = await this.normalizeForRecord(executor, entityType, entityId, input, actor);
+    await executor.update(table).set({ attachments: stored }).where(eq(table.id, entityId));
+    return stored;
+  }
+
+  /**
    * انتقال پیوست‌های قدیمی (data URL داخل JSONB) به دیسک — فقط با اقدام دستی (`npm run attachments:migrate`
    * یا مسیر مدیر)، پیش‌فرض آزمایشی. هر رکورد در تراکنش جدا و با قفل سطری؛ ستون version رکوردها تغییر نمی‌کند
    * چون محتوای پیوست عوض نمی‌شود. کل اجرا با قفل مشورتی 91004 (یک اجرا در هر لحظه).

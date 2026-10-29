@@ -85,6 +85,12 @@ export const QUERY_KEYS = {
   },
 
   // Projects & Production
+  /** v11 «افزودن پیوست»: the files of one recorded document, treasury row, cheque or voucher */
+  recordAttachments: {
+    all: ['record-attachments'] as const,
+    detail: (entityType: string, id: number) => ['record-attachments', entityType, id] as const,
+  },
+
   projects: {
     all: ['projects'] as const,
     list: () => ['projects', 'list'] as const,

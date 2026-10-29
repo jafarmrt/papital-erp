@@ -1,4 +1,7 @@
-import { Printer, ShoppingCart, FileText, X } from 'lucide-react';
+import { useState } from 'react';
+import { Paperclip, Printer, ShoppingCart, FileText, X } from 'lucide-react';
+import { useHasAnyPermission } from '../../../contexts/AuthContext';
+import { RecordAttachmentsWindow } from '../../attachments/RecordAttachmentsWindow';
 import { formatPersianCode, formatPersianDate } from '../../../utils';
 import { WorkflowStepperWidget } from '../../workflow/WorkflowStepperWidget';
 import { detailsTitleOf, type InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
@@ -19,7 +22,12 @@ interface InvoiceDetailsModalProps {
 }
 
 /** TD-080 (بخش ۳): مودال سریع جزئیات سند (طرف حساب، گردش‌کار، ریز اقلام، جمع‌ها و تسویه) */
+/** v11 «افزودن پیوست»: the keys that write a document (the server's list); a reader only sees its files */
+const DOCUMENT_ATTACHMENT_WRITERS = ['documents.edit', 'documents.create', 'documents.finalize', 'warehouse.in', 'warehouse.out', 'warehouse.production_receipt'] as const;
+
 export function InvoiceDetailsModal({ selectedDocDetails, setSelectedDocDetails, setSettlementDoc, printFromDetails, loadData, canSettle }: InvoiceDetailsModalProps) {
+  const canWriteAttachments = useHasAnyPermission(DOCUMENT_ATTACHMENT_WRITERS);
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
       <DialogLayer onClose={() => setSelectedDocDetails(null)} />
@@ -48,6 +56,11 @@ export function InvoiceDetailsModal({ selectedDocDetails, setSelectedDocDetails,
           </div>
 
           <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setAttachmentsOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer">
+              <Paperclip size={15} />
+              <span>پیوست‌ها</span>
+            </button>
             <button
               onClick={() => printFromDetails(selectedDocDetails.id)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs"
@@ -102,6 +115,10 @@ export function InvoiceDetailsModal({ selectedDocDetails, setSelectedDocDetails,
           </button>
         </div>
       </div>
+      {attachmentsOpen && (
+        <RecordAttachmentsWindow entityType="document" entityId={selectedDocDetails.id} title={`پیوست‌های سند ${formatPersianCode(selectedDocDetails.ref_number)}`}
+          canWrite={canWriteAttachments} onClose={() => setAttachmentsOpen(false)} />
+      )}
     </div>
   );
 }

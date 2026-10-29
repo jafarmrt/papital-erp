@@ -21,7 +21,9 @@ import { VoucherRowMenu } from './vouchers/VoucherRowMenu';
 import { VoucherPrimaryActionCell } from './vouchers/VoucherPrimaryActionCell';
 import { voucherSourceLabel } from '../../lib/accounting/voucherSource';
 import { isViewerVoucherMaker, voucherMakerName, voucherReferenceText } from '../../lib/accounting/voucherListViewer';
-import { useViewerIdentity } from '../../contexts/AuthContext';
+import { useHasPermission, useViewerIdentity } from '../../contexts/AuthContext';
+import { RecordAttachmentsButton } from '../attachments/RecordAttachmentsButton';
+import { RecordAttachmentsWindow } from '../attachments/RecordAttachmentsWindow';
 import { DialogLayer } from '../common/DialogLayer';
 
 interface JournalVouchersTabProps {
@@ -95,6 +97,9 @@ export function JournalVouchersTab({
   const [correctionTargetVoucher, setCorrectionTargetVoucher] = useState<JournalVoucher | null>(null);
   const [workflowTargetVoucher, setWorkflowTargetVoucher] = useState<JournalVoucher | null>(null);
   const [viewingAttachments, setViewingAttachments] = useState<{ title: string; attachments: FinancialAttachment[] } | null>(null);
+  // v11 «افزودن پیوست»: the files window of a voucher, for the holder of the voucher key
+  const canWriteVouchers = useHasPermission('accounting.vouchers');
+  const [attachmentsOf, setAttachmentsOf] = useState<{ id: number; number: number | string } | null>(null);
 
   // Multi-select & Batch Operations: انتخاب با وضعیت هر سند نگه داشته می‌شود تا در صفحه‌های دیگر هم بماند
   const [selectedStatuses, setSelectedStatuses] = useState<Record<number, JournalVoucher['status']>>({});
@@ -431,7 +436,10 @@ export function JournalVouchersTab({
                         <td className="py-3 px-4 font-medium text-slate-800 dark:text-slate-200" data-label="شرح">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span>{voucher.description}</span>
-                            {voucher.attachments && voucher.attachments.length > 0 && (
+                            {canWriteVouchers ? (
+                              <RecordAttachmentsButton count={voucher.attachments?.length ?? 0}
+                                onClick={() => setAttachmentsOf({ id: voucher.id, number: voucher.voucherNumber })} />
+                            ) : voucher.attachments && voucher.attachments.length > 0 && (
                               <FinancialAttachmentBadge
                                 count={voucher.attachments.length}
                                 onClick={() => setViewingAttachments({
@@ -628,6 +636,11 @@ export function JournalVouchersTab({
         onConfirm={executeConfirmAction}
         onCancel={() => setConfirmAction(null)}
       />
+
+      {attachmentsOf && (
+        <RecordAttachmentsWindow entityType="journal_voucher" entityId={attachmentsOf.id} title={`پیوست‌های سند حسابداری ${formatPersianCode(attachmentsOf.number)}`}
+          canWrite={canWriteVouchers} onClose={() => setAttachmentsOf(null)} />
+      )}
 
       {/* مدال پیش‌نمایش و دانلود ضمائم و فاکتورها */}
       {viewingAttachments && (

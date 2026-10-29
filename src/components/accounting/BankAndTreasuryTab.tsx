@@ -19,6 +19,7 @@ import { useDebounce } from '../../hooks/useDebounce';
 import { fetchTreasuryTransactions, useTreasuryDocumentDetach, useTreasuryDocumentRelink, useTreasuryTransactionPageQuery, type TreasuryListFilters } from '../../hooks/accounting/useTreasuryQueries';
 import { BankReconciliationModal } from './reconciliation/BankReconciliationModal';
 import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal';
+import { RecordAttachmentsWindow } from '../attachments/RecordAttachmentsWindow';
 
 // Modular Sub-components & Hook (Phase 6.1 Refactoring)
 import { useTreasuryCalculations } from './treasury/useTreasuryCalculations';
@@ -103,6 +104,9 @@ export function BankAndTreasuryTab({
   const [voidTarget, setVoidTarget] = useState<TreasuryTransaction | null>(null);
   const [reconciliationBankId, setReconciliationBankId] = useState<number | null>(null);
   const [viewingAttachments, setViewingAttachments] = useState<{ title: string; attachments: FinancialAttachment[] } | null>(null);
+  // v11 «افزودن پیوست»: the files window of a recorded row, for the holder of the treasury key
+  const canWriteTreasury = useHasPermission('accounting.treasury');
+  const [attachmentsOf, setAttachmentsOf] = useState<{ id: number; number: string } | null>(null);
 
   // Clipboard feedback
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -396,6 +400,7 @@ export function BankAndTreasuryTab({
         onCopy={handleCopy}
         onExportExcel={() => { void handleExportExcel(); }}
         onViewAttachments={(info) => setViewingAttachments(info)}
+        onOpenAttachments={canWriteTreasury ? (tx) => setAttachmentsOf({ id: tx.id, number: tx.transactionNumber }) : undefined}
         onVoidTransaction={(tx) => setVoidTarget(tx)}
         onDetachDocument={(tx) => { void handleDetachDocument(tx); }}
         onRelinkDocument={setRelinkTarget}
@@ -478,6 +483,11 @@ export function BankAndTreasuryTab({
         appCurrency={appCurrency}
         onSave={handleSaveTransaction}
       />
+
+      {attachmentsOf && (
+        <RecordAttachmentsWindow entityType="treasury_transaction" entityId={attachmentsOf.id} title={`پیوست‌های تراکنش ${attachmentsOf.number}`}
+          canWrite={canWriteTreasury} onClose={() => setAttachmentsOf(null)} />
+      )}
 
       {/* Financial Attachments Viewer Modal */}
       {viewingAttachments && (
