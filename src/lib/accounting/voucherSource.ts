@@ -6,7 +6,7 @@
  * `VOUCHER_HAS_SOURCE` است؛ اثر آن فقط با ابطال منشأ (و ثبت دوباره آن) تغییر می‌کند. پیش‌تر این کارها پذیرفته می‌شد و
  * دفتر از موجودی و سند منشأ جدا می‌افتاد (ناوردایی‌های I3 و I4).
  */
-export const VOUCHER_SOURCE_KINDS = ['document', 'treasury', 'cheque', 'payroll', 'bom_allocation', 'treasury_opening'] as const;
+export const VOUCHER_SOURCE_KINDS = ['document', 'treasury', 'cheque', 'payroll', 'bom_allocation', 'treasury_opening', 'colleague_expense'] as const;
 export type VoucherSourceKind = typeof VOUCHER_SOURCE_KINDS[number];
 
 export const VOUCHER_SOURCE_LABELS: Record<VoucherSourceKind, string> = {
@@ -17,6 +17,8 @@ export const VOUCHER_SOURCE_LABELS: Record<VoucherSourceKind, string> = {
   bom_allocation: 'تخصیص مواد پروژه',
   // v11 phase 3.1 (M2): the opening voucher of a treasury account and the adjustments of its opening balance
   treasury_opening: 'مانده اول دوره حساب خزانه',
+  // v11 (the 1405 replay, tool 4): an expense a colleague paid from their own pocket
+  colleague_expense: 'هزینهٔ پرداختی همکار',
 };
 
 /** پیشوند شماره مرجع سندهای برگشت (ابطال، ابطال برای بازثبت، برگشتِ برگشت خزانه) */

@@ -100,7 +100,8 @@ export function parseTreasurySheet(sheet: string, rows: readonly (readonly unkno
   return parsed;
 }
 
-export type BankTarget = { kind: 'bank'; bankAccountId: number } | { kind: 'skip' };
+/** «حساب نقد و بانک»: one of our accounts, or (sheet «هزینه‌ها», tool 4) the colleague who paid from their own pocket */
+export type BankTarget = { kind: 'bank'; bankAccountId: number } | { kind: 'personnel'; personnelId: number; name: string } | { kind: 'skip' };
 export type PartyTarget =
   | { kind: 'customer' | 'supplier'; partyId: number; name: string }
   | { kind: 'personnel'; personnelId: number; name: string }
@@ -119,14 +120,20 @@ export interface TreasuryImportMapping {
 
 export const emptyTreasuryMapping = (): TreasuryImportMapping => ({ banks: {}, parties: {}, expenses: {}, personnelOtherAccountId: null });
 
-/** What a colleague's row is: wages paid through their payslips, an advance, or another payment with a counter account. */
-export type PersonnelUse = 'payslip' | 'advance' | 'other';
+/**
+ * What a colleague's row is: wages paid through their payslips, an advance, their running account (petty cash given, their
+ * out-of-pocket expenses paid back, money handed back; tool 4), or another payment with a counter account.
+ */
+export type PersonnelUse = 'payslip' | 'advance' | 'colleague_account' | 'other';
 
 /** The default use of a colleague's row, read from its description; the user can change it row by row. */
 export function guessPersonnelUse(row: Pick<ParsedTreasuryRow, 'description' | 'partyName' | 'typeText'>): PersonnelUse {
   const text = `${row.description} ${row.partyName}`;
   if (text.includes('مساعده')) return 'advance';
   if (row.typeText === 'پرداخت' && /حقوق|دستمزد/.test(text)) return 'payslip';
+  // a loan repaid («بازپرداخت وام») is not the running account; such a row waits for the user's choice
+  if (/وام|قسط/.test(text)) return 'other';
+  if (/تنخواه|بازپرداخت|از جیب/.test(text)) return 'colleague_account';
   return 'other';
 }
 
@@ -171,13 +178,16 @@ export function resolveTreasuryRow(
   if (!parsed.bankName) return UNRESOLVED(parsed, 'حساب نقد و بانک ردیف خالی است.');
   if (!bank) return UNRESOLVED(parsed, `حساب «${parsed.bankName}» هنوز به حسابی در برنامه وصل نشده است.`);
   if (bank.kind === 'skip') return SKIP(parsed, `ردیف‌های حساب «${parsed.bankName}» کنار گذاشته شده‌اند.`);
+  if (bank.kind === 'personnel' && parsed.shape !== 'expenses') {
+    return UNRESOLVED(parsed, `«${parsed.bankName}» همکار است، نه حساب؛ در «دریافت و پرداخت» حساب نقد و بانک باید یکی از حساب‌های شرکت باشد.`);
+  }
   let rowContra: number | null = null;
   if (parsed.contraCode) {
     rowContra = options.accountIdOfCode?.(parsed.contraCode) ?? null;
     if (!rowContra) return UNRESOLVED(parsed, `کد حساب مقابل «${parsed.contraCode}» در فهرست حساب‌های قابل انتخاب نیست.`);
   }
   const base = {
-    rowNo: parsed.rowNo, sheet: parsed.sheet, date: parsed.date, bankAccountId: bank.bankAccountId, amount: parsed.amount,
+    rowNo: parsed.rowNo, sheet: parsed.sheet, date: parsed.date, bankAccountId: bank.kind === 'bank' ? bank.bankAccountId : 0, amount: parsed.amount,
     invoiceRef: parsed.invoiceRef, costCenter: parsed.costCenter, description: parsed.description,
     duplicateAccepted: options.accepted?.has(rowKey(parsed)) || undefined,
   };
@@ -189,6 +199,16 @@ export function resolveTreasuryRow(
     if (!parsed.typeText) return UNRESOLVED(parsed, 'نوع هزینه ردیف خالی است.');
     if (!expense) return UNRESOLVED(parsed, `نوع هزینه «${parsed.typeText}» هنوز به حسابی وصل نشده است.`);
     if (expense.kind === 'skip') return SKIP(parsed, `ردیف‌های نوع هزینه «${parsed.typeText}» کنار گذاشته شده‌اند.`);
+    if (bank.kind === 'personnel') {
+      // tool 4: a colleague paid it from their own pocket; the same name as «طرف حساب» is an accrual (wages), not a payment
+      if (headerKey(parsed.partyName) === headerKey(parsed.bankName)) {
+        return UNRESOLVED(parsed, `«حساب نقد و بانک» و «طرف حساب» هر دو «${parsed.bankName}» است؛ این ردیف پرداخت نیست (حقوق یا بستانکاری). حقوق از فیش ثبت می‌شود: نوع آن را کنار بگذارید یا ردیف را درست کنید.`);
+      }
+      if (expense.kind !== 'account') {
+        return UNRESOLVED(parsed, `خرید از تأمین‌کننده با پول همکار («${parsed.bankName}») از این ابزار ثبت نمی‌شود؛ آن را دستی ثبت کنید یا نوع هزینه را به یک حساب وصل کنید.`);
+      }
+      return ready({ kind: 'colleague_expense', personnelId: bank.personnelId, partyName: parsed.partyName, contraAccountId: rowContra ?? expense.accountId });
+    }
     if (expense.kind === 'account') {
       return ready({ kind: 'payment', partyType: 'other', partyName: parsed.partyName || parsed.typeText, contraAccountId: rowContra ?? expense.accountId });
     }
@@ -197,6 +217,7 @@ export function resolveTreasuryRow(
     return ready({ kind: 'payment', partyType: 'supplier', partyId: seller.partyId, partyName: seller.name, settleOldest: true });
   }
 
+  if (bank.kind !== 'bank') return UNRESOLVED(parsed, `«${parsed.bankName}» حساب شرکت نیست.`);
   const kind = parsed.typeText === 'دریافت' ? 'receipt' : parsed.typeText === 'پرداخت' ? 'payment' : null;
   if (!kind) return UNRESOLVED(parsed, `نوع ردیف «${parsed.typeText}» باید «دریافت» یا «پرداخت» باشد.`);
   const party = mapping.parties[parsed.partyName];
@@ -222,6 +243,7 @@ export function resolveTreasuryRow(
       const use = options.uses?.[rowKey(parsed)] ?? guessPersonnelUse(parsed);
       if (use === 'payslip' && kind === 'payment') return ready({ kind: 'payslip', personnelId: party.personnelId }, true);
       if (use === 'advance') return ready({ kind, partyType: 'personnel', partyId: party.personnelId, partyName: party.name, purpose: 'advance' }, true);
+      if (use === 'colleague_account') return ready({ kind, partyType: 'personnel', partyId: party.personnelId, partyName: party.name, purpose: 'colleague_account' }, true);
       const contra = rowContra ?? mapping.personnelOtherAccountId ?? null;
       if (!contra) return UNRESOLVED(parsed, 'برای پرداخت‌های دیگر همکاران (نه حقوق و نه مساعده) حساب مقابل را در مرحلهٔ نام‌ها انتخاب کنید.');
       return ready({ kind, partyType: 'personnel', partyId: party.personnelId, partyName: party.name, purpose: 'other', contraAccountId: contra }, true);

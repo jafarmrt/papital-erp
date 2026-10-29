@@ -11,15 +11,16 @@ const treasuryImportRowSchema = z.object({
   rowNo: z.coerce.number().int().positive(),
   sheet: z.string().trim().min(1).max(100),
   date: z.string().max(40),
-  kind: z.enum(['receipt', 'payment', 'transfer', 'payslip']),
-  bankAccountId: z.coerce.number().int().positive('حساب نقد و بانک ردیف مشخص نیست'),
+  kind: z.enum(['receipt', 'payment', 'transfer', 'payslip', 'colleague_expense']),
+  // tool 4: an expense a colleague paid from their own pocket moves no account of ours (0)
+  bankAccountId: z.coerce.number().int().nonnegative('حساب نقد و بانک ردیف مشخص نیست'),
   toBankAccountId: optionalId,
   // the amount is read again by the service, which names the row in its message
   amount: z.union([z.string().max(40), z.number()]).transform(v => String(v)),
   partyType: z.enum(['customer', 'supplier', 'personnel', 'other']).optional(),
   partyId: optionalId,
   partyName: z.string().max(TEXT_MAX).optional(),
-  purpose: z.enum(['advance', 'other']).nullable().optional(),
+  purpose: z.enum(['advance', 'colleague_account', 'other']).nullable().optional(),
   contraAccountId: optionalId,
   personnelId: optionalId,
   invoiceRef: z.string().max(TEXT_MAX).optional(),
@@ -27,7 +28,11 @@ const treasuryImportRowSchema = z.object({
   description: z.string().max(TEXT_MAX).optional(),
   settleOldest: z.boolean().optional(),
   duplicateAccepted: z.boolean().optional(),
-}).strict();
+}).strict().refine(row => (row.kind === 'colleague_expense') === (row.bankAccountId === 0), {
+  message: 'حساب نقد و بانک ردیف مشخص نیست', path: ['bankAccountId'],
+}).refine(row => row.kind !== 'colleague_expense' || (!!row.personnelId && !!row.contraAccountId), {
+  message: 'همکار و حساب هزینهٔ ردیف مشخص نیست', path: ['personnelId'],
+});
 
 export const treasuryHistoryImportSchema = z.object({
   body: z.object({

@@ -26,7 +26,7 @@ const partyTypeOf = (c: Customer) => c.partyType ?? c.party_type ?? 'customer';
 const accountLabel = (a: ContraAccountOption) => `${formatPersianCode(a.code)} — ${a.name}`;
 const SELECT_CLASS = 'w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-2 py-1.5 text-xs';
 
-const encodeBank = (t?: BankTarget) => (!t ? '' : t.kind === 'skip' ? 'skip' : `bank:${t.bankAccountId}`);
+const encodeBank = (t?: BankTarget) => (!t ? '' : t.kind === 'skip' ? 'skip' : t.kind === 'personnel' ? `personnel:${t.personnelId}` : `bank:${t.bankAccountId}`);
 const encodeParty = (t?: PartyTarget) => {
   if (!t) return '';
   switch (t.kind) {
@@ -51,7 +51,12 @@ export function TreasuryImportNames({ names, mapping, lists, onChange }: Props) 
   const setBank = (name: string, value: string) => {
     const banksMap = { ...mapping.banks };
     if (!value) delete banksMap[name];
-    else banksMap[name] = value === 'skip' ? { kind: 'skip' } : { kind: 'bank', bankAccountId: Number(value.split(':')[1]) };
+    else if (value === 'skip') banksMap[name] = { kind: 'skip' };
+    else if (value.startsWith('personnel:')) {
+      // tool 4: the colleague who paid from their own pocket (sheet «هزینه‌ها»)
+      const person = personnel.find(p => p.id === Number(value.split(':')[1]));
+      if (person) banksMap[name] = { kind: 'personnel', personnelId: person.id, name: person.fullName };
+    } else banksMap[name] = { kind: 'bank', bankAccountId: Number(value.split(':')[1]) };
     onChange({ ...mapping, banks: banksMap });
   };
   const setParty = (name: string, value: string) => {
@@ -93,11 +98,12 @@ export function TreasuryImportNames({ names, mapping, lists, onChange }: Props) 
 
   return (
     <div className="space-y-5">
-      {section('حساب نقد و بانک', 'هر نام ستون «حساب نقد و بانک» به یک حساب بانکی یا صندوق برنامه وصل شود. ردیف دوم مساعده (پرداخت از «مساعده - …») را کنار بگذارید تا مساعده یک بار ثبت شود.', names.banks, name => (
+      {section('حساب نقد و بانک', 'هر نام ستون «حساب نقد و بانک» به یک حساب بانکی یا صندوق برنامه وصل شود. ردیف دوم مساعده (پرداخت از «مساعده - …») را کنار بگذارید تا مساعده یک بار ثبت شود. اگر همکاری هزینه‌ای را از جیب خودش داده، نام او را به همان همکار وصل کنید: آن ردیف‌های «هزینه‌ها» «هزینهٔ پرداختی همکار» می‌شوند و به «حساب جاری همکاران» او می‌روند.', names.banks, name => (
         <select aria-label={`حساب ${name}`} className={SELECT_CLASS} value={encodeBank(mapping.banks[name])} onChange={e => setBank(name, e.target.value)}>
           <option value="">انتخاب کنید</option>
           <option value="skip">کنار گذاشته شود</option>
-          {bankOptions}
+          <optgroup label="حساب بانکی یا صندوق">{bankOptions}</optgroup>
+          <optgroup label="همکاری که از جیب خودش داده">{personnel.map(p => <option key={`bp${p.id}`} value={`personnel:${p.id}`}>{p.fullName}</option>)}</optgroup>
         </select>
       ))}
       {section('طرف حساب', 'مشتری، تأمین‌کننده، همکار، یکی از حساب‌های بانکی خودمان (انتقال) یا یک حساب (مانند کارمزد بانکی و سود بانکی).', names.parties, name => (
@@ -120,7 +126,7 @@ export function TreasuryImportNames({ names, mapping, lists, onChange }: Props) 
         </select>
       ))}
       <label className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
-        <span className="text-xs text-slate-700 dark:text-slate-200">حساب مقابل برای پرداخت‌های دیگر به همکاران (نه حقوق و نه مساعده؛ مثلاً پس دادن خرج‌کرد)</span>
+        <span className="text-xs text-slate-700 dark:text-slate-200">حساب مقابل برای پرداخت‌های دیگر به همکاران (نه حقوق، نه مساعده و نه حساب جاری همکار)</span>
         <select aria-label="حساب مقابل پرداخت‌های دیگر همکاران" className={SELECT_CLASS} value={mapping.personnelOtherAccountId ? String(mapping.personnelOtherAccountId) : ''}
           onChange={e => onChange({ ...mapping, personnelOtherAccountId: e.target.value ? Number(e.target.value) : null })}>
           <option value="">انتخاب کنید</option>

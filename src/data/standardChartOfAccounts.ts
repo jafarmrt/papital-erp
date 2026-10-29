@@ -84,6 +84,8 @@ export const STANDARD_CHART_OF_ACCOUNTS: InitialAccountItem[] = [
   { code: '3206', name: 'مالیات حقوق پرداختنی', level: 'subsidiary', parentCode: '32', accountType: 'liability', nature: 'credit', isSystem: 1 },
   // v10.0.222 (TD-1089، طرح حقوق §۳.۸): عیدی انباشته فیش‌ها تا «فیش عیدی»
   { code: '3207', name: 'عیدی پرداختنی', level: 'subsidiary', parentCode: '32', accountType: 'liability', nature: 'credit', isSystem: 1 },
+  // v11 (the 1405 replay, tool 4): each colleague's running account (detail personnel), either side: out-of-pocket expenses, petty cash in hand, paybacks
+  { code: '3208', name: 'حساب جاری همکاران', level: 'subsidiary', parentCode: '32', accountType: 'liability', nature: 'credit', isSystem: 1 },
 
   // ==========================================
   // گروه ۴: بدهی‌های بلندمدت و حقوق صاحبان سهام (Equity & Long-term)

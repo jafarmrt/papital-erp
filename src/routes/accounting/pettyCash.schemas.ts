@@ -32,3 +32,32 @@ export const pettyCashLinesSchema = z.object({
     id: z.string().regex(/^\d+$/, 'شناسه تراکنش باید عددی باشد')
   }),
 });
+
+// v11 (the 1405 replay, tool 4): an expense a colleague paid from their own pocket — the colleague and the lines of a petty cash statement
+export const colleagueExpenseSchema = z.object({
+  body: z.object({
+    personnelId: z.coerce.number().int().positive('همکاری را که هزینه را پرداخته انتخاب کنید'),
+    date: z.string().optional(),
+    description: z.string().max(PETTY_CASH_TEXT_MAX).optional(),
+    lines: z.array(pettyCashLineSchema)
+      .min(1, 'دست‌کم یک ردیف هزینه وارد کنید')
+      .max(PETTY_CASH_MAX_LINES, `هزینهٔ پرداختی همکار حداکثر ${PETTY_CASH_MAX_LINES.toLocaleString('fa-IR')} ردیف دارد`),
+    attachments: z.array(z.any()).optional(),
+  }).strict()
+});
+
+export const colleagueExpenseVoidSchema = z.object({
+  params: z.object({
+    id: z.string().regex(/^\d+$/, 'شناسه هزینه باید عددی باشد')
+  }),
+  body: z.object({
+    reason: z.string().trim().min(1, 'دلیل ابطال را بنویسید').max(PETTY_CASH_TEXT_MAX),
+  }).strict()
+});
+
+export const colleagueExpenseListSchema = z.object({
+  query: z.object({
+    personnelId: z.string().regex(/^\d+$/).optional(),
+    limit: z.string().regex(/^\d+$/).optional(),
+  }).strict()
+});

@@ -42,7 +42,8 @@ import {
   updateChequeStatusSchema,
   nextBankCodeQuerySchema,
 } from './accounting.schemas.js';
-import { pettyCashExpenseSchema, pettyCashLinesSchema } from './pettyCash.schemas.js';
+import { colleagueExpenseListSchema, colleagueExpenseSchema, colleagueExpenseVoidSchema, pettyCashExpenseSchema, pettyCashLinesSchema } from './pettyCash.schemas.js';
+import { createColleagueExpense, listColleagueExpenses, voidColleagueExpense } from '../../services/accounting/treasury/colleagueExpense.service.js';
 import { statutoryRemittanceOptionsSchema, statutoryRemittanceSchema } from './statutoryRemittance.schemas.js';
 
 const router = Router();
@@ -212,6 +213,34 @@ router.post('/accounting/treasury/petty-cash/:id/expenses', authorizePermission(
     audit: { req, userFullName: req.user?.fullName },
   });
   res.status(201).json(result);
+}));
+
+// v11 (the 1405 replay, tool 4): an expense a colleague paid from their own pocket; the company owes it them until paid back
+router.get('/accounting/treasury/colleague-expenses', authorizePermission('accounting.treasury'), validate(colleagueExpenseListSchema), asyncHandler(async (req, res) => {
+  const query = req.query as { personnelId?: string; limit?: string };
+  res.json({ success: true, data: await listColleagueExpenses({ personnelId: query.personnelId ? Number(query.personnelId) : undefined, limit: query.limit ? Number(query.limit) : undefined }) });
+}));
+
+router.post('/accounting/treasury/colleague-expenses', authorizePermission('accounting.treasury'), idempotency({ scope: 'treasury' }), validate(colleagueExpenseSchema), asyncHandler(async (req, res) => {
+  const body = req.body as z.infer<typeof colleagueExpenseSchema>['body'];
+  const result = await createColleagueExpense({
+    personnelId: body.personnelId,
+    date: body.date,
+    description: body.description,
+    lines: body.lines.map(line => ({ ...line, amount: line.amount ?? '' })),
+    attachments: body.attachments,
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+    audit: { req, userFullName: req.user?.fullName },
+  });
+  res.status(201).json(result);
+}));
+
+router.post('/accounting/treasury/colleague-expenses/:id/void', authorizePermission('accounting.treasury'), idempotency({ scope: 'treasury' }), validate(colleagueExpenseVoidSchema), asyncHandler(async (req, res) => {
+  const body = req.body as z.infer<typeof colleagueExpenseVoidSchema>['body'];
+  res.json(await voidColleagueExpense(Number(req.params.id), {
+    reason: body.reason, userId: req.user?.id, username: req.user?.fullName || req.user?.username, audit: { req, userFullName: req.user?.fullName },
+  }));
 }));
 
 router.get('/accounting/treasury/:id/petty-cash-lines', authorizePermission(...RECORD_READ_PERMISSIONS.treasury_transaction), validate(pettyCashLinesSchema), asyncHandler(async (req, res) => {

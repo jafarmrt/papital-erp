@@ -6742,8 +6742,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         SELECT count(*)::int AS n FROM pg_constraint pc JOIN pg_class rel ON rel.oid = pc.conrelid
         WHERE rel.relnamespace = current_schema()::regnamespace AND pc.conname LIKE 'chk%datefmt' AND pc.convalidated`) as unknown as { rows: Array<{ n: number }> }).rows;
       // v7.0.82 (TD-231): ۲۴ قید مهاجرت 0028 و ۳ قید مهاجرت 0030؛ v10.0.199 (TD-1086): ۱ قید مهاجرت 0103 (personnel.start_date)؛
-      // v10.0.254 (TD-971): ۱ قید مهاجرت 0108 (cheques.reconciled_at)؛ v10.3.19 (OBS-R1-65): ۱ قید مهاجرت 0134 (bank_accounts.opening_date)
-      if (covered !== 30) violations.push(`number of validated date format constraints: ${covered} (expected 30)`);
+      // v10.0.254 (TD-971): ۱ قید مهاجرت 0108 (cheques.reconciled_at)؛ v10.3.19 (OBS-R1-65): ۱ قید مهاجرت 0134 (bank_accounts.opening_date)؛
+      // v11 (ابزار ۴): ۱ قید مهاجرت 0009 (colleague_expenses.date)
+      if (covered !== 31) violations.push(`number of validated date format constraints: ${covered} (expected 31)`);
       if (missingRows.length > 0) violations.push(`without a valid format constraint: ${missingRows.map(r => `${r.table_name}.${r.column_name}`).join(', ')}`);
 
       const ROLLBACK = new Error('ROLLBACK_P3_15');
@@ -11175,6 +11176,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runHistoryImportOldOpeningsV11Tests(shouldRun));
   const { runHistoryImportSalesV11Tests } = await import('../regression/historyImportSalesV11Tests.js');
   results.push(...await runHistoryImportSalesV11Tests(shouldRun));
+  // v11 tool 4: each colleague's running account (out-of-pocket expenses, petty cash in hand, paybacks)
+  const { runColleagueAccountV11Tests } = await import('../regression/colleagueAccountV11Tests.js');
+  results.push(...await runColleagueAccountV11Tests(shouldRun));
   // v11 phase 7.2 (findings F1 to F6 of the v11 full test)
   const { runClosingFindingsV11Tests } = await import('../regression/closingFindingsV11Tests.js');
   results.push(...await runClosingFindingsV11Tests(shouldRun));

@@ -3,13 +3,14 @@
  * سرور و فرم خزانه همین را می‌خوانند. v10.0.257 (TD-952، ت۵ الف): «واریز کسورات حقوق» سایر کسورات فیش (۳۲۰۵) را با
  * تفصیلی همان پرسنل بدهکار می‌کند تا پس از واریز، مانده او صفر شود.
  */
-export const PERSONNEL_PURPOSES = ['settlement', 'advance', 'deductions', 'other'] as const;
+export const PERSONNEL_PURPOSES = ['settlement', 'advance', 'deductions', 'colleague_account', 'other'] as const;
 export type PersonnelPurpose = typeof PERSONNEL_PURPOSES[number];
 
 export const PERSONNEL_PURPOSE_LABELS: Record<PersonnelPurpose, string> = {
   settlement: 'تسویه حقوق',
   advance: 'مساعده و وام',
   deductions: 'واریز کسورات حقوق',
+  colleague_account: 'حساب جاری همکار',
   other: 'سایر',
 };
 
@@ -33,3 +34,14 @@ export function isSalarySettlementPayment(type: string | null | undefined, party
 
 export const SALARY_SETTLEMENT_VIA_PAYSLIP_MESSAGE =
   'تسویه حقوق پرسنل فقط از «پرداخت فیش» در صفحه کارمزد ثبت می‌شود تا یک فیش دو بار پرداخت نشود؛ برای مساعده «مساعده و وام» و برای پرداخت دیگر «سایر» را انتخاب کنید.';
+
+/**
+ * v11 (the 1405 replay, tool 4; owner's decision 7 Aban 1405): each colleague has a running account (حساب جاری همکار, the
+ * mapped colleague current account, 3208, on the colleague's detail) that may stand on either side. An expense the colleague
+ * paid for the company from their own pocket credits it; money given to the colleague (petty cash in hand, or paying back
+ * their expenses) is a treasury payment of this purpose and debits it; money the colleague hands back is a receipt of this
+ * purpose and credits it. Rials only, as the expenses are.
+ */
+export function isColleagueAccountMove(partyType: string | null | undefined, purpose: string | null | undefined): boolean {
+  return partyType === 'personnel' && purpose === 'colleague_account';
+}
