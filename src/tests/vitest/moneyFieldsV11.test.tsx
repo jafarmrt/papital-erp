@@ -81,6 +81,34 @@ function elementsOf(source: string, tag: string): Array<{ text: string; start: n
   return found;
 }
 
+/** a label that names a rial amount: the word, the shared unit, or the IRR label (`inputCurLbl` is `formatCurrencyLabel('IRR')`) */
+const RIAL_NAMED = /(^|[^\u0600-\u06FF])ریال|RIAL_INPUT_UNIT|formatCurrencyLabel\('IRR'\)|inputCurLbl/;
+/** the word «ریال» or «تومان» on its own («سریال» is not one) */
+const UNIT_WORD = /(^|[^\u0600-\u06FF])(ریال|تومان)/;
+
+const lineOf = (source: string, index: number) => source.slice(0, index).split('\n').length;
+
+/** the text of the label above a field: the last lines before it, after the field or equivalent before it in the same row */
+function labelAbove(source: string, start: number): string {
+  const lastLines = source.slice(Math.max(0, start - 300), start).split('\n').slice(-4).join('\n');
+  const previous = Math.max(lastLines.lastIndexOf('<DecimalInput'), lastLines.lastIndexOf('<RialEquivalent'), lastLines.lastIndexOf('<input'));
+  return previous < 0 ? lastLines : lastLines.slice(lastLines.indexOf('>', previous) + 1);
+}
+
+/** the `value={…}` expression of an element, without spaces and an empty fallback («x || ''» is «x») */
+function valueOf(element: string): string | null {
+  const at = element.indexOf('value={');
+  if (at < 0) return null;
+  let depth = 0;
+  let i = at + 'value='.length;
+  const open = i;
+  for (; i < element.length; i++) {
+    if (element[i] === '{') depth++;
+    else if (element[i] === '}' && --depth === 0) break;
+  }
+  return element.slice(open + 1, i).replace(/\s+/g, '').replace(/(\|\||\?\?)(''|0)$/, '');
+}
+
 /**
  * Plain `<input>` boxes that take a decimal number. Each one left is not an amount (a count, a quantity that may be
  * typed as hours, a workflow setting) or is the shared field itself. The list only shrinks: a new amount field uses
@@ -108,28 +136,28 @@ describe('amount fields are the shared number fields (ratchet)', () => {
           const key = relative(SRC, file).split('\\').join('/');
           counted[key] = (counted[key] ?? 0) + 1;
         }
-        // a rial or toman amount named by the box itself (its accessible name or hint)
-        if (/(aria-label|placeholder)=[^>]*(ریال|تومان)/.test(input.text)) named.push(relative(SRC, file));
+        // a rial or toman amount named by the box itself (its accessible name or hint) or by the label just above it
+        const hint = /(aria-label|placeholder)=[^>]*/.exec(input.text)?.[0] ?? '';
+        if (UNIT_WORD.test(hint) || UNIT_WORD.test(labelAbove(source, input.start))) {
+          named.push(`${relative(SRC, file)}:${lineOf(source, input.start)}`);
+        }
       }
     }
     expect(counted).toEqual(PLAIN_DECIMAL_INPUTS);
     expect(named).toEqual([]);
   });
 
-  it('a shared number field labelled in rial shows the toman equivalent under it', () => {
+  it('a shared number field labelled in rial shows its own toman equivalent', () => {
     const missing: string[] = [];
     for (const file of productionSources(SRC)) {
       const source = readFileSync(file, 'utf8');
       for (const field of elementsOf(source, 'DecimalInput')) {
-        const before = source.slice(Math.max(0, field.start - 300), field.start);
-        // the label above the field, not the field before it in the same row
-        const lastLines = before.split('\n').slice(-4).join('\n');
-        const previous = Math.max(lastLines.lastIndexOf('<DecimalInput'), lastLines.lastIndexOf('<RialEquivalent'));
-        const label = previous < 0 ? lastLines : lastLines.slice(lastLines.indexOf('>', previous) + 1);
-        const rialNamed = /ریال|RIAL_INPUT_UNIT|formatCurrencyLabel\('IRR'\)/.test(label + field.text);
-        if (!rialNamed) continue;
-        if (!/<RialEquivalent\b/.test(source.slice(field.end, field.end + 700))) {
-          missing.push(`${relative(SRC, file)}:${source.slice(0, field.start).split('\n').length}`);
+        if (!RIAL_NAMED.test(labelAbove(source, field.start) + field.text)) continue;
+        // the equivalent of this field (same value), under it or beside its label (`inline`)
+        const own = valueOf(field.text);
+        const near = elementsOf(source.slice(Math.max(0, field.start - 500), field.end + 700), 'RialEquivalent');
+        if (own === null || !near.some(eq => valueOf(eq.text) === own)) {
+          missing.push(`${relative(SRC, file)}:${lineOf(source, field.start)}`);
         }
       }
     }

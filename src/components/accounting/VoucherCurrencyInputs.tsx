@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { formatCurrencyLabel, formatPersianNumber } from '../../utils';
 import { DecimalInput } from '../common/DecimalInput';
 import { RialEquivalent } from '../common/RialEquivalent';
@@ -19,6 +20,7 @@ export function VoucherHeaderCurrencyFields({ value, onChange, currencyLocked = 
   currencyLocked?: boolean;
 }) {
   const currency = voucherRowCurrency(value.currency);
+  const rateId = useId();
   return (
     <div className="flex items-start gap-2">
       <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300">
@@ -33,19 +35,21 @@ export function VoucherHeaderCurrencyFields({ value, onChange, currencyLocked = 
         </select>
       </label>
       {currency !== 'IRR' && (
-        <div>
-          <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300">
+        <div className="flex flex-col gap-1">
+          {/* the field's error stays outside its label, so it never becomes part of the field's name */}
+          <label htmlFor={rateId} className="text-xs font-semibold text-slate-600 dark:text-slate-300">
             نرخ {formatCurrencyLabel(currency)} به ریال *
-            <DecimalInput
-              min="0"
-              step="any"
-              value={value.rate ?? ''}
-              onValueChange={rate => onChange({ currency, rate })}
-              placeholder="نرخ تبدیل"
-              className={`${inputClass} w-32 font-mono text-left`}
-            />
           </label>
-          <RialEquivalent value={value.rate} />
+          <DecimalInput
+            id={rateId}
+            min="0"
+            step="any"
+            value={value.rate ?? ''}
+            onValueChange={rate => onChange({ currency, rate })}
+            placeholder="نرخ تبدیل"
+            className={`${inputClass} w-32 font-mono text-left`}
+          />
+          <RialEquivalent value={value.rate} className="mt-0" />
         </div>
       )}
     </div>

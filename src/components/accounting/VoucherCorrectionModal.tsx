@@ -14,6 +14,9 @@ import toast from 'react-hot-toast';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { postingAccountsOf } from '../../lib/accounting/postingAccount';
 import { DecimalInput } from '../common/DecimalInput';
+import { RialEquivalent } from '../common/RialEquivalent';
+import { rowKeyOf, withFreshRowKeys, withRowKey, type KeyedRow } from '../../lib/rowKey';
+import { voucherRowCurrencyRate } from '../../lib/accounting/voucherFormCurrency';
 import { DialogLayer } from '../common/DialogLayer';
 import { controlAccountRefusalMessage } from '../../lib/accounting/controlAccounts';
 import { ControlAccountNotice, useControlAccountRows } from './vouchers/ControlAccountNotice';
@@ -65,7 +68,8 @@ export function VoucherCorrectionModal({
   const [date, setDate] = useState(() => getTodayIsoDate());
   const [reason, setReason] = useState('');
   const [newDescription, setNewDescription] = useState('');
-  const [items, setItems] = useState<VoucherItemDraft[]>([]);
+  // rows keep a browser-only key, so removing a row never hands its typed (or wrong) field text to the next row
+  const [items, setItems] = useState<Array<VoucherItemDraft & KeyedRow>>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // v9.0.191 (TD-564): ارز سند اصلاحی همان ارز سند اصلی است؛ نرخ سند از ردیف‌های اصلی و قابل تغییر
   const [headerRate, setHeaderRate] = useState<number | string | ''>('');
@@ -82,7 +86,7 @@ export function VoucherCorrectionModal({
       const originalHeader = { currency: originalCurrency, rate: voucherHeaderRateFromRows(voucher.items, originalCurrency) };
       setHeaderRate(originalHeader.rate);
       if (voucher.items && Array.isArray(voucher.items) && voucher.items.length > 0) {
-        setItems(voucher.items.map(it => ({
+        setItems(withFreshRowKeys(voucher.items.map(it => ({
           ...voucherRowDraftFromStored({ currency: it.currency, exchangeRate: it.exchangeRate ?? it.exchange_rate }, originalHeader),
           accountId: it.accountId,
           detailedType: voucherDetailedTypeFromStored(it.detailedType),
@@ -91,12 +95,12 @@ export function VoucherCorrectionModal({
           debit: it.debit || 0,
           credit: it.credit || 0,
           description: it.description || '',
-        })));
+        }))));
       } else {
-        setItems([
+        setItems(withFreshRowKeys([
           { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: 0, description: '' },
           { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: 0, description: '' },
-        ]);
+        ]));
       }
     }
   }, [voucher, isOpen]);
@@ -117,7 +121,7 @@ export function VoucherCorrectionModal({
   const handleAddItem = () => {
     setItems(prev => [
       ...prev,
-      { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: 0, description: newDescription || '' }
+      withRowKey({ accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: 0, description: newDescription || '' } as VoucherItemDraft)
     ]);
   };
 
@@ -146,7 +150,7 @@ export function VoucherCorrectionModal({
       return;
     }
     if (result.kind === 'balanced') return;
-    setItems(prev => [...prev, result.side === 'debit' ? { ...newRow, debit: result.amount } : { ...newRow, credit: result.amount }]);
+    setItems(prev => [...prev, withRowKey(result.side === 'debit' ? { ...newRow, debit: result.amount } : { ...newRow, credit: result.amount })]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -362,7 +366,7 @@ export function VoucherCorrectionModal({
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {items.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
+                    <tr key={rowKeyOf(item, idx)} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
                       <td className="py-2 px-2 text-center text-slate-400 font-mono">{formatPersianNumber(idx + 1)}</td>
                       <td className="py-2 px-2">
                         <div className="space-y-1.5">
@@ -410,6 +414,7 @@ export function VoucherCorrectionModal({
                           placeholder="۰"
                           className="w-full text-xs text-left font-mono font-bold text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded px-2 py-1 focus:ring-1 focus:ring-indigo-500"
                         />
+                        {voucherRowCurrencyRate(item, header).currency === 'IRR' && <RialEquivalent value={item.debit || ''} className="mt-0.5 text-[10px] text-left" />}
                       </td>
                       <td className="py-2 px-2">
                         <DecimalInput
@@ -423,6 +428,7 @@ export function VoucherCorrectionModal({
                           placeholder="۰"
                           className="w-full text-xs text-left font-mono font-bold text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded px-2 py-1 focus:ring-1 focus:ring-indigo-500"
                         />
+                        {voucherRowCurrencyRate(item, header).currency === 'IRR' && <RialEquivalent value={item.credit || ''} className="mt-0.5 text-[10px] text-left" />}
                       </td>
                       <td className="py-2 px-2 text-center">
                         <button aria-label="حذف ردیف"

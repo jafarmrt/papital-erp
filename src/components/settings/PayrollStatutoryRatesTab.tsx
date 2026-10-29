@@ -14,6 +14,7 @@ import { invalidateDomain } from '../../lib/queryInvalidation';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { RialEquivalent } from '../common/RialEquivalent';
 import { DecimalInput, refuseInvalidDecimalInputs } from '../common/DecimalInput';
+import { rowKeyOf, withFreshRowKeys, withRowKey, type KeyedRow } from '../../lib/rowKey';
 
 /**
  * v10.0.210 (TD-1087، طرح حقوق §۳.۳ بند ۱، تصمیم ت۴ الف): «نرخ‌های بیمه و مالیات حقوق» هر سال جلالی. حسابدار اعداد را از
@@ -37,7 +38,8 @@ interface FormState {
   employeeInsurancePercent: string;
   employerInsurancePercent: string;
   insuranceWageCap: string;
-  taxBrackets: Array<{ from: string; to: string; rate: string }>;
+  /** each bracket keeps a browser-only key, so removing one never hands its typed (or wrong) field text to the next */
+  taxBrackets: Array<{ from: string; to: string; rate: string } & KeyedRow>;
   deductInsuranceFromTax: boolean;
   version?: number;
 }
@@ -48,12 +50,12 @@ const inputClass = 'w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded
 const clean = (v: string) => normalizeDecimalString(v) || '0';
 
 function formOf(view: RatesView | undefined): FormState {
-  if (!view) return EMPTY_FORM;
+  if (!view) return { ...EMPTY_FORM, taxBrackets: withFreshRowKeys(EMPTY_FORM.taxBrackets) };
   return {
     employeeInsurancePercent: view.employeeInsurancePercent,
     employerInsurancePercent: view.employerInsurancePercent,
     insuranceWageCap: view.insuranceWageCap,
-    taxBrackets: view.taxBrackets.map(b => ({ from: b.from, to: b.to ?? '', rate: b.rate })),
+    taxBrackets: withFreshRowKeys(view.taxBrackets.map(b => ({ from: b.from, to: b.to ?? '', rate: b.rate }))),
     deductInsuranceFromTax: view.deductInsuranceFromTax,
     version: view.version,
   };
@@ -111,7 +113,7 @@ export function PayrollStatutoryRatesTab() {
     setForm(prev => ({ ...prev, taxBrackets: prev.taxBrackets.map((b, j) => (j === i ? { ...b, [key]: value } : b)) }));
   const addBracket = () => setForm(prev => {
     const last = prev.taxBrackets[prev.taxBrackets.length - 1];
-    return { ...prev, taxBrackets: [...prev.taxBrackets, { from: last?.to ?? '', to: '', rate: '' }] };
+    return { ...prev, taxBrackets: [...prev.taxBrackets, withRowKey({ from: last?.to ?? '', to: '', rate: '' })] };
   });
   const removeBracket = (i: number) => setForm(prev => ({ ...prev, taxBrackets: prev.taxBrackets.filter((_, j) => j !== i) }));
   const yearOptions = [...new Set([thisYear - 1, thisYear, thisYear + 1, ...years.map(r => r.jalaliYear)])].sort((a, b) => b - a);
@@ -164,7 +166,7 @@ export function PayrollStatutoryRatesTab() {
             <button type="button" onClick={addBracket} className="text-[11px] font-bold text-indigo-600 flex items-center gap-1 cursor-pointer"><Plus size={13} /> افزودن پله</button>
           </div>
           {form.taxBrackets.map((b, i) => (
-            <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-start">
+            <div key={rowKeyOf(b, i)} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-start">
               <div>
                 <DecimalInput aria-label={`آغاز پله ${toPersianDigits(String(i + 1))}`} value={b.from} onValueChange={(v) => setBracket(i, 'from', v)} placeholder="از (ریال)" className={inputClass} />
                 <RialEquivalent value={b.from} />
@@ -173,7 +175,9 @@ export function PayrollStatutoryRatesTab() {
                 <DecimalInput aria-label={`پایان پله ${toPersianDigits(String(i + 1))}`} value={b.to} onValueChange={(v) => setBracket(i, 'to', v)} placeholder="تا (ریال)؛ خالی یعنی بی‌پایان" className={inputClass} />
                 <RialEquivalent value={b.to} />
               </div>
-              <DecimalInput aria-label={`نرخ پله ${toPersianDigits(String(i + 1))}`} value={b.rate} onValueChange={(v) => setBracket(i, 'rate', v)} placeholder="نرخ (درصد)" className={`${inputClass} self-start`} />
+              <div>
+                <DecimalInput aria-label={`نرخ پله ${toPersianDigits(String(i + 1))}`} value={b.rate} onValueChange={(v) => setBracket(i, 'rate', v)} placeholder="نرخ (درصد)" className={inputClass} />
+              </div>
               <button type="button" onClick={() => removeBracket(i)} aria-label="حذف پله" className="p-2 text-rose-600 cursor-pointer"><Trash2 size={14} /></button>
             </div>
           ))}
