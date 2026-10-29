@@ -181,9 +181,18 @@ async function purchaseReceiptsOfRef(tx: DbExecutor, supplierId: number, ref: st
       eq(documents.isDeleted, 0),
       eq(documents.type, 'receipt'),
       inArray(documents.status, [...SETTLEABLE_DOCUMENT_STATUSES]),
+      sql`coalesce(nullif(trim(${documents.currency}), ''), 'IRR') = 'IRR'`,
     ))
     .orderBy(asc(documents.date), asc(documents.id));
   return found.map(f => Number(f.id));
+}
+
+/** Of these documents, the purchase receipts that carry a supplier invoice number of the stock import (tool 6). */
+async function receiptsWithPurchaseRef(tx: DbExecutor, ids: number[]): Promise<Set<number>> {
+  if (ids.length === 0) return new Set();
+  const found = await tx.selectDistinct({ id: historyImportPurchaseRefs.documentId }).from(historyImportPurchaseRefs)
+    .where(inArray(historyImportPurchaseRefs.documentId, ids));
+  return new Set(found.map(f => Number(f.id)));
 }
 
 /**
@@ -206,12 +215,18 @@ async function oldestFirstParts(tx: DbExecutor, row: TreasuryImportRow, isoDate:
   // tool 3: a receipt that names a past sales invoice by its Excel number settles that invoice first
   const named = isReceipt ? await invoiceOfExcelRef(tx, row.invoiceRef) : null;
   if (named !== null) candidates.sort((a, b) => Number(b.id === named) - Number(a.id === named));
+  if (!isReceipt) {
+    // tool 6: a receipt that carries a supplier invoice number waits for the payment row that names it, so a payment
+    // with no number (or what a named payment has left) goes to the oldest documents without a number first
+    const numbered = await receiptsWithPurchaseRef(tx, candidates.map(c => c.id));
+    candidates.sort((a, b) => Number(numbered.has(a.id)) - Number(numbered.has(b.id)));
+  }
   // tool 6: a supplier payment that names the supplier's invoice settles its receipts first (oldest of them first), also
   // a receipt dated after the payment (goods paid before they came in); what is left goes to the oldest open documents
-  if (!isReceipt && row.purchaseRef) {
-    const receipts = await purchaseReceiptsOfRef(tx, row.partyId, row.purchaseRef);
+  if (!isReceipt && purchaseRefKey(row.purchaseRef)) {
+    const receipts = await purchaseReceiptsOfRef(tx, row.partyId, row.purchaseRef!);
     if (receipts.length === 0) {
-      throw new ValidationError(`رسید خریدی با «شماره فاکتور مرجع» ${toPersianDigits(row.purchaseRef)} از این تأمین‌کننده در برنامه نیست. هر خرید مواد باید در اکسل انبار یک ردیف «خرید جدید» با همین شماره داشته باشد و آن ماه انبار پیش از این وارد شده باشد؛ اگر این خرید به انبار نمی‌آید، شمارهٔ ستون «شماره مرجع-فاکتور» این ردیف را پاک کنید تا از قدیمی‌ترین بدهی این تأمین‌کننده کم شود.`, undefined, 'HISTORY_IMPORT_PURCHASE_REF_UNKNOWN');
+      throw new ValidationError(`رسید خرید باز و ثبت‌شده‌ای با «شماره فاکتور مرجع» ${toPersianDigits(row.purchaseRef!)} از این تأمین‌کننده در برنامه نیست (رسیدی با این شماره وارد نشده، یا باطل یا پیش‌نویس شده، یا تأمین‌کننده‌اش عوض شده است). هر خرید مواد باید در اکسل انبار یک ردیف «خرید جدید» با همین شماره داشته باشد و آن ماه انبار پیش از این وارد شده باشد؛ اگر این خرید به انبار نمی‌آید، شمارهٔ ستون «شماره مرجع-فاکتور» این ردیف را پاک کنید تا از قدیمی‌ترین بدهی این تأمین‌کننده کم شود.`, undefined, 'HISTORY_IMPORT_PURCHASE_REF_UNKNOWN');
     }
     const named = new Set(receipts);
     candidates.splice(0, candidates.length, ...receipts.map(id => ({ id })), ...candidates.filter(c => !named.has(c.id)));

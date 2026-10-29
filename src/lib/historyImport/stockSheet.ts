@@ -1,7 +1,6 @@
 import { toEnglishDigits } from '../../utils/persianNumber.js';
 import { excelInvoiceNumber, type StockImportKind, type StockImportRow } from './stockHistoryImport.js';
 import { amountText, headerKey } from './treasurySheet.js';
-import { purchaseRefKey } from './purchaseRef.js';
 
 /**
  * v11 history import, tool 2: reading the two cleaned warehouse sheets and turning each row, through the codes and names
@@ -228,8 +227,6 @@ export function resolveStockRow(parsed: ParsedStockRow, mapping: StockImportMapp
     if (st?.kind === 'skip') return skipped(`تأمین‌کننده «${parsed.supplierName}» کنار گذاشته شد.`);
     if (st?.kind !== 'supplier') return unresolved(`تأمین‌کننده «${parsed.supplierName}» را به یک تأمین‌کنندهٔ برنامه وصل کنید.`);
     row.supplierId = st.partyId;
-    // tool 6: the number links the receipt to its payment on the «هزینه‌ها» sheet
-    if (!purchaseRefKey(parsed.slipRef)) return unresolved('«شماره فاکتور مرجع» این خرید خالی است؛ شمارهٔ ستون «شماره مرجع-فاکتور» ردیف همین خرید در برگهٔ «هزینه‌ها» را بنویسید تا پرداختش به همین رسید بنشیند.');
   }
   // the recipient stays in the notes only: a past remittance with a recipient would ask them today to confirm the delivery
   if (kind === 'transfer') {

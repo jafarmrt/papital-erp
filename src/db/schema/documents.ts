@@ -128,10 +128,11 @@ export const historyImportRefs = pgTable('history_import_refs', {
  * number can be several receipts (one per day and warehouse).
  */
 export const historyImportPurchaseRefs = pgTable('history_import_purchase_refs', {
-  documentId: integer('document_id').primaryKey().references(() => documents.id),
+  documentId: integer('document_id').notNull().references(() => documents.id),
   supplierId: integer('supplier_id').notNull().references(baseRelations.customersId),
   excelRef: text('excel_ref').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (t) => ({
+  pk: primaryKey({ name: 'history_import_purchase_refs_pkey', columns: [t.documentId, t.excelRef] }),
   idx_supplier_ref: index('idx_history_import_purchase_refs_supplier_ref').on(t.supplierId, t.excelRef),
 }));

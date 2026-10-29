@@ -9,3 +9,11 @@ export function purchaseRefKey(value: unknown): string {
   return toEnglishDigits(String(value ?? ''))
     .replace(/[‌\s]/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک').toLowerCase().trim();
 }
+
+/**
+ * The numbers of a purchase receipt's «شماره فاکتور مرجع» cell: one purchase paid in several «هزینه‌ها» rows (a deposit and
+ * the rest, or two accounts) names each row, separated by «،», «,», «;», «+» or a line break. Each in its key form, once.
+ */
+export function purchaseRefKeys(value: unknown): string[] {
+  return [...new Set(String(value ?? '').split(/[،,;+\n]/).map(purchaseRefKey).filter(Boolean))];
+}

@@ -49,8 +49,8 @@ describe('stock sheets', () => {
     const r = [...ins, ...outs].map(p => resolveStockRow(p, mapping(), lookups));
     expect(r[0]).toMatchObject({ status: 'ready', row: { kind: 'opening', date: STOCK_OPENING_DAY, itemCode: 'M-B-023', unitCost: '1200' } });
     expect(r[1]).toMatchObject({ status: 'ready', row: { kind: 'purchase', supplierId: 3, warehouse: 'MAIN', itemCode: 'm-b-023', slipRef: '35' } });
-    // tool 6: a purchase names its row on the «هزینه‌ها» sheet, so its payment settles this receipt
-    expect(resolveStockRow({ ...ins[1], slipRef: ' ' }, mapping(), lookups)).toMatchObject({ status: 'unresolved', reason: expect.stringContaining('شماره فاکتور مرجع') });
+    // tool 6: a purchase with no «هزینه‌ها» row (on credit, by cheque) goes in with no number
+    expect(resolveStockRow({ ...ins[1], slipRef: ' ' }, mapping(), lookups)).toMatchObject({ status: 'ready', row: { kind: 'purchase' } });
     expect(r[2]).toMatchObject({ status: 'ready', row: { kind: 'production', warehouse: null } });
     expect(r[3]).toMatchObject({ status: 'ready', row: { kind: 'return', invoiceRef: '61', unitCost: null } }); // back on its invoice
     expect(r[4].status).toBe('unresolved'); // a workshop return is netted against its consumption row

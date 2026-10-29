@@ -45,7 +45,7 @@ export async function runHistoryImportPurchaseRefsV11Tests(shouldRun: ShouldRun)
 
   const id = 'reg_history_import_purchase_refs_v11';
   if (shouldRun(id, 'v11', 'history_import', 'purchase', 'treasury')) {
-    await runCase(results, id, 'v11 history import (tool 6): two past purchase receipts keep the supplier invoice numbers they were imported with; a supplier payment that names the later one («b-۲۰۰», another spelling) settles that one although the other is older and open; an empty number settles the oldest; a payment before the named receipt still settles it, and what is left over goes to the oldest; a number with no receipt is refused and nothing is kept', () => inFiscalSandbox(async () => {
+    await runCase(results, id, 'v11 history import (tool 6): past purchase receipts keep the supplier invoice numbers they were imported with (one receipt paid in two rows keeps both); a supplier payment that names the later one (another spelling, Persian digits) settles that one although the other is older and open; a payment before the named receipt still settles it; a payment with no number, and what a named one has left, go to the oldest receipt without a number first; a number with no receipt is refused and nothing is kept', () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
@@ -54,15 +54,22 @@ export async function runHistoryImportPurchaseRefsV11Tests(shouldRun: ShouldRun)
       const receipts: StockImportRow[] = [
         { rowNo: 2, sheet: IN, date: '1405-02-01', kind: 'purchase', itemCode: item.code, quantity: '10', unitCost: '100000', supplierId: supplier.id, slipRef: 'A-100' },
         { rowNo: 3, sheet: IN, date: '1405-02-05', kind: 'purchase', itemCode: item.code, quantity: '5', unitCost: '100000', supplierId: supplier.id, slipRef: 'B-200' },
+        // bought on credit: no «هزینه‌ها» row names it
+        { rowNo: 4, sheet: IN, date: '1405-02-03', kind: 'purchase', itemCode: item.code, quantity: '2', unitCost: '100000', supplierId: supplier.id },
+        // paid in two «هزینه‌ها» rows
+        { rowNo: 5, sheet: IN, date: '1405-02-06', kind: 'purchase', itemCode: item.code, quantity: '3', unitCost: '100000', supplierId: supplier.id, slipRef: '۹، 10' },
       ];
       const stock = await postTo<StockImportResult>(admin, '/api/inventory/history-import', receipts, true);
       if (!stock.committed) throw new Error(`the receipts read ${JSON.stringify(stock.rows)}, expected committed`);
       const refA = stock.rows.find(r => r.rowNo === 2)?.created?.[0];
       const refB = stock.rows.find(r => r.rowNo === 3)?.created?.[0];
+      const refC = stock.rows.find(r => r.rowNo === 4)?.created?.[0];
+      const refD = stock.rows.find(r => r.rowNo === 5)?.created?.[0];
       const linked = await orm.execute(sql`SELECT r.excel_ref AS ref, d.ref_number AS "refNumber" FROM history_import_purchase_refs r JOIN documents d ON d.id = r.document_id
         WHERE r.supplier_id = ${supplier.id} ORDER BY r.excel_ref`);
       const pairs = (linked.rows as Array<{ ref: string; refNumber: string }>).map(r => `${r.ref}=${r.refNumber}`).join(',');
-      if (pairs !== `a-100=${refA},b-200=${refB}`) problems.push(`the receipts are linked as ${pairs}, expected a-100=${refA},b-200=${refB}`);
+      const expectedPairs = `10=${refD},9=${refD},a-100=${refA},b-200=${refB}`;
+      if (pairs !== expectedPairs) problems.push(`the receipts are linked as ${pairs}, expected ${expectedPairs}`);
 
       const bank = await fundedBank();
       const URL = '/api/accounting/treasury/history-import';
@@ -76,19 +83,25 @@ export async function runHistoryImportPurchaseRefsV11Tests(shouldRun: ShouldRun)
       const s0 = advance.rows[0]?.settled ?? [];
       if (!advance.committed || s0.length !== 1 || s0[0].refNumber !== refB || s0[0].amount !== 100_000) problems.push(`a payment before its named receipt read ${JSON.stringify(advance.rows)}, expected 100,000 settled on ${refB}`);
 
-      // B has 400,000 left; the other 100,000 goes to the oldest open receipt, A
+      // B has 400,000 left; the other 100,000 goes to the oldest receipt without a number, C, not to the older A that waits for its row
       const named = await postTo<TreasuryImportResult>(admin, URL, [payment(3, '1405-03-01', '500000', 'b-۲۰۰')], true);
       const s1 = (named.rows[0]?.settled ?? []).map(x => `${x.refNumber}:${x.amount}`).join(',');
-      if (!named.committed || s1 !== `${refB}:400000,${refA}:100000`) problems.push(`the payment naming b-200 read ${JSON.stringify(named.rows)}, expected ${refB}:400000,${refA}:100000`);
+      if (!named.committed || s1 !== `${refB}:400000,${refC}:100000`) problems.push(`the payment naming b-200 read ${JSON.stringify(named.rows)}, expected ${refB}:400000,${refC}:100000`);
 
+      // no number: what C has left first, then the oldest numbered receipt, A
       const oldest = await postTo<TreasuryImportResult>(admin, URL, [payment(4, '1405-03-02', '300000')], true);
-      const s2 = oldest.rows[0]?.settled ?? [];
-      if (!oldest.committed || s2.length !== 1 || s2[0].refNumber !== refA || s2[0].amount !== 300_000) problems.push(`a payment with no number read ${JSON.stringify(oldest.rows)}, expected 300,000 settled on the oldest ${refA}`);
+      const s2 = (oldest.rows[0]?.settled ?? []).map(x => `${x.refNumber}:${x.amount}`).join(',');
+      if (!oldest.committed || s2 !== `${refC}:100000,${refA}:200000`) problems.push(`a payment with no number read ${JSON.stringify(oldest.rows)}, expected ${refC}:100000,${refA}:200000`);
+
+      // D was paid in two rows; each names its own number
+      const split = await postTo<TreasuryImportResult>(admin, URL, [payment(6, '1405-03-03', '100000', '9'), payment(7, '1405-03-04', '200000', '10')], true);
+      const s3 = split.rows.map(row => (row.settled ?? []).map(x => `${x.refNumber}:${x.amount}`).join(',')).join(' ');
+      if (!split.committed || s3 !== `${refD}:100000 ${refD}:200000`) problems.push(`the two payments of one purchase read ${JSON.stringify(split.rows)}, expected both on ${refD}`);
 
       const before = await count(sql`SELECT count(*)::int AS n FROM treasury_transactions`);
-      const unknown = await postTo<TreasuryImportResult>(admin, URL, [payment(5, '1405-03-03', '100000', 'X-1')], true);
+      const unknown = await postTo<TreasuryImportResult>(admin, URL, [payment(5, '1405-03-05', '100000', 'X-1')], true);
       const r = unknown.rows[0];
-      if (unknown.committed || r?.status !== 'error' || !String(r?.message).includes('رسید خریدی')) problems.push(`a payment naming an unknown invoice read ${JSON.stringify(unknown.rows)}, expected refused`);
+      if (unknown.committed || r?.status !== 'error' || !String(r?.message).includes('رسید خرید')) problems.push(`a payment naming an unknown invoice read ${JSON.stringify(unknown.rows)}, expected refused`);
       if (await count(sql`SELECT count(*)::int AS n FROM treasury_transactions`) !== before) problems.push('a refused payment left a treasury row');
 
       if (problems.length > 0) throw new Error(problems.join(' | '));

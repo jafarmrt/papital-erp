@@ -71,7 +71,7 @@ export const DATA_EXPORT_TABLE_SOURCES: Readonly<Record<string, TableSpecSource>
   documents: { table: documents, key: ['id'] },
   document_items: { table: documentItems, key: ['id'] },
   history_import_refs: { table: historyImportRefs, key: ['kind', 'excelRef'] },
-  history_import_purchase_refs: { table: historyImportPurchaseRefs, key: ['documentId'] },
+  history_import_purchase_refs: { table: historyImportPurchaseRefs, key: ['documentId', 'excelRef'] },
   customers: { table: customers, key: ['id'] },
   crm_leads: { table: crmLeads, key: ['id'] },
   crm_activities: { table: crmActivities, key: ['id'] },
