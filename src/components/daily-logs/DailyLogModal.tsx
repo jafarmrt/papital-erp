@@ -6,7 +6,7 @@ import { SimpleUserOption } from '../../hooks/useDailyLogs';
 import { formatPersianNumber, getTodayJalaliDate, isoToJalaliDate, formatPersianCode } from '../../utils';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { MentionTextarea } from '../MentionTextarea';
-import { workTimeError } from '../../lib/dailyLogs/workHours';
+import { LONG_WORK_DAY_HOURS, afternoonEndTime, workTimeError } from '../../lib/dailyLogs/workHours';
 import { TimeOfDayInput } from './TimeOfDayInput';
 import { DAILY_LOG_CONTENT_MAX, DAILY_LOG_TAG_MAX, DAILY_LOG_TITLE_MAX } from '../../lib/dailyLogs/dailyLogLimits';
 import { type DailyLogVisibility, visibilityNotifiesMentions } from '../../lib/dailyLogs/dailyLogVisibility';
@@ -83,6 +83,12 @@ export function DailyLogModal({
 }: DailyLogModalProps) {
   const fieldId = useId();
   if (!isModalOpen) return null;
+  // v11: an end written as «۲» after a morning start is read as ۱۴:۰۰ when a time box is left (`afternoonEndTime`)
+  const readAfternoonEnd = () => {
+    const end = afternoonEndTime(formStartTime, formEndTime);
+    if (end !== formEndTime) setFormEndTime(end);
+  };
+  const timeError = workTimeError(formStartTime, afternoonEndTime(formStartTime, formEndTime));
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 overflow-y-auto font-farsi text-right">
@@ -173,14 +179,17 @@ export function DailyLogModal({
                 کارکرد: {formatPersianNumber(currentFormHours)} ساعت
               </span>
             </div>
-            {workTimeError(formStartTime, formEndTime) && (
-              <p role="alert" className="text-[11px] font-bold text-rose-600">{workTimeError(formStartTime, formEndTime)}</p>
-            )}
+            {timeError && <p role="alert" className="text-[11px] font-bold text-rose-600">{timeError}</p>}
 
             <div className="grid grid-cols-2 gap-2">
-              <TimeOfDayInput label="ساعت شروع" value={formStartTime} onChange={setFormStartTime} />
-              <TimeOfDayInput label="ساعت پایان" value={formEndTime} onChange={setFormEndTime} />
+              <TimeOfDayInput label="ساعت شروع" value={formStartTime} onChange={setFormStartTime} onCommit={readAfternoonEnd} />
+              <TimeOfDayInput label="ساعت پایان" value={formEndTime} onChange={setFormEndTime} onCommit={readAfternoonEnd} />
             </div>
+            {currentFormHours > LONG_WORK_DAY_HOURS && (
+              <p className="text-[11px] font-bold text-amber-700">
+                کارکرد این گزارش بیش از {formatPersianNumber(LONG_WORK_DAY_HOURS)} ساعت است؛ ساعت شروع و پایان را دوباره نگاه کنید.
+              </p>
+            )}
           </div>
 
           {/* Row 3: Simplified Confidentiality & Access Level */}

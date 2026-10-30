@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { numericIdString, storageDateParam } from '../middleware/validate.js';
 import { toEnglishDigits, toPersianDigits } from '../utils.js';
 import { DAILY_LOG_VISIBILITIES } from '../lib/dailyLogs/dailyLogVisibility.js';
-import { TIME_OF_DAY_PATTERN, normalizeTimeOfDay } from '../lib/dailyLogs/workHours.js';
+import { TIME_OF_DAY_PATTERN, normalizeTimeOfDay, timeOfDayFormatError } from '../lib/dailyLogs/workHours.js';
 import { DAILY_LOG_WORK_MODES } from '../lib/dailyLogs/workMode.js';
 import {
   DAILY_LOG_CONTENT_MAX, DAILY_LOG_MANAGER_NOTES_MAX, DAILY_LOG_PROJECT_NAME_MAX, DAILY_LOG_TAG_MAX, DAILY_LOG_TAGS_MAX,
@@ -21,11 +21,11 @@ const atMost = (label: string, max: number) => `${label} حداکثر ${toPersia
  * v9.0.236 (TD-900, decision ت۷): `public` and `all` are no longer accepted.
  * v9.0.258 (TD-644): title, content, tags, project name and manager notes have length caps (`dailyLogLimits.ts`).
  * v9.0.259 (TD-634): a start or end time is «HH:MM» from 00:00 to 23:59; the end after the start is checked by the
- * service with the shared rule (`workHours.ts`). v9.0.260 (TD-635, decision ت۳ ب): the work mode is onsite or remote.
+ * service with the shared rule (`workHours.ts`). v11: digits alone are read as a time too («۸۳۰» → 08:30). v9.0.260 (TD-635, decision ت۳ ب): the work mode is onsite or remote.
  */
 const timeOfDay = (label: string) => z.string()
   .transform(normalizeTimeOfDay)
-  .refine(v => TIME_OF_DAY_PATTERN.test(v), { message: `${label} باید به شکل ساعت:دقیقه، از ۰۰:۰۰ تا ۲۳:۵۹ باشد` });
+  .refine(v => TIME_OF_DAY_PATTERN.test(v), { message: timeOfDayFormatError(label) });
 
 const positiveId = (label: string) => z.union([z.number(), z.string()]).transform((v, ctx) => {
   const n = typeof v === 'number' ? v : (/^[1-9]\d*$/.test(v.trim()) ? Number(v.trim()) : NaN);

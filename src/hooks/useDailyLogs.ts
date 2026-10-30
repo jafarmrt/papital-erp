@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, type Dispatch, type FormEvent, type S
 import { useQueryClient } from '@tanstack/react-query';
 import { DEFAULT_DAILY_LOG_VISIBILITY, type DailyLogVisibility } from '../lib/dailyLogs/dailyLogVisibility';
 import { EMPTY_DAILY_LOG_STATS } from '../lib/dailyLogs/dailyLogStats';
-import { workHoursBetween, workTimeError } from '../lib/dailyLogs/workHours';
+import { afternoonEndTime, workHoursBetween, workTimeError } from '../lib/dailyLogs/workHours';
 import { SUMMARY_CSV_DOWNLOADED, buildSummaryCsv, summaryCsvFileName } from '../lib/dailyLogs/summaryCsv';
 import { fetchJson } from '../api';
 import { DailyWorkLog, User } from '../types';
@@ -161,7 +161,8 @@ export function useDailyLogs(user: User) {
     toast.success(SUMMARY_CSV_DOWNLOADED);
   };
 
-  const currentFormHours = workHoursBetween(formStartTime, formEndTime) ?? 0; // v9.0.259 (TD-634): the server's rule
+  // v9.0.259 (TD-634): the server's rule; v11: with an end like «۲» read as the afternoon, as on leaving the box
+  const currentFormHours = workHoursBetween(formStartTime, afternoonEndTime(formStartTime, formEndTime)) ?? 0;
 
   const resetForm = () => {
     setEditingLog(null);
@@ -220,7 +221,9 @@ export function useDailyLogs(user: User) {
       toast.error('لطفاً شرح کامل فعالیت‌ها را وارد کنید');
       return;
     }
-    const timeError = workTimeError(formStartTime, formEndTime);
+    // v11: the same afternoon reading as on leaving the time box, in case the form is sent without leaving it
+    const endTime = afternoonEndTime(formStartTime, formEndTime);
+    const timeError = workTimeError(formStartTime, endTime);
     if (timeError) { toast.error(timeError); return; }
 
     setIsSaving(true);
@@ -230,7 +233,7 @@ export function useDailyLogs(user: User) {
     const payload = {
       date: dateStr,
       start_time: formStartTime,
-      end_time: formEndTime,
+      end_time: endTime,
       work_mode: formWorkMode,
       title: formTitle,
       content: formContent,
