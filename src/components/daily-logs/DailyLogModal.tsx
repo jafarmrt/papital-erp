@@ -83,12 +83,10 @@ export function DailyLogModal({
 }: DailyLogModalProps) {
   const fieldId = useId();
   if (!isModalOpen) return null;
-  // v11: an end written as «۲» after a morning start is read as ۱۴:۰۰ when a time box is left (`afternoonEndTime`)
-  const readAfternoonEnd = () => {
-    const end = afternoonEndTime(formStartTime, formEndTime);
-    if (end !== formEndTime) setFormEndTime(end);
-  };
-  const timeError = workTimeError(formStartTime, afternoonEndTime(formStartTime, formEndTime));
+  // v11: an end typed as «۲» after a morning start is stored as ۱۴:۰۰ as it is typed (`afternoonEndTime`), and its
+  // reading under the box says so; a stored end the user does not type is never reread
+  const typeEndTime = (end: string) => setFormEndTime(afternoonEndTime(formStartTime, end));
+  const timeError = workTimeError(formStartTime, formEndTime);
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 overflow-y-auto font-farsi text-right">
@@ -182,11 +180,11 @@ export function DailyLogModal({
             {timeError && <p role="alert" className="text-[11px] font-bold text-rose-600">{timeError}</p>}
 
             <div className="grid grid-cols-2 gap-2">
-              <TimeOfDayInput label="ساعت شروع" value={formStartTime} onChange={setFormStartTime} onCommit={readAfternoonEnd} />
-              <TimeOfDayInput label="ساعت پایان" value={formEndTime} onChange={setFormEndTime} onCommit={readAfternoonEnd} />
+              <TimeOfDayInput label="ساعت شروع" value={formStartTime} onChange={setFormStartTime} />
+              <TimeOfDayInput label="ساعت پایان" value={formEndTime} onChange={typeEndTime} />
             </div>
             {currentFormHours > LONG_WORK_DAY_HOURS && (
-              <p className="text-[11px] font-bold text-amber-700">
+              <p role="status" className="text-[11px] font-bold text-amber-700">
                 کارکرد این گزارش بیش از {formatPersianNumber(LONG_WORK_DAY_HOURS)} ساعت است؛ ساعت شروع و پایان را دوباره نگاه کنید.
               </p>
             )}

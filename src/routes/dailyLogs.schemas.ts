@@ -21,7 +21,8 @@ const atMost = (label: string, max: number) => `${label} حداکثر ${toPersia
  * v9.0.236 (TD-900, decision ت۷): `public` and `all` are no longer accepted.
  * v9.0.258 (TD-644): title, content, tags, project name and manager notes have length caps (`dailyLogLimits.ts`).
  * v9.0.259 (TD-634): a start or end time is «HH:MM» from 00:00 to 23:59; the end after the start is checked by the
- * service with the shared rule (`workHours.ts`). v11: digits alone are read as a time too («۸۳۰» → 08:30). v9.0.260 (TD-635, decision ت۳ ب): the work mode is onsite or remote.
+ * service with the shared rule (`workHours.ts`). v9.0.260 (TD-635, decision ت۳ ب): the work mode is onsite or remote.
+ * v11: digits alone are read as a time too («۸۳۰» → 08:30).
  */
 const timeOfDay = (label: string) => z.string()
   .transform(normalizeTimeOfDay)

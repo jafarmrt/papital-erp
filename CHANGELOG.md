@@ -22,7 +22,7 @@ under «### Unreleased», then one section per released version.
 ## Version 11.x Series (Active — see `src/data/changelogs/11.ts`)
 
 ### Unreleased
-- Easier work-time entry in the daily log (v11, owner request 8 Aban 1405): a time box takes digits alone from the phone's number pad («۸۳۰» → ۰۸:۳۰, «۱۴» or «۱۴۰۰» → ۱۴:۰۰, Persian, Arabic or Latin digits; the server reads them the same way), shows the time in words under it («۲ بعدازظهر»), reads an end like «۲» after a morning start as ۱۴:۰۰ when the box is left or the form is sent, and warns (without refusing) when one log is longer than 12 hours.
+- Easier work-time entry in the daily log (v11, owner request 8 Aban 1405): a time box takes digits alone from the phone's number pad («۸۳۰» → ۰۸:۳۰, «۱۴» or «۱۴۰۰» → ۱۴:۰۰, Persian, Arabic or Latin digits; the server reads them the same way, also on stored rows in the overlap check), shows the time in words under it («۲ بعدازظهر»), reads an end typed as «۲» after a morning start as ۱۴:۰۰ (an end not typed is never reread), and warns (without refusing) when one log is longer than 12 hours.
 
 ### v11.7.0 — Excel import of the 1405 history
 - «افزودن پیوست» on recorded records (v11, owner decision 7 Aban 1405): a recorded document, treasury row, cheque or voucher takes files after it is saved, from its list or details window; before approval a file can be added or removed, after approval only added (kept with name and time), and in a closed fiscal year nothing changes; every change is audited and no amount is touched.

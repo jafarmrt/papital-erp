@@ -13,11 +13,13 @@ const ARABIC_DIGITS = '٠١٢٣٤٥٦٧٨٩';
  * «HH:MM» with Latin digits, or the trimmed input when it is not a time. v11 (owner request 8 Aban 1405): a phone's
  * number pad has no «:», so digits alone are read too: one or two digits are the hour («۸» → 08:00, «۱۴» → 14:00),
  * three or four are the hour and two minute digits («۸۳۰» → 08:30, «۱۴۰۰» → 14:00). An hour or minute out of range
- * stays refused by `TIME_OF_DAY_PATTERN`. The server reads the same way (`dailyLogs.schemas.ts`).
+ * stays refused by `TIME_OF_DAY_PATTERN`. A phone pad's «.» or «٫» is read as «:» («۸٫۳۰» → 08:30). The server reads
+ * the same way (`dailyLogs.schemas.ts`), and so does `minutesOfDay` for a stored row (an old row saved as «830» now
+ * counts in the overlap check instead of being skipped).
  */
 export function normalizeTimeOfDay(value: string): string {
   const latin = value.trim().replace(/[۰-۹٠-٩]/g, (d) => String(Math.max(PERSIAN_DIGITS.indexOf(d), ARABIC_DIGITS.indexOf(d))));
-  const withColon = /^(\d{1,2}):(\d\d)$/.exec(latin);
+  const withColon = /^(\d{1,2})[:.٫](\d\d)$/.exec(latin);
   if (withColon) return `${withColon[1].padStart(2, '0')}:${withColon[2]}`;
   if (!/^\d{1,4}$/.test(latin)) return latin;
   const [hour, minute] = latin.length <= 2 ? [latin, '00'] : [latin.slice(0, -2), latin.slice(-2)];
@@ -63,8 +65,8 @@ export function timeOfDayLabel(value: string | null | undefined): string {
 /**
  * v11 (owner request 8 Aban 1405): an end time written by the 12-hour habit, «۲» for 14:00. When the end is not after
  * the start, its hour is 1 to 11 and adding 12 hours puts it after the start, the afternoon time is returned
- * («08:00», «02:00» → «14:00»); otherwise the end is returned as it was. Only the form applies it, where the user sees
- * the new time and its reading (`timeOfDayReading`); the server still refuses an end before the start.
+ * («08:00», «02:00» → «14:00»); otherwise the end is returned as it was. Only the form applies it, to an end as it is
+ * typed, where the user sees its reading (`timeOfDayReading`); the server still refuses an end before the start.
  */
 export function afternoonEndTime(start: string, end: string): string {
   const s = minutesOfDay(start);

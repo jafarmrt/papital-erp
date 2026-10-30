@@ -7,16 +7,15 @@ import { normalizeTimeOfDay, timeOfDayLabel, timeOfDayReading } from '../../lib/
  * display follows the browser's locale («08:30 AM»).
  * v11 (owner request 8 Aban 1405): digits alone are a time («۸۳۰» → ۰۸:۳۰), so the phone's number pad is enough. While
  * the box has focus it keeps what was typed; on leaving it shows the stored time, and the time in words sits under it
- * («۲ بعدازظهر»). `onCommit` runs on leaving the box.
+ * («۲ بعدازظهر»).
  */
 interface TimeOfDayInputProps {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  onCommit?: () => void;
 }
 
-export function TimeOfDayInput({ label, value, onChange, onCommit }: TimeOfDayInputProps) {
+export function TimeOfDayInput({ label, value, onChange }: TimeOfDayInputProps) {
   const id = useId();
   const [draft, setDraft] = useState<string | null>(null);
   const reading = timeOfDayReading(value);
@@ -33,7 +32,7 @@ export function TimeOfDayInput({ label, value, onChange, onCommit }: TimeOfDayIn
         value={draft ?? timeOfDayLabel(value)}
         onFocus={(e) => { setDraft(timeOfDayLabel(value)); e.currentTarget.select(); }}
         onChange={(e) => { setDraft(e.target.value); onChange(normalizeTimeOfDay(e.target.value)); }}
-        onBlur={() => { setDraft(null); onCommit?.(); }}
+        onBlur={() => setDraft(null)}
         aria-describedby={reading ? `${id}-reading` : undefined}
         className="w-full px-2.5 py-1 border border-slate-200 rounded-lg text-xs bg-white text-center font-bold"
         required

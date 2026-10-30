@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { TimeOfDayInput } from '../../components/daily-logs/TimeOfDayInput';
+import { DailyLogModal } from '../../components/daily-logs/DailyLogModal';
 import { afternoonEndTime, normalizeTimeOfDay, timeOfDayReading, workHoursBetween, workTimeError } from '../../lib/dailyLogs/workHours';
 import { createDailyLogSchema } from '../../routes/dailyLogs.schemas';
 
@@ -18,10 +19,12 @@ describe('typed work times', () => {
     expect(normalizeTimeOfDay('0830')).toBe('08:30');
     expect(normalizeTimeOfDay('8:30')).toBe('08:30');
     expect(normalizeTimeOfDay('۱۷:۰۵')).toBe('17:05');
+    expect(normalizeTimeOfDay('۸٫۳۰')).toBe('08:30');
+    expect(normalizeTimeOfDay('8.30')).toBe('08:30');
   });
 
   it('still refuses what is not a time', () => {
-    for (const bad of ['24', '2400', '875', '12345', '8:5', '8.30', 'ساعت', '']) {
+    for (const bad of ['24', '2400', '875', '12345', '8:5', '8.5', '8/30', 'ساعت', '']) {
       expect(workTimeError(bad, '17:00')).not.toBeNull();
     }
     expect(workTimeError('8', '17')).toBeNull();
@@ -61,18 +64,46 @@ describe('typed work times', () => {
 
   it('the box keeps what is typed, stores HH:MM and shows the time in words', () => {
     const onChange = vi.fn();
-    const onCommit = vi.fn();
-    const { rerender } = render(<TimeOfDayInput label="ساعت پایان" value="17:00" onChange={onChange} onCommit={onCommit} />);
+    const { rerender } = render(<TimeOfDayInput label="ساعت پایان" value="17:00" onChange={onChange} />);
     const input = screen.getByLabelText('ساعت پایان') as HTMLInputElement;
     expect(input.inputMode).toBe('numeric');
     fireEvent.focus(input);
     fireEvent.change(input, { target: { value: '۱۴' } });
     expect(onChange).toHaveBeenLastCalledWith('14:00');
-    rerender(<TimeOfDayInput label="ساعت پایان" value="14:00" onChange={onChange} onCommit={onCommit} />);
+    rerender(<TimeOfDayInput label="ساعت پایان" value="14:00" onChange={onChange} />);
     expect(input.value).toBe('۱۴');
     fireEvent.blur(input);
-    expect(onCommit).toHaveBeenCalled();
     expect(input.value).toBe('۱۴:۰۰');
     expect(screen.getByText('۲ بعدازظهر')).toBeTruthy();
+  });
+});
+
+describe('the log form reads only a typed end as the afternoon', () => {
+  const props = (setFormEndTime: (v: string) => void, setFormStartTime: (v: string) => void) => ({
+    isModalOpen: true, onClose: () => undefined, editingLog: null, formDate: '1405/08/08', setFormDate: () => undefined,
+    formStartTime: '08:00', setFormStartTime, formEndTime: '10:00', setFormEndTime,
+    formWorkMode: 'onsite' as const, setFormWorkMode: () => undefined, formTitle: '', setFormTitle: () => undefined,
+    formContent: '', setFormContent: () => undefined, formProjectId: '', setFormProjectId: () => undefined,
+    formVisibility: 'mentioned_only' as const, setFormVisibility: () => undefined, formMentions: [], formTags: [],
+    tagInput: '', setTagInput: () => undefined, currentFormHours: 2, isSaving: false,
+    user: { id: 3, username: 'writer', full_name: 'نویسنده', role: 'custom_role' }, systemUsers: [], projects: [],
+    onAddTag: () => undefined, onRemoveTag: () => undefined, onSaveLog: () => undefined,
+  });
+
+  it('an end typed as «۲» is stored as 14:00; a changed start leaves the stored end alone', () => {
+    const setEnd = vi.fn();
+    const setStart = vi.fn();
+    render(<DailyLogModal {...props(setEnd, setStart)} />);
+    const end = screen.getByLabelText('ساعت پایان');
+    fireEvent.focus(end);
+    fireEvent.change(end, { target: { value: '۲' } });
+    expect(setEnd).toHaveBeenLastCalledWith('14:00');
+    setEnd.mockClear();
+    const start = screen.getByLabelText('ساعت شروع');
+    fireEvent.focus(start);
+    fireEvent.change(start, { target: { value: '۱۳' } });
+    fireEvent.blur(start);
+    expect(setStart).toHaveBeenLastCalledWith('13:00');
+    expect(setEnd).not.toHaveBeenCalled();
   });
 });
