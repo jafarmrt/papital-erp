@@ -90,7 +90,7 @@ describe('the log form reads only a typed end as the afternoon', () => {
     onAddTag: () => undefined, onRemoveTag: () => undefined, onSaveLog: () => undefined,
   });
 
-  it('an end typed as «۲» is stored as 14:00; a changed start leaves the stored end alone', () => {
+  it('an end typed as 2 is stored as 14:00; a changed start leaves the stored end alone', () => {
     const setEnd = vi.fn();
     const setStart = vi.fn();
     render(<DailyLogModal {...props(setEnd, setStart)} />);
