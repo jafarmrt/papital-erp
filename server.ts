@@ -9,6 +9,7 @@ import 'dotenv/config';
 
 import { logger } from './src/middleware/logger.js';
 import { createApp, beginStartup, markStartupComplete } from './src/app.js';
+import { isBuildFilePath } from './src/lib/system/buildFilePath.js';
 import { bootDataSteps } from './src/services/system/bootData.js';
 import { runBootSequence } from './src/services/system/bootSequence.js';
 import { registerWorkflowDomainActions } from './src/services/system/workflowDomainActions.js';
@@ -123,6 +124,13 @@ async function startServer() {
     const distPath = path.join(process.cwd(), 'dist');
     if (fs.existsSync(distPath)) {
       app.use(express.static(distPath));
+      // v11 (owner report 9 Aban 1405, blank page in Firefox): a build file that is no longer on the server (a chunk of an
+      // older version asked for by a tab or service worker that still runs it) is a 404, never the app page. The page
+      // served as JavaScript failed to load as a module, and the service worker could keep that HTML under the chunk's name.
+      app.use((req, res, next) => {
+        if (!isBuildFilePath(req.path || '')) return next();
+        res.status(404).type('text/plain').send('Not found');
+      });
       app.get('/{*splat}', (req, res) => {
         // send 1.x refuses an absolute path under a dot-directory (404), so the file is named relative to its root
         res.sendFile('index.html', { root: distPath });

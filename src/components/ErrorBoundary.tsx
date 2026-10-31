@@ -1,6 +1,6 @@
 import React , { ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
-import { isChunkLoadError, reloadOnceForNewVersion, reloadPage } from '../lib/system/chunkReload';
+import { isChunkLoadError, reloadOnceForNewVersion, reloadPage, reloadWithNewestServiceWorker } from '../lib/system/chunkReload';
 
 interface Props {
   children: ReactNode;
@@ -55,6 +55,11 @@ export class ErrorBoundary extends React.Component<Props, State> {
   };
 
   private handleReload = () => {
+    // a chunk of an older version: the reload asks for the newest service worker first
+    if (isChunkLoadError(this.state.error)) {
+      void reloadWithNewestServiceWorker();
+      return;
+    }
     reloadPage();
   };
 

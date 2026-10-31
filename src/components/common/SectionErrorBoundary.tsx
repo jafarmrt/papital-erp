@@ -1,6 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
 import { ErrorStateView } from './ErrorStateView';
-import { isChunkLoadError as isChunkLoadFailure, reloadPage } from '../../lib/system/chunkReload';
+import { isChunkLoadError as isChunkLoadFailure, reloadWithNewestServiceWorker } from '../../lib/system/chunkReload';
 
 export interface SectionErrorBoundaryProps {
   children: ReactNode;
@@ -89,7 +89,7 @@ export class SectionErrorBoundary extends Component<
            'پردازش داده‌های این بخش با مشکل مواجه شد. می‌توانید با فشردن دکمه زیر مجدداً تلاش کنید.');
 
       const onRetryAction = isChunkLoadError
-        ? reloadPage
+        ? () => { void reloadWithNewestServiceWorker(); }
         : this.handleReset;
 
       return (

@@ -52,10 +52,55 @@ export function reloadPage(): void {
   }
 }
 
+const NEWEST_WORKER_TIMEOUT_MS = 6000;
+
+function waitUntilInstalled(worker: ServiceWorker): Promise<void> {
+  return new Promise(resolve => {
+    if (worker.state !== 'installing') { resolve(); return; }
+    worker.addEventListener('statechange', () => { if (worker.state !== 'installing') resolve(); });
+  });
+}
+
+async function activateNewestWorker(container: ServiceWorkerContainer): Promise<void> {
+  const registration = await container.getRegistration();
+  if (!registration) return;
+  await registration.update().catch(() => undefined);
+  // update() settles once a new worker is installing, before its precache is done: wait for it to finish installing
+  if (registration.installing) await waitUntilInstalled(registration.installing);
+  const waiting = registration.waiting;
+  if (!waiting) return;
+  await new Promise<void>(resolve => {
+    container.addEventListener('controllerchange', () => resolve(), { once: true });
+    waiting.postMessage({ type: 'SKIP_WAITING' });
+  });
+}
+
+/**
+ * v11 (owner report 9 Aban 1405, blank page in Firefox until Ctrl+Shift+R): a plain reload is answered by the service
+ * worker that still holds the old version, so the same old page asks for the same missing chunk again. Before the
+ * reload the newest service worker is fetched, given time to install and, once waiting, told to take over (the
+ * SKIP_WAITING message of vite-plugin-pwa's prompt mode), so the reload gets the new version. All of it is capped at
+ * NEWEST_WORKER_TIMEOUT_MS; any failure or timeout falls back to the plain reload.
+ */
+export async function reloadWithNewestServiceWorker(reload: () => void = reloadPage): Promise<void> {
+  try {
+    const container = typeof navigator !== 'undefined' ? navigator.serviceWorker : undefined;
+    if (container) {
+      await Promise.race([
+        activateNewestWorker(container),
+        new Promise<void>(resolve => { setTimeout(resolve, NEWEST_WORKER_TIMEOUT_MS); }),
+      ]);
+    }
+  } catch {
+    // the plain reload below still runs
+  }
+  reload();
+}
+
 /** Reloads the page once for a chunk load error; true when a reload was started. */
 export function reloadOnceForNewVersion(error: unknown): boolean {
   if (typeof window === 'undefined' || !isChunkLoadError(error)) return false;
   if (!claimChunkReload()) return false;
-  reloadPage();
+  void reloadWithNewestServiceWorker();
   return true;
 }

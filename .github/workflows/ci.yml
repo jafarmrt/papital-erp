@@ -268,17 +268,17 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: playwright-firefox-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
-      - name: Install Playwright Chromium
+      - name: Install Playwright Chromium and Firefox
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         timeout-minutes: 10
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium firefox
 
       - name: Install Playwright System Libraries (browser from the cache)
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         timeout-minutes: 10
-        run: npx playwright install-deps chromium
+        run: npx playwright install-deps chromium firefox
 
       - name: Critical Path, Fresh Install and the Four Business Flows (purchase, production, payroll, treasury)
         # dist/server.cjs on an empty database; migrations and seed at start, admin from the setup route.
