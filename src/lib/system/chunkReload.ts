@@ -52,7 +52,7 @@ export function reloadPage(): void {
   }
 }
 
-const NEWEST_WORKER_TIMEOUT_MS = 3000;
+const NEWEST_WORKER_TIMEOUT_MS = 6000;
 
 function waitUntilInstalled(worker: ServiceWorker): Promise<void> {
   return new Promise(resolve => {

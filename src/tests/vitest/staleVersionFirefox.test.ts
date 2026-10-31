@@ -112,7 +112,7 @@ describe('the reload after a chunk error asks for the newest service worker firs
     fakeContainer({ update: vi.fn(async () => undefined), waiting: { postMessage: vi.fn() } });
     const reload = vi.fn();
     const done = reloadWithNewestServiceWorker(reload);
-    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(6000);
     await done;
     expect(reload).toHaveBeenCalledTimes(1);
   });
