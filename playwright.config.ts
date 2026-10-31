@@ -26,7 +26,11 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1400, height: 1000 } } }],
+  projects: [
+    { name: 'chromium', testIgnore: /\.firefox\.spec\.ts$/, use: { ...devices['Desktop Chrome'], viewport: { width: 1400, height: 1000 } } },
+    // v11 (owner report 9 Aban 1405, blank page in Firefox): a short smoke run in Firefox too
+    { name: 'firefox', testMatch: /\.firefox\.spec\.ts$/, use: { ...devices['Desktop Firefox'], viewport: { width: 1400, height: 1000 } } },
+  ],
   // v10.1.43 (messenger plan part 4): the fake Bale / Telegram Bot API first, then the server pointed at it (loopback only)
   webServer: [
     {

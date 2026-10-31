@@ -22,6 +22,7 @@ under «### Unreleased», then one section per released version.
 ## Version 11.x Series (Active — see `src/data/changelogs/11.ts`)
 
 ### Unreleased
+- Firefox check (v11, owner report 9 Aban 1405, blank white page in Firefox): the end-to-end run in CI also opens the app in Firefox (login, home, invoice form, reload through the service worker) and prints any script error.
 - Easier work-time entry in the daily log (v11, owner request 8 Aban 1405): a time box takes digits alone from the phone's number pad («۸۳۰» → ۰۸:۳۰, «۱۴» or «۱۴۰۰» → ۱۴:۰۰, Persian, Arabic or Latin digits; the server reads them the same way, also on stored rows in the overlap check), shows the time in words under it («۲ بعدازظهر»), reads an end typed as «۲» after a morning start as ۱۴:۰۰ (an end not typed is never reread), and warns (without refusing) when one log is longer than 12 hours.
 
 ### v11.7.0 — Excel import of the 1405 history
