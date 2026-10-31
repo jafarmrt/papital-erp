@@ -52,10 +52,42 @@ export function reloadPage(): void {
   }
 }
 
-/** Reloads the page once for a chunk load error; true when a reload was started. */
-export function reloadOnceForNewVersion(error: unknown): boolean {
-  if (typeof window === 'undefined' || !isChunkLoadError(error)) return false;
+const SKIP_WAITING_TIMEOUT_MS = 3000;
+
+/**
+ * v11 (owner report 9 Aban 1405, blank page in Firefox until Ctrl+Shift+R): a plain reload is answered by the service
+ * worker that still holds the old version, so the same old page asks for the same missing chunk again. Before the
+ * reload the newest service worker is fetched and, when one is waiting, told to take over (the SKIP_WAITING message
+ * of vite-plugin-pwa's prompt mode), so the reload gets the new version. Any failure falls back to the plain reload.
+ */
+export async function reloadWithNewestServiceWorker(reload: () => void = reloadPage): Promise<void> {
+  try {
+    const container = typeof navigator !== 'undefined' ? navigator.serviceWorker : undefined;
+    const registration = container ? await container.getRegistration() : undefined;
+    if (container && registration) {
+      await registration.update().catch(() => undefined);
+      const waiting = registration.waiting;
+      if (waiting) {
+        await new Promise<void>(resolve => {
+          const timer = setTimeout(resolve, SKIP_WAITING_TIMEOUT_MS);
+          container.addEventListener('controllerchange', () => { clearTimeout(timer); resolve(); }, { once: true });
+          waiting.postMessage({ type: 'SKIP_WAITING' });
+        });
+      }
+    }
+  } catch {
+    // the plain reload below still runs
+  }
+  reload();
+}
+
+/**
+ * Reloads the page once for a chunk load error; true when a reload was started. `knownChunkError` is for a caller that
+ * already knows the failure is a chunk load (Vite's `vite:preloadError` event), whatever the browser's wording.
+ */
+export function reloadOnceForNewVersion(error: unknown, knownChunkError = false): boolean {
+  if (typeof window === 'undefined' || (!knownChunkError && !isChunkLoadError(error))) return false;
   if (!claimChunkReload()) return false;
-  reloadPage();
+  void reloadWithNewestServiceWorker();
   return true;
 }
