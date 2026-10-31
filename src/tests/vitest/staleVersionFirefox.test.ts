@@ -66,6 +66,28 @@ describe('the reload after a chunk error asks for the newest service worker firs
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
+  it('a new worker still installing after update() is waited for, then told to take over', async () => {
+    const postMessage = vi.fn();
+    const listeners: Array<() => void> = [];
+    const installing = { state: 'installing', addEventListener: (_t: string, cb: () => void) => listeners.push(cb) };
+    const registration: { update: () => Promise<void>; installing: unknown; waiting: unknown } = {
+      update: vi.fn(async () => undefined), installing, waiting: null,
+    };
+    const container = fakeContainer(registration);
+    const reload = vi.fn();
+    const done = reloadWithNewestServiceWorker(reload);
+    await vi.waitFor(() => expect(listeners.length).toBe(1));
+    expect(postMessage).not.toHaveBeenCalled();
+    installing.state = 'installed';
+    registration.installing = null;
+    registration.waiting = { postMessage };
+    listeners[0]();
+    await vi.waitFor(() => expect(postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' }));
+    container.fire('controllerchange');
+    await done;
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
   it('no waiting worker: a plain reload', async () => {
     fakeContainer({ update: vi.fn(async () => undefined), waiting: null });
     const reload = vi.fn();

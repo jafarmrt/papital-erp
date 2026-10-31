@@ -9,7 +9,6 @@ import { SystemStartingOverlay } from './components/common/SystemStartingOverlay
 import { PwaStatusBanners } from './components/pwa/PwaStatusBanners';
 import { registerAppServiceWorker } from './lib/pwa/registerServiceWorker';
 import { listenForInstallPrompt } from './lib/pwa/installPrompt';
-import { reloadOnceForNewVersion } from './lib/system/chunkReload';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(
@@ -25,12 +24,6 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>,
 );
-
-// v11 (owner report 9 Aban 1405, blank page in Firefox): a chunk Vite could not load, also one outside the error boundaries,
-// earns the same single reload with the newest service worker (src/lib/system/chunkReload.ts); never a loop
-window.addEventListener('vite:preloadError', event => {
-  if (reloadOnceForNewVersion(event.payload, true)) event.preventDefault();
-});
 
 // v10.0.16 (D-11): installable app; registers only in the production build
 listenForInstallPrompt();
