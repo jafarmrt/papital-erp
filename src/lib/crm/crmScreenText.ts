@@ -28,3 +28,19 @@ export function activityResultLabel(result: string | null | undefined): string {
   const text = String(result ?? '').trim();
   return LEGACY_RESULT_LABELS[text.toLowerCase()] ?? text;
 }
+
+/**
+ * v11 (owner report 11 Aban 1405): a follow-up belongs to the user whose personnel row is its responsible
+ * (`ownFollowupCondition`). A responsible personnel with no linked user owns it for nobody: it is in no inbox, no
+ * «پیگیری‌های من» and gets no due reminder. The follow-up window says so when such a person is picked.
+ */
+export const FOLLOWUP_ASSIGNEE_NO_USER_TEXT =
+  'این همکار به هیچ حساب کاربری وصل نیست، پس این پیگیری در کارتابل هیچ‌کس دیده نمی‌شود و یادآوری هم برای آن نمی‌آید. در صفحهٔ «پرسنل»، او را در خانهٔ «اتصال به حساب کاربری» به یک حساب کاربری وصل کنید.';
+
+export const FOLLOWUP_ASSIGNEE_NO_USER_TAG = 'بدون حساب کاربری';
+
+/** Whether a personnel pick row is known to have no linked user (a row without the `userId` field is not judged) */
+export function personnelHasNoUser(p: { userId?: number | string | null } | null | undefined): boolean {
+  if (!p || !('userId' in p)) return false;
+  return p.userId === null || p.userId === undefined || String(p.userId).trim() === '' || Number(p.userId) <= 0;
+}

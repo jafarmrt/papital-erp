@@ -1,4 +1,4 @@
-import React, { useId } from 'react';
+import React, { useId, useState } from 'react';
 import { SearchableSelect } from '../SearchableSelect';
 import { PhoneCall, Video, MessageSquare, Mail, FileText, Clock, CheckCircle2 } from 'lucide-react';
 import { CRMLead, CRMActivity } from '../../types';
@@ -7,6 +7,13 @@ import { JalaliDateInput } from '../common/JalaliDateInput';
 import { MentionTextarea } from '../MentionTextarea';
 import { DialogLayer } from '../common/DialogLayer';
 import { personnelSellerOption, personnelServerSearchUrl } from '../../lib/personnel/personnelList';
+import { FOLLOWUP_ASSIGNEE_NO_USER_TAG, FOLLOWUP_ASSIGNEE_NO_USER_TEXT, personnelHasNoUser } from '../../lib/crm/crmScreenText';
+
+/** The follow-up picker option: a personnel with no linked user is tagged, since nobody would see the follow-up */
+function followupAssigneeOption(p: { id: number | string; fullName?: string | null; jobTitle?: string | null; userId?: number | string | null }) {
+  const option = personnelSellerOption(p);
+  return personnelHasNoUser(p) ? { ...option, label: `${option.label} (${FOLLOWUP_ASSIGNEE_NO_USER_TAG})` } : option;
+}
 
 interface CRMInteractionModalProps {
   // Activity Modal Props
@@ -61,6 +68,19 @@ export function CRMInteractionModal({
   onConfirmFollowupResult
 }: CRMInteractionModalProps) {
   const fieldId = useId();
+  // A person found by the server search is not in `personnelList`; the pick remembers whether it has a user
+  const [pickedAssignee, setPickedAssignee] = useState<{ id: number; noUser: boolean } | null>(null);
+  // The window stays mounted between openings: a pick of an earlier opening is forgotten
+  const [openedFlag, setOpenedFlag] = useState(isActivityModalOpen);
+  if (openedFlag !== isActivityModalOpen) {
+    setOpenedFlag(isActivityModalOpen);
+    setPickedAssignee(null);
+  }
+  const assignedId = activityForm?.assignedPersonnelId ? Number(activityForm.assignedPersonnelId) : null;
+  const listedAssignee = assignedId ? (Array.isArray(personnelList) ? personnelList : []).find((p: { id: number | string }) => Number(p.id) === assignedId) : undefined;
+  // Only a follow-up (a next follow-up date) is scoped to its responsible; a plain logged call needs no warning
+  const assigneeHasNoUser = assignedId !== null && Boolean(activityForm?.nextFollowUpDate)
+    && (listedAssignee ? personnelHasNoUser(listedAssignee) : pickedAssignee?.id === assignedId && pickedAssignee.noUser);
   return (
     <>
       {/* Modal 1: Log Activity / Call */}
@@ -280,18 +300,24 @@ export function CRMInteractionModal({
                   <SearchableSelect
                     id={`${fieldId}-assigned-personnel-id`}
                     value={activityForm.assignedPersonnelId ? String(activityForm.assignedPersonnelId) : ''}
-                    onChange={(value, raw?: { id: number; fullName?: string }) => {
+                    onChange={(value, raw?: { id: number; fullName?: string; userId?: number | null }) => {
                       const id = value ? Number(value) : null;
                       const selected = personnelList.find((p: any) => p.id === id) ?? (raw && raw.id === id ? raw : undefined);
                       setActivityForm({ ...activityForm, assignedPersonnelId: id, assignedTo: selected?.fullName || '' });
+                      setPickedAssignee(id && selected ? { id, noUser: personnelHasNoUser(selected) } : null);
                     }}
                     placeholder="انتخاب مسئول پیگیری"
-                    options={personnelList.map(personnelSellerOption)}
+                    options={personnelList.map(followupAssigneeOption)}
                     // 10.3 package 6 (TD-1362): a list cut at the cap also searches the active personnel on the server
                     serverSearchUrl={personnelServerSearchUrl(personnelList, { activeOnly: true })}
-                    mapResultToOption={personnelSellerOption}
+                    mapResultToOption={followupAssigneeOption}
                     valueLabel={activityForm.assignedTo || undefined}
                   />
+                  {assigneeHasNoUser && (
+                    <p id={`${fieldId}-assigned-no-user`} role="status" className="mt-1.5 p-2 rounded-lg bg-rose-50 border border-rose-200 text-[11px] leading-relaxed font-semibold text-rose-800">
+                      {FOLLOWUP_ASSIGNEE_NO_USER_TEXT}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
