@@ -27,9 +27,9 @@ const withClient = (node: ReactElement) => (
   </QueryClientProvider>
 );
 
-const modal = (assignedPersonnelId: number | null, assignedTo: string) => withClient(
+const modal = (assignedPersonnelId: number | null, assignedTo: string, nextFollowUpDate = '1405/08/11') => withClient(
   <CRMInteractionModal isActivityModalOpen onCloseActivityModal={() => undefined} selectedLeadForActivity={null} setSelectedLeadForActivity={() => undefined}
-    leads={[]} activityForm={{ type: 'call', title: '', description: '', result: '', mentions: [], nextFollowUpDate: '', nextFollowUpTask: '', assignedPersonnelId, assignedTo }}
+    leads={[]} activityForm={{ type: 'call', title: '', description: '', result: '', mentions: [], nextFollowUpDate, nextFollowUpTask: '', assignedPersonnelId, assignedTo }}
     setActivityForm={() => undefined} isSavingActivity={false} onSaveActivity={() => undefined} personnelList={[LINKED, UNLINKED]} mentionUsers={[]}
     currentUser={{ id: 1 }} currentLoggedInUser="u" isFollowupResultModalOpen={false} onCloseFollowupResultModal={() => undefined} selectedFollowupAct={null}
     followupResultForm={{ result: '', resultNote: '' }} setFollowupResultForm={() => undefined} isSubmittingFollowupResult={false} onConfirmFollowupResult={() => undefined} />,
@@ -50,7 +50,17 @@ describe('crm_followup_assignee_without_user', () => {
 
   it('warns when the chosen responsible has no linked user', () => {
     render(modal(UNLINKED.id, UNLINKED.fullName));
-    expect(screen.getByRole('alert').textContent).toBe(FOLLOWUP_ASSIGNEE_NO_USER_TEXT);
+    expect(screen.getByRole('status').textContent).toBe(FOLLOWUP_ASSIGNEE_NO_USER_TEXT);
+  });
+
+  it('says nothing for a plain logged call without a next follow-up date', () => {
+    render(modal(UNLINKED.id, UNLINKED.fullName, ''));
+    expect(screen.queryByText(FOLLOWUP_ASSIGNEE_NO_USER_TEXT)).toBeNull();
+  });
+
+  it('does not guess for a responsible outside the pick list', () => {
+    render(modal(3, 'Unknown', '1405/08/11'));
+    expect(screen.queryByText(FOLLOWUP_ASSIGNEE_NO_USER_TEXT)).toBeNull();
   });
 
   it('says nothing for a linked responsible or no responsible', () => {

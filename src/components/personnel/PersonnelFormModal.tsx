@@ -283,7 +283,7 @@ export function PersonnelFormModal({
               </div>
 
               <div>
-                <label htmlFor={`${fieldId}-user-id`} className="block text-xs font-bold text-slate-700 mb-1">اتصال به کاربر سیستم</label>
+                <label htmlFor={`${fieldId}-user-id`} className="block text-xs font-bold text-slate-700 mb-1">اتصال به حساب کاربری</label>
                 <select
                   id={`${fieldId}-user-id`}
                   value={formData.userId}

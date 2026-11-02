@@ -70,9 +70,16 @@ export function CRMInteractionModal({
   const fieldId = useId();
   // A person found by the server search is not in `personnelList`; the pick remembers whether it has a user
   const [pickedAssignee, setPickedAssignee] = useState<{ id: number; noUser: boolean } | null>(null);
+  // The window stays mounted between openings: a pick of an earlier opening is forgotten
+  const [openedFlag, setOpenedFlag] = useState(isActivityModalOpen);
+  if (openedFlag !== isActivityModalOpen) {
+    setOpenedFlag(isActivityModalOpen);
+    setPickedAssignee(null);
+  }
   const assignedId = activityForm?.assignedPersonnelId ? Number(activityForm.assignedPersonnelId) : null;
   const listedAssignee = assignedId ? (Array.isArray(personnelList) ? personnelList : []).find((p: { id: number | string }) => Number(p.id) === assignedId) : undefined;
-  const assigneeHasNoUser = assignedId !== null
+  // Only a follow-up (a next follow-up date) is scoped to its responsible; a plain logged call needs no warning
+  const assigneeHasNoUser = assignedId !== null && Boolean(activityForm?.nextFollowUpDate)
     && (listedAssignee ? personnelHasNoUser(listedAssignee) : pickedAssignee?.id === assignedId && pickedAssignee.noUser);
   return (
     <>
@@ -307,7 +314,7 @@ export function CRMInteractionModal({
                     valueLabel={activityForm.assignedTo || undefined}
                   />
                   {assigneeHasNoUser && (
-                    <p id={`${fieldId}-assigned-no-user`} role="alert" className="mt-1.5 p-2 rounded-lg bg-rose-50 border border-rose-200 text-[11px] leading-relaxed font-semibold text-rose-800">
+                    <p id={`${fieldId}-assigned-no-user`} role="status" className="mt-1.5 p-2 rounded-lg bg-rose-50 border border-rose-200 text-[11px] leading-relaxed font-semibold text-rose-800">
                       {FOLLOWUP_ASSIGNEE_NO_USER_TEXT}
                     </p>
                   )}

@@ -35,7 +35,7 @@ export function activityResultLabel(result: string | null | undefined): string {
  * «پیگیری‌های من» and gets no due reminder. The follow-up window says so when such a person is picked.
  */
 export const FOLLOWUP_ASSIGNEE_NO_USER_TEXT =
-  'این همکار به هیچ حساب کاربری وصل نیست، پس این پیگیری در کارتابل هیچ‌کس دیده نمی‌شود و یادآوری هم برای آن نمی‌آید. در صفحهٔ «پرسنل»، او را به حساب کاربری‌اش وصل کنید.';
+  'این همکار به هیچ حساب کاربری وصل نیست، پس این پیگیری در کارتابل هیچ‌کس دیده نمی‌شود و یادآوری هم برای آن نمی‌آید. در صفحهٔ «پرسنل»، او را در خانهٔ «اتصال به حساب کاربری» به یک حساب کاربری وصل کنید.';
 
 export const FOLLOWUP_ASSIGNEE_NO_USER_TAG = 'بدون حساب کاربری';
 
