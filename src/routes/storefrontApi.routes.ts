@@ -14,6 +14,7 @@ import { ORDER_LINES_MAX } from '../lib/storefront/storefrontOrderRules.js';
 import { placeOrder, quoteShipping } from '../services/storefront/storefrontOrderPlace.service.js';
 import { buyerOrder, sendReceipt } from '../services/storefront/storefrontOrderBuyer.service.js';
 import { ACCESS_KEY_MAX } from '../services/storefront/storefrontOrderKeys.js';
+import { RECEIPT_IMAGE_DATA_URL_MAX } from '../services/storefront/storefrontReceiptImage.js';
 
 /**
  * v11 phase 8.1 (package 18, start plan §3): the Storefront API, read only, `GET /api/storefront/v1/...`. Only the site
@@ -82,7 +83,10 @@ const orderNumberParams = z.object({ number: z.string().min(1).max(20) }).passth
 const orderReadSchema = z.object({ params: orderNumberParams });
 const receiptSchema = z.object({
   params: orderNumberParams,
-  body: z.object({ reference: z.string().max(80), paidAt: z.string().max(40), cardLast4: z.string().max(20), amount: z.string().max(40) }).strict(),
+  body: z.object({
+    reference: z.string().max(80), paidAt: z.string().max(40), cardLast4: z.string().max(20), amount: z.string().max(40),
+    image: z.string().max(RECEIPT_IMAGE_DATA_URL_MAX).optional(),
+  }).strict(),
 });
 
 const catalogSchema = z.object({

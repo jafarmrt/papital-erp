@@ -1,3 +1,4 @@
+import fs from 'fs';
 import type { Request } from 'express';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { and, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
@@ -20,6 +21,7 @@ import { documentAuditDetails } from '../documents/documentAudit.js';
 import { DocumentService } from '../document.service.js';
 import { TreasuryTransactionService } from '../accounting/treasury/treasuryTransaction.service.js';
 import { adminOrderView, type OrderRecord } from './storefrontOrderView.js';
+import { receiptImageFile } from './storefrontReceiptImage.js';
 import { rialText } from './storefrontShipping.service.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
 
@@ -263,4 +265,19 @@ export async function fulfilOrder(req: Request, id: number, input: { status: 'sh
     });
     return adminOrderView(tx, updated);
   });
+}
+
+/** The photo a buyer sent with a receipt of this order (at most 3 MB, so it is read whole); 404 when there is none */
+export async function receiptImage(orderId: number, receiptId: number): Promise<{ buffer: Buffer; mime: string }> {
+  const notFound = new NotFoundError('تصویری برای این رسید نیست.', undefined, 'STOREFRONT_RECEIPT_IMAGE_NOT_FOUND');
+  const [receipt] = await orm.select({ id: storefrontPaymentReceipts.id }).from(storefrontPaymentReceipts)
+    .where(and(eq(storefrontPaymentReceipts.id, receiptId), eq(storefrontPaymentReceipts.orderId, orderId)));
+  if (!receipt) throw notFound;
+  const file = await receiptImageFile(orm, receipt.id);
+  if (!file) throw notFound;
+  try {
+    return { buffer: await fs.promises.readFile(file.absolutePath), mime: file.mime };
+  } catch {
+    throw notFound;
+  }
 }

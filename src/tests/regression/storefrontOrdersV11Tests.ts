@@ -3,7 +3,7 @@ import { and, asc, eq, inArray, like } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import {
-  accounts, appSettings, bankAccounts, documents, itemPrices, items, storefrontOrders, storefrontPaymentReceipts, storefrontProducts,
+  accounts, appSettings, bankAccounts, notifications, documents, itemPrices, items, storefrontOrders, storefrontPaymentReceipts, storefrontProducts,
   storefrontShippingMethods, treasuryTransactions, warehouses,
 } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
@@ -189,7 +189,11 @@ export async function runStorefrontOrdersV11Tests(shouldRun: (id: string, ...ext
 
     // 7) a receipt with another amount cannot be confirmed; rejecting it reopens the order
     const nowIso = new Date().toISOString();
-    const badReceipt = await site.post(`/api/storefront/v1/orders/${order1.number}/receipts`, { reference: `R${tag}1`, paidAt: nowIso, cardLast4: '1234', amount: PRICE }, key1);
+    // a receipt photo must be an image whose bytes prove it; a 1x1 PNG is taken
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const notImage = await site.post(`/api/storefront/v1/orders/${order1.number}/receipts`, { reference: `R${tag}0`, paidAt: nowIso, cardLast4: '1234', amount: PRICE, image: 'data:image/png;base64,PHNjcmlwdD4=' }, key1);
+    if (notImage.status !== 422 || notImage.body.details?.field !== 'image') wrong.push(`a receipt photo that is not an image: ${notImage.status} ${JSON.stringify(notImage.body.details)}`);
+    const badReceipt = await site.post(`/api/storefront/v1/orders/${order1.number}/receipts`, { reference: `R${tag}1`, paidAt: nowIso, cardLast4: '1234', amount: PRICE, image: PNG }, key1);
     if (badReceipt.status !== 201 || badReceipt.body.data.status !== 'payment_submitted' || badReceipt.body.data.payment !== null) {
       wrong.push(`a receipt: ${badReceipt.status} ${JSON.stringify(badReceipt.body)}`);
     }
@@ -197,6 +201,13 @@ export async function runStorefrontOrdersV11Tests(shouldRun: (id: string, ...ext
     if (again.status !== 409 || again.body.code !== 'STOREFRONT_RECEIPT_NOT_EXPECTED') wrong.push(`a second receipt while one waits: ${again.status} ${again.body.code}`);
     let detail = (await erp.get(`/api/storefront/orders/${row1.id}`)).body.data;
     const firstReceipt = detail?.receipts?.[0];
+    const photo = await erp.get(`/api/storefront/orders/${row1.id}/receipts/${firstReceipt?.id}/image`);
+    if (!firstReceipt?.hasImage || photo.status !== 200 || photo.headers['content-type'] !== 'image/png') wrong.push(`the receipt photo: ${firstReceipt?.hasImage} ${photo.status} ${photo.headers['content-type']}`);
+    const elsewhere = await erp.get(`/api/storefront/orders/${row1.id + 100000}/receipts/${firstReceipt?.id}/image`);
+    if (elsewhere.status !== 404) wrong.push(`a receipt photo under another order: ${elsewhere.status}`);
+    // the colleagues who handle orders learn of the order and of its receipt
+    const notices = await orm.select({ title: notifications.title }).from(notifications).where(eq(notifications.link, `/site-orders?id=${row1.id}`));
+    if (!notices.some(n => n.title.includes('سفارش تازه')) || !notices.some(n => n.title.includes('رسید'))) wrong.push(`order notices: ${JSON.stringify(notices.map(n => n.title))}`);
     const mismatch = await erp.post(`/api/storefront/orders/${row1.id}/confirm`, { receiptId: firstReceipt?.id, version: detail?.version });
     if (mismatch.status !== 422 || mismatch.body.code !== 'STOREFRONT_RECEIPT_AMOUNT_MISMATCH') wrong.push(`confirming another amount: ${mismatch.status} ${mismatch.body.code}`);
     const noReason = await erp.post(`/api/storefront/orders/${row1.id}/reject-receipt`, { receiptId: firstReceipt?.id, reason: ' ', version: detail?.version });
@@ -212,6 +223,7 @@ export async function runStorefrontOrdersV11Tests(shouldRun: (id: string, ...ext
     if (goodReceipt.status !== 201) wrong.push(`the second receipt: ${goodReceipt.status} ${JSON.stringify(goodReceipt.body)}`);
     detail = (await erp.get(`/api/storefront/orders/${row1.id}`)).body.data;
     const pending = (detail?.receipts ?? []).find((r: Body) => r.status === 'pending');
+    if (!pending) throw new Error(`no pending receipt to confirm: ${wrong.join('; ')} ${JSON.stringify(detail?.receipts)}`);
     const role = await createTestRole({ permissions: ['site_orders.view', 'site_orders.manage'] });
     const clerk = as(await loginTestUserWithSession(app, (await createTestUser({ role: role.code })).username));
     const clerkConfirm = await clerk.post(`/api/storefront/orders/${row1.id}/confirm`, { receiptId: pending?.id, version: detail?.version });
