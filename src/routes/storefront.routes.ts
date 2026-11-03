@@ -28,8 +28,8 @@ import { ORDER_STATUSES, REJECT_REASON_MAX, TRACKING_CODE_MAX, type OrderStatus 
 const router = Router();
 export const STOREFRONT_VIEW_PERMISSION = 'storefront.view';
 export const STOREFRONT_MANAGE_PERMISSION = 'storefront.manage';
-export const STOREFRONT_ORDERS_VIEW_PERMISSION = 'storefront.orders.view';
-export const STOREFRONT_ORDERS_MANAGE_PERMISSION = 'storefront.orders.manage';
+export const STOREFRONT_ORDERS_VIEW_PERMISSION = 'site_orders.view';
+export const STOREFRONT_ORDERS_MANAGE_PERMISSION = 'site_orders.manage';
 
 const text = (max: number) => z.string().max(max);
 const amount = z.union([z.string().max(40), z.number()]).transform(v => String(v));
@@ -143,7 +143,7 @@ router.put('/products/:itemId', requirePermission(STOREFRONT_MANAGE_PERMISSION),
   res.json({ success: true, data: await saveStorefrontProduct(req, Number(req.params.itemId), req.body) });
 }));
 
-// v11 phase 8.2a: the «سفارش‌های سایت» page. Reads need storefront.orders.view; every action storefront.orders.manage, and
+// v11 phase 8.2a: the «سفارش‌های سایت» page. Reads need site_orders.view; every action site_orders.manage, and
 // confirming a payment also the treasury and finalize keys (checked in the service, since it posts money and stock)
 router.get('/orders', requirePermission(STOREFRONT_ORDERS_VIEW_PERMISSION), validate(orderListSchema), asyncHandler(async (req: Request, res: Response) => {
   const query = req.query as { page?: number; limit?: number; q?: string; status?: OrderStatus | 'open' };

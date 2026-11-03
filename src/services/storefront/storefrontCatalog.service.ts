@@ -56,7 +56,7 @@ export interface OnSale {
 }
 
 /** Every item the site offers now, in the shop's own order */
-async function itemsOnSale(settings: StorefrontSettingsInput, slug?: string, executor: DbExecutor = orm, slugs?: string[]): Promise<OnSale[]> {
+async function itemsOnSale(executor: DbExecutor, settings: StorefrontSettingsInput, slug?: string, slugs?: string[]): Promise<OnSale[]> {
   const conditions = [eq(storefrontProducts.isPublished, 1), eq(items.isDeleted, 0), eq(items.type, 'product')];
   if (slug !== undefined) conditions.push(eq(storefrontProducts.slug, slug));
   if (slugs !== undefined) {
@@ -89,7 +89,7 @@ async function itemsOnSale(settings: StorefrontSettingsInput, slug?: string, exe
  * retail list), read in the order's transaction; an item missing from the answer is not on sale
  */
 export async function orderableItems(executor: DbExecutor, settings: StorefrontSettingsInput, slugs: string[]): Promise<Map<string, OnSale>> {
-  return new Map((await itemsOnSale(settings, undefined, executor, slugs)).map(item => [item.slug, item]));
+  return new Map((await itemsOnSale(executor, settings, undefined, slugs)).map(item => [item.slug, item]));
 }
 
 const compareRial = (a: string, b: string) => {
@@ -127,7 +127,7 @@ export async function catalogPage(query: CatalogQuery): Promise<StorefrontCatalo
   const limit = Math.min(CATALOG_PAGE_MAX, Math.max(1, query.limit));
   const q = folded(query.q);
   const settings = await storefrontSettingValues(orm);
-  const matching = (await itemsOnSale(settings)).filter(item =>
+  const matching = (await itemsOnSale(orm, settings)).filter(item =>
     (!query.collection || item.collections.includes(query.collection))
     && (!query.category || item.category === query.category)
     && (!q || folded(`${item.name} ${item.sku} ${item.collections.join(' ')}`).includes(q)));
@@ -146,7 +146,7 @@ export async function catalogPage(query: CatalogQuery): Promise<StorefrontCatalo
 
 export async function productBySlug(slug: string): Promise<StorefrontProductDetail> {
   const settings = await storefrontSettingValues(orm);
-  const [item] = await itemsOnSale(settings, slug);
+  const [item] = await itemsOnSale(orm, settings, slug);
   if (!item) throw new NotFoundError('محصول پیدا نشد.', undefined, 'STOREFRONT_PRODUCT_NOT_FOUND');
   const sellable = await storefrontSellable(orm, [item.itemId], settings.warehouseCode);
   const images = (await imagesOf(orm, [item.itemId])).get(item.itemId)?.map(image => altOf(image, item.name)) ?? [];
@@ -166,7 +166,7 @@ function facet(values: string[]): StorefrontFacet[] {
 
 /** The collections and categories that have an item on the site, with their counts */
 export async function catalogFacets(): Promise<{ collections: StorefrontFacet[]; categories: StorefrontFacet[] }> {
-  const onSale = await itemsOnSale(await storefrontSettingValues(orm));
+  const onSale = await itemsOnSale(orm, await storefrontSettingValues(orm));
   return { collections: facet(onSale.flatMap(i => i.collections)), categories: facet(onSale.map(i => i.category)) };
 }
 

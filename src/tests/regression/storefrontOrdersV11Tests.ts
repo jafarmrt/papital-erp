@@ -207,16 +207,16 @@ export async function runStorefrontOrdersV11Tests(shouldRun: (id: string, ...ext
     if (buyerAfterReject?.receipts?.[0]?.rejectReason !== 'مبلغ کم است' || !buyerAfterReject?.canSendReceipt) wrong.push(`the buyer after a reject: ${JSON.stringify(buyerAfterReject?.receipts)}`);
     if ((await stockOf(slugA)) !== 1) wrong.push('a rejected receipt released the reservation');
 
-    // 8) the right receipt; a holder of storefront.orders.manage alone cannot confirm; the admin can
+    // 8) the right receipt; a holder of site_orders.manage alone cannot confirm; the admin can
     const goodReceipt = await site.post(`/api/storefront/v1/orders/${order1.number}/receipts`, { reference: `R${tag}2`, paidAt: nowIso, cardLast4: '1234', amount: payable }, key1);
     if (goodReceipt.status !== 201) wrong.push(`the second receipt: ${goodReceipt.status} ${JSON.stringify(goodReceipt.body)}`);
     detail = (await erp.get(`/api/storefront/orders/${row1.id}`)).body.data;
     const pending = (detail?.receipts ?? []).find((r: Body) => r.status === 'pending');
-    const role = await createTestRole({ permissions: ['storefront.orders.view', 'storefront.orders.manage'] });
+    const role = await createTestRole({ permissions: ['site_orders.view', 'site_orders.manage'] });
     const clerk = as(await loginTestUserWithSession(app, (await createTestUser({ role: role.code })).username));
     const clerkConfirm = await clerk.post(`/api/storefront/orders/${row1.id}/confirm`, { receiptId: pending?.id, version: detail?.version });
     if (clerkConfirm.status !== 403 || clerkConfirm.body.code !== 'STOREFRONT_CONFIRM_FORBIDDEN') wrong.push(`confirm without treasury keys: ${clerkConfirm.status} ${clerkConfirm.body.code}`);
-    const viewRole = await createTestRole({ permissions: ['storefront.orders.view'] });
+    const viewRole = await createTestRole({ permissions: ['site_orders.view'] });
     const viewer = as(await loginTestUserWithSession(app, (await createTestUser({ role: viewRole.code })).username));
     const viewerCancel = await viewer.post(`/api/storefront/orders/${row1.id}/cancel`, { version: detail?.version });
     if (viewerCancel.status !== 403) wrong.push(`cancel by a viewer: ${viewerCancel.status}`);

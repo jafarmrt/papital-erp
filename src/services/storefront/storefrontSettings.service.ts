@@ -268,7 +268,7 @@ export async function isStorefrontApiKey(presented: string): Promise<boolean> {
 }
 
 /** v11 phase 8.2a: whether the site takes orders now (`sf_enabled` and `sf_orders_enabled`, both default off) */
-export async function isStorefrontOrderingOn(executor: DbExecutor = orm): Promise<boolean> {
+export async function isStorefrontOrderingOn(executor: DbExecutor): Promise<boolean> {
   const rows = await executor.select({ key: appSettings.key, value: appSettings.value }).from(appSettings)
     .where(inArray(appSettings.key, [KEYS.enabled, KEYS.ordersEnabled]));
   const on = new Set(rows.filter(r => String(r.value ?? '') === '1').map(r => r.key));

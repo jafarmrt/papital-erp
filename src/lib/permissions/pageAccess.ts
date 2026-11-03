@@ -119,6 +119,8 @@ export const PAGE_ACCESS = {
   '/personnel': { gate: anyOf('personnel.view'), api: ['GET /api/personnel'] },
   '/daily-logs': { gate: anyOf('daily_logs.view'), api: ['GET /api/daily-logs', 'GET /api/projects/options'] },
   '/piecework': { gate: anyOf('piecework.view'), api: ['GET /api/piecework/logs', 'GET /api/projects/options'] },
+  // v11 phase 8.2a: the new site's orders; actions need site_orders.manage (confirm also treasury and finalize)
+  '/site-orders': { gate: anyOf('site_orders.view'), api: ['GET /api/storefront/orders', 'GET /api/storefront/orders/:id'] },
   '/reserved-items': { gate: anyOf('products.view', 'reports.view', 'warehouse.view', 'documents.view'), api: ['GET /api/inventory/reserved-items'] },
   '/transactions': { gate: anyOf('warehouse.view', 'accounting.view'), api: ['GET /api/transactions'] },
   '/accounting': { gate: { anyOf: ACCOUNTING_KEYS }, api: [] },

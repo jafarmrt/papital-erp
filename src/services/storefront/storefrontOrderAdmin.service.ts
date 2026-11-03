@@ -28,7 +28,7 @@ import { storefrontSettingValues } from './storefrontSettings.service.js';
  * - confirm: the receipt's amount must equal the order's payable amount; the stock rows of the order are locked, then a
  *   treasury receipt is posted into the chosen account through the one treasury path, linked to the proforma (bank, then
  *   document, the treasury's lock order), and the proforma is finalized into the invoice through the documents service
- *   (stock out of the site's warehouse, the draft voucher). It needs, besides `storefront.orders.manage`, the treasury and
+ *   (stock out of the site's warehouse, the draft voucher). It needs, besides `site_orders.manage`, the treasury and
  *   finalize permissions, since it moves money and stock.
  * - reject: the receipt gets its reason and the order waits for payment again with a fresh reservation window.
  * - cancel: the proforma is voided (its reservation released) through the documents service.

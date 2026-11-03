@@ -95,6 +95,7 @@ export function getMenuGroups(
         { name: 'ارتباط با مشتری و فروش', path: '/crm', icon: Target, visible: open('/crm') },
         { name: 'طرفین حساب', path: '/customers', icon: UsersRound, visible: open('/customers') },
         { name: 'صدور فاکتور و پیش‌فاکتور', path: '/invoices/create', icon: FileOutput, visible: open('/invoices/create') },
+        { name: 'سفارش‌های سایت', path: '/site-orders', icon: ShoppingBag, visible: open('/site-orders') },
       ]
     },
     {

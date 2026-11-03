@@ -17,7 +17,7 @@ export const STOREFRONT_EXPIRY_BATCH = 50;
 export const STOREFRONT_EXPIRY_INTERVAL_MS = 60_000;
 
 export async function expireDueOrdersOnce(): Promise<{ expired: number; failed: number }> {
-  if (!(await isStorefrontOrderingOn())) return { expired: 0, failed: 0 };
+  if (!(await isStorefrontOrderingOn(orm))) return { expired: 0, failed: 0 };
   const due = await orm.select({ id: storefrontOrders.id }).from(storefrontOrders)
     .where(and(eq(storefrontOrders.status, 'awaiting_payment'), lte(storefrontOrders.reserveUntil, sql`now()`)))
     .orderBy(asc(storefrontOrders.reserveUntil), asc(storefrontOrders.id)).limit(STOREFRONT_EXPIRY_BATCH);
