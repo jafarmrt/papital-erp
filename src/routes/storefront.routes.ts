@@ -7,7 +7,10 @@ import { orm } from '../db/drizzle.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { numericIdString, validate } from '../middleware/validate.js';
 import { OPEN_ORDERS_PER_PHONE_MAX } from '../lib/storefront/storefrontOrderRules.js';
-import { LOW_STOCK_THRESHOLD_MAX, RESERVATION_HOURS_MAX, SHIPPING_PRICING, SHIPPING_RATES_MAX, STOCK_DISPLAYS } from '../lib/storefront/storefrontRules.js';
+import {
+  BRAND_IMAGE_KINDS, LOW_STOCK_THRESHOLD_MAX, RESERVATION_HOURS_MAX, SHIPPING_PRICING, SHIPPING_RATES_MAX, STOCK_DISPLAYS, type BrandImageKind,
+} from '../lib/storefront/storefrontRules.js';
+import { saveStorefrontBrandImage } from '../services/storefront/storefrontBrand.service.js';
 import {
   readStorefrontSettings, rotateStorefrontApiKey, saveStorefrontSettings,
 } from '../services/storefront/storefrontSettings.service.js';
@@ -35,6 +38,12 @@ const text = (max: number) => z.string().max(max);
 const amount = z.union([z.string().max(40), z.number()]).transform(v => String(v));
 const version = z.number().int().min(0).max(2_147_483_647);
 
+// a data URL of at most 300 KB decoded is about 410,000 characters; the service checks the exact size and the type
+const brandImageSchema = z.object({
+  params: z.object({ kind: z.enum(BRAND_IMAGE_KINDS) }).passthrough(),
+  body: z.object({ image: z.string().max(420_000), version }).strict(),
+});
+
 const emptyBodySchema = z.object({ body: z.object({}).strict().optional() });
 
 const settingsSchema = z.object({
@@ -42,7 +51,8 @@ const settingsSchema = z.object({
     cardNumber: text(40), cardHolder: text(200), bankName: text(200), iban: text(60),
     freeShippingThreshold: amount, reservationHours: z.number().int().min(1).max(RESERVATION_HOURS_MAX),
     retailPriceList: text(200), wholesalePriceList: text(200),
-    lowStockThreshold: z.number().int().min(0).max(LOW_STOCK_THRESHOLD_MAX), stockDisplay: z.enum(STOCK_DISPLAYS), warehouseCode: text(100), enabled: z.boolean(),
+    lowStockThreshold: z.number().int().min(0).max(LOW_STOCK_THRESHOLD_MAX), stockDisplay: z.enum(STOCK_DISPLAYS), warehouseCode: text(100),
+    whatsappNumber: text(30), whatsappEnabled: z.boolean(), enabled: z.boolean(),
     ordersEnabled: z.boolean(), treasuryAccountId: z.number().int().min(0).max(2_147_483_647),
     openOrdersPerPhone: z.number().int().min(1).max(OPEN_ORDERS_PER_PHONE_MAX),
     version,
@@ -113,6 +123,11 @@ router.put('/settings', requirePermission(STOREFRONT_MANAGE_PERMISSION), validat
 // the new key is answered once; the form shows it to be copied into the site app's settings
 router.post('/api-key', requirePermission(STOREFRONT_MANAGE_PERMISSION), idempotency({ scope: 'storefront_key' }), validate(emptyBodySchema), asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json({ success: true, data: await rotateStorefrontApiKey(req) });
+}));
+
+router.put('/brand/:kind', requirePermission(STOREFRONT_MANAGE_PERMISSION), validate(brandImageSchema), asyncHandler(async (req: Request, res: Response) => {
+  const body = req.body as { image: string; version: number };
+  res.json({ data: await saveStorefrontBrandImage(req, String(req.params.kind) as BrandImageKind, body.image, body.version) });
 }));
 
 router.get('/shipping-methods', requirePermission(STOREFRONT_VIEW_PERMISSION), asyncHandler(async (_req: Request, res: Response) => {

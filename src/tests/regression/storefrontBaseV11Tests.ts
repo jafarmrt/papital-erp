@@ -1,8 +1,8 @@
 import request from 'supertest';
-import { and, asc, eq, inArray, like } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, like } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { appSettings, itemPrices, items, storefrontProducts, storefrontShippingMethods, warehouses } from '../../db/schema.js';
+import { activityLogs, appSettings, itemPrices, items, storefrontProducts, storefrontShippingMethods, warehouses } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 import { invalidateSettingsCache } from '../../lib/memoryCache.js';
 import { readPricingStrategies } from '../../lib/items/pricingStrategies.js';
@@ -64,7 +64,7 @@ export async function runStorefrontBaseV11Tests(shouldRun: (id: string, ...extra
     const settings = {
       cardNumber: VALID_CARD, cardHolder: 'گالری پاپیتال', bankName: 'ملت', iban: VALID_IBAN, freeShippingThreshold: '۵٬۰۰۰٬۰۰۰',
       reservationHours: 24, retailPriceList: retailList, wholesalePriceList: wholesaleList, lowStockThreshold: 2, stockDisplay: 'count',
-      warehouseCode: warehouse.code, enabled: false, ordersEnabled: false, treasuryAccountId: 0, openOrdersPerPhone: 3, version,
+      warehouseCode: warehouse.code, whatsappNumber: '', whatsappEnabled: false, enabled: false, ordersEnabled: false, treasuryAccountId: 0, openOrdersPerPhone: 3, version,
     };
     const badCard = await erp.put('/api/storefront/settings', { ...settings, cardNumber: '6037991234567894' });
     if (badCard.status !== 422 || badCard.body.code !== 'STOREFRONT_CARD_INVALID') wrong.push(`a wrong card: ${badCard.status} ${badCard.body.code}`);
@@ -136,15 +136,69 @@ export async function runStorefrontBaseV11Tests(shouldRun: (id: string, ...extra
       if (keys(card.stock) !== 'quantity,status') wrong.push(`stock fields: ${keys(card.stock)}`);
     }
     await erp.put('/api/storefront/settings', { ...settings, enabled: true, lowStockThreshold: 100, stockDisplay: 'status', version: version + 2 });
+    // an item of the same design (same transfer code, in another case) is listed on the page as «هم‌طرح», without a
+    // design field; the unpriced item of the same code is not on sale, so it is not listed
+    const twin = await createTestItem({ name: 'گردنبند هم‌طرح', code: `SFT${tag.split('').reverse().join('')}`, transferCode: ` X${tag} ` });
+    itemIds.push(twin.id);
+    await orm.update(items).set({ transferCode: `x${tag}` }).where(inArray(items.id, [priced.id, unpriced.id]));
+    await orm.insert(itemPrices).values({ itemId: twin.id, title: retailList, price: money('15000000'), currency: 'IRR' });
+    await erp.put(`/api/storefront/products/${twin.id}`, { published: true, slug: `twin-${tag}`, seoTitle: '', seoDescription: '', sortOrder: 0, version: 0 });
     const detail = await site(`/api/storefront/v1/products/${slug}`);
+    const twins = (detail.body.data?.sameDesign ?? []) as Body[];
+    if (twins.length !== 1 || twins[0].slug !== `twin-${tag}` || JSON.stringify(detail.body).toLowerCase().includes(`x${tag}`.toLowerCase())) {
+      wrong.push(`same design: ${JSON.stringify(twins.map(t => t.slug))}`);
+    }
     if (detail.status !== 200 || detail.body.data.stock.status !== 'low' || detail.body.data.stock.quantity !== null) {
       wrong.push(`detail after threshold 100 and status display: ${detail.status} ${JSON.stringify(detail.body.data?.stock)}`);
     }
     const detailKeys = Object.keys(detail.body.data ?? {}).sort().join(',');
-    const expectedDetail = 'category,collections,color,cover,description,designYear,images,material,name,retailPrice,seoDescription,seoTitle,size,sku,slug,stock,weightGrams';
+    const expectedDetail = 'category,collections,color,cover,description,designYear,images,material,name,retailPrice,sameDesign,seoDescription,seoTitle,size,sku,slug,stock,weightGrams';
     if (detailKeys !== expectedDetail) wrong.push(`detail fields: ${detailKeys}`);
     const publicKeys = Object.keys(pub.body.data ?? {}).sort().join(',');
-    if (publicKeys !== 'currency,freeShippingThreshold,payment,reservationHours,shippingMethods,stockDisplay') wrong.push(`site settings fields: ${publicKeys}`);
+    if (publicKeys !== 'currency,freeShippingThreshold,payment,reservationHours,shippingMethods,stockDisplay,whatsapp') wrong.push(`site settings fields: ${publicKeys}`);
+    if (pub.body.data?.whatsapp !== '') wrong.push(`the WhatsApp number while its button is off: ${pub.body.data?.whatsapp}`);
+    // the WhatsApp button (8.3): on needs a number; a local mobile is kept in the wa.me form; off hides the number
+    const waNoNumber = await erp.put('/api/storefront/settings', { ...settings, enabled: true, whatsappEnabled: true, version: version + 3 });
+    if (waNoNumber.status !== 422 || waNoNumber.body.code !== 'STOREFRONT_WHATSAPP_REQUIRED') wrong.push(`WhatsApp on without a number: ${waNoNumber.status} ${waNoNumber.body.code}`);
+    const waBad = await erp.put('/api/storefront/settings', { ...settings, enabled: true, whatsappNumber: '02112345678', version: version + 3 });
+    if (waBad.status !== 422 || waBad.body.code !== 'STOREFRONT_WHATSAPP_INVALID') wrong.push(`a landline as WhatsApp: ${waBad.status} ${waBad.body.code}`);
+    const waOn = await erp.put('/api/storefront/settings', { ...settings, enabled: true, whatsappNumber: '۰۹۱۲۰۰۰۰۰۰۰', whatsappEnabled: true, version: version + 3 });
+    const waPub = await site('/api/storefront/v1/settings');
+    if (waOn.status !== 200 || waPub.body.data?.whatsapp !== '989120000000') wrong.push(`WhatsApp on: ${waOn.status} ${waPub.body.data?.whatsapp}`);
+    await erp.put('/api/storefront/settings', { ...settings, enabled: true, whatsappNumber: '09120000000', whatsappEnabled: false, version: version + 4 });
+    const waOff = await site('/api/storefront/v1/settings');
+    if (waOff.body.data?.whatsapp !== '') wrong.push(`WhatsApp off still shows the number: ${waOff.body.data?.whatsapp}`);
+    // the logo and browser icon (8.3): a safe image saved with its own version, an unsafe SVG refused, the site reads both
+    const brandView = (await erp.get('/api/storefront/settings')).body.data.brand;
+    const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    const evilSvg = `data:image/svg+xml;base64,${Buffer.from('<svg onload="alert(1)"></svg>').toString('base64')}`;
+    const badLogo = await erp.put('/api/storefront/brand/logo', { image: evilSvg, version: brandView.version });
+    if (badLogo.status !== 422 || badLogo.body.code !== 'STOREFRONT_BRAND_IMAGE_INVALID') wrong.push(`an SVG with a script: ${badLogo.status} ${badLogo.body.code}`);
+    const logoSaved = await erp.put('/api/storefront/brand/logo', { image: tinyPng, version: brandView.version });
+    if (logoSaved.status !== 200 || logoSaved.body.data.logo !== tinyPng) wrong.push(`saving the logo: ${logoSaved.status}`);
+    const staleLogo = await erp.put('/api/storefront/brand/favicon', { image: tinyPng, version: brandView.version });
+    if (staleLogo.status !== 409) wrong.push(`a stale brand save: ${staleLogo.status}, not 409`);
+    const brandPub = await site('/api/storefront/v1/brand');
+    if (brandPub.status !== 200 || brandPub.body.data.logo !== tinyPng || Object.keys(brandPub.body.data).sort().join(',') !== 'favicon,logo') {
+      wrong.push(`site brand: ${brandPub.status} ${Object.keys(brandPub.body.data ?? {}).join(',')}`);
+    }
+    // the audit row names the image by its type, size and hash, never its bytes
+    const [brandAudit] = await orm.select({ details: activityLogs.details }).from(activityLogs)
+      .where(eq(activityLogs.entityId, 'brand-logo')).orderBy(desc(activityLogs.id)).limit(1);
+    const auditText = JSON.stringify(brandAudit?.details ?? null);
+    if (!brandAudit || auditText.includes('iVBORw0KGgo') || !auditText.includes('sha256')) wrong.push(`the logo audit row: ${auditText.slice(0, 120)}`);
+    // a bitmap over the size limit and a body over the request cap are refused on the server too
+    const PNG_HEAD = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const bigPng = `data:image/png;base64,${Buffer.concat([PNG_HEAD, Buffer.alloc(301 * 1024)]).toString('base64')}`;
+    const tooBig = await erp.put('/api/storefront/brand/logo', { image: bigPng, version: brandView.version + 1 });
+    if (tooBig.status !== 422) wrong.push(`a 301 KB logo: ${tooBig.status}, not 422`);
+    const overCap = await erp.put('/api/storefront/brand/logo', { image: `data:image/png;base64,${'A'.repeat(420_004)}`, version: brandView.version + 1 });
+    if (overCap.status !== 400) wrong.push(`a body over the cap: ${overCap.status}, not 400`);
+    // HTML bytes under an image type are refused (the declared type is not trusted)
+    const fakePng = `data:image/png;base64,${Buffer.from('<html><script>alert(1)</script></html>').toString('base64')}`;
+    const fake = await erp.put('/api/storefront/brand/logo', { image: fakePng, version: brandView.version + 1 });
+    if (fake.status !== 422) wrong.push(`HTML saved as a PNG: ${fake.status}, not 422`);
+    await erp.put('/api/storefront/brand/logo', { image: '', version: brandView.version + 1 });
     const missing = await site('/api/storefront/v1/products/no-such-item');
     if (missing.status !== 404) wrong.push(`an unknown address: ${missing.status}, not 404`);
     const facets = await site('/api/storefront/v1/facets');
@@ -180,11 +234,13 @@ export async function runStorefrontBaseV11Tests(shouldRun: (id: string, ...extra
     const viewerRead = await viewer.get('/api/storefront/settings');
     const viewerWrite = await viewer.post('/api/storefront/api-key');
     if (viewerRead.status !== 200 || viewerWrite.status !== 403) wrong.push(`view only: read ${viewerRead.status}, key ${viewerWrite.status}`);
+    const viewerBrand = await viewer.put('/api/storefront/brand/logo', { image: '', version: viewerRead.body.data?.brand?.version ?? 0 });
+    if (viewerBrand.status !== 403) wrong.push(`view only: logo ${viewerBrand.status}, not 403`);
 
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'settings saved under their version (wrong card 422, stale 409); the API answered 401 without or with a wrong key and 200 with the new one; publishing without a retail price was 422 and a taken address 409; the catalog answered only the priced item with its two prices and 100 units, then «تعداد کم» without the count after the threshold and display changed; a table method saved two rows, refused a wrong province and a stale version, and was deleted; a view-only holder could not make a key',
+      details: 'settings saved under their version (wrong card 422, stale 409); the API answered 401 without or with a wrong key and 200 with the new one; publishing without a retail price was 422 and a taken address 409; the catalog answered only the priced item with its two prices and 100 units, then «تعداد کم» without the count after the threshold and display changed; a table method saved two rows, refused a wrong province and a stale version, and was deleted; a view-only holder could not make a key or change the logo; the logo refused an unsafe SVG, a fake or too large bitmap and a stale version, and its audit row kept only a fingerprint',
     }));
   } catch (err) {
     results.push(makeTestCase({

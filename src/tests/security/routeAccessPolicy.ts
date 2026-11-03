@@ -28,8 +28,8 @@ export const PUBLIC_ROUTES = new Set([
   'GET /api/woocommerce/shop-image/:file',
   // v11 phase 8.1: the Storefront API takes no session; every route checks the site app's key (`requireStorefrontKey`,
   // a missing or wrong key is 401) and is limited per address
-  // (v11 phase 8.2a: and the order routes, a buyer's order also by its tracking key)
-  ...['GET settings', 'GET products', 'GET products/:slug', 'GET facets', 'GET media/:file', 'GET orders/:number', 'POST shipping/quote', 'POST orders', 'POST orders/:number/receipts'].map(route => route.replace(' ', ' /api/storefront/v1/')),
+  // (v11 phase 8.2a: and the order routes, a buyer's order also by its tracking key; 8.3: the site's logo and icon)
+  ...['GET settings', 'GET brand', 'GET products', 'GET products/:slug', 'GET facets', 'GET media/:file', 'GET orders/:number', 'POST shipping/quote', 'POST orders', 'POST orders/:number/receipts'].map(route => route.replace(' ', ' /api/storefront/v1/')),
 ]);
 
 /**

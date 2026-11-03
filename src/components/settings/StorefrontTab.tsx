@@ -4,6 +4,7 @@ import { useStorefrontSettingsQuery } from '../../hooks/queries/useStorefrontQue
 import { errorMessageOf } from '../../utils';
 import { StorefrontSettingsForm } from '../storefront/StorefrontSettingsForm';
 import { StorefrontApiKeyCard } from '../storefront/StorefrontApiKeyCard';
+import { StorefrontBrandCard } from '../storefront/StorefrontBrandCard';
 import { ShippingMethodsSection } from '../storefront/ShippingMethodsSection';
 import { StorefrontProductsSection } from '../storefront/StorefrontProductsSection';
 
@@ -12,10 +13,11 @@ import { StorefrontProductsSection } from '../storefront/StorefrontProductsSecti
  * which runs as its own app on the site's domain and reads the ERP through the Storefront API. `storefront.view` sees,
  * `storefront.manage` changes.
  */
-type Section = 'products' | 'settings' | 'shipping' | 'key';
+type Section = 'products' | 'settings' | 'brand' | 'shipping' | 'key';
 const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: 'products', label: 'کالاهای سایت' },
   { id: 'settings', label: 'پرداخت، قیمت و موجودی' },
+  { id: 'brand', label: 'لوگو و آیکون' },
   { id: 'shipping', label: 'روش‌های ارسال' },
   { id: 'key', label: 'کلید برنامه سایت' },
 ];
@@ -46,11 +48,12 @@ export function StorefrontTab({ canManage }: { canManage: boolean }) {
       </div>
       {section === 'products' && <StorefrontProductsSection canManage={canManage} />}
       {section === 'shipping' && <ShippingMethodsSection canManage={canManage} />}
-      {(section === 'settings' || section === 'key') && (
+      {(section === 'settings' || section === 'brand' || section === 'key') && (
         <>
           {settings.isLoading && <p className="text-xs text-slate-500">در حال خواندن…</p>}
           {settings.isError && <p className="text-xs text-rose-700">{errorMessageOf(settings.error)}</p>}
           {settings.data && section === 'settings' && <StorefrontSettingsForm view={settings.data} canManage={canManage} />}
+          {settings.data && section === 'brand' && <StorefrontBrandCard brand={settings.data.brand} canManage={canManage} />}
           {settings.data && section === 'key' && <StorefrontApiKeyCard view={settings.data} canManage={canManage} />}
         </>
       )}

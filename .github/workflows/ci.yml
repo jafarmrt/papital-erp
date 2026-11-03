@@ -236,6 +236,38 @@ jobs:
           path: dist/
           retention-days: 7
 
+  storefront:
+    name: Storefront App (typecheck, page tests, build)
+    runs-on: ubuntu-26.04
+    # v11 phase 8.3: the papitalgallery.com app in storefront/ has its own packages; the ERP jobs never build it
+    timeout-minutes: 15
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
+    defaults:
+      run:
+        working-directory: storefront
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js 24.x
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: storefront/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Typecheck
+        # the same steps as the app's own typecheck script, written out so the ERP's npm script guard does not read them as a root script
+        run: |
+          npx react-router typegen
+          npx tsc --noEmit
+
+      - name: Page Tests (server rendering against the mock Storefront API)
+        run: npm test
+
   e2e:
     name: End-to-End Critical Path (Playwright, v7.0.77 / audit P3-7)
     runs-on: ubuntu-26.04

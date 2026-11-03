@@ -9,7 +9,8 @@ import { isStorefrontApiKey, isStorefrontEnabled } from '../services/storefront/
 import {
   CATALOG_PAGE_MAX, CATALOG_SORTS, catalogFacets, catalogPage, productBySlug, publicSettings, storefrontMediaFile, type CatalogSort,
 } from '../services/storefront/storefrontCatalog.service.js';
-import { STOREFRONT_SLUG_MAX } from '../lib/storefront/storefrontRules.js';
+import { STOREFRONT_QUERY_TEXT_MAX, STOREFRONT_SLUG_MAX } from '../lib/storefront/storefrontRules.js';
+import { publicBrand } from '../services/storefront/storefrontBrand.service.js';
 import { ORDER_LINES_MAX } from '../lib/storefront/storefrontOrderRules.js';
 import { placeOrder, quoteShipping } from '../services/storefront/storefrontOrderPlace.service.js';
 import { buyerOrder, sendReceipt } from '../services/storefront/storefrontOrderBuyer.service.js';
@@ -93,9 +94,9 @@ const catalogSchema = z.object({
   query: z.object({
     page: z.string().regex(/^[1-9]\d{0,5}$/).transform(Number).optional(),
     limit: z.string().regex(/^[1-9]\d{0,2}$/).transform(Number).optional(),
-    q: z.string().max(100).optional(),
-    collection: z.string().max(100).optional(),
-    category: z.string().max(100).optional(),
+    q: z.string().max(STOREFRONT_QUERY_TEXT_MAX).optional(),
+    collection: z.string().max(STOREFRONT_QUERY_TEXT_MAX).optional(),
+    category: z.string().max(STOREFRONT_QUERY_TEXT_MAX).optional(),
     sort: z.enum(CATALOG_SORTS).optional(),
   }).passthrough(),
 });
@@ -104,6 +105,11 @@ const mediaSchema = z.object({ params: z.object({ file: z.string().min(1).max(80
 
 router.get('/settings', asyncHandler(async (_req: Request, res: Response) => {
   res.json({ data: await publicSettings() });
+}));
+
+// v11 phase 8.3: the site's logo and browser icon (the logo falls back to the company logo of the general settings)
+router.get('/brand', asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ data: await publicBrand() });
 }));
 
 router.get('/products', validate(catalogSchema), asyncHandler(async (req: Request, res: Response) => {
