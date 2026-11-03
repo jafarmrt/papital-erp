@@ -31,7 +31,7 @@ export interface ShippingQuoteAnswer {
 
 /** `POST /api/storefront/v1/orders` */
 export interface PlaceOrderRequest {
-  /** a key the app makes for this checkout; the same key and body answer the same order again */
+  /** a random key the app makes once per checkout (16 to 80 of A-Z a-z 0-9 _ -, e.g. a UUID); the same key and body answer the same order and its tracking key again, so it must not be guessable */
   requestKey: string;
   recipientName: string;
   phone: string;

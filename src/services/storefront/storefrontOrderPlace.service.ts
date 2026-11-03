@@ -50,7 +50,7 @@ const fieldError = (field: string, message: string) => new ValidationError(messa
 /** The request with every field normalized, or the first field's reason (each error names its field for the form) */
 export function cleanOrderRequest(input: PlaceOrderRequest): CleanOrder {
   const requestKey = String(input.requestKey ?? '').trim();
-  if (!/^[A-Za-z0-9_-]{8,80}$/.test(requestKey)) throw fieldError('requestKey', 'شناسهٔ درخواست نامعتبر است.');
+  if (!/^[A-Za-z0-9_-]{16,80}$/.test(requestKey)) throw fieldError('requestKey', 'شناسهٔ درخواست نامعتبر است.');
   const recipientName = cleanText(input.recipientName, RECIPIENT_NAME_MAX);
   if (!recipientName || recipientName.length < 2) throw fieldError('recipientName', 'نام و نام خانوادگی گیرنده را بنویسید.');
   const phone = normalizeMobile(input.phone);
@@ -141,7 +141,11 @@ async function placeInTransaction(tx: DbExecutor, order: CleanOrder, requestHash
   const warehouse = await storefrontWarehouseCode(tx, settings.warehouseCode);
   const sellable = await storefrontSellable(tx, cart.lines.map(l => l.item.itemId), settings.warehouseCode);
   const short = cart.lines.filter(l => (sellable.get(l.item.itemId) ?? 0) < l.quantity)
-    .map(l => ({ slug: l.item.slug, available: Math.max(0, Math.floor(sellable.get(l.item.itemId) ?? 0)) }));
+    .map(l => {
+      // the count only when the site shows counts; otherwise only «none left» (0) or «fewer than asked» (null)
+      const available = Math.max(0, Math.floor(sellable.get(l.item.itemId) ?? 0));
+      return { slug: l.item.slug, available: settings.stockDisplay === 'count' || available === 0 ? available : null };
+    });
   if (short.length > 0) {
     throw new ConflictError('موجودی برخی کالاها کمتر از تعداد سفارش است.', { lines: short }, 'STOREFRONT_OUT_OF_STOCK');
   }

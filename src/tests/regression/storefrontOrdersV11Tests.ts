@@ -121,7 +121,7 @@ export async function runStorefrontOrdersV11Tests(shouldRun: (id: string, ...ext
     const phone1 = `0912${tag}`;
 
     // 1) ordering is off by its own switch, even with the site on
-    const whileOff = await site.post('/api/storefront/v1/orders', buyer(phone1, slugA, `rk-off-${tag}`));
+    const whileOff = await site.post('/api/storefront/v1/orders', buyer(phone1, slugA, `rk-off-${tag}-checkout`));
     if (whileOff.status !== 404) wrong.push(`an order while ordering is off: ${whileOff.status}, not 404`);
     await save({ ordersEnabled: true });
 
@@ -129,11 +129,11 @@ export async function runStorefrontOrdersV11Tests(shouldRun: (id: string, ...ext
     const quote = await site.post('/api/storefront/v1/shipping/quote', { province: 'تهران', lines: [{ slug: slugA, quantity: 1 }] });
     const option = (quote.body.data?.options ?? []).find((o: Body) => o.code === `sfo-${tag}`);
     if (quote.status !== 200 || quote.body.data.itemsAmount !== PRICE || option?.amount !== SHIPPING) wrong.push(`quote: ${quote.status} ${JSON.stringify(quote.body)}`);
-    const tampered = await site.post('/api/storefront/v1/orders', { ...buyer(phone1, slugA, `rk-t-${tag}`), lines: [{ slug: slugA, quantity: 1, unitPrice: '1' }] });
+    const tampered = await site.post('/api/storefront/v1/orders', { ...buyer(phone1, slugA, `rk-t-${tag}-checkout`), lines: [{ slug: slugA, quantity: 1, unitPrice: '1' }] });
     if (tampered.status === 201 || tampered.status < 400 || tampered.status >= 500) wrong.push(`a price in the request: ${tampered.status}, not refused`);
 
     // 3) an order: 201, a key, server prices, a reserving proforma, one unit less on the site
-    const body1 = buyer(phone1, slugA, `rk-1-${tag}`);
+    const body1 = buyer(phone1, slugA, `rk-1-${tag}-checkout`);
     const placed = await site.post('/api/storefront/v1/orders', body1);
     if (placed.status !== 201) throw new Error(`place: ${placed.status} ${JSON.stringify(placed.body)}`);
     const order1 = placed.body.data.order;
@@ -175,8 +175,8 @@ export async function runStorefrontOrdersV11Tests(shouldRun: (id: string, ...ext
 
     // 6) two buyers race for the last unit: one order, one 409
     const raced = await Promise.all([
-      site.post('/api/storefront/v1/orders', buyer(`0913${tag}`, slugB, `rk-r1-${tag}`)),
-      site.post('/api/storefront/v1/orders', buyer(`0914${tag}`, slugB, `rk-r2-${tag}`)),
+      site.post('/api/storefront/v1/orders', buyer(`0913${tag}`, slugB, `rk-r1-${tag}-checkout`)),
+      site.post('/api/storefront/v1/orders', buyer(`0914${tag}`, slugB, `rk-r2-${tag}-checkout`)),
     ]);
     const won = raced.filter(r => r.status === 201);
     const lost = raced.filter(r => r.status === 409 && r.body.code === 'STOREFRONT_OUT_OF_STOCK');
