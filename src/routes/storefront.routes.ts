@@ -19,7 +19,7 @@ import {
 } from '../services/storefront/storefrontShipping.service.js';
 import { STOREFRONT_PAGE_MAX, listStorefrontProducts, saveStorefrontProduct } from '../services/storefront/storefrontProducts.service.js';
 import {
-  ADMIN_ORDER_PAGE_MAX, cancelOrder, confirmPayment, fulfilOrder, listOrders, orderDetail, rejectReceipt,
+  ADMIN_ORDER_PAGE_MAX, cancelOrder, confirmPayment, fulfilOrder, listOrders, orderDetail, receiptImage, rejectReceipt,
 } from '../services/storefront/storefrontOrderAdmin.service.js';
 import { ORDER_STATUSES, REJECT_REASON_MAX, TRACKING_CODE_MAX, type OrderStatus } from '../lib/storefront/storefrontOrderRules.js';
 
@@ -167,6 +167,18 @@ router.get('/orders', requirePermission(STOREFRONT_ORDERS_VIEW_PERMISSION), vali
 
 router.get('/orders/:id', requirePermission(STOREFRONT_ORDERS_VIEW_PERMISSION), validate(orderDetailSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ data: await orderDetail(Number(req.params.id)) });
+}));
+
+// v11 phase 8.2a: a receipt's photo, only for the orders page (the general attachment route never serves it)
+const receiptImageSchema = z.object({ params: z.object({ id: numericIdString, receiptId: numericIdString }).passthrough() });
+router.get('/orders/:id/receipts/:receiptId/image', requirePermission(STOREFRONT_ORDERS_VIEW_PERMISSION), validate(receiptImageSchema), asyncHandler(async (req: Request, res: Response) => {
+  const image = await receiptImage(Number(req.params.id), Number(req.params.receiptId));
+  res.setHeader('Content-Type', image.mime);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  res.setHeader('Cache-Control', 'private, max-age=86400');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; sandbox");
+  res.send(image.buffer);
 }));
 
 router.post('/orders/:id/confirm', requirePermission(STOREFRONT_ORDERS_MANAGE_PERMISSION), idempotency({ scope: 'storefront_orders' }), validate(confirmSchema), asyncHandler(async (req: Request, res: Response) => {
