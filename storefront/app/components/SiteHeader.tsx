@@ -1,10 +1,11 @@
 import { Form, Link, useLocation } from 'react-router';
-import { Menu, Search, X } from 'lucide-react';
+import { Menu, Search, UserRound, X } from 'lucide-react';
 import type { StorefrontFacet } from '@erp/storefront/storefrontContracts';
 import { BRAND, categoryPath } from '../lib/brand';
 
 /**
- * The header works without JavaScript: the phone menu is a <details>, the search a GET form to /products.
+ * The header works without JavaScript: the phone menu is a <details>, the search a GET form to /products. The account
+ * link (8.4b) is in the phone menu, and an icon beside the search from the desktop width up.
  */
 export function SiteHeader({ categories, logoUrl }: { categories: StorefrontFacet[]; logoUrl: string }) {
   const nav = [{ to: '/products', label: 'همهٔ محصولات' }, ...categories.map(c => ({ to: categoryPath(c.name), label: c.name }))];
@@ -25,6 +26,7 @@ export function SiteHeader({ categories, logoUrl }: { categories: StorefrontFace
               {nav.map(item => (
                 <li key={item.to}><Link to={item.to} className="flex min-h-12 items-center text-lg font-medium">{item.label}</Link></li>
               ))}
+              <li><Link to="/account/sign-in" className="flex min-h-12 items-center gap-2 text-lg font-medium"><UserRound className="size-5" strokeWidth={1.75} aria-hidden />ورود به حساب</Link></li>
             </ul>
           </nav>
         </details>
@@ -64,6 +66,9 @@ export function SiteHeader({ categories, logoUrl }: { categories: StorefrontFace
             <Search className="pointer-events-none absolute start-3 size-5 text-muted-foreground" strokeWidth={1.75} aria-hidden />
           </label>
         </Form>
+        <Link to="/account/sign-in" aria-label="ورود به حساب" className="hidden size-11 items-center justify-center rounded-control hover:bg-chrome-foreground/10 lg:flex">
+          <UserRound className="size-6" strokeWidth={1.75} aria-hidden />
+        </Link>
       </div>
     </header>
   );
