@@ -24,15 +24,21 @@ const PROOF_MAX_AGE = 600;
 const TIMEOUT_MS = 8000;
 const TOKEN = /^[A-Za-z0-9_-]{8,200}$/;
 
-function cookieOf(request: Request, name: string): string {
+export function cookieOf(request: Request, name: string): string {
   for (const part of (request.headers.get('cookie') ?? '').split(';')) {
     const [key, ...rest] = part.trim().split('=');
-    if (key === name) return decodeURIComponent(rest.join('='));
+    if (key !== name) continue;
+    // a cookie a browser or a hand garbled reads as none, never as an error page on every visit
+    try {
+      return decodeURIComponent(rest.join('='));
+    } catch {
+      return '';
+    }
   }
   return '';
 }
 
-const secure = () => (siteEnv().siteUrl.startsWith('https://') ? '; Secure' : '');
+export const secure = () => (siteEnv().siteUrl.startsWith('https://') ? '; Secure' : '');
 
 export function sessionOf(request: Request): string {
   const token = cookieOf(request, SESSION_COOKIE);
@@ -71,18 +77,24 @@ export interface ApiAnswer<T> {
   /** the ERP's own words for a refusal (already in Persian), or a fixed sentence when it could not be reached */
   error: string;
   code: string;
+  /** the form field a validation refusal is about ('' = none) */
+  field?: string;
 }
 
 const UNREACHABLE = 'ارتباط با فروشگاه برقرار نشد؛ چند دقیقهٔ دیگر دوباره امتحان کنید.';
 
 /** One call to the ERP's account routes; never throws for a refusal, so each form can say what went wrong */
-export async function accountCall<T>(request: Request, method: 'GET' | 'POST', path: string, body?: unknown): Promise<ApiAnswer<T>> {
+export async function accountCall<T>(
+  request: Request, method: 'GET' | 'POST', path: string, body?: unknown, options: { orderKey?: string } = {},
+): Promise<ApiAnswer<T>> {
   const { apiUrl, apiKey } = siteEnv();
   const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' };
   const address = clientAddress(request);
   if (address) headers['X-Storefront-Client-IP'] = address;
   const session = sessionOf(request);
   if (session) headers['X-Buyer-Session'] = session;
+  // v11 phase 8.2: an order's tracking key goes in a header, never in the address (it stays out of access logs)
+  if (options.orderKey) headers['X-Order-Key'] = options.orderKey;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   let res: Response;
   try {
@@ -92,7 +104,7 @@ export async function accountCall<T>(request: Request, method: 'GET' | 'POST', p
   } catch {
     return { status: 503, data: null, error: UNREACHABLE, code: '' };
   }
-  let json: { data?: T; error?: unknown; message?: unknown; code?: unknown } = {};
+  let json: { data?: T; error?: unknown; message?: unknown; code?: unknown; details?: { field?: unknown } } = {};
   try {
     json = await res.json() as typeof json;
   } catch {
@@ -102,6 +114,7 @@ export async function accountCall<T>(request: Request, method: 'GET' | 'POST', p
   const said = typeof json.error === 'string' ? json.error : typeof json.message === 'string' ? json.message : '';
   return {
     status: res.status, data: null, code: typeof json.code === 'string' ? json.code : '',
+    field: typeof json.details?.field === 'string' ? json.details.field : '',
     error: res.status === 429 ? said || 'درخواست‌ها زیاد بود؛ کمی صبر کنید.' : res.status >= 500 || !said ? UNREACHABLE : said,
   };
 }

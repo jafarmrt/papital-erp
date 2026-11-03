@@ -12,7 +12,7 @@ import {
 import { STOREFRONT_QUERY_TEXT_MAX, STOREFRONT_SLUG_MAX } from '../lib/storefront/storefrontRules.js';
 import { publicBrand } from '../services/storefront/storefrontBrand.service.js';
 import { ORDER_LINES_MAX, PAYMENT_METHODS } from '../lib/storefront/storefrontOrderRules.js';
-import { claimOrder, myOrder, myOrders } from '../services/storefront/storefrontAccountOrders.service.js';
+import { claimOrder, myOrder, myOrders, sendAccountReceipt } from '../services/storefront/storefrontAccountOrders.service.js';
 import { placeOrder, quoteShipping } from '../services/storefront/storefrontOrderPlace.service.js';
 import { buyerOrder, sendReceipt } from '../services/storefront/storefrontOrderBuyer.service.js';
 import { ACCESS_KEY_MAX } from '../services/storefront/storefrontOrderKeys.js';
@@ -279,6 +279,10 @@ router.get('/account/orders', validate(accountOrdersSchema), asyncHandler(async 
 
 router.get('/account/orders/:number', validate(orderReadSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ data: await myOrder(sessionOf(req), String(req.params.number)) });
+}));
+
+router.post('/account/orders/:number/receipts', writeLimiter, validate(receiptSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.status(201).json({ data: await sendAccountReceipt(sessionOf(req), String(req.params.number), req.body) });
 }));
 
 router.post('/account/orders/claim', writeLimiter, validate(claimSchema), asyncHandler(async (req: Request, res: Response) => {

@@ -9,13 +9,15 @@ import { SiteHeader } from './components/SiteHeader';
 import { SiteFooter } from './components/SiteFooter';
 import { AnalyticsScripts, MatomoPageViews } from './components/Analytics';
 import { siteSeo } from './lib/seo.server';
+import { sessionOf } from './lib/account.server';
+import { cartCount, cartOf } from './lib/cart.server';
 
 export const links: LinksFunction = () => [
   { rel: 'preload', href: '/fonts/Vazirmatn-Regular.woff2', as: 'font', type: 'font/woff2', crossOrigin: 'anonymous' },
   { rel: 'preload', href: '/fonts/Vazirmatn-ExtraBold.woff2', as: 'font', type: 'font/woff2', crossOrigin: 'anonymous' },
 ];
 
-export async function loader() {
+export async function loader({ request }: Route.LoaderArgs) {
   const [f, settings, images, seo] = await Promise.all([facets(), publicSettings(), brand(), siteSeo()]);
   const env = siteEnv();
   return {
@@ -24,6 +26,11 @@ export async function loader() {
     shippingTitles: settings.shippingMethods.map(m => m.title),
     freeShippingThreshold: settings.freeShippingThreshold,
     whatsapp: settings.whatsapp ?? '',
+    /** v11 phase 8.2: the site takes orders, so the cart and «افزودن به سبد» show */
+    ordering: settings.ordering === true,
+    cartCount: settings.ordering === true ? cartCount(cartOf(request)) : 0,
+    /** a session cookie is there (it may have expired: /account then asks to sign in again) */
+    signedIn: sessionOf(request) !== '',
     siteUrl: env.siteUrl,
     previewNotice: env.previewNotice,
     indexable: env.indexable,
@@ -74,7 +81,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {data?.previewNotice ? (
           <p className="bg-brand px-4 py-2 text-center text-sm text-brand-foreground">{data.previewNotice}</p>
         ) : null}
-        <SiteHeader categories={data?.categories ?? []} logoUrl={data?.logoUrl ?? ''} />
+        <SiteHeader categories={data?.categories ?? []} logoUrl={data?.logoUrl ?? ''} ordering={data?.ordering ?? false} cartCount={data?.cartCount ?? 0} signedIn={data?.signedIn ?? false} />
         <main id="main" className="flex-1">{children}</main>
         <SiteFooter data={data} />
         <ScrollRestoration />

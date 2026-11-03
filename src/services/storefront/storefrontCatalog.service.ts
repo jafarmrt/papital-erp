@@ -204,6 +204,7 @@ export async function publicSettings(): Promise<StorefrontPublicSettings> {
     stockDisplay: settings.stockDisplay,
     whatsapp: settings.whatsappEnabled ? settings.whatsappNumber : '',
     smsLogin: await smsLoginOn(orm),
+    ordering: settings.enabled && settings.ordersEnabled,
     shippingMethods: methods.map(({ id: _id, version: _version, isActive: _active, sortOrder: _sort, ...method }) => method),
   };
 }

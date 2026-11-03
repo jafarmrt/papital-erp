@@ -225,5 +225,7 @@ export interface StorefrontPublicSettings {
   whatsapp: string;
   /** v11 phase 8.4b: sign-in and sign-up take an SMS code (the site's texts on with a login code template) */
   smsLogin: boolean;
+  /** v11 phase 8.2: the site takes orders («ثبت سفارش» on), so the pages offer the cart and checkout */
+  ordering: boolean;
   shippingMethods: Array<Omit<ShippingMethodInput, 'isActive' | 'sortOrder'>>;
 }

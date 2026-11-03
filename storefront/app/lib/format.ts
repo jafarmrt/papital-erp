@@ -34,3 +34,22 @@ export function tomanDigits(rial: string): string {
 export function priceUnit(rial: string): string {
   return /^\d+0$/.test(rial) || rial === '0' ? 'تومان' : 'ریال';
 }
+
+const DATE_TIME = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { timeZone: 'Asia/Tehran', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+const DAY = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { timeZone: 'Asia/Tehran', weekday: 'long', month: 'long', day: 'numeric' });
+
+/** v11 phase 8.2: a moment on the Persian calendar and Tehran's clock («۱۲ آبان ۱۴۰۵، ساعت ۱۴:۳۰»); '' for none */
+export function faDateTime(iso: string | null | undefined): string {
+  const ms = Date.parse(String(iso ?? ''));
+  return Number.isFinite(ms) ? DATE_TIME.format(ms) : '';
+}
+
+/** The days a receipt may be from, newest first: «امروز»، «دیروز»، then the weekday and date */
+export function recentDays(count: number, now = Date.now()): Array<{ value: number; label: string }> {
+  return Array.from({ length: count }, (_, i) => ({ value: i, label: i === 0 ? 'امروز' : i === 1 ? 'دیروز' : DAY.format(now - i * 86_400_000) }));
+}
+
+/** A card number or IBAN in groups of four, for reading aloud from the screen */
+export function grouped4(value: string): string {
+  return value.replace(/\s+/g, '').replace(/(.{4})(?=.)/g, '$1 ');
+}
