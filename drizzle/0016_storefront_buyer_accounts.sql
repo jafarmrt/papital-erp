@@ -40,8 +40,10 @@ CREATE TABLE IF NOT EXISTS storefront_buyer_groups (
   CONSTRAINT chk_storefront_buyer_groups_amounts CHECK (min_order_amount >= 0 AND credit_limit >= 0),
   CONSTRAINT chk_storefront_buyer_groups_min_line CHECK (min_line_quantity >= 0),
   CONSTRAINT chk_storefront_buyer_groups_flags CHECK (
-    allow_card IN (0, 1) AND allow_on_account IN (0, 1) AND accepts_discounts IN (0, 1) AND is_active IN (0, 1) AND is_deleted IN (0, 1)
+    allow_card IN (0, 1) AND allow_on_account IN (0, 1) AND accepts_discounts IN (0, 1)
   ),
+  CONSTRAINT chk_storefront_buyer_groups_is_active_flag CHECK (is_active IN (0, 1)),
+  CONSTRAINT chk_storefront_buyer_groups_is_deleted_flag CHECK (is_deleted IN (0, 1)),
   CONSTRAINT chk_storefront_buyer_groups_payment CHECK (allow_card = 1 OR allow_on_account = 1),
   CONSTRAINT chk_storefront_buyer_groups_scope CHECK (catalog_scope IN ('all', 'collections')),
   CONSTRAINT chk_storefront_buyer_groups_active_price_list CHECK (is_active = 0 OR length(price_list) > 0),
@@ -113,7 +115,7 @@ CREATE TABLE IF NOT EXISTS storefront_buyer_sessions (
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS uq_storefront_buyer_sessions_token_hash ON storefront_buyer_sessions (token_hash);
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS idx_storefront_buyer_sessions_account_id ON storefront_buyer_sessions (account_id) WHERE revoked_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_storefront_buyer_sessions_account_id ON storefront_buyer_sessions (account_id);
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS storefront_password_tokens (
   id serial PRIMARY KEY,
@@ -129,7 +131,7 @@ CREATE TABLE IF NOT EXISTS storefront_password_tokens (
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS uq_storefront_password_tokens_token_hash ON storefront_password_tokens (token_hash);
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS idx_storefront_password_tokens_account_id ON storefront_password_tokens (account_id) WHERE used_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_storefront_password_tokens_account_id ON storefront_password_tokens (account_id);
 --> statement-breakpoint
 ALTER TABLE user_notification_preferences DROP CONSTRAINT IF EXISTS chk_user_notification_preferences_category;
 --> statement-breakpoint

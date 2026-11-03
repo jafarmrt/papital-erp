@@ -214,7 +214,7 @@ export const storefrontBuyerSessions = pgTable('storefront_buyer_sessions', {
   revokedAt: timestamp('revoked_at', { withTimezone: true, mode: 'string' }),
 }, (table) => ({
   uq_storefront_buyer_sessions_token_hash: uniqueIndex('uq_storefront_buyer_sessions_token_hash').on(table.tokenHash),
-  idx_storefront_buyer_sessions_account_id: index('idx_storefront_buyer_sessions_account_id').on(table.accountId).where(sql`${table.revokedAt} IS NULL`),
+  idx_storefront_buyer_sessions_account_id: index('idx_storefront_buyer_sessions_account_id').on(table.accountId),
 }));
 
 /** A one-time set-password link a colleague made for an account; only the SHA-256 of its token is kept */
@@ -228,5 +228,5 @@ export const storefrontPasswordTokens = pgTable('storefront_password_tokens', {
   usedAt: timestamp('used_at', { withTimezone: true, mode: 'string' }),
 }, (table) => ({
   uq_storefront_password_tokens_token_hash: uniqueIndex('uq_storefront_password_tokens_token_hash').on(table.tokenHash),
-  idx_storefront_password_tokens_account_id: index('idx_storefront_password_tokens_account_id').on(table.accountId).where(sql`${table.usedAt} IS NULL`),
+  idx_storefront_password_tokens_account_id: index('idx_storefront_password_tokens_account_id').on(table.accountId),
 }));
