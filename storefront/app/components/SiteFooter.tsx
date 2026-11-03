@@ -4,11 +4,12 @@ import type { RootData } from '../root';
 import { BRAND, categoryPath, collectionPath } from '../lib/brand';
 import { formatPrice } from '../lib/format';
 import { whatsappLink } from '../lib/whatsapp';
+import { INFO_PAGES } from '../content/pages';
 
 export function SiteFooter({ data }: { data: RootData | undefined }) {
   return (
     <footer className="mt-24 border-t border-border bg-chrome text-chrome-foreground">
-      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:grid-cols-2 lg:grid-cols-4 lg:px-8">
+      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:grid-cols-2 lg:grid-cols-5 lg:px-8">
         <div>
           {data?.logoUrl
             ? <img src={data.logoUrl} alt={BRAND.fullName} loading="lazy" className="h-12 w-auto max-w-48 object-contain" />
@@ -51,6 +52,14 @@ export function SiteFooter({ data }: { data: RootData | undefined }) {
             <li>هدیهٔ سازمانی و خرید عمده با فاکتور رسمی</li>
           </ul>
         </div>
+        <nav aria-label="پاپیتال">
+          <p className="font-bold">پاپیتال</p>
+          <ul className="mt-3 space-y-1">
+            {INFO_PAGES.map(p => (
+              <li key={p.slug}><Link to={`/${p.slug}`} className="inline-flex min-h-10 items-center hover:underline">{p.title}</Link></li>
+            ))}
+          </ul>
+        </nav>
       </div>
       <p className="border-t border-border px-4 py-5 text-center text-sm opacity-75">همهٔ حقوق برای {BRAND.fullName} محفوظ است.</p>
     </footer>
