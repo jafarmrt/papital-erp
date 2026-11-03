@@ -32,7 +32,19 @@ export async function legacyRedirect(request: Request): Promise<Response | null>
     const words = (url.searchParams.get('s') ?? '').trim().slice(0, 100);
     return url.pathname === '/' && words ? redirect(withCampaign(`/products?q=${encodeURIComponent(words)}`, url.search), 301) : null;
   }
-  const kept = (await redirects()).get(key);
+  const listed = await redirects();
+  let kept = listed.get(key);
+  // a listed redirect to another listed old address is followed here, so the browser makes one hop and two rows that
+  // name each other never loop (a cycle keeps the 404)
+  const seen = new Set([key]);
+  while (kept?.kind === 'path') {
+    const next = legacyPathKey(kept.target);
+    const further = next ? listed.get(next) : undefined;
+    if (!next || !further) break;
+    if (seen.has(next) || seen.size >= 5) return null;
+    seen.add(next);
+    kept = further;
+  }
   const to = kept ? pathOf(kept) : legacyFallback(key);
   if (!to || !isSafeSitePath(to)) return null;
   // never back to the address asked for

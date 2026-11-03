@@ -89,6 +89,9 @@ async function checkedInput(tx: DbExecutor, input: StorefrontRedirectInput): Pro
   const target = input.targetKind === 'product' ? '' : input.target.trim();
   const targetProblem = redirectTargetError(input.targetKind, target);
   if (targetProblem) throw new ValidationError(targetProblem, { field: 'target' }, 'STOREFRONT_REDIRECT_TARGET_INVALID');
+  if (input.targetKind === 'path' && legacyPathKey(target) === fromPath) {
+    throw new ValidationError('نشانی مقصد همان نشانی قدیمی است.', { field: 'target' }, 'STOREFRONT_REDIRECT_TARGET_INVALID');
+  }
   const note = input.note.trim();
   if (note.length > REDIRECT_NOTE_MAX) {
     throw new ValidationError(`یادداشت حداکثر ${REDIRECT_NOTE_MAX.toLocaleString('fa-IR')} نویسه است.`, { field: 'note' }, 'STOREFRONT_REDIRECT_NOTE_TOO_LONG');
@@ -209,7 +212,7 @@ export async function deleteRedirect(req: Request, id: number, version: number):
 export async function publicRedirects(): Promise<StorefrontPublicRedirect[]> {
   const rows = await orm.select({
     from: storefrontRedirects.fromPath, kind: storefrontRedirects.targetKind, target: storefrontRedirects.target,
-    slug: storefrontProducts.slug, published: storefrontProducts.isPublished, itemDeleted: items.isDeleted,
+    slug: storefrontProducts.slug, published: storefrontProducts.isPublished, itemDeleted: items.isDeleted, itemType: items.type,
   }).from(storefrontRedirects)
     .leftJoin(items, eq(items.id, storefrontRedirects.targetItemId))
     .leftJoin(storefrontProducts, eq(storefrontProducts.itemId, storefrontRedirects.targetItemId))
@@ -219,7 +222,8 @@ export async function publicRedirects(): Promise<StorefrontPublicRedirect[]> {
   for (const r of rows) {
     const kind = r.kind as RedirectTargetKind;
     if (kind === 'product') {
-      if (r.published !== 1 || r.itemDeleted !== 0 || !r.slug) continue;
+      // the same test as the catalog's: a live product item, published on the site
+      if (r.published !== 1 || r.itemDeleted !== 0 || r.itemType !== 'product' || !r.slug) continue;
       out.push({ from: r.from, kind, target: r.slug });
     } else {
       out.push({ from: r.from, kind, target: r.target });

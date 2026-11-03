@@ -1,5 +1,5 @@
 import { normalizeSearchText } from '../../lib/search/searchText.js';
-import { legacyPathKey, type RedirectTargetKind } from '../../lib/storefront/storefrontSeoRules.js';
+import { legacyPathKey, redirectTargetError, type RedirectTargetKind } from '../../lib/storefront/storefrontSeoRules.js';
 
 /**
  * v11 phase 8.5: what one reading of the WooCommerce site becomes, without the database or the site (so it is tested on its
@@ -21,10 +21,13 @@ export interface CandidateInput {
 }
 
 /** WooCommerce sends names with HTML entities («&amp;», «&#8211;») */
+const codePoint = (whole: string, code: number) => (code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole);
+
 export function decodeEntities(text: string): string {
   return text
-    .replace(/&#(\d{1,6});/g, (_m, code: string) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([0-9a-f]{1,6});/gi, (_m, code: string) => String.fromCodePoint(parseInt(code, 16)))
+    // a number past Unicode's end is left as written: one odd name never stops a reading
+    .replace(/&#(\d{1,7});/g, (whole, code: string) => codePoint(whole, Number(code)))
+    .replace(/&#x([0-9a-f]{1,6});/gi, (whole, code: string) => codePoint(whole, parseInt(code, 16)))
     .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
 }
 
@@ -64,7 +67,8 @@ export function redirectCandidates(input: CandidateInput): { candidates: Redirec
   for (const [list, prefix, first] of [[input.categories, 'product-category', 'category'], [input.tags, 'product-tag', 'collection']] as const) {
     for (const term of list) {
       const target = term.slug ? named(term.name, first) : null;
-      if (!target) {
+      // an ERP name the redirects cannot hold (longer than a target may be) counts as unmatched, as the form would refuse it
+      if (!target || redirectTargetError(target.targetKind, target.target) || !legacyPathKey(`/${prefix}/${term.slug}`)) {
         unmatched++;
         continue;
       }

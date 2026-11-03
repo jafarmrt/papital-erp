@@ -23,6 +23,10 @@ import { decodeEntities, planRedirectImport, redirectCandidates, type WooRow } f
  */
 const PAGE_SIZE = 100;
 const MAX_PAGES = 30;
+/** rows per insert statement: far under PostgreSQL's limit of parameters in one statement */
+const INSERT_CHUNK = 500;
+/** changed rows the audit row lists one by one; the counts cover the rest */
+const AUDIT_CHANGES_MAX = 200;
 
 async function readList(conn: WcConnection, path: string, fields: string): Promise<{ rows: WooRow[]; truncated: boolean }> {
   const rows: WooRow[] = [];
@@ -93,8 +97,9 @@ export async function importWooRedirects(req: Request): Promise<StorefrontRedire
     const saved = keys.length === 0 ? [] : await tx.select().from(storefrontRedirects).where(inArray(storefrontRedirects.fromPath, keys)).for('update');
     const plan = planRedirectImport(candidates, saved);
     const user = String((req.user as { username?: string } | undefined)?.username ?? '');
-    if (plan.inserts.length > 0) {
-      await tx.insert(storefrontRedirects).values(plan.inserts.map(c => ({ ...c, source: 'woocommerce', isActive: 1, createdBy: user, updatedBy: user })));
+    for (let start = 0; start < plan.inserts.length; start += INSERT_CHUNK) {
+      await tx.insert(storefrontRedirects).values(plan.inserts.slice(start, start + INSERT_CHUNK)
+        .map(c => ({ ...c, source: 'woocommerce', isActive: 1, createdBy: user, updatedBy: user })));
     }
     for (const { row, candidate } of plan.updates) {
       await tx.update(storefrontRedirects).set({
@@ -111,7 +116,14 @@ export async function importWooRedirects(req: Request): Promise<StorefrontRedire
     await logActivity({
       req, tx, action: 'SETTING_CHANGE', entity: 'فروشگاه سایت', entityId: 'redirects-import',
       description: `نشانی‌های سایت قبلی از ووکامرس خوانده شد: ${created.toLocaleString('fa-IR')} انتقال تازه، ${updated.toLocaleString('fa-IR')} به‌روز`,
-      details: { after: result },
+      details: {
+        after: result,
+        changes: plan.updates.slice(0, AUDIT_CHANGES_MAX).map(({ row, candidate }) => ({
+          id: row.id, fromPath: row.fromPath,
+          before: { targetKind: row.targetKind, targetItemId: row.targetItemId, target: row.target },
+          after: { targetKind: candidate.targetKind, targetItemId: candidate.targetItemId, target: candidate.target },
+        })),
+      },
     });
     return result;
   });

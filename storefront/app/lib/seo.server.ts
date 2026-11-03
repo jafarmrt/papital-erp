@@ -11,9 +11,14 @@ export interface SiteSeo {
 
 /** v11 phase 8.5: what every page writes for search engines and statistics, from the ERP's settings, checked again here */
 export async function siteSeo(): Promise<SiteSeo> {
-  const settings = await seo();
-  return {
-    analytics: siteEnv().indexable ? loadableAnalytics(settings.analytics) : null,
-    verification: { google: verificationToken(settings.verification.google), bing: verificationToken(settings.verification.bing) },
-  };
+  try {
+    const settings = await seo();
+    return {
+      analytics: siteEnv().indexable ? loadableAnalytics(settings.analytics) : null,
+      verification: { google: verificationToken(settings.verification.google), bing: verificationToken(settings.verification.bing) },
+    };
+  } catch {
+    // every page and its security header need this answer: anything odd means no statistics and no codes, never a 500
+    return { analytics: null, verification: { google: '', bing: '' } };
+  }
 }

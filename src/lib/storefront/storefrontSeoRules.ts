@@ -109,8 +109,10 @@ export function legacyPathError(address: string): string | null {
  * site), and has no space or control character
  */
 export function isSafeSitePath(path: string): boolean {
-  if (!path.startsWith('/') || path.startsWith('//') || path.startsWith('/\\')) return false;
+  if (!path.startsWith('/') || path.includes('//') || path.startsWith('/\\')) return false;
   if (path.length > REDIRECT_TARGET_MAX) return false;
+  // a «.» or «..» segment (also written %2e) is resolved away by the browser, and «/..//x» would become «//x»
+  if (/(^|\/)(\.|%2e){1,2}(\/|\?|#|$)/i.test(path.split(/[?#]/)[0] + '/')) return false;
   // eslint-disable-next-line no-control-regex
   return !/[\s\u0000-\u001f\u007f\\]/.test(path);
 }

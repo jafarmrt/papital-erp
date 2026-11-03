@@ -108,6 +108,8 @@ export async function runStorefrontSeoV11Tests(shouldRun: (id: string, ...extra:
     if (twin.status !== 409 || twin.body.code !== 'STOREFRONT_REDIRECT_FROM_TAKEN') wrong.push(`the same address decoded: ${twin.status} ${twin.body.code}`);
     const offsite = await erp.post('/api/storefront/redirects', { fromPath: `/old-${tag}`, targetKind: 'path', targetItemId: null, target: '//evil.example', note: '', isActive: true });
     if (offsite.status !== 422 || offsite.body.code !== 'STOREFRONT_REDIRECT_TARGET_INVALID') wrong.push(`a redirect to another site: ${offsite.status} ${offsite.body.code}`);
+    const itself = await erp.post('/api/storefront/redirects', { fromPath: `/old-${tag}/`, targetKind: 'path', targetItemId: null, target: `/old-${tag}`, note: '', isActive: true });
+    if (itself.status !== 422 || itself.body.code !== 'STOREFRONT_REDIRECT_TARGET_INVALID') wrong.push(`a redirect to itself: ${itself.status} ${itself.body.code}`);
     const home = await erp.post('/api/storefront/redirects', { fromPath: 'https://papitalgallery.com/', targetKind: 'path', targetItemId: null, target: '/products', note: '', isActive: true });
     if (home.status !== 422 || home.body.code !== 'STOREFRONT_REDIRECT_FROM_INVALID') wrong.push(`the home page as an old address: ${home.status} ${home.body.code}`);
     const fromOf = (list: Body[]) => list.find(r => r.from === `/product/${persian}`);

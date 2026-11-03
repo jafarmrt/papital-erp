@@ -25,7 +25,7 @@ describe('legacyPathKey', () => {
     ];
     for (const form of forms) expect(legacyPathKey(form)).toBe(`/product/${slug}`);
   });
-  it('reads Arabic «ي» and «ك» as Persian, and upper-case Latin as lower-case', () => {
+  it('reads the Arabic letters yeh and kaf as their Persian forms, and upper-case Latin as lower-case', () => {
     expect(legacyPathKey('/product/كاشي-ABC')).toBe('/product/کاشی-abc');
   });
   it('keeps of the query only what WordPress finds a page by', () => {
@@ -55,7 +55,10 @@ describe('legacyPathKey', () => {
 describe('targets', () => {
   it('sends only to a path of this site', () => {
     for (const safe of ['/products', '/p/earring-1', '/collections/%DB%8C%D9%84%D8%AF%D8%A7', '/products?q=a']) expect(isSafeSitePath(safe)).toBe(true);
-    for (const unsafe of ['//evil.example', '/\\evil.example', 'https://evil.example', 'products', '/a b', '/a\nb']) expect(isSafeSitePath(unsafe)).toBe(false);
+    for (const unsafe of ['//evil.example', '/\\evil.example', 'https://evil.example', 'products', '/a b', '/a\nb', '/..//evil.example', '/p/../..//x', '/a/./b', '/%2e%2e/x', '/a/..', '/a//b']) {
+      expect(isSafeSitePath(unsafe)).toBe(false);
+    }
+    expect(isSafeSitePath('/p/a..b')).toBe(true);
     expect(redirectTargetError('path', '//evil.example')).not.toBeNull();
     expect(redirectTargetError('collection', '')).not.toBeNull();
     expect(redirectTargetError('collection', 'یلدا')).toBeNull();
@@ -128,6 +131,15 @@ describe('a reading of the WooCommerce site', () => {
     expect(byKey['/product/not-linked']).toBeUndefined();
     // the unlinked product and the unknown category
     expect(unmatched).toBe(2);
+  });
+  it('never stops on an odd name: a number past Unicode stays as written, a name too long for a target is unmatched', () => {
+    expect(decodeEntities('a&#x110000;b&#9999999;&#8211;')).toBe('a&#x110000;b&#9999999;\u2013');
+    const long = 'n'.repeat(400);
+    const { candidates, unmatched } = redirectCandidates({
+      ...input, products: [], tags: [], categories: [{ id: 9, slug: 'long', permalink: '', name: long }], categoryNames: new Map([[long, long]]),
+    });
+    expect(candidates).toEqual([]);
+    expect(unmatched).toBe(1);
   });
   it('never changes or brings back a row made, edited or removed by hand, and brings its own rows in line', () => {
     const { candidates } = redirectCandidates(input);

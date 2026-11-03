@@ -220,6 +220,11 @@ describe('old addresses of the WooCommerce site (phase 8.5)', () => {
     expect((await visit('/about-us/')).headers.get('location')).toBe('/about');
   });
 
+  it('follows a redirect to another old address in one hop, and never loops', async () => {
+    expect((await visit('/our-story')).headers.get('location')).toBe('/about');
+    expect((await visit('/loop-a')).status).toBe(404);
+  });
+
   it('guesses for a WooCommerce address no redirect names, only for a while, and leaves the rest a 404', async () => {
     const unknown = await visit(`/product/${encodeURIComponent('دستبند-فیروزه')}/`);
     expect(unknown.status).toBe(302);

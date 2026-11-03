@@ -110,14 +110,30 @@ export async function brand(): Promise<StorefrontPublicBrand> {
 
 const NO_SEO: StorefrontPublicSeo = { verification: { google: '', bing: '' }, analytics: { provider: 'none', id: '', url: '' }, alternateSiteUrl: '' };
 
-/** v11 phase 8.5: verification codes, the statistics service and the other-language site; unreadable = none of them, never a down shop */
+const SEO_FAILURE_TTL_MS = 30_000;
+let seoFailedAt = 0;
+
+const isSeo = (value: unknown): value is StorefrontPublicSeo => {
+  const v = value as Partial<StorefrontPublicSeo> | null;
+  return Boolean(v && typeof v === 'object' && v.verification && typeof v.verification === 'object'
+    && v.analytics && typeof v.analytics === 'object' && typeof v.alternateSiteUrl === 'string');
+};
+
+/**
+ * v11 phase 8.5: verification codes, the statistics service and the other-language site. Every page reads it, so any
+ * failure (the ERP down, an answer in another shape) means none of them, never a down shop, and a failure is remembered
+ * a little while so pages do not wait on a slow ERP again and again.
+ */
 export async function seo(): Promise<StorefrontPublicSeo> {
+  if (Date.now() - seoFailedAt < SEO_FAILURE_TTL_MS) return NO_SEO;
   try {
-    return (await get<{ data: StorefrontPublicSeo }>('/seo', SETTINGS_TTL_MS)).data;
-  } catch (error) {
-    if (error instanceof StorefrontApiError) return NO_SEO;
-    throw error;
+    const data = (await get<{ data: unknown }>('/seo', SETTINGS_TTL_MS)).data;
+    if (isSeo(data)) return data;
+  } catch {
+    // falls through to none
   }
+  seoFailedAt = Date.now();
+  return NO_SEO;
 }
 
 const REDIRECTS_TTL_MS = 300_000;
