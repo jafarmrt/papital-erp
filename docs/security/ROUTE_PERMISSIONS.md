@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 505
+تعداد مسیرها: 529
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -71,6 +71,9 @@
 | GET | `/api/accounting/treasury/:id/document-options` | accounting.treasury |
 | GET | `/api/accounting/treasury/:id/petty-cash-lines` | accounting.treasury \| accounting.reports \| accounting.view |
 | POST | `/api/accounting/treasury/:id/void` | accounting.treasury |
+| GET | `/api/accounting/treasury/colleague-expenses` | accounting.treasury |
+| POST | `/api/accounting/treasury/colleague-expenses` | accounting.treasury |
+| POST | `/api/accounting/treasury/colleague-expenses/:id/void` | accounting.treasury |
 | GET | `/api/accounting/treasury/contra-accounts` | accounting.treasury \| accounting.cheques |
 | POST | `/api/accounting/treasury/history-import` | accounting.history_import |
 | POST | `/api/accounting/treasury/petty-cash/:id/expenses` | accounting.treasury |
@@ -235,6 +238,8 @@
 | GET | `/api/health/live` | public |
 | GET | `/api/health/ready` | public |
 | GET | `/api/health/startup` | public |
+| POST | `/api/history-import/close` | admin |
+| GET | `/api/history-import/status` | login-only |
 | GET | `/api/inventory/3way-integrity` | warehouse.view \| inventory.reconcile \| audit.view |
 | GET | `/api/inventory/allocations` | warehouse.view \| projects.view |
 | POST | `/api/inventory/allocations/:id/consume` | inventory.reconcile \| projects.edit |
@@ -242,6 +247,8 @@
 | POST | `/api/inventory/allocations/allocate` | warehouse.out |
 | POST | `/api/inventory/correct-wac` | inventory.wac_correct |
 | POST | `/api/inventory/history-import` | warehouse.history_import |
+| GET | `/api/inventory/history-import/old-openings` | warehouse.history_import |
+| POST | `/api/inventory/history-import/old-openings/withdraw` | warehouse.history_import & warehouse.in |
 | GET | `/api/inventory/integrity-audit` | warehouse.view \| inventory.reconcile \| audit.view |
 | GET | `/api/inventory/item-kardex/:itemId` | warehouse.view \| accounting.view |
 | POST | `/api/inventory/kardex-initial-backfill` | inventory.reconcile |
@@ -399,8 +406,11 @@
 | DELETE | `/api/projects/:id/stages/:stageId` | projects.edit |
 | PUT | `/api/projects/:id/stages/:stageId` | projects.edit |
 | GET | `/api/projects/:id/steps` | projects.view \| warehouse.view |
-| GET | `/api/projects/options` | projects.view \| documents.view \| documents.create \| documents.finalize \| warehouse.view \| warehouse.in \| warehouse.out \| piecework.view \| piecework.log \| daily_logs.view \| daily_logs.create \| accounting.vouchers \| reports.sales |
+| GET | `/api/projects/options` | projects.view \| documents.view \| documents.create \| documents.finalize \| warehouse.view \| warehouse.in \| warehouse.out \| piecework.view \| piecework.log \| daily_logs.view \| daily_logs.create \| accounting.vouchers \| reports.sales \| accounting.treasury |
 | GET | `/api/public-settings` | public |
+| GET | `/api/record-attachments/:entityType/:id` | documents.view \| documents.create \| documents.edit \| workflow.view \| accounting.treasury \| accounting.reports \| accounting.view \| accounting.cheques \| accounting.vouchers |
+| POST | `/api/record-attachments/:entityType/:id` | documents.edit \| documents.create \| documents.finalize \| warehouse.in \| warehouse.out \| warehouse.transfer \| warehouse.production_receipt \| accounting.treasury \| accounting.cheques \| accounting.vouchers |
+| DELETE | `/api/record-attachments/:entityType/:id/:attachmentId` | documents.edit \| documents.create \| documents.finalize \| warehouse.in \| warehouse.out \| warehouse.transfer \| warehouse.production_receipt \| accounting.treasury \| accounting.cheques \| accounting.vouchers |
 | GET | `/api/reports/aging` | accounting.reports |
 | GET | `/api/reports/dashboard-summary` | reports.sales \| accounting.reports |
 | GET | `/api/reports/purchases` | reports.purchases |
@@ -423,6 +433,20 @@
 | GET | `/api/social/whats-new` | login-only |
 | POST | `/api/social/whats-new/dismiss` | login-only |
 | GET | `/api/stats` | reports.view \| warehouse.view |
+| POST | `/api/storefront/api-key` | storefront.manage |
+| GET | `/api/storefront/products` | storefront.view |
+| PUT | `/api/storefront/products/:itemId` | storefront.manage |
+| GET | `/api/storefront/settings` | storefront.view |
+| PUT | `/api/storefront/settings` | storefront.manage |
+| GET | `/api/storefront/shipping-methods` | storefront.view |
+| POST | `/api/storefront/shipping-methods` | storefront.manage |
+| DELETE | `/api/storefront/shipping-methods/:id` | storefront.manage |
+| PUT | `/api/storefront/shipping-methods/:id` | storefront.manage |
+| GET | `/api/storefront/v1/facets` | public |
+| GET | `/api/storefront/v1/media/:file` | public |
+| GET | `/api/storefront/v1/products` | public |
+| GET | `/api/storefront/v1/products/:slug` | public |
+| GET | `/api/storefront/v1/settings` | public |
 | GET | `/api/system/business-date` | login-only |
 | GET | `/api/system/conditional-constraints` | admin |
 | POST | `/api/system/conditional-constraints/build` | admin |

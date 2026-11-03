@@ -174,6 +174,11 @@ describe('package_boundary_ratchet: server imports follow the package direction 
     expect(importAllowed('14', '8')).toBe(false);
     expect(importAllowed('8', '9')).toBe(false);
     expect(importAllowed('3', '4')).toBe(false);
+    // v11 phase 8.1: the storefront reads every domain, and no domain reads the storefront
+    expect(importAllowed('18', '15')).toBe(true);
+    expect(importAllowed('18', '5')).toBe(true);
+    expect(importAllowed('15', '18')).toBe(false);
+    expect(importAllowed('16', '18')).toBe(false);
   });
 
   it('reads runtime imports, re-exports and dynamic imports, not type-only imports or packages', () => {

@@ -26,6 +26,9 @@ export const PUBLIC_ROUTES = new Set([
   // v11 phase 6.5 (D-04 part D, decision ت۴۶): the shop downloads an item's cover from a signed address that lives 15
   // minutes; limited per address, and every refusal is the same 404
   'GET /api/woocommerce/shop-image/:file',
+  // v11 phase 8.1: the Storefront API takes no session; every route checks the site app's key (`requireStorefrontKey`,
+  // a missing or wrong key is 401) and is limited per address
+  ...['settings', 'products', 'products/:slug', 'facets', 'media/:file'].map(path => `GET /api/storefront/v1/${path}`),
 ]);
 
 /**
