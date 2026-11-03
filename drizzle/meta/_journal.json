@@ -141,6 +141,13 @@
       "when": 1797494400000,
       "tag": "0019_storefront_phone_verified",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1797580800000,
+      "tag": "0020_storefront_order_accounts",
+      "breakpoints": true
     }
   ]
 }

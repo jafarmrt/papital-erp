@@ -11,7 +11,8 @@ import {
 } from '../services/storefront/storefrontCatalog.service.js';
 import { STOREFRONT_QUERY_TEXT_MAX, STOREFRONT_SLUG_MAX } from '../lib/storefront/storefrontRules.js';
 import { publicBrand } from '../services/storefront/storefrontBrand.service.js';
-import { ORDER_LINES_MAX } from '../lib/storefront/storefrontOrderRules.js';
+import { ORDER_LINES_MAX, PAYMENT_METHODS } from '../lib/storefront/storefrontOrderRules.js';
+import { claimOrder, myOrder, myOrders } from '../services/storefront/storefrontAccountOrders.service.js';
 import { placeOrder, quoteShipping } from '../services/storefront/storefrontOrderPlace.service.js';
 import { buyerOrder, sendReceipt } from '../services/storefront/storefrontOrderBuyer.service.js';
 import { ACCESS_KEY_MAX } from '../services/storefront/storefrontOrderKeys.js';
@@ -77,6 +78,8 @@ const writeLimiter = rateLimit({
   validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
 });
 const orderKeyOf = (req: Request): string => String(req.headers['x-order-key'] ?? '').trim().slice(0, ACCESS_KEY_MAX + 1);
+/** v11 phase 8.2b: a signed-in buyer's session token (the app keeps it in an httpOnly cookie and forwards it) */
+const sessionOf = (req: Request): string => String(req.headers['x-buyer-session'] ?? '').trim().slice(0, BUYER_TOKEN_MAX + 1);
 
 const cartLine = z.object({ slug: z.string().min(1).max(STOREFRONT_SLUG_MAX), quantity: z.number().int() }).strict();
 const cartLines = z.array(cartLine).min(1).max(ORDER_LINES_MAX);
@@ -85,7 +88,7 @@ const orderSchema = z.object({
   body: z.object({
     requestKey: z.string().max(80), recipientName: z.string().max(200), phone: z.string().max(40), province: z.string().max(60),
     city: z.string().max(120), address: z.string().max(800), postalCode: z.string().max(40), note: z.string().max(1000),
-    shippingMethod: z.string().max(60), lines: cartLines,
+    shippingMethod: z.string().max(60), lines: cartLines, paymentMethod: z.enum(PAYMENT_METHODS).optional(),
   }).strict(),
 });
 const orderNumberParams = z.object({ number: z.string().min(1).max(20) }).passthrough();
@@ -158,11 +161,11 @@ router.get('/media/:file', validate(mediaSchema), asyncHandler(async (req: Reque
 }));
 
 router.post('/shipping/quote', writeLimiter, validate(quoteSchema), asyncHandler(async (req: Request, res: Response) => {
-  res.json({ data: await quoteShipping(req.body) });
+  res.json({ data: await quoteShipping(req.body, sessionOf(req)) });
 }));
 
 router.post('/orders', writeLimiter, validate(orderSchema), asyncHandler(async (req: Request, res: Response) => {
-  res.status(201).json({ data: await placeOrder(req.body) });
+  res.status(201).json({ data: await placeOrder(req.body, sessionOf(req)) });
 }));
 
 router.get('/orders/:number', validate(orderReadSchema), asyncHandler(async (req: Request, res: Response) => {
@@ -213,7 +216,6 @@ const authLimiter = rateLimit({
   keyGenerator: (req) => `storefront-auth:${ipKeyGenerator(buyerAddress(req))}`,
   validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
 });
-const sessionOf = (req: Request): string => String(req.headers['x-buyer-session'] ?? '').trim().slice(0, BUYER_TOKEN_MAX + 1);
 const password = z.string().max(PASSWORD_MAX * 2);
 // 8.4b: the phone proof of `POST /auth/otp/verify`, needed while the site signs in by SMS
 const phoneProof = z.string().max(PHONE_PROOF_MAX + 1);
@@ -259,6 +261,28 @@ router.get('/account', asyncHandler(async (req: Request, res: Response) => {
 
 router.get('/account/prices', asyncHandler(async (req: Request, res: Response) => {
   res.json({ data: await myGroupPrices(sessionOf(req)) });
+}));
+
+// v11 phase 8.2b part 2: the account's own orders, and a guest order joining it with its tracking key
+const accountOrdersSchema = z.object({
+  query: z.object({
+    page: z.string().regex(/^[1-9]\d{0,5}$/).transform(Number).optional(),
+    limit: z.string().regex(/^[1-9]\d{0,2}$/).transform(Number).optional(),
+  }).strict(),
+});
+const claimSchema = z.object({ body: z.object({ number: z.string().max(20), accessKey: z.string().max(ACCESS_KEY_MAX + 1) }).strict() });
+
+router.get('/account/orders', validate(accountOrdersSchema), asyncHandler(async (req: Request, res: Response) => {
+  const query = req.query as { page?: number; limit?: number };
+  res.json({ data: await myOrders(sessionOf(req), { page: query.page ?? 1, limit: query.limit ?? 20 }) });
+}));
+
+router.get('/account/orders/:number', validate(orderReadSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await myOrder(sessionOf(req), String(req.params.number)) });
+}));
+
+router.post('/account/orders/claim', writeLimiter, validate(claimSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await claimOrder(sessionOf(req), req.body) });
 }));
 
 export default router;
