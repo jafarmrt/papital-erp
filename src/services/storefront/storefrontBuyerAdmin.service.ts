@@ -39,7 +39,7 @@ function rowOf({ account, groupTitle, customerName }: Joined): BuyerAccountRow {
     status: isBuyerAccountStatus(account.status) ? account.status : 'suspended',
     applicationStatus: isApplicationStatus(account.applicationStatus) ? account.applicationStatus : 'none',
     groupId: account.groupId, groupTitle: groupTitle ?? '', customerId: account.customerId, customerName: customerName ?? '',
-    hasPassword: Boolean(account.passwordHash), appliedAt: account.appliedAt, createdAt: account.createdAt, version: account.version,
+    hasPassword: Boolean(account.passwordHash), phoneVerified: Boolean(account.phoneVerifiedAt), appliedAt: account.appliedAt, createdAt: account.createdAt, version: account.version,
   };
 }
 
@@ -152,11 +152,13 @@ export async function approveBuyer(req: Request, id: number, input: ApproveBuyer
     const group = await groupForApproval(tx, input.groupId);
     const customer = await customerForApproval(tx, account, input.customerId);
     const now = systemNowUtcIso();
+    // 8.4b: an SMS-proven phone keeps its password and sessions; an unproven one may not be the buyer the colleague spoke to
+    const proven = Boolean(account.phoneVerifiedAt);
     await tx.update(storefrontBuyerAccounts).set({
-      groupId: group.id, customerId: customer.id, applicationStatus: 'approved', status: 'active', passwordHash: '', failedLogins: 0,
+      groupId: group.id, customerId: customer.id, applicationStatus: 'approved', status: 'active', ...(proven ? {} : { passwordHash: '' }), failedLogins: 0,
       lockedUntil: null, reviewedBy: actor, reviewedAt: now, updatedAt: now, updatedBy: actor, version: nextVersion(account.version),
     }).where(eq(storefrontBuyerAccounts.id, id));
-    await revokeSessions(tx, id);
+    if (!proven) await revokeSessions(tx, id);
     const issued = await issuePasswordLink(tx, id, actor);
     await logActivity({
       req, tx, action: 'UPDATE', entity: 'حساب خریدار سایت', entityId: id,

@@ -16,8 +16,10 @@ import { createNotifications } from '../notifications/notificationCreator.js';
 import { permissionHolderUserIdsWith } from '../notifications/notificationRecipients.js';
 import { STOREFRONT_BOT_USER } from './storefrontCustomer.js';
 import {
-  accountByPhoneKey, accountExists, accountFieldError, accountView, assertAccountsOpen, lockPhone, sessionAccount,
+  accountByPhoneKey, accountExists, accountFieldError, accountView, assertAccountsOpen, lockPhone, phoneProofInvalid, provenPhoneAt,
+  sessionAccount,
 } from './storefrontBuyerAuth.service.js';
+import { smsLoginOn } from './storefrontSmsSettings.service.js';
 
 /**
  * v11 phase 8.2b (start plan §6): the «خرید عمده» form of the site. Without a session it makes a new account in
@@ -77,6 +79,9 @@ export async function applyForWholesale(input: WholesaleApplyRequest, rawSession
   await assertAccountsOpen(orm);
   const form = cleanApplication(input);
   const signedIn = await sessionAccount(orm, rawSession);
+  // 8.4b: a form without a session makes an account for its phone, so the phone is proven first while SMS is on
+  const proofNeeded = !signedIn && await smsLoginOn(orm);
+  if (proofNeeded && !input.phoneProof) throw phoneProofInvalid();
   const phoneKey = phoneMatchKey(signedIn ? signedIn.phone : form.phone);
   const fields = {
     companyName: form.companyName, nationalId: form.nationalId, economicCode: form.economicCode, applicationNote: form.note,
@@ -99,8 +104,9 @@ export async function applyForWholesale(input: WholesaleApplyRequest, rawSession
       accountId = existing.id;
     } else {
       if (existing) throw accountExists();
+      const phoneVerifiedAt = await provenPhoneAt(tx, form.phone, input.phoneProof, proofNeeded);
       const [created] = await tx.insert(storefrontBuyerAccounts).values({
-        ...fields, name: form.name, phone: form.phone, phoneKey, city: form.city, status: 'pending',
+        ...fields, name: form.name, phone: form.phone, phoneKey, city: form.city, status: 'pending', phoneVerifiedAt,
       }).returning({ id: storefrontBuyerAccounts.id });
       accountId = created.id;
     }

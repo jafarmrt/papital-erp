@@ -192,6 +192,8 @@ export const storefrontBuyerAccounts = pgTable('storefront_buyer_accounts', {
   failedLogins: integer('failed_logins').notNull().default(0),
   lockedUntil: timestamp('locked_until', { withTimezone: true, mode: 'string' }),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true, mode: 'string' }),
+  /** v11 phase 8.4b: when an SMS code proved the phone; null = not proven */
+  phoneVerifiedAt: timestamp('phone_verified_at', { withTimezone: true, mode: 'string' }),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedBy: text('updated_by').notNull().default(''),

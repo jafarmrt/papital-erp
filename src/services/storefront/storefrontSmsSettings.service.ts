@@ -87,6 +87,11 @@ export function activeTemplate(settings: SmsRuntimeSettings, kind: SmsKind): str
   return settings.templates[kind] ?? null;
 }
 
+/** v11 phase 8.4b: whether the site signs buyers in by SMS now (its texts on with a login code template) */
+export async function smsLoginOn(executor: DbExecutor): Promise<boolean> {
+  return activeTemplate(await smsRuntimeSettings(executor), 'otp') !== null;
+}
+
 export async function readSmsSettings(executor: DbExecutor): Promise<StorefrontSmsSettingsView> {
   const stored = await readStored(executor);
   const runtime = runtimeOf(stored);
