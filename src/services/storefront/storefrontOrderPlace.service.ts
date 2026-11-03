@@ -158,7 +158,7 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
 
   const [{ value: sequence }] = (await tx.execute(sql`SELECT nextval('storefront_order_number_seq')::text AS value`)).rows as Array<{ value: string }>;
   const orderNumber = String(sequence);
-  const customer = await resolveSiteCustomer(tx, orderNumber, { name: order.recipientName, phone: order.phone, city: order.city, address: order.address });
+  const customer = await resolveSiteCustomer(tx, `سفارش سایت ${orderNumber}`, { name: order.recipientName, phone: order.phone, city: order.city, address: order.address });
   const fullAddress = `${order.province}، ${order.city}، ${order.address}، کد پستی ${order.postalCode}`;
   const documentId = await DocumentService.createDocument({
     docType: 'invoice', status: 'proforma', inOut: 'out', user: STOREFRONT_BOT_USER,

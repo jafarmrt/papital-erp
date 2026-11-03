@@ -103,6 +103,9 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   { table: 'storefront_products', group: 'settings' },
   { table: 'storefront_shipping_methods', group: 'settings' },
   { table: 'storefront_shipping_rates', group: 'settings' },
+  // v11 phase 8.2b: the site's buyer groups (price policies) and buyer accounts
+  { table: 'storefront_buyer_groups', group: 'settings' },
+  { table: 'storefront_buyer_accounts', group: 'customers' },
 ];
 
 /** Exported only on request, for a business-day range */
@@ -126,6 +129,8 @@ export const DATA_EXPORT_EXCLUDED_TABLES: Readonly<Record<string, string>> = {
   user_messenger_links: 'شناسه گفت‌وگوی پیام‌رسان همکاران را دارد',
   messenger_link_codes: 'کدهای موقت اتصال به پیام‌رسان',
   user_sessions: 'نشست‌های ورود دستگاه‌ها، نشانی IP و شناسه نشست را دارد',
+  storefront_buyer_sessions: 'نشست‌های ورود خریداران سایت که با ورود دوباره ساخته می‌شوند',
+  storefront_password_tokens: 'پیوندهای یک‌بارمصرف و کوتاه‌عمر تعیین رمز خریداران سایت',
   user_notification_preferences: 'انتخاب‌های شخصی همکاران برای اعلان در پیام‌رسان',
   event_action_rule_retirements: 'پیکربندی قاعده‌های بازنشسته که ممکن است کلید داشته باشد',
   webhook_event_pattern_repairs: 'سابقه تبدیل یک‌باره الگوی رویداد اشتراک‌های وبهوک',

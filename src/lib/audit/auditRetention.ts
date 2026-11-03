@@ -120,7 +120,9 @@ export const CRITICAL_AUDIT_ENTITIES = [
   // v11 phase 8.1: the new site's card, IBAN, key, delivery methods and published items are never purged from the log
   'فروشگاه سایت',
   // v11 phase 8.2a: a site order, its receipts and their review are never purged from the log
-  'سفارش سایت'
+  'سفارش سایت',
+  // v11 phase 8.2b: a site buyer account, its approval, suspension and set-password links are never purged from the log
+  'حساب خریدار سایت'
 ] as const;
 
 /**
