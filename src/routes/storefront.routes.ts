@@ -19,7 +19,7 @@ import {
 } from '../services/storefront/storefrontShipping.service.js';
 import { STOREFRONT_PAGE_MAX, listStorefrontProducts, saveStorefrontProduct } from '../services/storefront/storefrontProducts.service.js';
 import {
-  ADMIN_ORDER_PAGE_MAX, cancelOrder, confirmPayment, fulfilOrder, listOrders, orderDetail, receiptImage, rejectReceipt,
+  ADMIN_ORDER_PAGE_MAX, approveOnAccount, cancelOrder, confirmPayment, fulfilOrder, listOrders, orderDetail, receiptImage, rejectReceipt,
 } from '../services/storefront/storefrontOrderAdmin.service.js';
 import { ORDER_STATUSES, REJECT_REASON_MAX, TRACKING_CODE_MAX, type OrderStatus } from '../lib/storefront/storefrontOrderRules.js';
 import { BUYER_LIST_FILTERS, CATALOG_SCOPES, GROUP_COLLECTIONS_MAX, type BuyerListFilter } from '../lib/storefront/storefrontBuyerRules.js';
@@ -190,6 +190,11 @@ router.get('/orders/:id/receipts/:receiptId/image', requirePermission(STOREFRONT
 
 router.post('/orders/:id/confirm', requirePermission(STOREFRONT_ORDERS_MANAGE_PERMISSION), idempotency({ scope: 'storefront_orders' }), validate(confirmSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: await confirmPayment(req, Number(req.params.id), req.body) });
+}));
+
+// v11 phase 8.2b part 2: «تأیید سفارش به حساب» (the finalize key is checked in the service)
+router.post('/orders/:id/approve-on-account', requirePermission(STOREFRONT_ORDERS_MANAGE_PERMISSION), idempotency({ scope: 'storefront_orders' }), validate(cancelSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await approveOnAccount(req, Number(req.params.id), req.body) });
 }));
 
 router.post('/orders/:id/reject-receipt', requirePermission(STOREFRONT_ORDERS_MANAGE_PERMISSION), idempotency({ scope: 'storefront_orders' }), validate(rejectSchema), asyncHandler(async (req: Request, res: Response) => {

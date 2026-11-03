@@ -36,7 +36,7 @@ import {
 const LAST_SEEN_STEP_MS = 10 * 60_000;
 
 export type AccountRecord = typeof storefrontBuyerAccounts.$inferSelect;
-type GroupRecord = typeof storefrontBuyerGroups.$inferSelect;
+export type GroupRecord = typeof storefrontBuyerGroups.$inferSelect;
 
 export const accountFieldError = (field: string, message: string) => new ValidationError(message, { field }, 'STOREFRONT_ACCOUNT_FIELD_INVALID');
 const wrongSignIn = () => new AppError('شمارهٔ همراه یا رمز درست نیست.', 401, 'STOREFRONT_SIGN_IN_FAILED');

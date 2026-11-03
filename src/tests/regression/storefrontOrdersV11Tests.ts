@@ -145,7 +145,7 @@ export async function runStorefrontOrdersV11Tests(shouldRun: (id: string, ...ext
     }
     // the security review's contract: exactly these fields reach the buyer
     const keys = (value: Body) => Object.keys(value).sort().join(',');
-    const expectedOrder = 'cancelReason,cancelReasonTitle,canSendReceipt,createdAt,itemsAmount,lines,note,number,payBefore,payableAmount,payableToman,payment,receipts,recipient,shipping,status,statusTitle,trackingCode';
+    const expectedOrder = 'cancelReason,cancelReasonTitle,canSendReceipt,createdAt,itemsAmount,lines,note,number,payBefore,payableAmount,payableToman,payment,paymentMethod,paymentMethodTitle,receipts,recipient,shipping,status,statusTitle,trackingCode,wholesale';
     if (keys(order1) !== expectedOrder.split(',').sort().join(',')) wrong.push(`buyer order fields: ${keys(order1)}`);
     if (keys(order1.lines[0] ?? {}) !== 'lineAmount,name,quantity,sku,slug,unitPrice') wrong.push(`buyer line fields: ${keys(order1.lines[0] ?? {})}`);
     if (keys(placed.body.data) !== 'accessKey,order') wrong.push(`placed fields: ${keys(placed.body.data)}`);

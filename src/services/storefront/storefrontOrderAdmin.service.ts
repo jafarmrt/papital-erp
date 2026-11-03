@@ -20,7 +20,7 @@ import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { documentAuditDetails } from '../documents/documentAudit.js';
 import { DocumentService } from '../document.service.js';
 import { TreasuryTransactionService } from '../accounting/treasury/treasuryTransaction.service.js';
-import { adminOrderView, type OrderRecord } from './storefrontOrderView.js';
+import { adminOrderView, paymentMethodOf, type OrderRecord } from './storefrontOrderView.js';
 import { receiptImageFile } from './storefrontReceiptImage.js';
 import { rialText } from './storefrontShipping.service.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
@@ -36,6 +36,7 @@ import { queueOrderSms } from './storefrontSms.service.js';
  *   finalize permissions, since it moves money and stock.
  * - reject: the receipt gets its reason and the order waits for payment again with a fresh reservation window.
  * - cancel: the proforma is voided (its reservation released) through the documents service.
+ * - approve on account (8.2b part 2): an on-account order's proforma becomes the invoice, with no treasury row.
  * - fulfil: «ارسال‌شده» with the post's tracking code, then «تحویل‌شده».
  */
 export const ADMIN_ORDER_PAGE_MAX = 100;
@@ -72,6 +73,7 @@ export async function listOrders(query: AdminOrderQuery): Promise<AdminOrderPage
     id: storefrontOrders.id, number: storefrontOrders.orderNumber, createdAt: storefrontOrders.createdAt,
     recipientName: storefrontOrders.recipientName, phone: storefrontOrders.phone, city: storefrontOrders.city, status: storefrontOrders.status,
     payableAmount: storefrontOrders.payableAmount, reserveUntil: storefrontOrders.reserveUntil,
+    paymentMethod: storefrontOrders.paymentMethod,
     hasPendingReceipt: sql<boolean>`EXISTS (SELECT 1 FROM storefront_payment_receipts r WHERE r.order_id = ${storefrontOrders.id} AND r.status = 'pending')`,
   }).from(storefrontOrders).where(where)
     .orderBy(desc(storefrontOrders.createdAt), desc(storefrontOrders.id))
@@ -82,7 +84,8 @@ export async function listOrders(query: AdminOrderQuery): Promise<AdminOrderPage
       return {
         id: r.id, number: r.number, createdAt: r.createdAt, recipientName: r.recipientName, phone: r.phone, city: r.city, status,
         payableAmount: rialText(r.payableAmount), hasPendingReceipt: Boolean(r.hasPendingReceipt),
-        payBefore: status === 'awaiting_payment' ? r.reserveUntil : null,
+        payBefore: status === 'awaiting_payment' || status === 'awaiting_approval' ? r.reserveUntil : null,
+        paymentMethod: paymentMethodOf(r),
       };
     }),
     total, page, limit,
@@ -190,6 +193,44 @@ export async function confirmPayment(req: Request, id: number, input: { receiptI
   });
 }
 
+/**
+ * v11 phase 8.2b part 2 (start plan §6): «تأیید سفارش به حساب». An on-account order needs no receipt: the colleague,
+ * having looked at the customer's balance and the group's credit limit in the ERP, turns its proforma into the invoice
+ * on the customer's account (stock out of the site's warehouse, the draft voucher), in one transaction. No treasury row
+ * is made, so only the finalize permission is needed besides `site_orders.manage`. The balance never goes to the site.
+ */
+export async function approveOnAccount(req: Request, id: number, input: { version: number }): Promise<AdminOrderDetail> {
+  if (!(await userHasRoleOrPermission(req.user, 'documents.finalize'))) {
+    throw new ForbiddenError('تأیید سفارش به حساب فاکتور را قطعی می‌کند؛ مجوز قطعی کردن سند هم لازم است.', undefined, 'STOREFRONT_CONFIRM_FORBIDDEN');
+  }
+  const actor = actorOf(req);
+  return orm.transaction(async (tx) => {
+    const order = await lockedOrder(tx, id, input.version);
+    if (order.status !== 'awaiting_approval' || paymentMethodOf(order) !== 'on_account') {
+      throw new ConflictError('این سفارش در انتظار تأیید به حساب نیست.', undefined, 'STOREFRONT_ORDER_NOT_OPEN');
+    }
+    const lines = await tx.select({ itemId: documentItems.itemId }).from(documentItems)
+      .where(and(eq(documentItems.documentId, order.documentId), eq(documentItems.isDeleted, 0)));
+    await lockStockItems(tx, lines.map(l => l.itemId));
+    await assertLiveProforma(tx, order);
+    const change = await DocumentService.finalizeDocument(order.documentId, actor.username, tx);
+    if (change) {
+      await logActivity({
+        req, tx, action: 'UPDATE', entity: 'اسناد انبار', entityId: order.documentId,
+        description: `نهایی‌سازی پیش‌فاکتور سفارش سایت ${order.orderNumber} با تأیید سفارش به حساب (فاکتور "${change.after?.refNumber ?? order.documentId}")`,
+        details: documentAuditDetails(change.before, change.after),
+      });
+    }
+    const updated = await moveOrder(tx, order, actor.username, { status: 'confirmed', confirmedAt: systemNowUtcIso() });
+    await logActivity({
+      req, tx, action: 'UPDATE', entity: 'سفارش سایت', entityId: order.id,
+      description: `سفارش سایت ${order.orderNumber} به حساب تأیید شد`,
+      details: { before: { status: order.status }, after: { status: 'confirmed', paymentMethod: 'on_account', payable: rialText(order.payableAmount) } },
+    });
+    return adminOrderView(tx, updated);
+  });
+}
+
 export async function rejectReceipt(req: Request, id: number, input: { receiptId: number; reason: string; version: number }): Promise<AdminOrderDetail> {
   const reason = cleanText(input.reason, REJECT_REASON_MAX);
   if (!reason) throw new ValidationError('دلیل رد رسید را بنویسید؛ خریدار آن را می‌بیند.', undefined, 'STOREFRONT_REJECT_REASON_REQUIRED');
@@ -255,9 +296,9 @@ export async function fulfilOrder(req: Request, id: number, input: { status: 'sh
   if (trackingCode === null) throw new ValidationError(`کد رهگیری حداکثر ${TRACKING_CODE_MAX.toLocaleString('fa-IR')} نویسه است.`, undefined, 'STOREFRONT_TRACKING_CODE_INVALID');
   return orm.transaction(async (tx) => {
     const order = await lockedOrder(tx, id, input.version);
-    const from = input.status === 'shipped' ? 'paid' : 'shipped';
-    if (order.status !== from) {
-      throw new ConflictError(input.status === 'shipped' ? 'فقط سفارش پرداخت‌شده ارسال می‌شود.' : 'فقط سفارش ارسال‌شده تحویل می‌شود.', undefined, 'STOREFRONT_ORDER_STEP_INVALID');
+    const from: readonly string[] = input.status === 'shipped' ? ['paid', 'confirmed'] : ['shipped'];
+    if (!from.includes(order.status)) {
+      throw new ConflictError(input.status === 'shipped' ? 'فقط سفارش پرداخت‌شده یا تأییدشده به حساب ارسال می‌شود.' : 'فقط سفارش ارسال‌شده تحویل می‌شود.', undefined, 'STOREFRONT_ORDER_STEP_INVALID');
     }
     const now = systemNowUtcIso();
     const updated = await moveOrder(tx, order, actor.username, input.status === 'shipped'

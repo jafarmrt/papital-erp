@@ -5,7 +5,9 @@ import { tomanText, type CartLineInput } from '../../lib/storefront/storefrontOr
 import type { StorefrontSettingsInput } from '../../lib/storefront/storefrontContracts.js';
 import type { ShippingOption } from '../../lib/storefront/storefrontOrderContracts.js';
 import { orderableItems, type OnSale } from './storefrontCatalog.service.js';
-import { listShippingMethods } from './storefrontShipping.service.js';
+import type { GroupRecord } from './storefrontBuyerAuth.service.js';
+import { pricesOf } from './storefrontItemData.js';
+import { listShippingMethods, rialText } from './storefrontShipping.service.js';
 
 /**
  * v11 phase 8.2a (start plan §4): a cart priced by the server. Only the slugs and quantities of the request are read; the
@@ -26,23 +28,46 @@ export interface PricedCart {
   weightGrams: number | null;
 }
 
-export async function priceCart(executor: DbExecutor, settings: StorefrontSettingsInput, cart: readonly CartLineInput[]): Promise<PricedCart> {
+/**
+ * v11 phase 8.2b part 2 (start plan §6): the buyer group an approved account orders with. Its price list replaces the
+ * retail price, an item outside its collections or without a price in its list is not on sale to it, and its minimums
+ * (each line's quantity, the items' amount before shipping) must be met.
+ */
+export type CartGroup = Pick<GroupRecord, 'priceList' | 'catalogScope' | 'collections' | 'minLineQuantity' | 'minOrderAmount'>;
+
+export async function priceCart(executor: DbExecutor, settings: StorefrontSettingsInput, cart: readonly CartLineInput[], group: CartGroup | null = null): Promise<PricedCart> {
   const bySlug = await orderableItems(executor, settings, cart.map(l => l.slug));
-  const missing = cart.filter(l => !bySlug.has(l.slug)).map(l => l.slug);
+  const groupPrices = group ? await pricesOf(executor, [...bySlug.values()].map(i => i.itemId), group.priceList) : null;
+  const inGroup = (item: OnSale) => !group || ((group.catalogScope !== 'collections' || item.collections.some(c => (group.collections ?? []).includes(c)))
+    && groupPrices!.has(item.itemId));
+  const missing = cart.filter(l => !bySlug.has(l.slug) || !inGroup(bySlug.get(l.slug)!)).map(l => l.slug);
   if (missing.length > 0) {
     throw new ValidationError('برخی کالاهای سبد دیگر روی سایت فروخته نمی‌شوند؛ آن‌ها را از سبد بردارید.', { slugs: missing }, 'STOREFRONT_ITEM_NOT_ON_SALE');
+  }
+  if (group && group.minLineQuantity > 0) {
+    const few = cart.filter(l => l.quantity < group.minLineQuantity).map(l => l.slug);
+    if (few.length > 0) {
+      throw new ValidationError(`در خرید عمده، تعداد هر کالا دست‌کم ${group.minLineQuantity.toLocaleString('fa-IR')} است.`, { slugs: few, minLineQuantity: group.minLineQuantity }, 'STOREFRONT_GROUP_MIN_LINE');
+    }
   }
   let total = 0n;
   let weight = 0;
   let weightKnown = true;
   const lines = cart.map((l) => {
     const item = bySlug.get(l.slug)!;
-    const lineAmount = BigInt(item.retailPrice) * BigInt(l.quantity);
+    const unitPrice = groupPrices ? groupPrices.get(item.itemId)! : item.retailPrice;
+    const lineAmount = BigInt(unitPrice) * BigInt(l.quantity);
     total += lineAmount;
     if (item.weight !== null && item.weight > 0) weight += item.weight * l.quantity;
     else weightKnown = false;
-    return { item, quantity: l.quantity, unitPrice: item.retailPrice, lineAmount: lineAmount.toString() };
+    return { item, quantity: l.quantity, unitPrice, lineAmount: lineAmount.toString() };
   });
+  if (group) {
+    const minimum = rialText(group.minOrderAmount);
+    if (BigInt(minimum) > 0n && total < BigInt(minimum)) {
+      throw new ValidationError(`حداقل مبلغ سفارش عمده ${tomanText(minimum)} تومان است.`, { minOrderAmount: minimum, itemsAmount: total.toString() }, 'STOREFRONT_GROUP_MIN_ORDER');
+    }
+  }
   return { lines, itemsAmount: total.toString(), weightGrams: weightKnown ? Math.ceil(weight) : null };
 }
 

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, integer, timestamp, index, uniqueIndex, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { items } from './inventory';
 import { baseRelations } from './baseRelations';
@@ -102,11 +102,18 @@ export const storefrontOrders = pgTable('storefront_orders', {
   shippedAt: timestamp('shipped_at', { withTimezone: true, mode: 'string' }),
   deliveredAt: timestamp('delivered_at', { withTimezone: true, mode: 'string' }),
   cancelledAt: timestamp('cancelled_at', { withTimezone: true, mode: 'string' }),
+  // v11 phase 8.2b part 2 (migration 0018): the buyer account, its group's prices and rules, and «به حساب» orders
+  buyerAccountId: integer('buyer_account_id').references((): AnyPgColumn => storefrontBuyerAccounts.id),
+  buyerGroupId: integer('buyer_group_id').references((): AnyPgColumn => storefrontBuyerGroups.id),
+  paymentMethod: text('payment_method').notNull().default('card'),
+  confirmedAt: timestamp('confirmed_at', { withTimezone: true, mode: 'string' }),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedBy: text('updated_by').notNull().default(''),
   version: integer('version').notNull().default(1),
 }, (table) => ({
+  idx_storefront_orders_buyer_account_id: index('idx_storefront_orders_buyer_account_id').on(table.buyerAccountId, table.createdAt.desc(), table.id.desc()),
+  idx_storefront_orders_buyer_group_id: index('idx_storefront_orders_buyer_group_id').on(table.buyerGroupId),
   uq_storefront_orders_number: uniqueIndex('uq_storefront_orders_number').on(table.orderNumber),
   uq_storefront_orders_request_key: uniqueIndex('uq_storefront_orders_request_key').on(table.requestKey),
   uq_storefront_orders_document: uniqueIndex('uq_storefront_orders_document').on(table.documentId),
