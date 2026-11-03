@@ -129,3 +129,68 @@ describe('storefront pages', () => {
     expect((await page('/media/abc.webp')).status).toBe(404);
   });
 });
+
+describe('search engines and information pages', () => {
+  const withEnv = async (name: string, value: string, run: () => Promise<void>) => {
+    const before = process.env[name];
+    process.env[name] = value;
+    try { await run(); } finally {
+      if (before === undefined) delete process.env[name]; else process.env[name] = before;
+    }
+  };
+
+  it('opens the shop to search engines with a sitemap that lists products, places and their photos', async () => {
+    const robots = await page('/robots.txt');
+    expect(robots.status).toBe(200);
+    expect(robots.html).toContain('Sitemap: https://shop.example/sitemap.xml');
+    expect(robots.html).toContain('Disallow: /healthz');
+    expect(robots.html).not.toContain('Disallow: /\n');
+    const sitemap = await page('/sitemap.xml');
+    expect(sitemap.status).toBe(200);
+    expect(sitemap.html).toContain('<loc>https://shop.example/p/tile-necklace-sample</loc>');
+    expect(sitemap.html).toContain('<loc>https://shop.example/shipping</loc>');
+    expect(sitemap.html).toContain('<loc>https://shop.example/collections/');
+    expect(sitemap.html).not.toContain(KEY);
+    expect((await page('/')).html).not.toContain('noindex');
+  });
+
+  it('shuts a preview or test address to search engines on every page', async () => {
+    await withEnv('STOREFRONT_NOINDEX', '1', async () => {
+      expect((await page('/robots.txt')).html).toContain('Disallow: /\n');
+      expect((await page('/sitemap.xml')).status).toBe(404);
+      expect((await page('/')).html).toContain('<meta name="robots" content="noindex, nofollow"/>');
+    });
+    await withEnv('STOREFRONT_SITE_URL', '', async () => {
+      expect((await page('/robots.txt')).html).toContain('Disallow: /\n');
+      expect((await page('/p/tile-necklace-sample')).html).not.toContain('application/ld+json');
+    });
+  });
+
+  it('describes the shop, the product and its place in the shop as structured data with absolute links', async () => {
+    const home = await page('/');
+    expect(home.html).toContain('"@type":"Organization"');
+    expect(home.html).toContain('"urlTemplate":"https://shop.example/products?q={search_term_string}"');
+    const product = await page('/p/tile-necklace-sample');
+    expect(product.html).toContain('"@type":"Product"');
+    expect(product.html).toContain('"@type":"BreadcrumbList"');
+    expect(product.html).toContain('"item":"https://shop.example/products?category=');
+    // the sample has no photos: a Product with an empty image list is an error to Google, so the field is left out
+    expect(product.html).not.toContain('"image":[]');
+  });
+
+  it('writes the shipping page from the live settings, and marks a page whose text is still a draft', async () => {
+    const shipping = await page('/shipping');
+    expect(shipping.status).toBe(200);
+    expect(shipping.html).toContain('پست پیشتاز');
+    expect(shipping.html).toContain('هنگام تحویل به پیک');
+    expect(shipping.html).toContain('۳٬۰۰۰٬۰۰۰ تومان');
+    expect(shipping.html).not.toContain('پیش‌نویس');
+    for (const slug of ['about', 'contact', 'terms', 'privacy']) {
+      const info = await page(`/${slug}`);
+      expect(info.status).toBe(200);
+      expect(info.html).toContain('پیش‌نویس');
+    }
+    expect((await page('/')).html).toContain('href="/terms"');
+    expect((await page('/about/extra')).status).toBe(404);
+  });
+});

@@ -20,14 +20,15 @@ export interface SiteBuyer {
 
 export const STOREFRONT_BOT_USER = 'فروشگاه سایت';
 
-export async function resolveSiteCustomer(tx: DbExecutor, orderNumber: string, buyer: SiteBuyer): Promise<{ id: number; name: string }> {
+/** `source` names what made the customer in its audit row, e.g. «سفارش سایت 100001» */
+export async function resolveSiteCustomer(tx: DbExecutor, source: string, buyer: SiteBuyer): Promise<{ id: number; name: string }> {
   for (let attempt = 0; ; attempt++) {
     const found = await findActiveCustomerByPhone(buyer.phone, tx);
     if (found) return { id: found.id, name: found.name };
     const namesake = await findActiveCustomerByName(buyer.name, tx);
     const name = namesake ? `${buyer.name} (${formatPersianPhone(buyer.phone) || buyer.phone})` : buyer.name;
     if (namesake && await findActiveCustomerByName(name, tx)) {
-      throw new ValidationError('ثبت سفارش با این نام و شماره ممکن نشد؛ لطفاً با فروشگاه تماس بگیرید.', undefined, 'STOREFRONT_CUSTOMER_NAME_TAKEN');
+      throw new ValidationError('ثبت با این نام و شماره ممکن نشد؛ لطفاً با فروشگاه تماس بگیرید.', undefined, 'STOREFRONT_CUSTOMER_NAME_TAKEN');
     }
     try {
       let createdId = 0;
@@ -37,7 +38,7 @@ export async function resolveSiteCustomer(tx: DbExecutor, orderNumber: string, b
         }).returning({ id: customers.id });
         await logActivity({
           tx: sp, username: STOREFRONT_BOT_USER, action: 'CREATE', entity: 'طرف حساب', entityId: created.id,
-          description: `ثبت خودکار طرف حساب «${name}» از سفارش سایت ${orderNumber}`,
+          description: `ثبت خودکار طرف حساب «${name}» از ${source}`,
           details: { after: { id: created.id, name, city: buyer.city }, namesake: namesake ? namesake.name : undefined },
         });
         createdId = created.id;

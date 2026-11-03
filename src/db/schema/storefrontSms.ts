@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import { storefrontOrders } from './storefront';
 
 /**
- * v11 phase 8.4a (migration 0015_storefront_sms, package 18): the site's text messages.
+ * v11 phase 8.4a (migration 0017_storefront_sms, package 18): the site's text messages.
  *
  * `storefront_sms_messages` is the outbox and the log in one: an order message is written in the same transaction as the
  * order's change (`queued`) and the minute sender sends it after the commit; a login code is written `sending` and sent at

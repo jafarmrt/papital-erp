@@ -16,6 +16,8 @@ export const NOTIFICATION_CATEGORIES = [
   'workshop',
   'social',
   'settings_change',
+  'site_order',
+  'site_buyer',
 ] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
@@ -32,6 +34,10 @@ export const NOTIFICATION_CATEGORY_LABELS: Readonly<Record<NotificationCategory,
   social: 'تولد همکاران و تبریک‌ها',
   // 10.3 package 5 (ت۴۷ item 5): for the system admins, e.g. «آستانه تراکنش کلان خزانه» changed by another user
   settings_change: 'تغییر تنظیمات حساس سامانه',
+  // v11 phase 8.2a: a new order or card-to-card receipt from the new site, for the holders of site_orders.manage
+  site_order: 'سفارش و رسید تازه از سایت',
+  // v11 phase 8.2b: a new wholesale application from the new site, for the holders of site_buyers.manage
+  site_buyer: 'درخواست تازهٔ خرید عمده از سایت',
 };
 
 /** One row of «در پیام‌رسان هم بفرست» in the profile (`GET /messenger/preferences/mine`) */
@@ -74,6 +80,8 @@ const GENERIC_SENTENCES: Readonly<Partial<Record<NotificationCategory, string>>>
   payslip: 'فیش حقوق شما تأیید شد.',
   workshop: 'یک کار یا گزارش در کارتابل کارگاه منتظر شماست.',
   settings_change: 'یکی از تنظیمات حساس سامانه تغییر کرد.',
+  site_order: 'یک خرید یا رسید کارت‌به‌کارت تازه از سایت رسید.',
+  site_buyer: 'یک فروشگاه یا خریدار تازه از سایت می‌خواهد عمده بخرد.',
 };
 const GENERIC_DEFAULT_SENTENCE = 'اعلان تازه‌ای در برنامه پاپیتال برای شما آمده است.';
 
@@ -82,7 +90,7 @@ const GENERIC_DEFAULT_SENTENCE = 'اعلان تازه‌ای در برنامه �
  * one opens a fixed page of its section (never a rule template's link, which may carry amounts or ids), else the app's
  * first page.
  */
-const GENERIC_LINK_SECTIONS: readonly string[] = ['/daily-logs', '/crm', '/approval-inbox', '/workshop', '/my-payslips', '/settings'];
+const GENERIC_LINK_SECTIONS: readonly string[] = ['/daily-logs', '/crm', '/approval-inbox', '/workshop', '/my-payslips', '/settings', '/site-orders', '/site-buyers'];
 
 export function messengerLinkPath(category: NotificationCategory, path: string | null | undefined): string {
   const target = String(path ?? '').trim();

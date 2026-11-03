@@ -26,10 +26,10 @@ export const PUBLIC_ROUTES = new Set([
   // v11 phase 6.5 (D-04 part D, decision ت۴۶): the shop downloads an item's cover from a signed address that lives 15
   // minutes; limited per address, and every refusal is the same 404
   'GET /api/woocommerce/shop-image/:file',
-  // v11 phase 8.1: the Storefront API takes no session; every route checks the site app's key (`requireStorefrontKey`,
-  // a missing or wrong key is 401) and is limited per address
-  // (v11 phase 8.2a: and the order routes, a buyer's order also by its tracking key; 8.3: the site's logo and icon)
-  ...['GET settings', 'GET brand', 'GET products', 'GET products/:slug', 'GET facets', 'GET media/:file', 'GET orders/:number', 'POST shipping/quote', 'POST orders', 'POST orders/:number/receipts', 'POST auth/otp/request', 'POST auth/otp/verify'].map(route => route.replace(' ', ' /api/storefront/v1/')),
+  // v11 phase 8.1: the Storefront API takes no staff session; every route checks the site app's key (`requireStorefrontKey`,
+  // 401 without it) and is limited per address (8.2a orders by tracking key; 8.3 logo; 8.2b accounts by X-Buyer-Session;
+  // 8.4a the SMS login code)
+  ...['GET settings', 'GET brand', 'GET products', 'GET products/:slug', 'GET facets', 'GET media/:file', 'GET orders/:number', 'POST shipping/quote', 'POST orders', 'POST orders/:number/receipts', 'POST auth/register', 'POST auth/login', 'POST auth/logout', 'POST auth/set-password', 'POST wholesale/apply', 'GET account', 'GET account/prices', 'POST auth/otp/request', 'POST auth/otp/verify'].map(route => route.replace(' ', ' /api/storefront/v1/')),
 ]);
 
 /**

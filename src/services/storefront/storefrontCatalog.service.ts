@@ -94,6 +94,11 @@ export async function orderableItems(executor: DbExecutor, settings: StorefrontS
   return new Map((await itemsOnSale(executor, settings, undefined, slugs)).map(item => [item.slug, item]));
 }
 
+/** v11 phase 8.2b: every item the site offers now, to price for a buyer group */
+export async function catalogItems(executor: DbExecutor, settings: StorefrontSettingsInput): Promise<OnSale[]> {
+  return itemsOnSale(executor, settings);
+}
+
 const compareRial = (a: string, b: string) => {
   const x = BigInt(a);
   const y = BigInt(b);

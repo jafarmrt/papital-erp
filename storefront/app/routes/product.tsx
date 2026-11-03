@@ -11,6 +11,8 @@ import type { StorefrontProductCard } from '@erp/storefront/storefrontContracts'
 import { ProductCard, ProductImage } from '../components/ProductCard';
 import { StockBadge } from '../components/StockBadge';
 import { useRootData } from '../root';
+import { breadcrumbLd } from '../lib/jsonLd';
+import { JsonLdScripts } from '../components/JsonLdScripts';
 
 export async function loader({ params }: Route.LoaderArgs) {
   const item = await productBySlug(params.slug);
@@ -38,6 +40,7 @@ export function meta({ data }: Route.MetaArgs) {
 }
 
 function productJsonLd(item: Route.ComponentProps['loaderData']['item'], siteUrl: string) {
+  const photos = item.images.length ? item.images : item.cover ? [item.cover] : [];
   const availability = item.stock.status === 'out' ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock';
   return {
     '@context': 'https://schema.org',
@@ -45,7 +48,7 @@ function productJsonLd(item: Route.ComponentProps['loaderData']['item'], siteUrl
     name: item.name,
     sku: item.sku,
     description: item.seoDescription || item.description.slice(0, 300),
-    image: item.images.map(i => `${siteUrl}${mediaPath(i.sha256)}`),
+    ...(photos.length ? { image: photos.map(i => `${siteUrl}${mediaPath(i.sha256)}`) } : {}),
     brand: { '@type': 'Brand', name: BRAND.fullName },
     offers: { '@type': 'Offer', priceCurrency: 'IRR', price: item.retailPrice, availability, url: `${siteUrl}${productPath(item.slug)}` },
   };
@@ -154,7 +157,17 @@ export default function ProductPage({ loaderData }: Route.ComponentProps) {
 
       {related.length ? <ProductRow id="related" title={relatedTitle} products={related} /> : null}
 
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd(item, siteUrl)).replace(/</g, '\\u003c') }} />
+      <JsonLdScripts
+        siteUrl={siteUrl}
+        blocks={[
+          productJsonLd(item, siteUrl),
+          breadcrumbLd([
+            { name: 'خانه', path: '/' },
+            item.category ? { name: item.category, path: categoryPath(item.category) } : { name: 'محصولات', path: '/products' },
+            { name: item.name },
+          ], siteUrl),
+        ]}
+      />
     </div>
   );
 }

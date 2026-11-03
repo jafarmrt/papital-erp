@@ -49,6 +49,7 @@ const ActivityLogsPage = lazyWithRetry(() => import('../pages/ActivityLogsPage')
 const TransactionsPage = lazyWithRetry(() => import('../pages/TransactionsPage'));
 const ReservedItemsReportPage = lazyWithRetry(() => import('../pages/ReservedItemsReportPage'));
 const StorefrontOrdersPage = lazyWithRetry(() => import('../pages/StorefrontOrdersPage'));
+const StorefrontBuyersPage = lazyWithRetry(() => import('../pages/StorefrontBuyersPage'));
 const ManagementReportsPage = lazyWithRetry(() => import('../pages/ManagementReportsPage'));
 const ProjectsPage = lazyWithRetry(() => import('../pages/ProjectsPage'));
 const ProjectDetailPage = lazyWithRetry(() => import('../pages/ProjectDetailPage'));
@@ -199,6 +200,11 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
         <Route path="/site-orders" element={
           <ProtectedRoute page="/site-orders" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <StorefrontOrdersPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/site-buyers" element={
+          <ProtectedRoute page="/site-buyers" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+            <StorefrontBuyersPage />
           </ProtectedRoute>
         } />
         <Route path="/reserved-items" element={

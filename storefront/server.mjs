@@ -13,12 +13,28 @@ if (!process.env.STOREFRONT_API_KEY) {
 const build = await import('./build/server/index.js');
 const client = fileURLToPath(new URL('./build/client', import.meta.url));
 
+const CSP = [
+  "default-src 'self'",
+  "img-src 'self' data:",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "frame-ancestors 'self'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "object-src 'none'",
+].join('; ');
+
 const app = express();
 app.disable('x-powered-by');
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  // everything the pages load comes from this site; the inline scripts are React Router's hydration data and JSON-LD
+  res.setHeader('Content-Security-Policy', CSP);
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
   next();
 });
 // file names under /assets carry their content hash

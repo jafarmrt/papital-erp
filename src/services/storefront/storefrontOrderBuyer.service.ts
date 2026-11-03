@@ -11,6 +11,8 @@ import type { BuyerOrder, ReceiptRequest } from '../../lib/storefront/storefront
 import { STOREFRONT_BOT_USER } from './storefrontCustomer.js';
 import { orderForKey } from './storefrontOrderPlace.service.js';
 import { buyerOrderView } from './storefrontOrderView.js';
+import { notifySiteOrder } from './storefrontOrderNotices.js';
+import { receiptImageOf, storeReceiptImage } from './storefrontReceiptImage.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
 
 /**
@@ -52,6 +54,7 @@ function cleanReceipt(input: ReceiptRequest, nowMs: number) {
 export async function sendReceipt(orderNumber: string, accessKey: string, input: ReceiptRequest): Promise<BuyerOrder> {
   const settings = await orderingOn();
   const receipt = cleanReceipt(input, Date.parse(systemNowUtcIso()));
+  const image = receiptImageOf(input.image);
   return orm.transaction(async (tx) => {
     const order = await orderForKey(tx, orderNumber, accessKey, { lock: true });
     if (order.status !== 'awaiting_payment') {
@@ -64,14 +67,16 @@ export async function sendReceipt(orderNumber: string, accessKey: string, input:
       throw new ConflictError('برای این سفارش بیش از این رسید پذیرفته نمی‌شود؛ با فروشگاه تماس بگیرید.', undefined, 'STOREFRONT_RECEIPTS_LIMIT');
     }
     const [created] = await tx.insert(storefrontPaymentReceipts).values({ orderId: order.id, ...receipt, amount: money(receipt.amount) }).returning({ id: storefrontPaymentReceipts.id });
+    if (image) await storeReceiptImage(tx, created.id, image);
     const [updated] = await tx.update(storefrontOrders).set({
       status: 'payment_submitted', updatedAt: systemNowUtcIso(), updatedBy: STOREFRONT_BOT_USER, version: sql`${storefrontOrders.version} + 1`,
     }).where(eq(storefrontOrders.id, order.id)).returning();
     await logActivity({
       tx, username: STOREFRONT_BOT_USER, action: 'CREATE', entity: 'سفارش سایت', entityId: order.id,
       description: `رسید کارت‌به‌کارت سفارش سایت ${order.orderNumber} ثبت شد`,
-      details: { receiptId: created.id, before: { status: order.status }, after: { status: 'payment_submitted', amount: receipt.amount, cardLast4: receipt.cardLast4 } },
+      details: { receiptId: created.id, hasImage: Boolean(image), before: { status: order.status }, after: { status: 'payment_submitted', amount: receipt.amount, cardLast4: receipt.cardLast4 } },
     });
+    await notifySiteOrder(tx, 'receipt', updated);
     return buyerOrderView(tx, updated, settings);
   });
 }

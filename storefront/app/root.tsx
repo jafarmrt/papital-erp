@@ -1,4 +1,4 @@
-import { Links, Meta, Outlet, Scripts, ScrollRestoration, isRouteErrorResponse, useRouteLoaderData, type LinksFunction } from 'react-router';
+import { Links, Meta, Outlet, Scripts, ScrollRestoration, isRouteErrorResponse, useNavigation, useRouteLoaderData, type LinksFunction } from 'react-router';
 import type { Route } from './+types/root';
 import './app.css';
 import { brand, facets, publicSettings } from './lib/api.server';
@@ -23,6 +23,7 @@ export async function loader() {
     whatsapp: settings.whatsapp ?? '',
     siteUrl: env.siteUrl,
     previewNotice: env.previewNotice,
+    indexable: env.indexable,
     /** '' = none; otherwise the address of the image, versioned by its content */
     logoUrl: images.logo ? `/brand/logo?v=${imageVersion(images.logo)}` : '',
     faviconUrl: images.favicon ? `/brand/favicon?v=${imageVersion(images.favicon)}` : '',
@@ -42,6 +43,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="theme-color" content="#ffffff" />
+        {data && !data.indexable ? <meta name="robots" content="noindex, nofollow" /> : null}
         <Meta />
         <Links />
         {data?.faviconUrl ? (
@@ -66,8 +68,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** A thin bar along the top while the next page loads, so a slow phone connection never looks frozen */
+function NavigationProgress() {
+  const busy = useNavigation().state !== 'idle';
+  return (
+    <div aria-hidden className={`pointer-events-none fixed inset-x-0 top-0 z-50 h-0.5 origin-right bg-primary transition-[opacity,scale] duration-500 ${busy ? 'scale-x-75 opacity-100' : 'scale-x-0 opacity-0'}`} />
+  );
+}
+
 export default function App() {
-  return <Outlet />;
+  return (
+    <>
+      <NavigationProgress />
+      <Outlet />
+    </>
+  );
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

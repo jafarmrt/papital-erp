@@ -20,6 +20,7 @@ import {
   Target,
   CheckSquare,
   ShoppingBag,
+  Handshake,
   Landmark,
   FileText,
   Building2,
@@ -96,6 +97,7 @@ export function getMenuGroups(
         { name: 'طرفین حساب', path: '/customers', icon: UsersRound, visible: open('/customers') },
         { name: 'صدور فاکتور و پیش‌فاکتور', path: '/invoices/create', icon: FileOutput, visible: open('/invoices/create') },
         { name: 'سفارش‌های سایت', path: '/site-orders', icon: ShoppingBag, visible: open('/site-orders') },
+        { name: 'خریداران سایت', path: '/site-buyers', icon: Handshake, visible: open('/site-buyers') },
       ]
     },
     {

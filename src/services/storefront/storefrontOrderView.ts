@@ -9,6 +9,7 @@ import {
 import type { AdminOrderDetail, AdminReceipt, BuyerOrder, BuyerOrderLine } from '../../lib/storefront/storefrontOrderContracts.js';
 import type { StorefrontSettingsInput } from '../../lib/storefront/storefrontContracts.js';
 import { rialText } from './storefrontShipping.service.js';
+import { receiptIdsWithImage } from './storefrontReceiptImage.js';
 
 /**
  * v11 phase 8.2a: what a buyer and the ERP orders screen see of an order. The lines are read from the order's document
@@ -101,6 +102,7 @@ export async function adminOrderView(executor: DbExecutor, order: OrderRecord): 
   const receipts = await receiptsOf(executor, order.id);
   const [doc] = await executor.select({ refNumber: documents.refNumber, status: documents.status, isDeleted: documents.isDeleted })
     .from(documents).where(eq(documents.id, order.documentId));
+  const withImage = await receiptIdsWithImage(executor, receipts.map(r => r.id));
   const pending = receipts.some(r => r.status === 'pending');
   const open = base.status === 'awaiting_payment' || base.status === 'payment_submitted';
   return {
@@ -112,7 +114,7 @@ export async function adminOrderView(executor: DbExecutor, order: OrderRecord): 
     documentRef: doc?.refNumber ?? '',
     documentStatus: doc ? (doc.isDeleted === 1 ? 'voided' : String(doc.status ?? '')) : '',
     receipts: receipts.map((r): AdminReceipt => ({
-      ...buyerReceipt(r), id: r.id, reviewedBy: r.reviewedBy, reviewedAt: r.reviewedAt, treasuryTransactionId: r.treasuryTransactionId,
+      ...buyerReceipt(r), id: r.id, hasImage: withImage.has(r.id), reviewedBy: r.reviewedBy, reviewedAt: r.reviewedAt, treasuryTransactionId: r.treasuryTransactionId,
     })),
     updatedBy: order.updatedBy,
     actions: { confirm: pending && open, reject: pending && open, cancel: open, fulfil: NEXT_FULFILMENT[base.status] ?? null },

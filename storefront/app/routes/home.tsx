@@ -9,6 +9,8 @@ import { pageMeta } from '../lib/meta';
 import { whatsappLink } from '../lib/whatsapp';
 import { ProductGrid, ProductImage } from '../components/ProductCard';
 import { useRootData } from '../root';
+import { homeLd } from '../lib/jsonLd';
+import { JsonLdScripts } from '../components/JsonLdScripts';
 
 export async function loader() {
   const f = await facets();
@@ -54,7 +56,7 @@ function SectionTitle({ id, title, href, cta }: { id: string; title: string; hre
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { hero, featured, newest, categories, collections } = loaderData;
+  const { hero, featured, newest, categories, collections, siteUrl } = loaderData;
   const root = useRootData();
   return (
     <>
@@ -165,6 +167,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           ) : null}
         </div>
       </section>
+      <JsonLdScripts blocks={homeLd(siteUrl, root?.logoUrl ?? '')} siteUrl={siteUrl} />
     </>
   );
 }
