@@ -22,6 +22,7 @@ import { FormDraftService } from './src/services/drafts/formDraft.service.js';
 import { OperationalPurgeService } from './src/services/events/operationalPurge.service.js';
 import { WcShopSyncWorker } from './src/services/woocommerce/wcSyncWorker.service.js';
 import { StorefrontOrderWorker } from './src/services/storefront/storefrontOrderExpiry.service.js';
+import { StorefrontSmsWorker } from './src/services/storefront/storefrontSms.service.js';
 import { purgeOldAutoRuns } from './src/services/woocommerce/wcSyncRunPurge.js';
 import { purgeEndedSessions } from './src/services/auth/sessionPurge.js';
 import { pool, getDatabaseMode } from './src/db/drizzle.js';
@@ -101,6 +102,8 @@ async function startServer() {
     WcShopSyncWorker.start();
     // v11 phase 8.2a: the end of site order reservations, a sweep a minute while the site takes orders (default off)
     StorefrontOrderWorker.start();
+    // v11 phase 8.4a: the site's texts to buyers, a pass every half minute while they are on (default off)
+    StorefrontSmsWorker.start();
     // v10.1.38 (messenger plan part 1): link codes and «/stop» sent to the staff bots
     MessengerUpdatePoller.start(5000);
     markStartupComplete();
@@ -166,6 +169,7 @@ async function startServer() {
       OperationalPurgeService.stop();
       WcShopSyncWorker.stop();
       StorefrontOrderWorker.stop();
+      StorefrontSmsWorker.stop();
       MessengerUpdatePoller.stop();
 
       if (pool && typeof pool.end === 'function') {

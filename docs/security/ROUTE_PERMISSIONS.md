@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 542
+تعداد مسیرها: 567
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -435,6 +435,18 @@
 | GET | `/api/stats` | reports.view \| warehouse.view |
 | POST | `/api/storefront/api-key` | storefront.manage |
 | PUT | `/api/storefront/brand/:kind` | storefront.manage |
+| GET | `/api/storefront/buyer-groups` | storefront.view |
+| POST | `/api/storefront/buyer-groups` | storefront.manage |
+| DELETE | `/api/storefront/buyer-groups/:id` | storefront.manage |
+| PUT | `/api/storefront/buyer-groups/:id` | storefront.manage |
+| GET | `/api/storefront/buyers` | site_buyers.view |
+| GET | `/api/storefront/buyers/:id` | site_buyers.view |
+| POST | `/api/storefront/buyers/:id/approve` | site_buyers.manage |
+| POST | `/api/storefront/buyers/:id/decline` | site_buyers.manage |
+| POST | `/api/storefront/buyers/:id/group` | site_buyers.manage |
+| POST | `/api/storefront/buyers/:id/password-link` | site_buyers.manage |
+| POST | `/api/storefront/buyers/:id/reactivate` | site_buyers.manage |
+| POST | `/api/storefront/buyers/:id/suspend` | site_buyers.manage |
 | GET | `/api/storefront/orders` | site_orders.view |
 | GET | `/api/storefront/orders/:id` | site_orders.view |
 | POST | `/api/storefront/orders/:id/cancel` | site_orders.manage |
@@ -450,6 +462,18 @@
 | POST | `/api/storefront/shipping-methods` | storefront.manage |
 | DELETE | `/api/storefront/shipping-methods/:id` | storefront.manage |
 | PUT | `/api/storefront/shipping-methods/:id` | storefront.manage |
+| GET | `/api/storefront/sms/messages` | storefront.view |
+| GET | `/api/storefront/sms/settings` | storefront.view |
+| PUT | `/api/storefront/sms/settings` | storefront.manage |
+| POST | `/api/storefront/sms/test` | storefront.manage |
+| GET | `/api/storefront/v1/account` | public |
+| GET | `/api/storefront/v1/account/prices` | public |
+| POST | `/api/storefront/v1/auth/login` | public |
+| POST | `/api/storefront/v1/auth/logout` | public |
+| POST | `/api/storefront/v1/auth/otp/request` | public |
+| POST | `/api/storefront/v1/auth/otp/verify` | public |
+| POST | `/api/storefront/v1/auth/register` | public |
+| POST | `/api/storefront/v1/auth/set-password` | public |
 | GET | `/api/storefront/v1/brand` | public |
 | GET | `/api/storefront/v1/facets` | public |
 | GET | `/api/storefront/v1/media/:file` | public |
@@ -460,6 +484,7 @@
 | GET | `/api/storefront/v1/products/:slug` | public |
 | GET | `/api/storefront/v1/settings` | public |
 | POST | `/api/storefront/v1/shipping/quote` | public |
+| POST | `/api/storefront/v1/wholesale/apply` | public |
 | GET | `/api/system/business-date` | login-only |
 | GET | `/api/system/conditional-constraints` | admin |
 | POST | `/api/system/conditional-constraints/build` | admin |

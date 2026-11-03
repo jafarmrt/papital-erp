@@ -113,6 +113,20 @@
       "when": 1797235200000,
       "tag": "0015_storefront_receipt_photo",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1797321600000,
+      "tag": "0016_storefront_buyer_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1797408000000,
+      "tag": "0017_storefront_sms",
+      "breakpoints": true
     }
   ]
 }

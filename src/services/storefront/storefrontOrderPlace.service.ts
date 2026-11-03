@@ -20,6 +20,7 @@ import { notifySiteOrder } from './storefrontOrderNotices.js';
 import { buyerOrderView, type OrderRecord } from './storefrontOrderView.js';
 import { storefrontSellable, storefrontWarehouseCode } from './storefrontStock.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
+import { queueOrderSms } from './storefrontSms.service.js';
 
 /**
  * v11 phase 8.2a (start plan §4): placing a site order, in one transaction. The server prices the cart (the request's
@@ -158,7 +159,7 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
 
   const [{ value: sequence }] = (await tx.execute(sql`SELECT nextval('storefront_order_number_seq')::text AS value`)).rows as Array<{ value: string }>;
   const orderNumber = String(sequence);
-  const customer = await resolveSiteCustomer(tx, orderNumber, { name: order.recipientName, phone: order.phone, city: order.city, address: order.address });
+  const customer = await resolveSiteCustomer(tx, `سفارش سایت ${orderNumber}`, { name: order.recipientName, phone: order.phone, city: order.city, address: order.address });
   const fullAddress = `${order.province}، ${order.city}، ${order.address}، کد پستی ${order.postalCode}`;
   const documentId = await DocumentService.createDocument({
     docType: 'invoice', status: 'proforma', inOut: 'out', user: STOREFRONT_BOT_USER,
@@ -184,6 +185,8 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
     reserveUntil: sql`now() + make_interval(hours => ${settings.reservationHours})`,
     updatedBy: STOREFRONT_BOT_USER,
   }).returning();
+  // v11 phase 8.4a: the buyer's text, queued with the order (sent after the commit; nothing while sending is off)
+  await queueOrderSms(tx, row, 'order_placed');
   await logActivity({
     tx, username: STOREFRONT_BOT_USER, action: 'CREATE', entity: 'سفارش سایت', entityId: row.id,
     description: `ثبت سفارش سایت ${orderNumber} با پیش‌فاکتور «${storedDocument?.refNumber ?? documentId}»`,

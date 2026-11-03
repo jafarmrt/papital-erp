@@ -234,6 +234,13 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     ]
   },
   {
+    category: 'خریداران سایت',
+    permissions: [
+      { key: 'site_buyers.view', title: 'مشاهده خریداران سایت', description: 'دیدن حساب‌های خریداران سایت، درخواست‌های خرید عمده، نام شرکت، شناسهٔ ملی و شمارهٔ همراه' },
+      { key: 'site_buyers.manage', title: 'رسیدگی به خریداران عمدهٔ سایت', description: 'تأیید یا رد درخواست خرید عمده، انتخاب گروه خریدار و طرف حساب، تعلیق حساب و ساخت پیوند تعیین رمز', requires: ['site_buyers.view'] },
+    ]
+  },
+  {
     category: 'گزارش‌ها و سجل رویدادها',
     permissions: [
       { key: 'reports.view', title: 'مشاهده گزارش‌ها و آمار', description: 'دسترسی به نمودارها، گزارش تراکنش‌ها و پیشخوان' },

@@ -15,7 +15,12 @@ import { ORDER_LINES_MAX } from '../lib/storefront/storefrontOrderRules.js';
 import { placeOrder, quoteShipping } from '../services/storefront/storefrontOrderPlace.service.js';
 import { buyerOrder, sendReceipt } from '../services/storefront/storefrontOrderBuyer.service.js';
 import { ACCESS_KEY_MAX } from '../services/storefront/storefrontOrderKeys.js';
+import { requestOtp, verifyOtp } from '../services/storefront/storefrontSmsOtp.service.js';
 import { RECEIPT_IMAGE_DATA_URL_MAX } from '../services/storefront/storefrontReceiptImage.js';
+import { myAccount, myGroupPrices, registerAccount, setPasswordWithLink, signIn, signOut } from '../services/storefront/storefrontBuyerAuth.service.js';
+import { applyForWholesale } from '../services/storefront/storefrontWholesaleApply.service.js';
+import { BUYER_TOKEN_MAX } from '../services/storefront/storefrontBuyerSecrets.js';
+import { PASSWORD_MAX } from '../lib/storefront/storefrontBuyerRules.js';
 
 /**
  * v11 phase 8.1 (package 18, start plan §3): the Storefront API, read only, `GET /api/storefront/v1/...`. Only the site
@@ -153,6 +158,87 @@ router.get('/orders/:number', validate(orderReadSchema), asyncHandler(async (req
 
 router.post('/orders/:number/receipts', writeLimiter, validate(receiptSchema), asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json({ data: await sendReceipt(String(req.params.number), orderKeyOf(req), req.body) });
+}));
+
+/**
+ * v11 phase 8.4a: the login code by SMS. Off (404) until the owner turns the site's texts on and gives the login code a
+ * template. Asking for a code has its own tight limit per buyer address in front of the service's own limits (per
+ * phone, per address and the site's budget of texts), since each code costs an SMS. A right code answers a single-use phone
+ * proof for the sign-up or sign-in that follows; it opens no session by itself.
+ */
+export const STOREFRONT_OTP_REQUESTS_PER_MINUTE = 3;
+const otpLimiter = rateLimit({
+  windowMs: 60_000,
+  max: STOREFRONT_OTP_REQUESTS_PER_MINUTE,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `storefront-otp:${ipKeyGenerator(buyerAddress(req))}`,
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+});
+const otpRequestSchema = z.object({ body: z.object({ phone: z.string().max(40) }).strict() });
+const otpVerifySchema = z.object({ body: z.object({ phone: z.string().max(40), code: z.string().max(20) }).strict() });
+
+router.post('/auth/otp/request', writeLimiter, otpLimiter, validate(otpRequestSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.status(202).json({ data: await requestOtp(req.body.phone, ipKeyGenerator(buyerAddress(req))) });
+}));
+
+router.post('/auth/otp/verify', writeLimiter, validate(otpVerifySchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await verifyOtp(req.body.phone, req.body.code) });
+}));
+
+/**
+ * v11 phase 8.2b (start plan §6 and §8): buyer accounts. A signed-in buyer's session token travels in
+ * `X-Buyer-Session` (the app keeps it in an httpOnly cookie), never in the address. Sign-in, sign-up, the set-password
+ * link and the wholesale form share a tight limit per buyer address, on top of the per-account lock of the service.
+ */
+export const STOREFRONT_AUTH_PER_MINUTE = 10;
+const authLimiter = rateLimit({
+  windowMs: 60_000,
+  max: STOREFRONT_AUTH_PER_MINUTE,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `storefront-auth:${ipKeyGenerator(buyerAddress(req))}`,
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+});
+const sessionOf = (req: Request): string => String(req.headers['x-buyer-session'] ?? '').trim().slice(0, BUYER_TOKEN_MAX + 1);
+const password = z.string().max(PASSWORD_MAX * 2);
+const registerSchema = z.object({ body: z.object({ name: z.string().max(200), phone: z.string().max(40), password }).strict() });
+const loginSchema = z.object({ body: z.object({ phone: z.string().max(40), password }).strict() });
+const setPasswordSchema = z.object({ body: z.object({ token: z.string().max(BUYER_TOKEN_MAX + 1), password }).strict() });
+const applySchema = z.object({
+  body: z.object({
+    name: z.string().max(200), companyName: z.string().max(300), city: z.string().max(120), phone: z.string().max(40),
+    nationalId: z.string().max(40), economicCode: z.string().max(40), note: z.string().max(1000),
+  }).strict(),
+});
+
+router.post('/auth/register', authLimiter, validate(registerSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.status(201).json({ data: await registerAccount(req.body) });
+}));
+
+router.post('/auth/login', authLimiter, validate(loginSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await signIn(req.body) });
+}));
+
+router.post('/auth/logout', writeLimiter, asyncHandler(async (req: Request, res: Response) => {
+  await signOut(sessionOf(req));
+  res.json({ success: true });
+}));
+
+router.post('/auth/set-password', authLimiter, validate(setPasswordSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await setPasswordWithLink(req.body) });
+}));
+
+router.post('/wholesale/apply', authLimiter, validate(applySchema), asyncHandler(async (req: Request, res: Response) => {
+  res.status(201).json({ data: await applyForWholesale(req.body, sessionOf(req)) });
+}));
+
+router.get('/account', asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await myAccount(sessionOf(req)) });
+}));
+
+router.get('/account/prices', asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await myGroupPrices(sessionOf(req)) });
 }));
 
 export default router;

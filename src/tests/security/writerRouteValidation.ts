@@ -32,6 +32,8 @@ export const WRITER_ROUTES_WITHOUT_BODY = new Set([
   'POST /api/piecework/tasks/:id/restore',
   'POST /api/piecework/tasks/clear-defaults', 'POST /api/piecework/tasks/clear-all',
   'POST /api/procurement/orders/:id/deliver',
+  // v11 phase 8.2b: signing out reads only the buyer's own session header
+  'POST /api/storefront/v1/auth/logout',
   'POST /api/warehouses/:id/reactivate',
   'POST /api/woocommerce/sync-all-stocks',
   'POST /api/workflow/delegations/:id/revoke',
