@@ -24,3 +24,6 @@ dist.prev
 node_modules.prev
 .update.lock
 .update-swapping
+storefront/node_modules
+storefront/build
+storefront/.react-router

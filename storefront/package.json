@@ -1,0 +1,38 @@
+{
+  "name": "papital-storefront",
+  "private": true,
+  "type": "module",
+  "description": "papitalgallery.com storefront: server-rendered pages over the ERP Storefront API (v11 phase 8.3)",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "react-router dev",
+    "build": "react-router build",
+    "start": "node server.mjs",
+    "typecheck": "react-router typegen && tsc --noEmit",
+    "test": "react-router build && vitest run",
+    "mock-api": "node mock/mockApi.mjs"
+  },
+  "dependencies": {
+    "@react-router/node": "7.18.5",
+    "express": "^5.2.1",
+    "isbot": "^5.2.2",
+    "lucide-react": "^0.546.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router": "7.18.5"
+  },
+  "devDependencies": {
+    "@react-router/dev": "7.18.5",
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/express": "^5.0.0",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "tailwindcss": "^4.1.14",
+    "typescript": "~6.0.3",
+    "vite": "^7.3.7",
+    "vitest": "^5.0.3"
+  }
+}

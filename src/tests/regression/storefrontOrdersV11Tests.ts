@@ -85,7 +85,7 @@ export async function runStorefrontOrdersV11Tests(shouldRun: (id: string, ...ext
     const settings = {
       cardNumber: VALID_CARD, cardHolder: 'گالری پاپیتال', bankName: 'ملت', iban: VALID_IBAN, freeShippingThreshold: '',
       reservationHours: 24, retailPriceList: retailList, wholesalePriceList: '', lowStockThreshold: 0, stockDisplay: 'count',
-      warehouseCode: warehouse.code, enabled: true, ordersEnabled: false, treasuryAccountId: bank.id, openOrdersPerPhone: 3,
+      warehouseCode: warehouse.code, whatsappNumber: '', whatsappEnabled: false, enabled: true, ordersEnabled: false, treasuryAccountId: bank.id, openOrdersPerPhone: 3,
     };
     const save = async (patch: Body) => {
       const res = await erp.put('/api/storefront/settings', { ...settings, ...patch, version });

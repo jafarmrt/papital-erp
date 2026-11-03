@@ -7,7 +7,7 @@ import { useSaveStorefrontSettingsMutation } from '../../hooks/queries/useStoref
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import type { StorefrontSettingsInput, StorefrontSettingsView } from '../../lib/storefront/storefrontContracts';
 import {
-  LOW_STOCK_THRESHOLD_MAX, RESERVATION_HOURS_MAX, STOCK_DISPLAYS, STOCK_DISPLAY_TITLES, cardNumberError, ibanError, type StockDisplay,
+  LOW_STOCK_THRESHOLD_MAX, RESERVATION_HOURS_MAX, STOCK_DISPLAYS, STOCK_DISPLAY_TITLES, cardNumberError, ibanError, whatsappNumberError, type StockDisplay,
 } from '../../lib/storefront/storefrontRules';
 import { OPEN_ORDERS_PER_PHONE_MAX } from '../../lib/storefront/storefrontOrderRules';
 import { formatPersianNumber } from '../../utils/persianNumber';
@@ -26,7 +26,8 @@ const formOf = (view: StorefrontSettingsView): StorefrontSettingsInput => ({
   cardNumber: view.cardNumber, cardHolder: view.cardHolder, bankName: view.bankName, iban: view.iban,
   freeShippingThreshold: view.freeShippingThreshold, reservationHours: view.reservationHours,
   retailPriceList: view.retailPriceList, wholesalePriceList: view.wholesalePriceList,
-  lowStockThreshold: view.lowStockThreshold, stockDisplay: view.stockDisplay, warehouseCode: view.warehouseCode, enabled: view.enabled,
+  lowStockThreshold: view.lowStockThreshold, stockDisplay: view.stockDisplay, warehouseCode: view.warehouseCode,
+  whatsappNumber: view.whatsappNumber, whatsappEnabled: view.whatsappEnabled, enabled: view.enabled,
   ordersEnabled: view.ordersEnabled, treasuryAccountId: view.treasuryAccountId, openOrdersPerPhone: view.openOrdersPerPhone,
   version: view.version,
 });
@@ -41,6 +42,7 @@ export function StorefrontSettingsForm({ view, canManage }: { view: StorefrontSe
 
   const cardProblem = cardNumberError(form.cardNumber);
   const ibanProblem = ibanError(form.iban);
+  const whatsappProblem = whatsappNumberError(form.whatsappNumber);
   const effective = view.warehouses.find(w => w.code === view.effectiveWarehouseCode);
 
   const submit = () => {
@@ -179,6 +181,22 @@ export function StorefrontSettingsForm({ view, canManage }: { view: StorefrontSe
                 ))}
               </div>
             </div>
+          </div>
+        </section>
+
+        <section aria-label="واتس‌اپ" className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
+          <h3 className="text-sm font-black text-slate-800">سفارش در واتس‌اپ</h3>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label htmlFor={`${id}-wa`} className={label}>شماره واتس‌اپ فروشگاه</label>
+              <input id={`${id}-wa`} dir="ltr" inputMode="tel" autoComplete="off" className={field} value={form.whatsappNumber}
+                onChange={e => set('whatsappNumber', e.target.value)} aria-invalid={whatsappProblem ? true : undefined} />
+              <p className={whatsappProblem ? 'mt-1 text-xs text-rose-600' : hint}>{whatsappProblem ?? 'شماره همراهی که سفارش‌ها و پرسش‌های سایت به آن می‌رسد.'}</p>
+            </div>
+            <label className="inline-flex items-center gap-2 self-center text-sm font-bold text-slate-700">
+              <input type="checkbox" checked={form.whatsappEnabled} onChange={e => set('whatsappEnabled', e.target.checked)} />
+              دکمهٔ «سفارش در واتس‌اپ» روی سایت نشان داده شود
+            </label>
           </div>
         </section>
       </fieldset>
