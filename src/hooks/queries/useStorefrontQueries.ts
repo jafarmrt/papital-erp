@@ -161,6 +161,7 @@ export type StorefrontOrderAction =
   | { kind: 'confirm'; receiptId: number }
   | { kind: 'reject-receipt'; receiptId: number; reason: string }
   | { kind: 'cancel' }
+  | { kind: 'approve-on-account' }
   | { kind: 'fulfil'; status: 'shipped' | 'delivered'; trackingCode: string };
 
 export function useStorefrontOrderActionMutation(id: number) {

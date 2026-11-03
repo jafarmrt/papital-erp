@@ -1,15 +1,17 @@
-import { and, asc, eq, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, lte, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { storefrontOrders } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { logger } from '../../middleware/logger.js';
+import { EXPIRING_ORDER_STATUSES, type OrderStatus } from '../../lib/storefront/storefrontOrderRules.js';
 import { STOREFRONT_BOT_USER } from './storefrontCustomer.js';
 import { cancelOpenOrder } from './storefrontOrderAdmin.service.js';
 import { isStorefrontOrderingOn } from './storefrontSettings.service.js';
 
 /**
  * v11 phase 8.2a (start plan §5): the end of a reservation. Once a minute, while the site takes orders, each order still
- * waiting for payment past its deadline, with no receipt waiting for review, is cancelled and its proforma voided, which
+ * waiting for payment past its deadline, with no receipt waiting for review (8.2b part 2: or an on-account order no
+ * colleague confirmed in time), is cancelled and its proforma voided, which
  * releases the stock. Each order is its own transaction with its own audit rows, so one that cannot be voided (a colleague
  * finalized its proforma in the ERP) is logged and skipped and never stops the others. Nothing runs at boot (§9.2).
  */
@@ -19,7 +21,7 @@ export const STOREFRONT_EXPIRY_INTERVAL_MS = 60_000;
 export async function expireDueOrdersOnce(): Promise<{ expired: number; failed: number }> {
   if (!(await isStorefrontOrderingOn(orm))) return { expired: 0, failed: 0 };
   const due = await orm.select({ id: storefrontOrders.id }).from(storefrontOrders)
-    .where(and(eq(storefrontOrders.status, 'awaiting_payment'), lte(storefrontOrders.reserveUntil, sql`now()`)))
+    .where(and(inArray(storefrontOrders.status, [...EXPIRING_ORDER_STATUSES]), lte(storefrontOrders.reserveUntil, sql`now()`)))
     .orderBy(asc(storefrontOrders.reserveUntil), asc(storefrontOrders.id)).limit(STOREFRONT_EXPIRY_BATCH);
   let expired = 0;
   let failed = 0;
@@ -29,11 +31,13 @@ export async function expireDueOrdersOnce(): Promise<{ expired: number; failed: 
         const [order] = await tx.select().from(storefrontOrders).where(eq(storefrontOrders.id, id)).for('update');
         // decided again under the lock: a receipt may have arrived since the list was read
         const [{ stillDue }] = (await tx.execute(sql`SELECT (${order?.reserveUntil ?? null}::timestamptz <= now()) AS "stillDue"`)).rows as Array<{ stillDue: boolean | null }>;
-        if (!order || order.status !== 'awaiting_payment' || !stillDue) return false;
+        if (!order || !EXPIRING_ORDER_STATUSES.includes(order.status as OrderStatus) || !stillDue) return false;
         await cancelOpenOrder(tx, order, 'expired', { username: STOREFRONT_BOT_USER });
         await logActivity({
           tx, username: STOREFRONT_BOT_USER, action: 'UPDATE', entity: 'سفارش سایت', entityId: order.id,
-          description: `مهلت پرداخت سفارش سایت ${order.orderNumber} گذشت و رزرو آن آزاد شد`,
+          description: order.status === 'awaiting_approval'
+            ? `مهلت تأیید سفارش به حساب ${order.orderNumber} گذشت و رزرو آن آزاد شد`
+            : `مهلت پرداخت سفارش سایت ${order.orderNumber} گذشت و رزرو آن آزاد شد`,
           details: { before: { status: order.status, reserveUntil: order.reserveUntil }, after: { status: 'cancelled', cancelReason: 'expired' } },
         });
         return true;

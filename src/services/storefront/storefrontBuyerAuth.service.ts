@@ -44,7 +44,7 @@ import {
 const LAST_SEEN_STEP_MS = 10 * 60_000;
 
 export type AccountRecord = typeof storefrontBuyerAccounts.$inferSelect;
-type GroupRecord = typeof storefrontBuyerGroups.$inferSelect;
+export type GroupRecord = typeof storefrontBuyerGroups.$inferSelect;
 
 export const accountFieldError = (field: string, message: string) => new ValidationError(message, { field }, 'STOREFRONT_ACCOUNT_FIELD_INVALID');
 /** A missing, wrong, used or expired phone proof: one answer */

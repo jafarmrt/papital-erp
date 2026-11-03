@@ -4,7 +4,7 @@ import { ShoppingBag, Search } from 'lucide-react';
 import { STOREFRONT_ORDERS_PAGE_SIZE, useStorefrontOrdersQuery, type StorefrontOrderFilter } from '../hooks/queries/useStorefrontQueries';
 import { useRialDisplay } from '../hooks/useAppCurrency';
 import { useHasPermission } from '../contexts/AuthContext';
-import { ORDER_STATUS_TITLES } from '../lib/storefront/storefrontOrderRules';
+import { ORDER_STATUS_TITLES, PAYMENT_METHOD_TITLES } from '../lib/storefront/storefrontOrderRules';
 import { StorefrontOrderDetail } from '../components/storefront/StorefrontOrderDetail';
 import { ORDER_STATUS_TONES } from '../components/storefront/storefrontOrderTones';
 import { formatPersianCode, formatPersianNumber } from '../utils/persianNumber';
@@ -21,6 +21,8 @@ const FILTERS: Array<{ value: StorefrontOrderFilter['status']; label: string }> 
   { value: 'payment_submitted', label: ORDER_STATUS_TITLES.payment_submitted },
   { value: 'awaiting_payment', label: ORDER_STATUS_TITLES.awaiting_payment },
   { value: 'paid', label: ORDER_STATUS_TITLES.paid },
+  { value: 'awaiting_approval', label: ORDER_STATUS_TITLES.awaiting_approval },
+  { value: 'confirmed', label: ORDER_STATUS_TITLES.confirmed },
   { value: 'shipped', label: ORDER_STATUS_TITLES.shipped },
   { value: 'delivered', label: ORDER_STATUS_TITLES.delivered },
   { value: 'cancelled', label: ORDER_STATUS_TITLES.cancelled },
@@ -90,6 +92,7 @@ export default function StorefrontOrdersPage() {
                 <div className="mt-1 flex items-center justify-between gap-2 text-xs text-slate-500">
                   <span>{formatPersianDateTime(row.createdAt)}</span>
                   {row.hasPendingReceipt && <span className="font-bold text-amber-700">رسید در انتظار بررسی</span>}
+                  {row.paymentMethod === 'on_account' && <span className="font-bold text-indigo-700">{PAYMENT_METHOD_TITLES.on_account}</span>}
                 </div>
               </button>
             </li>

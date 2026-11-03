@@ -1,19 +1,20 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { orm, type DbExecutor, type DbTransaction } from '../../db/drizzle.js';
-import { storefrontOrders } from '../../db/schema.js';
+import { customers, storefrontOrders } from '../../db/schema.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { phoneMatchKey } from '../../lib/search/phoneMatchKey.js';
 import { money } from '../../lib/money.js';
 import {
   ADDRESS_MAX, ADDRESS_MIN, BUYER_NOTE_MAX, CITY_MAX, OPEN_ORDER_STATUSES, RECIPIENT_NAME_MAX, cartLinesError, cleanText, isIranProvince,
-  normalizeMobile, normalizePostalCode,
+  isPaymentMethod, normalizeMobile, normalizePostalCode, type PaymentMethod,
 } from '../../lib/storefront/storefrontOrderRules.js';
 import type { PlaceOrderRequest, PlacedOrder, ShippingQuoteAnswer, ShippingQuoteRequest } from '../../lib/storefront/storefrontOrderContracts.js';
 import type { StorefrontSettingsInput } from '../../lib/storefront/storefrontContracts.js';
 import { DocumentService } from '../document.service.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { STOREFRONT_BOT_USER, resolveSiteCustomer } from './storefrontCustomer.js';
+import { activeGroupOf, sessionAccount, type AccountRecord, type GroupRecord } from './storefrontBuyerAuth.service.js';
 import { priceCart, shippingOptions } from './storefrontOrderCart.js';
 import { isOrderAccessKey, newAccessSalt, orderAccessKey, requestHashOf } from './storefrontOrderKeys.js';
 import { notifySiteOrder } from './storefrontOrderNotices.js';
@@ -45,6 +46,7 @@ interface CleanOrder {
   note: string;
   shippingMethod: string;
   lines: Array<{ slug: string; quantity: number }>;
+  paymentMethod: PaymentMethod;
 }
 
 const fieldError = (field: string, message: string) => new ValidationError(message, { field }, 'STOREFRONT_ORDER_FIELD_INVALID');
@@ -73,7 +75,34 @@ export function cleanOrderRequest(input: PlaceOrderRequest): CleanOrder {
   const lines = (Array.isArray(input.lines) ? input.lines : []).map(l => ({ slug: String(l?.slug ?? '').trim(), quantity: Number(l?.quantity) }));
   const linesError = cartLinesError(lines);
   if (linesError) throw fieldError('lines', linesError);
-  return { requestKey, recipientName, phone, phoneKey: phoneMatchKey(phone), province, city, address, postalCode, note, shippingMethod, lines };
+  const paymentMethod = input.paymentMethod === undefined || input.paymentMethod === null ? 'card' : input.paymentMethod;
+  if (!isPaymentMethod(paymentMethod)) throw fieldError('paymentMethod', 'روش پرداخت را انتخاب کنید.');
+  return { requestKey, recipientName, phone, phoneKey: phoneMatchKey(phone), province, city, address, postalCode, note, shippingMethod, lines, paymentMethod };
+}
+
+/**
+ * v11 phase 8.2b part 2: who is ordering. A live session links the order to its account; an approved account of an
+ * active group orders with the group's prices and rules, and only it may pay «به حساب» when its group allows it. A
+ * session that is not live is ignored (the order is a guest's), so a stale cookie never blocks a purchase.
+ */
+interface OrderBuyer {
+  account: AccountRecord | null;
+  group: GroupRecord | null;
+}
+
+async function orderBuyer(executor: DbExecutor, rawSession: unknown): Promise<OrderBuyer> {
+  const account = await sessionAccount(executor, rawSession);
+  return { account, group: account ? await activeGroupOf(executor, account) : null };
+}
+
+function assertPaymentAllowed(buyer: OrderBuyer, method: PaymentMethod): void {
+  const group = buyer.group;
+  const allowed = method === 'card' ? !group || group.allowCard === 1 : Boolean(group && group.allowOnAccount === 1);
+  if (!allowed) {
+    throw fieldError('paymentMethod', method === 'card'
+      ? 'پرداخت کارت‌به‌کارت برای گروه خرید شما باز نیست؛ «به حساب» را انتخاب کنید.'
+      : 'پرداخت «به حساب» فقط برای حساب‌های خرید عمده‌ای است که فروشگاه برایشان باز کرده است.');
+  }
 }
 
 async function settingsForOrders(executor: DbExecutor): Promise<StorefrontSettingsInput> {
@@ -83,14 +112,15 @@ async function settingsForOrders(executor: DbExecutor): Promise<StorefrontSettin
 }
 
 /** `POST /shipping/quote`: the methods a cart can use for a province */
-export async function quoteShipping(input: ShippingQuoteRequest): Promise<ShippingQuoteAnswer> {
+export async function quoteShipping(input: ShippingQuoteRequest, rawSession?: unknown): Promise<ShippingQuoteAnswer> {
   const settings = await settingsForOrders(orm);
+  const buyer = await orderBuyer(orm, rawSession);
   const province = String(input.province ?? '').trim();
   if (!isIranProvince(province)) throw fieldError('province', 'استان را از فهرست انتخاب کنید.');
   const lines = (Array.isArray(input.lines) ? input.lines : []).map(l => ({ slug: String(l?.slug ?? '').trim(), quantity: Number(l?.quantity) }));
   const linesError = cartLinesError(lines);
   if (linesError) throw fieldError('lines', linesError);
-  const cart = await priceCart(orm, settings, lines);
+  const cart = await priceCart(orm, settings, lines, buyer.group);
   return { itemsAmount: cart.itemsAmount, options: await shippingOptions(orm, settings, cart, province) };
 }
 
@@ -112,13 +142,15 @@ const isRequestKeyViolation = (err: unknown): boolean => {
   return e?.code === '23505' && e?.constraint === 'uq_storefront_orders_request_key';
 };
 
-export async function placeOrder(input: PlaceOrderRequest): Promise<PlacedOrder> {
+export async function placeOrder(input: PlaceOrderRequest, rawSession?: unknown): Promise<PlacedOrder> {
   const order = cleanOrderRequest(input);
-  const requestHash = requestHashOf({ ...order, requestKey: undefined });
+  // the account is part of the request: the same key from another account (or signed out) is another request
+  const signedIn = await sessionAccount(orm, rawSession);
+  const requestHash = requestHashOf({ ...order, requestKey: undefined, ...(signedIn ? { accountId: signedIn.id } : {}) });
   const existing = await findByRequestKey(orm, order.requestKey);
   if (existing) return replay(existing, requestHash);
   try {
-    const placed = await orm.transaction(tx => placeInTransaction(tx, order, requestHash));
+    const placed = await orm.transaction(tx => placeInTransaction(tx, order, requestHash, rawSession));
     return placed;
   } catch (err) {
     if (!isRequestKeyViolation(err)) throw err;
@@ -128,8 +160,11 @@ export async function placeOrder(input: PlaceOrderRequest): Promise<PlacedOrder>
   }
 }
 
-async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestHash: string): Promise<PlacedOrder> {
+async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestHash: string, rawSession: unknown): Promise<PlacedOrder> {
   const settings = await settingsForOrders(tx);
+  const buyer = await orderBuyer(tx, rawSession);
+  assertPaymentAllowed(buyer, order.paymentMethod);
+  const onAccount = order.paymentMethod === 'on_account';
   // one phone's orders one at a time, so the open-orders limit holds under concurrent requests; then the items (§2.6)
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`storefront-phone:${order.phoneKey}`}))`);
   const [{ open }] = await tx.select({ open: sql<number>`count(*)::int` }).from(storefrontOrders)
@@ -138,7 +173,7 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
     throw new ConflictError('برای این شمارهٔ همراه سفارش پرداخت‌نشدهٔ دیگری هست؛ اول آن را پرداخت کنید یا منتظر پایان مهلتش بمانید.', undefined, 'STOREFRONT_TOO_MANY_OPEN_ORDERS');
   }
 
-  const cart = await priceCart(tx, settings, order.lines);
+  const cart = await priceCart(tx, settings, order.lines, buyer.group);
   await lockStockItems(tx, cart.lines.map(l => l.item.itemId));
   const warehouse = await storefrontWarehouseCode(tx, settings.warehouseCode);
   const sellable = await storefrontSellable(tx, cart.lines.map(l => l.item.itemId), settings.warehouseCode);
@@ -159,12 +194,13 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
 
   const [{ value: sequence }] = (await tx.execute(sql`SELECT nextval('storefront_order_number_seq')::text AS value`)).rows as Array<{ value: string }>;
   const orderNumber = String(sequence);
-  const customer = await resolveSiteCustomer(tx, `سفارش سایت ${orderNumber}`, { name: order.recipientName, phone: order.phone, city: order.city, address: order.address });
+  // an approved buyer's orders go on the customer a colleague linked at approval; any other order finds or makes one by phone
+  const customer = await customerOf(tx, buyer, orderNumber, order);
   const fullAddress = `${order.province}، ${order.city}، ${order.address}، کد پستی ${order.postalCode}`;
   const documentId = await DocumentService.createDocument({
     docType: 'invoice', status: 'proforma', inOut: 'out', user: STOREFRONT_BOT_USER,
     partyId: customer.id, buyerName: customer.name, buyerPhone: order.phone, buyerCity: order.city, buyerAddress: fullAddress,
-    notes: `${ORDER_NOTE_PREFIX} ${orderNumber}، ارسال: ${option.title}${option.kind === 'on_delivery' ? ' (هزینه در محل)' : ''}`,
+    notes: `${ORDER_NOTE_PREFIX} ${orderNumber}، ارسال: ${option.title}${option.kind === 'on_delivery' ? ' (هزینه در محل)' : ''}${onAccount ? '، پرداخت به حساب' : ''}${buyer.group ? `، گروه خریدار «${buyer.group.title}»` : ''}`,
     currency: 'IRR', vatAmount: 0, vatPercent: 0, serviceChargeAmount: shippingAmount,
     items: cart.lines.map(l => ({ itemId: l.item.itemId, quantity: l.quantity, unit_price: Number(l.unitPrice), location: warehouse })),
     location: warehouse, externalTx: tx,
@@ -178,27 +214,39 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
 
   const [row] = await tx.insert(storefrontOrders).values({
     orderNumber, accessSalt: newAccessSalt(), requestKey: order.requestKey, requestHash, documentId, customerId: customer.id,
-    status: 'awaiting_payment', recipientName: order.recipientName, phone: order.phone, phoneKey: order.phoneKey,
+    status: onAccount ? 'awaiting_approval' : 'awaiting_payment', recipientName: order.recipientName, phone: order.phone, phoneKey: order.phoneKey,
     province: order.province, city: order.city, address: order.address, postalCode: order.postalCode, buyerNote: order.note,
     shippingMethodCode: option.code, shippingMethodTitle: option.title, shippingOnDelivery: option.kind === 'on_delivery' ? 1 : 0,
     shippingAmount: money(shippingAmount), itemsAmount: money(cart.itemsAmount), payableAmount: money(payable),
     reserveUntil: sql`now() + make_interval(hours => ${settings.reservationHours})`,
+    buyerAccountId: buyer.account?.id ?? null, buyerGroupId: buyer.group?.id ?? null, paymentMethod: order.paymentMethod,
     updatedBy: STOREFRONT_BOT_USER,
   }).returning();
-  // v11 phase 8.4a: the buyer's text, queued with the order (sent after the commit; nothing while sending is off)
-  await queueOrderSms(tx, row, 'order_placed');
+  // v11 phase 8.4a: the buyer's text, queued with the order (sent after the commit; nothing while sending is off). Its
+  // text asks for a card-to-card payment, so an on-account order sends none.
+  if (!onAccount) await queueOrderSms(tx, row, 'order_placed');
   await logActivity({
     tx, username: STOREFRONT_BOT_USER, action: 'CREATE', entity: 'سفارش سایت', entityId: row.id,
     description: `ثبت سفارش سایت ${orderNumber} با پیش‌فاکتور «${storedDocument?.refNumber ?? documentId}»`,
     details: {
       after: {
         orderNumber, documentId, customerId: customer.id, shippingMethod: option.code, itemsAmount: cart.itemsAmount,
-        shippingAmount, payableAmount: payable, reserveUntil: row.reserveUntil,
+        shippingAmount, payableAmount: payable, reserveUntil: row.reserveUntil, paymentMethod: order.paymentMethod,
+        buyerAccountId: row.buyerAccountId, buyerGroupId: row.buyerGroupId,
       },
     },
   });
   await notifySiteOrder(tx, 'placed', row);
   return { order: await buyerOrderView(tx, row, settings), accessKey: orderAccessKey(orderNumber, row.accessSalt) };
+}
+
+async function customerOf(tx: DbTransaction, buyer: OrderBuyer, orderNumber: string, order: CleanOrder): Promise<{ id: number; name: string }> {
+  if (buyer.group && buyer.account?.customerId) {
+    const [linked] = await tx.select({ id: customers.id, name: customers.name }).from(customers)
+      .where(and(eq(customers.id, buyer.account.customerId), eq(customers.isDeleted, 0)));
+    if (linked) return linked;
+  }
+  return resolveSiteCustomer(tx, `سفارش سایت ${orderNumber}`, { name: order.recipientName, phone: order.phone, city: order.city, address: order.address });
 }
 
 /** An order of the buyer who holds its key; a missing order and a wrong key are the same 404 */

@@ -6,8 +6,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  NEXT_FULFILMENT, ORDER_LINES_MAX, ORDER_STATUSES, ORDER_STATUS_TITLES, cartLinesError, cleanText, isIranProvince, isOrderStatus,
-  normalizeCardLast4, normalizeMobile, normalizePostalCode, normalizeReference, tomanText,
+  EXPIRING_ORDER_STATUSES, NEXT_FULFILMENT, OPEN_ORDER_STATUSES, ORDER_LINES_MAX, ORDER_STATUSES, ORDER_STATUS_TITLES, PAYMENT_METHODS,
+  PAYMENT_METHOD_TITLES, cartLinesError, cleanText, isIranProvince, isOrderStatus, isPaymentMethod, normalizeCardLast4, normalizeMobile, normalizePostalCode, normalizeReference, tomanText,
 } from '../../lib/storefront/storefrontOrderRules';
 
 describe('normalizeMobile', () => {
@@ -70,10 +70,22 @@ describe('text, provinces, tomans and steps', () => {
     expect(tomanText('0')).toBe('0');
     expect(tomanText('x')).toBe('');
   });
-  it('titles every status and moves paid → shipped → delivered only', () => {
+  it('titles every status and moves paid (or confirmed) → shipped → delivered only', () => {
     for (const status of ORDER_STATUSES) expect(ORDER_STATUS_TITLES[status]).toBeTruthy();
     expect(isOrderStatus('paid')).toBe(true);
     expect(isOrderStatus('refunded')).toBe(false);
-    expect(NEXT_FULFILMENT).toEqual({ paid: 'shipped', shipped: 'delivered' });
+    expect(NEXT_FULFILMENT).toEqual({ paid: 'shipped', confirmed: 'shipped', shipped: 'delivered' });
   });
 });
+
+describe('storefront order rules, 8.2b part 2', () => {
+  it('ships a confirmed on-account order like a paid one, and expires an unconfirmed one like an unpaid one', () => {
+    expect(NEXT_FULFILMENT.confirmed).toBe('shipped');
+    expect(EXPIRING_ORDER_STATUSES).toEqual(['awaiting_payment', 'awaiting_approval']);
+    expect(OPEN_ORDER_STATUSES).toContain('awaiting_approval');
+    expect(PAYMENT_METHODS.every(m => PAYMENT_METHOD_TITLES[m])).toBe(true);
+    expect(isPaymentMethod('on_account')).toBe(true);
+    expect(isPaymentMethod('credit')).toBe(false);
+  });
+});
+

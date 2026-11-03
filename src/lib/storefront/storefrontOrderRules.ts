@@ -6,12 +6,16 @@ import { IRAN_PROVINCES, digitsOnly, rialAmountText } from './storefrontRules.js
  * server, the ERP orders screen and the storefront app. Nothing here reads the database. Every field a buyer types on a
  * phone takes Persian, Arabic or Latin digits (§9الف), and each error is one Persian sentence for that field.
  */
-export const ORDER_STATUSES = ['awaiting_payment', 'payment_submitted', 'paid', 'shipped', 'delivered', 'cancelled'] as const;
+export const ORDER_STATUSES = [
+  'awaiting_payment', 'payment_submitted', 'paid', 'awaiting_approval', 'confirmed', 'shipped', 'delivered', 'cancelled',
+] as const;
 export type OrderStatus = typeof ORDER_STATUSES[number];
 export const ORDER_STATUS_TITLES: Readonly<Record<OrderStatus, string>> = {
   awaiting_payment: 'در انتظار پرداخت',
   payment_submitted: 'در انتظار تأیید پرداخت',
   paid: 'پرداخت‌شده',
+  awaiting_approval: 'در انتظار تأیید فروشگاه',
+  confirmed: 'تأییدشده (به حساب)',
   shipped: 'ارسال‌شده',
   delivered: 'تحویل‌شده',
   cancelled: 'لغوشده',
@@ -19,7 +23,18 @@ export const ORDER_STATUS_TITLES: Readonly<Record<OrderStatus, string>> = {
 export const isOrderStatus = (value: unknown): value is OrderStatus => ORDER_STATUSES.includes(value as OrderStatus);
 
 /** Orders whose proforma still holds stock: they count towards the open-orders limit and the expiry sweep reads them */
-export const OPEN_ORDER_STATUSES: readonly OrderStatus[] = ['awaiting_payment', 'payment_submitted'];
+export const OPEN_ORDER_STATUSES: readonly OrderStatus[] = ['awaiting_payment', 'payment_submitted', 'awaiting_approval'];
+/** Open orders the expiry sweep cancels when their window ends: no receipt is waiting for a colleague */
+export const EXPIRING_ORDER_STATUSES: readonly OrderStatus[] = ['awaiting_payment', 'awaiting_approval'];
+
+/**
+ * v11 phase 8.2b part 2: how an order is paid. «کارت‌به‌کارت» is open to everyone; «به حساب» only to a signed-in account
+ * of a buyer group that allows it. An on-account order sends no receipt: a colleague confirms it into the invoice.
+ */
+export const PAYMENT_METHODS = ['card', 'on_account'] as const;
+export type PaymentMethod = typeof PAYMENT_METHODS[number];
+export const PAYMENT_METHOD_TITLES: Readonly<Record<PaymentMethod, string>> = { card: 'کارت‌به‌کارت', on_account: 'به حساب' };
+export const isPaymentMethod = (value: unknown): value is PaymentMethod => PAYMENT_METHODS.includes(value as PaymentMethod);
 
 export const CANCEL_REASONS = ['expired', 'staff'] as const;
 export type CancelReason = typeof CANCEL_REASONS[number];
@@ -114,4 +129,6 @@ export function tomanText(rial: string): string {
 }
 
 /** The transitions the ERP orders screen offers for each status */
-export const NEXT_FULFILMENT: Readonly<Partial<Record<OrderStatus, 'shipped' | 'delivered'>>> = { paid: 'shipped', shipped: 'delivered' };
+export const NEXT_FULFILMENT: Readonly<Partial<Record<OrderStatus, 'shipped' | 'delivered'>>> = {
+  paid: 'shipped', confirmed: 'shipped', shipped: 'delivered',
+};

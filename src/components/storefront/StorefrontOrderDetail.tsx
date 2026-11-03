@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Phone, ShoppingBag } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '../common/Modal';
@@ -16,7 +17,8 @@ import { errorMessageOf } from '../../utils';
 /**
  * v11 phase 8.2a (start plan §5): one site order for a colleague: who and where, what was sold (read from the ERP
  * document), each card-to-card receipt with «تأیید پرداخت» or «رد رسید», and the next step (cancel, ship with a tracking
- * code, deliver). The server decides what is allowed (`actions`) and checks it again; confirming also needs the
+ * code, deliver); 8.2b part 2: an on-account order of a buyer group gets «تأیید سفارش به حساب» instead of receipts.
+ * The server decides what is allowed (`actions`) and checks it again; confirming also needs the
  * treasury and finalize keys, which the server checks and explains.
  */
 const button = 'min-h-11 rounded-xl px-4 py-2.5 text-sm font-bold disabled:opacity-50';
@@ -57,6 +59,7 @@ function OrderBody({ order, canManage, busy, run }: { order: AdminOrderDetail; c
     <div className="space-y-4 text-sm">
       {order.payBefore && <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">کالاها تا {formatPersianDateTime(order.payBefore)} برای این سفارش نگه داشته شده‌اند.</p>}
       {order.cancelReasonTitle && <p className="rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700">{order.cancelReasonTitle}</p>}
+      <BuyerBox order={order} />
 
       <section aria-label="گیرنده" className="space-y-1">
         <h4 className="text-xs font-black text-slate-500">گیرنده</h4>
@@ -97,15 +100,38 @@ function OrderBody({ order, canManage, busy, run }: { order: AdminOrderDetail; c
         </p>
       </section>
 
-      <section aria-label="رسیدهای کارت‌به‌کارت" className="space-y-2">
-        <h4 className="text-xs font-black text-slate-500">رسیدهای کارت‌به‌کارت</h4>
-        {order.receipts.length === 0 && <p className="text-xs text-slate-500">خریدار هنوز رسیدی نفرستاده است.</p>}
-        {order.receipts.map(receipt => (
-          <ReceiptCard key={receipt.id} receipt={receipt} payable={order.payableAmount}
-            orderId={order.id} canReview={canManage && receipt.status === 'pending' && order.actions.confirm} busy={busy} run={run} />
-        ))}
-      </section>
+      {order.paymentMethod === 'card' && (
+        <section aria-label="رسیدهای کارت‌به‌کارت" className="space-y-2">
+          <h4 className="text-xs font-black text-slate-500">رسیدهای کارت‌به‌کارت</h4>
+          {order.receipts.length === 0 && <p className="text-xs text-slate-500">خریدار هنوز رسیدی نفرستاده است.</p>}
+          {order.receipts.map(receipt => (
+            <ReceiptCard key={receipt.id} receipt={receipt} payable={order.payableAmount}
+              orderId={order.id} canReview={canManage && receipt.status === 'pending' && order.actions.confirm} busy={busy} run={run} />
+          ))}
+        </section>
+      )}
     </div>
+  );
+}
+
+/** v11 phase 8.2b part 2: the buyer account and group the order came with, and how it is paid */
+function BuyerBox({ order }: { order: AdminOrderDetail }) {
+  const rial = useRialDisplay();
+  if (!order.buyer && order.paymentMethod === 'card') return null;
+  return (
+    <section aria-label="خریدار" className="space-y-1 rounded-xl border border-slate-200 p-3 text-xs">
+      <p className="flex flex-wrap items-center gap-2">
+        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 font-bold text-slate-700">پرداخت: {order.paymentMethodTitle}</span>
+        {order.group && <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 font-bold text-indigo-800">گروه خریدار: {order.group.title}</span>}
+      </p>
+      {order.buyer && <p className="text-slate-700">حساب سایت: {order.buyer.companyName ? `${order.buyer.companyName} (${order.buyer.name})` : order.buyer.name}</p>}
+      {order.actions.approveOnAccount && (
+        <p className="rounded-lg bg-amber-50 p-2 text-amber-900">
+          پیش از تأیید، ماندهٔ حساب طرف حساب را در <Link to="/customers" state={{ editCustomerId: order.customerId }} className="font-bold underline">پروندهٔ طرف حساب</Link> ببینید.
+          {order.group && BigInt(order.group.creditLimit || '0') > 0n && <> سقف اعتبار گروه: {rial.number(order.group.creditLimit)} {rial.label}.</>}
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -157,9 +183,13 @@ function OrderSteps({ order, busy, run }: { order: AdminOrderDetail; busy: boole
   const [tracking, setTracking] = useState(order.trackingCode);
   const [cancelling, setCancelling] = useState(false);
   const next = order.actions.fulfil;
-  if (!next && !order.actions.cancel) return null;
+  if (!next && !order.actions.cancel && !order.actions.approveOnAccount) return null;
   return (
     <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end sm:justify-end">
+      {order.actions.approveOnAccount && !cancelling && (
+        <button type="button" disabled={busy} onClick={() => run({ kind: 'approve-on-account' }, 'سفارش به حساب تأیید شد و فاکتور قطعی شد.')}
+          className={`${button} bg-emerald-600 text-white`}>تأیید سفارش به حساب</button>
+      )}
       {next === 'shipped' && (
         <form className="flex w-full flex-col gap-2 sm:flex-row sm:items-end" onSubmit={(e) => { e.preventDefault(); run({ kind: 'fulfil', status: 'shipped', trackingCode: tracking }, 'سفارش ارسال‌شده ثبت شد.'); }}>
           <label className="w-full text-xs font-bold text-slate-700">

@@ -1,4 +1,4 @@
-import type { CancelReason, OrderStatus, ReceiptStatus } from './storefrontOrderRules.js';
+import type { CancelReason, OrderStatus, PaymentMethod, ReceiptStatus } from './storefrontOrderRules.js';
 
 /**
  * v11 phase 8.2a: the answers of the order routes, one contract for the server, the ERP orders screen and the storefront
@@ -42,6 +42,8 @@ export interface PlaceOrderRequest {
   note: string;
   shippingMethod: string;
   lines: Array<{ slug: string; quantity: number }>;
+  /** v11 phase 8.2b part 2: 'card' (the default) or, for a signed-in account of a group that allows it, 'on_account' */
+  paymentMethod?: PaymentMethod;
 }
 
 export interface OrderPaymentInfo {
@@ -93,6 +95,10 @@ export interface BuyerOrder {
   trackingCode: string;
   cancelReason: CancelReason | null;
   cancelReasonTitle: string;
+  /** v11 phase 8.2b part 2: how the order is paid, and whether it was placed with a buyer group's prices */
+  paymentMethod: PaymentMethod;
+  paymentMethodTitle: string;
+  wholesale: boolean;
 }
 
 /** The answer of placing an order: the order, and its tracking key (also answered again to a repeat of the same request) */
@@ -124,6 +130,7 @@ export interface AdminOrderRow {
   payableAmount: string;
   hasPendingReceipt: boolean;
   payBefore: string | null;
+  paymentMethod: PaymentMethod;
 }
 
 export interface AdminOrderPage {
@@ -151,6 +158,34 @@ export interface AdminOrderDetail extends Omit<BuyerOrder, 'payment' | 'canSendR
   documentStatus: string;
   receipts: AdminReceipt[];
   updatedBy: string;
-  /** what the screen may offer now */
-  actions: { confirm: boolean; reject: boolean; cancel: boolean; fulfil: 'shipped' | 'delivered' | null };
+  /** v11 phase 8.2b part 2: the buyer account and group the order was placed with (null for a guest or retail order) */
+  buyer: { accountId: number; name: string; companyName: string } | null;
+  group: { id: number; title: string; creditLimit: string } | null;
+  /** what the screen may offer now; approveOnAccount: «تأیید سفارش به حساب» */
+  actions: { confirm: boolean; reject: boolean; cancel: boolean; approveOnAccount: boolean; fulfil: 'shipped' | 'delivered' | null };
+}
+
+/** v11 phase 8.2b part 2: a signed-in buyer's orders (`GET /api/storefront/v1/account/orders`) */
+export interface AccountOrderRow {
+  number: string;
+  createdAt: string;
+  status: OrderStatus;
+  statusTitle: string;
+  payableAmount: string;
+  payableToman: string;
+  paymentMethod: PaymentMethod;
+  itemCount: number;
+}
+
+export interface AccountOrderPage {
+  data: AccountOrderRow[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+/** `POST /api/storefront/v1/account/orders/claim`: a guest order joins the signed-in account with its tracking key */
+export interface ClaimOrderRequest {
+  number: string;
+  accessKey: string;
 }
