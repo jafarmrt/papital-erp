@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { MessageSquareText, Save, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { DecimalInput } from '../common/DecimalInput';
 import {
   useSaveStorefrontSmsSettingsMutation, useSendTestSmsMutation, useStorefrontSmsLogQuery, useStorefrontSmsSettingsQuery,
 } from '../../hooks/queries/useStorefrontSmsQueries';
@@ -125,8 +126,8 @@ function SmsSettingsForm({ view, canManage }: { view: StorefrontSmsSettingsView;
 
         <section aria-label="سقف کد ورود" className="rounded-2xl border border-slate-200 bg-white p-5 space-y-2">
           <label htmlFor={`${id}-cap`} className={label}>بیشترین کد ورود در یک ساعت، برای کل سایت</label>
-          <input id={`${id}-cap`} type="number" min={1} max={OTP_HOURLY_CAP_MAX} className={`${field} max-w-[10rem]`} value={form.otpHourlyCap}
-            onChange={e => set('otpHourlyCap', Math.trunc(Number(e.target.value)) || 1)} />
+          <DecimalInput id={`${id}-cap`} className={`${field} max-w-[10rem]`} grouped={false} value={form.otpHourlyCap} min={1} max={OTP_HOURLY_CAP_MAX} step={1}
+            onValueChange={v => set('otpHourlyCap', Math.trunc(Number(v)) || 1)} />
           <p className={hint}>
             جلوی کسی را می‌گیرد که با شماره‌های بسیار، اعتبار پنل پیامک را خرج کند. هر شماره هم جدا در هر دقیقه یک کد، در ساعت {formatPersianNumber(5)} و در روز {formatPersianNumber(10)} کد بیشتر نمی‌گیرد.
           </p>
