@@ -27,7 +27,13 @@ const TOKEN = /^[A-Za-z0-9_-]{8,200}$/;
 export function cookieOf(request: Request, name: string): string {
   for (const part of (request.headers.get('cookie') ?? '').split(';')) {
     const [key, ...rest] = part.trim().split('=');
-    if (key === name) return decodeURIComponent(rest.join('='));
+    if (key !== name) continue;
+    // a cookie a browser or a hand garbled reads as none, never as an error page on every visit
+    try {
+      return decodeURIComponent(rest.join('='));
+    } catch {
+      return '';
+    }
   }
   return '';
 }

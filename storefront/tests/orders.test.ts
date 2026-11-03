@@ -71,6 +71,7 @@ describe('cart and checkout', () => {
     expect(view.html).toContain('۴٬۳۵۰٬۰۰۰ تومان');
     expect((await post('/cart', { intent: 'add', slug: 'no-such-product', quantity: '1' })).html).toContain('دیگر روی سایت نیست');
     expect((await post('/cart', { intent: 'add', slug: 'tile-necklace-sample', quantity: '1' }, '', { 'Sec-Fetch-Site': 'cross-site' })).status).toBe(403);
+    expect((await page('/cart', 'sf_cart=%E0%A4%A')).status).toBe(200);
     const removed = await post('/cart', { intent: 'remove', slug: 'tile-necklace-sample' }, cookieValue(again.cookies, 'sf_cart'));
     expect(removed.cookies.some(c => c.startsWith('sf_cart=;') && c.includes('Max-Age=0'))).toBe(true);
   });
