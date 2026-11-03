@@ -66,6 +66,15 @@ describe('storefront pages', () => {
     expect(html).toContain('<link rel="canonical" href="https://shop.example/p/tile-necklace-sample"');
   });
 
+  it('lists the other items of the same design on a product page, and no such row without one', async () => {
+    const { html } = await page('/p/tile-necklace-sample');
+    const row = html.slice(html.indexOf('id="same-design"'));
+    expect(html).toContain('از همین طرح');
+    expect(row).toContain('/p/tile-earrings-sample');
+    expect(html).not.toContain('"transferCode"');
+    expect((await page('/p/gift-set-sample')).html).not.toContain('از همین طرح');
+  });
+
   it('answers 404 for an unknown product, collection or address', async () => {
     expect((await page('/p/no-such-item')).status).toBe(404);
     expect((await page(`/collections/${encodeURIComponent('نیست')}`)).status).toBe(404);

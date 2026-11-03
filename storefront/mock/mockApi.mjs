@@ -31,7 +31,11 @@ const brand = await readFile(path.join(dir, 'brand.json'), 'utf8').then(JSON.par
 
 const fold = s => String(s).toLowerCase().replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/[‌\s]+/g, ' ');
 const card = ({ slug, sku, name, category, collections, retailPrice, stock, cover }) => ({ slug, sku, name, category, collections, retailPrice, stock, cover });
-const detail = ({ itemId: _id, ...rest }) => rest;
+// like the ERP: the transfer code links items of one design («هم‌طرح») and is never sent
+const detail = ({ itemId: _id, transferCode, ...rest }) => ({
+  ...rest,
+  sameDesign: transferCode ? products.filter(p => p.transferCode === transferCode && p.slug !== rest.slug).slice(0, 12).map(card) : [],
+});
 const cmp = (a, b) => (BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0);
 const facet = values => {
   const counts = new Map();

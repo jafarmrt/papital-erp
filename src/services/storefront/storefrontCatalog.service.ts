@@ -52,6 +52,8 @@ interface OnSale {
   designYear: number | null;
   seoTitle: string;
   seoDescription: string;
+  /** the design link of the item card («کد ترنسفر»): items with the same code share a design; it never leaves the ERP */
+  transferCode: string;
   retailPrice: string;
 }
 
@@ -63,7 +65,7 @@ async function itemsOnSale(settings: StorefrontSettingsInput, slug?: string): Pr
     itemId: items.id, slug: storefrontProducts.slug, sku: items.code, name: items.name, category: items.category,
     collections: items.collections, sortOrder: storefrontProducts.sortOrder, description: items.productDescription,
     material: items.material, size: items.size, color: items.color, weight: items.weight, designYear: items.designYear,
-    seoTitle: storefrontProducts.seoTitle, seoDescription: storefrontProducts.seoDescription,
+    seoTitle: storefrontProducts.seoTitle, seoDescription: storefrontProducts.seoDescription, transferCode: items.transferCode,
   }).from(storefrontProducts).innerJoin(items, eq(items.id, storefrontProducts.itemId)).where(and(...conditions));
   if (rows.length === 0) return [];
   const ids = rows.map(r => r.itemId);
@@ -74,7 +76,7 @@ async function itemsOnSale(settings: StorefrontSettingsInput, slug?: string): Pr
     if (!retailPrice) continue;
     out.push({
       ...r, category: r.category ?? '', collections: r.collections ?? [], description: r.description ?? '', material: r.material ?? '',
-      size: r.size ?? '', color: r.color ?? '', weight: r.weight ?? null, retailPrice,
+      size: r.size ?? '', color: r.color ?? '', weight: r.weight ?? null, transferCode: (r.transferCode ?? '').trim(), retailPrice,
     });
   }
   return out.sort((a, b) => (a.sortOrder - b.sortOrder) || (a.itemId - b.itemId));
@@ -132,17 +134,30 @@ export async function catalogPage(query: CatalogQuery): Promise<StorefrontCatalo
   };
 }
 
+/** At most this many other items of the same design are shown on a product page */
+export const SAME_DESIGN_MAX = 12;
+
 export async function productBySlug(slug: string): Promise<StorefrontProductDetail> {
   const settings = await storefrontSettingValues(orm);
   const [item] = await itemsOnSale(settings, slug);
   if (!item) throw new NotFoundError('محصول پیدا نشد.', undefined, 'STOREFRONT_PRODUCT_NOT_FOUND');
-  const sellable = await storefrontSellable(orm, [item.itemId], settings.warehouseCode);
+  // v11 phase 8.3 (owner, 2026-11-03): the items that share the transfer code are «هم‌طرح»; the site shows them, the code stays here
+  const twins = item.transferCode
+    ? (await itemsOnSale(settings)).filter(other => other.transferCode === item.transferCode && other.itemId !== item.itemId).slice(0, SAME_DESIGN_MAX)
+    : [];
+  const ids = [item.itemId, ...twins.map(t => t.itemId)];
+  const sellable = await storefrontSellable(orm, ids, settings.warehouseCode);
   const images = (await imagesOf(orm, [item.itemId])).get(item.itemId)?.map(image => altOf(image, item.name)) ?? [];
+  const twinCovers = twins.length > 0 ? await imagesOf(orm, twins.map(t => t.itemId), { coverOnly: true }) : new Map<number, StorefrontImage[]>();
+  const sameDesign = twins.map(twin => {
+    const cover = twinCovers.get(twin.itemId)?.[0];
+    return cardOf(twin, stockOf(sellable, twin.itemId, settings), cover ? altOf(cover, twin.name) : null);
+  });
   return {
     ...cardOf(item, stockOf(sellable, item.itemId, settings), images.find(i => i.isCover) ?? images[0] ?? null),
     description: item.description, material: item.material, size: item.size, color: item.color,
     weightGrams: item.weight !== null && item.weight > 0 ? Math.round(item.weight) : null, designYear: item.designYear,
-    seoTitle: item.seoTitle, seoDescription: item.seoDescription, images,
+    seoTitle: item.seoTitle, seoDescription: item.seoDescription, images, sameDesign,
   };
 }
 

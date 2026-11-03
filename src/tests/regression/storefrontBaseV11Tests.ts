@@ -136,12 +136,22 @@ export async function runStorefrontBaseV11Tests(shouldRun: (id: string, ...extra
       if (keys(card.stock) !== 'quantity,status') wrong.push(`stock fields: ${keys(card.stock)}`);
     }
     await erp.put('/api/storefront/settings', { ...settings, enabled: true, lowStockThreshold: 100, stockDisplay: 'status', version: version + 2 });
+    // an item of the same design (same transfer code) is listed on the page as «هم‌طرح», without the code itself
+    const twin = await createTestItem({ name: 'گردنبند هم‌طرح', code: `SFT${tag.split('').reverse().join('')}`, transferCode: `x${tag}` });
+    itemIds.push(twin.id);
+    await orm.update(items).set({ transferCode: `x${tag}` }).where(eq(items.id, priced.id));
+    await orm.insert(itemPrices).values({ itemId: twin.id, title: retailList, price: money('15000000'), currency: 'IRR' });
+    await erp.put(`/api/storefront/products/${twin.id}`, { published: true, slug: `twin-${tag}`, seoTitle: '', seoDescription: '', sortOrder: 0, version: 0 });
     const detail = await site(`/api/storefront/v1/products/${slug}`);
+    const twins = (detail.body.data?.sameDesign ?? []) as Body[];
+    if (twins.length !== 1 || twins[0].slug !== `twin-${tag}` || JSON.stringify(detail.body).includes(`x${tag}`)) {
+      wrong.push(`same design: ${JSON.stringify(twins.map(t => t.slug))}`);
+    }
     if (detail.status !== 200 || detail.body.data.stock.status !== 'low' || detail.body.data.stock.quantity !== null) {
       wrong.push(`detail after threshold 100 and status display: ${detail.status} ${JSON.stringify(detail.body.data?.stock)}`);
     }
     const detailKeys = Object.keys(detail.body.data ?? {}).sort().join(',');
-    const expectedDetail = 'category,collections,color,cover,description,designYear,images,material,name,retailPrice,seoDescription,seoTitle,size,sku,slug,stock,weightGrams';
+    const expectedDetail = 'category,collections,color,cover,description,designYear,images,material,name,retailPrice,sameDesign,seoDescription,seoTitle,size,sku,slug,stock,weightGrams';
     if (detailKeys !== expectedDetail) wrong.push(`detail fields: ${detailKeys}`);
     const publicKeys = Object.keys(pub.body.data ?? {}).sort().join(',');
     if (publicKeys !== 'currency,freeShippingThreshold,payment,reservationHours,shippingMethods,stockDisplay,whatsapp') wrong.push(`site settings fields: ${publicKeys}`);

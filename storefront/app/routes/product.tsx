@@ -7,6 +7,7 @@ import { BRAND, categoryPath, collectionPath, mediaPath, productPath } from '../
 import { faDigits, faNumber, priceUnit, tomanDigits } from '../lib/format';
 import { pageMeta } from '../lib/meta';
 import { whatsappLink } from '../lib/whatsapp';
+import type { StorefrontProductCard } from '@erp/storefront/storefrontContracts';
 import { ProductCard, ProductImage } from '../components/ProductCard';
 import { StockBadge } from '../components/StockBadge';
 import { useRootData } from '../root';
@@ -20,7 +21,8 @@ export async function loader({ params }: Route.LoaderArgs) {
     : item.category ? await catalog({ category: item.category, limit: 9 }) : { data: [] };
   return {
     item,
-    related: sameCollection.data.filter(p => p.slug !== item.slug).slice(0, 8),
+    // an item already shown as «از همین طرح» is not repeated in the row below it
+    related: sameCollection.data.filter(p => p.slug !== item.slug && !item.sameDesign.some(t => t.slug === p.slug)).slice(0, 8),
     relatedTitle: item.collections[0] ? `دیگر قطعه‌های کالکشن ${item.collections[0]}` : `دیگر ${item.category}‌ها`,
     siteUrl: siteEnv().siteUrl,
   };
@@ -144,17 +146,27 @@ export default function ProductPage({ loaderData }: Route.ComponentProps) {
         </section>
       </div>
 
-      {related.length ? (
-        <section className="mt-20" aria-labelledby="related">
-          <h2 id="related" className="text-xl font-extrabold lg:text-2xl">{relatedTitle}</h2>
-          <div className="tile-rule mt-3 w-24" aria-hidden />
-          <ul className="scrollbar-none -mx-4 mt-6 flex snap-x gap-4 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:px-0">
-            {related.map(p => <li key={p.slug} className="w-[44%] shrink-0 snap-start sm:w-[30%] lg:w-auto"><ProductCard product={p} /></li>)}
-          </ul>
-        </section>
+      {item.sameDesign.length ? (
+        <ProductRow id="same-design" title="از همین طرح" note="همین نقش، روی قطعه‌های دیگر" products={item.sameDesign} />
       ) : null}
+
+      {related.length ? <ProductRow id="related" title={relatedTitle} products={related} /> : null}
 
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd(item, siteUrl)).replace(/</g, '\\u003c') }} />
     </div>
+  );
+}
+
+/** A row of cards: a swipe strip on phones, a grid of four on a wide screen */
+function ProductRow({ id, title, note, products }: { id: string; title: string; note?: string; products: StorefrontProductCard[] }) {
+  return (
+    <section className="mt-20" aria-labelledby={id}>
+      <h2 id={id} className="text-xl font-extrabold lg:text-2xl">{title}</h2>
+      {note ? <p className="mt-1 text-sm text-muted-foreground">{note}</p> : null}
+      <div className="tile-rule mt-3 w-24" aria-hidden />
+      <ul className="scrollbar-none -mx-4 mt-6 flex snap-x gap-4 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:px-0">
+        {products.map(p => <li key={p.slug} className="w-[44%] shrink-0 snap-start sm:w-[30%] lg:w-auto"><ProductCard product={p} /></li>)}
+      </ul>
+    </section>
   );
 }
