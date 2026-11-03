@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   cardNumberError, ibanError, isProvince, maxOrderQuantity, normalizeIban, rialAmountText, shippingCodeError, shippingQuote,
-  slugError, stockStatusOf, suggestedSlug, normalizeWhatsappNumber, whatsappNumberError, brandImageError, base64Bytes, type ShippingMethodRule,
+  slugError, stockStatusOf, suggestedSlug, normalizeWhatsappNumber, whatsappNumberError, brandImageError, base64Bytes, storefrontDesignKey, type ShippingMethodRule,
 } from '../../lib/storefront/storefrontRules';
 import { sitePrice } from '../../services/storefront/storefrontItemData';
 
@@ -187,5 +187,19 @@ describe('storefront logo and browser icon (8.3)', () => {
 
   it('counts the decoded bytes of base64 without decoding', () => {
     for (const n of [0, 1, 2, 3, 100, 1001]) expect(base64Bytes(Buffer.alloc(n).toString('base64'))).toBe(n);
+  });
+});
+
+describe('storefrontDesignKey (the same-design row)', () => {
+  it('takes the transfer code of the item card, without case or outer spaces', () => {
+    expect(storefrontDesignKey(' A12 ', '1404-N-101-01')).toBe('a12');
+    expect(storefrontDesignKey('a12', 'X')).toBe(storefrontDesignKey('A12', 'Y'));
+  });
+
+  it('falls back to the third part of a standard product code, and gives no design to an item with neither', () => {
+    expect(storefrontDesignKey('', '1404-N-101-01')).toBe('101');
+    expect(storefrontDesignKey(null, '1404-G-101-03')).toBe('101');
+    expect(storefrontDesignKey('  ', 'SAMPLE1')).toBe('');
+    expect(storefrontDesignKey(null, '1404-N')).toBe('');
   });
 });

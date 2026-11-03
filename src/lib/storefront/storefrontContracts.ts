@@ -196,7 +196,10 @@ export interface StorefrontProductDetail extends StorefrontProductCard {
   seoTitle: string;
   seoDescription: string;
   images: StorefrontImage[];
-  /** other items on the site with the same design (the item card's transfer code, which is not sent), in the shop's order */
+  /**
+   * other items on the site with the same design (storefrontDesignKey: the transfer code of the item card, else the third
+   * part of the product code), in the shop's order; no separate design field is sent
+   */
   sameDesign: StorefrontProductCard[];
 }
 

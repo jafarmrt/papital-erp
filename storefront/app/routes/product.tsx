@@ -15,10 +15,12 @@ import { useRootData } from '../root';
 export async function loader({ params }: Route.LoaderArgs) {
   const item = await productBySlug(params.slug);
   if (!item) throw new Response('پیدا نشد', { status: 404 });
+  // the row below leaves out the «از همین طرح» items, so it asks for that many more
+  const limit = 9 + item.sameDesign.length;
   // the same collection, else the same category; an item with neither shows no «related» row
   const sameCollection = item.collections[0]
-    ? await catalog({ collection: item.collections[0], limit: 9 })
-    : item.category ? await catalog({ category: item.category, limit: 9 }) : { data: [] };
+    ? await catalog({ collection: item.collections[0], limit })
+    : item.category ? await catalog({ category: item.category, limit }) : { data: [] };
   return {
     item,
     // an item already shown as «از همین طرح» is not repeated in the row below it

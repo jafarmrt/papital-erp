@@ -10,6 +10,18 @@ export const STOREFRONT_SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 export const STOREFRONT_SLUG_MAX = 120;
 /** The longest search text, collection or category name the Storefront API takes in an address */
 export const STOREFRONT_QUERY_TEXT_MAX = 100;
+
+/**
+ * v11 phase 8.3: the design an item belongs to, for «از همین طرح». The ERP keeps it in two places: the «کد ترنسفر»
+ * field of the item card (the media screen filters on it) and the third part of a standard product code
+ * (`1404-N-101-01` → `101`, how the «ترنسفر» page groups). The card field wins when it is filled; both are compared
+ * without case or outer spaces, like the media filter. '' = no design, which matches nothing.
+ */
+export function storefrontDesignKey(transferCode: string | null, code: string): string {
+  const own = (transferCode ?? '').trim().toLowerCase();
+  if (own) return own;
+  return (code.split('-')[2] ?? '').trim().toLowerCase();
+}
 export const STOREFRONT_SEO_TITLE_MAX = 70;
 export const STOREFRONT_SEO_DESCRIPTION_MAX = 170;
 export const SHIPPING_CODE_MAX = 40;

@@ -4,7 +4,7 @@ import { items, mediaAssets, storefrontProducts } from '../../db/schema.js';
 import { NotFoundError } from '../../errors/customErrors.js';
 import { mediaFilePath } from '../../lib/media/mediaPaths.js';
 import { normalizeSearchText } from '../../lib/search/searchText.js';
-import { maxOrderQuantity, stockStatusOf } from '../../lib/storefront/storefrontRules.js';
+import { maxOrderQuantity, stockStatusOf, storefrontDesignKey } from '../../lib/storefront/storefrontRules.js';
 import type {
   StorefrontCatalogPage, StorefrontFacet, StorefrontImage, StorefrontProductCard, StorefrontProductDetail, StorefrontPublicSettings,
   StorefrontStock,
@@ -52,8 +52,8 @@ export interface OnSale {
   designYear: number | null;
   seoTitle: string;
   seoDescription: string;
-  /** the design link of the item card («کد ترنسفر»): items with the same code share a design; it never leaves the ERP */
-  transferCode: string;
+  /** storefrontDesignKey: items with the same key share a design («از همین طرح»); the key itself is never sent */
+  designKey: string;
   retailPrice: string;
 }
 
@@ -75,12 +75,12 @@ async function itemsOnSale(executor: DbExecutor, settings: StorefrontSettingsInp
   const ids = rows.map(r => r.itemId);
   const retail = await pricesOf(executor, ids, settings.retailPriceList);
   const out: OnSale[] = [];
-  for (const r of rows) {
+  for (const { transferCode, ...r } of rows) {
     const retailPrice = retail.get(r.itemId);
     if (!retailPrice) continue;
     out.push({
       ...r, category: r.category ?? '', collections: r.collections ?? [], description: r.description ?? '', material: r.material ?? '',
-      size: r.size ?? '', color: r.color ?? '', weight: r.weight ?? null, transferCode: (r.transferCode ?? '').trim(), retailPrice,
+      size: r.size ?? '', color: r.color ?? '', weight: r.weight ?? null, designKey: storefrontDesignKey(transferCode, r.sku), retailPrice,
     });
   }
   return out.sort((a, b) => (a.sortOrder - b.sortOrder) || (a.itemId - b.itemId));
@@ -153,9 +153,10 @@ export async function productBySlug(slug: string): Promise<StorefrontProductDeta
   const settings = await storefrontSettingValues(orm);
   const [item] = await itemsOnSale(orm, settings, slug);
   if (!item) throw new NotFoundError('محصول پیدا نشد.', undefined, 'STOREFRONT_PRODUCT_NOT_FOUND');
-  // v11 phase 8.3 (owner, 2026-11-03): the items that share the transfer code are «هم‌طرح»; the site shows them, the code stays here
-  const twins = item.transferCode
-    ? (await itemsOnSale(orm, settings)).filter(other => other.transferCode === item.transferCode && other.itemId !== item.itemId).slice(0, SAME_DESIGN_MAX)
+  // v11 phase 8.3 (owner, 2026-11-03): the items that share the transfer code are «هم‌طرح»; the site shows them under that
+  // name, not as a field (a standard product code still carries the code in its third part, as on every label)
+  const twins = item.designKey
+    ? (await itemsOnSale(orm, settings)).filter(other => other.designKey === item.designKey && other.itemId !== item.itemId).slice(0, SAME_DESIGN_MAX)
     : [];
   const ids = [item.itemId, ...twins.map(t => t.itemId)];
   const sellable = await storefrontSellable(orm, ids, settings.warehouseCode);

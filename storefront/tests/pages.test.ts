@@ -68,7 +68,8 @@ describe('storefront pages', () => {
 
   it('lists the other items of the same design on a product page, and no such row without one', async () => {
     const { html } = await page('/p/tile-necklace-sample');
-    const row = html.slice(html.indexOf('id="same-design"'));
+    const start = html.indexOf('id="same-design"');
+    const row = html.slice(start, html.indexOf('</section>', start));
     expect(html).toContain('از همین طرح');
     expect(row).toContain('/p/tile-earrings-sample');
     expect(html).not.toContain('"transferCode"');
