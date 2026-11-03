@@ -109,10 +109,14 @@ async function lockedAccount(tx: DbExecutor, id: number, expectedVersion: number
 }
 
 /** A new one-time set-password link; the account's earlier unused links stop working */
-async function issuePasswordLink(tx: DbExecutor, accountId: number, actor: string): Promise<{ token: string; expiresAt: string }> {
-  const now = systemNowUtcIso();
-  await tx.update(storefrontPasswordTokens).set({ usedAt: now })
+/** Closes the account's unused set-password links */
+async function closePasswordLinks(tx: DbExecutor, accountId: number): Promise<void> {
+  await tx.update(storefrontPasswordTokens).set({ usedAt: systemNowUtcIso() })
     .where(and(eq(storefrontPasswordTokens.accountId, accountId), isNull(storefrontPasswordTokens.usedAt)));
+}
+
+async function issuePasswordLink(tx: DbExecutor, accountId: number, actor: string): Promise<{ token: string; expiresAt: string }> {
+  await closePasswordLinks(tx, accountId);
   const token = newToken(PASSWORD_TOKEN_PREFIX);
   const expiresAt = nowPlus(PASSWORD_LINK_HOURS * 3600_000);
   await tx.insert(storefrontPasswordTokens).values({ accountId, tokenHash: tokenHash(token), createdBy: actor, expiresAt });
@@ -189,7 +193,7 @@ const ACTION_TEXT: Readonly<Record<SimpleAction, string>> = {
   decline: 'درخواست خرید عمده رد شد', suspend: 'حساب خریدار معلق شد', reactivate: 'حساب خریدار دوباره فعال شد',
 };
 
-/** Declines a request, suspends an account (its sessions end) or reactivates it */
+/** Declines a request, suspends an account (its sessions and unused links end) or reactivates it */
 export async function buyerAction(req: Request, id: number, action: SimpleAction, version: number): Promise<BuyerAccountDetail> {
   const actor = actorOf(req);
   await orm.transaction(async (tx) => {
@@ -208,7 +212,11 @@ export async function buyerAction(req: Request, id: number, action: SimpleAction
     }
     await tx.update(storefrontBuyerAccounts).set({ ...change, updatedAt: systemNowUtcIso(), updatedBy: actor, version: nextVersion(account.version) })
       .where(eq(storefrontBuyerAccounts.id, id));
-    if (action !== 'reactivate') await revokeSessions(tx, id);
+    if (action !== 'reactivate') {
+      // a link sent before suspension must not work again if the account is reactivated later
+      await revokeSessions(tx, id);
+      await closePasswordLinks(tx, id);
+    }
     await logActivity({
       req, tx, action: 'UPDATE', entity: 'حساب خریدار سایت', entityId: id, description: `${ACTION_TEXT[action]}: «${account.companyName || account.name}»`,
       details: { before: { status: account.status, applicationStatus: account.applicationStatus }, after: change },

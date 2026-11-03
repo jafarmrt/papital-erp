@@ -212,7 +212,10 @@ export async function runStorefrontBuyersV11Tests(shouldRun: (id: string, ...ext
       || priceRows[0].price !== GROUP_PRICE || keysOf(priceRows[0]) !== 'price,slug') wrong.push(`group prices: ${prices.status} ${JSON.stringify(prices.body)}`);
     if ((await site.get('/account/prices')).status !== 401) wrong.push('group prices without a session');
 
-    // 9) suspend ends the session and refuses sign-in; reactivate lets the buyer in again
+    // 9) suspend ends the session and unused links and refuses sign-in; reactivate lets the buyer in again
+    const before = await erp.get(`/api/storefront/buyers/${pending.id}`);
+    const unusedLink = await erp.post(`/api/storefront/buyers/${pending.id}/password-link`, { version: before.body.data.version });
+    if (unusedLink.status !== 201) wrong.push(`a new set-password link: ${unusedLink.status}`);
     const detail = await erp.get(`/api/storefront/buyers/${pending.id}`);
     const suspended = await erp.post(`/api/storefront/buyers/${pending.id}/suspend`, { version: detail.body.data.version });
     if (suspended.status !== 200) wrong.push(`suspend: ${suspended.status}`);
@@ -223,6 +226,8 @@ export async function runStorefrontBuyersV11Tests(shouldRun: (id: string, ...ext
     if (stale.status !== 409) wrong.push(`reactivate with a stale version: ${stale.status}`);
     const reactivated = await erp.post(`/api/storefront/buyers/${pending.id}/reactivate`, { version: suspended.body.data.version });
     if (reactivated.status !== 200 || (await site.post('/auth/login', { phone: phone3, password: PASSWORD })).status !== 200) wrong.push('reactivate did not let the buyer in');
+    const oldLink = await site.post('/auth/set-password', { token: String(unusedLink.body.data?.token ?? ''), password: PASSWORD });
+    if (oldLink.status !== 404) wrong.push(`a link made before suspension worked after reactivation: ${oldLink.status}`);
 
     // 10) a signed-in retail buyer's request: approval clears the password they chose and ends their session
     const ownForm = await site.post('/wholesale/apply', form(phone1), retailSession);
