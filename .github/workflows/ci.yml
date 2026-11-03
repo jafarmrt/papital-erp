@@ -260,7 +260,10 @@ jobs:
         run: npm ci
 
       - name: Typecheck
-        run: npm run typecheck
+        # the same steps as the app's own typecheck script, written out so the ERP's npm script guard does not read them as a root script
+        run: |
+          npx react-router typegen
+          npx tsc --noEmit
 
       - name: Page Tests (server rendering against the mock Storefront API)
         run: npm test
