@@ -102,14 +102,14 @@ function OrderBody({ order, canManage, busy, run }: { order: AdminOrderDetail; c
         {order.receipts.length === 0 && <p className="text-xs text-slate-500">خریدار هنوز رسیدی نفرستاده است.</p>}
         {order.receipts.map(receipt => (
           <ReceiptCard key={receipt.id} receipt={receipt} payable={order.payableAmount}
-            canReview={canManage && receipt.status === 'pending' && order.actions.confirm} busy={busy} run={run} />
+            orderId={order.id} canReview={canManage && receipt.status === 'pending' && order.actions.confirm} busy={busy} run={run} />
         ))}
       </section>
     </div>
   );
 }
 
-function ReceiptCard({ receipt, payable, canReview, busy, run }: { receipt: AdminReceipt; payable: string; canReview: boolean; busy: boolean; run: Run }) {
+function ReceiptCard({ receipt, orderId, payable, canReview, busy, run }: { receipt: AdminReceipt; orderId: number; payable: string; canReview: boolean; busy: boolean; run: Run }) {
   const rial = useRialDisplay();
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
@@ -123,6 +123,12 @@ function ReceiptCard({ receipt, payable, canReview, busy, run }: { receipt: Admi
       <p className="text-xs text-slate-600">
         پیگیری <span dir="ltr">{receipt.reference}</span> · کارت ****<span dir="ltr">{formatPersianCode(receipt.cardLast4)}</span> · {formatPersianDateTime(receipt.paidAt)}
       </p>
+      {receipt.hasImage && (
+        <a href={`/api/storefront/orders/${orderId}/receipts/${receipt.id}/image`} target="_blank" rel="noopener noreferrer" className="block">
+          <img src={`/api/storefront/orders/${orderId}/receipts/${receipt.id}/image`} alt="تصویر رسید" loading="lazy"
+            className="max-h-64 w-full rounded-lg border border-slate-100 object-contain" />
+        </a>
+      )}
       {differs && receipt.status === 'pending' && <p className="text-xs font-bold text-rose-700">مبلغ رسید با مبلغ قابل پرداخت سفارش برابر نیست.</p>}
       {receipt.rejectReason && <p className="text-xs text-rose-700">دلیل رد: {receipt.rejectReason}</p>}
       {receipt.reviewedBy && <p className="text-xs text-slate-500">بررسی: {receipt.reviewedBy}{receipt.reviewedAt && ` · ${formatPersianDateTime(receipt.reviewedAt)}`}</p>}

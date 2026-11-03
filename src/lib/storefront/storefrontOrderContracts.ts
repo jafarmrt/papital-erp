@@ -108,6 +108,8 @@ export interface ReceiptRequest {
   paidAt: string;
   cardLast4: string;
   amount: string;
+  /** optional: the receipt's photo or screenshot as a data URL (JPEG, PNG or WEBP, at most 3 MB; shrink it on the phone first) */
+  image?: string;
 }
 
 /** The ERP orders list (`GET /api/storefront/orders`) */
@@ -133,6 +135,8 @@ export interface AdminOrderPage {
 
 export interface AdminReceipt extends BuyerReceipt {
   id: number;
+  /** whether the buyer sent a photo (`GET /api/storefront/orders/:id/receipts/:receiptId/image`) */
+  hasImage: boolean;
   reviewedBy: string;
   reviewedAt: string | null;
   treasuryTransactionId: number | null;
