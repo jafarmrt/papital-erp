@@ -1,6 +1,6 @@
 import type { Request } from 'express';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
-import { and, desc, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { documentItems, documents, storefrontOrders, storefrontPaymentReceipts } from '../../db/schema.js';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
@@ -8,7 +8,8 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { OptimisticLockError } from '../../lib/occHelper.js';
 import { phoneSearchKey } from '../../lib/search/phoneMatchKey.js';
-import { escapeLikePattern } from '../../lib/sqlLike.js';
+import { foldedContains } from '../../lib/search/searchSql.js';
+import { toLatinDigits } from '../../lib/numericInput.js';
 import { userHasRoleOrPermission } from '../../middleware/authorize.js';
 import {
   OPEN_ORDER_STATUSES, REJECT_REASON_MAX, TRACKING_CODE_MAX, cleanText, isOrderStatus, type OrderStatus,
@@ -56,9 +57,10 @@ export async function listOrders(query: AdminOrderQuery): Promise<AdminOrderPage
   const q = query.q.trim();
   if (q) {
     const phoneKey = phoneSearchKey(q);
-    const like = `%${escapeLikePattern(q)}%`;
-    const matches: SQL[] = [eq(storefrontOrders.orderNumber, q), ilike(storefrontOrders.recipientName, like), ilike(storefrontOrders.city, like)];
-    if (phoneKey) matches.push(ilike(storefrontOrders.phoneKey, `%${phoneKey}%`));
+    const matches: SQL[] = [eq(storefrontOrders.orderNumber, toLatinDigits(q))];
+    const text = foldedContains([storefrontOrders.recipientName, storefrontOrders.city], q);
+    if (text) matches.push(text);
+    if (phoneKey) matches.push(foldedContains([storefrontOrders.phoneKey], phoneKey)!);
     conditions.push(or(...matches)!);
   }
   const where = conditions.length > 0 ? and(...conditions) : undefined;

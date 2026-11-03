@@ -282,7 +282,7 @@ export async function runStorefrontOrdersV11Tests(shouldRun: (id: string, ...ext
       await orm.update(items).set({ isDeleted: 1 }).where(inArray(items.id, itemIds)).catch(() => undefined);
     }
     if (methodId !== null) await orm.update(storefrontShippingMethods).set({ isDeleted: 1 }).where(eq(storefrontShippingMethods.id, methodId)).catch(() => undefined);
-    if (bankId !== null) await orm.update(bankAccounts).set({ isActive: 0 }).where(eq(bankAccounts.id, bankId)).catch(() => undefined);
+    if (bankId !== null) await orm.update(bankAccounts).set({ isActive: 0, isDeleted: 1 }).where(eq(bankAccounts.id, bankId)).catch(() => undefined);
     await orm.delete(appSettings).where(like(appSettings.key, 'sf\\_%')).catch(() => undefined);
     if (savedSettings.length > 0) await orm.insert(appSettings).values(savedSettings).catch(() => undefined);
     if (savedStrategies.length > 0) {

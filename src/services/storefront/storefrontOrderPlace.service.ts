@@ -169,7 +169,7 @@ async function placeInTransaction(tx: DbExecutor, order: CleanOrder, requestHash
   });
   const storedDocument = await DocumentService.documentAuditSnapshot(tx, documentId);
   await logActivity({
-    tx, username: STOREFRONT_BOT_USER, action: 'CREATE', entity: 'پیش‌فاکتور فروش', entityId: documentId,
+    tx, username: STOREFRONT_BOT_USER, action: 'CREATE', entity: 'اسناد انبار', entityId: documentId,
     description: `ثبت پیش‌فاکتور فروش شماره "${storedDocument?.refNumber ?? documentId}" از سفارش سایت ${orderNumber}`,
     details: { after: storedDocument, storefrontOrder: orderNumber, ...DocumentService.documentLineSummary(storedDocument) },
   });
