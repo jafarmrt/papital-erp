@@ -1,5 +1,5 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import { orm, type DbExecutor } from '../../db/drizzle.js';
+import { orm, type DbExecutor, type DbTransaction } from '../../db/drizzle.js';
 import { storefrontOrders } from '../../db/schema.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
@@ -16,6 +16,7 @@ import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { STOREFRONT_BOT_USER, resolveSiteCustomer } from './storefrontCustomer.js';
 import { priceCart, shippingOptions } from './storefrontOrderCart.js';
 import { isOrderAccessKey, newAccessSalt, orderAccessKey, requestHashOf } from './storefrontOrderKeys.js';
+import { notifySiteOrder } from './storefrontOrderNotices.js';
 import { buyerOrderView, type OrderRecord } from './storefrontOrderView.js';
 import { storefrontSellable, storefrontWarehouseCode } from './storefrontStock.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
@@ -126,7 +127,7 @@ export async function placeOrder(input: PlaceOrderRequest): Promise<PlacedOrder>
   }
 }
 
-async function placeInTransaction(tx: DbExecutor, order: CleanOrder, requestHash: string): Promise<PlacedOrder> {
+async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestHash: string): Promise<PlacedOrder> {
   const settings = await settingsForOrders(tx);
   // one phone's orders one at a time, so the open-orders limit holds under concurrent requests; then the items (§2.6)
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`storefront-phone:${order.phoneKey}`}))`);
@@ -193,6 +194,7 @@ async function placeInTransaction(tx: DbExecutor, order: CleanOrder, requestHash
       },
     },
   });
+  await notifySiteOrder(tx, 'placed', row);
   return { order: await buyerOrderView(tx, row, settings), accessKey: orderAccessKey(orderNumber, row.accessSalt) };
 }
 

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ShoppingBag, Search } from 'lucide-react';
 import { STOREFRONT_ORDERS_PAGE_SIZE, useStorefrontOrdersQuery, type StorefrontOrderFilter } from '../hooks/queries/useStorefrontQueries';
 import { useRialDisplay } from '../hooks/useAppCurrency';
@@ -31,7 +32,11 @@ export default function StorefrontOrdersPage() {
   const canManage = useHasPermission('site_orders.manage');
   const [filter, setFilter] = useState<StorefrontOrderFilter>({ page: 1, q: '', status: 'open' });
   const [search, setSearch] = useState('');
-  const [openId, setOpenId] = useState<number | null>(null);
+  // a notification opens its order: /site-orders?id=<order>
+  const [params, setParams] = useSearchParams();
+  const linked = Number(params.get('id'));
+  const openId = Number.isInteger(linked) && linked > 0 ? linked : null;
+  const setOpenId = (id: number | null) => setParams(id === null ? {} : { id: String(id) }, { replace: true });
   const orders = useStorefrontOrdersQuery(filter);
   const page = orders.data;
   const pages = page ? Math.max(1, Math.ceil(page.total / STOREFRONT_ORDERS_PAGE_SIZE)) : 1;
