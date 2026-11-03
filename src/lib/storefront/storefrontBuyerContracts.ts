@@ -52,6 +52,8 @@ export interface BuyerAccountRow {
   customerId: number | null;
   customerName: string;
   hasPassword: boolean;
+  /** v11 phase 8.4b: an SMS code proved the phone */
+  phoneVerified: boolean;
   appliedAt: string | null;
   createdAt: string;
   version: number;
@@ -103,6 +105,8 @@ export interface StorefrontAccountView {
   /** the wholesale application, as the buyer may see it */
   application: 'none' | 'pending' | 'approved' | 'declined';
   companyName: string;
+  /** v11 phase 8.4b: an SMS code proved the phone */
+  phoneVerified: boolean;
   group: null | {
     code: string;
     title: string;
@@ -129,6 +133,14 @@ export interface RegisterRequest {
   name: string;
   phone: string;
   password: string;
+  /** v11 phase 8.4b: required while `smsLogin` is on (from `POST /auth/otp/verify`) */
+  phoneProof?: string;
+}
+
+/** v11 phase 8.4b: `POST /auth/sms-login` */
+export interface SmsLoginRequest {
+  phone: string;
+  phoneProof: string;
 }
 
 export interface LoginRequest {
@@ -149,4 +161,6 @@ export interface WholesaleApplyRequest {
   nationalId: string;
   economicCode: string;
   note: string;
+  /** v11 phase 8.4b: required without a session while `smsLogin` is on */
+  phoneProof?: string;
 }

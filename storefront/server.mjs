@@ -10,7 +10,17 @@ if (!process.env.STOREFRONT_API_KEY) {
   console.error('STOREFRONT_API_KEY is not set: make a key in the ERP («فروشگاه سایت» tab) and give it to this server.');
   process.exit(1);
 }
-const build = await import('./build/server/index.js');
+// The web server in front ends https and talks plain http to this one, so a form's `Origin` (https://papitalgallery.com)
+// never matches the request's own address (http://…): React Router refuses such a post as a forged one unless the site's
+// host is named as an allowed origin. Another site's post is still refused (its host is not the site's).
+const siteHost = (() => {
+  try {
+    return new URL(process.env.STOREFRONT_SITE_URL ?? '').host;
+  } catch {
+    return '';
+  }
+})();
+const build = { ...(await import('./build/server/index.js')), ...(siteHost ? { allowedActionOrigins: [siteHost] } : {}) };
 const client = fileURLToPath(new URL('./build/client', import.meta.url));
 
 const CSP = [

@@ -102,7 +102,7 @@ export const storefrontOrders = pgTable('storefront_orders', {
   shippedAt: timestamp('shipped_at', { withTimezone: true, mode: 'string' }),
   deliveredAt: timestamp('delivered_at', { withTimezone: true, mode: 'string' }),
   cancelledAt: timestamp('cancelled_at', { withTimezone: true, mode: 'string' }),
-  // v11 phase 8.2b part 2 (migration 0018): the buyer account, its group's prices and rules, and «به حساب» orders
+  // v11 phase 8.2b part 2 (migration 0020): the buyer account, its group's prices and rules, and «به حساب» orders
   buyerAccountId: integer('buyer_account_id').references((): AnyPgColumn => storefrontBuyerAccounts.id),
   buyerGroupId: integer('buyer_group_id').references((): AnyPgColumn => storefrontBuyerGroups.id),
   paymentMethod: text('payment_method').notNull().default('card'),
@@ -199,6 +199,8 @@ export const storefrontBuyerAccounts = pgTable('storefront_buyer_accounts', {
   failedLogins: integer('failed_logins').notNull().default(0),
   lockedUntil: timestamp('locked_until', { withTimezone: true, mode: 'string' }),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true, mode: 'string' }),
+  /** v11 phase 8.4b: when an SMS code proved the phone; null = not proven */
+  phoneVerifiedAt: timestamp('phone_verified_at', { withTimezone: true, mode: 'string' }),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedBy: text('updated_by').notNull().default(''),

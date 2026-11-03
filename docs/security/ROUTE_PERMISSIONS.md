@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 571
+تعداد مسیرها: 582
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -457,6 +457,14 @@
 | POST | `/api/storefront/orders/:id/reject-receipt` | site_orders.manage |
 | GET | `/api/storefront/products` | storefront.view |
 | PUT | `/api/storefront/products/:itemId` | storefront.manage |
+| GET | `/api/storefront/redirects` | storefront.view |
+| POST | `/api/storefront/redirects` | storefront.manage |
+| DELETE | `/api/storefront/redirects/:id` | storefront.manage |
+| PUT | `/api/storefront/redirects/:id` | storefront.manage |
+| PUT | `/api/storefront/redirects/:id/active` | storefront.manage |
+| POST | `/api/storefront/redirects/import` | storefront.manage |
+| GET | `/api/storefront/seo` | storefront.view |
+| PUT | `/api/storefront/seo` | storefront.manage |
 | GET | `/api/storefront/settings` | storefront.view |
 | PUT | `/api/storefront/settings` | storefront.manage |
 | GET | `/api/storefront/shipping-methods` | storefront.view |
@@ -478,6 +486,7 @@
 | POST | `/api/storefront/v1/auth/otp/verify` | public |
 | POST | `/api/storefront/v1/auth/register` | public |
 | POST | `/api/storefront/v1/auth/set-password` | public |
+| POST | `/api/storefront/v1/auth/sms-login` | public |
 | GET | `/api/storefront/v1/brand` | public |
 | GET | `/api/storefront/v1/facets` | public |
 | GET | `/api/storefront/v1/media/:file` | public |
@@ -486,6 +495,8 @@
 | POST | `/api/storefront/v1/orders/:number/receipts` | public |
 | GET | `/api/storefront/v1/products` | public |
 | GET | `/api/storefront/v1/products/:slug` | public |
+| GET | `/api/storefront/v1/redirects` | public |
+| GET | `/api/storefront/v1/seo` | public |
 | GET | `/api/storefront/v1/settings` | public |
 | POST | `/api/storefront/v1/shipping/quote` | public |
 | POST | `/api/storefront/v1/wholesale/apply` | public |

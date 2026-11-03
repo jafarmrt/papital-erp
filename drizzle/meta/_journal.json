@@ -131,8 +131,22 @@
     {
       "idx": 18,
       "version": "7",
+      "when": 1797418000000,
+      "tag": "0018_storefront_redirects",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
       "when": 1797494400000,
-      "tag": "0018_storefront_order_accounts",
+      "tag": "0019_storefront_phone_verified",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1797580800000,
+      "tag": "0020_storefront_order_accounts",
       "breakpoints": true
     }
   ]
