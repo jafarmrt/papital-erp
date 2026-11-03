@@ -10,6 +10,8 @@ export default [
   route('healthz', 'routes/healthz.ts'),
   route('robots.txt', 'routes/robots.ts'),
   route('sitemap.xml', 'routes/sitemap.ts'),
+  route('manifest.webmanifest', 'routes/manifest.ts'),
+  route('sw.js', 'routes/serviceWorker.ts'),
   ...(['about', 'contact', 'shipping', 'terms', 'privacy'] as const).map(slug => route(slug, 'routes/info.tsx', { id: `info-${slug}` })),
   route('*', 'routes/notFound.tsx'),
 ] satisfies RouteConfig;
