@@ -31,8 +31,8 @@ CREATE TABLE IF NOT EXISTS storefront_redirects (
     OR (target_kind = 'path' AND target_item_id IS NULL AND target LIKE '/%' AND target NOT LIKE '//%' AND length(target) <= 300)
   ),
   CONSTRAINT chk_storefront_redirects_source CHECK (source IN ('manual', 'woocommerce')),
-  CONSTRAINT chk_storefront_redirects_is_active CHECK (is_active IN (0, 1)),
-  CONSTRAINT chk_storefront_redirects_is_deleted CHECK (is_deleted IN (0, 1)),
+  CONSTRAINT chk_storefront_redirects_is_active_flag CHECK (is_active IN (0, 1)),
+  CONSTRAINT chk_storefront_redirects_is_deleted_flag CHECK (is_deleted IN (0, 1)),
   CONSTRAINT chk_storefront_redirects_version CHECK (version >= 1)
 );
 --> statement-breakpoint
