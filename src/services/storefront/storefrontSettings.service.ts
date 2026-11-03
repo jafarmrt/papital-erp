@@ -1,8 +1,8 @@
 import crypto from 'crypto';
 import type { Request } from 'express';
-import { eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { appSettings } from '../../db/schema.js';
+import { appSettings, bankAccounts } from '../../db/schema.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { OptimisticLockError } from '../../lib/occHelper.js';
@@ -13,6 +13,7 @@ import {
   LOW_STOCK_THRESHOLD_DEFAULT, LOW_STOCK_THRESHOLD_MAX, RESERVATION_HOURS_DEFAULT, RESERVATION_HOURS_MAX, cardNumberError, digitsOnly,
   ibanError, isStockDisplay, normalizeIban, rialAmountText,
 } from '../../lib/storefront/storefrontRules.js';
+import { OPEN_ORDERS_PER_PHONE_DEFAULT, OPEN_ORDERS_PER_PHONE_MAX } from '../../lib/storefront/storefrontOrderRules.js';
 import {
   STOREFRONT_SETTING_KEYS as KEYS, type StorefrontSettingsInput, type StorefrontSettingsView,
 } from '../../lib/storefront/storefrontContracts.js';
@@ -39,7 +40,8 @@ async function readStored(executor: DbExecutor, keys: readonly string[]): Promis
 
 const GROUP_KEYS = [
   KEYS.cardNumber, KEYS.cardHolder, KEYS.bankName, KEYS.iban, KEYS.freeShippingThreshold, KEYS.reservationHours,
-  KEYS.retailPriceList, KEYS.wholesalePriceList, KEYS.lowStockThreshold, KEYS.stockDisplay, KEYS.warehouseCode, KEYS.enabled, KEYS.version, KEYS.apiKeyHint, KEYS.apiKeyCreatedAt, KEYS.apiKeySha256,
+  KEYS.retailPriceList, KEYS.wholesalePriceList, KEYS.lowStockThreshold, KEYS.stockDisplay, KEYS.warehouseCode, KEYS.enabled, KEYS.ordersEnabled, KEYS.treasuryAccountId,
+  KEYS.openOrdersPerPhone, KEYS.version, KEYS.apiKeyHint, KEYS.apiKeyCreatedAt, KEYS.apiKeySha256,
 ] as const;
 
 function reservationHoursOf(stored: string | undefined): number {
@@ -51,6 +53,28 @@ function lowStockThresholdOf(stored: string | undefined): number {
   if (stored === undefined || stored === '') return LOW_STOCK_THRESHOLD_DEFAULT;
   const value = Number(stored);
   return Number.isInteger(value) && value >= 0 && value <= LOW_STOCK_THRESHOLD_MAX ? value : LOW_STOCK_THRESHOLD_DEFAULT;
+}
+
+function openOrdersPerPhoneOf(stored: string | undefined): number {
+  const value = Number(stored);
+  return Number.isInteger(value) && value >= 1 && value <= OPEN_ORDERS_PER_PHONE_MAX ? value : OPEN_ORDERS_PER_PHONE_DEFAULT;
+}
+
+function treasuryAccountIdOf(stored: string | undefined): number {
+  const value = Number(stored);
+  return Number.isSafeInteger(value) && value > 0 ? value : 0;
+}
+
+/**
+ * v11 phase 8.2a: the treasury accounts a site payment may be received into: live and active bank accounts in rials with a
+ * ledger account (a receipt without one is refused by the treasury anyway)
+ */
+export async function storefrontTreasuryAccounts(executor: DbExecutor): Promise<Array<{ id: number; title: string; bankName: string }>> {
+  const rows = await executor.select({ id: bankAccounts.id, title: bankAccounts.title, bankName: bankAccounts.bankName, currency: bankAccounts.currency })
+    .from(bankAccounts)
+    .where(and(eq(bankAccounts.isDeleted, 0), eq(bankAccounts.isActive, 1), eq(bankAccounts.type, 'bank'), isNotNull(bankAccounts.accountId)))
+    .orderBy(asc(bankAccounts.code), asc(bankAccounts.id));
+  return rows.filter(r => (r.currency || 'IRR').toUpperCase() === 'IRR').map(r => ({ id: r.id, title: r.title, bankName: r.bankName ?? '' }));
 }
 
 function inputOf(stored: Stored): StorefrontSettingsInput {
@@ -67,6 +91,9 @@ function inputOf(stored: Stored): StorefrontSettingsInput {
     stockDisplay: isStockDisplay(stored[KEYS.stockDisplay]) ? stored[KEYS.stockDisplay] as StorefrontSettingsInput['stockDisplay'] : 'status',
     warehouseCode: stored[KEYS.warehouseCode] ?? '',
     enabled: stored[KEYS.enabled] === '1',
+    ordersEnabled: stored[KEYS.ordersEnabled] === '1',
+    treasuryAccountId: treasuryAccountIdOf(stored[KEYS.treasuryAccountId]),
+    openOrdersPerPhone: openOrdersPerPhoneOf(stored[KEYS.openOrdersPerPhone]),
     version: Number(stored[KEYS.version]) || 0,
   };
 }
@@ -79,6 +106,7 @@ export async function readStorefrontSettings(executor: DbExecutor): Promise<Stor
     ...input,
     priceLists: await ItemPricingService.getPricingStrategies(executor),
     warehouses: await activeWarehouses(executor),
+    treasuryAccounts: await storefrontTreasuryAccounts(executor),
     effectiveWarehouseCode: await storefrontWarehouseCode(executor, input.warehouseCode),
     apiKey: {
       configured: Boolean(stored[KEYS.apiKeySha256]),
@@ -93,7 +121,7 @@ export async function storefrontSettingValues(executor: DbExecutor): Promise<Sto
   return inputOf(await readStored(executor, GROUP_KEYS));
 }
 
-function checkedInput(input: StorefrontSettingsInput, priceLists: string[], warehouseCodes: string[]): Omit<StorefrontSettingsInput, 'version'> {
+function checkedInput(input: StorefrontSettingsInput, priceLists: string[], warehouseCodes: string[], treasuryIds: number[]): Omit<StorefrontSettingsInput, 'version'> {
   const cardError = cardNumberError(input.cardNumber);
   if (cardError) throw new ValidationError(cardError, undefined, 'STOREFRONT_CARD_INVALID');
   const shebaError = ibanError(input.iban);
@@ -134,9 +162,26 @@ function checkedInput(input: StorefrontSettingsInput, priceLists: string[], ware
   if (warehouseCode && !warehouseCodes.includes(warehouseCode)) {
     throw new ValidationError(`انبار «${warehouseCode}» فعال نیست یا وجود ندارد.`, undefined, 'STOREFRONT_WAREHOUSE_INVALID');
   }
+  if (input.treasuryAccountId !== 0 && !treasuryIds.includes(input.treasuryAccountId)) {
+    throw new ValidationError('حساب دریافت کارت‌به‌کارت باید یک حساب بانکی ریالیِ فعال با سرفصل حسابداری باشد.', undefined, 'STOREFRONT_TREASURY_ACCOUNT_INVALID');
+  }
+  if (!Number.isInteger(input.openOrdersPerPhone) || input.openOrdersPerPhone < 1 || input.openOrdersPerPhone > OPEN_ORDERS_PER_PHONE_MAX) {
+    throw new ValidationError(`سقف سفارش‌های پرداخت‌نشدهٔ هر شماره باید ۱ تا ${OPEN_ORDERS_PER_PHONE_MAX.toLocaleString('fa-IR')} باشد.`, undefined, 'STOREFRONT_OPEN_ORDERS_INVALID');
+  }
+  const ordersEnabled = input.ordersEnabled === true;
+  if (ordersEnabled && (!cardNumber && !iban)) {
+    throw new ValidationError('برای روشن کردن ثبت سفارش، کارت یا شبای دریافت پول لازم است.', undefined, 'STOREFRONT_ORDERS_NEED_PAYMENT');
+  }
+  if (ordersEnabled && input.treasuryAccountId === 0) {
+    throw new ValidationError('برای روشن کردن ثبت سفارش، حساب دریافت کارت‌به‌کارت را انتخاب کنید.', undefined, 'STOREFRONT_ORDERS_NEED_TREASURY');
+  }
+  if (ordersEnabled && !retailPriceList) {
+    throw new ValidationError('برای روشن کردن ثبت سفارش، لیست قیمت تکی لازم است.', undefined, 'STOREFRONT_ORDERS_NEED_PRICE_LIST');
+  }
   return {
     cardNumber, cardHolder, bankName, iban, freeShippingThreshold, reservationHours: input.reservationHours, retailPriceList, wholesalePriceList,
     lowStockThreshold: input.lowStockThreshold, stockDisplay: input.stockDisplay, warehouseCode, enabled: input.enabled === true,
+    ordersEnabled, treasuryAccountId: input.treasuryAccountId, openOrdersPerPhone: input.openOrdersPerPhone,
   };
 }
 
@@ -159,7 +204,8 @@ export async function saveStorefrontSettings(req: Request, input: StorefrontSett
   await orm.transaction(async (tx) => {
     const current = await lockVersion(tx, input.version);
     const warehouseCodes = (await activeWarehouses(tx)).map(w => w.code);
-    const values = checkedInput(input, await ItemPricingService.getPricingStrategies(tx), warehouseCodes);
+    const treasuryIds = (await storefrontTreasuryAccounts(tx)).map(a => a.id);
+    const values = checkedInput(input, await ItemPricingService.getPricingStrategies(tx), warehouseCodes, treasuryIds);
     const before = inputOf(await readStored(tx, GROUP_KEYS));
     const changes: Record<string, { before: unknown; after: unknown }> = {};
     const fields = Object.keys(values) as Array<keyof typeof values>;
@@ -219,4 +265,12 @@ export async function isStorefrontApiKey(presented: string): Promise<boolean> {
   const stored = String(row?.value ?? '');
   if (!/^[0-9a-f]{64}$/.test(stored)) return false;
   return crypto.timingSafeEqual(Buffer.from(sha256(presented), 'hex'), Buffer.from(stored, 'hex'));
+}
+
+/** v11 phase 8.2a: whether the site takes orders now (`sf_enabled` and `sf_orders_enabled`, both default off) */
+export async function isStorefrontOrderingOn(executor: DbExecutor = orm): Promise<boolean> {
+  const rows = await executor.select({ key: appSettings.key, value: appSettings.value }).from(appSettings)
+    .where(inArray(appSettings.key, [KEYS.enabled, KEYS.ordersEnabled]));
+  const on = new Set(rows.filter(r => String(r.value ?? '') === '1').map(r => r.key));
+  return on.has(KEYS.enabled) && on.has(KEYS.ordersEnabled);
 }

@@ -17,7 +17,7 @@ import {
   projectReservationReleases, inventoryReconciliationAnomalies, itemWarehouseStocks,
   integrationDeliveryJobs, eventActionRuleRetirements, webhookEventPatternRepairs, itemPriceTitleCleanup,
   dailyLogVisibilityRepairs, statutoryRemittanceLines, settlementAllocations, payrollStatutoryRates, payrollEidiRates, itemCodeHistory,
-  mediaAssets, mediaSections, storefrontProducts, storefrontShippingMethods, storefrontShippingRates, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
+  mediaAssets, mediaSections, storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
 } from '../../db/schema.js';
 
 /**
@@ -61,6 +61,9 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   // 3. Fiscal periods, treasury and accounting (fiscal_periods.closing_voucher_id references journal_vouchers;
   //    statutory remittance lines reference treasury rows and personnel; settlement allocations reference treasury rows,
   //    cheques and documents)
+  // v11 phase 8.2a: site receipts reference treasury rows, site orders reference documents and customers
+  { name: 'storefront_payment_receipts', table: storefrontPaymentReceipts },
+  { name: 'storefront_orders', table: storefrontOrders },
   { name: 'fiscal_periods', table: fiscalPeriods },
   { name: 'settlement_allocations', table: settlementAllocations },
   { name: 'petty_cash_expense_lines', table: pettyCashExpenseLines },

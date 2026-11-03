@@ -224,6 +224,8 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     permissions: [
       { key: 'storefront.view', title: 'مشاهده تنظیمات فروشگاه سایت', description: 'دیدن کالاهای منتشرشده روی سایت، روش‌ها و نرخ‌های ارسال، کارت و شبای دریافت پول و لیست‌های قیمت سایت' },
       { key: 'storefront.manage', title: 'مدیریت فروشگاه سایت', description: 'انتشار و برداشتن کالا از سایت، نشانی و متن جست‌وجوی کالا، روش‌ها و نرخ‌های ارسال، کارت و شبا، سقف ارسال رایگان و ساخت کلید برنامه سایت', requires: ['storefront.view'] },
+      { key: 'storefront.orders.view', title: 'مشاهده سفارش‌های سایت', description: 'دیدن سفارش‌های سایت، نشانی و شماره خریدار، رسیدهای کارت‌به‌کارت و وضعیت ارسال' },
+      { key: 'storefront.orders.manage', title: 'رسیدگی به سفارش‌های سایت', description: 'رد رسید، لغو سفارش و ثبت ارسال و تحویل؛ تأیید پرداخت افزون بر این مجوز خزانه و قطعی کردن سند را هم می‌خواهد', requires: ['storefront.orders.view'] },
     ]
   },
   {

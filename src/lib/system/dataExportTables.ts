@@ -12,7 +12,7 @@ export type DataExportGroup =
 export const DATA_EXPORT_GROUP_LABELS: Readonly<Record<DataExportGroup, string>> = {
   people: 'کاربران، نقش‌ها و پرسنل',
   inventory: 'کالاها، قیمت‌ها، انبارها، موجودی و کاردکس',
-  documents: 'اسناد فروش و انبار',
+  documents: 'اسناد فروش و انبار و سفارش‌های سایت',
   customers: 'طرف حساب‌ها، پرونده‌های فروش و پیگیری‌ها',
   dailyLogs: 'گزارش‌های روزانه کار',
   projects: 'پروژه‌ها، مراحل، تخصیص و رزرو مواد',
@@ -43,6 +43,8 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   { table: 'document_items', group: 'documents' },
   { table: 'history_import_refs', group: 'documents' },
   { table: 'history_import_purchase_refs', group: 'documents' },
+  { table: 'storefront_orders', group: 'documents' },
+  { table: 'storefront_payment_receipts', group: 'documents' },
   { table: 'customers', group: 'customers' },
   { table: 'crm_leads', group: 'customers' },
   { table: 'crm_activities', group: 'customers' },
