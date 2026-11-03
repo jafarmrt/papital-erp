@@ -17,7 +17,7 @@ import {
   projectReservationReleases, inventoryReconciliationAnomalies, itemWarehouseStocks,
   integrationDeliveryJobs, eventActionRuleRetirements, webhookEventPatternRepairs, itemPriceTitleCleanup,
   dailyLogVisibilityRepairs, statutoryRemittanceLines, settlementAllocations, payrollStatutoryRates, payrollEidiRates, itemCodeHistory,
-  mediaAssets, mediaSections, storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts,
+  mediaAssets, mediaSections, storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontSmsCodes, storefrontSmsMessages,
   storefrontBuyerGroups, storefrontBuyerAccounts, storefrontBuyerSessions, storefrontPasswordTokens, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
 } from '../../db/schema.js';
 
@@ -62,6 +62,9 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   // 3. Fiscal periods, treasury and accounting (fiscal_periods.closing_voucher_id references journal_vouchers;
   //    statutory remittance lines reference treasury rows and personnel; settlement allocations reference treasury rows,
   //    cheques and documents)
+  // v11 phase 8.4a: login codes reference site texts, site texts reference site orders
+  { name: 'storefront_sms_codes', table: storefrontSmsCodes },
+  { name: 'storefront_sms_messages', table: storefrontSmsMessages },
   // v11 phase 8.2a: site receipts reference treasury rows, site orders reference documents and customers
   { name: 'storefront_payment_receipts', table: storefrontPaymentReceipts },
   { name: 'storefront_orders', table: storefrontOrders },

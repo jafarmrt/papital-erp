@@ -15,6 +15,7 @@ import { ORDER_LINES_MAX } from '../lib/storefront/storefrontOrderRules.js';
 import { placeOrder, quoteShipping } from '../services/storefront/storefrontOrderPlace.service.js';
 import { buyerOrder, sendReceipt } from '../services/storefront/storefrontOrderBuyer.service.js';
 import { ACCESS_KEY_MAX } from '../services/storefront/storefrontOrderKeys.js';
+import { requestOtp, verifyOtp } from '../services/storefront/storefrontSmsOtp.service.js';
 import { RECEIPT_IMAGE_DATA_URL_MAX } from '../services/storefront/storefrontReceiptImage.js';
 import { myAccount, myGroupPrices, registerAccount, setPasswordWithLink, signIn, signOut } from '../services/storefront/storefrontBuyerAuth.service.js';
 import { applyForWholesale } from '../services/storefront/storefrontWholesaleApply.service.js';
@@ -157,6 +158,32 @@ router.get('/orders/:number', validate(orderReadSchema), asyncHandler(async (req
 
 router.post('/orders/:number/receipts', writeLimiter, validate(receiptSchema), asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json({ data: await sendReceipt(String(req.params.number), orderKeyOf(req), req.body) });
+}));
+
+/**
+ * v11 phase 8.4a: the login code by SMS. Off (404) until the owner turns the site's texts on and gives the login code a
+ * template. Asking for a code has its own tight limit per buyer address in front of the service's own limits (per
+ * phone, per address and the site's budget of texts), since each code costs an SMS. A right code answers a single-use phone
+ * proof for the sign-up or sign-in that follows; it opens no session by itself.
+ */
+export const STOREFRONT_OTP_REQUESTS_PER_MINUTE = 3;
+const otpLimiter = rateLimit({
+  windowMs: 60_000,
+  max: STOREFRONT_OTP_REQUESTS_PER_MINUTE,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `storefront-otp:${ipKeyGenerator(buyerAddress(req))}`,
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+});
+const otpRequestSchema = z.object({ body: z.object({ phone: z.string().max(40) }).strict() });
+const otpVerifySchema = z.object({ body: z.object({ phone: z.string().max(40), code: z.string().max(20) }).strict() });
+
+router.post('/auth/otp/request', writeLimiter, otpLimiter, validate(otpRequestSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.status(202).json({ data: await requestOtp(req.body.phone, ipKeyGenerator(buyerAddress(req))) });
+}));
+
+router.post('/auth/otp/verify', writeLimiter, validate(otpVerifySchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await verifyOtp(req.body.phone, req.body.code) });
 }));
 
 /**

@@ -12,7 +12,7 @@ import {
   workflowDefinitions, workflowDefinitionVersions, workflowStates, workflowTransitions, workflowInstances,
   workflowHistoryLogs, workflowTasks, workflowPendingApprovals, workflowDelegations,
   mediaSections, mediaAssets, projectManagers, stockReceiptConfirmations, workshopTaskReports,
-  storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontBuyerGroups, storefrontBuyerAccounts,
+  storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontBuyerGroups, storefrontBuyerAccounts, storefrontSmsMessages,
 } from '../../db/schema.js';
 import { SENSITIVE_SETTING_PATTERN } from '../settings/systemSettings.service.js';
 
@@ -73,6 +73,7 @@ export const DATA_EXPORT_TABLE_SOURCES: Readonly<Record<string, TableSpecSource>
   document_items: { table: documentItems, key: ['id'] },
   storefront_orders: { table: storefrontOrders, key: ['id'] },
   storefront_payment_receipts: { table: storefrontPaymentReceipts, key: ['id'] },
+  storefront_sms_messages: { table: storefrontSmsMessages, key: ['id'] },
   history_import_refs: { table: historyImportRefs, key: ['kind', 'excelRef'] },
   history_import_purchase_refs: { table: historyImportPurchaseRefs, key: ['documentId', 'excelRef'] },
   customers: { table: customers, key: ['id'] },
