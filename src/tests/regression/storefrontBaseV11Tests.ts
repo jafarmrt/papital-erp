@@ -17,7 +17,7 @@ import { readPricingStrategies } from '../../lib/items/pricingStrategies.js';
  */
 
 interface Session { cookie: string; csrfToken: string }
-type Body = Record<string, any>;
+type Body = Record<string, unknown>;
 
 const VALID_CARD = '6037991234567893';
 const VALID_IBAN = 'IR050170000000123456789012';
@@ -152,7 +152,7 @@ export async function runStorefrontBaseV11Tests(shouldRun: (id: string, ...extra
     const staleMethod = await erp.put(`/api/storefront/shipping-methods/${methodId}`, { ...method, version: 1 });
     if (staleMethod.status !== 409) wrong.push(`a stale shipping save: ${staleMethod.status}, not 409`);
     const offered = await site('/api/storefront/v1/settings');
-    if (!(offered.body.data?.shippingMethods ?? []).some((m: Body) => m.code === method.code && m.rates.length === 1)) wrong.push('the site settings left out the active method');
+    if (!(offered.body.data?.shippingMethods ?? []).some((m: { code: string; rates: unknown[] }) => m.code === method.code && m.rates.length === 1)) wrong.push('the site settings left out the active method');
     const removed = await erp.del(`/api/storefront/shipping-methods/${methodId}?version=2`);
     if (removed.status !== 200) wrong.push(`delete shipping: ${removed.status}`);
 
