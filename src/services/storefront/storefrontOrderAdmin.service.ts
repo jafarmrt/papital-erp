@@ -22,6 +22,7 @@ import { TreasuryTransactionService } from '../accounting/treasury/treasuryTrans
 import { adminOrderView, type OrderRecord } from './storefrontOrderView.js';
 import { rialText } from './storefrontShipping.service.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
+import { queueOrderSms } from './storefrontSms.service.js';
 
 /**
  * v11 phase 8.2a (start plan §5): the «سفارش‌های سایت» screen of the ERP. Every action locks the order row first and
@@ -177,6 +178,7 @@ export async function confirmPayment(req: Request, id: number, input: { receiptI
       status: 'accepted', reviewedBy: actor.username, reviewedAt: now, treasuryTransactionId: posted.id,
     }).where(eq(storefrontPaymentReceipts.id, receipt.id));
     const updated = await moveOrder(tx, order, actor.username, { status: 'paid', paidAt: now });
+    await queueOrderSms(tx, updated, 'order_paid');
     await logActivity({
       req, tx, action: 'UPDATE', entity: 'سفارش سایت', entityId: order.id,
       description: `پرداخت سفارش سایت ${order.orderNumber} تأیید شد`,
@@ -201,6 +203,7 @@ export async function rejectReceipt(req: Request, id: number, input: { receiptId
     const updated = await moveOrder(tx, order, actor.username, {
       status: 'awaiting_payment', reserveUntil: sql`GREATEST(${storefrontOrders.reserveUntil}, now() + make_interval(hours => ${settings.reservationHours}))`,
     });
+    await queueOrderSms(tx, updated, 'receipt_rejected');
     await logActivity({
       req, tx, action: 'UPDATE', entity: 'سفارش سایت', entityId: order.id,
       description: `رسید سفارش سایت ${order.orderNumber} رد شد`,
@@ -223,7 +226,9 @@ export async function cancelOpenOrder(tx: DbExecutor, order: OrderRecord, reason
   }
   await tx.update(storefrontPaymentReceipts).set({ status: 'rejected', rejectReason: 'سفارش لغو شد', reviewedBy: actor.username, reviewedAt: systemNowUtcIso() })
     .where(and(eq(storefrontPaymentReceipts.orderId, order.id), eq(storefrontPaymentReceipts.status, 'pending')));
-  return moveOrder(tx, order, actor.username, { status: 'cancelled', cancelReason: reason, cancelledAt: systemNowUtcIso() });
+  const cancelled = await moveOrder(tx, order, actor.username, { status: 'cancelled', cancelReason: reason, cancelledAt: systemNowUtcIso() });
+  await queueOrderSms(tx, cancelled, 'order_cancelled');
+  return cancelled;
 }
 
 export async function cancelOrder(req: Request, id: number, input: { version: number }): Promise<AdminOrderDetail> {
@@ -256,6 +261,7 @@ export async function fulfilOrder(req: Request, id: number, input: { status: 'sh
     const updated = await moveOrder(tx, order, actor.username, input.status === 'shipped'
       ? { status: 'shipped', shippedAt: now, trackingCode: trackingCode || order.trackingCode }
       : { status: 'delivered', deliveredAt: now, ...(trackingCode ? { trackingCode } : {}) });
+    await queueOrderSms(tx, updated, input.status === 'shipped' ? 'order_shipped' : 'order_delivered');
     await logActivity({
       req, tx, action: 'UPDATE', entity: 'سفارش سایت', entityId: order.id,
       description: `سفارش سایت ${order.orderNumber} ${input.status === 'shipped' ? 'ارسال' : 'تحویل'} شد`,

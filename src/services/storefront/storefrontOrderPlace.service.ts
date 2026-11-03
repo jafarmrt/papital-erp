@@ -19,6 +19,7 @@ import { isOrderAccessKey, newAccessSalt, orderAccessKey, requestHashOf } from '
 import { buyerOrderView, type OrderRecord } from './storefrontOrderView.js';
 import { storefrontSellable, storefrontWarehouseCode } from './storefrontStock.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
+import { queueOrderSms } from './storefrontSms.service.js';
 
 /**
  * v11 phase 8.2a (start plan §4): placing a site order, in one transaction. The server prices the cart (the request's
@@ -183,6 +184,8 @@ async function placeInTransaction(tx: DbExecutor, order: CleanOrder, requestHash
     reserveUntil: sql`now() + make_interval(hours => ${settings.reservationHours})`,
     updatedBy: STOREFRONT_BOT_USER,
   }).returning();
+  // v11 phase 8.4a: the buyer's text, queued with the order (sent after the commit; nothing while sending is off)
+  await queueOrderSms(tx, row, 'order_placed');
   await logActivity({
     tx, username: STOREFRONT_BOT_USER, action: 'CREATE', entity: 'سفارش سایت', entityId: row.id,
     description: `ثبت سفارش سایت ${orderNumber} با پیش‌فاکتور «${storedDocument?.refNumber ?? documentId}»`,
