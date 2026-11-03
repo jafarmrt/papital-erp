@@ -4,7 +4,7 @@ import { faNumber } from '../lib/format';
 
 const TONE = {
   in_stock: 'bg-card text-success border-success/30',
-  low: 'bg-card text-warning border-warning/40',
+  low: 'bg-brand-soft text-brand border-brand/30',
   out: 'bg-muted text-muted-foreground border-border',
 } as const;
 
