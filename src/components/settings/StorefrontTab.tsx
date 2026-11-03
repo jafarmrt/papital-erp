@@ -9,13 +9,15 @@ import { ShippingMethodsSection } from '../storefront/ShippingMethodsSection';
 import { StorefrontProductsSection } from '../storefront/StorefrontProductsSection';
 import { BuyerGroupsSection } from '../storefront/BuyerGroupsSection';
 import { StorefrontSmsSection } from '../storefront/StorefrontSmsSection';
+import { StorefrontSeoSection } from '../storefront/StorefrontSeoForm';
+import { StorefrontRedirectsSection } from '../storefront/StorefrontRedirectsSection';
 
 /**
  * v11 phase 8.1 (docs/roadmap/V11_STOREFRONT_START_PLAN.md): the settings tab «فروشگاه سایت» of the new papitalgallery.com,
  * which runs as its own app on the site's domain and reads the ERP through the Storefront API. `storefront.view` sees,
  * `storefront.manage` changes.
  */
-type Section = 'products' | 'settings' | 'brand' | 'shipping' | 'groups' | 'sms' | 'key';
+type Section = 'products' | 'settings' | 'brand' | 'shipping' | 'groups' | 'sms' | 'seo' | 'redirects' | 'key';
 const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: 'products', label: 'کالاهای سایت' },
   { id: 'settings', label: 'پرداخت، قیمت و موجودی' },
@@ -23,6 +25,8 @@ const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: 'shipping', label: 'روش‌های ارسال' },
   { id: 'groups', label: 'گروه‌های خریدار' },
   { id: 'sms', label: 'پیامک' },
+  { id: 'seo', label: 'جست‌وجو و آمار بازدید' },
+  { id: 'redirects', label: 'نشانی‌های سایت قبلی' },
   { id: 'key', label: 'کلید برنامه سایت' },
 ];
 
@@ -54,6 +58,8 @@ export function StorefrontTab({ canManage }: { canManage: boolean }) {
       {section === 'shipping' && <ShippingMethodsSection canManage={canManage} />}
       {section === 'groups' && <BuyerGroupsSection canManage={canManage} />}
       {section === 'sms' && <StorefrontSmsSection canManage={canManage} />}
+      {section === 'seo' && <StorefrontSeoSection canManage={canManage} />}
+      {section === 'redirects' && <StorefrontRedirectsSection canManage={canManage} />}
       {(section === 'settings' || section === 'brand' || section === 'key') && (
         <>
           {settings.isLoading && <p className="text-xs text-slate-500">در حال خواندن…</p>}

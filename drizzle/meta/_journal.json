@@ -127,6 +127,13 @@
       "when": 1797408000000,
       "tag": "0017_storefront_sms",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1797418000000,
+      "tag": "0018_storefront_redirects",
+      "breakpoints": true
     }
   ]
 }

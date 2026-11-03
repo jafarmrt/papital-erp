@@ -15,6 +15,8 @@ import { ORDER_LINES_MAX } from '../lib/storefront/storefrontOrderRules.js';
 import { placeOrder, quoteShipping } from '../services/storefront/storefrontOrderPlace.service.js';
 import { buyerOrder, sendReceipt } from '../services/storefront/storefrontOrderBuyer.service.js';
 import { ACCESS_KEY_MAX } from '../services/storefront/storefrontOrderKeys.js';
+import { publicSeo } from '../services/storefront/storefrontSeo.service.js';
+import { publicRedirects } from '../services/storefront/storefrontRedirects.service.js';
 import { requestOtp, verifyOtp } from '../services/storefront/storefrontSmsOtp.service.js';
 import { RECEIPT_IMAGE_DATA_URL_MAX } from '../services/storefront/storefrontReceiptImage.js';
 import { myAccount, myGroupPrices, registerAccount, setPasswordWithLink, signIn, signOut } from '../services/storefront/storefrontBuyerAuth.service.js';
@@ -115,6 +117,16 @@ router.get('/settings', asyncHandler(async (_req: Request, res: Response) => {
 // v11 phase 8.3: the site's logo and browser icon (the logo falls back to the company logo of the general settings)
 router.get('/brand', asyncHandler(async (_req: Request, res: Response) => {
   res.json({ data: await publicBrand() });
+}));
+
+// v11 phase 8.5: search-engine verification codes, the visit-statistics service, the other-language site, and the
+// redirects of the old WooCommerce addresses (old path → a product slug, a collection or category name, or a site path)
+router.get('/seo', asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ data: await publicSeo() });
+}));
+
+router.get('/redirects', asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ data: await publicRedirects() });
 }));
 
 router.get('/products', validate(catalogSchema), asyncHandler(async (req: Request, res: Response) => {

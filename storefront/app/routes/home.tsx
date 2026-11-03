@@ -1,7 +1,7 @@
 import { Link } from 'react-router';
 import { ArrowLeft, Building2, Hand, Leaf, Truck } from 'lucide-react';
 import type { Route } from './+types/home';
-import { catalog, facets } from '../lib/api.server';
+import { catalog, facets, seo } from '../lib/api.server';
 import { siteEnv } from '../lib/site.server';
 import { BRAND, categoryPath, collectionPath, productPath } from '../lib/brand';
 import { faNumber, formatPrice } from '../lib/format';
@@ -11,9 +11,16 @@ import { ProductGrid, ProductImage } from '../components/ProductCard';
 import { useRootData } from '../root';
 import { homeLd } from '../lib/jsonLd';
 import { JsonLdScripts } from '../components/JsonLdScripts';
+import { legacyRedirect } from '../lib/legacyRedirect.server';
+import { httpsSiteUrl } from '@erp/storefront/storefrontSeoRules';
 
-export async function loader() {
-  const f = await facets();
+export async function loader({ request }: Route.LoaderArgs) {
+  // phase 8.5: WordPress finds a product, a page or a search by the home page's query (/?p=…, /?s=…)
+  if (new URL(request.url).search) {
+    const moved = await legacyRedirect(request);
+    if (moved) throw moved;
+  }
+  const [f, seoSettings] = await Promise.all([facets(), seo()]);
   // the owner's order (sort order in «فروشگاه سایت») picks what the home page leads with
   const [featured, newest, ...categoryCovers] = await Promise.all([
     catalog({ limit: 9 }),
@@ -27,6 +34,7 @@ export async function loader() {
     categories: f.categories.slice(0, 4).map((c, i) => ({ ...c, cover: categoryCovers[i]?.data[0]?.cover ?? null })),
     collections: f.collections,
     siteUrl: siteEnv().siteUrl,
+    alternateSiteUrl: seoSettings.alternateSiteUrl,
   };
 }
 
@@ -36,7 +44,17 @@ export function meta({ data }: Route.MetaArgs) {
     description: 'گردنبند، گوشواره و ست هدیهٔ دست‌ساز با نقش کاشی‌کاری مسجدها و کاخ‌های ایران. قیمت روشن، ارسال به سراسر ایران، هدیهٔ سازمانی و خرید عمده.',
     path: '/',
     siteUrl: data?.siteUrl ?? '',
-  });
+  }).concat(languageAlternates(data?.siteUrl ?? '', data?.alternateSiteUrl ?? ''));
+}
+
+/** phase 8.5: the brand's site in another language, so each search engine shows its own reader the right one */
+function languageAlternates(siteUrl: string, alternate: string): Array<Record<string, string>> {
+  const other = httpsSiteUrl(alternate);
+  if (!siteUrl || !other) return [];
+  return [
+    { tagName: 'link', rel: 'alternate', hrefLang: 'fa', href: `${siteUrl}/` },
+    { tagName: 'link', rel: 'alternate', hrefLang: 'en', href: `${other}/` },
+  ];
 }
 
 function SectionTitle({ id, title, href, cta }: { id: string; title: string; href?: string; cta?: string }) {

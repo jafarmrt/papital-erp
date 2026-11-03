@@ -20,4 +20,5 @@ export * from './system';
 export * from './woocommerce';
 export * from './social';
 export * from './storefront';
+export * from './storefrontSeo';
 export * from './storefrontSms';
