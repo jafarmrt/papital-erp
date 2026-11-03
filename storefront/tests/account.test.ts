@@ -22,8 +22,10 @@ beforeAll(async () => {
   process.env.STOREFRONT_API_URL = `http://127.0.0.1:${PORT}/api/storefront/v1`;
   process.env.STOREFRONT_API_KEY = KEY;
   process.env.STOREFRONT_SITE_URL = 'https://shop.example';
+  process.env.STOREFRONT_TRUST_PROXY = '1';
   const build = await import(path.join(import.meta.dirname, '../build/server/index.js')) as ServerBuild;
-  handle = createRequestHandler(build, 'production');
+  // as server.mjs does: the site's own host is an allowed origin of a form post
+  handle = createRequestHandler({ ...build, allowedActionOrigins: ['shop.example'] }, 'production');
 });
 
 afterAll(() => {
@@ -106,6 +108,24 @@ describe('account pages', () => {
   it('never sends a buyer to another site after signing in', async () => {
     const away = await post('/account/sign-in', { intent: 'password', phone: '09123456789', password: 'رمز-آزمون-1405', next: '//evil.example/x' });
     expect(away.location).toBe('/');
+    for (const next of ['/\t/evil.example', '/%09/evil.example', '/\\evil.example', '/\n/evil.example', 'https://evil.example', '/a\\b']) {
+      const tricked = await post('/account/sign-in', { intent: 'password', phone: '09123456789', password: 'رمز-آزمون-1405', next });
+      expect(tricked.location, next).toBe(next === '/%09/evil.example' ? next : '/');
+    }
+    const kept = await post('/account/sign-in', { intent: 'password', phone: '09123456789', password: 'رمز-آزمون-1405', next: '/p/tile-necklace-sample?x=1#top' });
+    expect(kept.location).toBe('/p/tile-necklace-sample?x=1#top');
+  });
+
+  it('refuses account forms posted from another site', async () => {
+    for (const pathname of ['/account/sign-in', '/account/sign-up', '/account/set-password', '/account/sign-out']) {
+      const fromAway = await post(pathname, { intent: 'password', phone: '09123456789', password: 'رمز-آزمون-1405' }, { Origin: 'https://evil.example' });
+      expect([400, 403], pathname).toContain(fromAway.status); // React Router's own guard answers 400 first
+      expect(fromAway.cookies, pathname).toEqual([]);
+      const fetchSite = await post(pathname, { intent: 'password', phone: '09123456789', password: 'رمز-آزمون-1405' }, { 'Sec-Fetch-Site': 'cross-site' });
+      expect(fetchSite.status, pathname).toBe(403);
+    }
+    const ownSite = await post('/account/sign-in', { intent: 'password', phone: '09123456789', password: 'رمز-آزمون-1405' }, { Origin: 'https://shop.example', 'Sec-Fetch-Site': 'same-origin' });
+    expect(ownSite.status).toBe(302);
   });
 
   it('refuses a sign-up without a proven phone while SMS sign-in is on', async () => {

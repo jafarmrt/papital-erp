@@ -89,6 +89,8 @@ export async function applyForWholesale(input: WholesaleApplyRequest, rawSession
   };
   return orm.transaction(async (tx) => {
     await lockPhone(tx, phoneKey);
+    // 8.4b: the proof first, so without one the answer does not say whether the phone has an account
+    const phoneVerifiedAt = signedIn ? null : await provenPhoneAt(tx, form.phone, input.phoneProof, proofNeeded);
     const existing = await accountByPhoneKey(tx, phoneKey, { lock: true });
     let accountId: number;
     if (signedIn) {
@@ -104,7 +106,6 @@ export async function applyForWholesale(input: WholesaleApplyRequest, rawSession
       accountId = existing.id;
     } else {
       if (existing) throw accountExists();
-      const phoneVerifiedAt = await provenPhoneAt(tx, form.phone, input.phoneProof, proofNeeded);
       const [created] = await tx.insert(storefrontBuyerAccounts).values({
         ...fields, name: form.name, phone: form.phone, phoneKey, city: form.city, status: 'pending', phoneVerifiedAt,
       }).returning({ id: storefrontBuyerAccounts.id });

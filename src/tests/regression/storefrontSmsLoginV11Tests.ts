@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import http from 'http';
 import type { AddressInfo } from 'net';
 import request from 'supertest';
@@ -141,6 +142,9 @@ export async function runStorefrontSmsLoginV11Tests(shouldRun: (id: string, ...e
     if (otherPhone.status !== 422 || otherPhone.body.code !== 'STOREFRONT_PHONE_PROOF_REQUIRED') wrong.push(`another phone's proof: ${otherPhone.status} ${otherPhone.body.code}`);
     const regA = await site('10.30.1.2').post('/api/storefront/v1/auth/register', { name: 'خریدار پیامکی', phone: phoneA, password: PASSWORD, phoneProof: proofA });
     if (regA.status !== 201 || regA.body.data?.account?.phoneVerified !== true) wrong.push(`sign-up with a proof: ${regA.status} ${JSON.stringify(regA.body)}`);
+    // a made-up proof on a phone with an account is the same 422 as on one without: no answer tells which phones have accounts
+    const probe = await site('10.30.1.3').post('/api/storefront/v1/auth/register', { name: 'کاوشگر', phone: phoneA, password: PASSWORD, phoneProof: 'pp_notaproof' });
+    if (probe.status !== 422 || probe.body.code !== 'STOREFRONT_PHONE_PROOF_REQUIRED') wrong.push(`a made-up proof on a phone with an account: ${probe.status} ${probe.body.code}`);
     const again = await site('10.30.1.3').post('/api/storefront/v1/auth/sms-login', { phone: phoneA, phoneProof: proofA });
     if (again.status !== 422) wrong.push(`a used proof: ${again.status} ${again.body.code}`);
 
@@ -153,7 +157,11 @@ export async function runStorefrontSmsLoginV11Tests(shouldRun: (id: string, ...e
     const bogus = await site('10.30.1.4').post('/api/storefront/v1/auth/sms-login', { phone: phoneB, phoneProof: 'pp_notaproof' });
     if (bogus.status !== 422 || bogus.body.code !== 'STOREFRONT_PHONE_PROOF_REQUIRED') wrong.push(`a wrong proof: ${bogus.status} ${bogus.body.code}`);
 
-    // 4) the account nobody proved is taken by its SMS sign-in: the old password and session end
+    // 4) the account nobody proved is taken by its SMS sign-in: the old password, session and set-password links end
+    const [earlyAccount] = await orm.select({ id: storefrontBuyerAccounts.id }).from(storefrontBuyerAccounts).where(eq(storefrontBuyerAccounts.phoneKey, phoneC.slice(1)));
+    const [link] = await orm.insert(storefrontPasswordTokens).values({
+      accountId: earlyAccount.id, tokenHash: createHash('sha256').update(`erp-test-sfl-${tag}`).digest('hex'), createdBy: 'ERP-TEST-MARKER', expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+    }).returning({ id: storefrontPasswordTokens.id });
     const proofC = await proofFor(phoneC);
     const taken = await site('10.30.1.5').post('/api/storefront/v1/auth/sms-login', { phone: phoneC, phoneProof: proofC });
     if (taken.status !== 200 || !String(taken.body.data?.sessionToken ?? '').startsWith('bs_') || taken.body.data?.account?.phoneVerified !== true) {
@@ -168,6 +176,8 @@ export async function runStorefrontSmsLoginV11Tests(shouldRun: (id: string, ...e
     const [accountC] = await orm.select().from(storefrontBuyerAccounts).where(eq(storefrontBuyerAccounts.phoneKey, phoneC.slice(1)));
     const [audit] = await orm.select({ description: activityLogs.description }).from(activityLogs)
       .where(and(eq(activityLogs.entity, 'حساب خریدار سایت'), eq(activityLogs.entityId, String(accountC?.id ?? 0)))).orderBy(desc(activityLogs.id)).limit(1);
+    const [linkAfter] = await orm.select({ usedAt: storefrontPasswordTokens.usedAt }).from(storefrontPasswordTokens).where(eq(storefrontPasswordTokens.id, link.id));
+    if (!linkAfter?.usedAt) wrong.push('a set-password link still open after the take');
     if (!accountC?.phoneVerifiedAt || accountC.passwordHash !== '' || !audit?.description.includes('با پیامک تأیید شد')) wrong.push(`the taken account: ${JSON.stringify({ v: accountC?.phoneVerifiedAt, p: Boolean(accountC?.passwordHash), a: audit?.description })}`);
 
     // 5) the wholesale form without a session needs a proof; the request it makes is pending and cannot sign in yet
@@ -185,7 +195,7 @@ export async function runStorefrontSmsLoginV11Tests(shouldRun: (id: string, ...e
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'texts off: smsLogin false, the SMS sign-in 404 and a sign-up without a proof made an unproven account; texts on: smsLogin true, a sign-up without a proof and with another phone\'s proof was 422, with its own proof it marked the phone proven and the used proof was refused; an SMS sign-in without an account was 404 and the same proof then made the account; a wrong proof was 422; the unproven account was taken by its SMS sign-in, its old session and password stopped working and an audit row was written; the wholesale form needed a proof, made a proven pending request, and its SMS sign-in was 403',
+      details: 'texts off: smsLogin false, the SMS sign-in 404 and a sign-up without a proof made an unproven account; texts on: smsLogin true, a sign-up without a proof and with another phone\'s proof was 422, with its own proof it marked the phone proven, a made-up proof on that phone was 422 (not 409) and the used proof was refused; an SMS sign-in without an account was 404 and the same proof then made the account; a wrong proof was 422; the unproven account was taken by its SMS sign-in, its old session, password and set-password link stopped working and an audit row was written; the wholesale form needed a proof, made a proven pending request, and its SMS sign-in was 403',
     }));
   } catch (err) {
     results.push(makeTestCase({

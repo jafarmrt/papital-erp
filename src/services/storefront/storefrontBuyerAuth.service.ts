@@ -140,8 +140,10 @@ export async function registerAccount(input: RegisterRequest): Promise<Storefron
   const phoneKey = phoneMatchKey(phone);
   return orm.transaction(async (tx) => {
     await lockPhone(tx, phoneKey);
-    if (await accountByPhoneKey(tx, phoneKey)) throw accountExists();
+    // the proof first: without one the answer must not say whether the phone has an account (a 409 below rolls the
+    // transaction back, so the proof is not used up)
     const phoneVerifiedAt = await provenPhoneAt(tx, phone, input.phoneProof, proofNeeded);
+    if (await accountByPhoneKey(tx, phoneKey)) throw accountExists();
     const [account] = await tx.insert(storefrontBuyerAccounts).values({
       name, phone, phoneKey, status: 'active', passwordHash, lastLoginAt: systemNowUtcIso(), phoneVerifiedAt, updatedBy: STOREFRONT_BOT_USER,
     }).returning();
@@ -215,8 +217,11 @@ export async function smsSignIn(input: SmsLoginRequest): Promise<StorefrontSessi
     };
     await tx.update(storefrontBuyerAccounts).set(updated).where(eq(storefrontBuyerAccounts.id, account.id));
     if (takeover) {
-      // whoever made the account may not own the phone: what they knew (the password, a session) stops working
+      // whoever made the account may not own the phone: what they knew (the password, a session, a set-password link
+      // a colleague sent) stops working
       await revokeSessions(tx, account.id);
+      await tx.update(storefrontPasswordTokens).set({ usedAt: now })
+        .where(and(eq(storefrontPasswordTokens.accountId, account.id), isNull(storefrontPasswordTokens.usedAt)));
       await logActivity({
         tx, username: STOREFRONT_BOT_USER, action: 'UPDATE', entity: 'حساب خریدار سایت', entityId: account.id,
         description: `شمارهٔ ${account.phone} با پیامک تأیید شد؛ رمز و نشست‌های پیشین حساب پاک شد`, details: { hadPassword: Boolean(account.passwordHash) },

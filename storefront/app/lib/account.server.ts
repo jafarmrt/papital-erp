@@ -12,6 +12,10 @@ import { siteEnv } from './site.server';
  * - Every call says the buyer's own address in `X-Storefront-Client-IP`, so the ERP's limits count each buyer (without it
  *   every buyer would share this server's address and one budget). The address is the one the web server in front
  *   writes: `X-Real-IP`, else the last `X-Forwarded-For` hop (the one it appended; earlier hops are the browser's word).
+ *   Those headers are read only with `STOREFRONT_TRUST_PROXY=1`, set when a web server in front overwrites them; without
+ *   it a browser could write any address and get a fresh limit with every request.
+ * - Every account form is a POST from this site only (`sameSite`): a page elsewhere cannot post the forms in the buyer's
+ *   name (sign the buyer out, or into an account of the poster's).
  */
 export const SESSION_COOKIE = 'sf_session';
 const PROOF_COOKIE = 'sf_proof';
@@ -54,6 +58,7 @@ export function provenPhoneOf(request: Request): string {
 }
 
 export function clientAddress(request: Request): string {
+  if (process.env.STOREFRONT_TRUST_PROXY !== '1') return '';
   const real = (request.headers.get('x-real-ip') ?? '').trim();
   if (real) return real.slice(0, 64);
   const hops = (request.headers.get('x-forwarded-for') ?? '').split(',').map(h => h.trim()).filter(Boolean);
@@ -101,11 +106,43 @@ export async function accountCall<T>(request: Request, method: 'GET' | 'POST', p
   };
 }
 
-/** Where to go after signing in: a path on this site only (never `//other.site` or a full address) */
+/**
+ * Where to go after signing in: a path on this site only (never `//other.site`, a full address, or a path a browser
+ * would read as one once it drops tabs and line breaks and turns `\` into `/`)
+ */
 export function safeNext(raw: string | null | undefined): string {
   const next = String(raw ?? '');
-  return next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') && next.length <= 300 ? next : '/';
+  // eslint-disable-next-line no-control-regex
+  if (!next.startsWith('/') || next.startsWith('//') || next.length > 300 || /[\u0000-\u001f\u007f\\]/.test(next)) return '/';
+  try {
+    const resolved = new URL(next, 'http://site.invalid');
+    return resolved.origin === 'http://site.invalid' ? next : '/';
+  } catch {
+    return '/';
+  }
 }
+
+/**
+ * A form post that came from this site: the browser's `Sec-Fetch-Site` says same-origin (or `none`, typed by the buyer),
+ * else its `Origin` is this site's own address. A request with neither header (an old browser, a test) is let through:
+ * the `SameSite=Lax` cookies already keep another site's post from carrying the buyer's session.
+ */
+export function sameSite(request: Request): boolean {
+  const fetchSite = request.headers.get('sec-fetch-site');
+  if (fetchSite) return fetchSite === 'same-origin' || fetchSite === 'none';
+  const origin = request.headers.get('origin');
+  if (!origin) return true;
+  const own = new Set([new URL(request.url).origin]);
+  try {
+    own.add(new URL(siteEnv().siteUrl).origin);
+  } catch {
+    // no site address configured
+  }
+  return own.has(origin);
+}
+
+/** The answer to a form posted from another site */
+export const crossSite = () => new Response('Forbidden', { status: 403 });
 
 /** A phone as the buyer typed it (Persian or Arabic digits, spaces, +98) in the ERP's form, or '' */
 export function normalizePhone(raw: unknown): string {

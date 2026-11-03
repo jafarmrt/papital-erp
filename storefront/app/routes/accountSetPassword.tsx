@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Form, Link, redirect, useNavigation } from 'react-router';
 import type { Route } from './+types/accountSetPassword';
 import { siteEnv } from '../lib/site.server';
-import { accountCall, sessionCookie, type SessionAnswer } from '../lib/account.server';
+import { accountCall, crossSite, sameSite, sessionCookie, type SessionAnswer } from '../lib/account.server';
 import { pageMeta } from '../lib/meta';
 import { AccountShell, Field, FormError, SubmitButton } from '../components/AccountForm';
 
@@ -22,6 +22,7 @@ export function meta({ data }: Route.MetaArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
+  if (!sameSite(request)) return crossSite();
   const form = await request.formData();
   const token = String(form.get('token') ?? '');
   if (!LINK_KEY.test(token)) return { error: 'پیوند کامل باز نشده است؛ پیوندی را که فروشگاه فرستاده، کامل باز کنید.' };

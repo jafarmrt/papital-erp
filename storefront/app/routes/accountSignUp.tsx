@@ -3,7 +3,7 @@ import type { Route } from './+types/accountSignUp';
 import { publicSettings } from '../lib/api.server';
 import { siteEnv } from '../lib/site.server';
 import {
-  accountCall, clearProofCookie, normalizePhone, proofCookie, proofOf, provenPhoneOf, safeNext, sessionCookie, type SessionAnswer,
+  accountCall, clearProofCookie, crossSite, normalizePhone, proofCookie, proofOf, provenPhoneOf, safeNext, sameSite, sessionCookie, type SessionAnswer,
 } from '../lib/account.server';
 import { pageMeta } from '../lib/meta';
 import { AccountShell, CodeField, Field, FormError, FormNote, PhoneField, SubmitButton } from '../components/AccountForm';
@@ -33,6 +33,7 @@ export function meta({ data }: Route.MetaArgs) {
 const PHONE_WRONG = 'شمارهٔ همراه را درست بنویسید (مانند ۰۹۱۲۱۲۳۴۵۶۷).';
 
 export async function action({ request }: Route.ActionArgs): Promise<ActionAnswer | Response> {
+  if (!sameSite(request)) return crossSite();
   const form = await request.formData();
   const intent = String(form.get('intent') ?? '');
   const next = safeNext(String(form.get('next') ?? ''));
