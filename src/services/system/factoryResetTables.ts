@@ -17,7 +17,7 @@ import {
   projectReservationReleases, inventoryReconciliationAnomalies, itemWarehouseStocks,
   integrationDeliveryJobs, eventActionRuleRetirements, webhookEventPatternRepairs, itemPriceTitleCleanup,
   dailyLogVisibilityRepairs, statutoryRemittanceLines, settlementAllocations, payrollStatutoryRates, payrollEidiRates, itemCodeHistory,
-  mediaAssets, mediaSections, storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
+  mediaAssets, mediaSections, storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontRedirects, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
 } from '../../db/schema.js';
 
 /**
@@ -144,6 +144,8 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   // v11 phase 8.1: the site's published items before the items; the rates before their methods (the four methods
   // migration 0013 seeded are not made again: the owner adds the ones the site offers)
   { name: 'storefront_products', table: storefrontProducts },
+  // v11 phase 8.5: the old-address redirects point to items too
+  { name: 'storefront_redirects', table: storefrontRedirects },
   { name: 'storefront_shipping_rates', table: storefrontShippingRates },
   { name: 'storefront_shipping_methods', table: storefrontShippingMethods },
   { name: 'item_prices', table: itemPrices },

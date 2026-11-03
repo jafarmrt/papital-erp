@@ -1,6 +1,7 @@
 import type {
   StorefrontCatalogPage, StorefrontFacet, StorefrontProductDetail, StorefrontPublicBrand, StorefrontPublicSettings,
 } from '@erp/storefront/storefrontContracts';
+import type { StorefrontPublicRedirect, StorefrontPublicSeo } from '@erp/storefront/storefrontSeoContracts';
 import { siteEnv } from './site.server';
 import { STOREFRONT_QUERY_TEXT_MAX, STOREFRONT_SLUG_MAX } from '@erp/storefront/storefrontRules';
 import { CATALOG_PAGE_SIZE, type CatalogSort } from './catalog';
@@ -103,6 +104,37 @@ export async function brand(): Promise<StorefrontPublicBrand> {
   } catch (error) {
     // a logo that cannot be read never takes the shop down: the pages show the name instead
     if (error instanceof StorefrontApiError) return { logo: '', favicon: '' };
+    throw error;
+  }
+}
+
+const NO_SEO: StorefrontPublicSeo = { verification: { google: '', bing: '' }, analytics: { provider: 'none', id: '', url: '' }, alternateSiteUrl: '' };
+
+/** v11 phase 8.5: verification codes, the statistics service and the other-language site; unreadable = none of them, never a down shop */
+export async function seo(): Promise<StorefrontPublicSeo> {
+  try {
+    return (await get<{ data: StorefrontPublicSeo }>('/seo', SETTINGS_TTL_MS)).data;
+  } catch (error) {
+    if (error instanceof StorefrontApiError) return NO_SEO;
+    throw error;
+  }
+}
+
+const REDIRECTS_TTL_MS = 300_000;
+let redirectIndex: { list: StorefrontPublicRedirect[]; map: Map<string, StorefrontPublicRedirect> } | null = null;
+
+/**
+ * v11 phase 8.5: the old WooCommerce addresses and where each goes, by the old address's key. Read only when a request
+ * misses every page of the site, and kept a few minutes; unreadable = none, so the site's own guesses (temporary) apply.
+ */
+export async function redirects(): Promise<ReadonlyMap<string, StorefrontPublicRedirect>> {
+  try {
+    const list = (await get<{ data: StorefrontPublicRedirect[] }>('/redirects', REDIRECTS_TTL_MS)).data;
+    // the same kept answer is indexed once
+    if (redirectIndex?.list !== list) redirectIndex = { list, map: new Map(list.map(r => [r.from, r])) };
+    return redirectIndex.map;
+  } catch (error) {
+    if (error instanceof StorefrontApiError) return new Map();
     throw error;
   }
 }

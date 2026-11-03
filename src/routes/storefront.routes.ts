@@ -22,6 +22,12 @@ import {
   ADMIN_ORDER_PAGE_MAX, cancelOrder, confirmPayment, fulfilOrder, listOrders, orderDetail, rejectReceipt,
 } from '../services/storefront/storefrontOrderAdmin.service.js';
 import { ORDER_STATUSES, REJECT_REASON_MAX, TRACKING_CODE_MAX, type OrderStatus } from '../lib/storefront/storefrontOrderRules.js';
+import { ANALYTICS_PROVIDERS, REDIRECT_SOURCES, REDIRECT_TARGET_KINDS, type RedirectSource } from '../lib/storefront/storefrontSeoRules.js';
+import { readStorefrontSeoSettings, saveStorefrontSeoSettings } from '../services/storefront/storefrontSeo.service.js';
+import {
+  REDIRECT_PAGE_MAX, createRedirect, deleteRedirect, listRedirects, setRedirectActive, updateRedirect,
+} from '../services/storefront/storefrontRedirects.service.js';
+import { importWooRedirects } from '../services/storefront/storefrontRedirectImport.service.js';
 
 /**
  * v11 phase 8.1 (package 18): the ERP side of the storefront (`/api/storefront`), the «فروشگاه سایت» settings tab. `storefront.view` reads,
@@ -110,6 +116,34 @@ const fulfilSchema = z.object({
   body: z.object({ status: z.enum(['shipped', 'delivered']), trackingCode: text(TRACKING_CODE_MAX * 2), version: version.min(1) }).strict(),
 });
 
+// v11 phase 8.5: search and statistics settings, and the old addresses of the WooCommerce site
+const seoSchema = z.object({
+  body: z.object({
+    googleVerification: text(200), bingVerification: text(200), analyticsProvider: z.enum(ANALYTICS_PROVIDERS),
+    analyticsId: text(60), analyticsUrl: text(300), alternateSiteUrl: text(300), version,
+  }).strict(),
+});
+const redirectBody = z.object({
+  fromPath: text(1000), targetKind: z.enum(REDIRECT_TARGET_KINDS), targetItemId: z.number().int().min(1).max(2_147_483_647).nullable(),
+  target: text(400), note: text(400), isActive: z.boolean(),
+});
+const redirectIdParams = z.object({ id: numericIdString }).passthrough();
+const redirectListSchema = z.object({
+  query: z.object({
+    page: z.string().regex(/^[1-9]\d{0,5}$/).transform(Number).optional(),
+    limit: z.string().regex(/^[1-9]\d{0,2}$/).transform(Number).optional(),
+    q: text(300).optional(),
+    source: z.enum(REDIRECT_SOURCES).optional(),
+  }).passthrough(),
+});
+const redirectCreateSchema = z.object({ body: redirectBody.strict() });
+const redirectUpdateSchema = z.object({ params: redirectIdParams, body: redirectBody.extend({ version: version.min(1) }).strict() });
+const redirectActiveSchema = z.object({ params: redirectIdParams, body: z.object({ active: z.boolean(), version: version.min(1) }).strict() });
+const redirectDeleteSchema = z.object({
+  params: redirectIdParams,
+  query: z.object({ version: z.string().regex(/^[1-9]\d{0,9}$/, 'نسخه نامعتبر است').transform(Number) }).passthrough(),
+});
+
 router.use(authenticateToken);
 
 router.get('/settings', requirePermission(STOREFRONT_VIEW_PERMISSION), asyncHandler(async (_req: Request, res: Response) => {
@@ -156,6 +190,42 @@ router.get('/products', requirePermission(STOREFRONT_VIEW_PERMISSION), validate(
 
 router.put('/products/:itemId', requirePermission(STOREFRONT_MANAGE_PERMISSION), validate(productSaveSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: await saveStorefrontProduct(req, Number(req.params.itemId), req.body) });
+}));
+
+router.get('/seo', requirePermission(STOREFRONT_VIEW_PERMISSION), asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ data: await readStorefrontSeoSettings(orm) });
+}));
+
+router.put('/seo', requirePermission(STOREFRONT_MANAGE_PERMISSION), validate(seoSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await saveStorefrontSeoSettings(req, req.body) });
+}));
+
+router.get('/redirects', requirePermission(STOREFRONT_VIEW_PERMISSION), validate(redirectListSchema), asyncHandler(async (req: Request, res: Response) => {
+  const query = req.query as { page?: number; limit?: number; q?: string; source?: RedirectSource };
+  res.json(await listRedirects({ page: query.page ?? 1, limit: Math.min(query.limit ?? 50, REDIRECT_PAGE_MAX), q: query.q ?? '', source: query.source ?? '' }));
+}));
+
+router.post('/redirects', requirePermission(STOREFRONT_MANAGE_PERMISSION), idempotency({ scope: 'storefront' }), validate(redirectCreateSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.status(201).json({ success: true, data: await createRedirect(req, req.body) });
+}));
+
+// reads the WooCommerce site (products, categories and tags) and writes only redirects of the ERP
+router.post('/redirects/import', requirePermission(STOREFRONT_MANAGE_PERMISSION), idempotency({ scope: 'storefront' }), validate(emptyBodySchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await importWooRedirects(req) });
+}));
+
+router.put('/redirects/:id', requirePermission(STOREFRONT_MANAGE_PERMISSION), validate(redirectUpdateSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await updateRedirect(req, Number(req.params.id), req.body) });
+}));
+
+router.put('/redirects/:id/active', requirePermission(STOREFRONT_MANAGE_PERMISSION), validate(redirectActiveSchema), asyncHandler(async (req: Request, res: Response) => {
+  const body = req.body as { active: boolean; version: number };
+  res.json({ success: true, data: await setRedirectActive(req, Number(req.params.id), body.active, body.version) });
+}));
+
+router.delete('/redirects/:id', requirePermission(STOREFRONT_MANAGE_PERMISSION), validate(redirectDeleteSchema), asyncHandler(async (req: Request, res: Response) => {
+  await deleteRedirect(req, Number(req.params.id), Number((req.query as { version?: number }).version));
+  res.json({ success: true });
 }));
 
 // v11 phase 8.2a: the «سفارش‌های سایت» page. Reads need site_orders.view; every action site_orders.manage, and

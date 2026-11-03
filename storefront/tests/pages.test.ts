@@ -12,7 +12,13 @@ let handle: (request: Request) => Promise<Response>;
 
 beforeAll(async () => {
   mock = spawn(process.execPath, [path.join(import.meta.dirname, '../mock/mockApi.mjs')], {
-    env: { ...process.env, MOCK_PORT: String(PORT), MOCK_API_KEY: KEY },
+    env: {
+      ...process.env, MOCK_PORT: String(PORT), MOCK_API_KEY: KEY,
+      MOCK_SEO: JSON.stringify({
+        verification: { google: 'google-code_1', bing: '' }, analytics: { provider: 'ga4', id: 'G-TEST123', url: '' },
+        alternateSiteUrl: 'https://papital.gallery',
+      }),
+    },
     stdio: 'pipe',
   });
   await new Promise<void>((resolve, reject) => {
@@ -192,5 +198,73 @@ describe('search engines and information pages', () => {
     }
     expect((await page('/')).html).toContain('href="/terms"');
     expect((await page('/about/extra')).status).toBe(404);
+  });
+});
+
+describe('old addresses of the WooCommerce site (phase 8.5)', () => {
+  const visit = (pathname: string) => handle(new Request(`http://localhost${pathname}`));
+
+  it('sends an old product address, encoded or not, to its new page for good, with the campaign fields', async () => {
+    const encoded = await visit(`/product/${encodeURIComponent('گردنبند-کاشی-نمونه')}/?utm_source=instagram&add-to-cart=5`);
+    expect(encoded.status).toBe(301);
+    expect(encoded.headers.get('location')).toBe('/p/tile-necklace-sample?utm_source=instagram');
+    expect((await visit('/product/گردنبند-کاشی-نمونه')).headers.get('location')).toBe('/p/tile-necklace-sample');
+    const byId = await visit('/?p=101');
+    expect(byId.status).toBe(301);
+    expect(byId.headers.get('location')).toBe('/p/tile-earrings-sample');
+  });
+
+  it('sends old tag, category and page addresses to their collection, category and page', async () => {
+    expect((await visit(`/product-tag/${encodeURIComponent('نمونه‌الف')}/page/2/`)).headers.get('location')).toBe(`/collections/${encodeURIComponent('نمونه‌الف')}`);
+    expect((await visit('/product-category/jewelry/earrings/')).headers.get('location')).toBe(`/products?category=${encodeURIComponent('گوشواره')}`);
+    expect((await visit('/about-us/')).headers.get('location')).toBe('/about');
+  });
+
+  it('guesses for a WooCommerce address no redirect names, only for a while, and leaves the rest a 404', async () => {
+    const unknown = await visit(`/product/${encodeURIComponent('دستبند-فیروزه')}/`);
+    expect(unknown.status).toBe(302);
+    expect(unknown.headers.get('location')).toBe(`/products?q=${encodeURIComponent('دستبند فیروزه')}`);
+    expect(unknown.headers.get('cache-control')).toBe('no-store');
+    expect((await visit('/shop/')).headers.get('location')).toBe('/products');
+    const search = await visit('/?s=کاشی&post_type=product');
+    expect(search.status).toBe(301);
+    expect(search.headers.get('location')).toBe(`/products?q=${encodeURIComponent('کاشی')}`);
+    expect((await visit('/wp-login.php')).status).toBe(404);
+    // a campaign link to the home page stays the home page
+    expect((await visit('/?utm_source=instagram')).status).toBe(200);
+  });
+});
+
+describe('search-engine verification and visit statistics (phase 8.5)', () => {
+  it('writes the verification code, loads the chosen statistics service and allows only its addresses', async () => {
+    const res = await handle(new Request('http://localhost/'));
+    const html = await res.text();
+    expect(html).toContain('<meta name="google-site-verification" content="google-code_1"/>');
+    expect(html).not.toContain('msvalidate.01');
+    expect(html).toContain('https://www.googletagmanager.com/gtag/js?id=G-TEST123');
+    expect(html).toContain(`gtag('config',"G-TEST123")`);
+    const csp = res.headers.get('content-security-policy') ?? '';
+    expect(csp).toContain("script-src 'self' 'unsafe-inline' https://www.googletagmanager.com");
+    expect(csp).toContain('connect-src \'self\' https://*.google-analytics.com');
+    expect(csp).toContain("object-src 'none'");
+  });
+
+  it('names the brand\'s site in another language on the home page', async () => {
+    const { html } = await page('/');
+    expect(html).toContain('<link rel="alternate" hrefLang="fa" href="https://shop.example/"/>');
+    expect(html).toContain('<link rel="alternate" hrefLang="en" href="https://papital.gallery/"/>');
+  });
+
+  it('never counts visits on a preview or test address', async () => {
+    const before = process.env.STOREFRONT_NOINDEX;
+    process.env.STOREFRONT_NOINDEX = '1';
+    try {
+      const res = await handle(new Request('http://localhost/'));
+      const html = await res.text();
+      expect(html).not.toContain('googletagmanager');
+      expect(res.headers.get('content-security-policy')).not.toContain('googletagmanager');
+    } finally {
+      if (before === undefined) delete process.env.STOREFRONT_NOINDEX; else process.env.STOREFRONT_NOINDEX = before;
+    }
   });
 });

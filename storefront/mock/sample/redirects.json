@@ -1,0 +1,7 @@
+[
+  { "from": "/product/گردنبند-کاشی-نمونه", "kind": "product", "target": "tile-necklace-sample" },
+  { "from": "/?p=101", "kind": "product", "target": "tile-earrings-sample" },
+  { "from": "/product-tag/نمونه‌الف", "kind": "collection", "target": "نمونه‌الف" },
+  { "from": "/product-category/earrings", "kind": "category", "target": "گوشواره" },
+  { "from": "/about-us", "kind": "path", "target": "/about" }
+]

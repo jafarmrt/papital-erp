@@ -103,6 +103,8 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   { table: 'storefront_products', group: 'settings' },
   { table: 'storefront_shipping_methods', group: 'settings' },
   { table: 'storefront_shipping_rates', group: 'settings' },
+  // v11 phase 8.5: the old addresses of the WooCommerce site and where each goes
+  { table: 'storefront_redirects', group: 'settings' },
 ];
 
 /** Exported only on request, for a business-day range */

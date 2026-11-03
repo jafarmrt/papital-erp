@@ -12,7 +12,7 @@ import {
   workflowDefinitions, workflowDefinitionVersions, workflowStates, workflowTransitions, workflowInstances,
   workflowHistoryLogs, workflowTasks, workflowPendingApprovals, workflowDelegations,
   mediaSections, mediaAssets, projectManagers, stockReceiptConfirmations, workshopTaskReports,
-  storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts,
+  storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontRedirects,
 } from '../../db/schema.js';
 import { SENSITIVE_SETTING_PATTERN } from '../settings/systemSettings.service.js';
 
@@ -134,5 +134,6 @@ export const DATA_EXPORT_TABLE_SOURCES: Readonly<Record<string, TableSpecSource>
   storefront_products: { table: storefrontProducts, key: ['id'] },
   storefront_shipping_methods: { table: storefrontShippingMethods, key: ['id'] },
   storefront_shipping_rates: { table: storefrontShippingRates, key: ['id'] },
+  storefront_redirects: { table: storefrontRedirects, key: ['id'] },
 };
 
