@@ -5,10 +5,11 @@ import { ConflictError, NotFoundError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { ORDER_STATUS_TITLES, isOrderStatus, tomanText } from '../../lib/storefront/storefrontOrderRules.js';
-import type { AccountOrderPage, BuyerOrder, ClaimOrderRequest } from '../../lib/storefront/storefrontOrderContracts.js';
+import type { AccountOrderPage, BuyerOrder, ClaimOrderRequest, ReceiptRequest } from '../../lib/storefront/storefrontOrderContracts.js';
 import { STOREFRONT_BOT_USER } from './storefrontCustomer.js';
 import { requireAccount } from './storefrontBuyerAuth.service.js';
 import { orderForKey } from './storefrontOrderPlace.service.js';
+import { receiptFor } from './storefrontOrderBuyer.service.js';
 import { buyerOrderView, paymentMethodOf } from './storefrontOrderView.js';
 import { rialText } from './storefrontShipping.service.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
@@ -58,6 +59,22 @@ export async function myOrder(rawToken: unknown, orderNumber: string): Promise<B
     .where(and(eq(storefrontOrders.orderNumber, orderNumber), eq(storefrontOrders.buyerAccountId, account.id)));
   if (!order) throw notFound();
   return buyerOrderView(orm, order, await storefrontSettingValues(orm));
+}
+
+/**
+ * `POST /account/orders/:number/receipts`: v11 phase 8.2, a card-to-card receipt for one of the account's own orders,
+ * from any phone the buyer is signed in on (a guest's order still needs its tracking key). The same checks and answer as
+ * the keyed route; another account's order, or a number the account does not hold, is the same 404.
+ */
+export async function sendAccountReceipt(rawToken: unknown, orderNumber: string, input: ReceiptRequest): Promise<BuyerOrder> {
+  const account = await requireAccount(rawToken);
+  if (!/^\d{6,12}$/.test(orderNumber)) throw notFound();
+  return receiptFor(async (tx) => {
+    const [order] = await tx.select().from(storefrontOrders)
+      .where(and(eq(storefrontOrders.orderNumber, orderNumber), eq(storefrontOrders.buyerAccountId, account.id))).for('update');
+    if (!order) throw notFound();
+    return order;
+  }, input);
 }
 
 /**

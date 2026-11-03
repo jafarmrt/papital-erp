@@ -124,6 +124,8 @@ export async function runStorefrontOrdersV11Tests(shouldRun: (id: string, ...ext
     const whileOff = await site.post('/api/storefront/v1/orders', buyer(phone1, slugA, `rk-off-${tag}-checkout`));
     if (whileOff.status !== 404) wrong.push(`an order while ordering is off: ${whileOff.status}, not 404`);
     await save({ ordersEnabled: true });
+    const ordering = (await site.get('/api/storefront/v1/settings')).body.data?.ordering;
+    if (ordering !== true) wrong.push(`the site settings say ordering ${ordering} once «ثبت سفارش» is on`);
 
     // 2) a quote, then a price in the request is refused (the server prices the cart)
     const quote = await site.post('/api/storefront/v1/shipping/quote', { province: 'تهران', lines: [{ slug: slugA, quantity: 1 }] });

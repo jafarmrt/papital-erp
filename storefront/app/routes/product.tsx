@@ -1,5 +1,5 @@
-import { Link } from 'react-router';
-import { MessageCircle, Truck, Hand, ShieldCheck } from 'lucide-react';
+import { Form, Link } from 'react-router';
+import { MessageCircle, ShoppingBag, Truck, Hand, ShieldCheck } from 'lucide-react';
 import type { Route } from './+types/product';
 import { catalog, product as productBySlug } from '../lib/api.server';
 import { siteEnv } from '../lib/site.server';
@@ -107,13 +107,28 @@ export default function ProductPage({ loaderData }: Route.ComponentProps) {
             </div>
 
             <div className="mt-6 space-y-3">
-              {root?.whatsapp ? (
+              {root?.ordering ? (
+                // v11 phase 8.2: a plain form to the cart, so it works without JavaScript
+                <Form method="post" action="/cart" className="flex gap-3">
+                  <input type="hidden" name="slug" value={item.slug} />
+                  <input type="hidden" name="intent" value="add" />
+                  <label className="sr-only" htmlFor="add-quantity">تعداد</label>
+                  <select id="add-quantity" name="quantity" defaultValue="1" disabled={out} className="min-h-13 w-20 rounded-control border border-border bg-card px-3 text-lg disabled:opacity-50">
+                    {Array.from({ length: 10 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{faNumber(n)}</option>)}
+                  </select>
+                  <button type="submit" disabled={out} className="flex min-h-13 flex-1 items-center justify-center gap-2 rounded-control bg-primary px-6 text-lg font-bold text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground">
+                    <ShoppingBag className="size-5" strokeWidth={2} aria-hidden />
+                    {out ? 'فعلاً ناموجود' : 'افزودن به سبد'}
+                  </button>
+                </Form>
+              ) : null}
+              {root?.whatsapp && !(root.ordering && out) ? (
                 <a
                   // out of stock: no address, so neither a tap nor the keyboard opens the chat
                   href={out ? undefined : whatsappLink(root.whatsapp, orderText)}
                   rel="noopener"
                   aria-disabled={out || undefined}
-                  className={`flex min-h-13 w-full items-center justify-center gap-2 rounded-control px-6 text-lg font-bold transition-colors duration-(--motion) ${out ? 'pointer-events-none bg-muted text-muted-foreground' : 'bg-brand text-brand-foreground hover:bg-brand/90'}`}
+                  className={`flex min-h-13 w-full items-center justify-center gap-2 rounded-control px-6 text-lg font-bold transition-colors duration-(--motion) ${out ? 'pointer-events-none bg-muted text-muted-foreground' : root.ordering ? 'border border-border bg-card text-foreground hover:border-brand' : 'bg-brand text-brand-foreground hover:bg-brand/90'}`}
                 >
                   <MessageCircle className="size-5" strokeWidth={2} aria-hidden />
                   {out ? 'فعلاً ناموجود' : 'سفارش در واتس‌اپ'}

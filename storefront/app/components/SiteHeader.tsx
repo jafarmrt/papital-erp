@@ -1,13 +1,19 @@
 import { Form, Link, useLocation } from 'react-router';
-import { Menu, Search, UserRound, X } from 'lucide-react';
+import { Menu, Search, ShoppingBag, UserRound, X } from 'lucide-react';
 import type { StorefrontFacet } from '@erp/storefront/storefrontContracts';
 import { BRAND, categoryPath } from '../lib/brand';
+import { faNumber } from '../lib/format';
 
 /**
  * The header works without JavaScript: the phone menu is a <details>, the search a GET form to /products. The account
- * link (8.4b) is in the phone menu, and an icon beside the search from the desktop width up.
+ * link (8.4b) is in the phone menu, and an icon beside the search from the desktop width up. While the site takes orders
+ * (8.2) the cart icon, with how many items it holds, stays in sight at every width.
  */
-export function SiteHeader({ categories, logoUrl }: { categories: StorefrontFacet[]; logoUrl: string }) {
+export function SiteHeader({ categories, logoUrl, ordering, cartCount, signedIn }: {
+  categories: StorefrontFacet[]; logoUrl: string; ordering: boolean; cartCount: number; signedIn: boolean;
+}) {
+  const accountTo = signedIn ? '/account' : '/account/sign-in';
+  const accountLabel = signedIn ? 'حساب من' : 'ورود به حساب';
   const nav = [{ to: '/products', label: 'همهٔ محصولات' }, ...categories.map(c => ({ to: categoryPath(c.name), label: c.name }))];
   // every link here is /products with or without ?category=, so the path alone cannot tell which one is open
   const location = useLocation();
@@ -26,7 +32,8 @@ export function SiteHeader({ categories, logoUrl }: { categories: StorefrontFace
               {nav.map(item => (
                 <li key={item.to}><Link to={item.to} className="flex min-h-12 items-center text-lg font-medium">{item.label}</Link></li>
               ))}
-              <li><Link to="/account/sign-in" className="flex min-h-12 items-center gap-2 text-lg font-medium"><UserRound className="size-5" strokeWidth={1.75} aria-hidden />ورود به حساب</Link></li>
+              <li><Link to={accountTo} className="flex min-h-12 items-center gap-2 text-lg font-medium"><UserRound className="size-5" strokeWidth={1.75} aria-hidden />{accountLabel}</Link></li>
+              {ordering ? <li><Link to="/orders/track" className="flex min-h-12 items-center text-lg font-medium">پیگیری سفارش</Link></li> : null}
             </ul>
           </nav>
         </details>
@@ -66,9 +73,15 @@ export function SiteHeader({ categories, logoUrl }: { categories: StorefrontFace
             <Search className="pointer-events-none absolute start-3 size-5 text-muted-foreground" strokeWidth={1.75} aria-hidden />
           </label>
         </Form>
-        <Link to="/account/sign-in" aria-label="ورود به حساب" className="hidden size-11 items-center justify-center rounded-control hover:bg-chrome-foreground/10 lg:flex">
+        <Link to={accountTo} aria-label={accountLabel} className="hidden size-11 items-center justify-center rounded-control hover:bg-chrome-foreground/10 lg:flex">
           <UserRound className="size-6" strokeWidth={1.75} aria-hidden />
         </Link>
+        {ordering ? (
+          <Link to="/cart" aria-label={cartCount ? `سبد خرید، ${faNumber(cartCount)} کالا` : 'سبد خرید'} className="relative flex size-11 shrink-0 items-center justify-center rounded-control hover:bg-chrome-foreground/10">
+            <ShoppingBag className="size-6" strokeWidth={1.75} aria-hidden />
+            {cartCount ? <span aria-hidden className="absolute -top-0.5 -end-0.5 flex min-w-5 items-center justify-center rounded-full bg-brand px-1 text-xs font-bold text-brand-foreground">{faNumber(cartCount)}</span> : null}
+          </Link>
+        ) : null}
       </div>
     </header>
   );

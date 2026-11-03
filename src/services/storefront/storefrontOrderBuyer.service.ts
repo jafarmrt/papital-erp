@@ -1,5 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbTransaction } from '../../db/drizzle.js';
 import { storefrontOrders, storefrontPaymentReceipts } from '../../db/schema.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
@@ -10,7 +10,7 @@ import { RECEIPTS_PER_ORDER_MAX, normalizeCardLast4, normalizeReference } from '
 import type { BuyerOrder, ReceiptRequest } from '../../lib/storefront/storefrontOrderContracts.js';
 import { STOREFRONT_BOT_USER } from './storefrontCustomer.js';
 import { orderForKey } from './storefrontOrderPlace.service.js';
-import { buyerOrderView } from './storefrontOrderView.js';
+import { buyerOrderView, type OrderRecord } from './storefrontOrderView.js';
 import { notifySiteOrder } from './storefrontOrderNotices.js';
 import { receiptImageOf, storeReceiptImage } from './storefrontReceiptImage.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
@@ -52,11 +52,19 @@ function cleanReceipt(input: ReceiptRequest, nowMs: number) {
 }
 
 export async function sendReceipt(orderNumber: string, accessKey: string, input: ReceiptRequest): Promise<BuyerOrder> {
+  return receiptFor((tx) => orderForKey(tx, orderNumber, accessKey, { lock: true }), input);
+}
+
+/**
+ * A receipt for the order `lockOrder` finds and locks: by its tracking key (`sendReceipt`), or, v11 phase 8.2, as one
+ * of a signed-in account's own orders (`sendAccountReceipt`), so an account holder pays from any phone.
+ */
+export async function receiptFor(lockOrder: (tx: DbTransaction) => Promise<OrderRecord>, input: ReceiptRequest): Promise<BuyerOrder> {
   const settings = await orderingOn();
   const receipt = cleanReceipt(input, Date.parse(systemNowUtcIso()));
   const image = receiptImageOf(input.image);
   return orm.transaction(async (tx) => {
-    const order = await orderForKey(tx, orderNumber, accessKey, { lock: true });
+    const order = await lockOrder(tx);
     if (order.status !== 'awaiting_payment') {
       throw new ConflictError('برای این سفارش اکنون رسید پذیرفته نمی‌شود.', undefined, 'STOREFRONT_RECEIPT_NOT_EXPECTED');
     }
