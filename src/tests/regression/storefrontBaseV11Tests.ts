@@ -64,7 +64,7 @@ export async function runStorefrontBaseV11Tests(shouldRun: (id: string, ...extra
     const settings = {
       cardNumber: VALID_CARD, cardHolder: 'گالری پاپیتال', bankName: 'ملت', iban: VALID_IBAN, freeShippingThreshold: '۵٬۰۰۰٬۰۰۰',
       reservationHours: 24, retailPriceList: retailList, wholesalePriceList: wholesaleList, lowStockThreshold: 2, stockDisplay: 'count',
-      warehouseCode: warehouse.code, whatsappNumber: '', whatsappEnabled: false, enabled: false, version,
+      warehouseCode: warehouse.code, whatsappNumber: '', whatsappEnabled: false, enabled: false, ordersEnabled: false, treasuryAccountId: 0, openOrdersPerPhone: 3, version,
     };
     const badCard = await erp.put('/api/storefront/settings', { ...settings, cardNumber: '6037991234567894' });
     if (badCard.status !== 422 || badCard.body.code !== 'STOREFRONT_CARD_INVALID') wrong.push(`a wrong card: ${badCard.status} ${badCard.body.code}`);

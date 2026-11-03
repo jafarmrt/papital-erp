@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 531
+تعداد مسیرها: 541
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -435,6 +435,12 @@
 | GET | `/api/stats` | reports.view \| warehouse.view |
 | POST | `/api/storefront/api-key` | storefront.manage |
 | PUT | `/api/storefront/brand/:kind` | storefront.manage |
+| GET | `/api/storefront/orders` | site_orders.view |
+| GET | `/api/storefront/orders/:id` | site_orders.view |
+| POST | `/api/storefront/orders/:id/cancel` | site_orders.manage |
+| POST | `/api/storefront/orders/:id/confirm` | site_orders.manage |
+| POST | `/api/storefront/orders/:id/fulfil` | site_orders.manage |
+| POST | `/api/storefront/orders/:id/reject-receipt` | site_orders.manage |
 | GET | `/api/storefront/products` | storefront.view |
 | PUT | `/api/storefront/products/:itemId` | storefront.manage |
 | GET | `/api/storefront/settings` | storefront.view |
@@ -446,9 +452,13 @@
 | GET | `/api/storefront/v1/brand` | public |
 | GET | `/api/storefront/v1/facets` | public |
 | GET | `/api/storefront/v1/media/:file` | public |
+| POST | `/api/storefront/v1/orders` | public |
+| GET | `/api/storefront/v1/orders/:number` | public |
+| POST | `/api/storefront/v1/orders/:number/receipts` | public |
 | GET | `/api/storefront/v1/products` | public |
 | GET | `/api/storefront/v1/products/:slug` | public |
 | GET | `/api/storefront/v1/settings` | public |
+| POST | `/api/storefront/v1/shipping/quote` | public |
 | GET | `/api/system/business-date` | login-only |
 | GET | `/api/system/conditional-constraints` | admin |
 | POST | `/api/system/conditional-constraints/build` | admin |

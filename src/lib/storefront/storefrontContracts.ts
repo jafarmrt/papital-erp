@@ -28,6 +28,9 @@ export const STOREFRONT_SETTING_KEYS = {
   logo: 'sf_logo',
   favicon: 'sf_favicon',
   brandVersion: 'sf_brand_version',
+  ordersEnabled: 'sf_orders_enabled',
+  treasuryAccountId: 'sf_treasury_account',
+  openOrdersPerPhone: 'sf_open_orders_per_phone',
 } as const;
 
 export interface StorefrontSettingsInput {
@@ -51,6 +54,12 @@ export interface StorefrontSettingsInput {
   whatsappEnabled: boolean;
   /** the Storefront API answers only while this is on (default off: nothing of the ERP changes until the owner turns it on) */
   enabled: boolean;
+  /** v11 phase 8.2a: the site takes orders only while this is on too (default off, so the catalog can go live first) */
+  ordersEnabled: boolean;
+  /** the treasury account (bank) a confirmed card-to-card payment is received into; 0 = not chosen (confirming is refused) */
+  treasuryAccountId: number;
+  /** the unpaid orders one phone number may hold at once */
+  openOrdersPerPhone: number;
   version: number;
 }
 
@@ -59,6 +68,8 @@ export interface StorefrontSettingsView extends StorefrontSettingsInput {
   priceLists: string[];
   /** the active warehouses the warehouse field chooses from */
   warehouses: Array<{ code: string; name: string }>;
+  /** the active rial bank accounts with a ledger account the treasury account field chooses from */
+  treasuryAccounts: Array<{ id: number; title: string; bankName: string }>;
   /** the warehouse the site sells from now (the setting, or the shop warehouse it falls back to) */
   effectiveWarehouseCode: string;
   apiKey: { configured: boolean; hint: string; createdAt: string | null };

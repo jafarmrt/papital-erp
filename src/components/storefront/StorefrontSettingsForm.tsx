@@ -9,6 +9,7 @@ import type { StorefrontSettingsInput, StorefrontSettingsView } from '../../lib/
 import {
   LOW_STOCK_THRESHOLD_MAX, RESERVATION_HOURS_MAX, STOCK_DISPLAYS, STOCK_DISPLAY_TITLES, cardNumberError, ibanError, whatsappNumberError, type StockDisplay,
 } from '../../lib/storefront/storefrontRules';
+import { OPEN_ORDERS_PER_PHONE_MAX } from '../../lib/storefront/storefrontOrderRules';
 import { formatPersianNumber } from '../../utils/persianNumber';
 import { errorMessageOf } from '../../utils';
 
@@ -27,6 +28,7 @@ const formOf = (view: StorefrontSettingsView): StorefrontSettingsInput => ({
   retailPriceList: view.retailPriceList, wholesalePriceList: view.wholesalePriceList,
   lowStockThreshold: view.lowStockThreshold, stockDisplay: view.stockDisplay, warehouseCode: view.warehouseCode,
   whatsappNumber: view.whatsappNumber, whatsappEnabled: view.whatsappEnabled, enabled: view.enabled,
+  ordersEnabled: view.ordersEnabled, treasuryAccountId: view.treasuryAccountId, openOrdersPerPhone: view.openOrdersPerPhone,
   version: view.version,
 });
 
@@ -83,6 +85,32 @@ export function StorefrontSettingsForm({ view, canManage }: { view: StorefrontSe
             <div>
               <label htmlFor={`${id}-bank`} className={label}>نام بانک</label>
               <input id={`${id}-bank`} className={field} value={form.bankName} onChange={e => set('bankName', e.target.value)} />
+            </div>
+          </div>
+        </section>
+
+        <section aria-label="ثبت سفارش" className={`rounded-2xl border p-5 space-y-3 ${form.ordersEnabled ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-200 bg-white'}`}>
+          <label className="inline-flex items-center gap-2 text-sm font-black text-slate-800">
+            <input type="checkbox" checked={form.ordersEnabled} onChange={e => set('ordersEnabled', e.target.checked)} />
+            سایت سفارش می‌گیرد
+          </label>
+          <p className={hint}>
+            تا خاموش است، سایت فقط کالاها را نشان می‌دهد و سفارشی ثبت نمی‌شود. برای روشن کردن، کارت یا شبا، لیست قیمت تکی و حساب دریافت لازم است.
+          </p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label htmlFor={`${id}-treasury`} className={label}>حساب دریافت کارت‌به‌کارت</label>
+              <select id={`${id}-treasury`} className={field} value={form.treasuryAccountId} onChange={e => set('treasuryAccountId', Number(e.target.value) || 0)}>
+                <option value={0}>انتخاب نشده</option>
+                {view.treasuryAccounts.map(a => <option key={a.id} value={a.id}>{a.bankName ? `${a.title} (${a.bankName})` : a.title}</option>)}
+              </select>
+              <p className={hint}>حساب خزانه‌ای که کارت یا شبای بالا به آن وصل است. با تأیید هر پرداخت، دریافت در همین حساب ثبت می‌شود.</p>
+            </div>
+            <div>
+              <label htmlFor={`${id}-open`} className={label}>سقف سفارش پرداخت‌نشدهٔ هر شماره همراه</label>
+              <DecimalInput id={`${id}-open`} className={field} grouped={false} value={form.openOrdersPerPhone} min={1} max={OPEN_ORDERS_PER_PHONE_MAX} step={1}
+                onValueChange={v => set('openOrdersPerPhone', Number(v) || 0)} />
+              <p className={hint}>جلوی سفارش‌های ساختگی را می‌گیرد که فقط موجودی را قفل می‌کنند.</p>
             </div>
           </div>
         </section>
