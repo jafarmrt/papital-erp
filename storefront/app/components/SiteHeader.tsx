@@ -45,7 +45,7 @@ export function SiteHeader({ categories, logoUrl }: { categories: StorefrontFace
                 <Link
                   to={item.to}
                   aria-current={activeTo === item.to ? 'page' : undefined}
-                  className={`flex min-h-11 items-center rounded-control px-3 font-medium transition-colors duration-(--motion) hover:bg-chrome-foreground/10 ${activeTo === item.to ? 'underline decoration-gold decoration-2 underline-offset-8' : ''}`}
+                  className={`flex min-h-11 items-center rounded-control px-3 font-medium transition-colors duration-(--motion) hover:bg-chrome-foreground/10 ${activeTo === item.to ? 'underline decoration-tile decoration-2 underline-offset-8' : ''}`}
                 >
                   {item.label}
                 </Link>

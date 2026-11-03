@@ -5,6 +5,7 @@ import { BRAND, categoryPath, collectionPath } from '../lib/brand';
 import { formatPrice } from '../lib/format';
 import { whatsappLink } from '../lib/whatsapp';
 import { INFO_PAGES } from '../content/pages';
+import { InstallButton } from './InstallButton';
 
 export function SiteFooter({ data }: { data: RootData | undefined }) {
   return (
@@ -25,6 +26,7 @@ export function SiteFooter({ data }: { data: RootData | undefined }) {
               </a>
             ) : null}
           </div>
+          {data?.pwa ? <InstallButton /> : null}
         </div>
         <nav aria-label="دسته‌ها">
           <p className="font-bold">خرید</p>
