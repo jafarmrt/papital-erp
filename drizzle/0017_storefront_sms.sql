@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS storefront_sms_messages (
   CONSTRAINT chk_storefront_sms_messages_kind CHECK (kind IN ('otp', 'order_placed', 'receipt_rejected', 'order_paid', 'order_shipped', 'order_delivered', 'order_cancelled')),
   CONSTRAINT chk_storefront_sms_messages_phone CHECK (phone ~ '^09[0-9]{9}$'),
   CONSTRAINT chk_storefront_sms_messages_phone_key CHECK (phone_key ~ '^[0-9]{10}$'),
-  CONSTRAINT chk_storefront_sms_messages_test_flag CHECK (is_test IN (0, 1)),
+  CONSTRAINT chk_storefront_sms_messages_is_test_flag CHECK (is_test IN (0, 1)),
   CONSTRAINT chk_storefront_sms_messages_status CHECK (status IN ('queued', 'sending', 'sent', 'failed', 'skipped')),
   CONSTRAINT chk_storefront_sms_messages_attempts CHECK (attempts >= 0),
   CONSTRAINT chk_storefront_sms_messages_provider CHECK (provider IN ('', 'smsir', 'kavenegar')),
@@ -74,5 +74,7 @@ CREATE INDEX IF NOT EXISTS idx_storefront_sms_codes_phone ON storefront_sms_code
 CREATE INDEX IF NOT EXISTS idx_storefront_sms_codes_address ON storefront_sms_codes (address_key, created_at DESC);
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_storefront_sms_codes_created ON storefront_sms_codes (created_at DESC);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_storefront_sms_codes_message_id ON storefront_sms_codes (message_id) WHERE message_id IS NOT NULL;
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS uq_storefront_sms_codes_proof ON storefront_sms_codes (proof_hash) WHERE proof_hash IS NOT NULL;

@@ -56,5 +56,6 @@ export const storefrontSmsCodes = pgTable('storefront_sms_codes', {
   idx_storefront_sms_codes_phone: index('idx_storefront_sms_codes_phone').on(table.phoneKey, table.createdAt.desc()),
   idx_storefront_sms_codes_address: index('idx_storefront_sms_codes_address').on(table.addressKey, table.createdAt.desc()),
   idx_storefront_sms_codes_created: index('idx_storefront_sms_codes_created').on(table.createdAt.desc()),
+  idx_storefront_sms_codes_message_id: index('idx_storefront_sms_codes_message_id').on(table.messageId).where(sql`${table.messageId} IS NOT NULL`),
   uq_storefront_sms_codes_proof: uniqueIndex('uq_storefront_sms_codes_proof').on(table.proofHash).where(sql`${table.proofHash} IS NOT NULL`),
 }));
