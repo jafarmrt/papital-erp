@@ -81,6 +81,7 @@ function BuyerBody({ buyer, canManage, busy, run }: { buyer: BuyerAccountDetail;
         {buyer.appliedAt && <Row label="زمان درخواست">{formatPersianDateTime(buyer.appliedAt)}</Row>}
         {buyer.reviewedBy && <Row label="بررسی">{buyer.reviewedBy}{buyer.reviewedAt ? `، ${formatPersianDateTime(buyer.reviewedAt)}` : ''}</Row>}
         <Row label="رمز">{buyer.hasPassword ? 'گذاشته شده' : 'هنوز ندارد'}</Row>
+        <Row label="تأیید شماره">{buyer.phoneVerified ? 'با پیامک تأیید شده' : 'با پیامک تأیید نشده'}</Row>
         {buyer.passwordLinkExpiresAt && <Row label="پیوند تعیین رمز">تا {formatPersianDateTime(buyer.passwordLinkExpiresAt)}</Row>}
         {buyer.lastLoginAt && <Row label="آخرین ورود">{formatPersianDateTime(buyer.lastLoginAt)}</Row>}
         {buyer.lockedUntil && <Row label="قفل ورود">تا {formatPersianDateTime(buyer.lockedUntil)}</Row>}

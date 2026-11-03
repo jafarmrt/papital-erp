@@ -155,7 +155,7 @@ export async function runStorefrontBaseV11Tests(shouldRun: (id: string, ...extra
     const expectedDetail = 'category,collections,color,cover,description,designYear,images,material,name,retailPrice,sameDesign,seoDescription,seoTitle,size,sku,slug,stock,weightGrams';
     if (detailKeys !== expectedDetail) wrong.push(`detail fields: ${detailKeys}`);
     const publicKeys = Object.keys(pub.body.data ?? {}).sort().join(',');
-    if (publicKeys !== 'currency,freeShippingThreshold,payment,reservationHours,shippingMethods,stockDisplay,whatsapp') wrong.push(`site settings fields: ${publicKeys}`);
+    if (publicKeys !== 'currency,freeShippingThreshold,payment,reservationHours,shippingMethods,smsLogin,stockDisplay,whatsapp') wrong.push(`site settings fields: ${publicKeys}`);
     if (pub.body.data?.whatsapp !== '') wrong.push(`the WhatsApp number while its button is off: ${pub.body.data?.whatsapp}`);
     // the WhatsApp button (8.3): on needs a number; a local mobile is kept in the wa.me form; off hides the number
     const waNoNumber = await erp.put('/api/storefront/settings', { ...settings, enabled: true, whatsappEnabled: true, version: version + 3 });

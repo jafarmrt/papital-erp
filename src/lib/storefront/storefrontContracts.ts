@@ -223,5 +223,7 @@ export interface StorefrontPublicSettings {
   stockDisplay: StockDisplay;
   /** the WhatsApp number the site links to; '' while the button is off or no number is set */
   whatsapp: string;
+  /** v11 phase 8.4b: sign-in and sign-up take an SMS code (the site's texts on with a login code template) */
+  smsLogin: boolean;
   shippingMethods: Array<Omit<ShippingMethodInput, 'isActive' | 'sortOrder'>>;
 }

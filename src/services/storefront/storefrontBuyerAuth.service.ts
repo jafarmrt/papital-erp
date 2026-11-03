@@ -11,13 +11,15 @@ import {
   BUYER_NAME_MAX, LOGIN_FAILURES_MAX, LOGIN_LOCK_MINUTES, SESSION_DAYS, isApplicationStatus, passwordError,
 } from '../../lib/storefront/storefrontBuyerRules.js';
 import type {
-  LoginRequest, RegisterRequest, SetPasswordRequest, StorefrontAccountView, StorefrontGroupPrices, StorefrontSessionAnswer,
+  LoginRequest, RegisterRequest, SetPasswordRequest, SmsLoginRequest, StorefrontAccountView, StorefrontGroupPrices, StorefrontSessionAnswer,
 } from '../../lib/storefront/storefrontBuyerContracts.js';
 import { STOREFRONT_BOT_USER } from './storefrontCustomer.js';
 import { catalogItems } from './storefrontCatalog.service.js';
 import { pricesOf } from './storefrontItemData.js';
 import { rialText } from './storefrontShipping.service.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
+import { smsLoginOn } from './storefrontSmsSettings.service.js';
+import { consumePhoneProof } from './storefrontSmsOtp.service.js';
 import {
   PASSWORD_TOKEN_PREFIX, SESSION_TOKEN_PREFIX, hashPassword, newToken, presentedToken, tokenHash, verifyPassword,
 } from './storefrontBuyerSecrets.js';
@@ -32,6 +34,12 @@ import {
  * in a row lock the account for 15 minutes; the route limits attempts per address. A session token is 256 random bits
  * and lasts 30 days; only its SHA-256 is kept. Suspending an account, approving it and setting a password end its other
  * sessions. Every route is 404 while the site or its orders are off.
+ *
+ * v11 phase 8.4b (start plan docs/roadmap/V11_STOREFRONT_8_4B_SMS_LOGIN_START_PLAN.md): while the site signs in by SMS
+ * (`smsLoginOn`), a sign-up and an anonymous wholesale form need a phone proof (`POST /auth/otp/verify`), used up in their
+ * own transaction, and `POST /auth/sms-login` signs in with one. A proven phone is marked (`phone_verified_at`). A phone
+ * held by an account nobody proved (made before SMS, perhaps with another person's number) is taken by its SMS sign-in:
+ * the old password and sessions end, with an audit row.
  */
 const LAST_SEEN_STEP_MS = 10 * 60_000;
 
@@ -39,6 +47,22 @@ export type AccountRecord = typeof storefrontBuyerAccounts.$inferSelect;
 type GroupRecord = typeof storefrontBuyerGroups.$inferSelect;
 
 export const accountFieldError = (field: string, message: string) => new ValidationError(message, { field }, 'STOREFRONT_ACCOUNT_FIELD_INVALID');
+/** A missing, wrong, used or expired phone proof: one answer */
+export const phoneProofInvalid = () => new ValidationError(
+  'شمارهٔ همراه را با کد پیامکی تأیید کنید؛ اگر کد گرفته‌اید و مهلتش گذشته، کد تازه بخواهید.', { field: 'phoneProof' }, 'STOREFRONT_PHONE_PROOF_REQUIRED',
+);
+
+/**
+ * Inside the caller's transaction: the time to record as the phone's proof, or null when none is needed and none was
+ * given. A proof is needed while the site signs in by SMS; a proof given is always checked.
+ */
+export async function provenPhoneAt(tx: DbExecutor, phone: string, rawProof: unknown, needed: boolean): Promise<string | null> {
+  const proof = String(rawProof ?? '');
+  if (!proof && !needed) return null;
+  if (!proof || !(await consumePhoneProof(tx, phone, proof))) throw phoneProofInvalid();
+  return systemNowUtcIso();
+}
+const suspendedAccount = () => new ForbiddenError('این حساب معلق است؛ لطفاً با فروشگاه تماس بگیرید.', undefined, 'STOREFRONT_ACCOUNT_SUSPENDED');
 const wrongSignIn = () => new AppError('شمارهٔ همراه یا رمز درست نیست.', 401, 'STOREFRONT_SIGN_IN_FAILED');
 
 /** The site's accounts follow its orders switch: off, every account route is the same 404 */
@@ -63,7 +87,7 @@ export async function accountView(executor: DbExecutor, account: AccountRecord):
   const application = isApplicationStatus(account.applicationStatus) ? account.applicationStatus : 'none';
   return {
     name: account.name, phone: account.phone, city: account.city, kind: group ? 'wholesale' : 'retail', application,
-    companyName: account.companyName,
+    companyName: account.companyName, phoneVerified: Boolean(account.phoneVerifiedAt),
     group: group ? {
       code: group.code, title: group.title, minOrderAmount: rialText(group.minOrderAmount), minLineQuantity: group.minLineQuantity,
       paymentMethods: [...(group.allowCard === 1 ? ['card' as const] : []), ...(group.allowOnAccount === 1 ? ['on_account' as const] : [])],
@@ -110,13 +134,18 @@ export async function registerAccount(input: RegisterRequest): Promise<Storefron
   const password = String(input.password ?? '');
   const weak = passwordError(password, phone);
   if (weak) throw accountFieldError('password', weak);
+  const proofNeeded = await smsLoginOn(orm);
+  if (proofNeeded && !input.phoneProof) throw phoneProofInvalid();
   const passwordHash = await hashPassword(password);
   const phoneKey = phoneMatchKey(phone);
   return orm.transaction(async (tx) => {
     await lockPhone(tx, phoneKey);
+    // the proof first: without one the answer must not say whether the phone has an account (a 409 below rolls the
+    // transaction back, so the proof is not used up)
+    const phoneVerifiedAt = await provenPhoneAt(tx, phone, input.phoneProof, proofNeeded);
     if (await accountByPhoneKey(tx, phoneKey)) throw accountExists();
     const [account] = await tx.insert(storefrontBuyerAccounts).values({
-      name, phone, phoneKey, status: 'active', passwordHash, lastLoginAt: systemNowUtcIso(), updatedBy: STOREFRONT_BOT_USER,
+      name, phone, phoneKey, status: 'active', passwordHash, lastLoginAt: systemNowUtcIso(), phoneVerifiedAt, updatedBy: STOREFRONT_BOT_USER,
     }).returning();
     await logActivity({
       tx, username: STOREFRONT_BOT_USER, action: 'CREATE', entity: 'حساب خریدار سایت', entityId: account.id,
@@ -155,8 +184,50 @@ export async function signIn(input: LoginRequest): Promise<StorefrontSessionAnsw
   }).then((result) => {
     // the failure count is committed before the refusal is answered
     if ('failed' in result) throw wrongSignIn();
-    if ('suspended' in result) throw new ForbiddenError('این حساب معلق است؛ لطفاً با فروشگاه تماس بگیرید.', undefined, 'STOREFRONT_ACCOUNT_SUSPENDED');
+    if ('suspended' in result) throw suspendedAccount();
     return result.session;
+  });
+}
+
+/**
+ * `POST /auth/sms-login` (8.4b): signs in with a phone proof. A wrong proof is the same 422 as on sign-up. No account for
+ * the proven phone is a 404 thrown inside the transaction, so the proof is not used up and the sign-up that follows can
+ * present it (the buyer proved the phone, so saying it has no account tells a stranger nothing). An account nobody had
+ * proved is taken: its password and sessions end, and its phone is marked proven.
+ */
+export async function smsSignIn(input: SmsLoginRequest): Promise<StorefrontSessionAnswer> {
+  await assertAccountsOpen(orm);
+  if (!(await smsLoginOn(orm))) throw new NotFoundError('پیدا نشد');
+  const phone = normalizeMobile(input.phone);
+  if (!phone) throw phoneProofInvalid();
+  const phoneKey = phoneMatchKey(phone);
+  return orm.transaction(async (tx) => {
+    await lockPhone(tx, phoneKey);
+    const now = await provenPhoneAt(tx, phone, input.phoneProof, true) as string;
+    const account = await accountByPhoneKey(tx, phoneKey, { lock: true });
+    if (!account) throw new NotFoundError('حسابی با این شمارهٔ همراه نیست؛ حساب تازه بسازید.', { field: 'phone' }, 'STOREFRONT_ACCOUNT_NOT_FOUND');
+    if (account.status === 'suspended') throw suspendedAccount();
+    if (account.status !== 'active') {
+      throw new ForbiddenError('درخواست خرید عمدهٔ شما در دست بررسی است؛ پس از تأیید وارد شوید.', undefined, 'STOREFRONT_ACCOUNT_PENDING');
+    }
+    const takeover = !account.phoneVerifiedAt;
+    const updated = {
+      phoneVerifiedAt: account.phoneVerifiedAt ?? now, failedLogins: 0, lockedUntil: null, lastLoginAt: now,
+      ...(takeover ? { passwordHash: '', updatedAt: now, updatedBy: STOREFRONT_BOT_USER, version: nextVersion(account.version) } : {}),
+    };
+    await tx.update(storefrontBuyerAccounts).set(updated).where(eq(storefrontBuyerAccounts.id, account.id));
+    if (takeover) {
+      // whoever made the account may not own the phone: what they knew (the password, a session, a set-password link
+      // a colleague sent) stops working
+      await revokeSessions(tx, account.id);
+      await tx.update(storefrontPasswordTokens).set({ usedAt: now })
+        .where(and(eq(storefrontPasswordTokens.accountId, account.id), isNull(storefrontPasswordTokens.usedAt)));
+      await logActivity({
+        tx, username: STOREFRONT_BOT_USER, action: 'UPDATE', entity: 'حساب خریدار سایت', entityId: account.id,
+        description: `شمارهٔ ${account.phone} با پیامک تأیید شد؛ رمز و نشست‌های پیشین حساب پاک شد`, details: { hadPassword: Boolean(account.passwordHash) },
+      });
+    }
+    return newSession(tx, { ...account, ...updated });
   });
 }
 

@@ -19,10 +19,11 @@ import { publicSeo } from '../services/storefront/storefrontSeo.service.js';
 import { publicRedirects } from '../services/storefront/storefrontRedirects.service.js';
 import { requestOtp, verifyOtp } from '../services/storefront/storefrontSmsOtp.service.js';
 import { RECEIPT_IMAGE_DATA_URL_MAX } from '../services/storefront/storefrontReceiptImage.js';
-import { myAccount, myGroupPrices, registerAccount, setPasswordWithLink, signIn, signOut } from '../services/storefront/storefrontBuyerAuth.service.js';
+import { myAccount, myGroupPrices, registerAccount, setPasswordWithLink, signIn, signOut, smsSignIn } from '../services/storefront/storefrontBuyerAuth.service.js';
 import { applyForWholesale } from '../services/storefront/storefrontWholesaleApply.service.js';
 import { BUYER_TOKEN_MAX } from '../services/storefront/storefrontBuyerSecrets.js';
 import { PASSWORD_MAX } from '../lib/storefront/storefrontBuyerRules.js';
+import { PHONE_PROOF_MAX } from '../lib/storefront/storefrontSmsRules.js';
 
 /**
  * v11 phase 8.1 (package 18, start plan §3): the Storefront API, read only, `GET /api/storefront/v1/...`. Only the site
@@ -214,18 +215,25 @@ const authLimiter = rateLimit({
 });
 const sessionOf = (req: Request): string => String(req.headers['x-buyer-session'] ?? '').trim().slice(0, BUYER_TOKEN_MAX + 1);
 const password = z.string().max(PASSWORD_MAX * 2);
-const registerSchema = z.object({ body: z.object({ name: z.string().max(200), phone: z.string().max(40), password }).strict() });
+// 8.4b: the phone proof of `POST /auth/otp/verify`, needed while the site signs in by SMS
+const phoneProof = z.string().max(PHONE_PROOF_MAX + 1);
+const registerSchema = z.object({ body: z.object({ name: z.string().max(200), phone: z.string().max(40), password, phoneProof: phoneProof.optional() }).strict() });
+const smsLoginSchema = z.object({ body: z.object({ phone: z.string().max(40), phoneProof }).strict() });
 const loginSchema = z.object({ body: z.object({ phone: z.string().max(40), password }).strict() });
 const setPasswordSchema = z.object({ body: z.object({ token: z.string().max(BUYER_TOKEN_MAX + 1), password }).strict() });
 const applySchema = z.object({
   body: z.object({
     name: z.string().max(200), companyName: z.string().max(300), city: z.string().max(120), phone: z.string().max(40),
-    nationalId: z.string().max(40), economicCode: z.string().max(40), note: z.string().max(1000),
+    nationalId: z.string().max(40), economicCode: z.string().max(40), note: z.string().max(1000), phoneProof: phoneProof.optional(),
   }).strict(),
 });
 
 router.post('/auth/register', authLimiter, validate(registerSchema), asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json({ data: await registerAccount(req.body) });
+}));
+
+router.post('/auth/sms-login', authLimiter, validate(smsLoginSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await smsSignIn(req.body) });
 }));
 
 router.post('/auth/login', authLimiter, validate(loginSchema), asyncHandler(async (req: Request, res: Response) => {

@@ -14,6 +14,7 @@ import { storefrontSettingValues } from './storefrontSettings.service.js';
 import type { StorefrontSettingsInput } from '../../lib/storefront/storefrontContracts.js';
 import { listShippingMethods } from './storefrontShipping.service.js';
 import { imagesOf, pricesOf } from './storefrontItemData.js';
+import { smsLoginOn } from './storefrontSmsSettings.service.js';
 
 /**
  * v11 phase 8.1 (package 18): what the Storefront API answers the site app, read only. An item is on the site while its
@@ -202,6 +203,7 @@ export async function publicSettings(): Promise<StorefrontPublicSettings> {
     reservationHours: settings.reservationHours,
     stockDisplay: settings.stockDisplay,
     whatsapp: settings.whatsappEnabled ? settings.whatsappNumber : '',
+    smsLogin: await smsLoginOn(orm),
     shippingMethods: methods.map(({ id: _id, version: _version, isActive: _active, sortOrder: _sort, ...method }) => method),
   };
 }
