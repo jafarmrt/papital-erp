@@ -20,6 +20,7 @@ import { rialText } from './storefrontShipping.service.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
 import { smsLoginOn } from './storefrontSmsSettings.service.js';
 import { consumePhoneProof } from './storefrontSmsOtp.service.js';
+import { attachGuestOrders } from './storefrontGuestOrders.js';
 import {
   PASSWORD_TOKEN_PREFIX, SESSION_TOKEN_PREFIX, hashPassword, newToken, presentedToken, tokenHash, verifyPassword,
 } from './storefrontBuyerSecrets.js';
@@ -151,6 +152,8 @@ export async function registerAccount(input: RegisterRequest): Promise<Storefron
       tx, username: STOREFRONT_BOT_USER, action: 'CREATE', entity: 'حساب خریدار سایت', entityId: account.id,
       description: `حساب خریدار تکی برای شمارهٔ ${phone} در سایت ساخته شد`, details: { after: { id: account.id, name, kind: 'retail' } },
     });
+    // a proven phone brings the orders placed with it as a guest
+    if (phoneVerifiedAt) await attachGuestOrders(tx, account, phoneKey, phoneVerifiedAt);
     return newSession(tx, account);
   });
 }
@@ -193,7 +196,8 @@ export async function signIn(input: LoginRequest): Promise<StorefrontSessionAnsw
  * `POST /auth/sms-login` (8.4b): signs in with a phone proof. A wrong proof is the same 422 as on sign-up. No account for
  * the proven phone is a 404 thrown inside the transaction, so the proof is not used up and the sign-up that follows can
  * present it (the buyer proved the phone, so saying it has no account tells a stranger nothing). An account nobody had
- * proved is taken: its password and sessions end, and its phone is marked proven.
+ * proved is taken: its password and sessions end, and its phone is marked proven. The guest orders of the phone join the
+ * account (`attachGuestOrders`).
  */
 export async function smsSignIn(input: SmsLoginRequest): Promise<StorefrontSessionAnswer> {
   await assertAccountsOpen(orm);
@@ -227,6 +231,8 @@ export async function smsSignIn(input: SmsLoginRequest): Promise<StorefrontSessi
         description: `شمارهٔ ${account.phone} با پیامک تأیید شد؛ رمز و نشست‌های پیشین حساب پاک شد`, details: { hadPassword: Boolean(account.passwordHash) },
       });
     }
+    // every SMS sign-in proves the phone again, so guest orders placed with it since then join too
+    await attachGuestOrders(tx, account, phoneKey, now);
     return newSession(tx, { ...account, ...updated });
   });
 }
