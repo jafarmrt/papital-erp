@@ -21,6 +21,7 @@ import { MessengerUpdatePoller } from './src/services/messenger/messengerUpdateP
 import { FormDraftService } from './src/services/drafts/formDraft.service.js';
 import { OperationalPurgeService } from './src/services/events/operationalPurge.service.js';
 import { WcShopSyncWorker } from './src/services/woocommerce/wcSyncWorker.service.js';
+import { StorefrontOrderWorker } from './src/services/storefront/storefrontOrderExpiry.service.js';
 import { purgeOldAutoRuns } from './src/services/woocommerce/wcSyncRunPurge.js';
 import { purgeEndedSessions } from './src/services/auth/sessionPurge.js';
 import { pool, getDatabaseMode } from './src/db/drizzle.js';
@@ -98,6 +99,8 @@ async function startServer() {
     OperationalPurgeService.start();
     // 10.2 package 6 (D-04 part B): the automatic stock push to the online shop, a run a minute while its setting is on
     WcShopSyncWorker.start();
+    // v11 phase 8.2a: the end of site order reservations, a sweep a minute while the site takes orders (default off)
+    StorefrontOrderWorker.start();
     // v10.1.38 (messenger plan part 1): link codes and «/stop» sent to the staff bots
     MessengerUpdatePoller.start(5000);
     markStartupComplete();
@@ -162,6 +165,7 @@ async function startServer() {
       FormDraftService.stopCleanup();
       OperationalPurgeService.stop();
       WcShopSyncWorker.stop();
+      StorefrontOrderWorker.stop();
       MessengerUpdatePoller.stop();
 
       if (pool && typeof pool.end === 'function') {

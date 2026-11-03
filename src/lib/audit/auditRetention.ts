@@ -118,7 +118,9 @@ export const CRITICAL_AUDIT_ENTITIES = [
   'گزارش کار کارگاه',
   'تأیید دریافت کالای کارگاه',
   // v11 phase 8.1: the new site's card, IBAN, key, delivery methods and published items are never purged from the log
-  'فروشگاه سایت'
+  'فروشگاه سایت',
+  // v11 phase 8.2a: a site order, its receipts and their review are never purged from the log
+  'سفارش سایت'
 ] as const;
 
 /**

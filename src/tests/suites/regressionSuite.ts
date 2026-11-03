@@ -11202,6 +11202,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v11 phase 8.1: the storefront base (settings, the key-guarded Storefront API, publishing, stock display, shipping rows)
   const { runStorefrontBaseV11Tests } = await import('../regression/storefrontBaseV11Tests.js');
   results.push(...await runStorefrontBaseV11Tests(shouldRun));
+  const { runStorefrontOrdersV11Tests } = await import('../regression/storefrontOrdersV11Tests.js');
+  results.push(...await runStorefrontOrdersV11Tests(shouldRun));
 
   return results;
 }

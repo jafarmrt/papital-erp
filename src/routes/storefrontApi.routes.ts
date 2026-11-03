@@ -1,3 +1,4 @@
+import net from 'net';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
@@ -9,6 +10,10 @@ import {
   CATALOG_PAGE_MAX, CATALOG_SORTS, catalogFacets, catalogPage, productBySlug, publicSettings, storefrontMediaFile, type CatalogSort,
 } from '../services/storefront/storefrontCatalog.service.js';
 import { STOREFRONT_SLUG_MAX } from '../lib/storefront/storefrontRules.js';
+import { ORDER_LINES_MAX } from '../lib/storefront/storefrontOrderRules.js';
+import { placeOrder, quoteShipping } from '../services/storefront/storefrontOrderPlace.service.js';
+import { buyerOrder, sendReceipt } from '../services/storefront/storefrontOrderBuyer.service.js';
+import { ACCESS_KEY_MAX } from '../services/storefront/storefrontOrderKeys.js';
 
 /**
  * v11 phase 8.1 (package 18, start plan §3): the Storefront API, read only, `GET /api/storefront/v1/...`. Only the site
@@ -41,6 +46,44 @@ const requireStorefrontKey = asyncHandler(async (req: Request, res: Response, ne
 });
 
 router.use(limiter, requireStorefrontKey);
+
+/**
+ * v11 phase 8.2a: the writes (a quote, an order, a receipt) have a tighter limit of their own, per buyer: the app's server
+ * forwards the buyer's address in `X-Storefront-Client-IP` (read only after the key passed, and only when it is an IP
+ * address); without it the limit is the app server's. A buyer's order is read and written only with its tracking key, in
+ * `X-Order-Key`, never in the address, so it stays out of access logs.
+ */
+export const STOREFRONT_WRITES_PER_MINUTE = 30;
+const buyerAddress = (req: Request): string => {
+  const forwarded = String(req.headers['x-storefront-client-ip'] ?? '').trim();
+  return net.isIP(forwarded) ? forwarded : (req.ip || req.socket?.remoteAddress || '127.0.0.1');
+};
+const writeLimiter = rateLimit({
+  windowMs: 60_000,
+  max: STOREFRONT_WRITES_PER_MINUTE,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `storefront-write:${ipKeyGenerator(buyerAddress(req))}`,
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+});
+const orderKeyOf = (req: Request): string => String(req.headers['x-order-key'] ?? '').trim().slice(0, ACCESS_KEY_MAX + 1);
+
+const cartLine = z.object({ slug: z.string().min(1).max(STOREFRONT_SLUG_MAX), quantity: z.number().int() }).strict();
+const cartLines = z.array(cartLine).min(1).max(ORDER_LINES_MAX);
+const quoteSchema = z.object({ body: z.object({ province: z.string().max(60), lines: cartLines }).strict() });
+const orderSchema = z.object({
+  body: z.object({
+    requestKey: z.string().max(80), recipientName: z.string().max(200), phone: z.string().max(40), province: z.string().max(60),
+    city: z.string().max(120), address: z.string().max(800), postalCode: z.string().max(40), note: z.string().max(1000),
+    shippingMethod: z.string().max(60), lines: cartLines,
+  }).strict(),
+});
+const orderNumberParams = z.object({ number: z.string().min(1).max(20) }).passthrough();
+const orderReadSchema = z.object({ params: orderNumberParams });
+const receiptSchema = z.object({
+  params: orderNumberParams,
+  body: z.object({ reference: z.string().max(80), paidAt: z.string().max(40), cardLast4: z.string().max(20), amount: z.string().max(40) }).strict(),
+});
 
 const catalogSchema = z.object({
   query: z.object({
@@ -84,6 +127,22 @@ router.get('/media/:file', validate(mediaSchema), asyncHandler(async (req: Reque
       dotfiles: 'deny',
     }, (err) => (err && !res.headersSent ? reject(new NotFoundError('پیدا نشد')) : resolve()));
   });
+}));
+
+router.post('/shipping/quote', writeLimiter, validate(quoteSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await quoteShipping(req.body) });
+}));
+
+router.post('/orders', writeLimiter, validate(orderSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.status(201).json({ data: await placeOrder(req.body) });
+}));
+
+router.get('/orders/:number', validate(orderReadSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await buyerOrder(String(req.params.number), orderKeyOf(req)) });
+}));
+
+router.post('/orders/:number/receipts', writeLimiter, validate(receiptSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.status(201).json({ data: await sendReceipt(String(req.params.number), orderKeyOf(req), req.body) });
 }));
 
 export default router;

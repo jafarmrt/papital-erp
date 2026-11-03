@@ -1,5 +1,5 @@
-import { and, eq } from 'drizzle-orm';
-import { orm } from '../../db/drizzle.js';
+import { and, eq, inArray } from 'drizzle-orm';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, mediaAssets, storefrontProducts } from '../../db/schema.js';
 import { NotFoundError } from '../../errors/customErrors.js';
 import { mediaFilePath } from '../../lib/media/mediaPaths.js';
@@ -36,7 +36,7 @@ export interface CatalogQuery {
   sort: CatalogSort;
 }
 
-interface OnSale {
+export interface OnSale {
   itemId: number;
   slug: string;
   sku: string;
@@ -56,10 +56,14 @@ interface OnSale {
 }
 
 /** Every item the site offers now, in the shop's own order */
-async function itemsOnSale(settings: StorefrontSettingsInput, slug?: string): Promise<OnSale[]> {
+async function itemsOnSale(executor: DbExecutor, settings: StorefrontSettingsInput, slug?: string, slugs?: string[]): Promise<OnSale[]> {
   const conditions = [eq(storefrontProducts.isPublished, 1), eq(items.isDeleted, 0), eq(items.type, 'product')];
   if (slug !== undefined) conditions.push(eq(storefrontProducts.slug, slug));
-  const rows = await orm.select({
+  if (slugs !== undefined) {
+    if (slugs.length === 0) return [];
+    conditions.push(inArray(storefrontProducts.slug, slugs));
+  }
+  const rows = await executor.select({
     itemId: items.id, slug: storefrontProducts.slug, sku: items.code, name: items.name, category: items.category,
     collections: items.collections, sortOrder: storefrontProducts.sortOrder, description: items.productDescription,
     material: items.material, size: items.size, color: items.color, weight: items.weight, designYear: items.designYear,
@@ -67,7 +71,7 @@ async function itemsOnSale(settings: StorefrontSettingsInput, slug?: string): Pr
   }).from(storefrontProducts).innerJoin(items, eq(items.id, storefrontProducts.itemId)).where(and(...conditions));
   if (rows.length === 0) return [];
   const ids = rows.map(r => r.itemId);
-  const retail = await pricesOf(orm, ids, settings.retailPriceList);
+  const retail = await pricesOf(executor, ids, settings.retailPriceList);
   const out: OnSale[] = [];
   for (const r of rows) {
     const retailPrice = retail.get(r.itemId);
@@ -78,6 +82,14 @@ async function itemsOnSale(settings: StorefrontSettingsInput, slug?: string): Pr
     });
   }
   return out.sort((a, b) => (a.sortOrder - b.sortOrder) || (a.itemId - b.itemId));
+}
+
+/**
+ * v11 phase 8.2a: the items of a cart as the site offers them now (published, a live finished product, priced in the
+ * retail list), read in the order's transaction; an item missing from the answer is not on sale
+ */
+export async function orderableItems(executor: DbExecutor, settings: StorefrontSettingsInput, slugs: string[]): Promise<Map<string, OnSale>> {
+  return new Map((await itemsOnSale(executor, settings, undefined, slugs)).map(item => [item.slug, item]));
 }
 
 const compareRial = (a: string, b: string) => {
@@ -115,7 +127,7 @@ export async function catalogPage(query: CatalogQuery): Promise<StorefrontCatalo
   const limit = Math.min(CATALOG_PAGE_MAX, Math.max(1, query.limit));
   const q = folded(query.q);
   const settings = await storefrontSettingValues(orm);
-  const matching = (await itemsOnSale(settings)).filter(item =>
+  const matching = (await itemsOnSale(orm, settings)).filter(item =>
     (!query.collection || item.collections.includes(query.collection))
     && (!query.category || item.category === query.category)
     && (!q || folded(`${item.name} ${item.sku} ${item.collections.join(' ')}`).includes(q)));
@@ -134,7 +146,7 @@ export async function catalogPage(query: CatalogQuery): Promise<StorefrontCatalo
 
 export async function productBySlug(slug: string): Promise<StorefrontProductDetail> {
   const settings = await storefrontSettingValues(orm);
-  const [item] = await itemsOnSale(settings, slug);
+  const [item] = await itemsOnSale(orm, settings, slug);
   if (!item) throw new NotFoundError('محصول پیدا نشد.', undefined, 'STOREFRONT_PRODUCT_NOT_FOUND');
   const sellable = await storefrontSellable(orm, [item.itemId], settings.warehouseCode);
   const images = (await imagesOf(orm, [item.itemId])).get(item.itemId)?.map(image => altOf(image, item.name)) ?? [];
@@ -154,7 +166,7 @@ function facet(values: string[]): StorefrontFacet[] {
 
 /** The collections and categories that have an item on the site, with their counts */
 export async function catalogFacets(): Promise<{ collections: StorefrontFacet[]; categories: StorefrontFacet[] }> {
-  const onSale = await itemsOnSale(await storefrontSettingValues(orm));
+  const onSale = await itemsOnSale(orm, await storefrontSettingValues(orm));
   return { collections: facet(onSale.flatMap(i => i.collections)), categories: facet(onSale.map(i => i.category)) };
 }
 

@@ -227,6 +227,13 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     ]
   },
   {
+    category: 'سفارش‌های سایت',
+    permissions: [
+      { key: 'site_orders.view', title: 'مشاهده سفارش‌های سایت', description: 'دیدن سفارش‌های سایت، نشانی و شماره خریدار، رسیدهای کارت‌به‌کارت و وضعیت ارسال' },
+      { key: 'site_orders.manage', title: 'رسیدگی به سفارش‌های سایت', description: 'رد رسید، لغو سفارش و ثبت ارسال و تحویل؛ تأیید پرداخت افزون بر این مجوز خزانه و قطعی کردن سند را هم می‌خواهد', requires: ['site_orders.view'] },
+    ]
+  },
+  {
     category: 'گزارش‌ها و سجل رویدادها',
     permissions: [
       { key: 'reports.view', title: 'مشاهده گزارش‌ها و آمار', description: 'دسترسی به نمودارها، گزارش تراکنش‌ها و پیشخوان' },

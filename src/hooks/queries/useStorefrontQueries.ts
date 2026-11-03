@@ -4,6 +4,8 @@ import type {
   ShippingMethodInput, ShippingMethodRow, StorefrontProductAdminPage, StorefrontProductAdminRow, StorefrontProductInput,
   StorefrontSettingsInput, StorefrontSettingsView,
 } from '../../lib/storefront/storefrontContracts';
+import type { AdminOrderDetail, AdminOrderPage } from '../../lib/storefront/storefrontOrderContracts';
+import type { OrderStatus } from '../../lib/storefront/storefrontOrderRules';
 
 /** v11 phase 8.1: the reads of the «فروشگاه سایت» settings tab; a write refreshes the part it changed */
 export const STOREFRONT_KEY = ['storefront'] as const;
@@ -100,5 +102,61 @@ export function useSaveStorefrontProductMutation() {
       method: 'PUT', body: JSON.stringify(input),
     })) as { data: StorefrontProductAdminRow }).data,
     onSettled: () => { void queryClient.invalidateQueries({ queryKey: STOREFRONT_PRODUCTS_KEY }); },
+  });
+}
+
+/**
+ * v11 phase 8.2a: the «سفارش‌های سایت» page. A list page and one order's detail; every action answers the order again,
+ * so the detail is replaced in place and the list is refreshed.
+ */
+export const STOREFRONT_ORDERS_KEY = [...STOREFRONT_KEY, 'orders'] as const;
+export const STOREFRONT_ORDERS_PAGE_SIZE = 30;
+
+export interface StorefrontOrderFilter {
+  page: number;
+  q: string;
+  status: OrderStatus | 'open' | '';
+}
+
+export function useStorefrontOrdersQuery(filter: StorefrontOrderFilter) {
+  return useQuery<AdminOrderPage>({
+    queryKey: [...STOREFRONT_ORDERS_KEY, 'list', filter],
+    queryFn: async () => {
+      const params = new URLSearchParams({ page: String(filter.page), limit: String(STOREFRONT_ORDERS_PAGE_SIZE) });
+      if (filter.q.trim()) params.set('q', filter.q.trim());
+      if (filter.status) params.set('status', filter.status);
+      return (await fetchJson(`/storefront/orders?${params.toString()}`)) as AdminOrderPage;
+    },
+    staleTime: 0,
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useStorefrontOrderQuery(id: number | null) {
+  return useQuery<AdminOrderDetail>({
+    queryKey: [...STOREFRONT_ORDERS_KEY, 'detail', id],
+    queryFn: async () => ((await fetchJson(`/storefront/orders/${id}`)) as { data: AdminOrderDetail }).data,
+    enabled: id !== null,
+    staleTime: 0,
+  });
+}
+
+export type StorefrontOrderAction =
+  | { kind: 'confirm'; receiptId: number }
+  | { kind: 'reject-receipt'; receiptId: number; reason: string }
+  | { kind: 'cancel' }
+  | { kind: 'fulfil'; status: 'shipped' | 'delivered'; trackingCode: string };
+
+export function useStorefrontOrderActionMutation(id: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ action, version }: { action: StorefrontOrderAction; version: number }) => {
+      const { kind, ...rest } = action;
+      return ((await fetchJson(`/storefront/orders/${id}/${kind}`, {
+        method: 'POST', body: JSON.stringify({ ...rest, version }),
+      })) as { data: AdminOrderDetail }).data;
+    },
+    onSuccess: (order) => { queryClient.setQueryData([...STOREFRONT_ORDERS_KEY, 'detail', id], order); },
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: STOREFRONT_ORDERS_KEY }); },
   });
 }
