@@ -11204,6 +11204,11 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runStorefrontBaseV11Tests(shouldRun));
   const { runStorefrontOrdersV11Tests } = await import('../regression/storefrontOrdersV11Tests.js');
   results.push(...await runStorefrontOrdersV11Tests(shouldRun));
+  const { runStorefrontBuyersV11Tests } = await import('../regression/storefrontBuyersV11Tests.js');
+  results.push(...await runStorefrontBuyersV11Tests(shouldRun));
+  // v11 phase 8.4a: the site's texts (SMS settings, order texts, the login code and phone proof)
+  const { runStorefrontSmsV11Tests } = await import('../regression/storefrontSmsV11Tests.js');
+  results.push(...await runStorefrontSmsV11Tests(shouldRun));
   // v11 phase 8.5: search and statistics settings, and the old-address redirects of the WooCommerce site
   const { runStorefrontSeoV11Tests } = await import('../regression/storefrontSeoV11Tests.js');
   results.push(...await runStorefrontSeoV11Tests(shouldRun));

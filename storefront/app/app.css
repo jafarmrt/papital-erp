@@ -10,7 +10,10 @@
 @font-face { font-family: 'Vazirmatn'; src: url('/fonts/Vazirmatn-ExtraBold.woff2') format('woff2'); font-weight: 800; font-display: swap; }
 
 :root {
-  /* palette «لاجورد» (owner to choose; no cream or blush ground): white like the product photos, navy ink, the cobalt of tilework */
+  /*
+   * palette «لاجورد» (owner, 2026-11-03): white like the product photos, navy ink, the cobalt of tilework and its light
+   * sky tint; no orange, peach, cream, gold or blush anywhere in the theme
+   */
   color-scheme: light;
   --background: oklch(1 0 0);
   --foreground: oklch(0.24 0.04 262);
@@ -24,10 +27,9 @@
   --brand-foreground: oklch(0.99 0 0);
   --chrome: oklch(1 0 0);
   --chrome-foreground: oklch(0.24 0.04 262);
-  --gold: oklch(0.72 0.12 82);
+  --tile: oklch(0.74 0.09 245);
   --success: oklch(0.5 0.12 160);
-  --warning: oklch(0.55 0.13 60);
-  --destructive: oklch(0.55 0.19 25);
+  --destructive: oklch(0.53 0.2 20);
   --border: oklch(0.24 0.04 262 / 12%);
   --ring: oklch(0.46 0.15 262);
   --radius-control: 0.5rem;
@@ -48,11 +50,10 @@
   --color-brand: var(--brand);
   --color-brand-soft: var(--brand-soft);
   --color-brand-foreground: var(--brand-foreground);
-  --color-gold: var(--gold);
+  --color-tile: var(--tile);
   --color-chrome: var(--chrome);
   --color-chrome-foreground: var(--chrome-foreground);
   --color-success: var(--success);
-  --color-warning: var(--warning);
   --color-destructive: var(--destructive);
   --color-border: var(--border);
   --color-ring: var(--ring);
@@ -85,6 +86,6 @@
 @utility tile-rule {
   height: 6px;
   background:
-    linear-gradient(90deg, var(--brand) 0 24%, transparent 24% 28%, var(--gold) 28% 36%, transparent 36% 40%, var(--brand) 40% 100%);
+    linear-gradient(90deg, var(--brand) 0 24%, transparent 24% 28%, var(--tile) 28% 36%, transparent 36% 40%, var(--brand) 40% 100%);
   border-radius: 999px;
 }

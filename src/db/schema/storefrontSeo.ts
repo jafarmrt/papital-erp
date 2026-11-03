@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import { items } from './inventory';
 
 /**
- * v11 phase 8.5 (migration 0016, package 18): an old address of the WooCommerce site and where it goes on the new site.
+ * v11 phase 8.5 (migration 0018, package 18): an old address of the WooCommerce site and where it goes on the new site.
  * `fromPath` is the address's key (`legacyPathKey` of `src/lib/storefront/storefrontSeoRules.ts`); a product target is
  * kept by its item, so the redirect follows a later change of the product's slug. Removing a row is a soft delete.
  */

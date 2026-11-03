@@ -15,6 +15,11 @@ export interface SiteEnv {
    * shuts the whole site.
    */
   indexable: boolean;
+  /**
+   * The site can be installed on a phone (web app manifest and service worker), only with `STOREFRONT_PWA=1`. Turned
+   * off again, the worker is removed from every phone on its next visit.
+   */
+  pwa: boolean;
 }
 
 export function siteEnv(): SiteEnv {
@@ -26,5 +31,6 @@ export function siteEnv(): SiteEnv {
     siteUrl,
     previewNotice,
     indexable: siteUrl !== '' && previewNotice === '' && process.env.STOREFRONT_NOINDEX !== '1',
+    pwa: process.env.STOREFRONT_PWA === '1',
   };
 }

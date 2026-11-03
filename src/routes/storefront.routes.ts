@@ -28,6 +28,11 @@ import {
   REDIRECT_PAGE_MAX, createRedirect, deleteRedirect, listRedirects, setRedirectActive, updateRedirect,
 } from '../services/storefront/storefrontRedirects.service.js';
 import { importWooRedirects } from '../services/storefront/storefrontRedirectImport.service.js';
+import { BUYER_LIST_FILTERS, CATALOG_SCOPES, GROUP_COLLECTIONS_MAX, type BuyerListFilter } from '../lib/storefront/storefrontBuyerRules.js';
+import { createBuyerGroup, deleteBuyerGroup, listBuyerGroups, updateBuyerGroup } from '../services/storefront/storefrontBuyerGroups.service.js';
+import {
+  BUYER_PAGE_MAX, approveBuyer, buyerAccountDetail, buyerAction, changeBuyerGroup, listBuyerAccounts, newPasswordLink,
+} from '../services/storefront/storefrontBuyerAdmin.service.js';
 
 /**
  * v11 phase 8.1 (package 18): the ERP side of the storefront (`/api/storefront`), the «فروشگاه سایت» settings tab. `storefront.view` reads,
@@ -39,6 +44,8 @@ export const STOREFRONT_VIEW_PERMISSION = 'storefront.view';
 export const STOREFRONT_MANAGE_PERMISSION = 'storefront.manage';
 export const STOREFRONT_ORDERS_VIEW_PERMISSION = 'site_orders.view';
 export const STOREFRONT_ORDERS_MANAGE_PERMISSION = 'site_orders.manage';
+export const SITE_BUYERS_VIEW_PERMISSION = 'site_buyers.view';
+export const SITE_BUYERS_MANAGE_PERMISSION = 'site_buyers.manage';
 
 const text = (max: number) => z.string().max(max);
 const amount = z.union([z.string().max(40), z.number()]).transform(v => String(v));
@@ -265,6 +272,80 @@ router.post('/orders/:id/cancel', requirePermission(STOREFRONT_ORDERS_MANAGE_PER
 
 router.post('/orders/:id/fulfil', requirePermission(STOREFRONT_ORDERS_MANAGE_PERMISSION), idempotency({ scope: 'storefront_orders' }), validate(fulfilSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: await fulfilOrder(req, Number(req.params.id), req.body) });
+}));
+
+// v11 phase 8.2b: the «گروه‌های خریدار» section of the tab (storefront.manage; a group's price list also products.edit_price,
+// checked in the service)
+const groupBody = z.object({
+  code: text(80), title: text(200), description: text(600), priceList: text(200), minOrderAmount: amount,
+  minLineQuantity: z.number().int(), allowCard: z.boolean(), allowOnAccount: z.boolean(), creditLimit: amount,
+  catalogScope: z.enum(CATALOG_SCOPES), collections: z.array(text(200)).max(GROUP_COLLECTIONS_MAX * 2), acceptsDiscounts: z.boolean(),
+  isActive: z.boolean(), sortOrder: z.number().int(),
+});
+const groupCreateSchema = z.object({ body: groupBody.strict() });
+const groupUpdateSchema = z.object({ params: z.object({ id: numericIdString }).passthrough(), body: groupBody.extend({ version: version.min(1) }).strict() });
+const groupDeleteSchema = shippingDeleteSchema;
+
+router.get('/buyer-groups', requirePermission(STOREFRONT_VIEW_PERMISSION), asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ data: await listBuyerGroups(orm) });
+}));
+
+router.post('/buyer-groups', requirePermission(STOREFRONT_MANAGE_PERMISSION), idempotency({ scope: 'storefront' }), validate(groupCreateSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.status(201).json({ success: true, data: await createBuyerGroup(req, req.body) });
+}));
+
+router.put('/buyer-groups/:id', requirePermission(STOREFRONT_MANAGE_PERMISSION), validate(groupUpdateSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await updateBuyerGroup(req, Number(req.params.id), req.body) });
+}));
+
+router.delete('/buyer-groups/:id', requirePermission(STOREFRONT_MANAGE_PERMISSION), validate(groupDeleteSchema), asyncHandler(async (req: Request, res: Response) => {
+  await deleteBuyerGroup(req, Number(req.params.id), Number((req.query as { version?: number }).version));
+  res.json({ success: true });
+}));
+
+// v11 phase 8.2b: the «خریداران عمده» page (site_buyers.view reads, site_buyers.manage acts)
+const buyerListSchema = z.object({
+  query: z.object({
+    page: z.string().regex(/^[1-9]\d{0,5}$/).transform(Number).optional(),
+    limit: z.string().regex(/^[1-9]\d{0,2}$/).transform(Number).optional(),
+    q: text(100).optional(),
+    filter: z.enum(BUYER_LIST_FILTERS).optional(),
+  }).passthrough(),
+});
+const buyerParams = z.object({ id: numericIdString }).passthrough();
+const buyerDetailSchema = z.object({ params: buyerParams });
+const approveSchema = z.object({
+  params: buyerParams,
+  body: z.object({ groupId: z.number().int().min(1).max(2_147_483_647), customerId: z.number().int().min(0).max(2_147_483_647), version: version.min(1) }).strict(),
+});
+const buyerActionSchema = z.object({ params: buyerParams, body: z.object({ version: version.min(1) }).strict() });
+
+router.get('/buyers', requirePermission(SITE_BUYERS_VIEW_PERMISSION), validate(buyerListSchema), asyncHandler(async (req: Request, res: Response) => {
+  const query = req.query as { page?: number; limit?: number; q?: string; filter?: BuyerListFilter };
+  res.json(await listBuyerAccounts({ page: query.page ?? 1, limit: Math.min(query.limit ?? 30, BUYER_PAGE_MAX), q: query.q ?? '', filter: query.filter ?? 'pending' }));
+}));
+
+router.get('/buyers/:id', requirePermission(SITE_BUYERS_VIEW_PERMISSION), validate(buyerDetailSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await buyerAccountDetail(orm, Number(req.params.id)) });
+}));
+
+// a set-password link is answered once, to be sent to the buyer; a repeat of the same request gets the replay body, never the link
+router.post('/buyers/:id/approve', requirePermission(SITE_BUYERS_MANAGE_PERMISSION), idempotency({ scope: 'storefront_buyers' }), validate(approveSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await approveBuyer(req, Number(req.params.id), req.body) });
+}));
+
+router.post('/buyers/:id/group', requirePermission(SITE_BUYERS_MANAGE_PERMISSION), idempotency({ scope: 'storefront_buyers' }), validate(approveSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await changeBuyerGroup(req, Number(req.params.id), req.body) });
+}));
+
+for (const action of ['decline', 'suspend', 'reactivate'] as const) {
+  router.post(`/buyers/:id/${action}`, requirePermission(SITE_BUYERS_MANAGE_PERMISSION), idempotency({ scope: 'storefront_buyers' }), validate(buyerActionSchema), asyncHandler(async (req: Request, res: Response) => {
+    res.json({ success: true, data: await buyerAction(req, Number(req.params.id), action, req.body.version) });
+  }));
+}
+
+router.post('/buyers/:id/password-link', requirePermission(SITE_BUYERS_MANAGE_PERMISSION), idempotency({ scope: 'storefront_buyers' }), validate(buyerActionSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.status(201).json({ success: true, data: await newPasswordLink(req, Number(req.params.id), req.body.version) });
 }));
 
 export default router;

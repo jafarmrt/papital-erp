@@ -273,3 +273,47 @@ describe('search-engine verification and visit statistics (phase 8.5)', () => {
     }
   });
 });
+
+describe('the installable site (PWA)', () => {
+  const withPwa = async (run: () => Promise<void>) => {
+    process.env.STOREFRONT_PWA = '1';
+    try { await run(); } finally { delete process.env.STOREFRONT_PWA; }
+  };
+
+  it('is off by default: no manifest, no worker, and the page removes a worker left from before', async () => {
+    expect((await page('/manifest.webmanifest')).status).toBe(404);
+    expect((await page('/sw.js')).status).toBe(404);
+    expect((await page('/')).html).not.toContain('rel="manifest"');
+  });
+
+  it('switched on, describes the shop as an app with the shop icons when the ERP icon is not usable', async () => {
+    await withPwa(async () => {
+      const res = await handle(new Request('http://localhost/manifest.webmanifest'));
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toContain('application/manifest+json');
+      const manifest = await res.json() as { name: string; dir: string; start_url: string; display: string; icons: Array<{ src: string; sizes: string; purpose: string }> };
+      expect(manifest).toMatchObject({ name: 'گالری پاپیتال', dir: 'rtl', start_url: '/', display: 'standalone' });
+      // the sample's logo is an SVG but it sets no browser icon, so the shop's own icons are used
+      expect(manifest.icons.map(i => `${i.src} ${i.sizes} ${i.purpose}`)).toEqual([
+        '/pwa/icon-192.png 192x192 any', '/pwa/icon-512.png 512x512 any', '/pwa/icon-maskable-512.png 512x512 maskable',
+      ]);
+      expect((await page('/')).html).toContain('<link rel="manifest" href="/manifest.webmanifest"/>');
+    });
+  });
+
+  it('serves a worker that is never cached by the browser and never keeps pages, data or prices', async () => {
+    await withPwa(async () => {
+      const res = await handle(new Request('http://localhost/sw.js'));
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toContain('text/javascript');
+      expect(res.headers.get('cache-control')).toBe('no-cache');
+      const source = await res.text();
+      expect(source).toContain("request.mode === 'navigate'");
+      expect(source).toContain('اتصال به اینترنت برقرار نیست');
+      // only build files, fonts, app icons and hash-named photos go to a cache
+      expect(source.match(/cacheFirst\(request, [A-Z]+\)/g)).toEqual(['cacheFirst(request, STATIC)', 'cacheFirst(request, MEDIA)']);
+      expect(source).not.toContain('/api/');
+      expect(() => new Function(source)).not.toThrow();
+    });
+  });
+});
