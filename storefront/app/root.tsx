@@ -7,6 +7,8 @@ import { imageVersion } from './lib/brandImage.server';
 import { siteEnv } from './lib/site.server';
 import { SiteHeader } from './components/SiteHeader';
 import { SiteFooter } from './components/SiteFooter';
+import { AnalyticsScripts, MatomoPageViews } from './components/Analytics';
+import { siteSeo } from './lib/seo.server';
 
 export const links: LinksFunction = () => [
   { rel: 'preload', href: '/fonts/Vazirmatn-Regular.woff2', as: 'font', type: 'font/woff2', crossOrigin: 'anonymous' },
@@ -14,7 +16,7 @@ export const links: LinksFunction = () => [
 ];
 
 export async function loader() {
-  const [f, settings, images] = await Promise.all([facets(), publicSettings(), brand()]);
+  const [f, settings, images, seo] = await Promise.all([facets(), publicSettings(), brand(), siteSeo()]);
   const env = siteEnv();
   return {
     categories: f.categories,
@@ -31,6 +33,7 @@ export async function loader() {
     faviconUrl: images.favicon ? `/brand/favicon?v=${imageVersion(images.favicon)}` : '',
     /** iOS takes only a bitmap as the home-screen icon */
     faviconIsBitmap: Boolean(images.favicon) && !images.favicon.startsWith('data:image/svg+xml'),
+    seo,
   };
 }
 
@@ -46,6 +49,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="theme-color" content="#ffffff" />
         {data && !data.indexable ? <meta name="robots" content="noindex, nofollow" /> : null}
+        {data?.seo.verification.google ? <meta name="google-site-verification" content={data.seo.verification.google} /> : null}
+        {data?.seo.verification.bing ? <meta name="msvalidate.01" content={data.seo.verification.bing} /> : null}
         <Meta />
         <Links />
         {data?.faviconUrl ? (
@@ -54,6 +59,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {data.faviconIsBitmap ? <link rel="apple-touch-icon" href={data.faviconUrl} /> : null}
           </>
         ) : <link rel="icon" href="/favicon.svg" type="image/svg+xml" />}
+        {data?.seo.analytics ? <AnalyticsScripts config={data.seo.analytics} /> : null}
         {data?.pwa ? (
           <>
             <link rel="manifest" href="/manifest.webmanifest" />
@@ -99,10 +105,12 @@ function useServiceWorker(enabled: boolean) {
 }
 
 export default function App() {
-  useServiceWorker(useRootData()?.pwa ?? false);
+  const data = useRootData();
+  useServiceWorker(data?.pwa ?? false);
   return (
     <>
       <NavigationProgress />
+      {data?.seo.analytics?.provider === 'matomo' ? <MatomoPageViews /> : null}
       <Outlet />
     </>
   );

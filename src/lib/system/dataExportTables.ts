@@ -107,6 +107,8 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   // v11 phase 8.2b: the site's buyer groups (price policies) and buyer accounts
   { table: 'storefront_buyer_groups', group: 'settings' },
   { table: 'storefront_buyer_accounts', group: 'customers' },
+  // v11 phase 8.5: the old addresses of the WooCommerce site and where each goes
+  { table: 'storefront_redirects', group: 'settings' },
 ];
 
 /** Exported only on request, for a business-day range */

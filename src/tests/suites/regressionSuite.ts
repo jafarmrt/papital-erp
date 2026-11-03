@@ -11212,6 +11212,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v11 phase 8.4b: the SMS sign-in of buyer accounts and the phone proof of sign-up and the wholesale form
   const { runStorefrontSmsLoginV11Tests } = await import('../regression/storefrontSmsLoginV11Tests.js');
   results.push(...await runStorefrontSmsLoginV11Tests(shouldRun));
+  // v11 phase 8.5: search and statistics settings, and the old-address redirects of the WooCommerce site
+  const { runStorefrontSeoV11Tests } = await import('../regression/storefrontSeoV11Tests.js');
+  results.push(...await runStorefrontSeoV11Tests(shouldRun));
 
   return results;
 }

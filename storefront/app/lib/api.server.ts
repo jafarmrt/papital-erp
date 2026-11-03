@@ -1,6 +1,7 @@
 import type {
   StorefrontCatalogPage, StorefrontFacet, StorefrontProductDetail, StorefrontPublicBrand, StorefrontPublicSettings,
 } from '@erp/storefront/storefrontContracts';
+import type { StorefrontPublicRedirect, StorefrontPublicSeo } from '@erp/storefront/storefrontSeoContracts';
 import { siteEnv } from './site.server';
 import { STOREFRONT_QUERY_TEXT_MAX, STOREFRONT_SLUG_MAX } from '@erp/storefront/storefrontRules';
 import { CATALOG_PAGE_SIZE, type CatalogSort } from './catalog';
@@ -103,6 +104,53 @@ export async function brand(): Promise<StorefrontPublicBrand> {
   } catch (error) {
     // a logo that cannot be read never takes the shop down: the pages show the name instead
     if (error instanceof StorefrontApiError) return { logo: '', favicon: '' };
+    throw error;
+  }
+}
+
+const NO_SEO: StorefrontPublicSeo = { verification: { google: '', bing: '' }, analytics: { provider: 'none', id: '', url: '' }, alternateSiteUrl: '' };
+
+const SEO_FAILURE_TTL_MS = 30_000;
+let seoFailedAt = 0;
+
+const isSeo = (value: unknown): value is StorefrontPublicSeo => {
+  const v = value as Partial<StorefrontPublicSeo> | null;
+  return Boolean(v && typeof v === 'object' && v.verification && typeof v.verification === 'object'
+    && v.analytics && typeof v.analytics === 'object' && typeof v.alternateSiteUrl === 'string');
+};
+
+/**
+ * v11 phase 8.5: verification codes, the statistics service and the other-language site. Every page reads it, so any
+ * failure (the ERP down, an answer in another shape) means none of them, never a down shop, and a failure is remembered
+ * a little while so pages do not wait on a slow ERP again and again.
+ */
+export async function seo(): Promise<StorefrontPublicSeo> {
+  if (Date.now() - seoFailedAt < SEO_FAILURE_TTL_MS) return NO_SEO;
+  try {
+    const data = (await get<{ data: unknown }>('/seo', SETTINGS_TTL_MS)).data;
+    if (isSeo(data)) return data;
+  } catch {
+    // falls through to none
+  }
+  seoFailedAt = Date.now();
+  return NO_SEO;
+}
+
+const REDIRECTS_TTL_MS = 300_000;
+let redirectIndex: { list: StorefrontPublicRedirect[]; map: Map<string, StorefrontPublicRedirect> } | null = null;
+
+/**
+ * v11 phase 8.5: the old WooCommerce addresses and where each goes, by the old address's key. Read only when a request
+ * misses every page of the site, and kept a few minutes; unreadable = none, so the site's own guesses (temporary) apply.
+ */
+export async function redirects(): Promise<ReadonlyMap<string, StorefrontPublicRedirect>> {
+  try {
+    const list = (await get<{ data: StorefrontPublicRedirect[] }>('/redirects', REDIRECTS_TTL_MS)).data;
+    // the same kept answer is indexed once
+    if (redirectIndex?.list !== list) redirectIndex = { list, map: new Map(list.map(r => [r.from, r])) };
+    return redirectIndex.map;
+  } catch (error) {
+    if (error instanceof StorefrontApiError) return new Map();
     throw error;
   }
 }

@@ -31,6 +31,12 @@ const settings = await readFile(path.join(dir, 'settings.json'), 'utf8').then(JS
 settings.smsLogin = process.env.MOCK_SMS_LOGIN !== '0';
 
 const brand = await readFile(path.join(dir, 'brand.json'), 'utf8').then(JSON.parse).catch(() => ({ logo: '', favicon: '' }));
+// phase 8.5: the old-address redirects (`redirects.json`, a list of { from, kind, target }) and the search and statistics
+// settings (`seo.json`, or MOCK_SEO as JSON for a test); both optional
+const redirectList = await readFile(path.join(dir, 'redirects.json'), 'utf8').then(JSON.parse).catch(() => []);
+const seo = process.env.MOCK_SEO ? JSON.parse(process.env.MOCK_SEO) : await readFile(path.join(dir, 'seo.json'), 'utf8').then(JSON.parse).catch(() => ({
+  verification: { google: '', bing: '' }, analytics: { provider: 'none', id: '', url: '' }, alternateSiteUrl: '',
+}));
 
 const fold = s => String(s).toLowerCase().replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/[‌\s]+/g, ' ');
 const card = ({ slug, sku, name, category, collections, retailPrice, stock, cover }) => ({ slug, sku, name, category, collections, retailPrice, stock, cover });
@@ -120,6 +126,8 @@ createServer(async (req, res) => {
   }
   if (route === '/settings') return send(res, 200, { data: settings });
   if (route === '/brand') return send(res, 200, { data: brand });
+  if (route === '/seo') return send(res, 200, { data: seo });
+  if (route === '/redirects') return send(res, 200, { data: redirectList });
   if (route === '/facets') {
     return send(res, 200, { data: { collections: facet(products.flatMap(p => p.collections)), categories: facet(products.map(p => p.category)) } });
   }
