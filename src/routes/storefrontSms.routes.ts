@@ -5,7 +5,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { requirePermission } from '../middleware/authorize.js';
 import { validate } from '../middleware/validate.js';
 import {
-  OTP_HOURLY_CAP_MAX, SMS_API_KEY_MAX, SMS_KINDS, SMS_MESSAGE_STATUSES, SMS_PROVIDERS, SMS_TEMPLATE_MAX, type SmsKind, type SmsMessageStatus,
+  SMS_HOURLY_CAP_MAX, SMS_API_KEY_MAX, SMS_KINDS, SMS_MESSAGE_STATUSES, SMS_PROVIDERS, SMS_TEMPLATE_MAX, type SmsKind, type SmsMessageStatus,
 } from '../lib/storefront/storefrontSmsRules.js';
 import { readSmsSettings, saveSmsSettings } from '../services/storefront/storefrontSmsSettings.service.js';
 import { SMS_LOG_PAGE_MAX, listSmsMessages, sendTestSms } from '../services/storefront/storefrontSms.service.js';
@@ -24,7 +24,7 @@ const templates = z.object(Object.fromEntries(SMS_KINDS.map(kind => [kind, z.str
 const settingsSchema = z.object({
   body: z.object({
     enabled: z.boolean(), provider: z.enum(SMS_PROVIDERS), apiKey: z.string().max(SMS_API_KEY_MAX), clearApiKey: z.boolean(),
-    templates, otpHourlyCap: z.number().int().min(1).max(OTP_HOURLY_CAP_MAX), version: z.number().int().min(0).max(2_147_483_647),
+    templates, hourlyCap: z.number().int().min(1).max(SMS_HOURLY_CAP_MAX), version: z.number().int().min(0).max(2_147_483_647),
   }).strict(),
 });
 const testSchema = z.object({ body: z.object({ phone: z.string().max(40), kind: z.enum(SMS_KINDS) }).strict() });

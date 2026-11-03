@@ -55,11 +55,11 @@ describe('SMS rules', () => {
     expect(apiKeyError('')).toBeNull();
   });
   it('reads a login code in any digits and only at its length', () => {
-    expect(OTP_CODE_LENGTH).toBe(5);
-    expect(normalizeOtpCode('۱۲۳۴۵')).toBe('12345');
-    expect(normalizeOtpCode('١٢٣ ٤٥')).toBe('12345');
-    expect(normalizeOtpCode('1234')).toBeNull();
-    expect(normalizeOtpCode('12a45')).toBeNull();
+    expect(OTP_CODE_LENGTH).toBe(6);
+    expect(normalizeOtpCode('۱۲۳۴۵۶')).toBe('123456');
+    expect(normalizeOtpCode('١٢٣ ٤٥٦')).toBe('123456');
+    expect(normalizeOtpCode('12345')).toBeNull();
+    expect(normalizeOtpCode('12a456')).toBeNull();
   });
   it('drops spaces from a tracking code and hides the middle of a phone', () => {
     expect(smsParamValue(' 1234 5678 ')).toBe('12345678');
@@ -81,7 +81,7 @@ describe('SMS client', () => {
   });
   it('sms.ir: an answer 200 with another status is a failure, not a success', async () => {
     stubFetch(200, { status: 0, message: 'اعتبار کافی نیست', data: null });
-    const res = await sendTemplateSms({ provider: 'smsir', apiKey: KEY, template: '1', kind: 'otp', phone: '09121234567', params: { CODE: '12345' } });
+    const res = await sendTemplateSms({ provider: 'smsir', apiKey: KEY, template: '1', kind: 'otp', phone: '09121234567', params: { CODE: '123456' } });
     expect(res).toMatchObject({ ok: false, error: 'اعتبار کافی نیست', retryable: false });
   });
   it('Kavenegar: the lookup call with numbered tokens; return.status 200 is success', async () => {
@@ -94,12 +94,12 @@ describe('SMS client', () => {
   });
   it('never puts the key in an error, even when a provider echoes it or the network fails', async () => {
     stubFetch(401, { return: { status: 401, message: `apikey ${KEY} is not valid` } });
-    const res = await sendTemplateSms({ provider: 'kavenegar', apiKey: KEY, template: 't', kind: 'otp', phone: '09121234567', params: { CODE: '12345' } });
+    const res = await sendTemplateSms({ provider: 'kavenegar', apiKey: KEY, template: 't', kind: 'otp', phone: '09121234567', params: { CODE: '123456' } });
     expect(res.ok).toBe(false);
     expect(res.error).not.toContain(KEY);
     expect(res.retryable).toBe(false);
     vi.stubGlobal('fetch', vi.fn(async (url: string) => { throw new TypeError(`fetch failed for ${url}`); }));
-    const down = await sendTemplateSms({ provider: 'kavenegar', apiKey: KEY, template: 't', kind: 'otp', phone: '09121234567', params: { CODE: '12345' } });
+    const down = await sendTemplateSms({ provider: 'kavenegar', apiKey: KEY, template: 't', kind: 'otp', phone: '09121234567', params: { CODE: '123456' } });
     expect(down).toMatchObject({ ok: false, status: 0, error: 'network error', retryable: true });
   });
   it('a 429 or a 5xx is worth another try; a 4xx is not', async () => {

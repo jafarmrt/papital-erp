@@ -103,18 +103,28 @@ export const SMS_MESSAGE_STATUS_TITLES: Readonly<Record<SmsMessageStatus, string
 };
 
 /** The login code: digits only, short enough to type from the notification, valid for a few minutes */
-export const OTP_CODE_LENGTH = 5;
+export const OTP_CODE_LENGTH = 6;
 export const OTP_TTL_SECONDS = 180;
 export const OTP_RESEND_SECONDS = 60;
 export const OTP_VERIFY_ATTEMPTS_MAX = 5;
 /** Codes one phone may ask for (start plan §4, against SMS pumping and guessing) */
 export const OTP_PER_PHONE_HOUR_MAX = 5;
 export const OTP_PER_PHONE_DAY_MAX = 10;
-/** Codes one buyer address may ask for in an hour, whatever the phone */
+/** Codes one buyer address (an IPv6 address by its /56 subnet) may ask for in an hour, whatever the phone */
 export const OTP_PER_ADDRESS_HOUR_MAX = 10;
-/** The site's whole budget of login codes in an hour (settings), so a spread attack cannot drain the SMS credit */
-export const OTP_HOURLY_CAP_DEFAULT = 200;
-export const OTP_HOURLY_CAP_MAX = 5000;
+/** Wrong codes one phone may type in a day over all its codes, so a fresh code does not give fresh guesses */
+export const OTP_WRONG_PER_PHONE_DAY_MAX = 10;
+/**
+ * The site's whole budget of texts (login codes and order texts) in an hour and in a day (the day is 12 hours' worth),
+ * so neither a spread attack on login codes nor orders placed for strangers' numbers can drain the SMS credit
+ */
+export const SMS_HOURLY_CAP_DEFAULT = 200;
+export const SMS_HOURLY_CAP_MAX = 5000;
+export const SMS_DAILY_CAP_HOURS = 12;
+/** Order texts one phone may get in a day (an order and its cancel are two) */
+export const ORDER_SMS_PER_PHONE_DAY_MAX = 8;
+/** A queued order text older than this is not sent any more (texts were off for a while): it is `skipped` */
+export const SMS_QUEUED_MAX_HOURS = 24;
 /** After a right code: the phone proof the sign-up or sign-in that follows presents once */
 export const PHONE_PROOF_TTL_SECONDS = 600;
 export const PHONE_PROOF_PREFIX = 'pp_';

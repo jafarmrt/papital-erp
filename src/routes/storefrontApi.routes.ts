@@ -171,7 +171,7 @@ const otpRequestSchema = z.object({ body: z.object({ phone: z.string().max(40) }
 const otpVerifySchema = z.object({ body: z.object({ phone: z.string().max(40), code: z.string().max(20) }).strict() });
 
 router.post('/auth/otp/request', writeLimiter, otpLimiter, validate(otpRequestSchema), asyncHandler(async (req: Request, res: Response) => {
-  res.status(202).json({ data: await requestOtp(req.body.phone, buyerAddress(req)) });
+  res.status(202).json({ data: await requestOtp(req.body.phone, ipKeyGenerator(buyerAddress(req))) });
 }));
 
 router.post('/auth/otp/verify', writeLimiter, validate(otpVerifySchema), asyncHandler(async (req: Request, res: Response) => {

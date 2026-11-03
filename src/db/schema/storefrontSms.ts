@@ -35,6 +35,7 @@ export const storefrontSmsMessages = pgTable('storefront_sms_messages', {
   idx_storefront_sms_messages_due: index('idx_storefront_sms_messages_due').on(table.status, table.nextAttemptAt, table.id),
   idx_storefront_sms_messages_order_id: index('idx_storefront_sms_messages_order_id').on(table.orderId).where(sql`${table.orderId} IS NOT NULL`),
   idx_storefront_sms_messages_created: index('idx_storefront_sms_messages_created').on(table.createdAt.desc(), table.id.desc()),
+  idx_storefront_sms_messages_phone: index('idx_storefront_sms_messages_phone').on(table.phoneKey, table.createdAt.desc()),
 }));
 
 export const storefrontSmsCodes = pgTable('storefront_sms_codes', {

@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, isNull, notInArray, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { storefrontSmsCodes, storefrontSmsMessages } from '../../db/schema.js';
 import { AppError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
@@ -8,10 +8,10 @@ import { phoneMatchKey } from '../../lib/search/phoneMatchKey.js';
 import { normalizeMobile } from '../../lib/storefront/storefrontOrderRules.js';
 import {
   OTP_CODE_LENGTH, OTP_PER_ADDRESS_HOUR_MAX, OTP_PER_PHONE_DAY_MAX, OTP_PER_PHONE_HOUR_MAX, OTP_RESEND_SECONDS, OTP_TTL_SECONDS,
-  OTP_VERIFY_ATTEMPTS_MAX, PHONE_PROOF_MAX, PHONE_PROOF_PREFIX, PHONE_PROOF_TTL_SECONDS, normalizeOtpCode,
+  OTP_VERIFY_ATTEMPTS_MAX, OTP_WRONG_PER_PHONE_DAY_MAX, PHONE_PROOF_MAX, PHONE_PROOF_PREFIX, PHONE_PROOF_TTL_SECONDS, normalizeOtpCode,
 } from '../../lib/storefront/storefrontSmsRules.js';
 import type { OtpRequestResult, OtpVerifyResult } from '../../lib/storefront/storefrontSmsContracts.js';
-import { deliverMessage } from './storefrontSms.service.js';
+import { deliverMessage, smsBudgetSpent } from './storefrontSms.service.js';
 import { activeTemplate, smsRuntimeSettings } from './storefrontSmsSettings.service.js';
 
 /**
@@ -19,12 +19,14 @@ import { activeTemplate, smsRuntimeSettings } from './storefrontSmsSettings.serv
  *
  * - A code is `OTP_CODE_LENGTH` random digits, valid `OTP_TTL_SECONDS`; only the newest code of a phone counts, and it
  *   takes `OTP_VERIFY_ATTEMPTS_MAX` tries. The database keeps an HMAC of the code under a key derived from
- *   `ERP_SECRETS_KEY` (so a database copy cannot try the 100,000 codes offline), and an HMAC of the buyer's address,
- *   never the address.
+ *   `ERP_SECRETS_KEY` (so a database copy cannot try the million codes offline), and an HMAC of the buyer's address
+ *   (an IPv6 address by its /56 subnet), never the address. A phone gets `OTP_WRONG_PER_PHONE_DAY_MAX` wrong tries a day
+ *   over all its codes, so asking for fresh codes gives no fresh guesses.
  * - Limits against guessing and against draining the SMS credit («SMS pumping»), all decided under one advisory lock so
  *   concurrent requests cannot pass them together: one code per phone per `OTP_RESEND_SECONDS`, per phone per hour and
- *   per day, per buyer address per hour, and the site's own hourly budget in the settings. Only Iranian mobiles
- *   (09…) are taken. The route adds a per-address request limit in front.
+ *   per day, per buyer address per hour, and the site's budget of texts (`smsBudgetSpent`, shared with the order texts).
+ *   Only Iranian mobiles (09…) are taken. The route adds a per-address request limit in front. A code whose text could
+ *   not be sent is closed at once and does not hold the resend wait, but still counts toward the caps.
  * - A right code answers a random single-use phone proof (only its SHA-256 is kept) that the sign-up or sign-in that
  *   follows presents within `PHONE_PROOF_TTL_SECONDS` (`consumePhoneProof`, for stage 8.2b's accounts); the proof alone
  *   opens no session and no order.
@@ -81,8 +83,11 @@ export async function requestOtp(rawPhone: string, address: string): Promise<Otp
   const codeHash = hmac(CODE_PURPOSE, `${phoneKey}:${code}`);
   const message = await orm.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${OTP_LOCK}))`);
+    // the resend wait counts only codes whose text went out (or is going out)
     const [last] = await tx.select({ age: sql<number>`extract(epoch from now() - ${storefrontSmsCodes.createdAt})::int` }).from(storefrontSmsCodes)
-      .where(eq(storefrontSmsCodes.phoneKey, phoneKey)).orderBy(desc(storefrontSmsCodes.createdAt)).limit(1);
+      .innerJoin(storefrontSmsMessages, eq(storefrontSmsMessages.id, storefrontSmsCodes.messageId))
+      .where(and(eq(storefrontSmsCodes.phoneKey, phoneKey), notInArray(storefrontSmsMessages.status, ['failed', 'skipped'])))
+      .orderBy(desc(storefrontSmsCodes.createdAt)).limit(1);
     if (last && last.age < OTP_RESEND_SECONDS) {
       throw new TooManyCodesError('کد پیش‌تر فرستاده شد؛ کمی صبر کنید و دوباره بخواهید.', OTP_RESEND_SECONDS - last.age);
     }
@@ -93,22 +98,22 @@ export async function requestOtp(rawPhone: string, address: string): Promise<Otp
     if (await countSince(tx, eq(storefrontSmsCodes.addressKey, addressKey), 3600) >= OTP_PER_ADDRESS_HOUR_MAX) {
       throw new TooManyCodesError('از این دستگاه کد زیادی خواسته شده است؛ ساعتی دیگر دوباره بخواهید.', 3600);
     }
-    const [{ total }] = await tx.select({ total: sql<number>`count(*)::int` }).from(storefrontSmsCodes)
-      .where(sql`${storefrontSmsCodes.createdAt} > now() - interval '1 hour'`);
-    if (total >= settings.otpHourlyCap) {
+    if (await smsBudgetSpent(tx, settings.hourlyCap)) {
       throw new TooManyCodesError('ورود پیامکی اکنون شلوغ است؛ چند دقیقه دیگر دوباره بخواهید.', 300);
     }
     const [row] = await tx.insert(storefrontSmsMessages).values({
       kind: 'otp', phone, phoneKey, params: '{}', status: 'sending', attempts: 1, provider: settings.provider,
     }).returning();
-    await tx.insert(storefrontSmsCodes).values({
+    const [codeRow] = await tx.insert(storefrontSmsCodes).values({
       phoneKey, codeHash, addressKey, messageId: row.id, expiresAt: sql`now() + make_interval(secs => ${OTP_TTL_SECONDS})`,
-    });
-    return row;
+    }).returning({ id: storefrontSmsCodes.id });
+    return { row, codeId: codeRow.id };
   });
   // sent after the commit: the code row exists before the buyer can type it
-  const result = await deliverMessage(message, settings, { CODE: code });
+  const result = await deliverMessage(message.row, settings, { CODE: code });
   if (!result.ok) {
+    // a code the buyer never got is closed, so it cannot be guessed
+    await orm.update(storefrontSmsCodes).set({ expiresAt: sql`now()` }).where(eq(storefrontSmsCodes.id, message.codeId));
     throw new AppError('فرستادن پیامک اکنون ممکن نشد؛ چند دقیقه دیگر دوباره بخواهید.', 503, 'STOREFRONT_OTP_NOT_SENT');
   }
   return { resendAfter: OTP_RESEND_SECONDS, expiresIn: OTP_TTL_SECONDS };
@@ -127,6 +132,12 @@ export async function verifyOtp(rawPhone: string, rawCode: string): Promise<OtpV
     const [row] = await tx.select().from(storefrontSmsCodes).where(eq(storefrontSmsCodes.phoneKey, phoneKey))
       .orderBy(desc(storefrontSmsCodes.createdAt), desc(storefrontSmsCodes.id)).limit(1).for('update');
     if (!row || row.verifiedAt || row.attempts >= OTP_VERIFY_ATTEMPTS_MAX) return false;
+    // wrong tries of this phone over all its codes of the last day (a right try is the one counted on a verified code)
+    const [{ wrong }] = await tx.select({
+      wrong: sql<number>`coalesce(sum(${storefrontSmsCodes.attempts} - (CASE WHEN ${storefrontSmsCodes.verifiedAt} IS NULL THEN 0 ELSE 1 END)), 0)::int`,
+    }).from(storefrontSmsCodes)
+      .where(and(eq(storefrontSmsCodes.phoneKey, phoneKey), sql`${storefrontSmsCodes.createdAt} > now() - interval '1 day'`));
+    if (wrong >= OTP_WRONG_PER_PHONE_DAY_MAX) return false;
     const [{ live }] = (await tx.execute(sql`SELECT (${row.expiresAt}::timestamptz > now()) AS live`)).rows as Array<{ live: boolean }>;
     if (!live) return false;
     const stored = Buffer.from(row.codeHash, 'hex');

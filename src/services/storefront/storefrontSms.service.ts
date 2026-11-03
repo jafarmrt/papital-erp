@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import { and, asc, desc, eq, inArray, lte, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lte, ne, sql, type SQL } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { storefrontOrders, storefrontSmsMessages } from '../../db/schema.js';
 import { ValidationError } from '../../errors/customErrors.js';
@@ -9,7 +9,8 @@ import { phoneMatchKey } from '../../lib/search/phoneMatchKey.js';
 import { logger } from '../../middleware/logger.js';
 import { normalizeMobile } from '../../lib/storefront/storefrontOrderRules.js';
 import {
-  SMS_KIND_PARAMS, SMS_KIND_TITLES, isSmsKind, maskedMobile, smsParamValue,
+  ORDER_SMS_PER_PHONE_DAY_MAX, SMS_DAILY_CAP_HOURS, SMS_KIND_PARAMS, SMS_KIND_TITLES, SMS_QUEUED_MAX_HOURS, isSmsKind, maskedMobile,
+  smsParamValue,
   type OrderSmsKind, type SmsKind, type SmsMessageStatus, type SmsParams,
 } from '../../lib/storefront/storefrontSmsRules.js';
 import type { SmsMessagePage, SmsTestResult } from '../../lib/storefront/storefrontSmsContracts.js';
@@ -41,9 +42,34 @@ export function orderSmsParams(kind: OrderSmsKind, order: { orderNumber: string;
 }
 
 /**
- * Queues one message to an order's buyer inside the order change's own transaction. Returns whether a row was written
+ * Texts the site has spent (or is spending) in the last `seconds`: every kind, tests and skipped rows aside. One phone's
+ * order texts when `phoneKey` is given.
+ */
+async function spentSince(tx: DbExecutor, seconds: number, phoneKey?: string): Promise<number> {
+  const conditions: SQL[] = [
+    eq(storefrontSmsMessages.isTest, 0), ne(storefrontSmsMessages.status, 'skipped'),
+    sql`${storefrontSmsMessages.createdAt} > now() - make_interval(secs => ${seconds})`,
+  ];
+  if (phoneKey) conditions.push(eq(storefrontSmsMessages.phoneKey, phoneKey), ne(storefrontSmsMessages.kind, 'otp'));
+  const [{ count }] = await tx.select({ count: sql<number>`count(*)::int` }).from(storefrontSmsMessages).where(and(...conditions));
+  return count;
+}
+
+/**
+ * Whether the site's budget of texts is spent: `hourlyCap` in the last hour, or `hourlyCap × SMS_DAILY_CAP_HOURS` in the
+ * last day (start plan §4). Login codes and order texts share it, so orders placed for strangers' numbers cannot drain
+ * the SMS credit any more than a spread attack on login codes can.
+ */
+export async function smsBudgetSpent(tx: DbExecutor, hourlyCap: number): Promise<boolean> {
+  return await spentSince(tx, 3600) >= hourlyCap || await spentSince(tx, 86_400) >= hourlyCap * SMS_DAILY_CAP_HOURS;
+}
+
+/**
+ * Queues one message to an order's buyer inside the order change's own transaction. Returns whether a row was queued
  * (false while sending is off, or this kind has no template). A shipped order without a tracking code still gets its
- * message, with «-» in the template's place.
+ * message, with «-» in the template's place. Over the site's budget, or past `ORDER_SMS_PER_PHONE_DAY_MAX` texts to this
+ * phone in a day, the row is written `skipped` with the reason (the log shows it; nothing is sent). The counts are read
+ * without a lock, so concurrent orders may pass a cap by a message or two: the caps are a budget, not an exact count.
  */
 export async function queueOrderSms(
   tx: DbExecutor,
@@ -54,11 +80,15 @@ export async function queueOrderSms(
   if (!activeTemplate(settings, kind)) return false;
   const phone = normalizeMobile(order.phone);
   if (!phone) return false;
+  const phoneKey = order.phoneKey || phoneMatchKey(phone);
+  const skipped = await smsBudgetSpent(tx, settings.hourlyCap)
+    ? 'سقف پیامک‌های سایت پر شده بود'
+    : await spentSince(tx, 86_400, phoneKey) >= ORDER_SMS_PER_PHONE_DAY_MAX ? 'سقف روزانهٔ پیامک این شماره پر شده بود' : '';
   await tx.insert(storefrontSmsMessages).values({
-    kind, phone, phoneKey: order.phoneKey || phoneMatchKey(phone), orderId: order.id, params: JSON.stringify(orderSmsParams(kind, order)),
-    status: 'queued', provider: settings.provider,
+    kind, phone, phoneKey, orderId: order.id, params: JSON.stringify(orderSmsParams(kind, order)),
+    status: skipped ? 'skipped' : 'queued', error: skipped, provider: settings.provider,
   });
-  return true;
+  return !skipped;
 }
 
 /** Sends one message row now with the current settings and records the outcome on the row */
@@ -70,7 +100,7 @@ export async function deliverMessage(
   const kind = isSmsKind(row.kind) ? row.kind : null;
   const template = kind ? activeTemplate(settings, kind) : null;
   if (!kind || !template || !settings.apiKey) {
-    const reason = !settings.enabled ? 'پیامک سایت خاموش شد' : !settings.apiKey ? 'کلید سرویس پیامک خوانده نمی‌شود' : 'الگوی این پیامک برداشته شد';
+    const reason = !settings.siteEnabled ? 'سایت خاموش شد' : !settings.enabled ? 'پیامک سایت خاموش شد' : !settings.apiKey ? 'کلید سرویس پیامک خوانده نمی‌شود' : 'الگوی این پیامک برداشته شد';
     await orm.update(storefrontSmsMessages).set({ status: 'skipped', error: reason, updatedAt: systemNowUtcIso() })
       .where(eq(storefrontSmsMessages.id, row.id));
     return { ok: false, status: 0, messageId: '', error: reason, retryable: false };
@@ -100,10 +130,14 @@ export async function deliverMessage(
   return result;
 }
 
-/** One pass of the sender: close stale `sending` rows, claim due ones, send them */
+/** One pass of the sender: close stale `sending` rows, skip old `queued` ones, claim due ones, send them */
 export async function sendDueMessagesOnce(): Promise<{ sent: number; failed: number }> {
   const settings = await smsRuntimeSettings(orm);
-  if (!settings.enabled) return { sent: 0, failed: 0 };
+  // while the site or its texts are off, queued rows wait (and the age rule below closes them once it is back on)
+  if (!settings.enabled || !settings.siteEnabled) return { sent: 0, failed: 0 };
+  // a text queued long ago (texts were off for a while) is no news to the buyer any more
+  await orm.update(storefrontSmsMessages).set({ status: 'skipped', error: 'پیامک بیش از یک روز در صف ماند', updatedAt: systemNowUtcIso() })
+    .where(and(eq(storefrontSmsMessages.status, 'queued'), sql`${storefrontSmsMessages.createdAt} < now() - make_interval(hours => ${SMS_QUEUED_MAX_HOURS})`));
   // a row a stopped server left `sending` may or may not have reached the buyer; it is closed, never sent twice
   await orm.update(storefrontSmsMessages).set({ status: 'failed', error: 'وضعیت ارسال نامعلوم است (سرور میان ارسال بازایستاد)', updatedAt: systemNowUtcIso() })
     .where(and(eq(storefrontSmsMessages.status, 'sending'), sql`${storefrontSmsMessages.updatedAt} < now() - make_interval(mins => ${SMS_STALE_SENDING_MINUTES})`));
@@ -162,10 +196,10 @@ export class StorefrontSmsWorker {
   }
 }
 
-const SAMPLE_PARAMS: SmsParams = { CODE: '12345', ORDER: '100001', TRACKING: '123456789012345678' };
+const SAMPLE_PARAMS: SmsParams = { CODE: '123456', ORDER: '100001', TRACKING: '123456789012345678' };
 
 /**
- * A test of one kind's template to a number the colleague types, with sample values (code 12345, order 100001). It is a
+ * A test of one kind's template to a number the colleague types, with sample values (code 123456, order 100001). It is a
  * real message, logged as a test with an audit row; it works while sending is still off, so the owner can check every
  * template before turning the site's messages on.
  */
@@ -176,8 +210,8 @@ export async function sendTestSms(req: Request, input: { phone: string; kind: Sm
   const stored = await smsRuntimeSettings(orm);
   if (!stored.apiKey) throw new ValidationError(stored.apiKey === null ? 'کلید ذخیره‌شدهٔ سرویس پیامک با کلید رمزنگاری کنونی سرور باز نمی‌شود؛ آن را دوباره وارد کنید.' : 'اول کلید سرویس پیامک را وارد و ذخیره کنید.', { field: 'apiKey' }, 'STOREFRONT_SMS_NEEDS_KEY');
   if (!stored.templates[input.kind]) throw new ValidationError(`برای «${SMS_KIND_TITLES[input.kind]}» الگویی ذخیره نشده است.`, { field: `templates.${input.kind}` }, 'STOREFRONT_SMS_NEEDS_TEMPLATE');
-  // the test sends even while the site's messages are off
-  const settings: SmsRuntimeSettings = { ...stored, enabled: true };
+  // the test sends even while the site or its messages are off
+  const settings: SmsRuntimeSettings = { ...stored, enabled: true, siteEnabled: true };
   const params = Object.fromEntries(SMS_KIND_PARAMS[input.kind].map(name => [name, SAMPLE_PARAMS[name]])) as SmsParams;
   const row = await orm.transaction(async (tx) => {
     const [created] = await tx.insert(storefrontSmsMessages).values({

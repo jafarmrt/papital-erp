@@ -76,7 +76,7 @@
 - **برنامه:** `docs/roadmap/V11_STOREFRONT_8_4_SMS_START_PLAN.md`.
 - **مهاجرت تازه:** `storefront_sms` با دو جدول تازهٔ بستهٔ ۱۸، `storefront_sms_messages` (صف و گزارش پیامک‌ها) و `storefront_sms_codes` (کدهای ورود، فقط به شکل HMAC). به هیچ جدول یا ردیف موجود دست نمی‌زند. شماره‌اش هنگام ادغام شمارهٔ آزاد بعدی است.
 - **کلید خاموش:** `sf_sms_enabled`، پیش‌فرض خاموش. تا خاموش است هیچ پیامکی صف نمی‌شود و فرستنده کاری نمی‌کند.
-- **تنظیمات تازه** (گروه جدا با نسخهٔ خودش): `sf_sms_provider`، `sf_sms_api_key` (رمزشده با `encryptSecret`)، `sf_sms_api_key_hint`، `sf_sms_templates`، `sf_sms_otp_hourly_cap` و `sf_sms_version`. نام کلید `api_key` دارد، پس `SENSITIVE_SETTING_PATTERN` آن را از خروجی تنظیمات کنار می‌گذارد.
+- **تنظیمات تازه** (گروه جدا با نسخهٔ خودش): `sf_sms_provider`، `sf_sms_api_key` (رمزشده با `encryptSecret`)، `sf_sms_api_key_hint`، `sf_sms_templates`، `sf_sms_hourly_cap` و `sf_sms_version`. نام کلید `api_key` دارد، پس `SENSITIVE_SETTING_PATTERN` آن را از خروجی تنظیمات کنار می‌گذارد.
 - **کارگر تازه:** `StorefrontSmsWorker` در `server.ts`، هر نیم دقیقه. هنگام راه‌اندازی کاری نمی‌کند.
 - **درخواست بیرونی:** فقط به `api.sms.ir` و `api.kavenegar.com`، با مهلت و بی پیروی از تغییر مسیر.
 - **دست زدن به جریان سفارش:** در هر تغییر وضعیت سفارش سایت (ثبت، رد رسید، تأیید، ارسال، تحویل، لغو و پایان مهلت) یک سطر `queueOrderSms` در همان تراکنش آمده است. به `DocumentService` و خزانه دست نخورده است.

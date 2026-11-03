@@ -42,6 +42,8 @@ CREATE INDEX IF NOT EXISTS idx_storefront_sms_messages_order_id ON storefront_sm
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_storefront_sms_messages_created ON storefront_sms_messages (created_at DESC, id DESC);
 --> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_storefront_sms_messages_phone ON storefront_sms_messages (phone_key, created_at DESC);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS storefront_sms_codes (
   id serial PRIMARY KEY,
   phone_key text NOT NULL,

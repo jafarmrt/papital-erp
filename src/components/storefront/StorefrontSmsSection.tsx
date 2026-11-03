@@ -7,7 +7,7 @@ import {
 } from '../../hooks/queries/useStorefrontSmsQueries';
 import type { StorefrontSmsSettingsInput, StorefrontSmsSettingsView } from '../../lib/storefront/storefrontSmsContracts';
 import {
-  OTP_HOURLY_CAP_MAX, SMS_KINDS, SMS_KIND_PARAMS, SMS_KIND_TITLES, SMS_MESSAGE_STATUSES, SMS_MESSAGE_STATUS_TITLES, SMS_PROVIDERS,
+  ORDER_SMS_PER_PHONE_DAY_MAX, OTP_PER_PHONE_DAY_MAX, OTP_PER_PHONE_HOUR_MAX, SMS_DAILY_CAP_HOURS, SMS_HOURLY_CAP_MAX, SMS_KINDS, SMS_KIND_PARAMS, SMS_KIND_TITLES, SMS_MESSAGE_STATUSES, SMS_MESSAGE_STATUS_TITLES, SMS_PROVIDERS,
   SMS_PROVIDER_TITLES, apiKeyError, suggestedTemplateText, templateIdError, type SmsKind, type SmsMessageStatus, type SmsProvider,
 } from '../../lib/storefront/storefrontSmsRules';
 import { formatPersianCode, formatPersianNumber } from '../../utils/persianNumber';
@@ -26,7 +26,7 @@ const hint = 'mt-1 text-xs leading-6 text-slate-500';
 
 const formOf = (view: StorefrontSmsSettingsView): StorefrontSmsSettingsInput => ({
   enabled: view.enabled, provider: view.provider, apiKey: '', clearApiKey: false, templates: { ...view.templates },
-  otpHourlyCap: view.otpHourlyCap, version: view.version,
+  hourlyCap: view.hourlyCap, version: view.version,
 });
 
 const STATUS_TONE: Readonly<Record<SmsMessageStatus, string>> = {
@@ -124,12 +124,12 @@ function SmsSettingsForm({ view, canManage }: { view: StorefrontSmsSettingsView;
           </div>
         </section>
 
-        <section aria-label="سقف کد ورود" className="rounded-2xl border border-slate-200 bg-white p-5 space-y-2">
-          <label htmlFor={`${id}-cap`} className={label}>بیشترین کد ورود در یک ساعت، برای کل سایت</label>
-          <DecimalInput id={`${id}-cap`} className={`${field} max-w-[10rem]`} grouped={false} value={form.otpHourlyCap} min={1} max={OTP_HOURLY_CAP_MAX} step={1}
-            onValueChange={v => set('otpHourlyCap', Math.trunc(Number(v)) || 1)} />
+        <section aria-label="سقف پیامک سایت" className="rounded-2xl border border-slate-200 bg-white p-5 space-y-2">
+          <label htmlFor={`${id}-cap`} className={label}>بیشترین پیامک سایت در یک ساعت (کد ورود و پیامک سفارش با هم)</label>
+          <DecimalInput id={`${id}-cap`} className={`${field} max-w-[10rem]`} grouped={false} value={form.hourlyCap} min={1} max={SMS_HOURLY_CAP_MAX} step={1}
+            onValueChange={v => set('hourlyCap', Math.trunc(Number(v)) || 1)} />
           <p className={hint}>
-            جلوی کسی را می‌گیرد که با شماره‌های بسیار، اعتبار پنل پیامک را خرج کند. هر شماره هم جدا در هر دقیقه یک کد، در ساعت {formatPersianNumber(5)} و در روز {formatPersianNumber(10)} کد بیشتر نمی‌گیرد.
+            جلوی کسی را می‌گیرد که با شماره‌های بسیار یا سفارش‌های ساختگی، اعتبار پنل پیامک را خرج کند. سقف روزانه {formatPersianNumber(SMS_DAILY_CAP_HOURS)} برابر این عدد است. هر شماره هم جدا در هر دقیقه یک کد، در ساعت {formatPersianNumber(OTP_PER_PHONE_HOUR_MAX)} و در روز {formatPersianNumber(OTP_PER_PHONE_DAY_MAX)} کد و {formatPersianNumber(ORDER_SMS_PER_PHONE_DAY_MAX)} پیامک سفارش بیشتر نمی‌گیرد. پیامکی که از سقف بگذرد، با وضعیت «فرستاده نشد» در گزارش می‌ماند.
           </p>
         </section>
       </fieldset>
@@ -160,7 +160,7 @@ function SmsTestCard({ view }: { view: StorefrontSmsSettingsView }) {
   return (
     <section aria-label="پیامک آزمایشی" className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
       <h3 className="text-sm font-black text-slate-800">پیامک آزمایشی</h3>
-      <p className={hint}>یک پیامک واقعی با همان الگو و نمونهٔ مقدارها (کد ۱۲۳۴۵، سفارش ۱۰۰۰۰۱) به شماره‌ای که می‌نویسید می‌رود و در گزارش پایین با برچسب «آزمایشی» می‌آید. اول تنظیمات را ذخیره کنید.</p>
+      <p className={hint}>یک پیامک واقعی با همان الگو و نمونهٔ مقدارها (کد ۱۲۳۴۵۶، سفارش ۱۰۰۰۰۱) به شماره‌ای که می‌نویسید می‌رود و در گزارش پایین با برچسب «آزمایشی» می‌آید. اول تنظیمات را ذخیره کنید.</p>
       <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
         <div>
           <label htmlFor={`${id}-phone`} className={label}>شمارهٔ همراه</label>

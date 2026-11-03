@@ -2,13 +2,14 @@ import type { Request } from 'express';
 import { eq, inArray } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { appSettings } from '../../db/schema.js';
+import { STOREFRONT_SETTING_KEYS } from '../../lib/storefront/storefrontContracts.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { OptimisticLockError } from '../../lib/occHelper.js';
 import { invalidateSettingsCache } from '../../lib/memoryCache.js';
 import { decryptSecret, encryptSecret, isSecretsKeyConfigured } from '../../lib/secretBox.js';
 import {
-  OTP_HOURLY_CAP_DEFAULT, OTP_HOURLY_CAP_MAX, SMS_KINDS, SMS_KIND_TITLES, apiKeyError, isSmsKind, isSmsProvider, templateIdError,
+  SMS_HOURLY_CAP_DEFAULT, SMS_HOURLY_CAP_MAX, SMS_KINDS, SMS_KIND_TITLES, apiKeyError, isSmsKind, isSmsProvider, templateIdError,
   type SmsKind, type SmsProvider,
 } from '../../lib/storefront/storefrontSmsRules.js';
 import {
@@ -23,7 +24,7 @@ import {
  * budget of login codes. One save writes the group under the lock of its version row with one audit row in the same
  * transaction; the audit row never holds the key.
  */
-const GROUP_KEYS = [KEYS.enabled, KEYS.provider, KEYS.apiKey, KEYS.apiKeyHint, KEYS.templates, KEYS.otpHourlyCap, KEYS.version] as const;
+const GROUP_KEYS = [KEYS.enabled, KEYS.provider, KEYS.apiKey, KEYS.apiKeyHint, KEYS.templates, KEYS.hourlyCap, KEYS.version, STOREFRONT_SETTING_KEYS.enabled] as const;
 
 type Stored = Record<string, string>;
 
@@ -50,26 +51,29 @@ function templatesOf(stored: string | undefined): SmsTemplates {
 
 function hourlyCapOf(stored: string | undefined): number {
   const value = Number(stored);
-  return Number.isInteger(value) && value >= 1 && value <= OTP_HOURLY_CAP_MAX ? value : OTP_HOURLY_CAP_DEFAULT;
+  return Number.isInteger(value) && value >= 1 && value <= SMS_HOURLY_CAP_MAX ? value : SMS_HOURLY_CAP_DEFAULT;
 }
 
 /** What the sender and the code service read: the plain key (null when stored but not readable with this server's key) */
 export interface SmsRuntimeSettings {
   enabled: boolean;
+  /** the site itself (`sf_enabled`): while it is off no buyer text is queued */
+  siteEnabled: boolean;
   provider: SmsProvider;
   apiKey: string | null;
   templates: SmsTemplates;
-  otpHourlyCap: number;
+  hourlyCap: number;
 }
 
 function runtimeOf(stored: Stored): SmsRuntimeSettings {
   const sealed = stored[KEYS.apiKey] ?? '';
   return {
     enabled: stored[KEYS.enabled] === '1',
+    siteEnabled: stored[STOREFRONT_SETTING_KEYS.enabled] === '1',
     provider: isSmsProvider(stored[KEYS.provider]) ? stored[KEYS.provider] as SmsProvider : 'smsir',
     apiKey: sealed ? decryptSecret(sealed) : '',
     templates: templatesOf(stored[KEYS.templates]),
-    otpHourlyCap: hourlyCapOf(stored[KEYS.otpHourlyCap]),
+    hourlyCap: hourlyCapOf(stored[KEYS.hourlyCap]),
   };
 }
 
@@ -77,9 +81,9 @@ export async function smsRuntimeSettings(executor: DbExecutor): Promise<SmsRunti
   return runtimeOf(await readStored(executor));
 }
 
-/** The template a kind is sent with now, or null: sending off, no readable key, or no template for that kind */
+/** The template a kind is sent with now, or null: the site or its texts off, no readable key, or no template for that kind */
 export function activeTemplate(settings: SmsRuntimeSettings, kind: SmsKind): string | null {
-  if (!settings.enabled || !settings.apiKey) return null;
+  if (!settings.siteEnabled || !settings.enabled || !settings.apiKey) return null;
   return settings.templates[kind] ?? null;
 }
 
@@ -91,7 +95,7 @@ export async function readSmsSettings(executor: DbExecutor): Promise<StorefrontS
     provider: runtime.provider,
     apiKey: { configured: Boolean(stored[KEYS.apiKey]), hint: stored[KEYS.apiKeyHint] ?? '', readable: runtime.apiKey !== null },
     templates: runtime.templates,
-    otpHourlyCap: runtime.otpHourlyCap,
+    hourlyCap: runtime.hourlyCap,
     version: Number(stored[KEYS.version]) || 0,
     secretsKeyConfigured: isSecretsKeyConfigured(),
   };
@@ -128,8 +132,8 @@ export async function saveSmsSettings(req: Request, input: StorefrontSmsSettings
   const newKey = String(input.apiKey ?? '').trim();
   const keyProblem = apiKeyError(newKey);
   if (keyProblem) throw new ValidationError(keyProblem, { field: 'apiKey' }, 'STOREFRONT_SMS_KEY_INVALID');
-  if (!Number.isInteger(input.otpHourlyCap) || input.otpHourlyCap < 1 || input.otpHourlyCap > OTP_HOURLY_CAP_MAX) {
-    throw new ValidationError(`سقف کدهای ورود در ساعت باید ۱ تا ${OTP_HOURLY_CAP_MAX.toLocaleString('fa-IR')} باشد.`, { field: 'otpHourlyCap' }, 'STOREFRONT_SMS_CAP_INVALID');
+  if (!Number.isInteger(input.hourlyCap) || input.hourlyCap < 1 || input.hourlyCap > SMS_HOURLY_CAP_MAX) {
+    throw new ValidationError(`سقف پیامک‌های سایت در ساعت باید ۱ تا ${SMS_HOURLY_CAP_MAX.toLocaleString('fa-IR')} باشد.`, { field: 'hourlyCap' }, 'STOREFRONT_SMS_CAP_INVALID');
   }
   const templates = checkedTemplates(input.provider, input.templates ?? {});
   // encrypted before the transaction: no secrets key = 503 and nothing written
@@ -139,6 +143,10 @@ export async function saveSmsSettings(req: Request, input: StorefrontSmsSettings
     const stored = await readStored(tx);
     const before = runtimeOf(stored);
     const keyAfter = input.clearApiKey ? '' : sealedKey || stored[KEYS.apiKey] || '';
+    // a key belongs to its provider: sending another provider's key would hand it to a third party
+    if (input.provider !== before.provider && keyAfter && keyAfter === stored[KEYS.apiKey]) {
+      throw new ValidationError('با عوض کردن سرویس پیامک، کلید سرویس تازه را هم وارد کنید (یا کلید ذخیره‌شده را پاک کنید).', { field: 'apiKey' }, 'STOREFRONT_SMS_KEY_FOR_OTHER_PROVIDER');
+    }
     if (input.enabled && !keyAfter) {
       throw new ValidationError('برای روشن کردن پیامک، کلید سرویس پیامک را وارد کنید.', { field: 'apiKey' }, 'STOREFRONT_SMS_NEEDS_KEY');
     }
@@ -150,7 +158,7 @@ export async function saveSmsSettings(req: Request, input: StorefrontSmsSettings
     if (before.enabled !== enabled) changes.enabled = { before: before.enabled, after: enabled };
     if (before.provider !== input.provider) changes.provider = { before: before.provider, after: input.provider };
     if (JSON.stringify(before.templates) !== JSON.stringify(templates)) changes.templates = { before: before.templates, after: templates };
-    if (before.otpHourlyCap !== input.otpHourlyCap) changes.otpHourlyCap = { before: before.otpHourlyCap, after: input.otpHourlyCap };
+    if (before.hourlyCap !== input.hourlyCap) changes.hourlyCap = { before: before.hourlyCap, after: input.hourlyCap };
     const keyChanged = keyAfter !== (stored[KEYS.apiKey] ?? '');
     const hintAfter = !keyAfter ? '' : sealedKey ? newKey.slice(-4) : stored[KEYS.apiKeyHint] ?? '';
     // the key itself never enters the audit row: only that it changed and its last four letters
@@ -159,7 +167,7 @@ export async function saveSmsSettings(req: Request, input: StorefrontSmsSettings
     await writeValue(tx, KEYS.enabled, enabled ? '1' : '0');
     await writeValue(tx, KEYS.provider, input.provider);
     await writeValue(tx, KEYS.templates, JSON.stringify(templates));
-    await writeValue(tx, KEYS.otpHourlyCap, String(input.otpHourlyCap));
+    await writeValue(tx, KEYS.hourlyCap, String(input.hourlyCap));
     if (keyChanged) {
       await writeValue(tx, KEYS.apiKey, keyAfter);
       await writeValue(tx, KEYS.apiKeyHint, hintAfter);

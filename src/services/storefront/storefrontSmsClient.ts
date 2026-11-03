@@ -63,7 +63,10 @@ function networkErrorText(err: unknown): string {
 /** The provider's own words, cut short and with the key taken out should a provider ever echo it */
 function cleanError(text: unknown, apiKey: string): string {
   let value = String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
-  if (apiKey && value.includes(apiKey)) value = value.split(apiKey).join('[REDACTED]');
+  // Kavenegar carries the key in its address, encoded: both forms are taken out
+  for (const form of apiKey ? [apiKey, encodeURIComponent(apiKey)] : []) {
+    if (value.includes(form)) value = value.split(form).join('[REDACTED]');
+  }
   return value;
 }
 
