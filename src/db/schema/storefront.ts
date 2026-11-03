@@ -136,3 +136,97 @@ export const storefrontPaymentReceipts = pgTable('storefront_payment_receipts', 
     .on(table.treasuryTransactionId).where(sql`${table.treasuryTransactionId} IS NOT NULL`),
   uq_storefront_payment_receipts_pending: uniqueIndex('uq_storefront_payment_receipts_pending').on(table.orderId).where(sql`${table.status} = 'pending'`),
 }));
+
+/**
+ * v11 phase 8.2b (migration 0016): a buyer group, one of the site's price policies besides the retail one of the settings
+ * (start plan §6, decision 5). Its prices, minimums, payment methods and visible products apply only to an active account
+ * approved into it.
+ */
+export const storefrontBuyerGroups = pgTable('storefront_buyer_groups', {
+  id: serial('id').primaryKey(),
+  code: text('code').notNull(),
+  title: text('title').notNull(),
+  description: text('description').notNull().default(''),
+  priceList: text('price_list').notNull().default(''),
+  minOrderAmount: moneyNumeric('min_order_amount').notNull().default(sql`0`),
+  minLineQuantity: integer('min_line_quantity').notNull().default(0),
+  allowCard: integer('allow_card').notNull().default(1),
+  allowOnAccount: integer('allow_on_account').notNull().default(0),
+  creditLimit: moneyNumeric('credit_limit').notNull().default(sql`0`),
+  catalogScope: text('catalog_scope').notNull().default('all'),
+  collections: text('collections').array().notNull().default(sql`'{}'::text[]`),
+  acceptsDiscounts: integer('accepts_discounts').notNull().default(0),
+  isActive: integer('is_active').notNull().default(0),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdBy: text('created_by').notNull().default(''),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  version: integer('version').notNull().default(1),
+  isDeleted: integer('is_deleted').notNull().default(0),
+}, (table) => ({
+  uq_storefront_buyer_groups_code_live: uniqueIndex('uq_storefront_buyer_groups_code_live').on(table.code).where(sql`${table.isDeleted} = 0`),
+}));
+
+/**
+ * A buyer's account on the site: retail (no group) or approved into a buyer group. `status` 'pending' is an account the
+ * wholesale form made, with no password until a colleague approves it; only the scrypt hash of a password is kept.
+ */
+export const storefrontBuyerAccounts = pgTable('storefront_buyer_accounts', {
+  id: serial('id').primaryKey(),
+  groupId: integer('group_id').references(() => storefrontBuyerGroups.id),
+  customerId: integer('customer_id').references(baseRelations.customersId),
+  name: text('name').notNull(),
+  phone: text('phone').notNull(),
+  phoneKey: text('phone_key').notNull(),
+  city: text('city').notNull().default(''),
+  status: text('status').notNull().default('active'),
+  passwordHash: text('password_hash').notNull().default(''),
+  applicationStatus: text('application_status').notNull().default('none'),
+  companyName: text('company_name').notNull().default(''),
+  nationalId: text('national_id').notNull().default(''),
+  economicCode: text('economic_code').notNull().default(''),
+  applicationNote: text('application_note').notNull().default(''),
+  appliedAt: timestamp('applied_at', { withTimezone: true, mode: 'string' }),
+  reviewedBy: text('reviewed_by').notNull().default(''),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true, mode: 'string' }),
+  failedLogins: integer('failed_logins').notNull().default(0),
+  lockedUntil: timestamp('locked_until', { withTimezone: true, mode: 'string' }),
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true, mode: 'string' }),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  updatedBy: text('updated_by').notNull().default(''),
+  version: integer('version').notNull().default(1),
+}, (table) => ({
+  uq_storefront_buyer_accounts_phone_key: uniqueIndex('uq_storefront_buyer_accounts_phone_key').on(table.phoneKey),
+  idx_storefront_buyer_accounts_group_id: index('idx_storefront_buyer_accounts_group_id').on(table.groupId).where(sql`${table.groupId} IS NOT NULL`),
+  idx_storefront_buyer_accounts_customer_id: index('idx_storefront_buyer_accounts_customer_id').on(table.customerId).where(sql`${table.customerId} IS NOT NULL`),
+  idx_storefront_buyer_accounts_application: index('idx_storefront_buyer_accounts_application').on(table.applicationStatus, table.appliedAt.desc(), table.id.desc()),
+}));
+
+/** A sign-in session of a buyer account; only the SHA-256 of its token is kept */
+export const storefrontBuyerSessions = pgTable('storefront_buyer_sessions', {
+  id: serial('id').primaryKey(),
+  accountId: integer('account_id').notNull().references(() => storefrontBuyerAccounts.id),
+  tokenHash: text('token_hash').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true, mode: 'string' }),
+}, (table) => ({
+  uq_storefront_buyer_sessions_token_hash: uniqueIndex('uq_storefront_buyer_sessions_token_hash').on(table.tokenHash),
+  idx_storefront_buyer_sessions_account_id: index('idx_storefront_buyer_sessions_account_id').on(table.accountId),
+}));
+
+/** A one-time set-password link a colleague made for an account; only the SHA-256 of its token is kept */
+export const storefrontPasswordTokens = pgTable('storefront_password_tokens', {
+  id: serial('id').primaryKey(),
+  accountId: integer('account_id').notNull().references(() => storefrontBuyerAccounts.id),
+  tokenHash: text('token_hash').notNull(),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true, mode: 'string' }),
+}, (table) => ({
+  uq_storefront_password_tokens_token_hash: uniqueIndex('uq_storefront_password_tokens_token_hash').on(table.tokenHash),
+  idx_storefront_password_tokens_account_id: index('idx_storefront_password_tokens_account_id').on(table.accountId),
+}));

@@ -12,7 +12,7 @@ import {
   workflowDefinitions, workflowDefinitionVersions, workflowStates, workflowTransitions, workflowInstances,
   workflowHistoryLogs, workflowTasks, workflowPendingApprovals, workflowDelegations,
   mediaSections, mediaAssets, projectManagers, stockReceiptConfirmations, workshopTaskReports,
-  storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts,
+  storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontBuyerGroups, storefrontBuyerAccounts,
 } from '../../db/schema.js';
 import { SENSITIVE_SETTING_PATTERN } from '../settings/systemSettings.service.js';
 
@@ -134,5 +134,10 @@ export const DATA_EXPORT_TABLE_SOURCES: Readonly<Record<string, TableSpecSource>
   storefront_products: { table: storefrontProducts, key: ['id'] },
   storefront_shipping_methods: { table: storefrontShippingMethods, key: ['id'] },
   storefront_shipping_rates: { table: storefrontShippingRates, key: ['id'] },
+  // v11 phase 8.2b: the site's buyer groups, and buyer accounts WITHOUT the password hash or lockout state
+  storefront_buyer_groups: { table: storefrontBuyerGroups, key: ['id'] },
+  storefront_buyer_accounts: {
+    table: storefrontBuyerAccounts, key: ['id'], columns: withoutColumns(storefrontBuyerAccounts, ['passwordHash', 'failedLogins', 'lockedUntil']),
+  },
 };
 

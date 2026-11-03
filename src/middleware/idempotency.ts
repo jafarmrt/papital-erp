@@ -164,11 +164,11 @@ function parseBody(body: unknown): unknown {
 
 /**
  * v10.2.33 (TD-1328): scopes whose answers are not kept with their key (payslips and their payments, piecework logs and
- * rates carry amounts and names; v11 phase 8.1: a new storefront API key, shown once and stored only as its digest; v11 phase 8.2a: the site orders screen, whose answers carry buyers' names, addresses and amounts), and
+ * rates carry amounts and names; v11 phase 8.1: a new storefront API key, shown once and stored only as its digest; v11 phase 8.2a: the site orders screen, whose answers carry buyers' names, addresses and amounts; v11 phase 8.2b: the site buyers screen, whose approval answers a one-time set-password link), and
  * the largest answer kept at all. A repeat of such a request gets the stored status
  * with `IDEMPOTENCY_REPLAY_BODY` instead of the first answer; it still never runs twice.
  */
-export const RESPONSE_NOT_KEPT_SCOPES: ReadonlySet<string> = new Set(['payroll', 'piecework', 'storefront_key', 'storefront_orders']);
+export const RESPONSE_NOT_KEPT_SCOPES: ReadonlySet<string> = new Set(['payroll', 'piecework', 'storefront_key', 'storefront_orders', 'storefront_buyers']);
 export const IDEMPOTENCY_RESPONSE_MAX_BYTES = 64 * 1024;
 export const IDEMPOTENCY_REPLAY_BODY: Readonly<IdempotentReplayBody> = Object.freeze({
   success: true,

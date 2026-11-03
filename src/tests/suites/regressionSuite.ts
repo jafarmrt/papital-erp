@@ -11204,6 +11204,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runStorefrontBaseV11Tests(shouldRun));
   const { runStorefrontOrdersV11Tests } = await import('../regression/storefrontOrdersV11Tests.js');
   results.push(...await runStorefrontOrdersV11Tests(shouldRun));
+  const { runStorefrontBuyersV11Tests } = await import('../regression/storefrontBuyersV11Tests.js');
+  results.push(...await runStorefrontBuyersV11Tests(shouldRun));
 
   return results;
 }
