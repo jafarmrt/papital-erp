@@ -10,6 +10,8 @@ import { COLLECTION_TEXTS } from '../content/collections';
 import { ProductGrid } from '../components/ProductCard';
 import { Pagination } from '../components/Pagination';
 import { useRootData } from '../root';
+import { breadcrumbLd } from '../lib/jsonLd';
+import { JsonLdScripts } from '../components/JsonLdScripts';
 
 /** «همهٔ محصولات» (/products) and one collection (/collections/:name) share this page; filters live in the address */
 export async function loader({ request, params }: Route.LoaderArgs) {
@@ -36,7 +38,7 @@ export function meta({ data }: Route.MetaArgs) {
 }
 
 export default function Products({ loaderData }: Route.ComponentProps) {
-  const { result, collection, category, q, sort, page } = loaderData;
+  const { result, collection, category, q, sort, page, siteUrl } = loaderData;
   const root = useRootData();
   const submit = useSubmit();
   const pages = Math.ceil(result.total / (result.limit || CATALOG_PAGE_SIZE));
@@ -104,6 +106,16 @@ export default function Products({ loaderData }: Route.ComponentProps) {
         )}
       </div>
       <Pagination page={page} pages={pages} hrefOf={hrefOf} />
+      {/* a search result is not a place in the shop, so it has no trail */}
+      {collection || category ? (
+        <JsonLdScripts
+          siteUrl={siteUrl}
+          blocks={[breadcrumbLd([
+            { name: 'خانه', path: '/' },
+            collection ? { name: `کالکشن ${collection}` } : { name: category },
+          ], siteUrl)]}
+        />
+      ) : null}
     </div>
   );
 }

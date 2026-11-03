@@ -8,5 +8,8 @@ export default [
   route('media/:file', 'routes/media.ts'),
   route('brand/:kind', 'routes/brandImage.ts'),
   route('healthz', 'routes/healthz.ts'),
+  route('robots.txt', 'routes/robots.ts'),
+  route('sitemap.xml', 'routes/sitemap.ts'),
+  ...(['about', 'contact', 'shipping', 'terms', 'privacy'] as const).map(slug => route(slug, 'routes/info.tsx', { id: `info-${slug}` })),
   route('*', 'routes/notFound.tsx'),
 ] satisfies RouteConfig;

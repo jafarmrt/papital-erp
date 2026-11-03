@@ -1,0 +1,12 @@
+{
+  "currency": "IRR",
+  "payment": { "cardNumber": "", "cardHolder": "", "bankName": "", "iban": "" },
+  "freeShippingThreshold": "30000000",
+  "reservationHours": 24,
+  "stockDisplay": "status",
+  "whatsapp": "",
+  "shippingMethods": [
+    { "code": "post", "title": "پست پیشتاز", "description": "رسیدن به سراسر ایران در ۲ تا ۵ روز کاری.", "pricing": "table", "flatRate": "0", "isFreeShippingEligible": true, "rates": [] },
+    { "code": "snapp", "title": "اسنپ باکس", "description": "فقط در تهران، همان روز.", "pricing": "on_delivery", "flatRate": "0", "isFreeShippingEligible": false, "rates": [] }
+  ]
+}
