@@ -9,13 +9,22 @@ export interface SiteEnv {
   siteUrl: string;
   /** shown on every page while the data is a preview (never on the live site) */
   previewNotice: string;
+  /**
+   * Search engines may index the site only when its public address is known, it is not a preview and nobody turned
+   * indexing off (`STOREFRONT_NOINDEX=1`, e.g. on a test address); otherwise every page says noindex and robots.txt
+   * shuts the whole site.
+   */
+  indexable: boolean;
 }
 
 export function siteEnv(): SiteEnv {
+  const siteUrl = (process.env.STOREFRONT_SITE_URL ?? '').replace(/\/+$/, '');
+  const previewNotice = process.env.STOREFRONT_PREVIEW_NOTICE ?? '';
   return {
     apiUrl: (process.env.STOREFRONT_API_URL ?? 'http://127.0.0.1:3000/api/storefront/v1').replace(/\/+$/, ''),
     apiKey: process.env.STOREFRONT_API_KEY ?? '',
-    siteUrl: (process.env.STOREFRONT_SITE_URL ?? '').replace(/\/+$/, ''),
-    previewNotice: process.env.STOREFRONT_PREVIEW_NOTICE ?? '',
+    siteUrl,
+    previewNotice,
+    indexable: siteUrl !== '' && previewNotice === '' && process.env.STOREFRONT_NOINDEX !== '1',
   };
 }

@@ -23,6 +23,7 @@ STOREFRONT_API_URL=http://127.0.0.1:3901/api/storefront/v1 STOREFRONT_API_KEY=pr
 | `STOREFRONT_SITE_URL` | نشانی عمومی سایت، برای پیوندهای canonical و کارت شبکه‌های اجتماعی |
 | `STOREFRONT_PORT`، `STOREFRONT_HOST` | جایی که `npm start` گوش می‌دهد (پیش‌فرض: `127.0.0.1:3100`) |
 | `STOREFRONT_PREVIEW_NOTICE` | نوار بالای صفحه، فقط در پیش‌نمایش |
+| `STOREFRONT_NOINDEX` | با `1` موتورهای جست‌وجو هیچ صفحه‌ای را نمایه نمی‌کنند، مثلاً روی نشانی آزمایشی. بی `STOREFRONT_SITE_URL` یا با نوار پیش‌نمایش هم همین‌طور است. |
 
 ## بررسی‌ها
 
