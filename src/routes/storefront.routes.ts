@@ -259,7 +259,7 @@ router.get('/buyers/:id', requirePermission(SITE_BUYERS_VIEW_PERMISSION), valida
   res.json({ data: await buyerAccountDetail(orm, Number(req.params.id)) });
 }));
 
-// a set-password link is answered once, to be sent to the buyer; a repeat of the same request is answered from the store
+// a set-password link is answered once, to be sent to the buyer; a repeat of the same request gets the replay body, never the link
 router.post('/buyers/:id/approve', requirePermission(SITE_BUYERS_MANAGE_PERMISSION), idempotency({ scope: 'storefront_buyers' }), validate(approveSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: await approveBuyer(req, Number(req.params.id), req.body) });
 }));

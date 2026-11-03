@@ -79,11 +79,13 @@ export function useBuyerActionMutation(id: number) {
     mutationFn: async ({ action, version }: { action: BuyerAction; version: number }) => {
       const { kind, ...rest } = action;
       const answer = (await fetchJson(`/storefront/buyers/${id}/${kind}`, { method: 'POST', body: JSON.stringify({ ...rest, version }) })) as {
-        data: BuyerAccountDetail | PasswordLinkAnswer;
+        data?: BuyerAccountDetail | PasswordLinkAnswer;
       };
-      return answer.data;
+      // a replayed request answers no body (the link is shown only once); the list refresh below shows the account
+      return answer.data ?? null;
     },
     onSuccess: (data) => {
+      if (!data) return;
       const account = 'token' in data ? data.account : data;
       queryClient.setQueryData([...BUYERS_KEY, 'detail', id], account);
     },

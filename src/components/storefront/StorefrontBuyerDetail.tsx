@@ -31,7 +31,7 @@ export function StorefrontBuyerDetail({ id, canManage, onClose }: { id: number; 
     act.mutate({ action, version: data.version }, {
       onSuccess: (answer) => {
         toast.success(done);
-        if ('token' in answer) setLink(answer);
+        if (answer && 'token' in answer) setLink(answer);
       },
       onError: (err) => toast.error(errorMessageOf(err)),
     });
