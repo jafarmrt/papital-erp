@@ -28,13 +28,10 @@ export const PUBLIC_ROUTES = new Set([
   'GET /api/woocommerce/shop-image/:file',
   // v11 phase 8.1: the Storefront API takes no session; every route checks the site app's key (`requireStorefrontKey`,
   // a missing or wrong key is 401) and is limited per address
-<<<<<<< HEAD
   // (v11 phase 8.2a: and the order routes, a buyer's order also by its tracking key; 8.3: the site's logo and icon)
   ...['GET settings', 'GET brand', 'GET products', 'GET products/:slug', 'GET facets', 'GET media/:file', 'GET orders/:number', 'POST shipping/quote', 'POST orders', 'POST orders/:number/receipts'].map(route => route.replace(' ', ' /api/storefront/v1/')),
-=======
-  // (v11 phase 8.2a: and the order routes, a buyer's order also by its tracking key)
-  ...['GET settings', 'GET products', 'GET products/:slug', 'GET facets', 'GET media/:file', 'GET orders/:number', 'POST shipping/quote', 'POST orders', 'POST orders/:number/receipts', 'POST auth/register', 'POST auth/login', 'POST auth/logout', 'POST auth/set-password', 'POST wholesale/apply', 'GET account', 'GET account/prices'].map(route => route.replace(' ', ' /api/storefront/v1/')),
->>>>>>> 33e8710 (feat(storefront): buyer groups, buyer accounts and wholesale approval (phase 8.2b, part 1, flag off))
+  // (v11 phase 8.2b: buyer accounts; the account routes read the buyer's own session in X-Buyer-Session)
+  ...['POST auth/register', 'POST auth/login', 'POST auth/logout', 'POST auth/set-password', 'POST wholesale/apply', 'GET account', 'GET account/prices'].map(route => route.replace(' ', ' /api/storefront/v1/')),
 ]);
 
 /**
