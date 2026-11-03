@@ -1,5 +1,6 @@
 import type { Request } from 'express';
-import { and, asc, eq, ilike, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { foldedContains } from '../../lib/search/searchSql.js';
 import { orm } from '../../db/drizzle.js';
 import { items, storefrontProducts } from '../../db/schema.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
@@ -13,7 +14,7 @@ import type {
   StorefrontProductAdminPage, StorefrontProductAdminRow, StorefrontProductInput,
 } from '../../lib/storefront/storefrontContracts.js';
 import { storefrontSellable } from './storefrontStock.js';
-import { STOREFRONT_AUDIT_ENTITY, storefrontSettingValues } from './storefrontSettings.service.js';
+import { storefrontSettingValues } from './storefrontSettings.service.js';
 import { imagesOf, pricesOf } from './storefrontItemData.js';
 
 /**
@@ -71,11 +72,8 @@ export async function listStorefrontProducts(query: StorefrontProductQuery): Pro
   const page = Math.max(1, query.page);
   const limit = Math.min(STOREFRONT_PAGE_MAX, Math.max(1, query.limit));
   const conditions: SQL[] = [eq(items.type, 'product'), eq(items.isDeleted, 0)];
-  const q = query.q.trim();
-  if (q) {
-    const like = `%${q.replace(/[\\%_]/g, ch => `\\${ch}`)}%`;
-    conditions.push(or(ilike(items.code, like), ilike(items.name, like), ilike(storefrontProducts.slug, like)) as SQL);
-  }
+  const searched = foldedContains([items.code, items.name, storefrontProducts.slug], query.q);
+  if (searched) conditions.push(searched);
   if (query.published === 'published') conditions.push(eq(storefrontProducts.isPublished, 1));
   if (query.published === 'unpublished') conditions.push(or(isNull(storefrontProducts.id), eq(storefrontProducts.isPublished, 0)) as SQL);
   const where = and(...conditions);
@@ -146,7 +144,7 @@ export async function saveStorefrontProduct(req: Request, itemId: number, input:
     const after = { published: values.published, slug: values.slug, seoTitle: values.seoTitle, seoDescription: values.seoDescription, sortOrder: values.sortOrder };
     const verb = before?.published === after.published ? 'ویرایش شد' : after.published ? 'روی سایت منتشر شد' : 'از سایت برداشته شد';
     await logActivity({
-      req, tx, action: current ? 'UPDATE' : 'CREATE', entity: STOREFRONT_AUDIT_ENTITY, entityId: `item-${itemId}`,
+      req, tx, action: current ? 'UPDATE' : 'CREATE', entity: 'فروشگاه سایت', entityId: `item-${itemId}`,
       description: `کالای ${item.code} «${item.name}» ${verb}`, details: { before, after },
     });
   });

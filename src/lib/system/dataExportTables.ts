@@ -22,7 +22,7 @@ export const DATA_EXPORT_GROUP_LABELS: Readonly<Record<DataExportGroup, string>>
   workflow: 'گردش کار و قاعده‌های رویداد',
   attachments: 'فهرست پیوست‌ها (بی خود فایل‌ها)',
   media: 'فهرست کتابخانه تصاویر و فیلم‌ها (بی خود فایل‌ها)',
-  settings: 'تنظیمات (بی کلیدهای محرمانه)',
+  settings: 'تنظیمات (بی کلیدهای محرمانه)، کالاهای منتشرشده و روش‌های ارسال سایت',
 };
 
 /** Exported tables in file order (database names) */
@@ -97,6 +97,10 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   { table: 'media_sections', group: 'media' },
   { table: 'media_assets', group: 'media' },
   { table: 'app_settings', group: 'settings' },
+  // v11 phase 8.1: the new site's published items and delivery methods
+  { table: 'storefront_products', group: 'settings' },
+  { table: 'storefront_shipping_methods', group: 'settings' },
+  { table: 'storefront_shipping_rates', group: 'settings' },
 ];
 
 /** Exported only on request, for a business-day range */

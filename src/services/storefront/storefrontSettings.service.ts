@@ -26,7 +26,6 @@ import { activeWarehouses, storefrontWarehouseCode } from './storefrontStock.js'
  * one audit row in the same transaction; a stale version is 409 (`AGENTS.md` §2.7). The general settings form never
  * writes these keys (it refuses unknown keys).
  */
-export const STOREFRONT_AUDIT_ENTITY = 'فروشگاه سایت';
 const HOLDER_MAX = 100;
 const BANK_MAX = 60;
 const API_KEY_BYTES = 32;
@@ -40,7 +39,7 @@ async function readStored(executor: DbExecutor, keys: readonly string[]): Promis
 
 const GROUP_KEYS = [
   KEYS.cardNumber, KEYS.cardHolder, KEYS.bankName, KEYS.iban, KEYS.freeShippingThreshold, KEYS.reservationHours,
-  KEYS.retailPriceList, KEYS.wholesalePriceList, KEYS.lowStockThreshold, KEYS.stockDisplay, KEYS.warehouseCode, KEYS.version, KEYS.apiKeyHint, KEYS.apiKeyCreatedAt, KEYS.apiKeySha256,
+  KEYS.retailPriceList, KEYS.wholesalePriceList, KEYS.lowStockThreshold, KEYS.stockDisplay, KEYS.warehouseCode, KEYS.enabled, KEYS.version, KEYS.apiKeyHint, KEYS.apiKeyCreatedAt, KEYS.apiKeySha256,
 ] as const;
 
 function reservationHoursOf(stored: string | undefined): number {
@@ -67,6 +66,7 @@ function inputOf(stored: Stored): StorefrontSettingsInput {
     lowStockThreshold: lowStockThresholdOf(stored[KEYS.lowStockThreshold]),
     stockDisplay: isStockDisplay(stored[KEYS.stockDisplay]) ? stored[KEYS.stockDisplay] as StorefrontSettingsInput['stockDisplay'] : 'status',
     warehouseCode: stored[KEYS.warehouseCode] ?? '',
+    enabled: stored[KEYS.enabled] === '1',
     version: Number(stored[KEYS.version]) || 0,
   };
 }
@@ -136,7 +136,7 @@ function checkedInput(input: StorefrontSettingsInput, priceLists: string[], ware
   }
   return {
     cardNumber, cardHolder, bankName, iban, freeShippingThreshold, reservationHours: input.reservationHours, retailPriceList, wholesalePriceList,
-    lowStockThreshold: input.lowStockThreshold, stockDisplay: input.stockDisplay, warehouseCode,
+    lowStockThreshold: input.lowStockThreshold, stockDisplay: input.stockDisplay, warehouseCode, enabled: input.enabled === true,
   };
 }
 
@@ -167,13 +167,13 @@ export async function saveStorefrontSettings(req: Request, input: StorefrontSett
       const after = values[field];
       if (String(before[field]) === String(after)) continue;
       changes[field] = { before: before[field], after };
-      await writeValue(tx, KEYS[field], String(after));
+      await writeValue(tx, KEYS[field], typeof after === 'boolean' ? (after ? '1' : '0') : String(after));
     }
     if (Object.keys(changes).length === 0) return;
     await writeValue(tx, KEYS.version, String(current + 1));
     const { version: _v, ...beforeValues } = before;
     await logActivity({
-      req, tx, action: 'SETTING_CHANGE', entity: STOREFRONT_AUDIT_ENTITY, entityId: 'settings',
+      req, tx, action: 'SETTING_CHANGE', entity: 'فروشگاه سایت', entityId: 'settings',
       description: 'تنظیمات فروشگاه سایت ذخیره شد', details: { before: beforeValues, after: values, changes },
     });
   });
@@ -197,13 +197,19 @@ export async function rotateStorefrontApiKey(req: Request): Promise<{ apiKey: st
     await writeValue(tx, KEYS.apiKeyHint, hint);
     await writeValue(tx, KEYS.apiKeyCreatedAt, createdAt);
     await logActivity({
-      req, tx, action: 'SETTING_CHANGE', entity: STOREFRONT_AUDIT_ENTITY, entityId: 'api-key',
+      req, tx, action: 'SETTING_CHANGE', entity: 'فروشگاه سایت', entityId: 'api-key',
       description: row?.value ? 'کلید برنامه سایت عوض شد؛ کلید پیشین دیگر کار نمی‌کند' : 'کلید برنامه سایت ساخته شد',
       details: { after: { hint, createdAt } },
     });
   });
   invalidateSettingsCache();
   return { apiKey, hint, createdAt };
+}
+
+/** Whether the owner has turned the Storefront API on (`sf_enabled`, default off) */
+export async function isStorefrontEnabled(): Promise<boolean> {
+  const [row] = await orm.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, KEYS.enabled));
+  return String(row?.value ?? '') === '1';
 }
 
 /** Whether a presented key is the storefront app's current key (constant time; no stored key = never) */

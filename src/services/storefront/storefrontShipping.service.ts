@@ -12,7 +12,6 @@ import {
   rialAmountText, shippingCodeError,
 } from '../../lib/storefront/storefrontRules.js';
 import type { ShippingMethodInput, ShippingMethodRow, ShippingRateRow } from '../../lib/storefront/storefrontContracts.js';
-import { STOREFRONT_AUDIT_ENTITY } from './storefrontSettings.service.js';
 
 /**
  * v11 phase 8.1 (package 18): the delivery methods of the site and the rows of a weight and province priced method. A
@@ -150,7 +149,7 @@ export async function createShippingMethod(req: Request, input: ShippingMethodIn
     }).returning({ id: storefrontShippingMethods.id });
     await insertRates(tx, created.id, values.rates);
     await logActivity({
-      req, tx, action: 'CREATE', entity: STOREFRONT_AUDIT_ENTITY, entityId: `shipping-${created.id}`,
+      req, tx, action: 'CREATE', entity: 'فروشگاه سایت', entityId: `shipping-${created.id}`,
       description: `روش ارسال «${values.title}» ساخته شد`, details: { after: auditView(values) },
     });
     return created.id;
@@ -190,7 +189,7 @@ export async function updateShippingMethod(req: Request, id: number, input: Ship
     await insertRates(tx, id, values.rates);
     const { id: _id, version: _version, ...beforeValues } = before;
     await logActivity({
-      req, tx, action: 'UPDATE', entity: STOREFRONT_AUDIT_ENTITY, entityId: `shipping-${id}`,
+      req, tx, action: 'UPDATE', entity: 'فروشگاه سایت', entityId: `shipping-${id}`,
       description: `روش ارسال «${values.title}» ویرایش شد`, details: { before: auditView(beforeValues), after: auditView(values) },
     });
   });
@@ -205,7 +204,7 @@ export async function deleteShippingMethod(req: Request, id: number, version: nu
     await tx.update(storefrontShippingRates).set({ isDeleted: 1 })
       .where(and(eq(storefrontShippingRates.methodId, id), eq(storefrontShippingRates.isDeleted, 0)));
     await logActivity({
-      req, tx, action: 'DELETE', entity: STOREFRONT_AUDIT_ENTITY, entityId: `shipping-${id}`,
+      req, tx, action: 'DELETE', entity: 'فروشگاه سایت', entityId: `shipping-${id}`,
       description: `روش ارسال «${method.title}» حذف شد`, details: { before: { code: method.code, title: method.title, pricing: method.pricing } },
     });
   });

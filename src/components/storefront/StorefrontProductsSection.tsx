@@ -4,7 +4,7 @@ import { STOREFRONT_PRODUCTS_PAGE_SIZE, useStorefrontProductsQuery, type Storefr
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import type { StorefrontProductAdminRow } from '../../lib/storefront/storefrontContracts';
 import { PUBLISH_BLOCKER_MESSAGES } from '../../lib/storefront/storefrontRules';
-import { formatPersianNumber } from '../../utils/persianNumber';
+import { formatPersianCode, formatPersianNumber } from '../../utils/persianNumber';
 import { errorMessageOf } from '../../utils';
 import { StorefrontProductEditor } from './StorefrontProductEditor';
 
@@ -73,7 +73,7 @@ export function StorefrontProductsSection({ canManage }: { canManage: boolean })
                   <td className="p-2">
                     <p className="font-bold text-slate-800">{row.name}</p>
                     <p className="text-xs text-slate-500">
-                      <span dir="ltr">{row.code}</span>
+                      <span dir="ltr">{formatPersianCode(row.code)}</span>
                       {!row.hasCover && <span className="ms-2 inline-flex items-center gap-1 text-amber-700"><ImageOff className="w-3 h-3" />بی تصویر شاخص</span>}
                     </p>
                   </td>

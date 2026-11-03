@@ -9,7 +9,7 @@ import { readPricingStrategies } from '../../lib/items/pricingStrategies.js';
 
 /**
  * v11 phase 8.1 (docs/roadmap/V11_STOREFRONT_START_PLAN.md): the ERP base of the new site, on real Express routes and
- * PostgreSQL. The settings save under their version (a stale form is 409) and refuse a wrong card; the Storefront API
+ * PostgreSQL. The Storefront API is 404 until the site is turned on (default off). The settings save under their version (a stale form is 409) and refuse a wrong card; the Storefront API
  * answers only with the site app's key (none or a wrong one is 401); an item without a retail price cannot be published
  * and one address has one owner; the catalog answers only published items with a retail price, with the stock of the
  * chosen warehouse, the configured «تعداد کم» threshold and the count only when the settings show it; a shipping method
@@ -64,7 +64,7 @@ export async function runStorefrontBaseV11Tests(shouldRun: (id: string, ...extra
     const settings = {
       cardNumber: VALID_CARD, cardHolder: 'گالری پاپیتال', bankName: 'ملت', iban: VALID_IBAN, freeShippingThreshold: '۵٬۰۰۰٬۰۰۰',
       reservationHours: 24, retailPriceList: retailList, wholesalePriceList: wholesaleList, lowStockThreshold: 2, stockDisplay: 'count',
-      warehouseCode: warehouse.code, version,
+      warehouseCode: warehouse.code, enabled: false, version,
     };
     const badCard = await erp.put('/api/storefront/settings', { ...settings, cardNumber: '6037991234567894' });
     if (badCard.status !== 422 || badCard.body.code !== 'STOREFRONT_CARD_INVALID') wrong.push(`a wrong card: ${badCard.status} ${badCard.body.code}`);
@@ -77,11 +77,18 @@ export async function runStorefrontBaseV11Tests(shouldRun: (id: string, ...extra
 
     // 2) the key: none and a wrong one are 401; a new one opens the API
     const noKey = await request(app).get('/api/storefront/v1/settings');
-    if (noKey.status !== 401) wrong.push(`no key: ${noKey.status}, not 401`);
+    if (noKey.status !== 404) wrong.push(`no key while off: ${noKey.status}, not 404`);
     const made = await erp.post('/api/storefront/api-key');
     const apiKey = String(made.body.data?.apiKey ?? '');
     if (made.status !== 201 || !apiKey.startsWith('sf_')) throw new Error(`POST api-key: ${made.status}`);
     const site = (url: string, key = apiKey) => request(app).get(url).set('Authorization', `Bearer ${key}`);
+    // off by default: even the right key gets 404 until the owner turns the site on
+    const whileOff = await site('/api/storefront/v1/settings');
+    if (whileOff.status !== 404) wrong.push(`the API while off: ${whileOff.status}, not 404`);
+    const turnedOn = await erp.put('/api/storefront/settings', { ...settings, enabled: true, version: version + 1 });
+    if (turnedOn.status !== 200 || turnedOn.body.data.enabled !== true) wrong.push(`turning the site on: ${turnedOn.status}`);
+    const noKeyOn = await request(app).get('/api/storefront/v1/settings');
+    if (noKeyOn.status !== 401) wrong.push(`no key: ${noKeyOn.status}, not 401`);
     const wrongKey = await site('/api/storefront/v1/settings', `${apiKey}x`);
     if (wrongKey.status !== 401) wrong.push(`a wrong key: ${wrongKey.status}, not 401`);
     const view = await erp.get('/api/storefront/settings');
@@ -123,7 +130,7 @@ export async function runStorefrontBaseV11Tests(shouldRun: (id: string, ...extra
       if (card.retailPrice !== '12500000' || card.wholesalePrice !== '9000000') wrong.push(`catalog prices: ${card.retailPrice} / ${card.wholesalePrice}`);
       if (card.stock.status !== 'in_stock' || card.stock.quantity !== 100) wrong.push(`catalog stock: ${JSON.stringify(card.stock)}`);
     }
-    await erp.put('/api/storefront/settings', { ...settings, lowStockThreshold: 100, stockDisplay: 'status', version: version + 1 });
+    await erp.put('/api/storefront/settings', { ...settings, enabled: true, lowStockThreshold: 100, stockDisplay: 'status', version: version + 2 });
     const detail = await site(`/api/storefront/v1/products/${slug}`);
     if (detail.status !== 200 || detail.body.data.stock.status !== 'low' || detail.body.data.stock.quantity !== null) {
       wrong.push(`detail after threshold 100 and status display: ${detail.status} ${JSON.stringify(detail.body.data?.stock)}`);

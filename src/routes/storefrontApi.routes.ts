@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { validate } from '../middleware/validate.js';
 import { NotFoundError, UnauthorizedError } from '../errors/customErrors.js';
-import { isStorefrontApiKey } from '../services/storefront/storefrontSettings.service.js';
+import { isStorefrontApiKey, isStorefrontEnabled } from '../services/storefront/storefrontSettings.service.js';
 import {
   CATALOG_PAGE_MAX, CATALOG_SORTS, catalogFacets, catalogPage, productBySlug, publicSettings, storefrontMediaFile, type CatalogSort,
 } from '../services/storefront/storefrontCatalog.service.js';
@@ -15,7 +15,8 @@ import { STOREFRONT_SLUG_MAX } from '../lib/storefront/storefrontRules.js';
  * app's server calls it, with `Authorization: Bearer <key>` (the key made in the «فروشگاه سایت» tab; the database keeps
  * its SHA-256). No route here takes a session: these are in `PUBLIC_ROUTES` of the route access policy because the key,
  * not a user, is the guard. A missing or wrong key is the same 401; the rate limit is per address, and generous because
- * one app server makes every call. The answers name no cost, no other price list and no warehouse.
+ * one app server makes every call. While the owner has not turned the site on (`sf_enabled`, default off) every route is
+ * 404, key or not. The answers name no cost, no other price list, no warehouse, no customer and no accounting data.
  */
 const router = Router();
 export const STOREFRONT_API_REQUESTS_PER_MINUTE = 1200;
@@ -30,6 +31,8 @@ const limiter = rateLimit({
 });
 
 const requireStorefrontKey = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  // off by default (shared repository rule: a new storefront feature merges switched off): every route is the same 404
+  if (!(await isStorefrontEnabled())) throw new NotFoundError('پیدا نشد');
   const header = String(req.headers.authorization ?? '');
   const presented = header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
   if (!(await isStorefrontApiKey(presented))) throw new UnauthorizedError('کلید برنامه سایت پذیرفته نشد.');

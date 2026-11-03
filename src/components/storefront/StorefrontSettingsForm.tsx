@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { DecimalInput } from '../common/DecimalInput';
+import { RialEquivalent } from '../common/RialEquivalent';
 import { useSaveStorefrontSettingsMutation } from '../../hooks/queries/useStorefrontQueries';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import type { StorefrontSettingsInput, StorefrontSettingsView } from '../../lib/storefront/storefrontContracts';
@@ -24,7 +25,8 @@ const formOf = (view: StorefrontSettingsView): StorefrontSettingsInput => ({
   cardNumber: view.cardNumber, cardHolder: view.cardHolder, bankName: view.bankName, iban: view.iban,
   freeShippingThreshold: view.freeShippingThreshold, reservationHours: view.reservationHours,
   retailPriceList: view.retailPriceList, wholesalePriceList: view.wholesalePriceList,
-  lowStockThreshold: view.lowStockThreshold, stockDisplay: view.stockDisplay, warehouseCode: view.warehouseCode, version: view.version,
+  lowStockThreshold: view.lowStockThreshold, stockDisplay: view.stockDisplay, warehouseCode: view.warehouseCode, enabled: view.enabled,
+  version: view.version,
 });
 
 export function StorefrontSettingsForm({ view, canManage }: { view: StorefrontSettingsView; canManage: boolean }) {
@@ -49,6 +51,15 @@ export function StorefrontSettingsForm({ view, canManage }: { view: StorefrontSe
   return (
     <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); if (canManage) submit(); }}>
       <fieldset disabled={!canManage || save.isPending} className="space-y-5">
+        <section aria-label="روشن بودن سایت" className={`rounded-2xl border p-5 space-y-2 ${form.enabled ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-200 bg-white'}`}>
+          <label className="inline-flex items-center gap-2 text-sm font-black text-slate-800">
+            <input type="checkbox" checked={form.enabled} onChange={e => set('enabled', e.target.checked)} />
+            برنامهٔ سایت تازه به ERP دسترسی دارد
+          </label>
+          <p className={hint}>
+            تا وقتی خاموش است، برنامهٔ سایت هیچ داده‌ای از ERP نمی‌گیرد، حتی با کلید درست، و رفتار ERP هیچ تغییری نمی‌کند. فقط وقتی سایت تازه آمادهٔ آزمایش یا راه‌اندازی است روشنش کنید.
+          </p>
+        </section>
         <section aria-label="پرداخت کارت به کارت" className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
           <h3 className="text-sm font-black text-slate-800">پرداخت کارت به کارت</h3>
           <p className={hint}>این‌ها پس از ثبت سفارش به خریدار نشان داده می‌شوند. تا وقتی کارت یا شبا خالی است، سایت سفارش پرداختی نمی‌گیرد.</p>
@@ -80,6 +91,7 @@ export function StorefrontSettingsForm({ view, canManage }: { view: StorefrontSe
             <div>
               <label htmlFor={`${id}-free`} className={label}>سقف ارسال رایگان (ریال)</label>
               <DecimalInput id={`${id}-free`} className={field} value={form.freeShippingThreshold} onValueChange={v => set('freeShippingThreshold', v)} min={0} step={1} />
+              <RialEquivalent value={form.freeShippingThreshold} />
               <p className={hint}>
                 {form.freeShippingThreshold ? `خرید از ${rial.amount(form.freeShippingThreshold)} به بالا با روش‌هایی که «ارسال رایگان» دارند رایگان است.` : 'خالی یعنی ارسال رایگان خاموش است.'}
               </p>
@@ -105,12 +117,12 @@ export function StorefrontSettingsForm({ view, canManage }: { view: StorefrontSe
               <p className={hint}>کالایی که در این لیست قیمت ریالی ندارد روی سایت نمی‌آید.</p>
             </div>
             <div>
-              <label htmlFor={`${id}-wholesale`} className={label}>لیست قیمت عمده (همکاران)</label>
+              <label htmlFor={`${id}-wholesale`} className={label}>لیست قیمت عمده (خریداران عمده)</label>
               <select id={`${id}-wholesale`} className={field} value={form.wholesalePriceList} onChange={e => set('wholesalePriceList', e.target.value)}>
                 <option value="">انتخاب نشده</option>
                 {view.priceLists.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
-              <p className={hint}>فقط به حساب‌های همکار تأییدشده نشان داده می‌شود.</p>
+              <p className={hint}>فقط به خریداران عمدهٔ تأییدشده نشان داده می‌شود.</p>
             </div>
             <div>
               <label htmlFor={`${id}-warehouse`} className={label}>انبار فروشگاه سایت</label>

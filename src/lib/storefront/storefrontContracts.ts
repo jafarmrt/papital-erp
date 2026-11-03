@@ -22,6 +22,7 @@ export const STOREFRONT_SETTING_KEYS = {
   apiKeySha256: 'sf_api_key_sha256',
   apiKeyHint: 'sf_api_key_hint',
   apiKeyCreatedAt: 'sf_api_key_created_at',
+  enabled: 'sf_enabled',
 } as const;
 
 export interface StorefrontSettingsInput {
@@ -39,6 +40,8 @@ export interface StorefrontSettingsInput {
   stockDisplay: StockDisplay;
   /** the warehouse whose sellable stock the site sells; '' = the WooCommerce shop warehouse (start plan decision 5) */
   warehouseCode: string;
+  /** the Storefront API answers only while this is on (default off: nothing of the ERP changes until the owner turns it on) */
+  enabled: boolean;
   version: number;
 }
 

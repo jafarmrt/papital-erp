@@ -35,7 +35,7 @@ const settingsSchema = z.object({
     cardNumber: text(40), cardHolder: text(200), bankName: text(200), iban: text(60),
     freeShippingThreshold: amount, reservationHours: z.number().int().min(1).max(RESERVATION_HOURS_MAX),
     retailPriceList: text(200), wholesalePriceList: text(200),
-    lowStockThreshold: z.number().int().min(0).max(LOW_STOCK_THRESHOLD_MAX), stockDisplay: z.enum(STOCK_DISPLAYS), warehouseCode: text(100),
+    lowStockThreshold: z.number().int().min(0).max(LOW_STOCK_THRESHOLD_MAX), stockDisplay: z.enum(STOCK_DISPLAYS), warehouseCode: text(100), enabled: z.boolean(),
     version,
   }).strict(),
 });

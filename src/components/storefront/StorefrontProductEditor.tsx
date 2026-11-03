@@ -7,7 +7,7 @@ import type { StorefrontProductAdminRow, StorefrontProductInput } from '../../li
 import {
   PUBLISH_BLOCKER_MESSAGES, STOREFRONT_SEO_DESCRIPTION_MAX, STOREFRONT_SEO_TITLE_MAX, slugError,
 } from '../../lib/storefront/storefrontRules';
-import { formatPersianNumber } from '../../utils/persianNumber';
+import { formatPersianCode, formatPersianNumber } from '../../utils/persianNumber';
 import { errorMessageOf } from '../../utils';
 
 /**
@@ -41,7 +41,7 @@ export function StorefrontProductEditor({ row, onClose }: { row: StorefrontProdu
   return (
     <form aria-label={`انتشار ${row.name}`} className="rounded-2xl border border-violet-200 bg-violet-50/40 p-5 space-y-3" onSubmit={(e) => { e.preventDefault(); submit(); }}>
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-black text-slate-800">{row.name} <span dir="ltr" className="text-xs font-bold text-slate-500">{row.code}</span></h4>
+        <h4 className="text-sm font-black text-slate-800">{row.name} <span dir="ltr" className="text-xs font-bold text-slate-500">{formatPersianCode(row.code)}</span></h4>
         <button type="button" onClick={onClose} aria-label="بستن" className="rounded-lg p-1 text-slate-500 hover:bg-white"><X className="w-4 h-4" /></button>
       </div>
       {row.blocker && <p className="text-xs font-bold text-amber-700">{PUBLISH_BLOCKER_MESSAGES[row.blocker]}</p>}

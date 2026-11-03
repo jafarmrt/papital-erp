@@ -2,6 +2,7 @@ import { useId, useState } from 'react';
 import { Plus, Save, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { DecimalInput } from '../common/DecimalInput';
+import { RialEquivalent } from '../common/RialEquivalent';
 import { useSaveShippingMethodMutation } from '../../hooks/queries/useStorefrontQueries';
 import type { ShippingMethodInput, ShippingMethodRow, ShippingRateRow } from '../../lib/storefront/storefrontContracts';
 import { IRAN_PROVINCES, SHIPPING_PRICING, SHIPPING_PRICING_TITLES, type ShippingPricing } from '../../lib/storefront/storefrontRules';
@@ -66,6 +67,7 @@ export function ShippingMethodEditor({ method, onClose }: { method: ShippingMeth
           <div>
             <label htmlFor={`${id}-flat`} className={label}>نرخ ثابت (ریال)</label>
             <DecimalInput id={`${id}-flat`} className={field} value={form.flatRate} min={0} step={1} onValueChange={v => set('flatRate', v)} />
+            <RialEquivalent value={form.flatRate} />
           </div>
         )}
         <div>

@@ -3,6 +3,7 @@ import { orm } from '../../db/drizzle.js';
 import { items, mediaAssets, storefrontProducts } from '../../db/schema.js';
 import { NotFoundError } from '../../errors/customErrors.js';
 import { mediaFilePath } from '../../lib/media/mediaPaths.js';
+import { normalizeSearchText } from '../../lib/search/searchText.js';
 import { maxOrderQuantity, stockStatusOf } from '../../lib/storefront/storefrontRules.js';
 import type {
   StorefrontCatalogPage, StorefrontFacet, StorefrontImage, StorefrontProductCard, StorefrontProductDetail, StorefrontPublicSettings,
@@ -94,8 +95,8 @@ function sorted(list: OnSale[], sort: CatalogSort): OnSale[] {
   return list;
 }
 
-/** Lower-case with Arabic ي and ك read as Persian, for the search box */
-const folded = (text: string) => text.toLowerCase().replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/‌/g, ' ').trim();
+/** The search box's fold, the same as every list of the ERP (Arabic «ي/ك», digits, case) */
+const folded = (text: string) => normalizeSearchText(text);
 
 function stockOf(sellable: Map<number, number>, itemId: number, settings: StorefrontSettingsInput): StorefrontStock {
   const quantity = sellable.get(itemId) ?? 0;
