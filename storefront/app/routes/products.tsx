@@ -1,6 +1,6 @@
 import { Form, Link, useSubmit } from 'react-router';
 import type { Route } from './+types/products';
-import { catalog } from '../lib/api.server';
+import { catalog, tooLongForCatalog } from '../lib/api.server';
 import { CATALOG_PAGE_SIZE, CATALOG_SORTS, parsePage, parseSort } from '../lib/catalog';
 import { siteEnv } from '../lib/site.server';
 import { SORT_TITLES, categoryPath, collectionPath } from '../lib/brand';
@@ -19,8 +19,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const q = (url.searchParams.get('q') ?? '').trim().slice(0, 100);
   const sort = parseSort(url.searchParams.get('sort'));
   const page = parsePage(url.searchParams.get('page'));
+  if (tooLongForCatalog(collection, category)) throw new Response('پیدا نشد', { status: 404 });
   const result = await catalog({ page, collection, category, q, sort });
-  if (collection && result.total === 0) throw new Response('پیدا نشد', { status: 404 });
+  // a collection that holds nothing is not a page; a filter that empties a real collection is only an empty list
+  if (collection && result.total === 0 && !category && !q && page === 1) throw new Response('پیدا نشد', { status: 404 });
   return { result, collection, category, q, sort, page, siteUrl: siteEnv().siteUrl, path: url.pathname + url.search };
 }
 

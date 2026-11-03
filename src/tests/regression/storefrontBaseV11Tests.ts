@@ -1,8 +1,8 @@
 import request from 'supertest';
-import { and, asc, eq, inArray, like } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, like } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { appSettings, itemPrices, items, storefrontProducts, storefrontShippingMethods, warehouses } from '../../db/schema.js';
+import { activityLogs, appSettings, itemPrices, items, storefrontProducts, storefrontShippingMethods, warehouses } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 import { invalidateSettingsCache } from '../../lib/memoryCache.js';
 import { readPricingStrategies } from '../../lib/items/pricingStrategies.js';
@@ -171,6 +171,22 @@ export async function runStorefrontBaseV11Tests(shouldRun: (id: string, ...extra
     if (brandPub.status !== 200 || brandPub.body.data.logo !== tinyPng || Object.keys(brandPub.body.data).sort().join(',') !== 'favicon,logo') {
       wrong.push(`site brand: ${brandPub.status} ${Object.keys(brandPub.body.data ?? {}).join(',')}`);
     }
+    // the audit row names the image by its type, size and hash, never its bytes
+    const [brandAudit] = await orm.select({ details: activityLogs.details }).from(activityLogs)
+      .where(eq(activityLogs.entityId, 'brand-logo')).orderBy(desc(activityLogs.id)).limit(1);
+    const auditText = JSON.stringify(brandAudit?.details ?? null);
+    if (!brandAudit || auditText.includes('iVBORw0KGgo') || !auditText.includes('sha256')) wrong.push(`the logo audit row: ${auditText.slice(0, 120)}`);
+    // a bitmap over the size limit and a body over the request cap are refused on the server too
+    const PNG_HEAD = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const bigPng = `data:image/png;base64,${Buffer.concat([PNG_HEAD, Buffer.alloc(301 * 1024)]).toString('base64')}`;
+    const tooBig = await erp.put('/api/storefront/brand/logo', { image: bigPng, version: brandView.version + 1 });
+    if (tooBig.status !== 422) wrong.push(`a 301 KB logo: ${tooBig.status}, not 422`);
+    const overCap = await erp.put('/api/storefront/brand/logo', { image: `data:image/png;base64,${'A'.repeat(420_004)}`, version: brandView.version + 1 });
+    if (overCap.status !== 400) wrong.push(`a body over the cap: ${overCap.status}, not 400`);
+    // HTML bytes under an image type are refused (the declared type is not trusted)
+    const fakePng = `data:image/png;base64,${Buffer.from('<html><script>alert(1)</script></html>').toString('base64')}`;
+    const fake = await erp.put('/api/storefront/brand/logo', { image: fakePng, version: brandView.version + 1 });
+    if (fake.status !== 422) wrong.push(`HTML saved as a PNG: ${fake.status}, not 422`);
     await erp.put('/api/storefront/brand/logo', { image: '', version: brandView.version + 1 });
     const missing = await site('/api/storefront/v1/products/no-such-item');
     if (missing.status !== 404) wrong.push(`an unknown address: ${missing.status}, not 404`);
@@ -207,11 +223,13 @@ export async function runStorefrontBaseV11Tests(shouldRun: (id: string, ...extra
     const viewerRead = await viewer.get('/api/storefront/settings');
     const viewerWrite = await viewer.post('/api/storefront/api-key');
     if (viewerRead.status !== 200 || viewerWrite.status !== 403) wrong.push(`view only: read ${viewerRead.status}, key ${viewerWrite.status}`);
+    const viewerBrand = await viewer.put('/api/storefront/brand/logo', { image: '', version: viewerRead.body.data?.brand?.version ?? 0 });
+    if (viewerBrand.status !== 403) wrong.push(`view only: logo ${viewerBrand.status}, not 403`);
 
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'settings saved under their version (wrong card 422, stale 409); the API answered 401 without or with a wrong key and 200 with the new one; publishing without a retail price was 422 and a taken address 409; the catalog answered only the priced item with its two prices and 100 units, then «تعداد کم» without the count after the threshold and display changed; a table method saved two rows, refused a wrong province and a stale version, and was deleted; a view-only holder could not make a key',
+      details: 'settings saved under their version (wrong card 422, stale 409); the API answered 401 without or with a wrong key and 200 with the new one; publishing without a retail price was 422 and a taken address 409; the catalog answered only the priced item with its two prices and 100 units, then «تعداد کم» without the count after the threshold and display changed; a table method saved two rows, refused a wrong province and a stale version, and was deleted; a view-only holder could not make a key or change the logo; the logo refused an unsafe SVG, a fake or too large bitmap and a stale version, and its audit row kept only a fingerprint',
     }));
   } catch (err) {
     results.push(makeTestCase({

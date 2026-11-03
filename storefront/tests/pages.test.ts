@@ -70,6 +70,22 @@ describe('storefront pages', () => {
     expect((await page('/p/no-such-item')).status).toBe(404);
     expect((await page(`/collections/${encodeURIComponent('نیست')}`)).status).toBe(404);
     expect((await page('/no/such/page')).status).toBe(404);
+    // a name longer than the ERP takes is a 404 here, not the ERP's 400 shown as «not available»
+    expect((await page(`/p/${'a'.repeat(121)}`)).status).toBe(404);
+    expect((await page(`/collections/${'ب'.repeat(101)}`)).status).toBe(404);
+    expect((await page(`/products?category=${'ب'.repeat(101)}`)).status).toBe(404);
+  });
+
+  it('keeps a real collection a page when a filter empties it', async () => {
+    const { status, html } = await page(`/collections/${encodeURIComponent('نمونه‌الف')}?category=${encodeURIComponent('ست هدیه')}`);
+    expect(status).toBe(200);
+    expect(html).not.toContain('گردنبند کاشی نمونه</a>');
+  });
+
+  it('underlines only the open category in the header', async () => {
+    const { html } = await page(`/products?category=${encodeURIComponent('گوشواره')}`);
+    expect(html.match(/aria-current="page"/g)?.length).toBe(1);
+    expect(html).toMatch(/<a aria-current="page"[^>]*href="\/products\?category=[^"]+"|<a[^>]*href="\/products\?category=[^"]+"[^>]*aria-current="page"/);
   });
 
   it('never puts the API key or the ERP address in a page', async () => {

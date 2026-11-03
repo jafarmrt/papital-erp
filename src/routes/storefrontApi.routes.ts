@@ -8,7 +8,7 @@ import { isStorefrontApiKey, isStorefrontEnabled } from '../services/storefront/
 import {
   CATALOG_PAGE_MAX, CATALOG_SORTS, catalogFacets, catalogPage, productBySlug, publicSettings, storefrontMediaFile, type CatalogSort,
 } from '../services/storefront/storefrontCatalog.service.js';
-import { STOREFRONT_SLUG_MAX } from '../lib/storefront/storefrontRules.js';
+import { STOREFRONT_QUERY_TEXT_MAX, STOREFRONT_SLUG_MAX } from '../lib/storefront/storefrontRules.js';
 import { publicBrand } from '../services/storefront/storefrontBrand.service.js';
 
 /**
@@ -47,9 +47,9 @@ const catalogSchema = z.object({
   query: z.object({
     page: z.string().regex(/^[1-9]\d{0,5}$/).transform(Number).optional(),
     limit: z.string().regex(/^[1-9]\d{0,2}$/).transform(Number).optional(),
-    q: z.string().max(100).optional(),
-    collection: z.string().max(100).optional(),
-    category: z.string().max(100).optional(),
+    q: z.string().max(STOREFRONT_QUERY_TEXT_MAX).optional(),
+    collection: z.string().max(STOREFRONT_QUERY_TEXT_MAX).optional(),
+    category: z.string().max(STOREFRONT_QUERY_TEXT_MAX).optional(),
     sort: z.enum(CATALOG_SORTS).optional(),
   }).passthrough(),
 });

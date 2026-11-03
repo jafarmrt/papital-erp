@@ -18,7 +18,7 @@ const HINTS: Readonly<Record<BrandImageKind, string>> = {
   favicon: 'در زبانه مرورگر و میان‌برِ گوشی دیده می‌شود. تصویری مربع، دست‌کم ۱۸۰ در ۱۸۰ نقطه.',
 };
 
-const decodeText = (base64: string) => new TextDecoder().decode(Uint8Array.from(atob(base64), c => c.charCodeAt(0)));
+const decodeBytes = (base64: string) => Uint8Array.from(atob(base64), c => c.charCodeAt(0));
 
 function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -40,9 +40,14 @@ function BrandSlot({ kind, brand, canManage }: { kind: BrandImageKind; brand: St
   });
   const pick = async (file: File | undefined) => {
     if (!file) return;
+    if (file.size > BRAND_IMAGE_MAX_BYTES[kind]) {
+      toast.error(`${BRAND_IMAGE_TITLES[kind]} حداکثر ${formatPersianNumber(Math.round(BRAND_IMAGE_MAX_BYTES[kind] / 1024))} کیلوبایت است.`);
+      if (input.current) input.current.value = '';
+      return;
+    }
     try {
       const image = await readAsDataUrl(file);
-      const problem = brandImageError(image, kind, decodeText);
+      const problem = brandImageError(image, kind, decodeBytes);
       if (problem) toast.error(problem);
       else send(image);
     } catch (err) {

@@ -140,25 +140,49 @@ describe('storefront WhatsApp number (8.3)', () => {
 });
 
 describe('storefront logo and browser icon (8.3)', () => {
-  const decode = (b64: string) => Buffer.from(b64, 'base64').toString('utf8');
+  const decode = (b64: string): Uint8Array => Buffer.from(b64, 'base64');
   const svg = (text: string) => `data:image/svg+xml;base64,${Buffer.from(text).toString('base64')}`;
-  const png = (bytes: number) => `data:image/png;base64,${Buffer.alloc(bytes, 7).toString('base64')}`;
+  const PNG_HEAD = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const png = (bytes: number) => `data:image/png;base64,${Buffer.concat([PNG_HEAD, Buffer.alloc(bytes - PNG_HEAD.length, 7)]).toString('base64')}`;
 
-  it('takes no image, a small PNG, and a plain SVG', () => {
+  it('takes no image, a small PNG, WEBP and JPEG, and a plain SVG as drawing programs save it', () => {
     expect(brandImageError('', 'logo', decode)).toBeNull();
     expect(brandImageError(png(1000), 'favicon', decode)).toBeNull();
+    expect(brandImageError(`data:image/webp;base64,${Buffer.from('RIFF\0\0\0\0WEBPVP8 ').toString('base64')}`, 'logo', decode)).toBeNull();
+    expect(brandImageError(`data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16]).toString('base64')}`, 'logo', decode)).toBeNull();
     expect(brandImageError(svg('<svg xmlns="http://www.w3.org/2000/svg"><use href="#a"/><circle r="4"/></svg>'), 'logo', decode)).toBeNull();
+    const illustrator = '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">'
+      + '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><defs><style>.cls-1{fill:url(#g);}</style></defs>'
+      + '<image xlink:href="data:image/png;base64,iVBORw0KGgo="/><rect class="cls-1" style="fill:url(#g)"/><settings/></svg>';
+    expect(brandImageError(svg(illustrator), 'logo', decode)).toBeNull();
   });
 
-  it('refuses another type, a too large file and an SVG with active content or outside links', () => {
+  it('refuses another type, a too large file, and bitmap bytes that are not the declared type', () => {
     expect(brandImageError('data:text/html;base64,PGgxPg==', 'logo', decode)).not.toBeNull();
     expect(brandImageError('https://example.com/logo.png', 'logo', decode)).not.toBeNull();
     expect(brandImageError(png(101 * 1024), 'favicon', decode)).not.toBeNull();
     expect(brandImageError(png(101 * 1024), 'logo', decode)).toBeNull();
-    for (const bad of ['<svg><script>alert(1)</script></svg>', '<svg onload="x()"></svg>', '<svg><a href="javascript:x"/></svg>',
-      '<svg><image href="https://tracker.example/a.png"/></svg>', '<svg><foreignObject/></svg>']) {
-      expect(brandImageError(svg(bad), 'logo', decode)).not.toBeNull();
+    const html = Buffer.from('<html><script>alert(1)</script></html>').toString('base64');
+    for (const type of ['png', 'jpeg', 'webp']) expect(brandImageError(`data:image/${type};base64,${html}`, 'logo', decode)).not.toBeNull();
+  });
+
+  it('refuses an SVG with active content or outside links, however it is spelled', () => {
+    for (const bad of [
+      '<svg><script>alert(1)</script></svg>', '<svg onload="x()"></svg>', '<svg><a href="javascript:x"/></svg>',
+      '<svg><image href="https://tracker.example/a.png"/></svg>', '<svg><foreignObject/></svg>',
+      '<svg><s:script xmlns:s="http://www.w3.org/2000/svg">alert(1)</s:script></svg>',
+      '<svg><a><animate attributeName="href" values="javascript&#58;alert(1)"/></a></svg>',
+      '<svg><a><set attributeName="href" to="https://x.example"/></a></svg>',
+      '<svg><style>@import url(https://x.example/a.css);</style></svg>',
+      '<svg><rect style="fill:url(https://x.example/a.svg#p)"/></svg>',
+      '<svg><image xlink:href="https://x.example/a.png"/></svg>',
+      '<!DOCTYPE svg [<!ENTITY x "javascript">]><svg/>',
+      '<svg><a x:onclick="y()"/></svg>',
+    ]) {
+      expect(brandImageError(svg(bad), 'logo', decode), bad).not.toBeNull();
     }
+    const utf16 = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('<svg><script>alert(1)</script></svg>', 'utf16le')]);
+    expect(brandImageError(`data:image/svg+xml;base64,${utf16.toString('base64')}`, 'logo', decode)).not.toBeNull();
   });
 
   it('counts the decoded bytes of base64 without decoding', () => {

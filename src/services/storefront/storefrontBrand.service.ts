@@ -21,7 +21,7 @@ import {
  */
 const COMPANY_LOGO_KEY = 'company_logo';
 const KIND_KEYS: Readonly<Record<BrandImageKind, string>> = { logo: KEYS.logo, favicon: KEYS.favicon };
-const decodeText = (base64: string) => Buffer.from(base64, 'base64').toString('utf8');
+const decodeBytes = (base64: string): Uint8Array => Buffer.from(base64, 'base64');
 
 async function stored(executor: DbExecutor): Promise<Record<string, string>> {
   const rows = await executor.select().from(appSettings)
@@ -30,7 +30,7 @@ async function stored(executor: DbExecutor): Promise<Record<string, string>> {
 }
 
 /** The company logo, only when it is an image the site may show (an old file path or anything unsafe is left out) */
-const usableCompanyLogo = (value: string | undefined) => (value && brandImageError(value, 'logo', decodeText) === null ? value : '');
+const usableCompanyLogo = (value: string | undefined) => (value && brandImageError(value, 'logo', decodeBytes) === null ? value : '');
 
 export async function readStorefrontBrand(executor: DbExecutor): Promise<StorefrontBrandView> {
   const values = await stored(executor);
@@ -56,7 +56,7 @@ const fingerprint = (dataUrl: string) => {
 
 /** Saves (or with '' removes) one brand image */
 export async function saveStorefrontBrandImage(req: Request, kind: BrandImageKind, image: string, version: number): Promise<StorefrontBrandView> {
-  const problem = brandImageError(image, kind, decodeText);
+  const problem = brandImageError(image, kind, decodeBytes);
   if (problem) throw new ValidationError(problem, undefined, 'STOREFRONT_BRAND_IMAGE_INVALID');
   await orm.transaction(async (tx) => {
     await tx.insert(appSettings).values({ key: KEYS.brandVersion, value: '0' }).onConflictDoNothing({ target: appSettings.key });

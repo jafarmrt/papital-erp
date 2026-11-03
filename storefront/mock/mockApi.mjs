@@ -13,6 +13,9 @@ const key = process.env.MOCK_API_KEY ?? 'preview-key';
 const PAGE_MAX = 60;
 const SORTS = ['default', 'newest', 'price_asc', 'price_desc'];
 
+/** STOREFRONT_QUERY_TEXT_MAX and STOREFRONT_SLUG_MAX of src/lib/storefront/storefrontRules.ts */
+const TEXT_MAX = 100;
+const SLUG_MAX = 120;
 const { products } = JSON.parse(await readFile(path.join(dir, 'catalog.json'), 'utf8'));
 const settings = await readFile(path.join(dir, 'settings.json'), 'utf8').then(JSON.parse).catch(() => ({
   currency: 'IRR',
@@ -57,7 +60,9 @@ createServer(async (req, res) => {
     const sort = url.searchParams.get('sort') ?? 'default';
     const page = Number(url.searchParams.get('page') ?? 1);
     const limit = Math.min(PAGE_MAX, Number(url.searchParams.get('limit') ?? 24));
-    if (!SORTS.includes(sort) || !(page >= 1) || !(limit >= 1)) return send(res, 400, { error: 'درخواست نادرست' });
+    // the ERP's own limits (src/routes/storefrontApi.routes.ts): a longer text is a 400 there too
+    const tooLong = [url.searchParams.get('q'), collection, category].some(t => (t ?? '').length > TEXT_MAX);
+    if (tooLong || !SORTS.includes(sort) || !(page >= 1) || !(limit >= 1)) return send(res, 400, { error: 'درخواست نادرست' });
     let list = products.filter(p => (!collection || p.collections.includes(collection)) && (!category || p.category === category)
       && (!q || fold(`${p.name} ${p.sku} ${p.collections.join(' ')}`).includes(q)));
     if (sort === 'newest') list = [...list].sort((a, b) => b.itemId - a.itemId);
@@ -67,6 +72,7 @@ createServer(async (req, res) => {
   }
   const slug = /^\/products\/([^/]+)$/.exec(route);
   if (slug) {
+    if (decodeURIComponent(slug[1]).length > SLUG_MAX) return send(res, 400, { error: 'درخواست نادرست' });
     const found = products.find(p => p.slug === decodeURIComponent(slug[1]));
     return found ? send(res, 200, { data: detail(found) }) : send(res, 404, { error: 'محصول پیدا نشد.' });
   }

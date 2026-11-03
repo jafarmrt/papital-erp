@@ -14,9 +14,10 @@ import { useRootData } from '../root';
 export async function loader({ params }: Route.LoaderArgs) {
   const item = await productBySlug(params.slug);
   if (!item) throw new Response('پیدا نشد', { status: 404 });
+  // the same collection, else the same category; an item with neither shows no «related» row
   const sameCollection = item.collections[0]
     ? await catalog({ collection: item.collections[0], limit: 9 })
-    : await catalog({ category: item.category, limit: 9 });
+    : item.category ? await catalog({ category: item.category, limit: 9 }) : { data: [] };
   return {
     item,
     related: sameCollection.data.filter(p => p.slug !== item.slug).slice(0, 8),
@@ -101,7 +102,8 @@ export default function ProductPage({ loaderData }: Route.ComponentProps) {
             <div className="mt-6 space-y-3">
               {root?.whatsapp ? (
                 <a
-                  href={whatsappLink(root.whatsapp, orderText)}
+                  // out of stock: no address, so neither a tap nor the keyboard opens the chat
+                  href={out ? undefined : whatsappLink(root.whatsapp, orderText)}
                   rel="noopener"
                   aria-disabled={out || undefined}
                   className={`flex min-h-13 w-full items-center justify-center gap-2 rounded-control px-6 text-lg font-bold transition-colors duration-(--motion) ${out ? 'pointer-events-none bg-muted text-muted-foreground' : 'bg-brand text-brand-foreground hover:bg-brand/90'}`}

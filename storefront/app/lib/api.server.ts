@@ -2,6 +2,7 @@ import type {
   StorefrontCatalogPage, StorefrontFacet, StorefrontProductDetail, StorefrontPublicBrand, StorefrontPublicSettings,
 } from '@erp/storefront/storefrontContracts';
 import { siteEnv } from './site.server';
+import { STOREFRONT_QUERY_TEXT_MAX, STOREFRONT_SLUG_MAX } from '@erp/storefront/storefrontRules';
 import { CATALOG_PAGE_SIZE, type CatalogSort } from './catalog';
 
 /**
@@ -20,12 +21,21 @@ export class StorefrontApiError extends Error {
   }
 }
 
-const cache = new Map<string, { at: number; value: unknown }>();
+const cache = new Map<string, { at: number; value: unknown; status?: number }>();
 const CACHE_MAX = 500;
+/** An address the ERP does not know (a crawler walking random slugs) is remembered this long, so it costs one call */
+const NOT_FOUND_TTL_MS = 60_000;
+
+function remember(path: string, entry: { at: number; value: unknown; status?: number }) {
+  cache.delete(path);
+  if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value as string);
+  cache.set(path, entry);
+}
 
 async function get<T>(path: string, ttlMs: number): Promise<T> {
   const hit = cache.get(path);
-  if (hit && Date.now() - hit.at < ttlMs) return hit.value as T;
+  if (hit?.status === 404 && Date.now() - hit.at < NOT_FOUND_TTL_MS) throw new StorefrontApiError(404, path);
+  if (hit && hit.status === undefined && Date.now() - hit.at < ttlMs) return hit.value as T;
   const { apiUrl, apiKey } = siteEnv();
   let res: Response;
   try {
@@ -36,12 +46,10 @@ async function get<T>(path: string, ttlMs: number): Promise<T> {
   } catch {
     throw new StorefrontApiError(503, path);
   }
+  if (res.status === 404) remember(path, { at: Date.now(), value: null, status: 404 });
   if (!res.ok) throw new StorefrontApiError(res.status, path);
   const value = await res.json() as T;
-  if (ttlMs > 0) {
-    if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value as string);
-    cache.set(path, { at: Date.now(), value });
-  }
+  if (ttlMs > 0) remember(path, { at: Date.now(), value });
   return value;
 }
 
@@ -65,7 +73,11 @@ export function catalog(query: CatalogQuery): Promise<StorefrontCatalogPage> {
   return get<StorefrontCatalogPage>(`/products?${params}`, CATALOG_TTL_MS);
 }
 
+/** A name longer than the API takes cannot match anything: the page is a 404 (the API itself would answer 400) */
+export const tooLongForCatalog = (...texts: string[]) => texts.some(t => t.length > STOREFRONT_QUERY_TEXT_MAX);
+
 export async function product(slug: string): Promise<StorefrontProductDetail | null> {
+  if (!slug || slug.length > STOREFRONT_SLUG_MAX) return null;
   try {
     return (await get<{ data: StorefrontProductDetail }>(`/products/${encodeURIComponent(slug)}`, CATALOG_TTL_MS)).data;
   } catch (error) {
@@ -98,9 +110,30 @@ export async function brand(): Promise<StorefrontPublicBrand> {
 const MEDIA_FILE = /^[0-9a-f]{64}(-thumb)?\.webp$/;
 export const isMediaFile = (file: string) => MEDIA_FILE.test(file);
 
-/** An image of a product on the site, streamed through this server so the key never reaches the browser */
-export async function mediaFile(file: string): Promise<Response | null> {
-  if (!isMediaFile(file)) return null;
+/**
+ * Product images, kept in this server's memory once read: a name is the image's content hash, so a kept file never goes
+ * stale. Every visitor reaches the ERP from this one server, so without this a busy listing page (about 24 images) would
+ * spend the ERP's per-address budget quickly. The cache is bounded by bytes; the oldest image leaves first.
+ */
+const MEDIA_CACHE_BYTES = 96 * 1024 * 1024;
+const MEDIA_FILE_MAX_CACHED = 2 * 1024 * 1024;
+const mediaCache = new Map<string, Uint8Array<ArrayBuffer>>();
+const mediaMissing = new Map<string, number>();
+const mediaInFlight = new Map<string, Promise<Uint8Array<ArrayBuffer> | null>>();
+let mediaCacheBytes = 0;
+
+function keepMedia(file: string, bytes: Uint8Array<ArrayBuffer>) {
+  if (bytes.byteLength > MEDIA_FILE_MAX_CACHED) return;
+  mediaCache.set(file, bytes);
+  mediaCacheBytes += bytes.byteLength;
+  while (mediaCacheBytes > MEDIA_CACHE_BYTES) {
+    const oldest = mediaCache.keys().next().value as string;
+    mediaCacheBytes -= mediaCache.get(oldest)!.byteLength;
+    mediaCache.delete(oldest);
+  }
+}
+
+async function fetchMedia(file: string): Promise<Uint8Array<ArrayBuffer> | null> {
   const { apiUrl, apiKey } = siteEnv();
   let res: Response;
   try {
@@ -108,7 +141,34 @@ export async function mediaFile(file: string): Promise<Response | null> {
   } catch {
     throw new StorefrontApiError(503, '/media');
   }
-  if (res.status === 404) return null;
-  if (!res.ok || !res.body) throw new StorefrontApiError(res.status, '/media');
-  return res;
+  if (res.status === 404) {
+    if (mediaMissing.size >= CACHE_MAX) mediaMissing.delete(mediaMissing.keys().next().value as string);
+    mediaMissing.set(file, Date.now());
+    return null;
+  }
+  if (!res.ok) throw new StorefrontApiError(res.status, '/media');
+  const bytes = new Uint8Array<ArrayBuffer>(await res.arrayBuffer());
+  keepMedia(file, bytes);
+  return bytes;
+}
+
+/** A product image on the site, read through this server so the key never reaches the browser; null = no such image */
+export async function mediaFile(file: string): Promise<Uint8Array<ArrayBuffer> | null> {
+  if (!isMediaFile(file)) return null;
+  const kept = mediaCache.get(file);
+  if (kept) {
+    // used again: it moves to the young end
+    mediaCache.delete(file);
+    mediaCache.set(file, kept);
+    return kept;
+  }
+  const missingAt = mediaMissing.get(file);
+  if (missingAt !== undefined && Date.now() - missingAt < NOT_FOUND_TTL_MS) return null;
+  // many visitors asking for the same new image at once make one call
+  let pending = mediaInFlight.get(file);
+  if (!pending) {
+    pending = fetchMedia(file).finally(() => mediaInFlight.delete(file));
+    mediaInFlight.set(file, pending);
+  }
+  return pending;
 }

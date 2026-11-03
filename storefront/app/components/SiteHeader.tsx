@@ -1,4 +1,4 @@
-import { Form, Link, NavLink } from 'react-router';
+import { Form, Link, useLocation } from 'react-router';
 import { Menu, Search, X } from 'lucide-react';
 import type { StorefrontFacet } from '@erp/storefront/storefrontContracts';
 import { BRAND, categoryPath } from '../lib/brand';
@@ -8,6 +8,10 @@ import { BRAND, categoryPath } from '../lib/brand';
  */
 export function SiteHeader({ categories, logoUrl }: { categories: StorefrontFacet[]; logoUrl: string }) {
   const nav = [{ to: '/products', label: 'همهٔ محصولات' }, ...categories.map(c => ({ to: categoryPath(c.name), label: c.name }))];
+  // every link here is /products with or without ?category=, so the path alone cannot tell which one is open
+  const location = useLocation();
+  const category = location.pathname === '/products' ? new URLSearchParams(location.search).get('category') : null;
+  const activeTo = location.pathname !== '/products' ? '' : category ? categoryPath(category) : '/products';
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-chrome text-chrome-foreground">
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 lg:h-20 lg:px-8">
@@ -36,13 +40,13 @@ export function SiteHeader({ categories, logoUrl }: { categories: StorefrontFace
           <ul className="flex items-center gap-1">
             {nav.map(item => (
               <li key={item.to}>
-                <NavLink
+                <Link
                   to={item.to}
-                  end
-                  className={({ isActive }) => `flex min-h-11 items-center rounded-control px-3 font-medium transition-colors duration-(--motion) hover:bg-chrome-foreground/10 ${isActive ? 'underline decoration-gold decoration-2 underline-offset-8' : ''}`}
+                  aria-current={activeTo === item.to ? 'page' : undefined}
+                  className={`flex min-h-11 items-center rounded-control px-3 font-medium transition-colors duration-(--motion) hover:bg-chrome-foreground/10 ${activeTo === item.to ? 'underline decoration-gold decoration-2 underline-offset-8' : ''}`}
                 >
                   {item.label}
-                </NavLink>
+                </Link>
               </li>
             ))}
           </ul>

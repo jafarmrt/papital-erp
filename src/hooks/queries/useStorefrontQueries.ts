@@ -111,6 +111,10 @@ export function useSaveStorefrontBrandMutation() {
     mutationFn: async ({ kind, image, version }: { kind: BrandImageKind; image: string; version: number }) => ((await fetchJson(`/storefront/brand/${kind}`, {
       method: 'PUT', body: JSON.stringify({ image, version }),
     })) as { data: StorefrontBrandView }).data,
+    // the logo and the icon share one version: the new one goes in at once, so a second save right after is not stale
+    onSuccess: (brand) => {
+      queryClient.setQueryData<StorefrontSettingsView>(STOREFRONT_SETTINGS_KEY, view => (view ? { ...view, brand } : view));
+    },
     onSettled: () => { void queryClient.invalidateQueries({ queryKey: STOREFRONT_SETTINGS_KEY }); },
   });
 }

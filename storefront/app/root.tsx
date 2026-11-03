@@ -26,6 +26,8 @@ export async function loader() {
     /** '' = none; otherwise the address of the image, versioned by its content */
     logoUrl: images.logo ? `/brand/logo?v=${imageVersion(images.logo)}` : '',
     faviconUrl: images.favicon ? `/brand/favicon?v=${imageVersion(images.favicon)}` : '',
+    /** iOS takes only a bitmap as the home-screen icon */
+    faviconIsBitmap: Boolean(images.favicon) && !images.favicon.startsWith('data:image/svg+xml'),
   };
 }
 
@@ -45,7 +47,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {data?.faviconUrl ? (
           <>
             <link rel="icon" href={data.faviconUrl} />
-            <link rel="apple-touch-icon" href={data.faviconUrl} />
+            {data.faviconIsBitmap ? <link rel="apple-touch-icon" href={data.faviconUrl} /> : null}
           </>
         ) : <link rel="icon" href="/favicon.svg" type="image/svg+xml" />}
       </head>
