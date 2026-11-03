@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Links, Meta, Outlet, Scripts, ScrollRestoration, isRouteErrorResponse, useNavigation, useRouteLoaderData, type LinksFunction } from 'react-router';
 import type { Route } from './+types/root';
 import './app.css';
@@ -24,6 +25,7 @@ export async function loader() {
     siteUrl: env.siteUrl,
     previewNotice: env.previewNotice,
     indexable: env.indexable,
+    pwa: env.pwa,
     /** '' = none; otherwise the address of the image, versioned by its content */
     logoUrl: images.logo ? `/brand/logo?v=${imageVersion(images.logo)}` : '',
     faviconUrl: images.favicon ? `/brand/favicon?v=${imageVersion(images.favicon)}` : '',
@@ -52,6 +54,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {data.faviconIsBitmap ? <link rel="apple-touch-icon" href={data.faviconUrl} /> : null}
           </>
         ) : <link rel="icon" href="/favicon.svg" type="image/svg+xml" />}
+        {data?.pwa ? (
+          <>
+            <link rel="manifest" href="/manifest.webmanifest" />
+            {data.faviconIsBitmap ? null : <link rel="apple-touch-icon" href="/pwa/icon-192.png" />}
+            <meta name="mobile-web-app-capable" content="yes" />
+            <meta name="apple-mobile-web-app-title" content="پاپیتال" />
+          </>
+        ) : null}
       </head>
       <body>
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:start-4 focus:top-4 focus:z-50 focus:rounded-control focus:bg-card focus:px-4 focus:py-2">پرش به محتوا</a>
@@ -76,7 +86,20 @@ function NavigationProgress() {
   );
 }
 
+/**
+ * The installable site's worker: registered while `STOREFRONT_PWA=1`; once the switch is off, the next visit removes
+ * it from the phone, so nothing stays behind
+ */
+function useServiceWorker(enabled: boolean) {
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    if (enabled) navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+    else navigator.serviceWorker.getRegistrations().then(all => all.forEach(r => void r.unregister())).catch(() => undefined);
+  }, [enabled]);
+}
+
 export default function App() {
+  useServiceWorker(useRootData()?.pwa ?? false);
   return (
     <>
       <NavigationProgress />
