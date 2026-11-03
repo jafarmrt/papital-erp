@@ -53,7 +53,6 @@ interface OnSale {
   seoTitle: string;
   seoDescription: string;
   retailPrice: string;
-  wholesalePrice: string | null;
 }
 
 /** Every item the site offers now, in the shop's own order */
@@ -69,14 +68,13 @@ async function itemsOnSale(settings: StorefrontSettingsInput, slug?: string): Pr
   if (rows.length === 0) return [];
   const ids = rows.map(r => r.itemId);
   const retail = await pricesOf(orm, ids, settings.retailPriceList);
-  const wholesale = await pricesOf(orm, ids, settings.wholesalePriceList);
   const out: OnSale[] = [];
   for (const r of rows) {
     const retailPrice = retail.get(r.itemId);
     if (!retailPrice) continue;
     out.push({
       ...r, category: r.category ?? '', collections: r.collections ?? [], description: r.description ?? '', material: r.material ?? '',
-      size: r.size ?? '', color: r.color ?? '', weight: r.weight ?? null, retailPrice, wholesalePrice: wholesale.get(r.itemId) ?? null,
+      size: r.size ?? '', color: r.color ?? '', weight: r.weight ?? null, retailPrice,
     });
   }
   return out.sort((a, b) => (a.sortOrder - b.sortOrder) || (a.itemId - b.itemId));
@@ -99,15 +97,14 @@ function sorted(list: OnSale[], sort: CatalogSort): OnSale[] {
 const folded = (text: string) => normalizeSearchText(text);
 
 function stockOf(sellable: Map<number, number>, itemId: number, settings: StorefrontSettingsInput): StorefrontStock {
-  const quantity = sellable.get(itemId) ?? 0;
-  const maxQuantity = maxOrderQuantity(quantity);
-  return { status: stockStatusOf(quantity, settings.lowStockThreshold), maxQuantity, quantity: settings.stockDisplay === 'count' ? maxQuantity : null };
+  const units = sellable.get(itemId) ?? 0;
+  return { status: stockStatusOf(units, settings.lowStockThreshold), quantity: settings.stockDisplay === 'count' ? maxOrderQuantity(units) : null };
 }
 
 function cardOf(item: OnSale, stock: StorefrontStock, cover: StorefrontImage | null): StorefrontProductCard {
   return {
     slug: item.slug, sku: item.sku, name: item.name, category: item.category, collections: item.collections,
-    retailPrice: item.retailPrice, wholesalePrice: item.wholesalePrice, stock, cover,
+    retailPrice: item.retailPrice, stock, cover,
   };
 }
 
@@ -177,7 +174,7 @@ export async function publicSettings(): Promise<StorefrontPublicSettings> {
 
 const MEDIA_FILE = /^([0-9a-f]{64})(-thumb)?\.webp$/;
 
-/** The light (or thumbnail) WEBP of an image of an item on the site; any other file is the same 404 */
+/** The light (or thumbnail) WEBP of an image of an item on the site (published and priced); any other file is the same 404 */
 export async function storefrontMediaFile(file: string): Promise<string> {
   const match = MEDIA_FILE.exec(file);
   const notFound = new NotFoundError('پیدا نشد');
@@ -189,7 +186,9 @@ export async function storefrontMediaFile(file: string): Promise<string> {
     .innerJoin(items, eq(items.id, mediaAssets.itemId))
     .where(and(eq(mediaAssets.sha256, sha256), eq(mediaAssets.isDeleted, 0), eq(mediaAssets.kind, 'image'),
       eq(storefrontProducts.isPublished, 1), eq(items.isDeleted, 0), eq(items.type, 'product')));
-  const usable = rows.find(r => (thumb ? r.thumbBytes : r.lightBytes) !== null);
-  if (!usable) throw notFound;
+  const withFile = rows.filter(r => (thumb ? r.thumbBytes : r.lightBytes) !== null).map(r => Number(r.itemId));
+  if (withFile.length === 0) throw notFound;
+  const priced = await pricesOf(orm, withFile, (await storefrontSettingValues(orm)).retailPriceList);
+  if (!withFile.some(itemId => priced.has(itemId))) throw notFound;
   return mediaFilePath(sha256, thumb ? 'thumb' : 'light', 'webp');
 }

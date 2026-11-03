@@ -127,14 +127,24 @@ export async function runStorefrontBaseV11Tests(shouldRun: (id: string, ...extra
     if (catalog.status !== 200 || cards.length !== 1 || cards[0].slug !== slug) wrong.push(`catalog: ${catalog.status} ${JSON.stringify(cards.map((c: Body) => c.slug))}`);
     else {
       const card = cards[0];
-      if (card.retailPrice !== '12500000' || card.wholesalePrice !== '9000000') wrong.push(`catalog prices: ${card.retailPrice} / ${card.wholesalePrice}`);
+      if (card.retailPrice !== '12500000') wrong.push(`catalog price: ${card.retailPrice}`);
       if (card.stock.status !== 'in_stock' || card.stock.quantity !== 100) wrong.push(`catalog stock: ${JSON.stringify(card.stock)}`);
+      // the security review's contract: exactly these fields leave the ERP, so a new one (a cost, a wholesale price, a
+      // warehouse) fails here until it is reviewed
+      const keys = (value: Body) => Object.keys(value).sort().join(',');
+      if (keys(card) !== 'category,collections,cover,name,retailPrice,sku,slug,stock') wrong.push(`catalog card fields: ${keys(card)}`);
+      if (keys(card.stock) !== 'quantity,status') wrong.push(`stock fields: ${keys(card.stock)}`);
     }
     await erp.put('/api/storefront/settings', { ...settings, enabled: true, lowStockThreshold: 100, stockDisplay: 'status', version: version + 2 });
     const detail = await site(`/api/storefront/v1/products/${slug}`);
     if (detail.status !== 200 || detail.body.data.stock.status !== 'low' || detail.body.data.stock.quantity !== null) {
       wrong.push(`detail after threshold 100 and status display: ${detail.status} ${JSON.stringify(detail.body.data?.stock)}`);
     }
+    const detailKeys = Object.keys(detail.body.data ?? {}).sort().join(',');
+    const expectedDetail = 'category,collections,color,cover,description,designYear,images,material,name,retailPrice,seoDescription,seoTitle,size,sku,slug,stock,weightGrams';
+    if (detailKeys !== expectedDetail) wrong.push(`detail fields: ${detailKeys}`);
+    const publicKeys = Object.keys(pub.body.data ?? {}).sort().join(',');
+    if (publicKeys !== 'currency,freeShippingThreshold,payment,reservationHours,shippingMethods,stockDisplay') wrong.push(`site settings fields: ${publicKeys}`);
     const missing = await site('/api/storefront/v1/products/no-such-item');
     if (missing.status !== 404) wrong.push(`an unknown address: ${missing.status}, not 404`);
     const facets = await site('/api/storefront/v1/facets');

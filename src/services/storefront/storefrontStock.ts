@@ -17,6 +17,9 @@ export async function activeWarehouses(executor: DbExecutor): Promise<Array<{ co
     .where(eq(warehouses.isActive, 1)).orderBy(asc(warehouses.id));
 }
 
+/** The codes already reported, so a key holder's requests do not repeat the warning on every call */
+const warnedWarehouses = new Set<string>();
+
 /** The setting when it names an active warehouse, else the shop warehouse */
 export async function storefrontWarehouseCode(executor: DbExecutor, wanted: string): Promise<string> {
   const code = wanted.trim();
@@ -24,7 +27,10 @@ export async function storefrontWarehouseCode(executor: DbExecutor, wanted: stri
     const [row] = await executor.select({ code: warehouses.code }).from(warehouses)
       .where(and(eq(warehouses.code, code), eq(warehouses.isActive, 1)));
     if (row) return row.code;
-    logger.warn({ message: `[Storefront] warehouse "${code}" is inactive or missing; the shop warehouse was used.` });
+    if (!warnedWarehouses.has(code)) {
+      warnedWarehouses.add(code);
+      logger.warn({ message: `[Storefront] warehouse "${code}" is inactive or missing; the shop warehouse was used.` });
+    }
   }
   return resolveShopWarehouseCode(executor);
 }

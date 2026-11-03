@@ -128,8 +128,10 @@ export interface StorefrontImage {
 
 export interface StorefrontStock {
   status: StockStatus;
-  maxQuantity: number;
-  /** the units in stock, only when the settings show the count; null otherwise */
+  /**
+   * the whole units a buyer may order, only when the settings show the count; null otherwise, so the status display
+   * does not give the count away. The order step checks the stock again either way.
+   */
   quantity: number | null;
 }
 
@@ -139,9 +141,11 @@ export interface StorefrontProductCard {
   name: string;
   category: string;
   collections: string[];
+  /**
+   * the retail price only: the wholesale price is never on the public catalog; it comes with the approved wholesale
+   * buyer's sign-in in a later step (start plan, B2B)
+   */
   retailPrice: string;
-  /** null when the item has no rial price in the wholesale list; the app shows it only to an approved partner */
-  wholesalePrice: string | null;
   stock: StorefrontStock;
   cover: StorefrontImage | null;
 }

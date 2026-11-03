@@ -83,7 +83,7 @@ router.put('/settings', requirePermission(STOREFRONT_MANAGE_PERMISSION), validat
 }));
 
 // the new key is answered once; the form shows it to be copied into the site app's settings
-router.post('/api-key', requirePermission(STOREFRONT_MANAGE_PERMISSION), idempotency({ scope: 'storefront' }), validate(emptyBodySchema), asyncHandler(async (req: Request, res: Response) => {
+router.post('/api-key', requirePermission(STOREFRONT_MANAGE_PERMISSION), idempotency({ scope: 'storefront_key' }), validate(emptyBodySchema), asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json({ success: true, data: await rotateStorefrontApiKey(req) });
 }));
 
