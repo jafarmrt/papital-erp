@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
+import type { BrandImageKind } from '../../lib/storefront/storefrontRules';
 import type {
   ShippingMethodInput, ShippingMethodRow, StorefrontProductAdminPage, StorefrontProductAdminRow, StorefrontProductInput,
-  StorefrontSettingsInput, StorefrontSettingsView,
+  StorefrontBrandView, StorefrontSettingsInput, StorefrontSettingsView,
 } from '../../lib/storefront/storefrontContracts';
 
 /** v11 phase 8.1: the reads of the «فروشگاه سایت» settings tab; a write refreshes the part it changed */
@@ -100,5 +101,16 @@ export function useSaveStorefrontProductMutation() {
       method: 'PUT', body: JSON.stringify(input),
     })) as { data: StorefrontProductAdminRow }).data,
     onSettled: () => { void queryClient.invalidateQueries({ queryKey: STOREFRONT_PRODUCTS_KEY }); },
+  });
+}
+
+/** v11 phase 8.3: saves or removes the site's logo or browser icon */
+export function useSaveStorefrontBrandMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ kind, image, version }: { kind: BrandImageKind; image: string; version: number }) => ((await fetchJson(`/storefront/brand/${kind}`, {
+      method: 'PUT', body: JSON.stringify({ image, version }),
+    })) as { data: StorefrontBrandView }).data,
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: STOREFRONT_SETTINGS_KEY }); },
   });
 }

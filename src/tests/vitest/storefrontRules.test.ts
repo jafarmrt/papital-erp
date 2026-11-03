@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   cardNumberError, ibanError, isProvince, maxOrderQuantity, normalizeIban, rialAmountText, shippingCodeError, shippingQuote,
-  slugError, stockStatusOf, suggestedSlug, type ShippingMethodRule,
+  slugError, stockStatusOf, suggestedSlug, normalizeWhatsappNumber, whatsappNumberError, brandImageError, base64Bytes, type ShippingMethodRule,
 } from '../../lib/storefront/storefrontRules';
 import { sitePrice } from '../../services/storefront/storefrontItemData';
 
@@ -120,5 +120,48 @@ describe('shipping quote', () => {
   it('leaves Snapp and courier to the buyer and pickup free', () => {
     expect(shippingQuote({ pricing: 'on_delivery', flatRate: '0', isFreeShippingEligible: false, rates: [] }, cart('تهران', 1), '')).toEqual({ kind: 'on_delivery' });
     expect(shippingQuote({ pricing: 'free', flatRate: '0', isFreeShippingEligible: false, rates: [] }, cart('تهران', 1), '')).toEqual({ kind: 'cost', amount: '0', free: true });
+  });
+});
+
+describe('storefront WhatsApp number (8.3)', () => {
+  it('keeps a mobile in the international form wa.me needs, from any common spelling', () => {
+    for (const raw of ['09121234567', '۰۹۱۲ ۱۲۳ ۴۵۶۷', '+989121234567', '00989121234567', '989121234567']) {
+      expect(normalizeWhatsappNumber(raw)).toBe('989121234567');
+      expect(whatsappNumberError(raw)).toBeNull();
+    }
+  });
+
+  it('allows no number and refuses a landline or a short number', () => {
+    expect(normalizeWhatsappNumber('')).toBe('');
+    expect(whatsappNumberError('')).toBeNull();
+    expect(whatsappNumberError('02112345678')).not.toBeNull();
+    expect(whatsappNumberError('0912123')).not.toBeNull();
+  });
+});
+
+describe('storefront logo and browser icon (8.3)', () => {
+  const decode = (b64: string) => Buffer.from(b64, 'base64').toString('utf8');
+  const svg = (text: string) => `data:image/svg+xml;base64,${Buffer.from(text).toString('base64')}`;
+  const png = (bytes: number) => `data:image/png;base64,${Buffer.alloc(bytes, 7).toString('base64')}`;
+
+  it('takes no image, a small PNG, and a plain SVG', () => {
+    expect(brandImageError('', 'logo', decode)).toBeNull();
+    expect(brandImageError(png(1000), 'favicon', decode)).toBeNull();
+    expect(brandImageError(svg('<svg xmlns="http://www.w3.org/2000/svg"><use href="#a"/><circle r="4"/></svg>'), 'logo', decode)).toBeNull();
+  });
+
+  it('refuses another type, a too large file and an SVG with active content or outside links', () => {
+    expect(brandImageError('data:text/html;base64,PGgxPg==', 'logo', decode)).not.toBeNull();
+    expect(brandImageError('https://example.com/logo.png', 'logo', decode)).not.toBeNull();
+    expect(brandImageError(png(101 * 1024), 'favicon', decode)).not.toBeNull();
+    expect(brandImageError(png(101 * 1024), 'logo', decode)).toBeNull();
+    for (const bad of ['<svg><script>alert(1)</script></svg>', '<svg onload="x()"></svg>', '<svg><a href="javascript:x"/></svg>',
+      '<svg><image href="https://tracker.example/a.png"/></svg>', '<svg><foreignObject/></svg>']) {
+      expect(brandImageError(svg(bad), 'logo', decode)).not.toBeNull();
+    }
+  });
+
+  it('counts the decoded bytes of base64 without decoding', () => {
+    for (const n of [0, 1, 2, 3, 100, 1001]) expect(base64Bytes(Buffer.alloc(n).toString('base64'))).toBe(n);
   });
 });

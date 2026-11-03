@@ -28,7 +28,7 @@ export const PUBLIC_ROUTES = new Set([
   'GET /api/woocommerce/shop-image/:file',
   // v11 phase 8.1: the Storefront API takes no session; every route checks the site app's key (`requireStorefrontKey`,
   // a missing or wrong key is 401) and is limited per address
-  ...['settings', 'products', 'products/:slug', 'facets', 'media/:file'].map(path => `GET /api/storefront/v1/${path}`),
+  ...['settings', 'brand', 'products', 'products/:slug', 'facets', 'media/:file'].map(path => `GET /api/storefront/v1/${path}`),
 ]);
 
 /**

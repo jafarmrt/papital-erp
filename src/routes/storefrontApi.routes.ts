@@ -9,6 +9,7 @@ import {
   CATALOG_PAGE_MAX, CATALOG_SORTS, catalogFacets, catalogPage, productBySlug, publicSettings, storefrontMediaFile, type CatalogSort,
 } from '../services/storefront/storefrontCatalog.service.js';
 import { STOREFRONT_SLUG_MAX } from '../lib/storefront/storefrontRules.js';
+import { publicBrand } from '../services/storefront/storefrontBrand.service.js';
 
 /**
  * v11 phase 8.1 (package 18, start plan §3): the Storefront API, read only, `GET /api/storefront/v1/...`. Only the site
@@ -57,6 +58,11 @@ const mediaSchema = z.object({ params: z.object({ file: z.string().min(1).max(80
 
 router.get('/settings', asyncHandler(async (_req: Request, res: Response) => {
   res.json({ data: await publicSettings() });
+}));
+
+// v11 phase 8.3: the site's logo and browser icon (the logo falls back to the company logo of the general settings)
+router.get('/brand', asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ data: await publicBrand() });
 }));
 
 router.get('/products', validate(catalogSchema), asyncHandler(async (req: Request, res: Response) => {

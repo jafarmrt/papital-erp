@@ -1,0 +1,79 @@
+{
+ "products": [
+  {
+   "itemId": 1,
+   "slug": "tile-necklace-sample",
+   "sku": "SAMPLE-1",
+   "name": "گردنبند کاشی نمونه",
+   "category": "گردنبند",
+   "collections": [
+    "نمونه‌الف"
+   ],
+   "retailPrice": "14500000",
+   "stock": {
+    "status": "in_stock",
+    "quantity": null
+   },
+   "cover": null,
+   "description": "متن ساختگی برای آزمون.",
+   "material": "کاشی",
+   "size": "۳۰ × ۲۰ میلی‌متر",
+   "color": "آبی",
+   "weightGrams": 25,
+   "designYear": null,
+   "seoTitle": "",
+   "seoDescription": "",
+   "images": []
+  },
+  {
+   "itemId": 2,
+   "slug": "tile-earrings-sample",
+   "sku": "SAMPLE-2",
+   "name": "گوشوارهٔ کاشی نمونه",
+   "category": "گوشواره",
+   "collections": [
+    "نمونه‌الف"
+   ],
+   "retailPrice": "8900000",
+   "stock": {
+    "status": "low",
+    "quantity": null
+   },
+   "cover": null,
+   "description": "متن ساختگی برای آزمون.",
+   "material": "کاشی",
+   "size": "۳۰ × ۲۰ میلی‌متر",
+   "color": "آبی",
+   "weightGrams": 25,
+   "designYear": null,
+   "seoTitle": "",
+   "seoDescription": "",
+   "images": []
+  },
+  {
+   "itemId": 3,
+   "slug": "gift-set-sample",
+   "sku": "SAMPLE-3",
+   "name": "ست هدیهٔ نمونه",
+   "category": "ست هدیه",
+   "collections": [
+    "نمونه‌ب"
+   ],
+   "retailPrice": "23500000",
+   "stock": {
+    "status": "out",
+    "quantity": null
+   },
+   "cover": null,
+   "description": "متن ساختگی برای آزمون.",
+   "material": "کاشی",
+   "size": "۳۰ × ۲۰ میلی‌متر",
+   "color": "آبی",
+   "weightGrams": 25,
+   "designYear": null,
+   "seoTitle": "",
+   "seoDescription": "",
+   "images": []
+  }
+ ]
+}

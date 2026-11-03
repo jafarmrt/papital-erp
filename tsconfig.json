@@ -25,5 +25,6 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": false
-  }
+  },
+  "exclude": ["node_modules", "dist", "storefront"]
 }

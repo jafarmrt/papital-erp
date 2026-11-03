@@ -73,6 +73,24 @@ export function ibanError(raw: string): string | null {
   return remainder === 1 ? null : 'شماره شبا درست نیست؛ رقم‌ها را دوباره ببینید.';
 }
 
+/**
+ * The shop's WhatsApp number in the international form wa.me needs (98 and the 10 digits of a mobile): «09…», «+98…»,
+ * «0098…» and Persian digits are read; '' is allowed (no number)
+ */
+export function normalizeWhatsappNumber(raw: string): string {
+  const digits = digitsOnly(raw).replace(/^\+/, '');
+  if (!digits) return '';
+  if (/^09\d{9}$/.test(digits)) return `98${digits.slice(1)}`;
+  if (/^0098\d{10}$/.test(digits)) return digits.slice(2);
+  return digits;
+}
+
+export function whatsappNumberError(raw: string): string | null {
+  const number = normalizeWhatsappNumber(raw);
+  if (!number) return null;
+  return /^989\d{9}$/.test(number) ? null : 'شماره واتس‌اپ باید شماره همراه باشد، مانند ۰۹۱۲۳۴۵۶۷۸۹.';
+}
+
 export function normalizeIban(raw: string): string {
   const text = digitsOnly(raw).toUpperCase();
   if (!text) return '';
@@ -176,4 +194,36 @@ export function shippingQuote(method: ShippingMethodRule, cart: { province: stri
   }
   const reached = method.isFreeShippingEligible && freeThreshold !== '' && BigInt(cart.subtotal || '0') >= BigInt(freeThreshold);
   return reached ? { kind: 'cost', amount: '0', free: true } : { kind: 'cost', amount, free: amount === '0' };
+}
+
+/** v11 phase 8.3: the site's logo and browser icon, kept as data URLs in the settings (owner: changeable in the settings) */
+export const BRAND_IMAGE_KINDS = ['logo', 'favicon'] as const;
+export type BrandImageKind = typeof BRAND_IMAGE_KINDS[number];
+export const BRAND_IMAGE_TITLES: Readonly<Record<BrandImageKind, string>> = { logo: 'لوگوی سایت', favicon: 'آیکون مرورگر' };
+export const BRAND_IMAGE_MAX_BYTES: Readonly<Record<BrandImageKind, number>> = { logo: 300 * 1024, favicon: 100 * 1024 };
+const BRAND_IMAGE_TYPES = ['image/svg+xml', 'image/png', 'image/webp', 'image/jpeg'] as const;
+const DATA_URL = /^data:(image\/(?:svg\+xml|png|webp|jpeg));base64,([A-Za-z0-9+/]+={0,2})$/;
+/** what an SVG may not hold: scripts, event handlers, outside documents (it is shown as an image, this is defence in depth) */
+const SVG_UNSAFE = /<script|<foreignobject|\son[a-z]+\s*=|javascript:|<iframe|<embed|<object|xlink:href\s*=\s*["']\s*(?!#)|href\s*=\s*["']\s*(?!#|data:image\/)/i;
+
+export function parseBrandImage(dataUrl: string): { type: typeof BRAND_IMAGE_TYPES[number]; base64: string } | null {
+  const match = DATA_URL.exec(dataUrl);
+  return match ? { type: match[1] as typeof BRAND_IMAGE_TYPES[number], base64: match[2] } : null;
+}
+
+/** The decoded size of a base64 text, without decoding it */
+export const base64Bytes = (base64: string): number => Math.floor((base64.length * 3) / 4) - (base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0);
+
+/** '' (no image) is allowed; anything else must be a small SVG, PNG, WEBP or JPEG data URL, and an SVG without active content */
+export function brandImageError(dataUrl: string, kind: BrandImageKind, decodeText: (base64: string) => string): string | null {
+  if (dataUrl === '') return null;
+  const parsed = parseBrandImage(dataUrl);
+  if (!parsed) return 'فایل باید تصویر SVG، PNG، WEBP یا JPG باشد.';
+  if (base64Bytes(parsed.base64) > BRAND_IMAGE_MAX_BYTES[kind]) {
+    return `${BRAND_IMAGE_TITLES[kind]} حداکثر ${Math.round(BRAND_IMAGE_MAX_BYTES[kind] / 1024)} کیلوبایت است.`.replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+  }
+  if (parsed.type === 'image/svg+xml' && SVG_UNSAFE.test(decodeText(parsed.base64))) {
+    return 'این فایل SVG کد یا پیوند بیرونی دارد؛ آن را بدون اسکریپت دوباره ذخیره کنید یا PNG بفرستید.';
+  }
+  return null;
 }

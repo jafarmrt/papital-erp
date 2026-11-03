@@ -11,12 +11,13 @@ import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { ItemPricingService } from '../items/itemPricing.service.js';
 import {
   LOW_STOCK_THRESHOLD_DEFAULT, LOW_STOCK_THRESHOLD_MAX, RESERVATION_HOURS_DEFAULT, RESERVATION_HOURS_MAX, cardNumberError, digitsOnly,
-  ibanError, isStockDisplay, normalizeIban, rialAmountText,
+  ibanError, isStockDisplay, normalizeIban, normalizeWhatsappNumber, rialAmountText, whatsappNumberError,
 } from '../../lib/storefront/storefrontRules.js';
 import {
   STOREFRONT_SETTING_KEYS as KEYS, type StorefrontSettingsInput, type StorefrontSettingsView,
 } from '../../lib/storefront/storefrontContracts.js';
 import { activeWarehouses, storefrontWarehouseCode } from './storefrontStock.js';
+import { readStorefrontBrand } from './storefrontBrand.service.js';
 
 /**
  * v11 phase 8.1 (package 18): the storefront settings in `app_settings` (`sf_*`): the card and IBAN buyers pay to, the
@@ -39,7 +40,7 @@ async function readStored(executor: DbExecutor, keys: readonly string[]): Promis
 
 const GROUP_KEYS = [
   KEYS.cardNumber, KEYS.cardHolder, KEYS.bankName, KEYS.iban, KEYS.freeShippingThreshold, KEYS.reservationHours,
-  KEYS.retailPriceList, KEYS.wholesalePriceList, KEYS.lowStockThreshold, KEYS.stockDisplay, KEYS.warehouseCode, KEYS.enabled, KEYS.version, KEYS.apiKeyHint, KEYS.apiKeyCreatedAt, KEYS.apiKeySha256,
+  KEYS.retailPriceList, KEYS.wholesalePriceList, KEYS.lowStockThreshold, KEYS.stockDisplay, KEYS.warehouseCode, KEYS.whatsappNumber, KEYS.whatsappEnabled, KEYS.enabled, KEYS.version, KEYS.apiKeyHint, KEYS.apiKeyCreatedAt, KEYS.apiKeySha256,
 ] as const;
 
 function reservationHoursOf(stored: string | undefined): number {
@@ -66,6 +67,8 @@ function inputOf(stored: Stored): StorefrontSettingsInput {
     lowStockThreshold: lowStockThresholdOf(stored[KEYS.lowStockThreshold]),
     stockDisplay: isStockDisplay(stored[KEYS.stockDisplay]) ? stored[KEYS.stockDisplay] as StorefrontSettingsInput['stockDisplay'] : 'status',
     warehouseCode: stored[KEYS.warehouseCode] ?? '',
+    whatsappNumber: stored[KEYS.whatsappNumber] ?? '',
+    whatsappEnabled: stored[KEYS.whatsappEnabled] === '1',
     enabled: stored[KEYS.enabled] === '1',
     version: Number(stored[KEYS.version]) || 0,
   };
@@ -85,6 +88,7 @@ export async function readStorefrontSettings(executor: DbExecutor): Promise<Stor
       hint: stored[KEYS.apiKeyHint] ?? '',
       createdAt: stored[KEYS.apiKeyCreatedAt] || null,
     },
+    brand: await readStorefrontBrand(executor),
   };
 }
 
@@ -134,9 +138,16 @@ function checkedInput(input: StorefrontSettingsInput, priceLists: string[], ware
   if (warehouseCode && !warehouseCodes.includes(warehouseCode)) {
     throw new ValidationError(`انبار «${warehouseCode}» فعال نیست یا وجود ندارد.`, undefined, 'STOREFRONT_WAREHOUSE_INVALID');
   }
+  const waError = whatsappNumberError(input.whatsappNumber);
+  if (waError) throw new ValidationError(waError, undefined, 'STOREFRONT_WHATSAPP_INVALID');
+  const whatsappNumber = normalizeWhatsappNumber(input.whatsappNumber);
+  if (input.whatsappEnabled === true && !whatsappNumber) {
+    throw new ValidationError('برای روشن کردن دکمهٔ واتس‌اپ، شماره واتس‌اپ فروشگاه را بنویسید.', undefined, 'STOREFRONT_WHATSAPP_REQUIRED');
+  }
   return {
     cardNumber, cardHolder, bankName, iban, freeShippingThreshold, reservationHours: input.reservationHours, retailPriceList, wholesalePriceList,
-    lowStockThreshold: input.lowStockThreshold, stockDisplay: input.stockDisplay, warehouseCode, enabled: input.enabled === true,
+    lowStockThreshold: input.lowStockThreshold, stockDisplay: input.stockDisplay, warehouseCode,
+    whatsappNumber, whatsappEnabled: input.whatsappEnabled === true, enabled: input.enabled === true,
   };
 }
 

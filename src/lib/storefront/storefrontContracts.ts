@@ -18,11 +18,16 @@ export const STOREFRONT_SETTING_KEYS = {
   lowStockThreshold: 'sf_low_stock_threshold',
   stockDisplay: 'sf_stock_display',
   warehouseCode: 'sf_warehouse',
+  whatsappNumber: 'sf_whatsapp_number',
+  whatsappEnabled: 'sf_whatsapp_enabled',
   version: 'sf_settings_version',
   apiKeySha256: 'sf_api_key_sha256',
   apiKeyHint: 'sf_api_key_hint',
   apiKeyCreatedAt: 'sf_api_key_created_at',
   enabled: 'sf_enabled',
+  logo: 'sf_logo',
+  favicon: 'sf_favicon',
+  brandVersion: 'sf_brand_version',
 } as const;
 
 export interface StorefrontSettingsInput {
@@ -40,6 +45,10 @@ export interface StorefrontSettingsInput {
   stockDisplay: StockDisplay;
   /** the warehouse whose sellable stock the site sells; '' = the WooCommerce shop warehouse (start plan decision 5) */
   warehouseCode: string;
+  /** the shop's WhatsApp number, international digits (98…); '' = none */
+  whatsappNumber: string;
+  /** whether the site shows the «سفارش در واتس‌اپ» button and link (start plan 8.3, owner's answer 2) */
+  whatsappEnabled: boolean;
   /** the Storefront API answers only while this is on (default off: nothing of the ERP changes until the owner turns it on) */
   enabled: boolean;
   version: number;
@@ -53,6 +62,22 @@ export interface StorefrontSettingsView extends StorefrontSettingsInput {
   /** the warehouse the site sells from now (the setting, or the shop warehouse it falls back to) */
   effectiveWarehouseCode: string;
   apiKey: { configured: boolean; hint: string; createdAt: string | null };
+  brand: StorefrontBrandView;
+}
+
+/** v11 phase 8.3: the site's own logo and browser icon (data URLs, '' = none) */
+export interface StorefrontBrandView {
+  logo: string;
+  favicon: string;
+  /** true while the site has no logo of its own and shows the company logo of the general settings */
+  usesCompanyLogo: boolean;
+  version: number;
+}
+
+/** `GET /api/storefront/v1/brand`: what the site shows; the logo falls back to the company logo */
+export interface StorefrontPublicBrand {
+  logo: string;
+  favicon: string;
 }
 
 export interface ShippingRateRow {
@@ -180,5 +205,7 @@ export interface StorefrontPublicSettings {
   freeShippingThreshold: string;
   reservationHours: number;
   stockDisplay: StockDisplay;
+  /** the WhatsApp number the site links to; '' while the button is off or no number is set */
+  whatsapp: string;
   shippingMethods: Array<Omit<ShippingMethodInput, 'isActive' | 'sortOrder'>>;
 }

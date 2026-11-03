@@ -168,6 +168,7 @@ export async function publicSettings(): Promise<StorefrontPublicSettings> {
     freeShippingThreshold: settings.freeShippingThreshold,
     reservationHours: settings.reservationHours,
     stockDisplay: settings.stockDisplay,
+    whatsapp: settings.whatsappEnabled ? settings.whatsappNumber : '',
     shippingMethods: methods.map(({ id: _id, version: _version, isActive: _active, sortOrder: _sort, ...method }) => method),
   };
 }

@@ -64,7 +64,7 @@ export async function runStorefrontBaseV11Tests(shouldRun: (id: string, ...extra
     const settings = {
       cardNumber: VALID_CARD, cardHolder: 'گالری پاپیتال', bankName: 'ملت', iban: VALID_IBAN, freeShippingThreshold: '۵٬۰۰۰٬۰۰۰',
       reservationHours: 24, retailPriceList: retailList, wholesalePriceList: wholesaleList, lowStockThreshold: 2, stockDisplay: 'count',
-      warehouseCode: warehouse.code, enabled: false, version,
+      warehouseCode: warehouse.code, whatsappNumber: '', whatsappEnabled: false, enabled: false, version,
     };
     const badCard = await erp.put('/api/storefront/settings', { ...settings, cardNumber: '6037991234567894' });
     if (badCard.status !== 422 || badCard.body.code !== 'STOREFRONT_CARD_INVALID') wrong.push(`a wrong card: ${badCard.status} ${badCard.body.code}`);
@@ -144,7 +144,34 @@ export async function runStorefrontBaseV11Tests(shouldRun: (id: string, ...extra
     const expectedDetail = 'category,collections,color,cover,description,designYear,images,material,name,retailPrice,seoDescription,seoTitle,size,sku,slug,stock,weightGrams';
     if (detailKeys !== expectedDetail) wrong.push(`detail fields: ${detailKeys}`);
     const publicKeys = Object.keys(pub.body.data ?? {}).sort().join(',');
-    if (publicKeys !== 'currency,freeShippingThreshold,payment,reservationHours,shippingMethods,stockDisplay') wrong.push(`site settings fields: ${publicKeys}`);
+    if (publicKeys !== 'currency,freeShippingThreshold,payment,reservationHours,shippingMethods,stockDisplay,whatsapp') wrong.push(`site settings fields: ${publicKeys}`);
+    if (pub.body.data?.whatsapp !== '') wrong.push(`the WhatsApp number while its button is off: ${pub.body.data?.whatsapp}`);
+    // the WhatsApp button (8.3): on needs a number; a local mobile is kept in the wa.me form; off hides the number
+    const waNoNumber = await erp.put('/api/storefront/settings', { ...settings, enabled: true, whatsappEnabled: true, version: version + 3 });
+    if (waNoNumber.status !== 422 || waNoNumber.body.code !== 'STOREFRONT_WHATSAPP_REQUIRED') wrong.push(`WhatsApp on without a number: ${waNoNumber.status} ${waNoNumber.body.code}`);
+    const waBad = await erp.put('/api/storefront/settings', { ...settings, enabled: true, whatsappNumber: '02112345678', version: version + 3 });
+    if (waBad.status !== 422 || waBad.body.code !== 'STOREFRONT_WHATSAPP_INVALID') wrong.push(`a landline as WhatsApp: ${waBad.status} ${waBad.body.code}`);
+    const waOn = await erp.put('/api/storefront/settings', { ...settings, enabled: true, whatsappNumber: '۰۹۱۲۰۰۰۰۰۰۰', whatsappEnabled: true, version: version + 3 });
+    const waPub = await site('/api/storefront/v1/settings');
+    if (waOn.status !== 200 || waPub.body.data?.whatsapp !== '989120000000') wrong.push(`WhatsApp on: ${waOn.status} ${waPub.body.data?.whatsapp}`);
+    await erp.put('/api/storefront/settings', { ...settings, enabled: true, whatsappNumber: '09120000000', whatsappEnabled: false, version: version + 4 });
+    const waOff = await site('/api/storefront/v1/settings');
+    if (waOff.body.data?.whatsapp !== '') wrong.push(`WhatsApp off still shows the number: ${waOff.body.data?.whatsapp}`);
+    // the logo and browser icon (8.3): a safe image saved with its own version, an unsafe SVG refused, the site reads both
+    const brandView = (await erp.get('/api/storefront/settings')).body.data.brand;
+    const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    const evilSvg = `data:image/svg+xml;base64,${Buffer.from('<svg onload="alert(1)"></svg>').toString('base64')}`;
+    const badLogo = await erp.put('/api/storefront/brand/logo', { image: evilSvg, version: brandView.version });
+    if (badLogo.status !== 422 || badLogo.body.code !== 'STOREFRONT_BRAND_IMAGE_INVALID') wrong.push(`an SVG with a script: ${badLogo.status} ${badLogo.body.code}`);
+    const logoSaved = await erp.put('/api/storefront/brand/logo', { image: tinyPng, version: brandView.version });
+    if (logoSaved.status !== 200 || logoSaved.body.data.logo !== tinyPng) wrong.push(`saving the logo: ${logoSaved.status}`);
+    const staleLogo = await erp.put('/api/storefront/brand/favicon', { image: tinyPng, version: brandView.version });
+    if (staleLogo.status !== 409) wrong.push(`a stale brand save: ${staleLogo.status}, not 409`);
+    const brandPub = await site('/api/storefront/v1/brand');
+    if (brandPub.status !== 200 || brandPub.body.data.logo !== tinyPng || Object.keys(brandPub.body.data).sort().join(',') !== 'favicon,logo') {
+      wrong.push(`site brand: ${brandPub.status} ${Object.keys(brandPub.body.data ?? {}).join(',')}`);
+    }
+    await erp.put('/api/storefront/brand/logo', { image: '', version: brandView.version + 1 });
     const missing = await site('/api/storefront/v1/products/no-such-item');
     if (missing.status !== 404) wrong.push(`an unknown address: ${missing.status}, not 404`);
     const facets = await site('/api/storefront/v1/facets');
