@@ -48,6 +48,9 @@ export function packageRank(pkg: string): number {
   if (['1', '2', '16', 'G'].includes(pkg)) return 0;
   if (['3', '4', '5', '6'].includes(pkg)) return 1;
   if (pkg === '14') return 2;
+  // v11 phase 8.1: the storefront (18) sits above every domain: it reads items, prices, media and the shop's stock, and
+  // nothing imports it
+  if (pkg === '18') return 4;
   return 3;
 }
 

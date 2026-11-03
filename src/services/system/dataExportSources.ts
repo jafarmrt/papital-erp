@@ -12,6 +12,7 @@ import {
   workflowDefinitions, workflowDefinitionVersions, workflowStates, workflowTransitions, workflowInstances,
   workflowHistoryLogs, workflowTasks, workflowPendingApprovals, workflowDelegations,
   mediaSections, mediaAssets, projectManagers, stockReceiptConfirmations, workshopTaskReports,
+  storefrontProducts, storefrontShippingMethods, storefrontShippingRates,
 } from '../../db/schema.js';
 import { SENSITIVE_SETTING_PATTERN } from '../settings/systemSettings.service.js';
 
@@ -128,5 +129,8 @@ export const DATA_EXPORT_TABLE_SOURCES: Readonly<Record<string, TableSpecSource>
   media_assets: { table: mediaAssets, key: ['id'] },
   // Settings WITHOUT secrets (WooCommerce keys, webhook secrets, tokens)
   app_settings: { table: appSettings, key: ['key'], keep: row => !SENSITIVE_SETTING_PATTERN.test(String(row.key)) },
+  storefront_products: { table: storefrontProducts, key: ['id'] },
+  storefront_shipping_methods: { table: storefrontShippingMethods, key: ['id'] },
+  storefront_shipping_rates: { table: storefrontShippingRates, key: ['id'] },
 };
 

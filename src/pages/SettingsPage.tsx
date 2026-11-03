@@ -18,6 +18,7 @@ import { PayrollEidiRatesSection } from '../components/settings/PayrollEidiRates
 import { SystemOperationsTab, ClearDataModal } from '../components/settings/SystemOperationsTab';
 import { WooCommerceTab } from '../components/settings/WooCommerceTab';
 import { MessengerBotsTab } from '../components/settings/MessengerBotsTab';
+import { StorefrontTab } from '../components/settings/StorefrontTab';
 import { AccountingSettingsTab } from '../components/settings/AccountingSettingsTab';
 import { ChartOfAccountsSettingsTab } from '../components/settings/ChartOfAccountsSettingsTab';
 import { 
@@ -256,6 +257,10 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
         )}
         
         {activeTab === 'messenger' && <MessengerBotsTab />}
+
+        {activeTab === 'storefront' && (
+          <StorefrontTab canManage={isSystemAdmin || Boolean(userPermissions?.permissions?.includes('storefront.manage'))} />
+        )}
 
         {activeTab === 'woocommerce' && (
           <WooCommerceTab

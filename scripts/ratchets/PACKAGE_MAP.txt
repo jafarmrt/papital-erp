@@ -26,6 +26,15 @@ G  scripts/check-version-sync.ts
 
 # ───────── استثناهای دامنه‌ای درون پوشه‌های بسته‌های دیگر (پیش از قاعده‌های کلی) ─────────
 # ۴ خزانه درون پوشه حسابداری
+# 18 v11 phase 8 storefront (the new site on the ERP): an edge consumer that reads items, prices, media and the shop's
+# sellable stock; no other package imports it (packageRank 4)
+18 src/services/storefront/**
+18 src/routes/storefront.routes.ts
+18 src/routes/storefrontApi.routes.ts
+18 src/lib/storefront/**
+18 src/components/storefront/**
+18 src/components/settings/StorefrontTab.tsx
+18 src/hooks/queries/useStorefrontQueries.ts
 # 17 v11 history import (1405 replay from Excel): replays documents of several packages through their services
 17 src/services/historyImport/**
 17 src/routes/historyImport.routes.ts

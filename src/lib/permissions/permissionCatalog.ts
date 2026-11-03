@@ -220,6 +220,13 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     ]
   },
   {
+    category: 'فروشگاه سایت',
+    permissions: [
+      { key: 'storefront.view', title: 'مشاهده تنظیمات فروشگاه سایت', description: 'دیدن کالاهای منتشرشده روی سایت، روش‌ها و نرخ‌های ارسال، کارت و شبای دریافت پول و لیست‌های قیمت سایت' },
+      { key: 'storefront.manage', title: 'مدیریت فروشگاه سایت', description: 'انتشار و برداشتن کالا از سایت، نشانی و متن جست‌وجوی کالا، روش‌ها و نرخ‌های ارسال، کارت و شبا، سقف ارسال رایگان و ساخت کلید برنامه سایت', requires: ['storefront.view'] },
+    ]
+  },
+  {
     category: 'گزارش‌ها و سجل رویدادها',
     permissions: [
       { key: 'reports.view', title: 'مشاهده گزارش‌ها و آمار', description: 'دسترسی به نمودارها، گزارش تراکنش‌ها و پیشخوان' },

@@ -1,0 +1,118 @@
+import { Router, type Request, type Response } from 'express';
+import { z } from 'zod';
+import { authenticateToken } from '../middleware/auth.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
+import { requirePermission } from '../middleware/authorize.js';
+import { orm } from '../db/drizzle.js';
+import { idempotency } from '../middleware/idempotency.js';
+import { numericIdString, validate } from '../middleware/validate.js';
+import { LOW_STOCK_THRESHOLD_MAX, RESERVATION_HOURS_MAX, SHIPPING_PRICING, SHIPPING_RATES_MAX, STOCK_DISPLAYS } from '../lib/storefront/storefrontRules.js';
+import {
+  readStorefrontSettings, rotateStorefrontApiKey, saveStorefrontSettings,
+} from '../services/storefront/storefrontSettings.service.js';
+import {
+  createShippingMethod, deleteShippingMethod, listShippingMethods, updateShippingMethod,
+} from '../services/storefront/storefrontShipping.service.js';
+import { STOREFRONT_PAGE_MAX, listStorefrontProducts, saveStorefrontProduct } from '../services/storefront/storefrontProducts.service.js';
+
+/**
+ * v11 phase 8.1 (package 18): the ERP side of the storefront (`/api/storefront`), the «فروشگاه سایت» settings tab. `storefront.view` reads,
+ * `storefront.manage` writes; every write is checked again in its service (lengths, card and IBAN checks, price lists,
+ * the publish rule) and carries the version the form was opened with.
+ */
+const router = Router();
+export const STOREFRONT_VIEW_PERMISSION = 'storefront.view';
+export const STOREFRONT_MANAGE_PERMISSION = 'storefront.manage';
+
+const text = (max: number) => z.string().max(max);
+const amount = z.union([z.string().max(40), z.number()]).transform(v => String(v));
+const version = z.number().int().min(0).max(2_147_483_647);
+
+const emptyBodySchema = z.object({ body: z.object({}).strict().optional() });
+
+const settingsSchema = z.object({
+  body: z.object({
+    cardNumber: text(40), cardHolder: text(200), bankName: text(200), iban: text(60),
+    freeShippingThreshold: amount, reservationHours: z.number().int().min(1).max(RESERVATION_HOURS_MAX),
+    retailPriceList: text(200), wholesalePriceList: text(200),
+    lowStockThreshold: z.number().int().min(0).max(LOW_STOCK_THRESHOLD_MAX), stockDisplay: z.enum(STOCK_DISPLAYS), warehouseCode: text(100), enabled: z.boolean(),
+    version,
+  }).strict(),
+});
+
+const shippingBody = z.object({
+  code: text(80), title: text(200), description: text(400), pricing: z.enum(SHIPPING_PRICING), flatRate: amount,
+  isActive: z.boolean(), isFreeShippingEligible: z.boolean(), sortOrder: z.number().int(),
+  rates: z.array(z.object({
+    province: text(60), maxWeightGrams: z.number().int().nullable(), rate: amount,
+  }).strict()).max(SHIPPING_RATES_MAX + 1),
+});
+const shippingCreateSchema = z.object({ body: shippingBody.strict() });
+const shippingUpdateSchema = z.object({
+  params: z.object({ id: numericIdString }).passthrough(),
+  body: shippingBody.extend({ version: version.min(1) }).strict(),
+});
+const shippingDeleteSchema = z.object({
+  params: z.object({ id: numericIdString }).passthrough(),
+  query: z.object({ version: z.string().regex(/^[1-9]\d{0,9}$/, 'نسخه نامعتبر است').transform(Number) }).passthrough(),
+});
+
+const productListSchema = z.object({
+  query: z.object({
+    page: z.string().regex(/^[1-9]\d{0,5}$/).transform(Number).optional(),
+    limit: z.string().regex(/^[1-9]\d{0,2}$/).transform(Number).optional(),
+    q: text(100).optional(),
+    published: z.enum(['all', 'published', 'unpublished']).optional(),
+  }).passthrough(),
+});
+const productSaveSchema = z.object({
+  params: z.object({ itemId: numericIdString }).passthrough(),
+  body: z.object({
+    published: z.boolean(), slug: text(200), seoTitle: text(200), seoDescription: text(400), sortOrder: z.number().int(), version,
+  }).strict(),
+});
+
+router.use(authenticateToken);
+
+router.get('/settings', requirePermission(STOREFRONT_VIEW_PERMISSION), asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ data: await readStorefrontSettings(orm) });
+}));
+
+router.put('/settings', requirePermission(STOREFRONT_MANAGE_PERMISSION), validate(settingsSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await saveStorefrontSettings(req, req.body) });
+}));
+
+// the new key is answered once; the form shows it to be copied into the site app's settings
+router.post('/api-key', requirePermission(STOREFRONT_MANAGE_PERMISSION), idempotency({ scope: 'storefront_key' }), validate(emptyBodySchema), asyncHandler(async (req: Request, res: Response) => {
+  res.status(201).json({ success: true, data: await rotateStorefrontApiKey(req) });
+}));
+
+router.get('/shipping-methods', requirePermission(STOREFRONT_VIEW_PERMISSION), asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ data: await listShippingMethods(orm) });
+}));
+
+router.post('/shipping-methods', requirePermission(STOREFRONT_MANAGE_PERMISSION), idempotency({ scope: 'storefront' }), validate(shippingCreateSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.status(201).json({ success: true, data: await createShippingMethod(req, req.body) });
+}));
+
+router.put('/shipping-methods/:id', requirePermission(STOREFRONT_MANAGE_PERMISSION), validate(shippingUpdateSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await updateShippingMethod(req, Number(req.params.id), req.body) });
+}));
+
+router.delete('/shipping-methods/:id', requirePermission(STOREFRONT_MANAGE_PERMISSION), validate(shippingDeleteSchema), asyncHandler(async (req: Request, res: Response) => {
+  await deleteShippingMethod(req, Number(req.params.id), Number((req.query as { version?: number }).version));
+  res.json({ success: true });
+}));
+
+router.get('/products', requirePermission(STOREFRONT_VIEW_PERMISSION), validate(productListSchema), asyncHandler(async (req: Request, res: Response) => {
+  const query = req.query as { page?: number; limit?: number; q?: string; published?: 'all' | 'published' | 'unpublished' };
+  res.json(await listStorefrontProducts({
+    page: query.page ?? 1, limit: Math.min(query.limit ?? 50, STOREFRONT_PAGE_MAX), q: query.q ?? '', published: query.published ?? 'all',
+  }));
+}));
+
+router.put('/products/:itemId', requirePermission(STOREFRONT_MANAGE_PERMISSION), validate(productSaveSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await saveStorefrontProduct(req, Number(req.params.itemId), req.body) });
+}));
+
+export default router;

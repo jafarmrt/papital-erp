@@ -116,7 +116,9 @@ export const CRITICAL_AUDIT_ENTITIES = [
   'کتابخانه تصاویر',
   // v10.1.39 (N-01): گزارش پایان کار کارگاه (تأیید آن کارکرد کارمزدی می‌سازد) و پاسخ دریافت کالا هرگز پاک نمی‌شوند
   'گزارش کار کارگاه',
-  'تأیید دریافت کالای کارگاه'
+  'تأیید دریافت کالای کارگاه',
+  // v11 phase 8.1: the new site's card, IBAN, key, delivery methods and published items are never purged from the log
+  'فروشگاه سایت'
 ] as const;
 
 /**

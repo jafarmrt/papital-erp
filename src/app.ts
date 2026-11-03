@@ -46,6 +46,8 @@ import workshopRoutes from './routes/workshop.routes.js';
 import payrollStatutoryRoutes from './routes/payrollStatutory.routes.js';
 import pendingMaterialsRoutes from './routes/pendingMaterials.routes.js';
 import mediaRoutes from './routes/media.routes.js';
+import storefrontRoutes from './routes/storefront.routes.js';
+import storefrontApiRoutes from './routes/storefrontApi.routes.js';
 import accountingRoutes from './routes/accounting.routes.js';
 import historyImportRoutes from './routes/historyImport.routes.js';
 import workflowRoutes from './routes/workflow.routes.js';
@@ -360,6 +362,9 @@ export async function createApp(): Promise<express.Express> {
   }));
 
   app.use('/api/woocommerce', woocommerceRoutes);
+  // v11 phase 8.1: the Storefront API (the site app's key, no session) is mounted before the ERP side of the same prefix
+  app.use('/api/storefront/v1', storefrontApiRoutes);
+  app.use('/api/storefront', storefrontRoutes);
   app.use('/api', authRoutes);
   app.use('/api', usersRoutes);
   app.use('/api', sessionsRoutes);

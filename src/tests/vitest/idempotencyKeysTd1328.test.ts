@@ -64,6 +64,7 @@ describe('idempotency_keys_td_1328', () => {
     const { keptResponseBody, IDEMPOTENCY_REPLAY_BODY, IDEMPOTENCY_RESPONSE_MAX_BYTES } = await import('../../middleware/idempotency');
     expect(keptResponseBody('payroll', { amount: 5 })).toBe(IDEMPOTENCY_REPLAY_BODY);
     expect(keptResponseBody('piecework', { amount: 5 })).toBe(IDEMPOTENCY_REPLAY_BODY);
+    expect(keptResponseBody('storefront_key', { apiKey: 'sf_x' })).toBe(IDEMPOTENCY_REPLAY_BODY);
     expect(keptResponseBody('documents', { id: 3 })).toEqual({ id: 3 });
     expect(keptResponseBody('documents', { text: 'x'.repeat(IDEMPOTENCY_RESPONSE_MAX_BYTES + 1) })).toBe(IDEMPOTENCY_REPLAY_BODY);
   });
