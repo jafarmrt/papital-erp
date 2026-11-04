@@ -488,6 +488,115 @@ jobs:
           sudo journalctl -u papital-erp -n 200 --no-pager || true
           sudo tail -n 100 /opt/papital-erp/logs/*.log 2>/dev/null || true
 
+  storefront-install:
+    name: Storefront Install (Ubuntu 26.04, systemd and nginx)
+    runs-on: ubuntu-26.04
+    # v11 phase 8.6: the papitalgallery.com service is installed, put behind nginx, updated, rolled back and installed
+    # from a bundle exactly as the runbook does it on a server (deploy/storefront/), against the mock Storefront API
+    timeout-minutes: 30
+    env:
+      SITE: shop.example.test
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js 24.x
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Copy The Source To /opt/papital-erp
+        run: |
+          sudo install -d -o "$(id -un)" /opt/papital-erp
+          cp -a . /opt/papital-erp/
+
+      - name: Mock Storefront API
+        run: |
+          nohup node storefront/mock/mockApi.mjs > "$RUNNER_TEMP/mock-api.log" 2>&1 &
+          for _ in $(seq 1 20); do curl -fsS -o /dev/null -H 'Authorization: Bearer preview-key' http://127.0.0.1:3901/api/storefront/v1/settings && break; sleep 1; done
+          curl -fsS -o /dev/null -H 'Authorization: Bearer preview-key' http://127.0.0.1:3901/api/storefront/v1/settings
+
+      - name: Install (storefront.sh install)
+        run: |
+          sudo env "PATH=$PATH" STOREFRONT_API_URL=http://127.0.0.1:3901/api/storefront/v1 STOREFRONT_API_KEY=preview-key \
+            STOREFRONT_SITE_URL="http://$SITE" bash /opt/papital-erp/deploy/storefront/storefront.sh install
+          if sudo env "PATH=$PATH" bash /opt/papital-erp/deploy/storefront/storefront.sh install > "$RUNNER_TEMP/again.log" 2>&1; then
+            echo "::error::install ran again over a working install"; exit 1
+          fi
+          grep -q 'already installed' "$RUNNER_TEMP/again.log"
+
+      - name: The Service Runs Hardened On The Loopback
+        run: |
+          systemctl is-active papital-storefront
+          systemctl show -p DynamicUser --value papital-storefront | grep -qx yes
+          systemctl show -p ProtectSystem --value papital-storefront | grep -qx strict
+          systemctl show -p NoNewPrivileges --value papital-storefront | grep -qx yes
+          test "$(sudo stat -c '%a %U' /etc/papital-storefront/storefront.env)" = "600 root"
+          ss -ltnH 'sport = :3100'
+          if ss -ltnH 'sport = :3100' | grep -vq '127\.0\.0\.1:3100'; then echo "::error::the site listens on another address"; exit 1; fi
+          curl -fsS http://127.0.0.1:3100/healthz
+          curl -fsS -o /dev/null http://127.0.0.1:3100/
+          sudo bash /opt/papital-storefront/current/deploy/storefront.sh status | tee "$RUNNER_TEMP/status.log"
+          grep -q 'ERP link : 200' "$RUNNER_TEMP/status.log"
+
+      - name: nginx Site (http only on the runner)
+        run: |
+          sudo env "PATH=$PATH" DOMAIN="$SITE" WWW=1 TLS=none bash /opt/papital-storefront/current/deploy/storefront-nginx.sh
+          sudo nginx -t
+          r=(--resolve "$SITE:80:127.0.0.1" --resolve "www.$SITE:80:127.0.0.1" -s -o /dev/null)
+          same() { if [ "$1" != "$2" ]; then echo "::error::$3: got '$1', expected '$2'"; return 1; fi; }
+          # a reload reaches the workers a moment after systemctl returns
+          for _ in $(seq 1 20); do [ "$(curl "${r[@]}" -w '%{http_code}' "http://$SITE/healthz")" = 200 ] && break; sleep 1; done
+          same "$(curl "${r[@]}" -w '%{http_code}' "http://$SITE/")" 200 "home page through nginx"
+          same "$(curl "${r[@]}" -w '%{http_code} %{redirect_url}' "http://www.$SITE/products?q=x")" "301 http://$SITE/products?q=x" "www. redirect"
+          # a form from another site is refused, one from the site itself is not (Host reaches the app unchanged)
+          same "$(curl "${r[@]}" -w '%{http_code}' -X POST -H 'Origin: http://other.example' --data 'phone=09120000000&password=x' "http://$SITE/account/sign-in")" 400 "form from another site"
+          same "$(curl "${r[@]}" -w '%{http_code}' -X POST -H "Origin: http://$SITE" --data 'phone=09120000000&password=x' "http://$SITE/account/sign-in")" 200 "form from the site"
+          head -c 6000000 /dev/zero > "$RUNNER_TEMP/big.bin"
+          same "$(curl "${r[@]}" -w '%{http_code}' -X POST -H "Origin: http://$SITE" --data-binary @"$RUNNER_TEMP/big.bin" "http://$SITE/orders/x")" 413 "6 MB body"
+          asset="$(ls /opt/papital-storefront/current/build/client/assets | head -n 1)"
+          curl -s -o /dev/null --resolve "$SITE:80:127.0.0.1" "http://$SITE/assets/$asset"
+          curl -s -D - -o /dev/null --resolve "$SITE:80:127.0.0.1" "http://$SITE/assets/$asset" | grep -qi '^x-cache-status: HIT'
+
+      - name: Update, Roll Back And Install From A Bundle
+        run: |
+          sf() { sudo env "PATH=$PATH" bash /opt/papital-erp/deploy/storefront/storefront.sh "$@"; }
+          first="$(readlink -f /opt/papital-storefront/current)"
+          sf update
+          second="$(readlink -f /opt/papital-storefront/current)"
+          test "$first" != "$second"
+          curl -fsS http://127.0.0.1:3100/healthz
+          sf rollback
+          test "$(readlink -f /opt/papital-storefront/current)" = "$first"
+          sf package --with-node --out "$RUNNER_TEMP/bundle"
+          bundle="$(ls "$RUNNER_TEMP"/bundle/papital-storefront-*.tar.gz)"
+          sf update --bundle "$bundle"
+          test -x /opt/papital-storefront/current/bin/node
+          systemctl show -p ExecStart --value papital-storefront | grep -q '/opt/papital-storefront/current/bin/node'
+          test "$(curl -s -o /dev/null -w '%{http_code}' --resolve "$SITE:80:127.0.0.1" "http://$SITE/")" = 200
+          test "$(find /opt/papital-storefront/releases -mindepth 1 -maxdepth 1 -type d | wc -l)" -le 3
+
+      - name: A Release That Does Not Start Is Rolled Back By Itself
+        run: |
+          live="$(readlink -f /opt/papital-storefront/current)"
+          mkdir "$RUNNER_TEMP/broken"
+          tar -xzf "$(ls "$RUNNER_TEMP"/bundle/papital-storefront-*.tar.gz)" -C "$RUNNER_TEMP/broken"
+          echo 'process.exit(1);' > "$RUNNER_TEMP/broken/server.mjs"
+          tar -czf "$RUNNER_TEMP/broken.tar.gz" -C "$RUNNER_TEMP/broken" .
+          if sudo env "PATH=$PATH" HEALTH_TIMEOUT=10 bash /opt/papital-erp/deploy/storefront/storefront.sh update --bundle "$RUNNER_TEMP/broken.tar.gz"; then
+            echo "::error::a release that does not start was kept"; exit 1
+          fi
+          test "$(readlink -f /opt/papital-storefront/current)" = "$live"
+          curl -fsS http://127.0.0.1:3100/healthz
+
+      - name: Service Log On Failure
+        if: failure()
+        run: |
+          sudo journalctl -u papital-storefront -n 200 --no-pager || true
+          cat "$RUNNER_TEMP/mock-api.log" || true
+          sudo cat /etc/nginx/sites-available/papital-storefront.conf || true
+          sudo tail -n 50 /var/log/nginx/error.log || true
+
   # v10.0.192: the image is pushed only after every check job passed (the build check above no longer waits for them)
   docker-publish:
     name: Push Container Image
