@@ -33,11 +33,11 @@ CREATE TABLE IF NOT EXISTS storefront_campaigns (
   version integer NOT NULL DEFAULT 1,
   CONSTRAINT chk_storefront_campaigns_slug CHECK (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND length(slug) <= 60),
   CONSTRAINT chk_storefront_campaigns_texts CHECK (
-    length(title) BETWEEN 1 AND 120 AND length(summary) <= 300 AND length(body) <= 6000
+    length(title) >= 1 AND length(title) <= 120 AND length(summary) <= 300 AND length(body) <= 6000
   ),
   CONSTRAINT chk_storefront_campaigns_source CHECK (
-    (source = 'collection' AND length(collection) BETWEEN 1 AND 120 AND cardinality(item_ids) = 0)
-    OR (source = 'products' AND collection = '' AND cardinality(item_ids) BETWEEN 1 AND 48)
+    (source = 'collection' AND length(collection) >= 1 AND length(collection) <= 120 AND cardinality(item_ids) = 0)
+    OR (source = 'products' AND collection = '' AND cardinality(item_ids) >= 1 AND cardinality(item_ids) <= 48)
   ),
   CONSTRAINT chk_storefront_campaigns_discount_code CHECK (discount_code = '' OR discount_code ~ '^[A-Z0-9][A-Z0-9-]{2,29}$'),
   CONSTRAINT chk_storefront_campaigns_window CHECK (starts_at IS NULL OR ends_at IS NULL OR ends_at > starts_at),
