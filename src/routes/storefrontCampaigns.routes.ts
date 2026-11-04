@@ -16,11 +16,13 @@ import {
 
 /**
  * v11 phase 8.5b: the ERP side of «صفحه‌های ویژه» (`/api/storefront/campaigns`), a section of the «فروشگاه سایت» tab.
- * `storefront.view` reads the pages and the images a page may take; `storefront.manage` makes, edits and removes a page.
+ * `storefront.view` reads the pages, and with `media.view` the images a page may take; `storefront.manage` makes, edits and
+ * removes a page (choosing a new hero image needs `media.view` too).
  */
 const router = Router();
 const VIEW = 'storefront.view';
 const MANAGE = 'storefront.manage';
+const MEDIA_VIEW = 'media.view';
 
 const text = (max: number) => z.string().max(max);
 const version = z.number().int().min(0).max(2_147_483_647);
@@ -51,7 +53,8 @@ router.get('/', requirePermission(VIEW), asyncHandler(async (_req: Request, res:
   res.json({ data: await listCampaigns(orm) });
 }));
 
-router.get('/hero-images', requirePermission(VIEW), validate(heroSchema), asyncHandler(async (req: Request, res: Response) => {
+// the media library's own key too: the picker lists the library's images, their titles and item codes
+router.get('/hero-images', requirePermission(VIEW), requirePermission(MEDIA_VIEW), validate(heroSchema), asyncHandler(async (req: Request, res: Response) => {
   const q = req.query as { q?: string; page?: number; limit?: number };
   res.json(await campaignHeroOptions({ q: q.q ?? '', page: q.page ?? 1, limit: Math.min(q.limit ?? 24, HERO_OPTIONS_PAGE_MAX) }));
 }));

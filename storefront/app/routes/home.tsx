@@ -1,13 +1,14 @@
 import { Link } from 'react-router';
 import { ArrowLeft, Building2, Hand, Leaf, Truck } from 'lucide-react';
 import type { Route } from './+types/home';
-import { catalog, facets, seo } from '../lib/api.server';
+import { campaigns, catalog, facets, seo } from '../lib/api.server';
 import { siteEnv } from '../lib/site.server';
-import { BRAND, categoryPath, collectionPath, productPath } from '../lib/brand';
-import { faNumber, formatPrice } from '../lib/format';
+import { BRAND, campaignPath, categoryPath, collectionPath, productPath } from '../lib/brand';
+import { faDay, faNumber, formatPrice } from '../lib/format';
 import { pageMeta } from '../lib/meta';
 import { whatsappLink } from '../lib/whatsapp';
 import { ProductGrid, ProductImage } from '../components/ProductCard';
+import { CampaignHeroImage } from '../components/CampaignHero';
 import { useRootData } from '../root';
 import { homeLd } from '../lib/jsonLd';
 import { JsonLdScripts } from '../components/JsonLdScripts';
@@ -20,7 +21,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     const moved = await legacyRedirect(request);
     if (moved) throw moved;
   }
-  const [f, seoSettings] = await Promise.all([facets(), seo()]);
+  const [f, seoSettings, pages] = await Promise.all([facets(), seo(), campaigns()]);
   // the owner's order (sort order in «فروشگاه سایت») picks what the home page leads with
   const [featured, newest, ...categoryCovers] = await Promise.all([
     catalog({ limit: 9 }),
@@ -29,6 +30,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   ]);
   return {
     hero: featured.data[0] ?? null,
+    // phase 8.5b: a «صفحهٔ ویژه» that asks for the home page takes the top of it while it is on the site (the newest first)
+    banner: pages.find(p => p.homeBanner) ?? null,
     featured: featured.data.slice(1, 9),
     newest: newest.data,
     categories: f.categories.slice(0, 4).map((c, i) => ({ ...c, cover: categoryCovers[i]?.data[0]?.cover ?? null })),
@@ -73,11 +76,41 @@ function SectionTitle({ id, title, href, cta }: { id: string; title: string; hre
   );
 }
 
+/** phase 8.5b: the top of the home page while a «صفحهٔ ویژه» asks for it; the shop's own words come back when it ends */
+function CampaignBanner({ banner }: { banner: NonNullable<Route.ComponentProps['loaderData']['banner']> }) {
+  const until = faDay(banner.endsOn);
+  return (
+    <section className="border-b border-border bg-brand-soft" aria-labelledby="campaign-banner">
+      <div className="mx-auto grid max-w-7xl items-center gap-6 px-4 py-7 lg:grid-cols-2 lg:gap-16 lg:px-8 lg:py-16">
+        {banner.hero ? (
+          <Link to={campaignPath(banner.slug)} className="-mx-4 block overflow-hidden sm:mx-0 sm:rounded-surface sm:border sm:border-border lg:order-last" tabIndex={-1} aria-hidden>
+            <CampaignHeroImage image={banner.hero} eager sizes="(min-width: 1024px) 600px, 100vw" className="max-h-[40vh]" />
+          </Link>
+        ) : null}
+        <div>
+          {until ? <p className="text-sm font-medium text-brand lg:text-base">{`تا پایان ${until}`}</p> : null}
+          <h1 id="campaign-banner" className="mt-2 text-3xl font-extrabold leading-tight text-balance sm:text-5xl lg:mt-3 lg:text-6xl">{banner.title}</h1>
+          {banner.summary ? <p className="mt-3 max-w-lg leading-8 text-muted-foreground lg:mt-5 lg:text-lg lg:leading-9">{banner.summary}</p> : null}
+          <div className="mt-5 flex flex-wrap gap-3 lg:mt-8">
+            <Link to={campaignPath(banner.slug)} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-control bg-primary px-6 text-lg font-bold text-primary-foreground hover:bg-primary/90 sm:flex-none">
+              دیدن صفحه<ArrowLeft className="size-5" aria-hidden />
+            </Link>
+            <Link to="/products" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-control border border-brand/30 bg-card px-5 font-medium hover:border-brand">
+              همهٔ محصولات
+            </Link>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { hero, featured, newest, categories, collections, siteUrl } = loaderData;
+  const { hero, banner, featured, newest, categories, collections, siteUrl } = loaderData;
   const root = useRootData();
   return (
     <>
+      {banner ? <CampaignBanner banner={banner} /> : (
       <section className="border-b border-border bg-brand-soft">
         <div className="mx-auto grid max-w-7xl items-center gap-8 px-4 py-7 lg:grid-cols-2 lg:gap-16 lg:px-8 lg:py-16">
           <div>
@@ -105,6 +138,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           ) : null}
         </div>
       </section>
+      )}
 
       {categories.length ? (
         <section className="mx-auto max-w-7xl px-4 pt-10 lg:px-8 lg:pt-16" aria-labelledby="cats">

@@ -53,3 +53,12 @@ export function recentDays(count: number, now = Date.now()): Array<{ value: numb
 export function grouped4(value: string): string {
   return value.replace(/\s+/g, '').replace(/(.{4})(?=.)/g, '$1 ');
 }
+
+const LONG_DAY = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { timeZone: 'Asia/Tehran', month: 'long', day: 'numeric' });
+
+/** v11 phase 8.5b: a day of Tehran (YYYY-MM-DD) on the Persian calendar («۳۰ آذر»); '' for none */
+export function faDay(day: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return '';
+  const ms = Date.parse(`${day}T12:00:00+03:30`);
+  return Number.isFinite(ms) ? LONG_DAY.format(ms) : '';
+}

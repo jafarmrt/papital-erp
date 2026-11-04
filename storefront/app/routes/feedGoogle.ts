@@ -17,6 +17,8 @@ const xml = (text: string) => text
   // a character XML 1.0 cannot carry (a control character pasted into a description) is dropped
   // eslint-disable-next-line no-control-regex
   .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f￾￿]/g, '')
+  // and so is half of a pair (a broken emoji): one such character would make the whole file unreadable
+  .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 const tag = (name: string, value: string) => (value ? `<${name}>${xml(value)}</${name}>` : '');
@@ -28,7 +30,7 @@ export function feedItem(item: StorefrontFeedItem, siteUrl: string): string {
   return [
     '<item>',
     tag('g:id', item.sku),
-    tag('title', item.name.slice(0, TITLE_MAX)),
+    tag('title', Array.from(item.name).slice(0, TITLE_MAX).join('')),
     tag('description', description),
     tag('link', `${siteUrl}${productPath(item.slug)}`),
     tag('g:image_link', photos[0] ?? ''),

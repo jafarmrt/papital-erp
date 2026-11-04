@@ -1,8 +1,9 @@
 import type { Request } from 'express';
 import { and, count, desc, eq, gt, ilike, inArray, isNotNull, isNull, lte, ne, or, sql, type SQL } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { items, mediaAssets, mediaSections, storefrontCampaigns, storefrontDiscountCodes } from '../../db/schema.js';
-import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { items, mediaAssets, mediaSections, storefrontCampaigns, storefrontDiscountCodes, storefrontDiscountRedemptions } from '../../db/schema.js';
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { can } from '../../middleware/authorize.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { mediaFilePath } from '../../lib/media/mediaPaths.js';
@@ -135,11 +136,23 @@ async function refuseTooMany(tx: DbExecutor): Promise<void> {
   }
 }
 
+/**
+ * A new hero image is a file of the media library going onto the site, so whoever picks it must be allowed to see the
+ * library (the security review of 8.5b); keeping the image a page already has needs nothing more
+ */
+async function refuseHeroWithoutMedia(req: Request, heroAssetId: number | null, before: number | null): Promise<void> {
+  if (heroAssetId === null || heroAssetId === before) return;
+  if (!(await can(req.user as { role?: string } | undefined, 'media.view'))) {
+    throw new ForbiddenError('برای انتخاب تصویر سرصفحه، دسترسی «مشاهده کتابخانه تصاویر» لازم است.', { field: 'heroAssetId' }, 'STOREFRONT_CAMPAIGN_HERO_FORBIDDEN');
+  }
+}
+
 /** Two saves of pages never interleave (the slug check and the cap read the whole table) */
 const lockCampaigns = (tx: DbExecutor) => tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${'storefront_campaigns'}))`);
 
 export async function createCampaign(req: Request, input: CampaignInput): Promise<CampaignRow> {
   const values = checkedCampaign(input);
+  await refuseHeroWithoutMedia(req, values.heroAssetId, null);
   const id = await orm.transaction(async (tx) => {
     await lockCampaigns(tx);
     await refuseTooMany(tx);
@@ -171,6 +184,7 @@ export async function updateCampaign(req: Request, id: number, input: CampaignIn
   await orm.transaction(async (tx) => {
     await lockCampaigns(tx);
     const row = await lockedCampaign(tx, id, input.version);
+    await refuseHeroWithoutMedia(req, values.heroAssetId, row.heroAssetId);
     await refuseTakenSlug(tx, values.slug, id);
     await checkReferences(tx, values);
     await tx.update(storefrontCampaigns)
@@ -242,17 +256,18 @@ async function heroImages(rows: CampaignRecord[]): Promise<Map<number, Storefron
   const ids = [...new Set(rows.map(r => r.heroAssetId).filter((id): id is number => id !== null))];
   const out = new Map<number, StorefrontImage>();
   if (ids.length === 0) return out;
-  const assets = await orm.select({ id: mediaAssets.id, sha256: mediaAssets.sha256, width: mediaAssets.width, height: mediaAssets.height, title: mediaAssets.title })
+  const assets = await orm.select({ id: mediaAssets.id, sha256: mediaAssets.sha256, width: mediaAssets.width, height: mediaAssets.height })
     .from(mediaAssets)
     .where(and(inArray(mediaAssets.id, ids), eq(mediaAssets.isDeleted, 0), eq(mediaAssets.kind, 'image'), isNotNull(mediaAssets.lightBytes)));
-  for (const a of assets) out.set(a.id, { sha256: a.sha256, width: a.width, height: a.height, alt: a.title.trim(), isCover: false });
+  // the alt text is the page's title (summaryOf), never the library's own title, which no one wrote for the site
+  for (const a of assets) out.set(a.id, { sha256: a.sha256, width: a.width, height: a.height, alt: '', isCover: false });
   return out;
 }
 
 function summaryOf(row: CampaignRecord, heroes: Map<number, StorefrontImage>): StorefrontCampaignSummary {
   const hero = row.heroAssetId !== null ? heroes.get(row.heroAssetId) : undefined;
   return {
-    slug: row.slug, title: row.title, summary: row.summary, hero: hero ? { ...hero, alt: hero.alt || row.title } : null,
+    slug: row.slug, title: row.title, summary: row.summary, hero: hero ? { ...hero, alt: row.title } : null,
     homeBanner: row.homeBanner === 1, endsOn: tehranDay(row.endsAt, { ends: true }),
   };
 }
@@ -264,16 +279,25 @@ export async function publicCampaigns(): Promise<StorefrontCampaignSummary[]> {
   return rows.map(row => summaryOf(row, heroes));
 }
 
-/** A code is shown on a page only while an order could use it: live, on, open to retail buyers and inside its window */
+/**
+ * A code is shown on a page only while a guest could use it: live, on, open to retail buyers and not only to accounts,
+ * inside its window, and with uses left
+ */
 async function shownCode(code: string): Promise<string> {
   if (!code) return '';
-  const [open] = await orm.select({ id: storefrontDiscountCodes.id }).from(storefrontDiscountCodes).where(and(
+  const [open] = await orm.select({ id: storefrontDiscountCodes.id, usageLimit: storefrontDiscountCodes.usageLimit }).from(storefrontDiscountCodes).where(and(
     eq(storefrontDiscountCodes.code, code), eq(storefrontDiscountCodes.isDeleted, 0), eq(storefrontDiscountCodes.isActive, 1),
-    eq(storefrontDiscountCodes.forRetail, 1),
+    eq(storefrontDiscountCodes.forRetail, 1), eq(storefrontDiscountCodes.accountsOnly, 0),
     or(isNull(storefrontDiscountCodes.startsAt), lte(storefrontDiscountCodes.startsAt, sql`now()`)),
     or(isNull(storefrontDiscountCodes.endsAt), gt(storefrontDiscountCodes.endsAt, sql`now()`)),
   )).limit(1);
-  return open ? code : '';
+  if (!open) return '';
+  if (open.usageLimit > 0) {
+    const [{ n }] = await orm.select({ n: count() }).from(storefrontDiscountRedemptions)
+      .where(and(eq(storefrontDiscountRedemptions.codeId, open.id), isNull(storefrontDiscountRedemptions.releasedAt)));
+    if (Number(n) >= open.usageLimit) return '';
+  }
+  return code;
 }
 
 /** `GET /api/storefront/v1/campaigns/:slug`: a page on the site now, or the same 404 for any other */

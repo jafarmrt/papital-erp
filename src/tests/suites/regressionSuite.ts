@@ -11220,6 +11220,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v11 phase 8.5: search and statistics settings, and the old-address redirects of the WooCommerce site
   const { runStorefrontSeoV11Tests } = await import('../regression/storefrontSeoV11Tests.js');
   results.push(...await runStorefrontSeoV11Tests(shouldRun));
+  // v11 phase 8.5b: «صفحه‌های ویژه», the campaign pages of the site
+  const { runStorefrontCampaignsV11Tests } = await import('../regression/storefrontCampaignsV11Tests.js');
+  results.push(...await runStorefrontCampaignsV11Tests(shouldRun));
 
   return results;
 }

@@ -28,5 +28,7 @@ export default [
   route('orders/:number', 'routes/order.tsx'),
   // v11 phase 8.2c: the corporate gift form (a CRM lead in the ERP)
   route('corporate-gift', 'routes/corporateGift.tsx'),
+  // v11 phase 8.5b: «صفحه‌های ویژه», the campaign and occasion pages (Yalda first)
+  route('campaigns/:slug', 'routes/campaign.tsx'),
   route('*', 'routes/notFound.tsx'),
 ] satisfies RouteConfig;

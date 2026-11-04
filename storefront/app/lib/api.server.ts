@@ -2,6 +2,8 @@ import type {
   StorefrontCatalogPage, StorefrontFacet, StorefrontFeedItem, StorefrontProductDetail, StorefrontPublicBrand, StorefrontPublicSettings,
 } from '@erp/storefront/storefrontContracts';
 import type { StorefrontPublicRedirect, StorefrontPublicSeo } from '@erp/storefront/storefrontSeoContracts';
+import type { StorefrontCampaignPage, StorefrontCampaignSummary } from '@erp/storefront/storefrontCampaignContracts';
+import { CAMPAIGN_SLUG_MAX } from '@erp/storefront/storefrontCampaignRules';
 import { siteEnv } from './site.server';
 import { STOREFRONT_QUERY_TEXT_MAX, STOREFRONT_SLUG_MAX } from '@erp/storefront/storefrontRules';
 import { CATALOG_PAGE_SIZE, type CatalogSort } from './catalog';
@@ -22,21 +24,33 @@ export class StorefrontApiError extends Error {
   }
 }
 
-const cache = new Map<string, { at: number; value: unknown; status?: number }>();
+type Entry = { at: number; value: unknown; status?: number };
+const cache = new Map<string, Entry>();
 const CACHE_MAX = 500;
+/**
+ * The answers every page or a reader of the shop needs, by fixed addresses, are kept apart from the bounded cache, so a
+ * crawler walking random addresses (each a remembered 404 there) never pushes out the feed or the settings (the security
+ * review of 8.5b)
+ */
+const PINNED_PATHS = new Set(['/facets', '/settings', '/brand', '/seo', '/redirects', '/feed', '/campaigns']);
+const pinned = new Map<string, Entry>();
+const kept = (path: string) => (PINNED_PATHS.has(path) ? pinned : cache).get(path);
+/** Many visitors asking for the same address at once make one call */
+const inFlight = new Map<string, Promise<unknown>>();
 /** An address the ERP does not know (a crawler walking random slugs) is remembered this long, so it costs one call */
 const NOT_FOUND_TTL_MS = 60_000;
 
-function remember(path: string, entry: { at: number; value: unknown; status?: number }) {
+function remember(path: string, entry: Entry) {
+  if (PINNED_PATHS.has(path)) {
+    pinned.set(path, entry);
+    return;
+  }
   cache.delete(path);
   if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value as string);
   cache.set(path, entry);
 }
 
-async function get<T>(path: string, ttlMs: number): Promise<T> {
-  const hit = cache.get(path);
-  if (hit?.status === 404 && Date.now() - hit.at < NOT_FOUND_TTL_MS) throw new StorefrontApiError(404, path);
-  if (hit && hit.status === undefined && Date.now() - hit.at < ttlMs) return hit.value as T;
+async function fetchJson<T>(path: string, ttlMs: number): Promise<T> {
   const { apiUrl, apiKey } = siteEnv();
   let res: Response;
   try {
@@ -52,6 +66,18 @@ async function get<T>(path: string, ttlMs: number): Promise<T> {
   const value = await res.json() as T;
   if (ttlMs > 0) remember(path, { at: Date.now(), value });
   return value;
+}
+
+async function get<T>(path: string, ttlMs: number): Promise<T> {
+  const hit = kept(path);
+  if (hit?.status === 404 && Date.now() - hit.at < NOT_FOUND_TTL_MS) throw new StorefrontApiError(404, path);
+  if (hit && hit.status === undefined && Date.now() - hit.at < ttlMs) return hit.value as T;
+  let pending = inFlight.get(path) as Promise<T> | undefined;
+  if (!pending) {
+    pending = fetchJson<T>(path, ttlMs).finally(() => inFlight.delete(path));
+    inFlight.set(path, pending);
+  }
+  return pending;
 }
 
 export interface CatalogQuery {
@@ -141,6 +167,34 @@ const FEED_TTL_MS = 600_000;
 /** v11 phase 8.5b: every item on the site with its feed fields; read only by the feed, which is fetched a few times a day */
 export async function feed(): Promise<StorefrontFeedItem[]> {
   return (await get<{ data: StorefrontFeedItem[] }>('/feed', FEED_TTL_MS)).data;
+}
+
+const CAMPAIGN_TTL_MS = 60_000;
+const CAMPAIGN_SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+export const isCampaignSlug = (slug: string) => slug.length <= CAMPAIGN_SLUG_MAX && CAMPAIGN_SLUG.test(slug);
+
+/**
+ * v11 phase 8.5b: «صفحه‌های ویژه» on the site now (on, and inside their days). The home page, the sitemap and the
+ * not-found page read the list; any failure there is no pages, never a down shop.
+ */
+export async function campaigns(): Promise<StorefrontCampaignSummary[]> {
+  try {
+    return (await get<{ data: StorefrontCampaignSummary[] }>('/campaigns', CAMPAIGN_TTL_MS)).data;
+  } catch (error) {
+    if (error instanceof StorefrontApiError) return [];
+    throw error;
+  }
+}
+
+/** One campaign page on the site now; null when there is none by that address (or it is off, or outside its days) */
+export async function campaign(slug: string): Promise<StorefrontCampaignPage | null> {
+  if (!isCampaignSlug(slug)) return null;
+  try {
+    return (await get<{ data: StorefrontCampaignPage }>(`/campaigns/${slug}`, CAMPAIGN_TTL_MS)).data;
+  } catch (error) {
+    if (error instanceof StorefrontApiError && error.status === 404) return null;
+    throw error;
+  }
 }
 
 const REDIRECTS_TTL_MS = 300_000;

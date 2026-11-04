@@ -357,3 +357,40 @@ describe('the installable site (PWA)', () => {
     });
   });
 });
+
+describe('«صفحه‌های ویژه», the campaign pages (phase 8.5b)', () => {
+  it('renders a campaign page with its text as paragraphs, its code to copy and its products in the chosen order', async () => {
+    const { status, html } = await page('/campaigns/yalda');
+    expect(status).toBe(200);
+    expect(html).toContain('یلدا با پاپیتال</h1>');
+    expect(html).toContain('<link rel="canonical" href="https://shop.example/campaigns/yalda"/>');
+    expect(html).toContain('<p><span>یلدا شب کنار هم بودن است.');
+    // a single line break stays a line break inside its paragraph
+    expect(html).toMatch(/ارسال می‌شوند\.<\/span><span><br\/>اگر هدیه‌ای/);
+    expect(html).toContain('YALDA1405');
+    expect(html.indexOf('ست هدیهٔ نمونه')).toBeLessThan(html.indexOf('گردنبند کاشی نمونه'));
+    expect(html).not.toContain('گوشوارهٔ کاشی نمونه');
+    expect(html).toContain('"@type":"BreadcrumbList"');
+  });
+
+  it('is a 404 for a page not on the site now and for an address no page can have', async () => {
+    expect((await page('/campaigns/nowruz')).status).toBe(404);
+    expect((await page('/campaigns/Yalda')).status).toBe(404);
+    expect((await page(`/campaigns/${'a'.repeat(61)}`)).status).toBe(404);
+  });
+
+  it('takes the top of the home page while it asks for it, and is in the sitemap', async () => {
+    const home = (await page('/')).html;
+    expect(home).toContain('id="campaign-banner"');
+    expect(home).toContain('href="/campaigns/yalda"');
+    expect(home).not.toContain('این بار برای پوشیدن');
+    expect((await page('/sitemap.xml')).html).toContain('<loc>https://shop.example/campaigns/yalda</loc>');
+  });
+
+  it('sends the short address of a page on the site now to it, for a while, with the campaign fields', async () => {
+    const res = await handle(new Request('http://localhost/yalda?utm_source=instagram&x=1'));
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('/campaigns/yalda?utm_source=instagram');
+    expect((await page('/nowruz')).status).toBe(404);
+  });
+});
