@@ -11208,6 +11208,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runStorefrontBuyersV11Tests(shouldRun));
   const { runStorefrontAccountOrdersV11Tests } = await import('../regression/storefrontAccountOrdersV11Tests.js');
   results.push(...await runStorefrontAccountOrdersV11Tests(shouldRun));
+  // v11 phase 8.2c: the site's discount codes
+  const { runStorefrontDiscountsV11Tests } = await import('../regression/storefrontDiscountsV11Tests.js');
+  results.push(...await runStorefrontDiscountsV11Tests(shouldRun));
   // v11 phase 8.4a: the site's texts (SMS settings, order texts, the login code and phone proof)
   const { runStorefrontSmsV11Tests } = await import('../regression/storefrontSmsV11Tests.js');
   results.push(...await runStorefrontSmsV11Tests(shouldRun));

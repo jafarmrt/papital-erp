@@ -71,13 +71,18 @@ export async function priceCart(executor: DbExecutor, settings: StorefrontSettin
   return { lines, itemsAmount: total.toString(), weightGrams: weightKnown ? Math.ceil(weight) : null };
 }
 
-/** The active methods this cart can use for a province, each with what it adds to the order */
-export async function shippingOptions(executor: DbExecutor, settings: StorefrontSettingsInput, cart: PricedCart, province: string): Promise<ShippingOption[]> {
+/**
+ * The active methods this cart can use for a province, each with what it adds to the order. `subtotal` is what free
+ * shipping is reckoned on: the items after a discount code (v11 phase 8.2c), the items' amount when none.
+ */
+export async function shippingOptions(
+  executor: DbExecutor, settings: StorefrontSettingsInput, cart: PricedCart, province: string, subtotal: string = cart.itemsAmount,
+): Promise<ShippingOption[]> {
   const methods = await listShippingMethods(executor, { activeOnly: true });
   const options: ShippingOption[] = [];
   for (const method of methods) {
     if (method.pricing === 'table' && cart.weightGrams === null) continue;
-    const quote = shippingQuote(method, { province, weightGrams: cart.weightGrams ?? 0, subtotal: cart.itemsAmount }, settings.freeShippingThreshold);
+    const quote = shippingQuote(method, { province, weightGrams: cart.weightGrams ?? 0, subtotal }, settings.freeShippingThreshold);
     if (quote.kind === 'unavailable') continue;
     const base = { code: method.code, title: method.title, description: method.description };
     options.push(quote.kind === 'on_delivery'

@@ -105,6 +105,27 @@ describe('cart and checkout', () => {
     expect(kept).toMatch(/Path=\/orders/);
     expect(placed.cookies.some(c => c.startsWith('sf_cart=;'))).toBe(true);
   });
+
+  it('takes a discount code: its amount in the quote, a refused one under its field with the methods still shown, and the order', async () => {
+    const cart = cookieValue((await post('/cart', { intent: 'add', slug: 'tile-earrings-sample', quantity: '1' })).cookies, 'sf_cart');
+    const refused = await post('/checkout', { intent: 'quote', requestKey: 'rk-discount-check-0001', ...address, discountCode: 'NOPE' }, cart);
+    expect(refused.html).toContain('این کد تخفیف شناخته نیست');
+    expect(refused.html).toMatch(/id="field-discountCode"[^>]*aria-invalid="true"/);
+    expect(refused.html).toContain('پست پیشتاز');
+
+    const quoted = await post('/checkout', { intent: 'quote', requestKey: 'rk-discount-check-0001', ...address, discountCode: ' yalda ' }, cart);
+    expect(quoted.html).toContain('پس از تخفیف');
+    expect(quoted.html).toContain('YALDA');
+    expect((await lastPost()).body).toMatchObject({ discountCode: 'yalda' });
+
+    const placed = await post('/checkout', { intent: 'place', requestKey: 'rk-discount-check-0001', ...address, shippingMethod: 'post', discountCode: 'yalda' }, cart);
+    expect(placed.status).toBe(302);
+    expect((await lastPost()).body).toMatchObject({ discountCode: 'yalda', shippingMethod: 'post' });
+    const kept = cookieValue(placed.cookies, 'sf_orders');
+    const shown = await page(placed.location.split('?')[0], kept);
+    expect(shown.html).toContain('تخفیف');
+    expect(shown.html).toContain('YALDA');
+  });
 });
 
 describe('an order page', () => {
@@ -208,5 +229,20 @@ describe('«حساب من»', () => {
     expect(write.route).toBe(`/account/orders/${number}/receipts`);
     expect(write.orderKey).toBe('');
     expect(write.session).toMatch(/^bs_/);
+  });
+});
+
+describe('«هدیهٔ سازمانی»', () => {
+  it('sends the form with the budget in rial, says a refused field, and answers the request number', async () => {
+    const form = await page('/corporate-gift');
+    expect(form.status).toBe(200);
+    expect(form.html).toContain('نام سازمان یا شرکت');
+    const refused = await post('/corporate-gift', { organization: 'شرکت نمونه', contactName: 'رابط نمونه', phone: '12', quantity: '', budget: '', neededBy: '', note: '' });
+    expect(refused.html).toContain('شمارهٔ تماس را با پیش‌شماره بنویسید');
+    expect(refused.html).toMatch(/id="field-phone"[^>]*aria-invalid="true"/);
+    const sent = await post('/corporate-gift', { organization: 'شرکت نمونه', contactName: 'رابط نمونه', phone: '۰۲۱-۸۸۷۷۶۶۵۵', quantity: '۱۲۰', budget: '۲۰۰٬۰۰۰٬۰۰۰', neededBy: '۱۴۰۵/۱۰/۱۵', note: '' });
+    expect(sent.html).toContain('درخواست شما رسید');
+    expect((await lastPost()).body).toMatchObject({ organization: 'شرکت نمونه', phone: '۰۲۱-۸۸۷۷۶۶۵۵', quantity: 120, budget: '2000000000', neededBy: '۱۴۰۵/۱۰/۱۵' });
+    expect((await post('/corporate-gift', { organization: 'x' }, '', { 'Sec-Fetch-Site': 'cross-site' })).status).toBe(403);
   });
 });

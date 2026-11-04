@@ -107,6 +107,10 @@ export const storefrontOrders = pgTable('storefront_orders', {
   buyerGroupId: integer('buyer_group_id').references((): AnyPgColumn => storefrontBuyerGroups.id),
   paymentMethod: text('payment_method').notNull().default('card'),
   confirmedAt: timestamp('confirmed_at', { withTimezone: true, mode: 'string' }),
+  // v11 phase 8.2c (migration 0021): the discount code the order used, as typed then, and its amount over the lines
+  discountCodeId: integer('discount_code_id').references((): AnyPgColumn => storefrontDiscountCodes.id),
+  discountCode: text('discount_code').notNull().default(''),
+  discountAmount: moneyNumeric('discount_amount').notNull().default(sql`0`),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedBy: text('updated_by').notNull().default(''),
@@ -114,6 +118,7 @@ export const storefrontOrders = pgTable('storefront_orders', {
 }, (table) => ({
   idx_storefront_orders_buyer_account_id: index('idx_storefront_orders_buyer_account_id').on(table.buyerAccountId, table.createdAt.desc(), table.id.desc()),
   idx_storefront_orders_buyer_group_id: index('idx_storefront_orders_buyer_group_id').on(table.buyerGroupId),
+  idx_storefront_orders_discount_code_id: index('idx_storefront_orders_discount_code_id').on(table.discountCodeId),
   uq_storefront_orders_number: uniqueIndex('uq_storefront_orders_number').on(table.orderNumber),
   uq_storefront_orders_request_key: uniqueIndex('uq_storefront_orders_request_key').on(table.requestKey),
   uq_storefront_orders_document: uniqueIndex('uq_storefront_orders_document').on(table.documentId),
@@ -239,3 +244,56 @@ export const storefrontPasswordTokens = pgTable('storefront_password_tokens', {
   uq_storefront_password_tokens_token_hash: uniqueIndex('uq_storefront_password_tokens_token_hash').on(table.tokenHash),
   idx_storefront_password_tokens_account_id: index('idx_storefront_password_tokens_account_id').on(table.accountId),
 }));
+
+/**
+ * v11 phase 8.2c (migration 0021, start plan §6, decision 6): a discount code of the site. A percent (1 to 90, with an
+ * optional cap) or an amount in rial below its minimum order; a validity window, a total limit and a limit per buyer
+ * (0 = none). `forRetail`: guests and retail accounts may use it; the groups of `groupIds` may
+ * too. Removing a code is a soft delete.
+ */
+export const storefrontDiscountCodes = pgTable('storefront_discount_codes', {
+  id: serial('id').primaryKey(),
+  code: text('code').notNull(),
+  title: text('title').notNull().default(''),
+  kind: text('kind').notNull(),
+  percent: integer('percent').notNull().default(0),
+  amount: moneyNumeric('amount').notNull().default(sql`0`),
+  maxDiscount: moneyNumeric('max_discount').notNull().default(sql`0`),
+  minOrderAmount: moneyNumeric('min_order_amount').notNull().default(sql`0`),
+  startsAt: timestamp('starts_at', { withTimezone: true, mode: 'string' }),
+  endsAt: timestamp('ends_at', { withTimezone: true, mode: 'string' }),
+  usageLimit: integer('usage_limit').notNull().default(0),
+  perBuyerLimit: integer('per_buyer_limit').notNull().default(1),
+  forRetail: integer('for_retail').notNull().default(1),
+  /** the buyer groups whose buyers may use it too (groups are only soft-deleted, so an id stays that group's) */
+  groupIds: integer('group_ids').array().notNull().default(sql`'{}'::integer[]`),
+  accountsOnly: integer('accounts_only').notNull().default(0),
+  firstOrderOnly: integer('first_order_only').notNull().default(0),
+  isActive: integer('is_active').notNull().default(1),
+  isDeleted: integer('is_deleted').notNull().default(0),
+  createdBy: text('created_by').notNull().default(''),
+  updatedBy: text('updated_by').notNull().default(''),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  version: integer('version').notNull().default(1),
+}, (table) => ({
+  uq_storefront_discount_codes_code_live: uniqueIndex('uq_storefront_discount_codes_code_live').on(table.code).where(sql`${table.isDeleted} = 0`),
+  idx_storefront_discount_codes_list: index('idx_storefront_discount_codes_list').on(table.isDeleted, table.id.desc()),
+}));
+
+/** v11 phase 8.2c: one use of a code by one order; `releasedAt` once the order was cancelled (the use goes back) */
+export const storefrontDiscountRedemptions = pgTable('storefront_discount_redemptions', {
+  id: serial('id').primaryKey(),
+  codeId: integer('code_id').notNull().references(() => storefrontDiscountCodes.id),
+  orderId: integer('order_id').notNull().references(() => storefrontOrders.id),
+  phoneKey: text('phone_key').notNull(),
+  buyerAccountId: integer('buyer_account_id').references(() => storefrontBuyerAccounts.id),
+  amount: moneyNumeric('amount').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  releasedAt: timestamp('released_at', { withTimezone: true, mode: 'string' }),
+}, (table) => ({
+  uq_storefront_discount_redemptions_order_id: uniqueIndex('uq_storefront_discount_redemptions_order_id').on(table.orderId),
+  idx_storefront_discount_redemptions_code_id: index('idx_storefront_discount_redemptions_code_id').on(table.codeId, table.phoneKey),
+  idx_storefront_discount_redemptions_buyer_account_id: index('idx_storefront_discount_redemptions_buyer_account_id').on(table.buyerAccountId),
+}));
+

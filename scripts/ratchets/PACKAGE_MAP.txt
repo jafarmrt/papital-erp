@@ -37,6 +37,7 @@ G  scripts/check-version-sync.ts
 18 src/components/settings/StorefrontTab.tsx
 18 src/hooks/queries/useStorefrontQueries.ts
 18 src/hooks/queries/useStorefrontSeoQueries.ts
+18 src/hooks/queries/useStorefrontDiscountQueries.ts
 # 17 v11 history import (1405 replay from Excel): replays documents of several packages through their services
 17 src/services/historyImport/**
 17 src/routes/historyImport.routes.ts

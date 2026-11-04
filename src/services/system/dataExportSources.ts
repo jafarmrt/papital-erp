@@ -12,7 +12,7 @@ import {
   workflowDefinitions, workflowDefinitionVersions, workflowStates, workflowTransitions, workflowInstances,
   workflowHistoryLogs, workflowTasks, workflowPendingApprovals, workflowDelegations,
   mediaSections, mediaAssets, projectManagers, stockReceiptConfirmations, workshopTaskReports,
-  storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontBuyerGroups, storefrontBuyerAccounts, storefrontSmsMessages, storefrontRedirects,
+  storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontBuyerGroups, storefrontBuyerAccounts, storefrontSmsMessages, storefrontRedirects, storefrontDiscountCodes, storefrontDiscountRedemptions,
 } from '../../db/schema.js';
 import { SENSITIVE_SETTING_PATTERN } from '../settings/systemSettings.service.js';
 
@@ -74,6 +74,7 @@ export const DATA_EXPORT_TABLE_SOURCES: Readonly<Record<string, TableSpecSource>
   storefront_orders: { table: storefrontOrders, key: ['id'] },
   storefront_payment_receipts: { table: storefrontPaymentReceipts, key: ['id'] },
   storefront_sms_messages: { table: storefrontSmsMessages, key: ['id'] },
+  storefront_discount_redemptions: { table: storefrontDiscountRedemptions, key: ['id'] },
   history_import_refs: { table: historyImportRefs, key: ['kind', 'excelRef'] },
   history_import_purchase_refs: { table: historyImportPurchaseRefs, key: ['documentId', 'excelRef'] },
   customers: { table: customers, key: ['id'] },
@@ -137,6 +138,7 @@ export const DATA_EXPORT_TABLE_SOURCES: Readonly<Record<string, TableSpecSource>
   storefront_shipping_rates: { table: storefrontShippingRates, key: ['id'] },
   // v11 phase 8.2b: the site's buyer groups, and buyer accounts WITHOUT the password hash or lockout state
   storefront_buyer_groups: { table: storefrontBuyerGroups, key: ['id'] },
+  storefront_discount_codes: { table: storefrontDiscountCodes, key: ['id'] },
   storefront_buyer_accounts: {
     table: storefrontBuyerAccounts, key: ['id'], columns: withoutColumns(storefrontBuyerAccounts, ['passwordHash', 'failedLogins', 'lockedUntil']),
   },

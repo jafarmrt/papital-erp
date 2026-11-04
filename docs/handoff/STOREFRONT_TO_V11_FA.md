@@ -147,3 +147,17 @@
   - سقف عکس رسید (`RECEIPT_IMAGE_BYTES_MAX`) به `storefrontOrderRules.ts` رفت تا سایت هم همان را بخواند.
 - **کوکی‌های سایت:** `sf_cart` (فقط نام محصول و تعداد، httpOnly) و `sf_orders` (کلید پیگیری ده سفارش آخر، httpOnly، فقط زیر `/orders`). کلید سفارش هرگز در نشانی نمی‌آید.
 
+## ۱۵. مرحلهٔ ۸.۲ج (کد تخفیف و فرم هدیهٔ سازمانی)
+- **مهاجرت `0021_storefront_discounts`:**
+  - دو جدول تازه: `storefront_discount_codes` و `storefront_discount_redemptions`.
+  - سه ستون تازه در `storefront_orders`: `discount_code_id`، `discount_code` و `discount_amount`.
+  - قید `chk_storefront_orders_amounts` بازنویسی شد: مبلغ قابل پرداخت = کالاها − تخفیف + ارسال.
+  - دسته‌بندی اعلان `site_inquiry` به قید `chk_user_notification_preferences_category` افزوده شد.
+- **پیش‌فاکتور:** تخفیف به نسبت مبلغ خط‌ها، به شکل تخفیف خطی (`document_items.discount`) روی پیش‌فاکتور می‌نشیند. جمع پیش‌فاکتور با مبلغ قابل پرداخت سفارش یکی است.
+- **لغو سفارش:** `cancelOpenOrder` (همکار یا پایان مهلت) استفادهٔ کد را برمی‌گرداند (`released_at`).
+- **مسیرهای ERP:** `GET/POST /api/storefront/discounts` و `PUT/DELETE /api/storefront/discounts/:id`. دیدن با `storefront.view`، نوشتن با `storefront.manage`.
+- **API سایت:**
+  - `POST /shipping/quote` و `POST /orders` فیلد اختیاری `discountCode` می‌گیرند. پاسخ قیمت‌گذاری و سفارش فیلد `discount` دارد.
+  - مسیر تازهٔ `POST /inquiries/corporate-gift` (در `PUBLIC_ROUTES`، پشت `authLimiter`): یک پرونده فروش در CRM می‌سازد، در مرحلهٔ آغاز، با منبع «وبسایت» و بی طرف حساب. پاسخش فقط شمارهٔ پرونده است.
+- **CRM:** پرونده‌های فرم سایت با `createdBy` = «فروشگاه سایت» ساخته می‌شوند و ردیف تاریخچهٔ مرحله و یادداشت «ایجاد فرصت فروش» همان پرونده‌های دستی را دارند.
+

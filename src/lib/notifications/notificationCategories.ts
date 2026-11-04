@@ -18,6 +18,7 @@ export const NOTIFICATION_CATEGORIES = [
   'settings_change',
   'site_order',
   'site_buyer',
+  'site_inquiry',
 ] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
@@ -38,6 +39,8 @@ export const NOTIFICATION_CATEGORY_LABELS: Readonly<Record<NotificationCategory,
   site_order: 'سفارش و رسید تازه از سایت',
   // v11 phase 8.2b: a new wholesale application from the new site, for the holders of site_buyers.manage
   site_buyer: 'درخواست تازهٔ خرید عمده از سایت',
+  // v11 phase 8.2c: a corporate gift request from the new site (a new CRM lead), for the holders of crm.manage
+  site_inquiry: 'درخواست هدیهٔ سازمانی از سایت',
 };
 
 /** One row of «در پیام‌رسان هم بفرست» in the profile (`GET /messenger/preferences/mine`) */
@@ -82,6 +85,7 @@ const GENERIC_SENTENCES: Readonly<Partial<Record<NotificationCategory, string>>>
   settings_change: 'یکی از تنظیمات حساس سامانه تغییر کرد.',
   site_order: 'یک خرید یا رسید کارت‌به‌کارت تازه از سایت رسید.',
   site_buyer: 'یک فروشگاه یا خریدار تازه از سایت می‌خواهد عمده بخرد.',
+  site_inquiry: 'یک سازمان از سایت هدیهٔ سازمانی خواسته است؛ پرونده فروش تازه‌ای ساخته شد.',
 };
 const GENERIC_DEFAULT_SENTENCE = 'اعلان تازه‌ای در برنامه پاپیتال برای شما آمده است.';
 

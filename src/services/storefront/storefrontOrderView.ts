@@ -1,7 +1,7 @@
 import { and, asc, eq } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import {
-  documentItems, documents, items, storefrontBuyerAccounts, storefrontBuyerGroups, storefrontOrders, storefrontPaymentReceipts, storefrontProducts,
+  documentItems, documents, items, storefrontBuyerAccounts, storefrontDiscountCodes, storefrontBuyerGroups, storefrontOrders, storefrontPaymentReceipts, storefrontProducts,
 } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import {
@@ -12,6 +12,8 @@ import type { AdminOrderDetail, AdminReceipt, BuyerOrder, BuyerOrderLine } from 
 import type { StorefrontSettingsInput } from '../../lib/storefront/storefrontContracts.js';
 import { rialText } from './storefrontShipping.service.js';
 import { receiptIdsWithImage } from './storefrontReceiptImage.js';
+import { appliedDiscount } from './storefrontDiscountApply.js';
+import type { AppliedDiscount } from '../../lib/storefront/storefrontDiscountContracts.js';
 
 /**
  * v11 phase 8.2a: what a buyer and the ERP orders screen see of an order. The lines are read from the order's document
@@ -52,6 +54,14 @@ function cancelReasonOf(order: OrderRecord): CancelReason | null {
   return order.cancelReason === 'expired' || order.cancelReason === 'staff' ? order.cancelReason : null;
 }
 
+/** v11 phase 8.2c: the code the order used (its title as it is now) and the amount taken off its lines */
+async function discountOf(executor: DbExecutor, order: OrderRecord): Promise<AppliedDiscount | null> {
+  if (order.discountCodeId === null) return null;
+  const [code] = await executor.select({ title: storefrontDiscountCodes.title }).from(storefrontDiscountCodes)
+    .where(eq(storefrontDiscountCodes.id, order.discountCodeId));
+  return appliedDiscount(order.discountCode, code?.title ?? '', rialText(order.discountAmount));
+}
+
 async function common(executor: DbExecutor, order: OrderRecord) {
   const orderStatus = status(order);
   const reason = cancelReasonOf(order);
@@ -80,6 +90,7 @@ async function common(executor: DbExecutor, order: OrderRecord) {
     paymentMethod: paymentMethodOf(order),
     paymentMethodTitle: PAYMENT_METHOD_TITLES[paymentMethodOf(order)],
     wholesale: order.buyerGroupId !== null,
+    discount: await discountOf(executor, order),
   };
 }
 

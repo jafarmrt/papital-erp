@@ -29,7 +29,7 @@ export const PUBLIC_ROUTES = new Set([
   // v11 phase 8.1: the Storefront API takes no staff session; every route checks the site app's key (`requireStorefrontKey`,
   // 401 without it) and is limited per address (8.2a orders by tracking key; 8.3 logo; 8.2b accounts by X-Buyer-Session;
   // 8.4a the SMS login code; 8.4b the SMS sign-in; 8.5 search settings and old-address redirects; 8.2b-2 account orders)
-  ...['GET settings', 'GET brand', 'GET seo', 'GET redirects', 'GET products', 'GET products/:slug', 'GET facets', 'GET media/:file', 'GET orders/:number', 'POST shipping/quote', 'POST orders', 'POST orders/:number/receipts', 'POST auth/register', 'POST auth/login', 'POST auth/logout', 'POST auth/set-password', 'POST wholesale/apply', 'GET account', 'GET account/prices', 'POST auth/otp/request', 'POST auth/otp/verify', 'POST auth/sms-login', 'GET account/orders', 'GET account/orders/:number', 'POST account/orders/claim', 'POST account/orders/:number/receipts'].map(route => route.replace(' ', ' /api/storefront/v1/')),
+  ...['GET settings', 'GET brand', 'GET seo', 'GET redirects', 'GET products', 'GET products/:slug', 'GET facets', 'GET media/:file', 'GET orders/:number', 'POST shipping/quote', 'POST orders', 'POST orders/:number/receipts', 'POST auth/register', 'POST auth/login', 'POST auth/logout', 'POST auth/set-password', 'POST wholesale/apply', 'POST inquiries/corporate-gift', 'GET account', 'GET account/prices', 'POST auth/otp/request', 'POST auth/otp/verify', 'POST auth/sms-login', 'GET account/orders', 'GET account/orders/:number', 'POST account/orders/claim', 'POST account/orders/:number/receipts'].map(route => route.replace(' ', ' /api/storefront/v1/')),
 ]);
 
 /**

@@ -22,6 +22,7 @@ import { requestOtp, verifyOtp } from '../services/storefront/storefrontSmsOtp.s
 import { RECEIPT_IMAGE_DATA_URL_MAX } from '../services/storefront/storefrontReceiptImage.js';
 import { myAccount, myGroupPrices, registerAccount, setPasswordWithLink, signIn, signOut, smsSignIn } from '../services/storefront/storefrontBuyerAuth.service.js';
 import { applyForWholesale } from '../services/storefront/storefrontWholesaleApply.service.js';
+import { submitCorporateGift } from '../services/storefront/storefrontInquiry.service.js';
 import { BUYER_TOKEN_MAX } from '../services/storefront/storefrontBuyerSecrets.js';
 import { PASSWORD_MAX } from '../lib/storefront/storefrontBuyerRules.js';
 import { PHONE_PROOF_MAX } from '../lib/storefront/storefrontSmsRules.js';
@@ -83,12 +84,13 @@ const sessionOf = (req: Request): string => String(req.headers['x-buyer-session'
 
 const cartLine = z.object({ slug: z.string().min(1).max(STOREFRONT_SLUG_MAX), quantity: z.number().int() }).strict();
 const cartLines = z.array(cartLine).min(1).max(ORDER_LINES_MAX);
-const quoteSchema = z.object({ body: z.object({ province: z.string().max(60), lines: cartLines }).strict() });
+const quoteSchema = z.object({ body: z.object({ province: z.string().max(60), lines: cartLines, discountCode: z.string().max(40).optional() }).strict() });
 const orderSchema = z.object({
   body: z.object({
     requestKey: z.string().max(80), recipientName: z.string().max(200), phone: z.string().max(40), province: z.string().max(60),
     city: z.string().max(120), address: z.string().max(800), postalCode: z.string().max(40), note: z.string().max(1000),
     shippingMethod: z.string().max(60), lines: cartLines, paymentMethod: z.enum(PAYMENT_METHODS).optional(),
+    discountCode: z.string().max(40).optional(),
   }).strict(),
 });
 const orderNumberParams = z.object({ number: z.string().min(1).max(20) }).passthrough();
@@ -253,6 +255,18 @@ router.post('/auth/set-password', authLimiter, validate(setPasswordSchema), asyn
 
 router.post('/wholesale/apply', authLimiter, validate(applySchema), asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json({ data: await applyForWholesale(req.body, sessionOf(req)) });
+}));
+
+// v11 phase 8.2c (start plan §7): the «هدیهٔ سازمانی» form makes a CRM lead; the same tight limit per buyer address
+const giftSchema = z.object({
+  body: z.object({
+    organization: z.string().max(300), contactName: z.string().max(200), phone: z.string().max(40),
+    quantity: z.number().int().optional(), budget: z.string().max(40).optional(), neededBy: z.string().max(20).optional(), note: z.string().max(2000).optional(),
+  }).strict(),
+});
+
+router.post('/inquiries/corporate-gift', authLimiter, validate(giftSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.status(201).json({ data: await submitCorporateGift(req.body) });
 }));
 
 router.get('/account', asyncHandler(async (req: Request, res: Response) => {
