@@ -148,6 +148,13 @@
       "when": 1797580800000,
       "tag": "0020_storefront_order_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1797667200000,
+      "tag": "0021_storefront_discounts",
+      "breakpoints": true
     }
   ]
 }

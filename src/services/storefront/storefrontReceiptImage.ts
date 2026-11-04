@@ -7,6 +7,7 @@ import { fileAttachments } from '../../db/schema.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { getAttachmentsRoot } from '../../lib/storage.js';
 import { decodeDataUrl } from '../attachments/attachmentStorage.service.js';
+import { RECEIPT_IMAGE_BYTES_MAX } from '../../lib/storefront/storefrontOrderRules.js';
 import { STOREFRONT_BOT_USER } from './storefrontCustomer.js';
 
 /**
@@ -18,7 +19,7 @@ import { STOREFRONT_BOT_USER } from './storefrontCustomer.js';
  * `site_orders.view`. A receipt without a photo is still taken.
  */
 export const RECEIPT_IMAGE_ENTITY = 'storefront_receipt';
-export const RECEIPT_IMAGE_MAX_BYTES = 3 * 1024 * 1024;
+export const RECEIPT_IMAGE_MAX_BYTES = RECEIPT_IMAGE_BYTES_MAX;
 /** the longest data URL the receipt route accepts (base64 is about 4/3 of the bytes, plus its header) */
 export const RECEIPT_IMAGE_DATA_URL_MAX = Math.ceil(RECEIPT_IMAGE_MAX_BYTES * 1.37) + 64;
 const EXTENSIONS: Readonly<Record<string, string>> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };

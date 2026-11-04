@@ -29,6 +29,9 @@ const settings = await readFile(path.join(dir, 'settings.json'), 'utf8').then(JS
 
 // v11 phase 8.4b: the SMS sign-in, on unless MOCK_SMS_LOGIN=0
 settings.smsLogin = process.env.MOCK_SMS_LOGIN !== '0';
+// v11 phase 8.2: ordering (the cart and checkout), on only with MOCK_ORDERING=1; the card to pay to is a made-up one
+settings.ordering = process.env.MOCK_ORDERING === '1';
+if (settings.ordering && !settings.payment.cardNumber) settings.payment = { cardNumber: '6037990000000000', cardHolder: 'فروشگاه نمونه', bankName: 'بانک نمونه', iban: 'IR000000000000000000000000' };
 
 const brand = await readFile(path.join(dir, 'brand.json'), 'utf8').then(JSON.parse).catch(() => ({ logo: '', favicon: '' }));
 // phase 8.5: the old-address redirects (`redirects.json`, a list of { from, kind, target }) and the search and statistics
@@ -57,6 +60,8 @@ const facet = values => {
 const accounts = new Map();
 const sessions = new Map();
 let last = { clientIp: '', session: '' };
+/** the last order write (route, key header and body), kept apart since the page's own reads follow it */
+let lastPost = null;
 const readBody = req => new Promise(resolve => {
   let body = '';
   req.on('data', chunk => { body += chunk; });
@@ -108,6 +113,127 @@ async function auth(req, res, route) {
   return refuse(404, 'NOT_FOUND', 'پیدا نشد');
 }
 
+// v11 phase 8.2: orders in memory. Prices are the retail ones; the post costs 500000 rial (free over the threshold),
+// the courier is paid on delivery and only in Tehran. A key is `ok_mock` + the number, padded to the ERP's length.
+const orders = new Map();
+const byRequestKey = new Map();
+let nextNumber = 100001;
+let nextLead = 501;
+const keyOf = number => `ok_mock${number}`.padEnd(46, 'x');
+const STATUS_TITLES = { awaiting_payment: 'در انتظار پرداخت', payment_submitted: 'در انتظار تأیید پرداخت', awaiting_approval: 'در انتظار تأیید فروشگاه' };
+const priced = lines => {
+  const out = [];
+  for (const l of Array.isArray(lines) ? lines : []) {
+    const p = products.find(x => x.slug === l.slug);
+    if (!p || !Number.isInteger(l.quantity) || l.quantity < 1) return null;
+    out.push({ slug: p.slug, sku: p.sku, name: p.name, quantity: l.quantity, unitPrice: p.retailPrice, lineAmount: (BigInt(p.retailPrice) * BigInt(l.quantity)).toString() });
+  }
+  return out.length ? out : null;
+};
+// v11 phase 8.2c: one mock code, YALDA (10% in whole tomans); any other code is refused on its field
+const discountOf = (raw, items) => {
+  const code = latin(raw).replace(/\s+/g, '').toUpperCase();
+  if (!code) return null;
+  if (code !== 'YALDA') return 'bad';
+  const amount = (items / 10n / 10n) * 10n;
+  return { code, title: 'تخفیف یلدا', amount: amount.toString(), amountToman: (amount / 10n).toString() };
+};
+const discountRefused = res => send(res, 422, { error: 'این کد تخفیف شناخته نیست یا دیگر کار نمی‌کند.', code: 'STOREFRONT_DISCOUNT_NOT_APPLICABLE', details: { field: 'discountCode' } });
+const quoteOf = (province, lines, discount = null) => {
+  const items = lines.reduce((sum, l) => sum + BigInt(l.lineAmount), 0n);
+  const free = settings.freeShippingThreshold && items - BigInt(discount?.amount ?? 0) >= BigInt(settings.freeShippingThreshold);
+  const options = [{ code: 'post', title: 'پست پیشتاز', description: '', kind: 'cost', amount: free ? '0' : '500000', amountToman: free ? '0' : '50000', free: Boolean(free) }];
+  if (province === 'تهران') options.push({ code: 'snapp', title: 'اسنپ باکس', description: 'فقط در تهران، همان روز.', kind: 'on_delivery', amount: '0', amountToman: '0', free: false });
+  return { itemsAmount: items.toString(), discount, options };
+};
+const orderView = o => {
+  const waiting = o.status === 'awaiting_payment';
+  return {
+    number: o.number, status: o.status, statusTitle: STATUS_TITLES[o.status], createdAt: o.createdAt, payBefore: waiting ? new Date(Date.parse(o.createdAt) + 24 * 3600e3).toISOString() : null,
+    recipient: o.recipient, note: o.note, shipping: o.shipping, lines: o.lines, itemsAmount: o.itemsAmount, payableAmount: o.payableAmount,
+    payableToman: (BigInt(o.payableAmount) / 10n).toString(), payment: waiting ? settings.payment : null, canSendReceipt: waiting, receipts: o.receipts,
+    trackingCode: '', cancelReason: null, cancelReasonTitle: '', paymentMethod: 'card', paymentMethodTitle: 'کارت‌به‌کارت', wholesale: false,
+    discount: o.discount ?? null,
+  };
+};
+// the ERP takes Persian and Arabic digits in every field a buyer types (start plan §9الف)
+const latin = v => String(v ?? '').replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+const accountOf = req => sessions.get(String(req.headers['x-buyer-session'] ?? ''));
+const fieldError = (res, field, error) => send(res, 422, { error, code: 'STOREFRONT_ORDER_FIELD_INVALID', details: { field } });
+
+async function ordering(req, res, route) {
+  if (!settings.ordering) return send(res, 404, { error: 'پیدا نشد' });
+  const body = req.method === 'POST' ? await readBody(req) : {};
+  if (req.method === 'POST') lastPost = { route, orderKey: String(req.headers['x-order-key'] ?? ''), session: String(req.headers['x-buyer-session'] ?? ''), body };
+  const presentedKey = String(req.headers['x-order-key'] ?? '');
+  if (route === '/shipping/quote') {
+    if (!body.province) return fieldError(res, 'province', 'استان را از فهرست انتخاب کنید.');
+    const lines = priced(body.lines);
+    if (!lines) return fieldError(res, 'lines', 'این کالا روی سایت فروخته نمی‌شود.');
+    const discount = discountOf(body.discountCode, lines.reduce((sum, l) => sum + BigInt(l.lineAmount), 0n));
+    return discount === 'bad' ? discountRefused(res) : send(res, 200, { data: quoteOf(body.province, lines, discount) });
+  }
+  if (route === '/orders' && req.method === 'POST') {
+    const again = byRequestKey.get(body.requestKey);
+    if (again) return send(res, 201, { data: { order: orderView(again), accessKey: keyOf(again.number) } });
+    if (String(body.recipientName ?? '').trim().length < 2) return fieldError(res, 'recipientName', 'نام و نام خانوادگی گیرنده را بنویسید.');
+    if (!/^09\d{9}$/.test(latin(body.phone))) return fieldError(res, 'phone', 'شمارهٔ همراه باید ۱۱ رقم و با ۰۹ آغاز شود.');
+    if (!/^\d{10}$/.test(latin(body.postalCode))) return fieldError(res, 'postalCode', 'کد پستی باید ۱۰ رقم باشد.');
+    if (body.paymentMethod === 'on_account') return fieldError(res, 'paymentMethod', 'پرداخت «به حساب» برای این حساب باز نیست.');
+    const lines = priced(body.lines);
+    if (!lines) return fieldError(res, 'lines', 'این کالا روی سایت فروخته نمی‌شود.');
+    const discount = discountOf(body.discountCode, lines.reduce((sum, l) => sum + BigInt(l.lineAmount), 0n));
+    if (discount === 'bad') return discountRefused(res);
+    const quote = quoteOf(body.province, lines, discount);
+    const option = quote.options.find(o => o.code === body.shippingMethod);
+    if (!option) return fieldError(res, 'shippingMethod', 'این روش ارسال برای این سبد و استان در دسترس نیست؛ روش دیگری انتخاب کنید.');
+    const number = String(nextNumber++);
+    const order = {
+      number, status: 'awaiting_payment', createdAt: new Date().toISOString(), account: accountOf(req) ?? null,
+      recipient: { name: body.recipientName, phone: body.phone, province: body.province, city: body.city, address: body.address, postalCode: body.postalCode },
+      note: body.note ?? '', shipping: { code: option.code, title: option.title, kind: option.kind, amount: option.amount }, lines,
+      itemsAmount: quote.itemsAmount, payableAmount: (BigInt(quote.itemsAmount) - BigInt(discount?.amount ?? 0) + BigInt(option.amount)).toString(), receipts: [], discount,
+    };
+    orders.set(number, order);
+    byRequestKey.set(body.requestKey, order);
+    return send(res, 201, { data: { order: orderView(order), accessKey: keyOf(number) } });
+  }
+  const receipt = (order) => {
+    if (order.status !== 'awaiting_payment') return send(res, 409, { error: 'برای این سفارش اکنون رسید پذیرفته نمی‌شود.', code: 'STOREFRONT_RECEIPT_NOT_EXPECTED' });
+    if (!/^[A-Za-z0-9]{4,40}$/.test(String(body.reference ?? ''))) return send(res, 422, { error: 'شمارهٔ پیگیری یا ارجاع واریز را درست بنویسید (۴ تا ۴۰ رقم یا حرف لاتین).', code: 'STOREFRONT_RECEIPT_FIELD_INVALID', details: { field: 'reference' } });
+    order.status = 'payment_submitted';
+    order.receipts.push({ reference: body.reference, paidAt: body.paidAt, cardLast4: String(body.cardLast4).slice(-4), amount: body.amount, status: 'pending', statusTitle: 'در انتظار بررسی', rejectReason: '', createdAt: new Date().toISOString() });
+    return send(res, 201, { data: orderView(order) });
+  };
+  const keyed = /^\/orders\/(\d+)(\/receipts)?$/.exec(route);
+  if (keyed) {
+    const order = orders.get(keyed[1]);
+    if (!order || presentedKey !== keyOf(order.number)) return send(res, 404, { error: 'سفارش پیدا نشد.', code: 'STOREFRONT_ORDER_NOT_FOUND' });
+    return keyed[2] ? receipt(order) : send(res, 200, { data: orderView(order) });
+  }
+  const phone = accountOf(req);
+  if (!phone) return send(res, 401, { error: 'برای این کار وارد حساب خود شوید.', code: 'STOREFRONT_SESSION_REQUIRED' });
+  if (route === '/account/orders/claim') {
+    const order = orders.get(String(body.number ?? ''));
+    if (!order || body.accessKey !== keyOf(order.number)) return send(res, 404, { error: 'سفارش پیدا نشد.', code: 'STOREFRONT_ORDER_NOT_FOUND' });
+    if (order.account && order.account !== phone) return send(res, 409, { error: 'این سفارش به حساب دیگری وصل است.', code: 'STOREFRONT_ORDER_CLAIMED' });
+    order.account = phone;
+    return send(res, 200, { data: orderView(order) });
+  }
+  if (route === '/account/orders') {
+    const mine = [...orders.values()].filter(o => o.account === phone).reverse();
+    const data = mine.map(o => ({ number: o.number, createdAt: o.createdAt, status: o.status, statusTitle: STATUS_TITLES[o.status], payableAmount: o.payableAmount, payableToman: (BigInt(o.payableAmount) / 10n).toString(), paymentMethod: 'card', itemCount: o.lines.length }));
+    return send(res, 200, { data: { data, total: data.length, page: 1, limit: 20 } });
+  }
+  const own = /^\/account\/orders\/(\d+)(\/receipts)?$/.exec(route);
+  if (own) {
+    const order = orders.get(own[1]);
+    if (!order || order.account !== phone) return send(res, 404, { error: 'سفارش پیدا نشد.', code: 'STOREFRONT_ORDER_NOT_FOUND' });
+    return own[2] ? receipt(order) : send(res, 200, { data: orderView(order) });
+  }
+  return send(res, 404, { error: 'پیدا نشد' });
+}
+
 function send(res, status, body, headers = {}) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers });
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
@@ -116,10 +242,20 @@ function send(res, status, body, headers = {}) {
 createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://mock');
   const route = url.pathname.replace(/^\/api\/storefront\/v1/, '');
-  if (url.pathname === '/__mock/last') return send(res, 200, last);
+  if (url.pathname === '/__mock/last') return send(res, 200, { ...last, post: lastPost });
   if (req.headers.authorization !== `Bearer ${key}`) return send(res, 401, { error: 'کلید برنامه سایت پذیرفته نشد.' });
   last = { clientIp: String(req.headers['x-storefront-client-ip'] ?? ''), session: String(req.headers['x-buyer-session'] ?? '') };
   if (req.method === 'POST' && route.startsWith('/auth/')) return auth(req, res, route);
+  if (route === '/shipping/quote' || route.startsWith('/orders') || route.startsWith('/account/orders')) return ordering(req, res, route);
+  // v11 phase 8.2c: the corporate gift form makes a CRM lead in the ERP; here a number, or a refusal on the phone field
+  if (route === '/inquiries/corporate-gift' && req.method === 'POST') {
+    const body = await readBody(req);
+    lastPost = { route, orderKey: '', session: '', body };
+    if (String(body.organization ?? '').trim().length < 2) return fieldError(res, 'organization', 'نام سازمان یا شرکت را بنویسید.');
+    if (!/^\+?\d{8,15}$/.test(latin(body.phone).replace(/[\s()-]/g, ''))) return fieldError(res, 'phone', 'شمارهٔ تماس را با پیش‌شماره بنویسید (۸ تا ۱۵ رقم).');
+    return send(res, 201, { data: { reference: String(nextLead++) } });
+  }
+  if (route === '/account/prices') return send(res, 200, { data: { group: '', prices: [] } });
   if (route === '/account') {
     const phone = sessions.get(String(req.headers['x-buyer-session'] ?? ''));
     return phone ? send(res, 200, { data: view(accounts.get(phone)) }) : send(res, 401, { error: 'برای این کار وارد حساب خود شوید.', code: 'STOREFRONT_SESSION_REQUIRED' });

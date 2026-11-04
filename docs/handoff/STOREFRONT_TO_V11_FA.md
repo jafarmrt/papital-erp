@@ -15,6 +15,7 @@
 - **PR #453** (کد): مرحلهٔ ۸.۵الف، نشانی‌های سایت قبلی، جست‌وجو و آمار بازدید، با مهاجرت `0018_storefront_redirects` (جدول تازهٔ `storefront_redirects`). خاموش است. جزئیاتش در بخش ۱۱ آمده است.
 - **PR #455** (کد): مرحلهٔ ۸.۴ب، ورود پیامکی و صفحه‌های حساب سایت، با مهاجرت `0019_storefront_phone_verified` (فقط یک ستون تازه). جزئیاتش در بخش ۱۲ آمده است.
 - **PR #456** (کد): مرحلهٔ ۸.۲ب بخش ۲، سفارش خریدار حساب‌دار و سفارش «به حساب»، با مهاجرت `0020_storefront_order_accounts`. جزئیاتش در بخش ۱۳ آمده است.
+- **PR بعدی (سایت، مرحلهٔ ۸.۲):** سبد، تسویه، صفحهٔ سفارش و رسید، و «حساب من». مهاجرت ندارد. جزئیاتش در بخش ۱۴ آمده است.
 - **آخرین مهاجرت روی master پس از #456: `0020`.** مهاجرت بعدی هر پروژه شمارهٔ آزاد بعدی را هنگام ادغام می‌گیرد.
 - ادغام فقط با گفتهٔ جعفر و در نوبت صف مشترک انجام می‌شود، یکی‌یکی.
 
@@ -137,3 +138,26 @@
   - `POST /api/storefront/orders/:id/approve-on-account` با `site_orders.manage`؛ مجوز `documents.finalize` در سرویس سنجیده می‌شود.
   - `GET /api/storefront/v1/account/orders`، `GET …/account/orders/:number` و `POST …/account/orders/claim`، که در `PUBLIC_ROUTES` ثبت شده‌اند.
 - **پیامک:** سفارش «به حساب» پیامک «ثبت سفارش» نمی‌فرستد، چون متن آن خواهش پرداخت کارت‌به‌کارت است. اگر v 11 پیامک‌های تازه بخواهد، این جای خالی را در نظر بگیرد.
+
+## ۱۴. مرحلهٔ ۸.۲ در سایت (سبد، تسویه، صفحهٔ سفارش و «حساب من»)
+- **مهاجرت ندارد.** کار بیشتر در `storefront/` است.
+- **تغییر در ERP، کوچک:**
+  - تنظیمات عمومی سایت (`GET /api/storefront/v1/settings`) فیلد تازهٔ `ordering` دارد: روشن بودن سایت و «ثبت سفارش» با هم. سایت تا این روشن نباشد سبد و دکمهٔ «افزودن به سبد» را نشان نمی‌دهد.
+  - مسیر تازهٔ `POST /api/storefront/v1/account/orders/:number/receipts` (در `PUBLIC_ROUTES`، پشت `writeLimiter` و همان طرح‌وارهٔ رسید): رسید سفارشی از خود حساب، بی کلید پیگیری، تا خریدار حساب‌دار از هر گوشی بتواند رسید بفرستد. بررسی‌ها و پاسخ همان مسیر کلیددار است (`receiptFor` در `storefrontOrderBuyer.service.ts`).
+  - سقف عکس رسید (`RECEIPT_IMAGE_BYTES_MAX`) به `storefrontOrderRules.ts` رفت تا سایت هم همان را بخواند.
+- **کوکی‌های سایت:** `sf_cart` (فقط نام محصول و تعداد، httpOnly) و `sf_orders` (کلید پیگیری ده سفارش آخر، httpOnly، فقط زیر `/orders`). کلید سفارش هرگز در نشانی نمی‌آید.
+
+## ۱۵. مرحلهٔ ۸.۲ج (کد تخفیف و فرم هدیهٔ سازمانی)
+- **مهاجرت `0021_storefront_discounts`:**
+  - دو جدول تازه: `storefront_discount_codes` و `storefront_discount_redemptions`.
+  - سه ستون تازه در `storefront_orders`: `discount_code_id`، `discount_code` و `discount_amount`.
+  - قید `chk_storefront_orders_amounts` بازنویسی شد: مبلغ قابل پرداخت = کالاها − تخفیف + ارسال.
+  - دسته‌بندی اعلان `site_inquiry` به قید `chk_user_notification_preferences_category` افزوده شد.
+- **پیش‌فاکتور:** تخفیف به نسبت مبلغ خط‌ها، به شکل تخفیف خطی (`document_items.discount`) روی پیش‌فاکتور می‌نشیند. جمع پیش‌فاکتور با مبلغ قابل پرداخت سفارش یکی است.
+- **لغو سفارش:** `cancelOpenOrder` (همکار یا پایان مهلت) استفادهٔ کد را برمی‌گرداند (`released_at`).
+- **مسیرهای ERP:** `GET/POST /api/storefront/discounts` و `PUT/DELETE /api/storefront/discounts/:id`. دیدن با `storefront.view`، نوشتن با `storefront.manage`.
+- **API سایت:**
+  - `POST /shipping/quote` و `POST /orders` فیلد اختیاری `discountCode` می‌گیرند. پاسخ قیمت‌گذاری و سفارش فیلد `discount` دارد.
+  - مسیر تازهٔ `POST /inquiries/corporate-gift` (در `PUBLIC_ROUTES`، پشت `authLimiter`): یک پرونده فروش در CRM می‌سازد، در مرحلهٔ آغاز، با منبع «وبسایت» و بی طرف حساب. پاسخش فقط شمارهٔ پرونده است.
+- **CRM:** پرونده‌های فرم سایت با `createdBy` = «فروشگاه سایت» ساخته می‌شوند و ردیف تاریخچهٔ مرحله و یادداشت «ایجاد فرصت فروش» همان پرونده‌های دستی را دارند.
+

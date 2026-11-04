@@ -152,6 +152,18 @@ export async function runStorefrontAccountOrdersV11Tests(shouldRun: (id: string,
     const stolen = await site.post('/account/orders/claim', { number: numberG, accessKey: keyG }, otherSession);
     if (stolen.status !== 409 || stolen.body.code !== 'STOREFRONT_ORDER_CLAIMED') wrong.push(`a second claim: ${stolen.status}`);
     if ((await site.get(`/account/orders/${numberR}`, otherSession)).status !== 404) wrong.push('another account read an order');
+    // 2b) an account sends a receipt for its own order without the key; another account's session is the same 404
+    const receipt = (amount: string) => ({ reference: `RF${tag}`, paidAt: new Date(Date.now() - 60_000).toISOString(), cardLast4: '1234', amount });
+    if ((await site.post(`/account/orders/${numberR}/receipts`, receipt(String(placedR.body.data.order.payableAmount)), otherSession)).status !== 404) {
+      wrong.push('another account sent a receipt for an order');
+    }
+    if ((await site.post(`/account/orders/${numberR}/receipts`, receipt(String(placedR.body.data.order.payableAmount)))).status !== 401) {
+      wrong.push('an account receipt without a session is not 401');
+    }
+    const paidR = await site.post(`/account/orders/${numberR}/receipts`, receipt(String(placedR.body.data.order.payableAmount)), retail);
+    if (paidR.status !== 201 || paidR.body.data.status !== 'payment_submitted' || paidR.body.data.receipts?.length !== 1) {
+      wrong.push(`an account receipt: ${paidR.status} ${JSON.stringify(paidR.body)}`);
+    }
     const retailOnAccount = await site.post('/orders', order(phoneR, slugA, 1, { paymentMethod: 'on_account' }), retail);
     if (retailOnAccount.status !== 422 || retailOnAccount.body.details?.field !== 'paymentMethod') wrong.push(`a retail on-account order: ${retailOnAccount.status}`);
 
@@ -220,7 +232,7 @@ export async function runStorefrontAccountOrdersV11Tests(shouldRun: (id: string,
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'a retail account listed and read only its own orders with exact fields; a guest order joined only with its key and could not be claimed twice; a retail account could not pay on account; the approved buyer was quoted and charged its group price, and an item outside its collections, a line below its minimum, an order below its minimum and card payment were refused by field; the on-account order waited for approval on the linked customer, needed the finalize key, became final and shipped; an unconfirmed on-account order expired',
+      details: 'a retail account listed and read only its own orders with exact fields; a guest order joined only with its key and could not be claimed twice; the account sent a receipt for its own order without the key (another session 404, none 401); a retail account could not pay on account; the approved buyer was quoted and charged its group price, and an item outside its collections, a line below its minimum, an order below its minimum and card payment were refused by field; the on-account order waited for approval on the linked customer, needed the finalize key, became final and shipped; an unconfirmed on-account order expired',
     }));
   } catch (err) {
     results.push(makeTestCase({

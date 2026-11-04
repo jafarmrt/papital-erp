@@ -46,6 +46,7 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   { table: 'storefront_orders', group: 'documents' },
   { table: 'storefront_payment_receipts', group: 'documents' },
   { table: 'storefront_sms_messages', group: 'documents' },
+  { table: 'storefront_discount_redemptions', group: 'documents' },
   { table: 'customers', group: 'customers' },
   { table: 'crm_leads', group: 'customers' },
   { table: 'crm_activities', group: 'customers' },
@@ -106,6 +107,7 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   { table: 'storefront_shipping_rates', group: 'settings' },
   // v11 phase 8.2b: the site's buyer groups (price policies) and buyer accounts
   { table: 'storefront_buyer_groups', group: 'settings' },
+  { table: 'storefront_discount_codes', group: 'settings' },
   { table: 'storefront_buyer_accounts', group: 'customers' },
   // v11 phase 8.5: the old addresses of the WooCommerce site and where each goes
   { table: 'storefront_redirects', group: 'settings' },

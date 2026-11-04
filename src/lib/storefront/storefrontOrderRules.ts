@@ -53,6 +53,8 @@ export const RECEIPT_STATUS_TITLES: Readonly<Record<ReceiptStatus, string>> = {
 
 /** At most this many receipts per order (a rejected one may be sent again) */
 export const RECEIPTS_PER_ORDER_MAX = 3;
+/** the largest receipt photo the ERP keeps (the site shrinks a phone photo before sending it) */
+export const RECEIPT_IMAGE_BYTES_MAX = 3 * 1024 * 1024;
 /** Distinct items in one order, and units of one item */
 export const ORDER_LINES_MAX = 50;
 export const ORDER_LINE_QUANTITY_MAX = 99;

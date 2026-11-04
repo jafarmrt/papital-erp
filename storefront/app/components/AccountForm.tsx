@@ -47,6 +47,8 @@ export function Field(props: {
   maxLength?: number;
   required?: boolean;
   autoFocus?: boolean;
+  /** the server refused this field: it is marked for screen readers and outlined */
+  invalid?: boolean;
 }) {
   const id = `field-${props.name}`;
   return (
@@ -55,18 +57,18 @@ export function Field(props: {
       <input
         id={id} name={props.name} type={props.type ?? 'text'} autoComplete={props.autoComplete} inputMode={props.inputMode}
         defaultValue={props.defaultValue} dir={props.dir} maxLength={props.maxLength} required={props.required ?? true}
-        autoFocus={props.autoFocus} aria-describedby={props.hint ? `${id}-hint` : undefined}
-        className={`${inputClass} ${props.dir === 'ltr' ? 'text-left' : ''}`}
+        autoFocus={props.autoFocus} aria-describedby={props.hint ? `${id}-hint` : undefined} aria-invalid={props.invalid || undefined}
+        className={`${inputClass} ${props.dir === 'ltr' ? 'text-left' : ''} ${props.invalid ? 'border-destructive' : ''}`}
       />
       {props.hint && <p id={`${id}-hint`} className="text-sm leading-6 text-muted-foreground">{props.hint}</p>}
     </div>
   );
 }
 
-export function PhoneField({ defaultValue, autoFocus }: { defaultValue?: string; autoFocus?: boolean }) {
+export function PhoneField({ defaultValue, autoFocus, invalid }: { defaultValue?: string; autoFocus?: boolean; invalid?: boolean }) {
   return (
     <Field label="شمارهٔ همراه" name="phone" type="tel" inputMode="tel" autoComplete="tel" dir="ltr" maxLength={20}
-      defaultValue={defaultValue} autoFocus={autoFocus} hint="مانند ۰۹۱۲۱۲۳۴۵۶۷" />
+      defaultValue={defaultValue} autoFocus={autoFocus} hint="مانند ۰۹۱۲۱۲۳۴۵۶۷" invalid={invalid} />
   );
 }
 
@@ -87,5 +89,40 @@ export function SubmitButton({ children, intent, busy, secondary }: { children: 
     >
       {children}
     </button>
+  );
+}
+
+/** v11 phase 8.2: a choice from a fixed list (the province), the phone's own picker */
+export function SelectField(props: { label: string; name: string; options: readonly string[]; defaultValue?: string; autoComplete: string; invalid?: boolean }) {
+  const id = `field-${props.name}`;
+  return (
+    <div className="space-y-2">
+      <label htmlFor={id} className="block text-base font-bold">{props.label}</label>
+      <select
+        id={id} name={props.name} defaultValue={props.defaultValue ?? ''} autoComplete={props.autoComplete} required aria-invalid={props.invalid || undefined}
+        className={`${inputClass} ${props.invalid ? 'border-destructive' : ''}`}
+      >
+        <option value="" disabled>انتخاب کنید</option>
+        {props.options.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+}
+
+/** v11 phase 8.2: several lines of text (the address, a note) */
+export function TextAreaField(props: {
+  label: string; name: string; autoComplete: string; maxLength: number; defaultValue?: string; hint?: string; required?: boolean; invalid?: boolean;
+}) {
+  const id = `field-${props.name}`;
+  return (
+    <div className="space-y-2">
+      <label htmlFor={id} className="block text-base font-bold">{props.label}</label>
+      <textarea
+        id={id} name={props.name} autoComplete={props.autoComplete} maxLength={props.maxLength} defaultValue={props.defaultValue} rows={3}
+        required={props.required ?? true} aria-describedby={props.hint ? `${id}-hint` : undefined} aria-invalid={props.invalid || undefined}
+        className={`${inputClass} py-3 leading-8 ${props.invalid ? 'border-destructive' : ''}`}
+      />
+      {props.hint && <p id={`${id}-hint`} className="text-sm leading-6 text-muted-foreground">{props.hint}</p>}
+    </div>
   );
 }
