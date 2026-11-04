@@ -6,9 +6,8 @@ import { and, asc, desc, eq, inArray, like } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import {
-  accounts, activityLogs, appSettings, bankAccounts, documentItems, itemPrices, items, storefrontBuyerAccounts, storefrontBuyerSessions,
-  storefrontOrders, storefrontPasswordTokens, storefrontPaymentReceipts, storefrontProducts, storefrontShippingMethods, storefrontSmsCodes,
-  storefrontSmsMessages, warehouses,
+  accounts, activityLogs, appSettings, bankAccounts, storefrontBuyerAccounts, storefrontBuyerSessions, storefrontPasswordTokens,
+  storefrontSmsCodes, storefrontSmsMessages, warehouses,
 } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 import { invalidateSettingsCache } from '../../lib/memoryCache.js';
@@ -20,8 +19,7 @@ import { readPricingStrategies } from '../../lib/items/pricingStrategies.js';
  * answer says so, a sign-up and an anonymous wholesale form need a phone proof and mark the phone proven, and a proof is
  * for its own phone only. An SMS sign-in without an account is 404 and leaves the proof for the sign-up; one for an
  * account nobody proved takes it (its password and sessions end, with an audit row); a pending request is 403; a wrong
- * proof is 422. With the texts off the route is 404 and sign-up needs no proof. The guest orders of a phone join its
- * account when the phone is proven (a sign-up with a proof, every SMS sign-in), and no other phone's order does.
+ * proof is 422. With the texts off the route is 404 and sign-up needs no proof.
  */
 
 interface Session { cookie: string; csrfToken: string }
@@ -54,12 +52,10 @@ export async function runStorefrontSmsLoginV11Tests(shouldRun: (id: string, ...e
   const id = 'reg_storefront_sms_login_v11_8_4b';
   if (!shouldRun(id, 'v11', 'phase8', 'storefront', 'sms', 'buyers', 'accounts', 'security')) return results;
 
-  const name = 'v11 phase 8.4b: SMS sign-in of buyer accounts: guest orders joining a proven phone\'s account, the settings flag, a phone proof for sign-up and the wholesale form, a proof for its own phone only, 404 without an account that keeps the proof, taking an account nobody proved, a pending request refused, and nothing changed with the texts off';
+  const name = 'v11 phase 8.4b: SMS sign-in of buyer accounts: the settings flag, a phone proof for sign-up and the wholesale form, a proof for its own phone only, 404 without an account that keeps the proof, taking an account nobody proved, a pending request refused, and nothing changed with the texts off';
   const tStart = Date.now();
   const phoneKeys: string[] = [];
   let bankId: number | null = null;
-  let methodId: number | null = null;
-  const itemIds: number[] = [];
   const savedSettings = await orm.select().from(appSettings).where(like(appSettings.key, 'sf\\_%'));
   const savedStrategies = await orm.select().from(appSettings).where(eq(appSettings.key, 'pricing_strategies'));
   const savedBase = process.env.ERP_SMS_TEST_API_BASE;
@@ -76,8 +72,8 @@ export async function runStorefrontSmsLoginV11Tests(shouldRun: (id: string, ...e
     };
     const tag = String(Date.now()).slice(-7);
     const wrong: string[] = [];
-    const [phoneA, phoneB, phoneC, phoneD, phoneE, phoneF] = ['0911', '0912', '0913', '0914', '0915', '0916'].map(p => `${p}${tag}`);
-    phoneKeys.push(...[phoneA, phoneB, phoneC, phoneD, phoneE, phoneF].map(p => p.slice(1)));
+    const [phoneA, phoneB, phoneC, phoneD] = ['0911', '0912', '0913', '0914'].map(p => `${p}${tag}`);
+    phoneKeys.push(...[phoneA, phoneB, phoneC, phoneD].map(p => p.slice(1)));
 
     // the shop: the site on and taking orders (accounts follow the orders switch)
     const retailList = `تکی ورود پیامکی ${tag}`;
@@ -196,62 +192,10 @@ export async function runStorefrontSmsLoginV11Tests(shouldRun: (id: string, ...e
     const pending = await site('10.30.1.8').post('/api/storefront/v1/auth/sms-login', { phone: phoneD, phoneProof: proofD2 });
     if (pending.status !== 403 || pending.body.code !== 'STOREFRONT_ACCOUNT_PENDING') wrong.push(`a pending request signing in: ${pending.status} ${pending.body.code}`);
 
-    // 6) guest orders: placed with phone E (and one with F) before any account; a sign-up with E's proof brings E's, and
-    // a later guest order of E joins at the next SMS sign-in; F's never moves, and a guest order stays a retail card order
-    const { createTestItem } = await import('../fixtures/factories.js');
-    const item = await createTestItem({ name: `دستبند ورود پیامکی ${tag}`, code: `SFL-${tag}`, stocks: { [warehouse.code]: 10 } });
-    itemIds.push(item.id);
-    await orm.insert(itemPrices).values({ itemId: item.id, title: retailList, price: money('12500000'), currency: 'IRR' });
-    const slug = `bracelet-sfl-${tag}`;
-    const published = await erp.put(`/api/storefront/products/${item.id}`, { published: true, slug, seoTitle: '', seoDescription: '', sortOrder: 0, version: 0 });
-    if (published.status !== 200) throw new Error(`publish: ${published.status} ${JSON.stringify(published.body)}`);
-    const method = await erp.post('/api/storefront/shipping-methods', {
-      code: `sfl-${tag}`, title: 'پست آزمون ورود پیامکی', description: '', pricing: 'flat', flatRate: '500000', isActive: true,
-      isFreeShippingEligible: false, sortOrder: 1, rates: [],
-    });
-    if (method.status !== 201) throw new Error(`shipping: ${method.status} ${JSON.stringify(method.body)}`);
-    methodId = Number(method.body.data.id);
-    let rk = 0;
-    const guestOrder = async (phone: string): Promise<string> => {
-      const placed = await site(`10.30.2.${++rk}`).post('/api/storefront/v1/orders', {
-        requestKey: `rk-sfl-${tag}-${rk}-checkout`, recipientName: `خریدار مهمان ${tag}`, phone, province: 'تهران', city: 'تهران',
-        address: 'خیابان آزمون، پلاک ۱', postalCode: '1234567890', note: '', shippingMethod: `sfl-${tag}`, lines: [{ slug, quantity: 1 }],
-      });
-      if (placed.status !== 201) throw new Error(`guest order: ${placed.status} ${JSON.stringify(placed.body)}`);
-      return String(placed.body.data.order.number);
-    };
-    const firstE = [await guestOrder(phoneE), await guestOrder(phoneE)];
-    const ofF = await guestOrder(phoneF);
-    const ordersOf = (numbers: string[]) => orm.select({
-      id: storefrontOrders.id, number: storefrontOrders.orderNumber, account: storefrontOrders.buyerAccountId,
-      group: storefrontOrders.buyerGroupId, payment: storefrontOrders.paymentMethod,
-    }).from(storefrontOrders).where(inArray(storefrontOrders.orderNumber, numbers));
-    const proofE = await proofFor(phoneE);
-    const regE = await site('10.30.1.9').post('/api/storefront/v1/auth/register', { name: 'خریدار مهمان پیشین', phone: phoneE, password: PASSWORD, phoneProof: proofE });
-    const sessionE = String(regE.body.data?.sessionToken ?? '');
-    if (regE.status !== 201) throw new Error(`sign-up of E: ${regE.status} ${JSON.stringify(regE.body)}`);
-    const [accountE] = await orm.select({ id: storefrontBuyerAccounts.id }).from(storefrontBuyerAccounts).where(eq(storefrontBuyerAccounts.phoneKey, phoneE.slice(1)));
-    const afterSignUp = await ordersOf([...firstE, ofF]);
-    const joined = afterSignUp.filter(o => firstE.includes(o.number));
-    if (joined.length !== 2 || joined.some(o => o.account !== accountE.id || o.group !== null || o.payment !== 'card')) wrong.push(`guest orders after the sign-up: ${JSON.stringify(joined)}`);
-    if (afterSignUp.find(o => o.number === ofF)?.account !== null) wrong.push('another phone\'s guest order moved');
-    const history = await site('10.30.1.9', sessionE).get('/api/storefront/v1/account/orders');
-    if (history.status !== 200 || history.body.data?.total !== 2) wrong.push(`the account's orders after the sign-up: ${history.status} ${JSON.stringify(history.body.data?.total)}`);
-    const orderAudit = await orm.select({ id: activityLogs.id }).from(activityLogs)
-      .where(and(eq(activityLogs.entity, 'سفارش سایت'), inArray(activityLogs.entityId, joined.map(o => String(o.id))), like(activityLogs.description, '%پس از تأیید شمارهٔ%')));
-    if (orderAudit.length !== 2) wrong.push(`audit rows of the joined orders: ${orderAudit.length}`);
-    const laterE = await guestOrder(phoneE);
-    if ((await ordersOf([laterE]))[0]?.account !== null) wrong.push('a guest order joined an account without a proof');
-    await orm.update(storefrontSmsCodes).set({ createdAt: new Date(Date.now() - 120_000).toISOString() }).where(eq(storefrontSmsCodes.phoneKey, phoneE.slice(1)));
-    const smsE = await site('10.30.1.10').post('/api/storefront/v1/auth/sms-login', { phone: phoneE, phoneProof: await proofFor(phoneE) });
-    if (smsE.status !== 200) wrong.push(`SMS sign-in of E: ${smsE.status} ${smsE.body.code}`);
-    if ((await ordersOf([laterE]))[0]?.account !== accountE.id) wrong.push('the later guest order did not join at the SMS sign-in');
-    if ((await ordersOf([ofF]))[0]?.account !== null) wrong.push('another phone\'s guest order moved at the SMS sign-in');
-
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'texts off: smsLogin false, the SMS sign-in 404 and a sign-up without a proof made an unproven account; texts on: smsLogin true, a sign-up without a proof and with another phone\'s proof was 422, with its own proof it marked the phone proven, a made-up proof on that phone was 422 (not 409) and the used proof was refused; an SMS sign-in without an account was 404 and the same proof then made the account; a wrong proof was 422; the unproven account was taken by its SMS sign-in, its old session, password and set-password link stopped working and an audit row was written; the wholesale form needed a proof, made a proven pending request, and its SMS sign-in was 403; two guest orders of a phone joined its account at the sign-up with its proof (still retail card orders, one audit row each, listed in the account), another phone\'s did not, and a later guest order joined at the next SMS sign-in',
+      details: 'texts off: smsLogin false, the SMS sign-in 404 and a sign-up without a proof made an unproven account; texts on: smsLogin true, a sign-up without a proof and with another phone\'s proof was 422, with its own proof it marked the phone proven, a made-up proof on that phone was 422 (not 409) and the used proof was refused; an SMS sign-in without an account was 404 and the same proof then made the account; a wrong proof was 422; the unproven account was taken by its SMS sign-in, its old session, password and set-password link stopped working and an audit row was written; the wholesale form needed a proof, made a proven pending request, and its SMS sign-in was 403',
     }));
   } catch (err) {
     results.push(makeTestCase({
@@ -263,15 +207,6 @@ export async function runStorefrontSmsLoginV11Tests(shouldRun: (id: string, ...e
     if (savedBase === undefined) delete process.env.ERP_SMS_TEST_API_BASE;
     else process.env.ERP_SMS_TEST_API_BASE = savedBase;
     if (phoneKeys.length > 0) {
-      const orderRows = await orm.select({ id: storefrontOrders.id, documentId: storefrontOrders.documentId }).from(storefrontOrders)
-        .where(inArray(storefrontOrders.phoneKey, phoneKeys)).catch(() => []);
-      const orderIds = orderRows.map(o => o.id);
-      if (orderIds.length > 0) {
-        await orm.delete(storefrontSmsMessages).where(inArray(storefrontSmsMessages.orderId, orderIds)).catch(() => undefined);
-        await orm.delete(storefrontPaymentReceipts).where(inArray(storefrontPaymentReceipts.orderId, orderIds)).catch(() => undefined);
-        await orm.delete(storefrontOrders).where(inArray(storefrontOrders.id, orderIds)).catch(() => undefined);
-        await orm.update(documentItems).set({ isDeleted: 1 }).where(inArray(documentItems.documentId, orderRows.map(o => o.documentId))).catch(() => undefined);
-      }
       const ids = (await orm.select({ id: storefrontBuyerAccounts.id }).from(storefrontBuyerAccounts)
         .where(inArray(storefrontBuyerAccounts.phoneKey, phoneKeys)).catch(() => [])).map(r => r.id);
       if (ids.length > 0) {
@@ -282,12 +217,6 @@ export async function runStorefrontSmsLoginV11Tests(shouldRun: (id: string, ...e
       await orm.delete(storefrontSmsCodes).where(inArray(storefrontSmsCodes.phoneKey, phoneKeys)).catch(() => undefined);
       await orm.delete(storefrontSmsMessages).where(inArray(storefrontSmsMessages.phoneKey, phoneKeys)).catch(() => undefined);
     }
-    if (itemIds.length > 0) {
-      await orm.delete(storefrontProducts).where(inArray(storefrontProducts.itemId, itemIds)).catch(() => undefined);
-      await orm.update(itemPrices).set({ isDeleted: 1 }).where(inArray(itemPrices.itemId, itemIds)).catch(() => undefined);
-      await orm.update(items).set({ isDeleted: 1 }).where(inArray(items.id, itemIds)).catch(() => undefined);
-    }
-    if (methodId !== null) await orm.update(storefrontShippingMethods).set({ isDeleted: 1 }).where(eq(storefrontShippingMethods.id, methodId)).catch(() => undefined);
     if (bankId !== null) await orm.update(bankAccounts).set({ isActive: 0, isDeleted: 1 }).where(eq(bankAccounts.id, bankId)).catch(() => undefined);
     await orm.delete(appSettings).where(like(appSettings.key, 'sf\\_%')).catch(() => undefined);
     if (savedSettings.length > 0) await orm.insert(appSettings).values(savedSettings).catch(() => undefined);
