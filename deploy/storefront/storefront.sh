@@ -36,6 +36,8 @@ UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 KEEP_RELEASES="${KEEP_RELEASES:-3}"
 HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-60}"
 RELEASES="${SITE_ROOT}/releases"
+# release folders only (names start with their UTC time), in byte order whatever the locale
+list_releases() { find "$RELEASES" -mindepth 1 -maxdepth 1 -type d -name '[0-9]*' -printf '%f\n' 2>/dev/null | LC_ALL=C sort; }
 CURRENT="${SITE_ROOT}/current"
 MIN_NODE_MAJOR=22
 WORK_DIR=""
@@ -217,7 +219,7 @@ prune_releases() {
   local keep="$KEEP_RELEASES" live old
   live="$(readlink -f "$CURRENT" 2>/dev/null || true)"
   # oldest first; the live release is never removed
-  mapfile -t old < <(find "$RELEASES" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort | head -n "-${keep}")
+  mapfile -t old < <(list_releases | head -n "-${keep}")
   for r in "${old[@]}"; do
     [ "${RELEASES}/${r}" = "$live" ] && continue
     rm -rf "${RELEASES:?}/${r}"
@@ -259,6 +261,8 @@ activate() {
   die "Update failed."
 }
 
+# Sets RELEASE_DIR (not echoed: in a $(…) subshell WORK_DIR would be lost to the EXIT trap and a failed build left behind)
+RELEASE_DIR=""
 make_release() {
   local bundle="$1" dest
   mkdir -p "$RELEASES"
@@ -279,12 +283,12 @@ make_release() {
     while [ -e "$dest" ]; do sleep 1; dest="${RELEASES}/$(new_release_name)"; done
     log "Building a release from ${SOURCE_DIR} into ${dest} ..."
     # npm and the build print to stdout; only the release folder may reach the caller's stdout
-    build_release "$dest" >&2
+    build_release "$dest"
   fi
   # code and packages are root's; the service only reads them
   chown -R root:root "$dest"
   chmod -R go-w "$dest"
-  echo "$dest"
+  RELEASE_DIR="$dest"
 }
 
 # ---------- commands ----------
@@ -314,7 +318,7 @@ cmd_install() {
   fi
   chown root:root "$ENV_FILE"
   chmod 600 "$ENV_FILE"
-  local release; release="$(make_release "$bundle")"
+  make_release "$bundle"; local release="$RELEASE_DIR"
   activate "$release"
   log "=============================== STOREFRONT INSTALLED ==============================="
   log "  Service  : systemctl status ${SERVICE_NAME}   |   logs: journalctl -u ${SERVICE_NAME} -f"
@@ -328,7 +332,7 @@ cmd_update() {
   local bundle="$1"
   need_root
   [ -f "$UNIT_FILE" ] || die "The storefront is not installed yet. Use: bash $0 install"
-  local release; release="$(make_release "$bundle")"
+  make_release "$bundle"; local release="$RELEASE_DIR"
   activate "$release"
   prune_releases
 }
@@ -338,7 +342,7 @@ cmd_rollback() {
   local live previous
   live="$(readlink -f "$CURRENT" 2>/dev/null || true)"
   [ -n "$live" ] || die "No current release."
-  previous="$(find "$RELEASES" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort | awk -v live="$(basename "$live")" '$0 < live' | tail -n 1)"
+  previous="$(list_releases | LC_ALL=C awk -v live="$(basename "$live")" '$0 < live' | tail -n 1)"
   [ -n "$previous" ] || die "No release older than $(basename "$live") to go back to."
   log "Rolling back from $(basename "$live") to ${previous} ..."
   # activate goes back to $live if the older release does not start
@@ -351,7 +355,7 @@ cmd_status() {
   port="$(site_port)"
   echo "Release  : ${live:-none}"
   [ -n "$live" ] && [ -f "${live}/RELEASE" ] && sed 's/^/           /' "${live}/RELEASE"
-  echo "Releases : $(find "$RELEASES" -mindepth 1 -maxdepth 1 -type d -printf '%f ' 2>/dev/null | tr ' ' '\n' | sort | tr '\n' ' ')"
+  echo "Releases : $(list_releases | tr '\n' ' ')"
   echo "Service  : $(systemctl is-active "$SERVICE_NAME" 2>/dev/null || true)"
   echo "Settings : ${ENV_FILE} (API key $(api_key_set && echo set || echo EMPTY), site $(env_value STOREFRONT_SITE_URL), noindex $(env_value STOREFRONT_NOINDEX))"
   echo "Liveness : $(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://127.0.0.1:${port}/healthz" || true) (GET /healthz)"

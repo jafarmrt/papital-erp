@@ -544,13 +544,16 @@ jobs:
           sudo env "PATH=$PATH" DOMAIN="$SITE" WWW=1 TLS=none bash /opt/papital-storefront/current/deploy/storefront-nginx.sh
           sudo nginx -t
           r=(--resolve "$SITE:80:127.0.0.1" --resolve "www.$SITE:80:127.0.0.1" -s -o /dev/null)
-          test "$(curl "${r[@]}" -w '%{http_code}' "http://$SITE/")" = 200
-          test "$(curl "${r[@]}" -w '%{http_code} %{redirect_url}' "http://www.$SITE/products?q=x")" = "301 http://$SITE/products?q=x"
+          same() { if [ "$1" != "$2" ]; then echo "::error::$3: got '$1', expected '$2'"; return 1; fi; }
+          # a reload reaches the workers a moment after systemctl returns
+          for _ in $(seq 1 20); do [ "$(curl "${r[@]}" -w '%{http_code}' "http://$SITE/healthz")" = 200 ] && break; sleep 1; done
+          same "$(curl "${r[@]}" -w '%{http_code}' "http://$SITE/")" 200 "home page through nginx"
+          same "$(curl "${r[@]}" -w '%{http_code} %{redirect_url}' "http://www.$SITE/products?q=x")" "301 http://$SITE/products?q=x" "www. redirect"
           # a form from another site is refused, one from the site itself is not (Host reaches the app unchanged)
-          test "$(curl "${r[@]}" -w '%{http_code}' -X POST -H 'Origin: http://other.example' --data 'phone=09120000000&password=x' "http://$SITE/account/sign-in")" = 400
-          test "$(curl "${r[@]}" -w '%{http_code}' -X POST -H "Origin: http://$SITE" --data 'phone=09120000000&password=x' "http://$SITE/account/sign-in")" = 200
+          same "$(curl "${r[@]}" -w '%{http_code}' -X POST -H 'Origin: http://other.example' --data 'phone=09120000000&password=x' "http://$SITE/account/sign-in")" 400 "form from another site"
+          same "$(curl "${r[@]}" -w '%{http_code}' -X POST -H "Origin: http://$SITE" --data 'phone=09120000000&password=x' "http://$SITE/account/sign-in")" 200 "form from the site"
           head -c 6000000 /dev/zero > "$RUNNER_TEMP/big.bin"
-          test "$(curl "${r[@]}" -w '%{http_code}' -X POST -H "Origin: http://$SITE" --data-binary @"$RUNNER_TEMP/big.bin" "http://$SITE/orders/x")" = 413
+          same "$(curl "${r[@]}" -w '%{http_code}' -X POST -H "Origin: http://$SITE" --data-binary @"$RUNNER_TEMP/big.bin" "http://$SITE/orders/x")" 413 "6 MB body"
           asset="$(ls /opt/papital-storefront/current/build/client/assets | head -n 1)"
           curl -s -o /dev/null --resolve "$SITE:80:127.0.0.1" "http://$SITE/assets/$asset"
           curl -s -D - -o /dev/null --resolve "$SITE:80:127.0.0.1" "http://$SITE/assets/$asset" | grep -qi '^x-cache-status: HIT'

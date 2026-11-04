@@ -15,11 +15,13 @@ import { afterAll, describe, expect, it } from 'vitest';
 const DIR = 'deploy/storefront';
 const tmpRoots: string[] = [];
 
-function nginxSite(env: Record<string, string>): { site: string; snippet: string } {
+function nginxSite(env: Record<string, string>, otherSites: Record<string, string> = {}): { site: string; snippet: string } {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-nginx-'));
   tmpRoots.push(root);
+  fs.mkdirSync(path.join(root, 'sites-enabled'), { recursive: true });
+  for (const [name, text] of Object.entries(otherSites)) fs.writeFileSync(path.join(root, 'sites-enabled', name), text);
   execFileSync('bash', [path.join(DIR, 'storefront-nginx.sh')], {
-    env: { PATH: process.env.PATH ?? '', DRY_RUN: '1', NGINX_DIR: root, ENV_FILE: path.join(root, 'none.env'), FORCE_IPV6: '0', ...env },
+    env: { PATH: process.env.PATH ?? '', DRY_RUN: '1', NGINX_DIR: root, ENV_FILE: path.join(root, 'none.env'), ...('FORCE_IPV6' in env || Object.keys(otherSites).length ? {} : { FORCE_IPV6: '0' }), ...env },
     stdio: 'pipe',
   });
   return {
@@ -84,6 +86,21 @@ describe('storefront_deploy_nginx_v11_8_6', () => {
     const blocks = serverBlocks(test.site);
     expect(blocks).toHaveLength(1);
     expect(blocks[0]).toContain('server_name new.papitalgallery.com;');
+  });
+
+  it('never takes IPv6 on a port where the ERP site listens over IPv4 only (it would become the default there)', () => {
+    const erpV4 = 'server {\n    listen 80;\n    server_name erp.example.com;\n}\nserver {\n    listen 443 ssl; # managed by Certbot\n    server_name erp.example.com;\n}\n';
+    // a server with IPv6 (the script reads IF_INET6 in place of /proc/net/if_inet6)
+    const ipv6 = { IF_INET6: path.join(DIR, 'storefront.sh') };
+    const alone = nginxSite({ DOMAIN: 'papitalgallery.com', TLS: 'existing', CERT_FILE: '/x/c.pem', KEY_FILE: '/x/k.pem', ...ipv6 }, { 'other.conf': '# nothing here\n' });
+    expect(alone.site).toMatch(/listen \[::\]:443 ssl/);
+    const withErp = nginxSite({ DOMAIN: 'papitalgallery.com', TLS: 'existing', CERT_FILE: '/x/c.pem', KEY_FILE: '/x/k.pem', ...ipv6 }, { 'erp.example.com': erpV4 });
+    expect(withErp.site).not.toContain('[::]');
+    // where the ERP site listens on [::] too, ours may join it
+    const erpV6 = erpV4.replace('listen 443 ssl;', 'listen 443 ssl;\n    listen [::]:443 ssl;').replace('listen 80;', 'listen 80;\n    listen [::]:80;');
+    const both = nginxSite({ DOMAIN: 'papitalgallery.com', TLS: 'existing', CERT_FILE: '/x/c.pem', KEY_FILE: '/x/k.pem', ...ipv6 }, { 'erp.example.com': erpV6 });
+    expect(both.site).toMatch(/listen \[::\]:443 ssl/);
+    expect(both.site).toMatch(/listen \[::\]:80;/);
   });
 
   it('refuses a domain that is not a plain host name', () => {

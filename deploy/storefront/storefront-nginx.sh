@@ -105,16 +105,39 @@ if [ "$(printf '%s\n%s\n' 1.25.1 "$NGINX_VERSION" | sort -V | head -n 1)" = 1.25
 else
   LISTEN_TLS="listen 443 ssl http2;"; HTTP2_LINE=""
 fi
-IPV6=0
-[ -f /proc/net/if_inet6 ] && IPV6=1
-[ -n "${FORCE_IPV6:-}" ] && IPV6="$FORCE_IPV6"
+# IPv6 on a port only where it takes nothing from another site: the first site listening on [::]:PORT becomes the
+# default server of every host there, so when the ERP's site listens on PORT over IPv4 only (setup-domain.sh), an
+# IPv6 visitor of the ERP domain would get this site's certificate. Such a server keeps IPv4 only for that port.
+other_site_files() {
+  local f
+  for f in "${NGINX_DIR}"/sites-enabled/* "${NGINX_DIR}"/conf.d/*.conf; do
+    [ -e "$f" ] || continue
+    [ "$(readlink -f "$f")" = "$(readlink -f "$SITE_FILE")" ] && continue
+    echo "$f"
+  done
+}
+ipv6_on_port() { # $1 = 80 | 443
+  local port="$1" files
+  [ -n "${FORCE_IPV6:-}" ] && { [ "$FORCE_IPV6" = 1 ]; return; }
+  [ -f "${IF_INET6:-/proc/net/if_inet6}" ] || return 1
+  mapfile -t files < <(other_site_files)
+  [ "${#files[@]}" -eq 0 ] && return 0
+  # another site listens there over IPv6 already: adding ours changes no one's default
+  grep -hE "^[[:space:]]*listen[[:space:]]+\[::\]:${port}([[:space:];]|$)" "${files[@]}" >/dev/null 2>&1 && return 0
+  # another site listens there over IPv4 only: stay off IPv6 on that port
+  grep -hE "^[[:space:]]*listen[[:space:]]+([0-9.]+:)?${port}([[:space:];]|$)" "${files[@]}" >/dev/null 2>&1 && return 1
+  return 0
+}
+IPV6_80=0; IPV6_443=0
+ipv6_on_port 80 && IPV6_80=1
+ipv6_on_port 443 && IPV6_443=1
 listen_lines() { # $1 = http | https
   if [ "$1" = http ]; then
     echo "    listen 80;"
-    [ "$IPV6" = 1 ] && echo "    listen [::]:80;"
+    [ "$IPV6_80" = 1 ] && echo "    listen [::]:80;"
   else
     echo "    ${LISTEN_TLS}"
-    [ "$IPV6" = 1 ] && echo "    ${LISTEN_TLS/443/[::]:443}"
+    [ "$IPV6_443" = 1 ] && echo "    ${LISTEN_TLS/443/[::]:443}"
     [ -n "$HTTP2_LINE" ] && echo "    ${HTTP2_LINE}"
   fi
   return 0
@@ -171,8 +194,11 @@ proxy_set_header X-Forwarded-Proto $scheme;
 proxy_connect_timeout 5s;
 proxy_read_timeout 60s;
 
-# product images: named after their content, never stale
+# product images: named after their content, never stale. A missing name is not kept and asks the ERP, so images
+# have their own limit, high enough for a page of thumbnails
 location /media/ {
+    limit_req zone=papital_storefront_media burst=300 nodelay;
+    limit_req_status 429;
     proxy_pass http://papital_storefront;
     proxy_cache papital_storefront;
     proxy_cache_key $uri;
@@ -200,7 +226,7 @@ location / {
     proxy_pass http://papital_storefront;
 }
 NGINX
-  sed -i "s/__BURST__/${BURST}/" "${SNIPPET}.new"
+  sed -i "s/__BURST__/${BURST}/g" "${SNIPPET}.new"
 }
 
 # ---------- the site ----------
@@ -216,6 +242,7 @@ proxy_cache_path ${CACHE_DIR} levels=1:2 keys_zone=papital_storefront:10m max_si
 # page requests of one visitor address: every page may ask the ERP, whose Storefront API limit all visitors share;
 # mobile operators put many phones behind one address, so it is generous
 limit_req_zone \$binary_remote_addr zone=papital_storefront_pages:10m rate=${RATE};
+limit_req_zone \$binary_remote_addr zone=papital_storefront_media:10m rate=60r/s;
 
 upstream papital_storefront {
     server 127.0.0.1:${SITE_PORT};
@@ -322,22 +349,34 @@ case "$TLS" in
     KEY_FILE="${LE_LIVE}/privkey.pem"
     if [ "$DRY_RUN" = 1 ]; then
       write_snippet; write_site https; apply
-    elif [ -f "$CERT_FILE" ] && [ "$FORCE_RENEW" != 1 ]; then
+    elif [ -f "$CERT_FILE" ]; then
       log "Using the certificate already in ${LE_LIVE}."
-      if ! openssl x509 -in "$CERT_FILE" -noout -checkend 0 >/dev/null 2>&1; then warn "That certificate has expired: run again with FORCE_RENEW=1."; fi
-      for name in $NAMES; do
-        openssl x509 -in "$CERT_FILE" -noout -ext subjectAltName 2>/dev/null | grep -q "DNS:${name}\b" \
-          || warn "The certificate does not name ${name}: run again with FORCE_RENEW=1 once the DNS of ${name} points here."
-      done
+      # the https site stays up throughout: its port-80 server answers Let's Encrypt's check too
       write_snippet; write_site https; apply
+      if [ "$FORCE_RENEW" = 1 ]; then
+        args=(certonly --webroot -w "$ACME_ROOT" --cert-name "$CERT_NAME" --non-interactive --agree-tos --force-renewal
+              --deploy-hook "systemctl reload nginx")
+        for name in $NAMES; do args+=(-d "$name"); done
+        if [ -n "$EMAIL" ]; then args+=(-m "$EMAIL"); fi
+        log "Asking Let's Encrypt again for ${NAMES} (renewal through http from now on) ..."
+        certbot "${args[@]}" || die "certbot failed; the site keeps its current certificate. The DNS of ${NAMES} must point here and port 80 must be open."
+        systemctl reload nginx
+      else
+        if ! openssl x509 -in "$CERT_FILE" -noout -checkend 0 >/dev/null 2>&1; then warn "That certificate has expired: run again with FORCE_RENEW=1."; fi
+        for name in $NAMES; do
+          openssl x509 -in "$CERT_FILE" -noout -ext subjectAltName 2>/dev/null | grep -q "DNS:${name}\b" \
+            || warn "The certificate does not name ${name}: run again with FORCE_RENEW=1 once the DNS of ${name} points here."
+        done
+      fi
     else
-      # first the http site (it answers Let's Encrypt's check), then the certificate, then https
+      # no certificate yet: first the http site (it answers Let's Encrypt's check), then the certificate, then https.
+      # Meanwhile https requests for this domain reach another site of this server (a certificate error), so on a live
+      # domain take the certificate before the DNS change (RUNBOOK_FA.md §4.4)
       write_snippet; write_site http; apply
-      args=(certonly --webroot -w "$ACME_ROOT" --cert-name "$CERT_NAME" --non-interactive --agree-tos
+      args=(certonly --webroot -w "$ACME_ROOT" --cert-name "$CERT_NAME" --non-interactive --agree-tos --keep-until-expiring
             --deploy-hook "systemctl reload nginx")
       for name in $NAMES; do args+=(-d "$name"); done
       if [ -n "$EMAIL" ]; then args+=(-m "$EMAIL"); fi
-      if [ "$FORCE_RENEW" = 1 ]; then args+=(--force-renewal); else args+=(--keep-until-expiring); fi
       log "Asking Let's Encrypt for ${NAMES} ..."
       certbot "${args[@]}" || die "certbot failed: the DNS of ${NAMES} must point to this server and port 80 must be open. The site answers on http meanwhile; run this script again once the DNS is right."
       write_site https; write_snippet; apply
