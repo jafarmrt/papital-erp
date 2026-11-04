@@ -152,6 +152,30 @@ export async function catalogPage(query: CatalogQuery): Promise<StorefrontCatalo
   };
 }
 
+/**
+ * v11 phase 8.5b: the cards of a campaign page: the chosen items still on the site in the given order, or a collection's
+ * items in the shop's order; at most `limit`
+ */
+export async function campaignCards(products: { itemIds: number[] } | { collection: string }, limit: number): Promise<StorefrontProductCard[]> {
+  const settings = await storefrontSettingValues(orm);
+  const onSale = await itemsOnSale(orm, settings);
+  let chosen: OnSale[];
+  if ('itemIds' in products) {
+    const byId = new Map(onSale.map(item => [item.itemId, item]));
+    chosen = products.itemIds.map(id => byId.get(id)).filter((item): item is OnSale => item !== undefined);
+  } else {
+    chosen = onSale.filter(item => item.collections.includes(products.collection));
+  }
+  chosen = chosen.slice(0, limit);
+  const ids = chosen.map(i => i.itemId);
+  const sellable = await storefrontSellable(orm, ids, settings.warehouseCode);
+  const covers = await imagesOf(orm, ids, { coverOnly: true });
+  return chosen.map(item => {
+    const cover = covers.get(item.itemId)?.[0];
+    return cardOf(item, stockOf(sellable, item.itemId, settings), cover ? altOf(cover, item.name) : null);
+  });
+}
+
 /** At most this many other items of the same design are shown on a product page */
 export const SAME_DESIGN_MAX = 12;
 

@@ -12,13 +12,14 @@ import { DiscountCodesSection } from '../storefront/DiscountCodesSection';
 import { StorefrontSmsSection } from '../storefront/StorefrontSmsSection';
 import { StorefrontSeoSection } from '../storefront/StorefrontSeoForm';
 import { StorefrontRedirectsSection } from '../storefront/StorefrontRedirectsSection';
+import { StorefrontCampaignsSection } from '../storefront/StorefrontCampaignsSection';
 
 /**
  * v11 phase 8.1 (docs/roadmap/V11_STOREFRONT_START_PLAN.md): the settings tab «فروشگاه سایت» of the new papitalgallery.com,
  * which runs as its own app on the site's domain and reads the ERP through the Storefront API. `storefront.view` sees,
  * `storefront.manage` changes.
  */
-type Section = 'products' | 'settings' | 'brand' | 'shipping' | 'groups' | 'discounts' | 'sms' | 'seo' | 'redirects' | 'key';
+type Section = 'products' | 'settings' | 'brand' | 'shipping' | 'groups' | 'discounts' | 'campaigns' | 'sms' | 'seo' | 'redirects' | 'key';
 const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: 'products', label: 'کالاهای سایت' },
   { id: 'settings', label: 'پرداخت، قیمت و موجودی' },
@@ -26,6 +27,7 @@ const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: 'shipping', label: 'روش‌های ارسال' },
   { id: 'groups', label: 'گروه‌های خریدار' },
   { id: 'discounts', label: 'کدهای تخفیف' },
+  { id: 'campaigns', label: 'صفحه‌های ویژه' },
   { id: 'sms', label: 'پیامک' },
   { id: 'seo', label: 'جست‌وجو و آمار بازدید' },
   { id: 'redirects', label: 'نشانی‌های سایت قبلی' },
@@ -60,6 +62,7 @@ export function StorefrontTab({ canManage }: { canManage: boolean }) {
       {section === 'shipping' && <ShippingMethodsSection canManage={canManage} />}
       {section === 'groups' && <BuyerGroupsSection canManage={canManage} />}
       {section === 'discounts' && <DiscountCodesSection canManage={canManage} />}
+      {section === 'campaigns' && <StorefrontCampaignsSection canManage={canManage} />}
       {section === 'sms' && <StorefrontSmsSection canManage={canManage} />}
       {section === 'seo' && <StorefrontSeoSection canManage={canManage} />}
       {section === 'redirects' && <StorefrontRedirectsSection canManage={canManage} />}

@@ -12,7 +12,7 @@ import {
   workflowDefinitions, workflowDefinitionVersions, workflowStates, workflowTransitions, workflowInstances,
   workflowHistoryLogs, workflowTasks, workflowPendingApprovals, workflowDelegations,
   mediaSections, mediaAssets, projectManagers, stockReceiptConfirmations, workshopTaskReports,
-  storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontBuyerGroups, storefrontBuyerAccounts, storefrontSmsMessages, storefrontRedirects, storefrontDiscountCodes, storefrontDiscountRedemptions,
+  storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontBuyerGroups, storefrontBuyerAccounts, storefrontSmsMessages, storefrontRedirects, storefrontDiscountCodes, storefrontDiscountRedemptions, storefrontCampaigns,
 } from '../../db/schema.js';
 import { SENSITIVE_SETTING_PATTERN } from '../settings/systemSettings.service.js';
 
@@ -143,5 +143,6 @@ export const DATA_EXPORT_TABLE_SOURCES: Readonly<Record<string, TableSpecSource>
     table: storefrontBuyerAccounts, key: ['id'], columns: withoutColumns(storefrontBuyerAccounts, ['passwordHash', 'failedLogins', 'lockedUntil']),
   },
   storefront_redirects: { table: storefrontRedirects, key: ['id'] },
+  storefront_campaigns: { table: storefrontCampaigns, key: ['id'] },
 };
 

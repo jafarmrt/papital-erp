@@ -18,7 +18,7 @@ import {
   integrationDeliveryJobs, eventActionRuleRetirements, webhookEventPatternRepairs, itemPriceTitleCleanup,
   dailyLogVisibilityRepairs, statutoryRemittanceLines, settlementAllocations, payrollStatutoryRates, payrollEidiRates, itemCodeHistory,
   mediaAssets, mediaSections, storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontRedirects, storefrontSmsCodes, storefrontSmsMessages,
-  storefrontBuyerGroups, storefrontBuyerAccounts, storefrontBuyerSessions, storefrontPasswordTokens, storefrontDiscountCodes, storefrontDiscountRedemptions, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
+  storefrontBuyerGroups, storefrontBuyerAccounts, storefrontBuyerSessions, storefrontPasswordTokens, storefrontDiscountCodes, storefrontDiscountRedemptions, storefrontCampaigns, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
 } from '../../db/schema.js';
 
 /**
@@ -157,6 +157,8 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   { name: 'storefront_products', table: storefrontProducts },
   // v11 phase 8.5: the old-address redirects point to items too
   { name: 'storefront_redirects', table: storefrontRedirects },
+  // v11 phase 8.5b: the campaign pages point to media images (their hero), so they go before media_assets
+  { name: 'storefront_campaigns', table: storefrontCampaigns },
   { name: 'storefront_shipping_rates', table: storefrontShippingRates },
   { name: 'storefront_shipping_methods', table: storefrontShippingMethods },
   { name: 'item_prices', table: itemPrices },
