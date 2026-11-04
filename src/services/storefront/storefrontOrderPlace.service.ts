@@ -22,6 +22,8 @@ import { buyerOrderView, type OrderRecord } from './storefrontOrderView.js';
 import { storefrontSellable, storefrontWarehouseCode } from './storefrontStock.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
 import { queueOrderSms } from './storefrontSms.service.js';
+import { appliedDiscount, chooseDiscount, redeemDiscount, type DiscountChoice } from './storefrontDiscountApply.js';
+import { normalizeDiscountCode, spreadDiscount } from '../../lib/storefront/storefrontDiscountRules.js';
 
 /**
  * v11 phase 8.2a (start plan §4): placing a site order, in one transaction. The server prices the cart (the request's
@@ -47,9 +49,20 @@ interface CleanOrder {
   shippingMethod: string;
   lines: Array<{ slug: string; quantity: number }>;
   paymentMethod: PaymentMethod;
+  /** v11 phase 8.2c: the code as normalized; left out when none, so the hash of an order without one is as before */
+  discountCode?: string;
 }
 
 const fieldError = (field: string, message: string) => new ValidationError(message, { field }, 'STOREFRONT_ORDER_FIELD_INVALID');
+
+/** A typed discount code normalized, '' for none, or a 422 on `discountCode` when it cannot be a code */
+function typedDiscountCode(raw: unknown): string {
+  const text = String(raw ?? '').trim();
+  if (!text) return '';
+  const code = normalizeDiscountCode(text);
+  if (!code) throw new ValidationError('این کد تخفیف شناخته نیست یا دیگر کار نمی‌کند.', { field: 'discountCode' }, 'STOREFRONT_DISCOUNT_NOT_APPLICABLE');
+  return code;
+}
 
 /** The request with every field normalized, or the first field's reason (each error names its field for the form) */
 export function cleanOrderRequest(input: PlaceOrderRequest): CleanOrder {
@@ -77,7 +90,11 @@ export function cleanOrderRequest(input: PlaceOrderRequest): CleanOrder {
   if (linesError) throw fieldError('lines', linesError);
   const paymentMethod = input.paymentMethod === undefined || input.paymentMethod === null ? 'card' : input.paymentMethod;
   if (!isPaymentMethod(paymentMethod)) throw fieldError('paymentMethod', 'روش پرداخت را انتخاب کنید.');
-  return { requestKey, recipientName, phone, phoneKey: phoneMatchKey(phone), province, city, address, postalCode, note, shippingMethod, lines, paymentMethod };
+  const discountCode = typedDiscountCode(input.discountCode);
+  return {
+    requestKey, recipientName, phone, phoneKey: phoneMatchKey(phone), province, city, address, postalCode, note, shippingMethod, lines, paymentMethod,
+    ...(discountCode ? { discountCode } : {}),
+  };
 }
 
 /**
@@ -121,8 +138,19 @@ export async function quoteShipping(input: ShippingQuoteRequest, rawSession?: un
   const linesError = cartLinesError(lines);
   if (linesError) throw fieldError('lines', linesError);
   const cart = await priceCart(orm, settings, lines, buyer.group);
-  return { itemsAmount: cart.itemsAmount, options: await shippingOptions(orm, settings, cart, province) };
+  const code = typedDiscountCode(input.discountCode);
+  // the quote has no phone yet: the phone's own uses and first order are checked again when the order is placed
+  const choice = code ? await chooseDiscount(orm, code, cart.itemsAmount, { ...buyer, phoneKey: '' }) : null;
+  return {
+    itemsAmount: cart.itemsAmount,
+    discount: choice ? appliedDiscount(choice.code.code, choice.code.title, choice.amount.toString()) : null,
+    options: await shippingOptions(orm, settings, cart, province, discountedSubtotal(cart.itemsAmount, choice)),
+  };
 }
+
+/** The items amount after a code: free shipping is reckoned on what the buyer pays for the items */
+const discountedSubtotal = (itemsAmount: string, choice: DiscountChoice | null): string =>
+  (BigInt(itemsAmount) - (choice?.amount ?? 0n)).toString();
 
 async function findByRequestKey(executor: DbExecutor, requestKey: string): Promise<OrderRecord | undefined> {
   const [row] = await executor.select().from(storefrontOrders).where(eq(storefrontOrders.requestKey, requestKey));
@@ -187,10 +215,16 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
     throw new ConflictError('موجودی برخی کالاها کمتر از تعداد سفارش است.', { lines: short }, 'STOREFRONT_OUT_OF_STOCK');
   }
 
-  const option = (await shippingOptions(tx, settings, cart, order.province)).find(o => o.code === order.shippingMethod);
+  // the code under its row lock, so its uses counted here hold until the commit (two orders never take its last use)
+  const choice = order.discountCode
+    ? await chooseDiscount(tx, order.discountCode, cart.itemsAmount, { ...buyer, phoneKey: order.phoneKey }, { lock: true })
+    : null;
+  const discountAmount = (choice?.amount ?? 0n).toString();
+  const lineDiscounts = spreadDiscount(cart.lines.map(l => BigInt(l.lineAmount)), choice?.amount ?? 0n);
+  const option = (await shippingOptions(tx, settings, cart, order.province, discountedSubtotal(cart.itemsAmount, choice))).find(o => o.code === order.shippingMethod);
   if (!option) throw fieldError('shippingMethod', 'این روش ارسال برای این سبد و استان در دسترس نیست؛ روش دیگری انتخاب کنید.');
   const shippingAmount = option.kind === 'cost' ? option.amount : '0';
-  const payable = (BigInt(cart.itemsAmount) + BigInt(shippingAmount)).toString();
+  const payable = (BigInt(cart.itemsAmount) - BigInt(discountAmount) + BigInt(shippingAmount)).toString();
 
   const [{ value: sequence }] = (await tx.execute(sql`SELECT nextval('storefront_order_number_seq')::text AS value`)).rows as Array<{ value: string }>;
   const orderNumber = String(sequence);
@@ -200,9 +234,12 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
   const documentId = await DocumentService.createDocument({
     docType: 'invoice', status: 'proforma', inOut: 'out', user: STOREFRONT_BOT_USER,
     partyId: customer.id, buyerName: customer.name, buyerPhone: order.phone, buyerCity: order.city, buyerAddress: fullAddress,
-    notes: `${ORDER_NOTE_PREFIX} ${orderNumber}، ارسال: ${option.title}${option.kind === 'on_delivery' ? ' (هزینه در محل)' : ''}${onAccount ? '، پرداخت به حساب' : ''}${buyer.group ? `، گروه خریدار «${buyer.group.title}»` : ''}`,
+    notes: `${ORDER_NOTE_PREFIX} ${orderNumber}، ارسال: ${option.title}${option.kind === 'on_delivery' ? ' (هزینه در محل)' : ''}${onAccount ? '، پرداخت به حساب' : ''}${buyer.group ? `، گروه خریدار «${buyer.group.title}»` : ''}${choice ? `، کد تخفیف ${choice.code.code}` : ''}`,
     currency: 'IRR', vatAmount: 0, vatPercent: 0, serviceChargeAmount: shippingAmount,
-    items: cart.lines.map(l => ({ itemId: l.item.itemId, quantity: l.quantity, unit_price: Number(l.unitPrice), location: warehouse })),
+    items: cart.lines.map((l, i) => ({
+      itemId: l.item.itemId, quantity: l.quantity, unit_price: Number(l.unitPrice), location: warehouse,
+      ...(lineDiscounts[i] > 0n ? { discount: lineDiscounts[i].toString() } : {}),
+    })),
     location: warehouse, externalTx: tx,
   });
   const storedDocument = await DocumentService.documentAuditSnapshot(tx, documentId);
@@ -220,8 +257,10 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
     shippingAmount: money(shippingAmount), itemsAmount: money(cart.itemsAmount), payableAmount: money(payable),
     reserveUntil: sql`now() + make_interval(hours => ${settings.reservationHours})`,
     buyerAccountId: buyer.account?.id ?? null, buyerGroupId: buyer.group?.id ?? null, paymentMethod: order.paymentMethod,
+    discountCodeId: choice?.code.id ?? null, discountCode: choice?.code.code ?? '', discountAmount: money(discountAmount),
     updatedBy: STOREFRONT_BOT_USER,
   }).returning();
+  if (choice) await redeemDiscount(tx, choice, { id: row.id, phoneKey: order.phoneKey, buyerAccountId: row.buyerAccountId });
   // v11 phase 8.4a: the buyer's text, queued with the order (sent after the commit; nothing while sending is off). Its
   // text asks for a card-to-card payment, so an on-account order sends none.
   if (!onAccount) await queueOrderSms(tx, row, 'order_placed');
@@ -231,7 +270,7 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
     details: {
       after: {
         orderNumber, documentId, customerId: customer.id, shippingMethod: option.code, itemsAmount: cart.itemsAmount,
-        shippingAmount, payableAmount: payable, reserveUntil: row.reserveUntil, paymentMethod: order.paymentMethod,
+        shippingAmount, discountCode: row.discountCode, discountAmount, payableAmount: payable, reserveUntil: row.reserveUntil, paymentMethod: order.paymentMethod,
         buyerAccountId: row.buyerAccountId, buyerGroupId: row.buyerGroupId,
       },
     },

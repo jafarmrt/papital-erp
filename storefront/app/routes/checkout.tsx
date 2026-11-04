@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Form, Link, redirect, useNavigation } from 'react-router';
 import type { Route } from './+types/checkout';
 import type { PlacedOrder, ShippingOption, ShippingQuoteAnswer } from '@erp/storefront/storefrontOrderContracts';
+import type { AppliedDiscount } from '@erp/storefront/storefrontDiscountContracts';
 import type { StorefrontAccountView } from '@erp/storefront/storefrontBuyerContracts';
 import { ADDRESS_MAX, BUYER_NOTE_MAX, CITY_MAX, RECIPIENT_NAME_MAX } from '@erp/storefront/storefrontOrderRules';
 import { IRAN_PROVINCES } from '@erp/storefront/storefrontRules';
@@ -23,6 +24,8 @@ import { Field, FormError, PhoneField, SelectField, SubmitButton, TextAreaField 
  *   the same order and key again instead of a second order. It is renewed only after the ERP refused the order (a
  *   refused key never made an order); when the ERP could not be reached the same key is kept, since the order may exist.
  * - A signed-in buyer's details fill the form, and a buyer of a group that may order «به حساب» chooses how to pay.
+ * - A discount code (8.2c) goes with the quote and the order; the ERP checks it and answers its amount. A code that does
+ *   not apply is said under its field and the quote is asked again without it, so the buyer still sees the methods.
  * - The placed order's tracking key goes in the `sf_orders` cookie and the buyer lands on its page; the cart is emptied.
  */
 const FIELDS = ['recipientName', 'phone', 'province', 'city', 'address', 'postalCode', 'note'] as const;
@@ -38,6 +41,8 @@ interface ActionAnswer {
   paymentMethod: string;
   options: ShippingOption[] | null;
   itemsAmount: string;
+  discountCode: string;
+  discount: AppliedDiscount | null;
   error?: string;
   field?: string;
 }
@@ -84,15 +89,24 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionAnswe
   const requestKey = /^[A-Za-z0-9_-]{16,80}$/.test(typedKey) ? typedKey : randomUUID();
   const shippingMethod = String(form.get('shippingMethod') ?? '').slice(0, 60);
   const paymentMethod = String(form.get('paymentMethod') ?? 'card') === 'on_account' ? 'on_account' : 'card';
-  const answer = (rest: Partial<ActionAnswer>): ActionAnswer => ({ fields, requestKey, shippingMethod, paymentMethod, options: null, itemsAmount: '', ...rest });
+  const discountCode = String(form.get('discountCode') ?? '').trim().slice(0, 40);
+  const answer = (rest: Partial<ActionAnswer>): ActionAnswer => ({
+    fields, requestKey, shippingMethod, paymentMethod, options: null, itemsAmount: '', discountCode, discount: null, ...rest,
+  });
 
-  const quote = await accountCall<ShippingQuoteAnswer>(request, 'POST', '/shipping/quote', { province: fields.province, lines });
+  const quoteOf = (code: string) => accountCall<ShippingQuoteAnswer>(request, 'POST', '/shipping/quote', { province: fields.province, lines, ...(code ? { discountCode: code } : {}) });
+  let quote = await quoteOf(discountCode);
+  if (!quote.data && discountCode && quote.field === 'discountCode') {
+    const refused = quote.error;
+    quote = await quoteOf('');
+    if (quote.data) return answer({ options: quote.data.options, itemsAmount: quote.data.itemsAmount, error: refused, field: 'discountCode' });
+  }
   if (!quote.data) return answer({ error: quote.error, field: quote.field === 'province' ? 'province' : '' });
-  const quoted = { options: quote.data.options, itemsAmount: quote.data.itemsAmount };
+  const quoted = { options: quote.data.options, itemsAmount: quote.data.itemsAmount, discount: quote.data.discount };
   if (String(form.get('intent') ?? '') !== 'place') return answer(quoted);
 
   const placed = await accountCall<PlacedOrder>(request, 'POST', '/orders', {
-    requestKey, ...fields, shippingMethod, lines, ...(paymentMethod === 'on_account' ? { paymentMethod } : {}),
+    requestKey, ...fields, shippingMethod, lines, ...(paymentMethod === 'on_account' ? { paymentMethod } : {}), ...(discountCode ? { discountCode } : {}),
   });
   if (!placed.data) {
     return answer({ ...quoted, error: placed.error, field: placed.field ?? '', requestKey: placed.status >= 500 ? requestKey : randomUUID() });
@@ -113,6 +127,8 @@ export default function CheckoutPage({ loaderData, actionData }: Route.Component
   const chosen = options?.some(o => o.code === answer?.shippingMethod) ? answer?.shippingMethod : options?.[0]?.code;
   const onAccount = paymentMethods.includes('on_account');
   const cardAllowed = paymentMethods.includes('card');
+  const discount = answer?.discount ?? null;
+  const afterDiscount = discount && answer ? (BigInt(answer.itemsAmount || '0') - BigInt(discount.amount)).toString() : '';
 
   return (
     <div className="mx-auto w-full max-w-xl px-4 pt-6 pb-16 lg:pt-10">
@@ -137,6 +153,9 @@ export default function CheckoutPage({ loaderData, actionData }: Route.Component
         <TextAreaField label="نشانی" name="address" autoComplete="street-address" maxLength={ADDRESS_MAX} defaultValue={value('address')} hint="خیابان، کوچه، پلاک و واحد" invalid={bad('address')} />
         <Field label="کد پستی" name="postalCode" inputMode="numeric" autoComplete="postal-code" dir="ltr" maxLength={20} defaultValue={value('postalCode')} hint="ده رقم، بی خط تیره" invalid={bad('postalCode')} />
         <TextAreaField label="توضیح (اختیاری)" name="note" autoComplete="off" maxLength={BUYER_NOTE_MAX} defaultValue={value('note')} required={false} invalid={bad('note')} />
+
+        <Field label="کد تخفیف (اختیاری)" name="discountCode" autoComplete="off" dir="ltr" maxLength={40} required={false}
+          defaultValue={answer?.discountCode ?? ''} invalid={bad('discountCode')} hint={discount ? `«${discount.title || discount.code}» روی این سبد نشست.` : 'اگر کدی دارید بنویسید؛ با «هزینهٔ ارسال» سنجیده می‌شود.'} />
 
         {options ? (
           <fieldset className="space-y-3" aria-invalid={bad('shippingMethod') || undefined}>
@@ -180,6 +199,12 @@ export default function CheckoutPage({ loaderData, actionData }: Route.Component
         {options ? (
           <div className="space-y-2 border-t border-border pt-5">
             <p className="flex justify-between text-lg"><span>جمع کالاها</span><span className="font-extrabold">{formatPrice(answer?.itemsAmount ?? '')}</span></p>
+            {discount ? (
+              <>
+                <p className="flex justify-between text-base text-brand"><span>تخفیف <span dir="ltr">{discount.code}</span></span><span className="font-bold">− {formatPrice(discount.amount)}</span></p>
+                <p className="flex justify-between text-lg"><span>پس از تخفیف</span><span className="font-extrabold">{formatPrice(afterDiscount)}</span></p>
+              </>
+            ) : null}
             <p className="text-sm leading-7 text-muted-foreground">
               هزینهٔ ارسال روش انتخابی به این مبلغ افزوده می‌شود. پس از ثبت، کالاها {faNumber(reservationHours)} ساعت برای شما کنار گذاشته می‌شوند تا پرداخت را انجام دهید.
             </p>

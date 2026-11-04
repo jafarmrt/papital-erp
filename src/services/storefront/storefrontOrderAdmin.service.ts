@@ -25,6 +25,7 @@ import { receiptImageFile } from './storefrontReceiptImage.js';
 import { rialText } from './storefrontShipping.service.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
 import { queueOrderSms } from './storefrontSms.service.js';
+import { releaseDiscount } from './storefrontDiscountApply.js';
 
 /**
  * v11 phase 8.2a (start plan §5): the «سفارش‌های سایت» screen of the ERP. Every action locks the order row first and
@@ -270,6 +271,8 @@ export async function cancelOpenOrder(tx: DbExecutor, order: OrderRecord, reason
   await tx.update(storefrontPaymentReceipts).set({ status: 'rejected', rejectReason: 'سفارش لغو شد', reviewedBy: actor.username, reviewedAt: systemNowUtcIso() })
     .where(and(eq(storefrontPaymentReceipts.orderId, order.id), eq(storefrontPaymentReceipts.status, 'pending')));
   const cancelled = await moveOrder(tx, order, actor.username, { status: 'cancelled', cancelReason: reason, cancelledAt: systemNowUtcIso() });
+  // v11 phase 8.2c: a cancelled order (by a colleague or when its time ran out) gives its discount code's use back
+  await releaseDiscount(tx, order.id);
   await queueOrderSms(tx, cancelled, 'order_cancelled');
   return cancelled;
 }

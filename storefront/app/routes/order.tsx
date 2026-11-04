@@ -178,12 +178,16 @@ export default function OrderPage({ loaderData, actionData }: Route.ComponentPro
           {order.lines.map(line => (
             <li key={line.slug} className="flex justify-between gap-4 py-3">
               <span className="leading-7">{line.name} <span className="text-muted-foreground">× {faNumber(line.quantity)}</span></span>
-              <span className="shrink-0 font-bold">{formatPrice(line.lineAmount)}</span>
+              {/* before the discount code: the code's amount is its own row below (the ERP line carries it as its discount) */}
+              <span className="shrink-0 font-bold">{formatPrice(order.discount ? (BigInt(line.unitPrice) * BigInt(line.quantity)).toString() : line.lineAmount)}</span>
             </li>
           ))}
         </ul>
         <dl className="mt-3 space-y-2">
           <div className="flex justify-between"><dt>جمع کالاها</dt><dd>{formatPrice(order.itemsAmount)}</dd></div>
+          {order.discount ? (
+            <div className="flex justify-between text-brand"><dt>تخفیف <span dir="ltr">{order.discount.code}</span></dt><dd>− {formatPrice(order.discount.amount)}</dd></div>
+          ) : null}
           <div className="flex justify-between"><dt>ارسال: {order.shipping.title}</dt><dd>{shippingAmount ? (shippingAmount === '0' ? 'رایگان' : formatPrice(shippingAmount)) : 'هنگام تحویل'}</dd></div>
           <div className="flex justify-between text-lg font-extrabold"><dt>مبلغ قابل پرداخت</dt><dd>{formatPrice(order.payableAmount)}</dd></div>
         </dl>

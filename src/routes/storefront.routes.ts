@@ -30,6 +30,8 @@ import {
 import { importWooRedirects } from '../services/storefront/storefrontRedirectImport.service.js';
 import { BUYER_LIST_FILTERS, CATALOG_SCOPES, GROUP_COLLECTIONS_MAX, type BuyerListFilter } from '../lib/storefront/storefrontBuyerRules.js';
 import { createBuyerGroup, deleteBuyerGroup, listBuyerGroups, updateBuyerGroup } from '../services/storefront/storefrontBuyerGroups.service.js';
+import { createDiscountCode, deleteDiscountCode, listDiscountCodes, updateDiscountCode } from '../services/storefront/storefrontDiscounts.service.js';
+import { DISCOUNT_KINDS } from '../lib/storefront/storefrontDiscountRules.js';
 import {
   BUYER_PAGE_MAX, approveBuyer, buyerAccountDetail, buyerAction, changeBuyerGroup, listBuyerAccounts, newPasswordLink,
 } from '../services/storefront/storefrontBuyerAdmin.service.js';
@@ -305,6 +307,33 @@ router.put('/buyer-groups/:id', requirePermission(STOREFRONT_MANAGE_PERMISSION),
 
 router.delete('/buyer-groups/:id', requirePermission(STOREFRONT_MANAGE_PERMISSION), validate(groupDeleteSchema), asyncHandler(async (req: Request, res: Response) => {
   await deleteBuyerGroup(req, Number(req.params.id), Number((req.query as { version?: number }).version));
+  res.json({ success: true });
+}));
+
+// v11 phase 8.2c: the «کدهای تخفیف» section of the tab (storefront.view reads, storefront.manage writes)
+const discountBody = z.object({
+  code: text(60), title: text(200), kind: z.enum(DISCOUNT_KINDS), percent: z.number().int(), amount, maxDiscount: amount,
+  minOrderAmount: amount, startsOn: text(10), endsOn: text(10), usageLimit: z.number().int(), perBuyerLimit: z.number().int(),
+  forRetail: z.boolean(), groupIds: z.array(z.number().int().min(1).max(2_147_483_647)).max(100), accountsOnly: z.boolean(),
+  firstOrderOnly: z.boolean(), isActive: z.boolean(),
+});
+const discountCreateSchema = z.object({ body: discountBody.strict() });
+const discountUpdateSchema = z.object({ params: z.object({ id: numericIdString }).passthrough(), body: discountBody.extend({ version: version.min(1) }).strict() });
+
+router.get('/discounts', requirePermission(STOREFRONT_VIEW_PERMISSION), asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ data: await listDiscountCodes(orm) });
+}));
+
+router.post('/discounts', requirePermission(STOREFRONT_MANAGE_PERMISSION), idempotency({ scope: 'storefront' }), validate(discountCreateSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.status(201).json({ success: true, data: await createDiscountCode(req, req.body) });
+}));
+
+router.put('/discounts/:id', requirePermission(STOREFRONT_MANAGE_PERMISSION), validate(discountUpdateSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await updateDiscountCode(req, Number(req.params.id), req.body) });
+}));
+
+router.delete('/discounts/:id', requirePermission(STOREFRONT_MANAGE_PERMISSION), validate(groupDeleteSchema), asyncHandler(async (req: Request, res: Response) => {
+  await deleteDiscountCode(req, Number(req.params.id), Number((req.query as { version?: number }).version));
   res.json({ success: true });
 }));
 

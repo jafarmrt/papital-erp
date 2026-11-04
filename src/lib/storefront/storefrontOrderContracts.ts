@@ -1,4 +1,5 @@
 import type { CancelReason, OrderStatus, PaymentMethod, ReceiptStatus } from './storefrontOrderRules.js';
+import type { AppliedDiscount } from './storefrontDiscountContracts.js';
 
 /**
  * v11 phase 8.2a: the answers of the order routes, one contract for the server, the ERP orders screen and the storefront
@@ -10,6 +11,8 @@ import type { CancelReason, OrderStatus, PaymentMethod, ReceiptStatus } from './
 export interface ShippingQuoteRequest {
   province: string;
   lines: Array<{ slug: string; quantity: number }>;
+  /** v11 phase 8.2c: a discount code to try on this cart; a code that does not apply is a 422 on the field `discountCode` */
+  discountCode?: string;
 }
 
 export interface ShippingOption {
@@ -25,6 +28,8 @@ export interface ShippingOption {
 
 export interface ShippingQuoteAnswer {
   itemsAmount: string;
+  /** v11 phase 8.2c: the code that applied (free shipping is reckoned on the items after it), or null */
+  discount: AppliedDiscount | null;
   /** the methods this cart and province can use, in the site's order (a weight-priced method needs every item's weight) */
   options: ShippingOption[];
 }
@@ -44,6 +49,8 @@ export interface PlaceOrderRequest {
   lines: Array<{ slug: string; quantity: number }>;
   /** v11 phase 8.2b part 2: 'card' (the default) or, for a signed-in account of a group that allows it, 'on_account' */
   paymentMethod?: PaymentMethod;
+  /** v11 phase 8.2c: a discount code; the order is refused (422 on `discountCode`) when it no longer applies */
+  discountCode?: string;
 }
 
 export interface OrderPaymentInfo {
@@ -99,6 +106,8 @@ export interface BuyerOrder {
   paymentMethod: PaymentMethod;
   paymentMethodTitle: string;
   wholesale: boolean;
+  /** v11 phase 8.2c: the code the order used and its amount (taken off the lines), or null */
+  discount: AppliedDiscount | null;
 }
 
 /** The answer of placing an order: the order, and its tracking key (also answered again to a repeat of the same request) */

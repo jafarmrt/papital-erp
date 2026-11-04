@@ -24,5 +24,7 @@ export default [
   route('checkout', 'routes/checkout.tsx'),
   route('orders/track', 'routes/orderTrack.tsx'),
   route('orders/:number', 'routes/order.tsx'),
+  // v11 phase 8.2c: the corporate gift form (a CRM lead in the ERP)
+  route('corporate-gift', 'routes/corporateGift.tsx'),
   route('*', 'routes/notFound.tsx'),
 ] satisfies RouteConfig;

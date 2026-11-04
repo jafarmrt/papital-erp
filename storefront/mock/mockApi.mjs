@@ -118,6 +118,7 @@ async function auth(req, res, route) {
 const orders = new Map();
 const byRequestKey = new Map();
 let nextNumber = 100001;
+let nextLead = 501;
 const keyOf = number => `ok_mock${number}`.padEnd(46, 'x');
 const STATUS_TITLES = { awaiting_payment: 'در انتظار پرداخت', payment_submitted: 'در انتظار تأیید پرداخت', awaiting_approval: 'در انتظار تأیید فروشگاه' };
 const priced = lines => {
@@ -129,12 +130,21 @@ const priced = lines => {
   }
   return out.length ? out : null;
 };
-const quoteOf = (province, lines) => {
+// v11 phase 8.2c: one mock code, YALDA (10% in whole tomans); any other code is refused on its field
+const discountOf = (raw, items) => {
+  const code = latin(raw).replace(/\s+/g, '').toUpperCase();
+  if (!code) return null;
+  if (code !== 'YALDA') return 'bad';
+  const amount = (items / 10n / 10n) * 10n;
+  return { code, title: 'تخفیف یلدا', amount: amount.toString(), amountToman: (amount / 10n).toString() };
+};
+const discountRefused = res => send(res, 422, { error: 'این کد تخفیف شناخته نیست یا دیگر کار نمی‌کند.', code: 'STOREFRONT_DISCOUNT_NOT_APPLICABLE', details: { field: 'discountCode' } });
+const quoteOf = (province, lines, discount = null) => {
   const items = lines.reduce((sum, l) => sum + BigInt(l.lineAmount), 0n);
-  const free = settings.freeShippingThreshold && items >= BigInt(settings.freeShippingThreshold);
+  const free = settings.freeShippingThreshold && items - BigInt(discount?.amount ?? 0) >= BigInt(settings.freeShippingThreshold);
   const options = [{ code: 'post', title: 'پست پیشتاز', description: '', kind: 'cost', amount: free ? '0' : '500000', amountToman: free ? '0' : '50000', free: Boolean(free) }];
   if (province === 'تهران') options.push({ code: 'snapp', title: 'اسنپ باکس', description: 'فقط در تهران، همان روز.', kind: 'on_delivery', amount: '0', amountToman: '0', free: false });
-  return { itemsAmount: items.toString(), options };
+  return { itemsAmount: items.toString(), discount, options };
 };
 const orderView = o => {
   const waiting = o.status === 'awaiting_payment';
@@ -143,6 +153,7 @@ const orderView = o => {
     recipient: o.recipient, note: o.note, shipping: o.shipping, lines: o.lines, itemsAmount: o.itemsAmount, payableAmount: o.payableAmount,
     payableToman: (BigInt(o.payableAmount) / 10n).toString(), payment: waiting ? settings.payment : null, canSendReceipt: waiting, receipts: o.receipts,
     trackingCode: '', cancelReason: null, cancelReasonTitle: '', paymentMethod: 'card', paymentMethodTitle: 'کارت‌به‌کارت', wholesale: false,
+    discount: o.discount ?? null,
   };
 };
 // the ERP takes Persian and Arabic digits in every field a buyer types (start plan §9الف)
@@ -158,7 +169,9 @@ async function ordering(req, res, route) {
   if (route === '/shipping/quote') {
     if (!body.province) return fieldError(res, 'province', 'استان را از فهرست انتخاب کنید.');
     const lines = priced(body.lines);
-    return lines ? send(res, 200, { data: quoteOf(body.province, lines) }) : fieldError(res, 'lines', 'این کالا روی سایت فروخته نمی‌شود.');
+    if (!lines) return fieldError(res, 'lines', 'این کالا روی سایت فروخته نمی‌شود.');
+    const discount = discountOf(body.discountCode, lines.reduce((sum, l) => sum + BigInt(l.lineAmount), 0n));
+    return discount === 'bad' ? discountRefused(res) : send(res, 200, { data: quoteOf(body.province, lines, discount) });
   }
   if (route === '/orders' && req.method === 'POST') {
     const again = byRequestKey.get(body.requestKey);
@@ -169,7 +182,9 @@ async function ordering(req, res, route) {
     if (body.paymentMethod === 'on_account') return fieldError(res, 'paymentMethod', 'پرداخت «به حساب» برای این حساب باز نیست.');
     const lines = priced(body.lines);
     if (!lines) return fieldError(res, 'lines', 'این کالا روی سایت فروخته نمی‌شود.');
-    const quote = quoteOf(body.province, lines);
+    const discount = discountOf(body.discountCode, lines.reduce((sum, l) => sum + BigInt(l.lineAmount), 0n));
+    if (discount === 'bad') return discountRefused(res);
+    const quote = quoteOf(body.province, lines, discount);
     const option = quote.options.find(o => o.code === body.shippingMethod);
     if (!option) return fieldError(res, 'shippingMethod', 'این روش ارسال برای این سبد و استان در دسترس نیست؛ روش دیگری انتخاب کنید.');
     const number = String(nextNumber++);
@@ -177,7 +192,7 @@ async function ordering(req, res, route) {
       number, status: 'awaiting_payment', createdAt: new Date().toISOString(), account: accountOf(req) ?? null,
       recipient: { name: body.recipientName, phone: body.phone, province: body.province, city: body.city, address: body.address, postalCode: body.postalCode },
       note: body.note ?? '', shipping: { code: option.code, title: option.title, kind: option.kind, amount: option.amount }, lines,
-      itemsAmount: quote.itemsAmount, payableAmount: (BigInt(quote.itemsAmount) + BigInt(option.amount)).toString(), receipts: [],
+      itemsAmount: quote.itemsAmount, payableAmount: (BigInt(quote.itemsAmount) - BigInt(discount?.amount ?? 0) + BigInt(option.amount)).toString(), receipts: [], discount,
     };
     orders.set(number, order);
     byRequestKey.set(body.requestKey, order);
@@ -232,6 +247,14 @@ createServer(async (req, res) => {
   last = { clientIp: String(req.headers['x-storefront-client-ip'] ?? ''), session: String(req.headers['x-buyer-session'] ?? '') };
   if (req.method === 'POST' && route.startsWith('/auth/')) return auth(req, res, route);
   if (route === '/shipping/quote' || route.startsWith('/orders') || route.startsWith('/account/orders')) return ordering(req, res, route);
+  // v11 phase 8.2c: the corporate gift form makes a CRM lead in the ERP; here a number, or a refusal on the phone field
+  if (route === '/inquiries/corporate-gift' && req.method === 'POST') {
+    const body = await readBody(req);
+    lastPost = { route, orderKey: '', session: '', body };
+    if (String(body.organization ?? '').trim().length < 2) return fieldError(res, 'organization', 'نام سازمان یا شرکت را بنویسید.');
+    if (!/^\+?\d{8,15}$/.test(latin(body.phone).replace(/[\s()-]/g, ''))) return fieldError(res, 'phone', 'شمارهٔ تماس را با پیش‌شماره بنویسید (۸ تا ۱۵ رقم).');
+    return send(res, 201, { data: { reference: String(nextLead++) } });
+  }
   if (route === '/account/prices') return send(res, 200, { data: { group: '', prices: [] } });
   if (route === '/account') {
     const phone = sessions.get(String(req.headers['x-buyer-session'] ?? ''));

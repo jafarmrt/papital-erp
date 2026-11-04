@@ -35,6 +35,7 @@ export async function loader() {
       ? `<image:image><image:loc>${xml(`${siteUrl}${mediaPath(p.cover.sha256)}`)}</image:loc></image:image>`
       : '')),
     ...INFO_PAGES.map(page => url(`/${page.slug}`)),
+    url('/corporate-gift'),
   ];
   const body = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${entries.join('\n')}\n</urlset>\n`;
   return new Response(body, { headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' } });
