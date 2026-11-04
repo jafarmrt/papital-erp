@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import { and, count, desc, eq, gt, ilike, inArray, isNotNull, isNull, lte, ne, or, sql, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, gt, inArray, isNotNull, isNull, lte, ne, or, sql, type SQL } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, mediaAssets, mediaSections, storefrontCampaigns, storefrontDiscountCodes, storefrontDiscountRedemptions } from '../../db/schema.js';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
@@ -7,6 +7,7 @@ import { can } from '../../middleware/authorize.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { mediaFilePath } from '../../lib/media/mediaPaths.js';
+import { foldedContains } from '../../lib/search/searchSql.js';
 import { OptimisticLockError, nextVersion } from '../../lib/occHelper.js';
 import {
   CAMPAIGNS_MAX, CAMPAIGN_PRODUCTS_MAX, campaignProblem, campaignStatus, isCampaignSource, normalizedCampaign, tehranDayOf,
@@ -224,11 +225,9 @@ export async function campaignHeroOptions(query: { q: string; page: number; limi
   const page = Math.max(1, query.page);
   const limit = Math.min(HERO_OPTIONS_PAGE_MAX, Math.max(1, query.limit));
   const conditions: SQL[] = [eq(mediaAssets.isDeleted, 0), eq(mediaAssets.kind, 'image'), isNotNull(mediaAssets.lightBytes)];
-  const q = query.q.trim();
-  if (q) {
-    const like = `%${q.replace(/[\\%_]/g, c => `\\${c}`)}%`;
-    conditions.push(or(ilike(mediaAssets.title, like), ilike(mediaAssets.originalName, like), ilike(items.code, like), ilike(items.name, like)) as SQL);
-  }
+  // the same folded search as every list (Arabic and Persian letters, digits and spaces alike)
+  const searched = foldedContains([mediaAssets.title, mediaAssets.originalName, items.code, items.name], query.q);
+  if (searched) conditions.push(searched);
   const where = and(...conditions);
   const [{ n }] = await orm.select({ n: count() }).from(mediaAssets).leftJoin(items, eq(items.id, mediaAssets.itemId)).where(where);
   const rows = await orm.select({
