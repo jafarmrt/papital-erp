@@ -1,5 +1,5 @@
 import type {
-  StorefrontCatalogPage, StorefrontFacet, StorefrontProductDetail, StorefrontPublicBrand, StorefrontPublicSettings,
+  StorefrontCatalogPage, StorefrontFacet, StorefrontFeedItem, StorefrontProductDetail, StorefrontPublicBrand, StorefrontPublicSettings,
 } from '@erp/storefront/storefrontContracts';
 import type { StorefrontPublicRedirect, StorefrontPublicSeo } from '@erp/storefront/storefrontSeoContracts';
 import { siteEnv } from './site.server';
@@ -134,6 +134,13 @@ export async function seo(): Promise<StorefrontPublicSeo> {
   }
   seoFailedAt = Date.now();
   return NO_SEO;
+}
+
+const FEED_TTL_MS = 600_000;
+
+/** v11 phase 8.5b: every item on the site with its feed fields; read only by the feed, which is fetched a few times a day */
+export async function feed(): Promise<StorefrontFeedItem[]> {
+  return (await get<{ data: StorefrontFeedItem[] }>('/feed', FEED_TTL_MS)).data;
 }
 
 const REDIRECTS_TTL_MS = 300_000;

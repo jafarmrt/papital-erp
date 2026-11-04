@@ -10,6 +10,8 @@ export default [
   route('healthz', 'routes/healthz.ts'),
   route('robots.txt', 'routes/robots.ts'),
   route('sitemap.xml', 'routes/sitemap.ts'),
+  // v11 phase 8.5b: the product feed (Google's format)
+  route('feeds/google.xml', 'routes/feedGoogle.ts'),
   route('manifest.webmanifest', 'routes/manifest.ts'),
   route('sw.js', 'routes/serviceWorker.ts'),
   ...(['about', 'contact', 'shipping', 'terms', 'privacy'] as const).map(slug => route(slug, 'routes/info.tsx', { id: `info-${slug}` })),

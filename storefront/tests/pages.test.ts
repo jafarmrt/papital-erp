@@ -201,6 +201,46 @@ describe('search engines and information pages', () => {
   });
 });
 
+describe('the product feed and the price-comparison sites (phase 8.5b)', () => {
+  it('lists every product with a photo in Google\'s format, with its price in rial and its stock', async () => {
+    const res = await handle(new Request('http://localhost/feeds/google.xml'));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('application/xml');
+    const body = await res.text();
+    expect(body).toContain('<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">');
+    expect(body).toContain('<g:id>SAMPLE-1</g:id>');
+    expect(body).toContain('<link>https://shop.example/p/tile-necklace-sample</link>');
+    expect(body).toContain(`<g:image_link>https://shop.example/media/${'5a'.repeat(32)}.webp</g:image_link>`);
+    expect(body).toContain(`<g:additional_image_link>https://shop.example/media/${'6b'.repeat(32)}.webp</g:additional_image_link>`);
+    expect(body).toContain('<g:price>14500000 IRR</g:price>');
+    expect(body).toContain('<g:availability>in_stock</g:availability>');
+    expect(body).toContain('<g:identifier_exists>no</g:identifier_exists>');
+    // a product without a photo is left out (Google refuses it); the key never shows
+    expect(body).not.toContain('SAMPLE-2');
+    expect(body).not.toContain(KEY);
+  });
+
+  it('has no feed on a preview or test address', async () => {
+    const before = process.env.STOREFRONT_NOINDEX;
+    process.env.STOREFRONT_NOINDEX = '1';
+    try {
+      expect((await handle(new Request('http://localhost/feeds/google.xml'))).status).toBe(404);
+    } finally {
+      if (before === undefined) delete process.env.STOREFRONT_NOINDEX; else process.env.STOREFRONT_NOINDEX = before;
+    }
+  });
+
+  it('names the product, its price in toman and its stock for Torob, and in Open Graph for the others', async () => {
+    const { html } = await page('/p/tile-necklace-sample');
+    expect(html).toContain('<meta name="product_id" content="SAMPLE-1"/>');
+    expect(html).toContain('<meta name="product_price" content="1450000"/>');
+    expect(html).toContain('<meta name="availability" content="instock"/>');
+    expect(html).toContain('<meta property="product:price:amount" content="14500000"/>');
+    expect(html).toContain('<meta property="product:price:currency" content="IRR"/>');
+    expect((await page('/p/gift-set-sample')).html).toContain('<meta name="availability" content="outofstock"/>');
+  });
+});
+
 describe('old addresses of the WooCommerce site (phase 8.5)', () => {
   const visit = (pathname: string) => handle(new Request(`http://localhost${pathname}`));
 

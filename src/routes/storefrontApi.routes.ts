@@ -17,6 +17,7 @@ import { placeOrder, quoteShipping } from '../services/storefront/storefrontOrde
 import { buyerOrder, sendReceipt } from '../services/storefront/storefrontOrderBuyer.service.js';
 import { ACCESS_KEY_MAX } from '../services/storefront/storefrontOrderKeys.js';
 import { publicSeo } from '../services/storefront/storefrontSeo.service.js';
+import { catalogFeed } from '../services/storefront/storefrontFeed.service.js';
 import { publicRedirects } from '../services/storefront/storefrontRedirects.service.js';
 import { requestOtp, verifyOtp } from '../services/storefront/storefrontSmsOtp.service.js';
 import { RECEIPT_IMAGE_DATA_URL_MAX } from '../services/storefront/storefrontReceiptImage.js';
@@ -145,6 +146,11 @@ router.get('/products', validate(catalogSchema), asyncHandler(async (req: Reques
 
 router.get('/products/:slug', validate(slugSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ data: await productBySlug(String(req.params.slug)) });
+}));
+
+// v11 phase 8.5b: every item on the site with the fields of a product feed (the site writes Google's format)
+router.get('/feed', asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ data: await catalogFeed() });
 }));
 
 router.get('/facets', asyncHandler(async (_req: Request, res: Response) => {

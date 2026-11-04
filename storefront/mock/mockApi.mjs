@@ -264,6 +264,16 @@ createServer(async (req, res) => {
   if (route === '/brand') return send(res, 200, { data: brand });
   if (route === '/seo') return send(res, 200, { data: seo });
   if (route === '/redirects') return send(res, 200, { data: redirectList });
+  // phase 8.5b: the product feed, the same fields as the ERP's (storefrontFeed.service.ts)
+  if (route === '/feed') {
+    return send(res, 200, {
+      data: products.map(p => ({
+        slug: p.slug, sku: p.sku, name: p.name, category: p.category, collections: p.collections, retailPrice: p.retailPrice,
+        description: (p.seoDescription || p.description || '').slice(0, 5000), material: p.material ?? '', color: p.color ?? '',
+        inStock: p.stock.status !== 'out', images: (p.images.length ? p.images : p.cover ? [p.cover] : []).slice(0, 10),
+      })),
+    });
+  }
   if (route === '/facets') {
     return send(res, 200, { data: { collections: facet(products.flatMap(p => p.collections)), categories: facet(products.map(p => p.category)) } });
   }
