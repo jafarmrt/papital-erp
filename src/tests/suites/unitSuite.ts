@@ -1183,10 +1183,10 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     }));
   }
 
-  // v11.0.0: سری‌های ۷ تا ۱۰ بسته و منجمدند و تغییرات تازه فقط در سری فعال ۱۱ (11.ts) ثبت می‌شوند
-  // (جانشین unit_changelog_series_closure_v10؛ روی v10.3.24 قرمز است، چون سری فعال ۱۰ است و سری ۱۰ بسته نیست)
+  // v12.0.0: سری‌های ۷ تا ۱۱ بسته و منجمدند و تغییرات تازه فقط در سری فعال ۱۲ (12.ts) ثبت می‌شوند (v11.0.0: ۷ تا ۱۰ و سری ۱۱)
+  // (جانشین unit_changelog_series_closure_v11؛ روی v11.7.0 قرمز است، چون سری فعال ۱۱ است و سری ۱۱ بسته نیست)
   const tSeriesStart = Date.now();
-  const seriesTestName = 'v11.0.0: the active changelog series is 11, the package.json version is in it, and the closed series 7 (v7.0.140), 8 (v8.0.128), 9 (v9.0.461) and 10 (v10.3.24) are untouched';
+  const seriesTestName = 'v12.0.0: the active changelog series is 12, the package.json version is in it, and the closed series 7 (v7.0.140), 8 (v8.0.128), 9 (v9.0.461), 10 (v10.3.24) and 11 (v11.7.0) are untouched';
   try {
     const fs = await import('fs');
     const path = await import('path');
@@ -1194,10 +1194,10 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     const { findChangelogSeriesViolations } = await import('../../data/changelogs/seriesGuard.js');
     const pkgVersion = String(JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')).version || '');
     const violations: string[] = [];
-    if (ACTIVE_CHANGELOG.series !== 11 || ACTIVE_CHANGELOG.file !== 'src/data/changelogs/11.ts') {
-      violations.push(`active series must be 11 (11.ts), but is ${ACTIVE_CHANGELOG.series} (${ACTIVE_CHANGELOG.file})`);
+    if (ACTIVE_CHANGELOG.series !== 12 || ACTIVE_CHANGELOG.file !== 'src/data/changelogs/12.ts') {
+      violations.push(`active series must be 12 (12.ts), but is ${ACTIVE_CHANGELOG.series} (${ACTIVE_CHANGELOG.file})`);
     }
-    const expectedClosed: Array<[number, string]> = [[7, 'v7.0.140'], [8, 'v8.0.128'], [9, 'v9.0.461'], [10, 'v10.3.24']];
+    const expectedClosed: Array<[number, string]> = [[7, 'v7.0.140'], [8, 'v8.0.128'], [9, 'v9.0.461'], [10, 'v10.3.24'], [11, 'v11.7.0']];
     for (const [series, finalVersion] of expectedClosed) {
       const closed = CLOSED_CHANGELOG_SERIES.find(c => c.series === series);
       if (!closed || closed.finalVersion !== finalVersion) {
@@ -1220,7 +1220,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
 
     if (violations.length > 0) throw new Error(violations.join(' | '));
     results.push(makeTestCase({
-      id: 'unit_changelog_series_closure_v11',
+      id: 'unit_changelog_series_closure_v12',
       name: seriesTestName,
       layer: 'unit',
       executionType: 'real_code',
@@ -1231,7 +1231,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
   } catch (err) {
     const { getErrorMessage } = await import('../../utils/formatters.js');
     results.push(makeTestCase({
-      id: 'unit_changelog_series_closure_v11',
+      id: 'unit_changelog_series_closure_v12',
       name: seriesTestName,
       layer: 'unit',
       executionType: 'real_code',
