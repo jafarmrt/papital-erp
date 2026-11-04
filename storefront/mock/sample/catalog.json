@@ -14,7 +14,7 @@
     "status": "in_stock",
     "quantity": null
    },
-   "cover": null,
+   "cover": { "sha256": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a", "width": 1200, "height": 1200, "alt": "", "isCover": true },
    "description": "متن ساختگی برای آزمون.",
    "material": "کاشی",
    "size": "۳۰ × ۲۰ میلی‌متر",
@@ -23,7 +23,7 @@
    "designYear": null,
    "seoTitle": "",
    "seoDescription": "",
-   "images": [],
+   "images": [{ "sha256": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a", "width": 1200, "height": 1200, "alt": "", "isCover": true }, { "sha256": "6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b", "width": 1200, "height": 1200, "alt": "", "isCover": false }],
    "transferCode": "001"
   },
   {

@@ -10,6 +10,8 @@ export default [
   route('healthz', 'routes/healthz.ts'),
   route('robots.txt', 'routes/robots.ts'),
   route('sitemap.xml', 'routes/sitemap.ts'),
+  // v11 phase 8.5b: the product feed (Google's format)
+  route('feeds/google.xml', 'routes/feedGoogle.ts'),
   route('manifest.webmanifest', 'routes/manifest.ts'),
   route('sw.js', 'routes/serviceWorker.ts'),
   ...(['about', 'contact', 'shipping', 'terms', 'privacy'] as const).map(slug => route(slug, 'routes/info.tsx', { id: `info-${slug}` })),
@@ -26,5 +28,7 @@ export default [
   route('orders/:number', 'routes/order.tsx'),
   // v11 phase 8.2c: the corporate gift form (a CRM lead in the ERP)
   route('corporate-gift', 'routes/corporateGift.tsx'),
+  // v11 phase 8.5b: «صفحه‌های ویژه», the campaign and occasion pages (Yalda first)
+  route('campaigns/:slug', 'routes/campaign.tsx'),
   route('*', 'routes/notFound.tsx'),
 ] satisfies RouteConfig;

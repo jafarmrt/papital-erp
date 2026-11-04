@@ -203,6 +203,20 @@ export interface StorefrontProductDetail extends StorefrontProductCard {
   sameDesign: StorefrontProductCard[];
 }
 
+/**
+ * v11 phase 8.5b: `GET /api/storefront/v1/feed`, every item on the site with what a product feed (Google Merchant and the
+ * price-comparison sites) needs: the fields its own page already shows, and no more
+ */
+export interface StorefrontFeedItem extends Omit<StorefrontProductCard, 'cover' | 'stock'> {
+  /** the page's description (its search description, else the product description), at most FEED_DESCRIPTION_MAX */
+  description: string;
+  material: string;
+  color: string;
+  inStock: boolean;
+  /** the cover first, at most FEED_IMAGES_MAX */
+  images: StorefrontImage[];
+}
+
 export interface StorefrontCatalogPage {
   data: StorefrontProductCard[];
   total: number;

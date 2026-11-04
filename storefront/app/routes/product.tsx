@@ -5,7 +5,7 @@ import { catalog, product as productBySlug } from '../lib/api.server';
 import { siteEnv } from '../lib/site.server';
 import { BRAND, categoryPath, collectionPath, mediaPath, productPath } from '../lib/brand';
 import { faDigits, faNumber, priceUnit, tomanDigits } from '../lib/format';
-import { pageMeta } from '../lib/meta';
+import { pageMeta, productMeta } from '../lib/meta';
 import { whatsappLink } from '../lib/whatsapp';
 import type { StorefrontProductCard } from '@erp/storefront/storefrontContracts';
 import { ProductCard, ProductImage } from '../components/ProductCard';
@@ -36,7 +36,10 @@ export function meta({ data }: Route.MetaArgs) {
   if (!data) return [];
   const { item, siteUrl } = data;
   const description = item.seoDescription || `${item.name}، ساخت دست پاپیتال با نقش کاشی‌های ایران.`;
-  return pageMeta({ title: item.seoTitle || item.name, description, path: productPath(item.slug), image: item.cover ? mediaPath(item.cover.sha256) : undefined, siteUrl });
+  return [
+    ...pageMeta({ title: item.seoTitle || item.name, description, path: productPath(item.slug), image: item.cover ? mediaPath(item.cover.sha256) : undefined, siteUrl }),
+    ...productMeta(item),
+  ];
 }
 
 function productJsonLd(item: Route.ComponentProps['loaderData']['item'], siteUrl: string) {

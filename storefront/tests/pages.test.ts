@@ -201,6 +201,46 @@ describe('search engines and information pages', () => {
   });
 });
 
+describe('the product feed and the price-comparison sites (phase 8.5b)', () => {
+  it('lists every product with a photo in Google\'s format, with its price in rial and its stock', async () => {
+    const res = await handle(new Request('http://localhost/feeds/google.xml'));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('application/xml');
+    const body = await res.text();
+    expect(body).toContain('<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">');
+    expect(body).toContain('<g:id>SAMPLE-1</g:id>');
+    expect(body).toContain('<link>https://shop.example/p/tile-necklace-sample</link>');
+    expect(body).toContain(`<g:image_link>https://shop.example/media/${'5a'.repeat(32)}.webp</g:image_link>`);
+    expect(body).toContain(`<g:additional_image_link>https://shop.example/media/${'6b'.repeat(32)}.webp</g:additional_image_link>`);
+    expect(body).toContain('<g:price>14500000 IRR</g:price>');
+    expect(body).toContain('<g:availability>in_stock</g:availability>');
+    expect(body).toContain('<g:identifier_exists>no</g:identifier_exists>');
+    // a product without a photo is left out (Google refuses it); the key never shows
+    expect(body).not.toContain('SAMPLE-2');
+    expect(body).not.toContain(KEY);
+  });
+
+  it('has no feed on a preview or test address', async () => {
+    const before = process.env.STOREFRONT_NOINDEX;
+    process.env.STOREFRONT_NOINDEX = '1';
+    try {
+      expect((await handle(new Request('http://localhost/feeds/google.xml'))).status).toBe(404);
+    } finally {
+      if (before === undefined) delete process.env.STOREFRONT_NOINDEX; else process.env.STOREFRONT_NOINDEX = before;
+    }
+  });
+
+  it('names the product, its price in toman and its stock for Torob, and in Open Graph for the others', async () => {
+    const { html } = await page('/p/tile-necklace-sample');
+    expect(html).toContain('<meta name="product_id" content="SAMPLE-1"/>');
+    expect(html).toContain('<meta name="product_price" content="1450000"/>');
+    expect(html).toContain('<meta name="availability" content="instock"/>');
+    expect(html).toContain('<meta property="product:price:amount" content="14500000"/>');
+    expect(html).toContain('<meta property="product:price:currency" content="IRR"/>');
+    expect((await page('/p/gift-set-sample')).html).toContain('<meta name="availability" content="outofstock"/>');
+  });
+});
+
 describe('old addresses of the WooCommerce site (phase 8.5)', () => {
   const visit = (pathname: string) => handle(new Request(`http://localhost${pathname}`));
 
@@ -315,5 +355,42 @@ describe('the installable site (PWA)', () => {
       expect(source).not.toContain('/api/');
       expect(() => new Function(source)).not.toThrow();
     });
+  });
+});
+
+describe('«صفحه‌های ویژه», the campaign pages (phase 8.5b)', () => {
+  it('renders a campaign page with its text as paragraphs, its code to copy and its products in the chosen order', async () => {
+    const { status, html } = await page('/campaigns/yalda');
+    expect(status).toBe(200);
+    expect(html).toContain('یلدا با پاپیتال</h1>');
+    expect(html).toContain('<link rel="canonical" href="https://shop.example/campaigns/yalda"/>');
+    expect(html).toContain('<p><span>یلدا شب کنار هم بودن است.');
+    // a single line break stays a line break inside its paragraph
+    expect(html).toMatch(/ارسال می‌شوند\.<\/span><span><br\/>اگر هدیه‌ای/);
+    expect(html).toContain('YALDA1405');
+    expect(html.indexOf('ست هدیهٔ نمونه')).toBeLessThan(html.indexOf('گردنبند کاشی نمونه'));
+    expect(html).not.toContain('گوشوارهٔ کاشی نمونه');
+    expect(html).toContain('"@type":"BreadcrumbList"');
+  });
+
+  it('is a 404 for a page not on the site now and for an address no page can have', async () => {
+    expect((await page('/campaigns/nowruz')).status).toBe(404);
+    expect((await page('/campaigns/Yalda')).status).toBe(404);
+    expect((await page(`/campaigns/${'a'.repeat(61)}`)).status).toBe(404);
+  });
+
+  it('takes the top of the home page while it asks for it, and is in the sitemap', async () => {
+    const home = (await page('/')).html;
+    expect(home).toContain('id="campaign-banner"');
+    expect(home).toContain('href="/campaigns/yalda"');
+    expect(home).not.toContain('این بار برای پوشیدن');
+    expect((await page('/sitemap.xml')).html).toContain('<loc>https://shop.example/campaigns/yalda</loc>');
+  });
+
+  it('sends the short address of a page on the site now to it, for a while, with the campaign fields', async () => {
+    const res = await handle(new Request('http://localhost/yalda?utm_source=instagram&x=1'));
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('/campaigns/yalda?utm_source=instagram');
+    expect((await page('/nowruz')).status).toBe(404);
   });
 });

@@ -28,10 +28,10 @@ const TEHRAN_OFFSET_MS = 3.5 * 3600 * 1000;
 const DAY_MS = 24 * 3600 * 1000;
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-const dayStart = (day: string): string => `${day}T00:00:00+03:30`;
-const dayAfter = (day: string): string => new Date(Date.parse(`${day}T00:00:00Z`) + DAY_MS).toISOString().slice(0, 10);
+export const dayStart = (day: string): string => `${day}T00:00:00+03:30`;
+export const dayAfter = (day: string): string => new Date(Date.parse(`${day}T00:00:00Z`) + DAY_MS).toISOString().slice(0, 10);
 /** The Tehran day a stored time falls on ('' for none); `ends` reads an end time back as the last day it works */
-function tehranDay(stored: string | null, options: { ends?: boolean } = {}): string {
+export function tehranDay(stored: string | null, options: { ends?: boolean } = {}): string {
   if (!stored) return '';
   const at = Date.parse(stored) + TEHRAN_OFFSET_MS - (options.ends ? DAY_MS : 0);
   return new Date(at).toISOString().slice(0, 10);

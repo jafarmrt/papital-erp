@@ -41,6 +41,11 @@ const seo = process.env.MOCK_SEO ? JSON.parse(process.env.MOCK_SEO) : await read
   verification: { google: '', bing: '' }, analytics: { provider: 'none', id: '', url: '' }, alternateSiteUrl: '',
 }));
 
+// phase 8.5b: «صفحه‌های ویژه» on the site now (`campaigns.json`, a list of pages whose `products` are slugs of the catalog;
+// MOCK_CAMPAIGNS=0 for none)
+const campaignList = process.env.MOCK_CAMPAIGNS === '0' ? [] : await readFile(path.join(dir, 'campaigns.json'), 'utf8').then(JSON.parse).catch(() => []);
+const campaignSummary = ({ slug, title, summary, hero, homeBanner, endsOn }) => ({ slug, title, summary, hero, homeBanner, endsOn });
+
 const fold = s => String(s).toLowerCase().replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/[‌\s]+/g, ' ');
 const card = ({ slug, sku, name, category, collections, retailPrice, stock, cover }) => ({ slug, sku, name, category, collections, retailPrice, stock, cover });
 // like the ERP: the transfer code links items of one design («هم‌طرح») and is never sent
@@ -264,6 +269,26 @@ createServer(async (req, res) => {
   if (route === '/brand') return send(res, 200, { data: brand });
   if (route === '/seo') return send(res, 200, { data: seo });
   if (route === '/redirects') return send(res, 200, { data: redirectList });
+  // phase 8.5b: the product feed, the same fields as the ERP's (storefrontFeed.service.ts)
+  if (route === '/feed') {
+    return send(res, 200, {
+      data: products.map(p => ({
+        slug: p.slug, sku: p.sku, name: p.name, category: p.category, collections: p.collections, retailPrice: p.retailPrice,
+        description: (p.seoDescription || p.description || '').slice(0, 5000), material: p.material ?? '', color: p.color ?? '',
+        inStock: p.stock.status !== 'out', images: (p.images.length ? p.images : p.cover ? [p.cover] : []).slice(0, 10),
+      })),
+    });
+  }
+  if (route === '/campaigns') return send(res, 200, { data: campaignList.map(campaignSummary) });
+  const campaignSlug = /^\/campaigns\/([^/]+)$/.exec(route);
+  if (campaignSlug) {
+    let wanted = '';
+    try { wanted = decodeURIComponent(campaignSlug[1]); } catch { return send(res, 400, { error: 'درخواست نادرست' }); }
+    const page = campaignList.find(c => c.slug === wanted);
+    if (!page) return send(res, 404, { error: 'این صفحه پیدا نشد.', code: 'STOREFRONT_CAMPAIGN_NOT_FOUND' });
+    const items = page.products.map(slug => products.find(p => p.slug === slug)).filter(Boolean).map(card);
+    return send(res, 200, { data: { ...campaignSummary(page), body: page.body, discountCode: page.discountCode, products: items } });
+  }
   if (route === '/facets') {
     return send(res, 200, { data: { collections: facet(products.flatMap(p => p.collections)), categories: facet(products.map(p => p.category)) } });
   }

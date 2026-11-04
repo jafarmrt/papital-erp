@@ -17,6 +17,9 @@ import { placeOrder, quoteShipping } from '../services/storefront/storefrontOrde
 import { buyerOrder, sendReceipt } from '../services/storefront/storefrontOrderBuyer.service.js';
 import { ACCESS_KEY_MAX } from '../services/storefront/storefrontOrderKeys.js';
 import { publicSeo } from '../services/storefront/storefrontSeo.service.js';
+import { catalogFeed } from '../services/storefront/storefrontFeed.service.js';
+import { campaignHeroFile, publicCampaign, publicCampaigns } from '../services/storefront/storefrontCampaigns.service.js';
+import { CAMPAIGN_SLUG_MAX } from '../lib/storefront/storefrontCampaignRules.js';
 import { publicRedirects } from '../services/storefront/storefrontRedirects.service.js';
 import { requestOtp, verifyOtp } from '../services/storefront/storefrontSmsOtp.service.js';
 import { RECEIPT_IMAGE_DATA_URL_MAX } from '../services/storefront/storefrontReceiptImage.js';
@@ -114,6 +117,7 @@ const catalogSchema = z.object({
   }).passthrough(),
 });
 const slugSchema = z.object({ params: z.object({ slug: z.string().min(1).max(STOREFRONT_SLUG_MAX) }).passthrough() });
+const campaignSlugSchema = z.object({ params: z.object({ slug: z.string().min(1).max(CAMPAIGN_SLUG_MAX) }).passthrough() });
 const mediaSchema = z.object({ params: z.object({ file: z.string().min(1).max(80) }).passthrough() });
 
 router.get('/settings', asyncHandler(async (_req: Request, res: Response) => {
@@ -147,12 +151,36 @@ router.get('/products/:slug', validate(slugSchema), asyncHandler(async (req: Req
   res.json({ data: await productBySlug(String(req.params.slug)) });
 }));
 
+// v11 phase 8.5b: every item on the site with the fields of a product feed (the site writes Google's format)
+router.get('/feed', asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ data: await catalogFeed() });
+}));
+
+// v11 phase 8.5b: «صفحه‌های ویژه», the campaign pages on the site now (on, inside their window), and one of them
+router.get('/campaigns', asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ data: await publicCampaigns() });
+}));
+
+router.get('/campaigns/:slug', validate(campaignSlugSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await publicCampaign(String(req.params.slug)) });
+}));
+
 router.get('/facets', asyncHandler(async (_req: Request, res: Response) => {
   res.json({ data: await catalogFacets() });
 }));
 
+/** A photo of an item on the site, else (v11 phase 8.5b) the hero image of a campaign page on the site now */
+async function siteMediaFile(file: string): Promise<string> {
+  try {
+    return await storefrontMediaFile(file);
+  } catch (error) {
+    if (error instanceof NotFoundError) return campaignHeroFile(file);
+    throw error;
+  }
+}
+
 router.get('/media/:file', validate(mediaSchema), asyncHandler(async (req: Request, res: Response) => {
-  const filePath = await storefrontMediaFile(String(req.params.file));
+  const filePath = await siteMediaFile(String(req.params.file));
   await new Promise<void>((resolve, reject) => {
     res.sendFile(filePath, {
       // a file is named by its content, so the app may keep it for a long time
