@@ -40,6 +40,6 @@ describe('ops_docs_current_o_06', () => {
     expect(checklist).toContain('(3 locations)');
     expect(checklist).not.toContain('erp-deployment.yaml` (image tag');
     expect(checklist).toContain('npm run check:version');
-    expect(readFileSync('README.md', 'utf8')).toContain('src/data/changelogs/11.ts');
+    expect(readFileSync('README.md', 'utf8')).toContain('src/data/changelogs/12.ts');
   });
 });

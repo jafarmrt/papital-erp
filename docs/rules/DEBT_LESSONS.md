@@ -20,6 +20,13 @@ What the fixed debt of series 1 to 10 teaches, in one place, and the debt rows c
 14. **CI that depends on anonymous registries.** Database and Node images pulled anonymously failed when the pull limit was reached, before any test ran. CI pulls from a mirror or with a login. (TD-1169)
 15. **Purchase discounts reach the cost.** A line discount lowered the voucher but not the weighted average cost or the Kardex row, so stock value drifted above the inventory accounts. (TD-250)
 
+## 🧭 نسخه ۱۲ — بدهی‌های بسته‌شده
+
+A row closed in series 12 moves here from `TECH_DEBT.md` (`npm run release`, `closes[]`); write it short and, when the fix teaches something new, add a lesson above.
+
+| ID | حوزه | شرح | منبع (فایل) | وضعیت |
+|----|------|-----|--------------|-------|
+
 ## 🧭 نسخه ۱۱ — بدهی‌های بسته‌شده
 
 A row closed in series 11 moves here from `TECH_DEBT.md` (`npm run release`, `closes[]`); write it short and, when the fix teaches something new, add a lesson above.
