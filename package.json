@@ -25,6 +25,7 @@
     "media:rebuild-light": "tsx scripts/media-rebuild-light.ts",
     "dates:report": "tsx scripts/date-calendar-report.ts",
     "secrets:encrypt": "tsx scripts/encrypt-personnel-secrets.ts",
+    "media:cover-repair": "tsx scripts/media-cover-repair.ts",
     "users:lock-plain-passwords": "tsx scripts/lock-plain-passwords.ts",
     "db:cleanup-test": "tsx scripts/cleanup-test-data.ts",
     "lint": "node --max-old-space-size=4096 node_modules/typescript/bin/tsc --noEmit",

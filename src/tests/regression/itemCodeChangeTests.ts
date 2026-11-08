@@ -32,8 +32,20 @@ export async function runItemCodeChangeTests(shouldRun: ShouldRun): Promise<Test
 }
 
 const digits = (n: number) => String(crypto.randomInt(10 ** (n - 1), 10 ** n));
-/** A product code «YYYY-Z-TTT-SS» no other test uses */
-const productCode = () => `1404-Z-${digits(3)}-${digits(2)}`;
+const usedCodes = new Set<string>();
+/**
+ * A product code «YYYY-Z-TTT-SS» no other test uses. v12: never one this run already handed out, so a «new» code is never
+ * the item's current code (red on master 4 Nov 2026: change-code answered 422 ITEM_CODE_UNCHANGED for two equal draws).
+ */
+const productCode = (): string => {
+  for (;;) {
+    const code = `1404-Z-${digits(3)}-${digits(2)}`;
+    if (!usedCodes.has(code)) {
+      usedCodes.add(code);
+      return code;
+    }
+  }
+};
 
 async function newProduct(h: Harness, code = productCode()): Promise<{ id: number; code: string; version: number }> {
   const res = await h.post('/api/items', { type: 'product', name: `کد کالا ${h.tag} ${digits(6)}`, code, unit: 'عدد', category: 'دستبند' });

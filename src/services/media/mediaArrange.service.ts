@@ -24,6 +24,32 @@ const AUDIT_ENTITY: 'کتابخانه تصاویر' = MEDIA_AUDIT_ENTITY;
 const ITEM_ENTITY: 'کالا' = ITEM_AUDIT_ENTITY;
 
 /**
+ * v12 phase 7: the file chosen as the item's featured image is also the item's one cover in the library, the mark the
+ * site's product cards and the WooCommerce featured-image push read (`media_assets.is_cover`). Since v10.1.71 nothing set it,
+ * so the site showed every product without a featured image. Inside the item's transaction: the item's other marks are
+ * taken off first (one cover per item, `uq_media_assets_cover_item`), each change with its audit row.
+ */
+export async function markItemCover(tx: DbTransaction, assetId: number, itemId: number, actor: Omit<MediaActor, 'canManage'>): Promise<void> {
+  const marked = await tx.select().from(mediaAssets).where(and(eq(mediaAssets.itemId, itemId), eq(mediaAssets.isDeleted, 0)))
+    .orderBy(asc(mediaAssets.id)).for('update');
+  const target = marked.find(row => row.id === assetId);
+  if (!target) throw new NotFoundError('فایل یافت نشد.', undefined, 'MEDIA_NOT_FOUND');
+  const changes = [
+    ...marked.filter(row => row.id !== assetId && row.isCover === 1).map(row => ({ row, isCover: 0 })),
+    ...(target.isCover === 1 ? [] : [{ row: target, isCover: 1 }]),
+  ];
+  for (const { row, isCover } of changes) {
+    const [after] = await tx.update(mediaAssets).set({ isCover, version: row.version + 1, updatedAt: sql`now()` })
+      .where(eq(mediaAssets.id, row.id)).returning();
+    await logActivity({
+      tx, req: actor.req, userId: actor.userId, username: actor.username, action: 'UPDATE', entity: AUDIT_ENTITY,
+      entityId: row.id, description: isCover === 1 ? `«${row.originalName}» تصویر شاخص کالا شد` : `«${row.originalName}» دیگر تصویر شاخص کالا نیست`,
+      details: { operation: 'cover', before: auditSnapshot(row), after: auditSnapshot(after) },
+    });
+  }
+}
+
+/**
  * v10.0.247 (N-05 PR 3): arranging the files of the media library — their order, replacing a file with a better
  * version and using a product image as the item's picture. Each change runs in one transaction with its audit row (`tx`).
  * v10.1.71: the item's own picture (`items.image` / `items.thumbnail`) is the product's one featured image; the library's
@@ -168,6 +194,7 @@ export const MediaArrangeService = {
         const thumbnail = `/uploads/${thumbName}`;
         const [after] = await tx.update(items).set({ image, thumbnail, version: before.version + 1 })
           .where(and(eq(items.id, before.id), eq(items.version, before.version))).returning({ version: items.version });
+        await markItemCover(tx, asset.id, before.id, actor);
         await logActivity({
           tx, req: actor.req, userId: actor.userId, username: actor.username, action: 'UPDATE', entity: ITEM_ENTITY,
           entityId: before.id, description: `عکس کالای «${before.name}» (${before.code}) از کتابخانه تصاویر (فایل ${asset.id})`,
