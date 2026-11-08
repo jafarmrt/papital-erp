@@ -34,7 +34,49 @@ export async function runMediaArrangeTests(shouldRun: ShouldRun): Promise<TestCa
     ['reg_media_item_image_n05',
       'v10.0.247: a product image becomes the item picture at the item version, with copied files and an item audit row (N-05); v10.1.71: only products.edit sets it, media.manage alone is refused',
       ['n05', 'media', 'items', 'permissions'], itemImageCase],
+    ['reg_media_cover_repair_v12',
+      'v12 phase 7: the cover repair marks the library file an item picture came from (dry run first), skips a picture changed since, and lists pictures outside the library',
+      ['v12', 'media', 'items', 'storefront'], coverRepairCase],
   ]);
+}
+
+async function coverRepairCase(h: Harness, wrong: string[]): Promise<string> {
+  withTempMediaDir();
+  const { repairItemCovers } = await import('../../services/media/mediaCoverRepair.service.js');
+  const products = await sectionId(h);
+  const manager = await h.sessionWith(['media.view', 'media.upload', 'media.manage', 'products.edit']);
+  const chosen = await createTestItem({ type: 'product' });
+  const changed = await createTestItem({ type: 'product' });
+  const outside = await createTestItem({ type: 'product', image: `/uploads/outside-${digits(6)}.webp` });
+  const scoped = [chosen.id, changed.id, outside.id];
+  const scope = (id: number) => `sectionId=${products}&itemId=${id}`;
+  await uploadTo(h, manager, `${scope(chosen.id)}&shotType=side`, await noisyJpeg(900, 700));
+  const picked = await uploadTo(h, manager, `${scope(chosen.id)}&shotType=white_background`, await noisyJpeg(900, 700));
+  const changedFile = await uploadTo(h, manager, `${scope(changed.id)}&shotType=side`, await noisyJpeg(900, 700));
+  // the state v10.1.71 to v12 left: the picture came from the library (audit row) but no file carries the cover mark
+  for (const [item, file] of [[chosen, picked], [changed, changedFile]] as const) {
+    const [row] = await h.q(`SELECT version FROM items WHERE id = $1`, [item.id]);
+    const set = await h.post(`/api/media/assets/${file.id}/item-image`, { version: Number(row.version) }, manager);
+    if (set.status !== 200) throw new Error(`setup: item image answered ${brief(set)}`);
+  }
+  await h.q(`UPDATE media_assets SET is_cover = 0 WHERE item_id = ANY($1::int[])`, [[chosen.id, changed.id]]);
+  await h.q(`UPDATE items SET image = '/uploads/changed-later.webp' WHERE id = $1`, [changed.id]);
+
+  const dry = await repairItemCovers({ apply: false, itemIds: scoped });
+  const listed = dry.markable.filter(m => m.itemId === chosen.id || m.itemId === changed.id);
+  if (listed.length !== 1 || listed[0].itemId !== chosen.id || listed[0].assetId !== picked.id) wrong.push(`dry run listed ${JSON.stringify(listed)}, expected only item ${chosen.id} <- ${picked.id}`);
+  if (!dry.pictureOutsideLibrary.some(r => r.itemId === outside.id)) wrong.push('a picture outside the library was not listed');
+  const [untouched] = await h.q(`SELECT count(*)::int AS n FROM media_assets WHERE item_id = $1 AND is_cover = 1`, [chosen.id]);
+  if (Number(untouched.n) !== 0) wrong.push('the dry run changed a cover mark');
+
+  await repairItemCovers({ apply: true, itemIds: scoped });
+  const marks = await h.q(`SELECT id, item_id, is_cover FROM media_assets WHERE item_id = ANY($1::int[]) AND is_cover = 1`, [[chosen.id, changed.id]]);
+  if (marks.length !== 1 || Number(marks[0].id) !== picked.id) wrong.push(`covers after the repair ${JSON.stringify(marks)}, expected only ${picked.id}`);
+  const audit = await h.q(`SELECT username FROM activity_logs WHERE entity = 'کتابخانه تصاویر' AND entity_id = $1 AND details->>'operation' = 'cover' ORDER BY id DESC LIMIT 1`, [String(picked.id)]);
+  if (audit[0]?.username !== 'cover-repair') wrong.push(`repair audit row ${JSON.stringify(audit)}`);
+  const again = await repairItemCovers({ apply: false, itemIds: scoped });
+  if (again.markable.some(m => m.itemId === chosen.id)) wrong.push('a repaired item is listed again');
+  return `listed ${listed.length}; covers ${marks.length}; outside ${dry.pictureOutsideLibrary.length}`;
 }
 
 const brief = (res: { status: number; body?: unknown }) => `${res.status} ${JSON.stringify(res.body ?? null).slice(0, 200)}`;
@@ -247,8 +289,18 @@ async function featuredImageCase(h: Harness, wrong: string[]): Promise<string> {
 
   const coverRoute = await h.put(`/api/media/assets/${second.id}/cover`, { cover: true }, manager);
   if (coverRoute.status !== 404) wrong.push(`the retired cover route answered ${brief(coverRoute)}, expected 404`);
-  const [mark] = await h.q(`SELECT is_cover FROM media_assets WHERE id = $1`, [second.id]);
-  if (Number(mark.is_cover) !== 1) wrong.push('the stored cover mark was rewritten');
+  // v12 phase 7: the featured image is also the item's one cover in the library (the site's cards and the WooCommerce
+  // featured-image push read that mark); red before: the chosen file stayed 0 and the old mark stayed on the other file
+  const marks = await h.q(`SELECT id, is_cover FROM media_assets WHERE id = ANY($1::int[]) ORDER BY id`, [[first.id, second.id]]);
+  const markOf = (id: number) => Number(marks.find(m => Number(m.id) === id)?.is_cover);
+  if (markOf(first.id) !== 1 || markOf(second.id) !== 0) wrong.push(`cover marks after setting the featured image ${JSON.stringify(marks)}, expected only ${first.id}`);
+  const coverAudit = await h.q(`SELECT entity_id FROM activity_logs WHERE entity = 'کتابخانه تصاویر' AND details->>'operation' = 'cover' AND entity_id = ANY($1::text[])`, [[String(first.id), String(second.id)]]);
+  if (coverAudit.length !== 2) wrong.push(`cover audit rows ${JSON.stringify(coverAudit)}, expected one per changed file`);
+  // the answer carries both changed files at their new version, so the page's next edit of either is not a false 409
+  const answered = ((set.body as { data?: { assets?: Array<{ id: number; version: number }> } }).data?.assets ?? []);
+  const versions = await h.q(`SELECT id, version FROM media_assets WHERE id = ANY($1::int[])`, [[first.id, second.id]]);
+  const fresh = (id: number) => answered.find(a => a.id === id)?.version === Number(versions.find(v => Number(v.id) === id)?.version);
+  if (answered.length !== 2 || !fresh(first.id) || !fresh(second.id)) wrong.push(`changed files in the answer ${JSON.stringify(answered)}, stored ${JSON.stringify(versions)}`);
   return `pictured ${pictureRow?.featuredImage}; bare fallback ${bareRow?.fallbackAssetId}; set ${set.status}; cover route ${coverRoute.status}`;
 }
 
