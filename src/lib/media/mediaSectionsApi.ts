@@ -144,6 +144,8 @@ export interface MediaItemImageAnswer {
   image: string;
   thumbnail: string;
   version: number;
+  /** v12 phase 7: the files whose cover mark (and so version) changed: the chosen one and the one that lost the mark */
+  assets: MediaAssetView[];
 }
 
 /** Copies the light version of a product image into the item's picture, the product's featured image; `version` is the item's version */
