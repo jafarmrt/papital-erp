@@ -52,6 +52,7 @@ export async function runStorefrontOrdersV11Tests(shouldRun: (id: string, ...ext
       get: (url: string) => request(app).get(url).set('Cookie', s.cookie).set('x-csrf-token', s.csrfToken),
       put: (url: string, body: Body) => request(app).put(url).set('Cookie', s.cookie).set('x-csrf-token', s.csrfToken).send(body),
       post: (url: string, body: Body = {}) => request(app).post(url).set('Cookie', s.cookie).set('x-csrf-token', s.csrfToken).send(body),
+      del: (url: string) => request(app).delete(url).set('Cookie', s.cookie).set('x-csrf-token', s.csrfToken),
     });
     const erp = as(admin);
     const tag = String(Date.now()).slice(-7);
@@ -189,6 +190,21 @@ export async function runStorefrontOrdersV11Tests(shouldRun: (id: string, ...ext
       orderIds.push(w.id);
     }
 
+    // 6b) v12 phase 7 (site review 1.6, 3.2a): the ERP's own document paths refuse the proforma of an open site order (red
+    // before: a colleague could finalize it, leaving the order «waiting for payment», or change its lines and amounts)
+    if (winner) {
+      const [open] = await orm.select({ documentId: storefrontOrders.documentId }).from(storefrontOrders).where(eq(storefrontOrders.orderNumber, winner.number));
+      const [docRow] = await orm.select({ version: documents.version }).from(documents).where(eq(documents.id, open.documentId));
+      const refusedWith = (what: string, res: { status: number; body: Body }) => {
+        if (res.status !== 409 || res.body.code !== 'DOCUMENT_SITE_ORDER_OPEN') wrong.push(`${what}: ${res.status} ${String(res.body.code)}`);
+      };
+      refusedWith('editing an open site order proforma in the ERP', await erp.put(`/api/documents/${open.documentId}`, { version: docRow.version, notes: 'ERP edit' }));
+      refusedWith('finalizing it in the ERP', await erp.put(`/api/documents/${open.documentId}/finalize`, {}));
+      refusedWith('voiding it in the ERP', await erp.del(`/api/documents/${open.documentId}`));
+      const [still] = await orm.select({ status: documents.status, isDeleted: documents.isDeleted }).from(documents).where(eq(documents.id, open.documentId));
+      if (still?.status !== 'proforma' || still.isDeleted !== 0) wrong.push(`the proforma after the refused ERP paths: ${JSON.stringify(still)}`);
+    }
+
     // 7) a receipt with another amount cannot be confirmed; rejecting it reopens the order
     const nowIso = new Date().toISOString();
     // a receipt photo must be an image whose bytes prove it; a 1x1 PNG is taken
@@ -264,12 +280,33 @@ export async function runStorefrontOrdersV11Tests(shouldRun: (id: string, ...ext
     if (winner) {
       await orm.update(storefrontOrders).set({ reserveUntil: new Date(Date.now() - 60_000).toISOString() }).where(eq(storefrontOrders.orderNumber, winner.number));
       if ((await stockOf(slugB)) !== 0) wrong.push('the raced unit was not reserved');
+      // v12 phase 7 (site review 1.5): with «ثبت سفارش» off, new orders are 404 but a buyer still reads an order and the
+      // reservation still runs out (red before: the order page was 404 and the sweep did nothing while the switch was off)
+      await save({ ordersEnabled: false });
+      const offRead = await site.get(`/api/storefront/v1/orders/${order1.number}`, key1);
+      if (offRead.status !== 200) wrong.push(`reading an order while ordering is off: ${offRead.status}`);
+      const offPlace = await site.post('/api/storefront/v1/orders', buyer(`0916${tag}`, slugA, `rk-off2-${tag}-checkout`));
+      if (offPlace.status !== 404) wrong.push(`a new order while ordering is off: ${offPlace.status}`);
       await expireDueOrdersOnce();
       const [gone] = await orm.select().from(storefrontOrders).where(eq(storefrontOrders.orderNumber, winner.number));
       const [goneDoc] = await orm.select({ isDeleted: documents.isDeleted }).from(documents).where(eq(documents.id, gone.documentId));
       if (gone.status !== 'cancelled' || gone.cancelReason !== 'expired' || goneDoc?.isDeleted !== 1) wrong.push(`expiry: ${gone.status} ${gone.cancelReason} doc ${goneDoc?.isDeleted}`);
       if ((await stockOf(slugB)) !== 1) wrong.push(`site stock after expiry: ${await stockOf(slugB)}, not 1`);
+      await save({ ordersEnabled: true });
     }
+
+    // 10b) v12 phase 7 (site review 3.2a): an overdue order whose proforma is no longer a proforma (finalized before the
+    // guard, or by another path) is not picked by the sweep, so it never fills the batch and fails every minute
+    const stuckPlaced = await site.post('/api/storefront/v1/orders', buyer(`0917${tag}`, slugA, `rk-stuck-${tag}-checkout`));
+    if (stuckPlaced.status !== 201) throw new Error(`place the stuck order: ${stuckPlaced.status} ${JSON.stringify(stuckPlaced.body)}`);
+    const [stuck] = await orm.select().from(storefrontOrders).where(eq(storefrontOrders.orderNumber, stuckPlaced.body.data.order.number));
+    orderIds.push(stuck.id);
+    await orm.update(documents).set({ status: 'final' }).where(eq(documents.id, stuck.documentId));
+    await orm.update(storefrontOrders).set({ reserveUntil: new Date(Date.now() - 60_000).toISOString() }).where(eq(storefrontOrders.id, stuck.id));
+    const sweep = await expireDueOrdersOnce();
+    const [stuckAfter] = await orm.select({ status: storefrontOrders.status }).from(storefrontOrders).where(eq(storefrontOrders.id, stuck.id));
+    if (sweep.failed !== 0 || stuckAfter?.status !== 'awaiting_payment') wrong.push(`the sweep on an order whose proforma was finalized: ${JSON.stringify(sweep)} ${stuckAfter?.status}`);
+    await orm.update(documents).set({ status: 'proforma' }).where(eq(documents.id, stuck.documentId));
 
     // 11) the ERP list finds the order by phone
     const list = await erp.get(`/api/storefront/orders?q=${phone1}`);

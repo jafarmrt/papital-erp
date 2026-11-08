@@ -171,6 +171,10 @@ export async function confirmPayment(req: Request, id: number, input: { receiptI
       documentId: order.documentId, description: `دریافت کارت‌به‌کارت سفارش سایت ${order.orderNumber}`,
       userId: actor.userId, username: actor.username, audit: { req, userFullName: actor.userFullName },
     }, tx);
+    // v12 phase 7: the order leaves the open statuses before its proforma is finalized, so the documents package's guard
+    // for an open site order's proforma (siteOrderLock.ts) lets this, its own path, through; one transaction either way
+    const now = systemNowUtcIso();
+    const updated = await moveOrder(tx, order, actor.username, { status: 'paid', paidAt: now });
     const change = await DocumentService.finalizeDocument(order.documentId, actor.username, tx);
     if (change) {
       await logActivity({
@@ -179,11 +183,9 @@ export async function confirmPayment(req: Request, id: number, input: { receiptI
         details: documentAuditDetails(change.before, change.after),
       });
     }
-    const now = systemNowUtcIso();
     await tx.update(storefrontPaymentReceipts).set({
       status: 'accepted', reviewedBy: actor.username, reviewedAt: now, treasuryTransactionId: posted.id,
     }).where(eq(storefrontPaymentReceipts.id, receipt.id));
-    const updated = await moveOrder(tx, order, actor.username, { status: 'paid', paidAt: now });
     await queueOrderSms(tx, updated, 'order_paid');
     await logActivity({
       req, tx, action: 'UPDATE', entity: 'سفارش سایت', entityId: order.id,
@@ -214,6 +216,8 @@ export async function approveOnAccount(req: Request, id: number, input: { versio
       .where(and(eq(documentItems.documentId, order.documentId), eq(documentItems.isDeleted, 0)));
     await lockStockItems(tx, lines.map(l => l.itemId));
     await assertLiveProforma(tx, order);
+    // v12 phase 7: out of the open statuses first, so the open site order guard of the documents package lets this through
+    const updated = await moveOrder(tx, order, actor.username, { status: 'confirmed', confirmedAt: systemNowUtcIso() });
     const change = await DocumentService.finalizeDocument(order.documentId, actor.username, tx);
     if (change) {
       await logActivity({
@@ -222,7 +226,6 @@ export async function approveOnAccount(req: Request, id: number, input: { versio
         details: documentAuditDetails(change.before, change.after),
       });
     }
-    const updated = await moveOrder(tx, order, actor.username, { status: 'confirmed', confirmedAt: systemNowUtcIso() });
     await logActivity({
       req, tx, action: 'UPDATE', entity: 'سفارش سایت', entityId: order.id,
       description: `سفارش سایت ${order.orderNumber} به حساب تأیید شد`,
@@ -260,17 +263,19 @@ export async function rejectReceipt(req: Request, id: number, input: { receiptId
 /** Voids the order's proforma (its reservation is released) and cancels the order; used by the screen and the expiry sweep */
 export async function cancelOpenOrder(tx: DbExecutor, order: OrderRecord, reason: 'staff' | 'expired', actor: { userId?: number; username: string; userFullName?: string }): Promise<OrderRecord> {
   const [doc] = await tx.select({ status: documents.status, isDeleted: documents.isDeleted }).from(documents).where(eq(documents.id, order.documentId));
+  if (doc && doc.isDeleted === 0 && doc.status !== 'proforma') {
+    throw new ConflictError('پیش‌فاکتور این سفارش در ERP قطعی شده است؛ لغو آن از مسیر برگشت از فروش است.', undefined, 'STOREFRONT_PROFORMA_CHANGED');
+  }
+  // v12 phase 7: the order is cancelled before its proforma is voided, so the documents package's open site order guard
+  // lets this, its own path, through (one transaction: a refused void rolls the cancel back)
+  const cancelled = await moveOrder(tx, order, actor.username, { status: 'cancelled', cancelReason: reason, cancelledAt: systemNowUtcIso() });
   if (doc && doc.isDeleted === 0) {
-    if (doc.status !== 'proforma') {
-      throw new ConflictError('پیش‌فاکتور این سفارش در ERP قطعی شده است؛ لغو آن از مسیر برگشت از فروش است.', undefined, 'STOREFRONT_PROFORMA_CHANGED');
-    }
     await DocumentService.deleteDocument(order.documentId, actor.username, tx, {
       actor, note: reason === 'expired' ? `مهلت پرداخت سفارش سایت ${order.orderNumber} گذشت` : `لغو سفارش سایت ${order.orderNumber}`,
     });
   }
   await tx.update(storefrontPaymentReceipts).set({ status: 'rejected', rejectReason: 'سفارش لغو شد', reviewedBy: actor.username, reviewedAt: systemNowUtcIso() })
     .where(and(eq(storefrontPaymentReceipts.orderId, order.id), eq(storefrontPaymentReceipts.status, 'pending')));
-  const cancelled = await moveOrder(tx, order, actor.username, { status: 'cancelled', cancelReason: reason, cancelledAt: systemNowUtcIso() });
   // v11 phase 8.2c: a cancelled order (by a colleague or when its time ran out) gives its discount code's use back
   await releaseDiscount(tx, order.id);
   await queueOrderSms(tx, cancelled, 'order_cancelled');

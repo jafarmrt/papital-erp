@@ -39,6 +39,7 @@ import { consumesProjectReservation } from '../../lib/transactions/projectIssueT
 import { documentAuditSnapshot, type DocumentAuditChange, type DocumentAuditSnapshot, type DocumentVoidAudit } from './documentAudit.js';
 import { assertNameNotOtherKind, hasPricedLine, linkKnownDocumentParty } from './documentParty.js';
 import { assertLinkedLeadUnchanged, lockLinkedLead, markLinkedLeadSold } from './linkedLeadHooks.js';
+import { assertNoOpenSiteOrder } from './siteOrderLock.js';
 import { lockRequisitionOfOrder, releaseVoidedProcurementOrder } from './procurementOrderVoid.js';
 import { documentVoidVoucherReason } from '../../lib/documents/documentTypeName.js';
 import { idempotentTransaction } from '../../middleware/idempotency.js';
@@ -142,6 +143,8 @@ export class DocumentLifecycleService {
           if (doc.projectId) await assertProjectNotCancelled(tx, Number(doc.projectId), 'سند');
           // v11 phase 6.4 (C3, review): the lead locked first still links this document
           await assertLinkedLeadUnchanged(tx, doc, lead);
+          // v12 phase 7: an open site order's proforma is finalized only by its payment or on-account confirmation
+          await assertNoOpenSiteOrder(tx, id);
           auditBefore = await documentAuditSnapshot(tx, id);
 
           const docLines = await tx.select().from(documentItems)
@@ -347,6 +350,8 @@ export class DocumentLifecycleService {
       await assertVoidHasNoReturns(tx, { id: doc.id, refNumber: doc.refNumber });
       // v9.0.272 (TD-779، ت۴ الف): و نه سندی که دریافت یا پرداخت زنده خزانه دارد (۴۰۹ با فهرست آن‌ها)
       await assertVoidHasNoTreasuryRows(tx, { id: doc.id, refNumber: doc.refNumber });
+      // v12 phase 7: an open site order's proforma is voided only by cancelling the order (its SMS, discount use and receipts)
+      await assertNoOpenSiteOrder(tx, doc.id);
       // v9.0.337 (TD-785): سند و ردیف‌هایش پیش از ابطال برای تنها ردیف ممیزی ابطال
       const auditBefore = await documentAuditSnapshot(tx, id);
 
