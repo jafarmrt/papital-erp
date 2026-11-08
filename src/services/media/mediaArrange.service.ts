@@ -29,11 +29,12 @@ const ITEM_ENTITY: 'کالا' = ITEM_AUDIT_ENTITY;
  * so the site showed every product without a featured image. Inside the item's transaction: the item's other marks are
  * taken off first (one cover per item, `uq_media_assets_cover_item`), each change with its audit row.
  */
-export async function markItemCover(tx: DbTransaction, assetId: number, itemId: number, actor: Omit<MediaActor, 'canManage'>): Promise<void> {
+export async function markItemCover(tx: DbTransaction, assetId: number, itemId: number, actor: Omit<MediaActor, 'canManage'>): Promise<AssetRow[]> {
   const marked = await tx.select().from(mediaAssets).where(and(eq(mediaAssets.itemId, itemId), eq(mediaAssets.isDeleted, 0)))
     .orderBy(asc(mediaAssets.id)).for('update');
   const target = marked.find(row => row.id === assetId);
-  if (!target) throw new NotFoundError('فایل یافت نشد.', undefined, 'MEDIA_NOT_FOUND');
+  if (!target || target.kind !== 'image' || target.lightBytes === null) throw new NotFoundError('فایل یافت نشد.', undefined, 'MEDIA_NOT_FOUND');
+  const changed: AssetRow[] = [];
   const changes = [
     ...marked.filter(row => row.id !== assetId && row.isCover === 1).map(row => ({ row, isCover: 0 })),
     ...(target.isCover === 1 ? [] : [{ row: target, isCover: 1 }]),
@@ -46,14 +47,16 @@ export async function markItemCover(tx: DbTransaction, assetId: number, itemId: 
       entityId: row.id, description: isCover === 1 ? `«${row.originalName}» تصویر شاخص کالا شد` : `«${row.originalName}» دیگر تصویر شاخص کالا نیست`,
       details: { operation: 'cover', before: auditSnapshot(row), after: auditSnapshot(after) },
     });
+    changed.push(after);
   }
+  return changed;
 }
 
 /**
  * v10.0.247 (N-05 PR 3): arranging the files of the media library — their order, replacing a file with a better
  * version and using a product image as the item's picture. Each change runs in one transaction with its audit row (`tx`).
  * v10.1.71: the item's own picture (`items.image` / `items.thumbnail`) is the product's one featured image; the library's
- * separate cover mark was retired (its column is kept as stored and no longer read).
+ * separate cover route was retired. v12 phase 7: the cover mark follows the featured image again (`markItemCover`).
  */
 
 type AssetRow = typeof mediaAssets.$inferSelect;
@@ -145,7 +148,7 @@ export const MediaArrangeService = {
           lightBytes: null,
           thumbBytes: null,
           lightError: '',
-          // the retired cover mark stays as stored for an image; a replaced video has none until the browser sends its poster
+          // the cover mark (the featured image, markItemCover) stays for an image; a replaced video has none until the browser sends its poster
           isCover: kind === 'image' ? before.isCover : 0,
           version: before.version + 1,
           updatedAt: sql`now()`,
@@ -170,7 +173,7 @@ export const MediaArrangeService = {
    * thumbnail are copied into the image uploads folder, so the item list keeps showing them even if the library file is
    * deleted, and the item is saved at the version the page was built from (409 `OCC_CONFLICT`) with a «کالا» audit row.
    */
-  async useAsItemImage(id: number, itemVersion: number, actor: Omit<MediaActor, 'canManage'>): Promise<{ itemId: number; image: string; thumbnail: string; version: number }> {
+  async useAsItemImage(id: number, itemVersion: number, actor: Omit<MediaActor, 'canManage'>): Promise<{ itemId: number; image: string; thumbnail: string; version: number; assets: MediaAssetView[] }> {
     const [asset] = await orm.select().from(mediaAssets).where(and(eq(mediaAssets.id, id), eq(mediaAssets.isDeleted, 0)));
     if (!asset) throw new NotFoundError('فایل یافت نشد.', undefined, 'MEDIA_NOT_FOUND');
     if (asset.itemId === null || asset.kind !== 'image' || asset.lightBytes === null || asset.thumbBytes === null) {
@@ -194,7 +197,8 @@ export const MediaArrangeService = {
         const thumbnail = `/uploads/${thumbName}`;
         const [after] = await tx.update(items).set({ image, thumbnail, version: before.version + 1 })
           .where(and(eq(items.id, before.id), eq(items.version, before.version))).returning({ version: items.version });
-        await markItemCover(tx, asset.id, before.id, actor);
+        // the page keeps its file cards, so it gets back the files whose version moved (no false 409 on the next edit)
+        const assets = (await markItemCover(tx, asset.id, before.id, actor)).map(assetView);
         await logActivity({
           tx, req: actor.req, userId: actor.userId, username: actor.username, action: 'UPDATE', entity: ITEM_ENTITY,
           entityId: before.id, description: `عکس کالای «${before.name}» (${before.code}) از کتابخانه تصاویر (فایل ${asset.id})`,
@@ -205,7 +209,7 @@ export const MediaArrangeService = {
             mediaAssetId: asset.id,
           },
         });
-        return { itemId: before.id, image, thumbnail, version: after.version };
+        return { itemId: before.id, image, thumbnail, version: after.version, assets };
       });
     } catch (err) {
       await Promise.all([imageName, thumbName].map(name => fs.promises.rm(path.join(dir, name), { force: true })));

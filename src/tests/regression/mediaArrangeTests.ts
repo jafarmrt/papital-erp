@@ -48,6 +48,7 @@ async function coverRepairCase(h: Harness, wrong: string[]): Promise<string> {
   const chosen = await createTestItem({ type: 'product' });
   const changed = await createTestItem({ type: 'product' });
   const outside = await createTestItem({ type: 'product', image: `/uploads/outside-${digits(6)}.webp` });
+  const scoped = [chosen.id, changed.id, outside.id];
   const scope = (id: number) => `sectionId=${products}&itemId=${id}`;
   await uploadTo(h, manager, `${scope(chosen.id)}&shotType=side`, await noisyJpeg(900, 700));
   const picked = await uploadTo(h, manager, `${scope(chosen.id)}&shotType=white_background`, await noisyJpeg(900, 700));
@@ -61,19 +62,19 @@ async function coverRepairCase(h: Harness, wrong: string[]): Promise<string> {
   await h.q(`UPDATE media_assets SET is_cover = 0 WHERE item_id = ANY($1::int[])`, [[chosen.id, changed.id]]);
   await h.q(`UPDATE items SET image = '/uploads/changed-later.webp' WHERE id = $1`, [changed.id]);
 
-  const dry = await repairItemCovers({ apply: false });
+  const dry = await repairItemCovers({ apply: false, itemIds: scoped });
   const listed = dry.markable.filter(m => m.itemId === chosen.id || m.itemId === changed.id);
   if (listed.length !== 1 || listed[0].itemId !== chosen.id || listed[0].assetId !== picked.id) wrong.push(`dry run listed ${JSON.stringify(listed)}, expected only item ${chosen.id} <- ${picked.id}`);
   if (!dry.pictureOutsideLibrary.some(r => r.itemId === outside.id)) wrong.push('a picture outside the library was not listed');
   const [untouched] = await h.q(`SELECT count(*)::int AS n FROM media_assets WHERE item_id = $1 AND is_cover = 1`, [chosen.id]);
   if (Number(untouched.n) !== 0) wrong.push('the dry run changed a cover mark');
 
-  await repairItemCovers({ apply: true });
+  await repairItemCovers({ apply: true, itemIds: scoped });
   const marks = await h.q(`SELECT id, item_id, is_cover FROM media_assets WHERE item_id = ANY($1::int[]) AND is_cover = 1`, [[chosen.id, changed.id]]);
   if (marks.length !== 1 || Number(marks[0].id) !== picked.id) wrong.push(`covers after the repair ${JSON.stringify(marks)}, expected only ${picked.id}`);
   const audit = await h.q(`SELECT username FROM activity_logs WHERE entity = 'کتابخانه تصاویر' AND entity_id = $1 AND details->>'operation' = 'cover' ORDER BY id DESC LIMIT 1`, [String(picked.id)]);
   if (audit[0]?.username !== 'cover-repair') wrong.push(`repair audit row ${JSON.stringify(audit)}`);
-  const again = await repairItemCovers({ apply: false });
+  const again = await repairItemCovers({ apply: false, itemIds: scoped });
   if (again.markable.some(m => m.itemId === chosen.id)) wrong.push('a repaired item is listed again');
   return `listed ${listed.length}; covers ${marks.length}; outside ${dry.pictureOutsideLibrary.length}`;
 }
@@ -295,6 +296,11 @@ async function featuredImageCase(h: Harness, wrong: string[]): Promise<string> {
   if (markOf(first.id) !== 1 || markOf(second.id) !== 0) wrong.push(`cover marks after setting the featured image ${JSON.stringify(marks)}, expected only ${first.id}`);
   const coverAudit = await h.q(`SELECT entity_id FROM activity_logs WHERE entity = 'کتابخانه تصاویر' AND details->>'operation' = 'cover' AND entity_id = ANY($1::text[])`, [[String(first.id), String(second.id)]]);
   if (coverAudit.length !== 2) wrong.push(`cover audit rows ${JSON.stringify(coverAudit)}, expected one per changed file`);
+  // the answer carries both changed files at their new version, so the page's next edit of either is not a false 409
+  const answered = ((set.body as { data?: { assets?: Array<{ id: number; version: number }> } }).data?.assets ?? []);
+  const versions = await h.q(`SELECT id, version FROM media_assets WHERE id = ANY($1::int[])`, [[first.id, second.id]]);
+  const fresh = (id: number) => answered.find(a => a.id === id)?.version === Number(versions.find(v => Number(v.id) === id)?.version);
+  if (answered.length !== 2 || !fresh(first.id) || !fresh(second.id)) wrong.push(`changed files in the answer ${JSON.stringify(answered)}, stored ${JSON.stringify(versions)}`);
   return `pictured ${pictureRow?.featuredImage}; bare fallback ${bareRow?.fallbackAssetId}; set ${set.status}; cover route ${coverRoute.status}`;
 }
 
