@@ -23,6 +23,7 @@ under «### Unreleased», then one section per released version.
 ## Version 12.x Series (Active — see `src/data/changelogs/12.ts`)
 
 ### Unreleased
+- The new site's header on a phone (v12 phase 7, site review 1.1 and 1.2): on a 360 or 390 px screen the header was about 400 px wide, so the page slid sideways and the menu button was half off the screen; below the `sm` width the search is now an icon that opens a full-width search row and the logo and gaps are smaller, so menu, logo, search and cart fit (checked in a browser at 360 px: no sideways scroll). The phone menu and the search row close on every page change; the menu used to stay open over the new page after a link was tapped.
 
 ### v12.0.0 — بستن سری ۱۱ و آغاز نسخهٔ ۱۲: فروشگاه سایت تازهٔ پاپیتال
 - Series 11 closes and version 12 opens with the new papitalgallery.com shop site (owner decision 13 Aban 1405: the site is new work, so it starts a new major): `11.ts` is frozen at v11.7.0 with its fingerprint (12 entries) and `12.ts` is the active changelog; `docs/roadmap/V12_MASTER_ROADMAP.md` is the active roadmap, its phases 1 to 6 are the former site stages 8.1 to 8.6 of `docs/roadmap/V11_MASTER_ROADMAP.md` (whose phase 8 now points there; file names, migrations and test ids of those stages keep their v11 names), and the lines below were built before the series opened, so they are released together in v12.0.0. A branch opened before this cut moves its Unreleased line from the 11.x section to the 12.x section by hand when it merges master.
