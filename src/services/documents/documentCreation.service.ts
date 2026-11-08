@@ -43,6 +43,7 @@ import { assertDocumentStatus, assertRecordableDocument, stockDirectionOf } from
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
 import { consumesProjectReservation } from '../../lib/transactions/projectIssueTypes.js';
 import { assertDocumentNotInReview } from './documentReviewLock.js';
+import { assertNoOpenSiteOrder } from './siteOrderLock.js';
 import { assertReturnPartyOfInvoice, hasPricedLine, linkKnownDocumentParty, parseDocumentPartyId, resolveDocumentParty, returnInvoicePartyId } from './documentParty.js';
 import { documentAuditSnapshot, logDocumentCreated, type DocumentAuditActor, type DocumentAuditChange } from './documentAudit.js';
 import { assertLiveRecipient, documentRecipientInput } from './documentRecipient.js';
@@ -127,6 +128,7 @@ export class DocumentCreationService {
       }
       // v10.0.86 (TD-1138، ت۱۳): سندی که در گام بازبینی گردش کار است تا پایان بازبینی ویرایش نمی‌شود
       await assertDocumentNotInReview(tx, id);
+      await assertNoOpenSiteOrder(tx, id);
       const before = await documentAuditSnapshot(tx, id);
       // v11 phase 6.1t (review of M11): a document a receipt or cheque settles keeps its party, currency and cover
       const settled = await documentIsSettled(tx, id);

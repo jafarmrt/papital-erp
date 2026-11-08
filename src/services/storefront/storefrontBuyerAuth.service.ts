@@ -247,9 +247,16 @@ export async function sessionAccount(executor: DbExecutor, rawToken: unknown): P
 
 const signInNeeded = () => new AppError('برای این کار وارد حساب خود شوید.', 401, 'STOREFRONT_SESSION_REQUIRED');
 
-/** The account of the request's session, or 401 */
-export async function requireAccount(rawToken: unknown): Promise<AccountRecord> {
-  await assertAccountsOpen(orm);
+/**
+ * The account of the request's session, or 401. v12 phase 7 (site review 1.5): `ordersOff` (the account's own orders and
+ * their receipts) needs only the site on, so a signed-in buyer who paid still sends the receipt while «ثبت سفارش» is off.
+ */
+export async function requireAccount(rawToken: unknown, options: { ordersOff?: boolean } = {}): Promise<AccountRecord> {
+  if (options.ordersOff) {
+    if (!(await storefrontSettingValues(orm)).enabled) throw new NotFoundError('پیدا نشد');
+  } else {
+    await assertAccountsOpen(orm);
+  }
   const account = await sessionAccount(orm, rawToken);
   if (!account) throw signInNeeded();
   return account;

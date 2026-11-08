@@ -23,14 +23,18 @@ import { storefrontSettingValues } from './storefrontSettings.service.js';
 const RECEIPT_PAST_DAYS = 30;
 const RECEIPT_FUTURE_SLACK_MS = 10 * 60_000;
 
-async function orderingOn() {
+/**
+ * v12 phase 7 (site review 1.5): the order switch closes only new orders; while the site is on, a buyer still reads an open
+ * order and sends its receipt, so turning orders off for a holiday or a stock count never strands a buyer who has paid.
+ */
+async function siteOn() {
   const settings = await storefrontSettingValues(orm);
-  if (!settings.enabled || !settings.ordersEnabled) throw new NotFoundError('پیدا نشد');
+  if (!settings.enabled) throw new NotFoundError('پیدا نشد');
   return settings;
 }
 
 export async function buyerOrder(orderNumber: string, accessKey: string): Promise<BuyerOrder> {
-  const settings = await orderingOn();
+  const settings = await siteOn();
   const order = await orderForKey(orm, orderNumber, accessKey);
   return buyerOrderView(orm, order, settings);
 }
@@ -60,7 +64,7 @@ export async function sendReceipt(orderNumber: string, accessKey: string, input:
  * of a signed-in account's own orders (`sendAccountReceipt`), so an account holder pays from any phone.
  */
 export async function receiptFor(lockOrder: (tx: DbTransaction) => Promise<OrderRecord>, input: ReceiptRequest): Promise<BuyerOrder> {
-  const settings = await orderingOn();
+  const settings = await siteOn();
   const receipt = cleanReceipt(input, Date.parse(systemNowUtcIso()));
   const image = receiptImageOf(input.image);
   return orm.transaction(async (tx) => {
