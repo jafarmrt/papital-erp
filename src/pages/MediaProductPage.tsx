@@ -57,9 +57,14 @@ export default function MediaProductPage({ user }: { user?: User | null }) {
   const itemVersion = detail?.item.version;
   const itemImage = useMemo(() => (canItemImage && itemVersion !== undefined ? {
     version: itemVersion,
-    onSaved: ({ version, image, thumbnail }: MediaItemImageAnswer) => setDetail(prev => (prev
-      ? { ...prev, item: { ...prev.item, version }, featuredImage: { image, thumbnail } }
-      : prev)),
+    onSaved: ({ version, image, thumbnail, assets }: MediaItemImageAnswer) => setDetail(prev => {
+      if (!prev) return prev;
+      const changed = new Map((Array.isArray(assets) ? assets : []).map(a => [a.id, a]));
+      return {
+        ...prev, item: { ...prev.item, version }, featuredImage: { image, thumbnail },
+        assets: prev.assets.map(a => changed.get(a.id) ?? a),
+      };
+    }),
   } : null), [canItemImage, itemVersion]);
 
   return (

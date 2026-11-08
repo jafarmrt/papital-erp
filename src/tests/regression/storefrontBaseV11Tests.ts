@@ -2,7 +2,8 @@ import request from 'supertest';
 import { and, asc, desc, eq, inArray, like } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { activityLogs, appSettings, itemPrices, items, storefrontProducts, storefrontShippingMethods, warehouses } from '../../db/schema.js';
+import { createHash } from 'crypto';
+import { activityLogs, appSettings, itemPrices, items, mediaAssets, mediaSections, storefrontProducts, storefrontShippingMethods, warehouses } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 import { invalidateSettingsCache } from '../../lib/memoryCache.js';
 import { readPricingStrategies } from '../../lib/items/pricingStrategies.js';
@@ -30,6 +31,7 @@ export async function runStorefrontBaseV11Tests(shouldRun: (id: string, ...extra
   const name = 'v11 phase 8.1: storefront settings under their version, the key-guarded Storefront API, publishing only with a retail price, unique addresses, the stock of the chosen warehouse with the configured threshold and display, shipping rows under their version, and view-only holders refused';
   const tStart = Date.now();
   const itemIds: number[] = [];
+  let mediaSectionId = 0;
   const savedSettings = await orm.select().from(appSettings).where(like(appSettings.key, 'sf\\_%'));
   const savedStrategies = await orm.select().from(appSettings).where(eq(appSettings.key, 'pricing_strategies'));
   try {
@@ -135,6 +137,20 @@ export async function runStorefrontBaseV11Tests(shouldRun: (id: string, ...extra
       if (keys(card) !== 'category,collections,cover,name,retailPrice,sku,slug,stock') wrong.push(`catalog card fields: ${keys(card)}`);
       if (keys(card.stock) !== 'quantity,status') wrong.push(`stock fields: ${keys(card.stock)}`);
     }
+    // v12 phase 7: an item whose photos carry no cover mark (nothing set it since v10.1.71) still has a card image, the
+    // first in the library order; red before: cover null and «بی تصویر شاخص» in the admin list
+    const [photoSection] = await orm.insert(mediaSections).values({ kind: 'custom', title: `عکس‌های آزمون سایت ${tag}` }).returning({ id: mediaSections.id });
+    mediaSectionId = photoSection.id;
+    const photoSha = (n: number) => createHash('sha256').update(`storefront-card-${tag}-${n}`).digest('hex');
+    await orm.insert(mediaAssets).values([2, 1].map(n => ({
+      sectionId: mediaSectionId, itemId: priced.id, kind: 'image', title: `عکس ${n}`, mimeType: 'image/jpeg', sizeBytes: 100,
+      sha256: photoSha(n), width: 800, height: 800, lightBytes: 4, thumbBytes: 4, sortOrder: n,
+    })));
+    const pictured = await site(`/api/storefront/v1/products?q=${encodeURIComponent(tag)}`);
+    const pictureCard = (pictured.body.data ?? []).find((c: Body) => c.slug === slug);
+    if (pictureCard?.cover?.sha256 !== photoSha(1)) wrong.push(`card image without a cover mark: ${JSON.stringify(pictureCard?.cover)}, expected the first photo`);
+    const adminRow = ((await erp.get(`/api/storefront/products?q=${encodeURIComponent(`SF-A-${tag}`)}`)).body.data ?? [])[0];
+    if (adminRow?.hasCover !== true) wrong.push(`admin list «بی تصویر شاخص» for an item with photos: ${JSON.stringify(adminRow)}`);
     await erp.put('/api/storefront/settings', { ...settings, enabled: true, lowStockThreshold: 100, stockDisplay: 'status', version: version + 2 });
     // an item of the same design (same transfer code, in another case) is listed on the page as «هم‌طرح», without a
     // design field; the unpriced item of the same code is not on sale, so it is not listed
@@ -249,6 +265,10 @@ export async function runStorefrontBaseV11Tests(shouldRun: (id: string, ...extra
       error: err instanceof Error ? err.message : String(err),
     }));
   } finally {
+    if (mediaSectionId) {
+      await orm.delete(mediaAssets).where(eq(mediaAssets.sectionId, mediaSectionId)).catch(() => undefined);
+      await orm.delete(mediaSections).where(eq(mediaSections.id, mediaSectionId)).catch(() => undefined);
+    }
     if (itemIds.length > 0) {
       await orm.delete(storefrontProducts).where(inArray(storefrontProducts.itemId, itemIds)).catch(() => undefined);
       await orm.update(itemPrices).set({ isDeleted: 1 }).where(inArray(itemPrices.itemId, itemIds)).catch(() => undefined);

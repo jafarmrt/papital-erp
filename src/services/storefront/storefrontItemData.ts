@@ -42,7 +42,11 @@ export async function pricesOf(executor: DbExecutor, itemIds: number[], priceLis
   return prices;
 }
 
-/** The live images of each item that have a light version: the cover first, then the library order */
+/**
+ * The live images of each item that have a light version: the cover first, then the library order. `coverOnly` (cards)
+ * keeps one image per item: the cover, or (v12 phase 7) the first image in the library order when the item has no cover
+ * mark, so a product with photos never shows as «without a featured image».
+ */
 export async function imagesOf(executor: DbExecutor, itemIds: number[], options: { coverOnly?: boolean } = {}): Promise<Map<number, StorefrontImage[]>> {
   const images = new Map<number, StorefrontImage[]>();
   if (itemIds.length === 0) return images;
@@ -50,7 +54,6 @@ export async function imagesOf(executor: DbExecutor, itemIds: number[], options:
     const conditions = [
       inArray(mediaAssets.itemId, part), eq(mediaAssets.isDeleted, 0), eq(mediaAssets.kind, 'image'), isNotNull(mediaAssets.lightBytes),
     ];
-    if (options.coverOnly) conditions.push(eq(mediaAssets.isCover, 1));
     const rows = await executor.select({
       itemId: mediaAssets.itemId, sha256: mediaAssets.sha256, width: mediaAssets.width, height: mediaAssets.height,
       title: mediaAssets.title, isCover: mediaAssets.isCover, sortOrder: mediaAssets.sortOrder, id: mediaAssets.id,
@@ -61,6 +64,7 @@ export async function imagesOf(executor: DbExecutor, itemIds: number[], options:
       const list = images.get(itemId) ?? [];
       // one file may be filed twice for an item; the site shows it once
       if (list.some(image => image.sha256 === row.sha256)) continue;
+      if (options.coverOnly && list.length > 0) continue;
       list.push({ sha256: row.sha256, width: row.width, height: row.height, alt: row.title.trim(), isCover: row.isCover === 1 });
       images.set(itemId, list);
     }
