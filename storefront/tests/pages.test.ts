@@ -50,6 +50,18 @@ describe('storefront pages', () => {
     expect(html).toContain('۱٬۴۵۰٬۰۰۰ تومان');
   });
 
+  it('fits the phone header in 360 px: the search is an icon that opens a full-width row, and the inline field is from sm up (v12 phase 7, site review 1.1)', async () => {
+    const { html } = await page('/');
+    const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
+    // red before: the search field sat in the phone row (w-32) beside the menu, the logo (max-w-40) and the cart
+    expect(header).toContain('data-header-panel="search"');
+    expect(header).toMatch(/<details[^>]*class="[^"]*sm:hidden[^"]*"[^>]*data-header-panel="search"/);
+    expect(header).toMatch(/<form[^>]*class="ms-auto hidden sm:block/);
+    expect(header).toContain('max-w-28');
+    expect(header).not.toContain('w-32');
+    expect(header).toContain('data-header-panel="menu"');
+  });
+
   it('lists, filters and sorts on the server, so the list works without JavaScript', async () => {
     const all = await page('/products');
     expect(all.status).toBe(200);
