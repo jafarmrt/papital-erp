@@ -297,16 +297,31 @@ export async function runStorefrontOrdersV11Tests(shouldRun: (id: string, ...ext
 
     // 10b) v12 phase 7 (site review 3.2a): an overdue order whose proforma is no longer a proforma (finalized before the
     // guard, or by another path) is not picked by the sweep, so it never fills the batch and fails every minute
-    const stuckPlaced = await site.post('/api/storefront/v1/orders', buyer(`0917${tag}`, slugA, `rk-stuck-${tag}-checkout`));
-    if (stuckPlaced.status !== 201) throw new Error(`place the stuck order: ${stuckPlaced.status} ${JSON.stringify(stuckPlaced.body)}`);
-    const [stuck] = await orm.select().from(storefrontOrders).where(eq(storefrontOrders.orderNumber, stuckPlaced.body.data.order.number));
-    orderIds.push(stuck.id);
-    await orm.update(documents).set({ status: 'final' }).where(eq(documents.id, stuck.documentId));
-    await orm.update(storefrontOrders).set({ reserveUntil: new Date(Date.now() - 60_000).toISOString() }).where(eq(storefrontOrders.id, stuck.id));
-    const sweep = await expireDueOrdersOnce();
-    const [stuckAfter] = await orm.select({ status: storefrontOrders.status }).from(storefrontOrders).where(eq(storefrontOrders.id, stuck.id));
-    if (sweep.failed !== 0 || stuckAfter?.status !== 'awaiting_payment') wrong.push(`the sweep on an order whose proforma was finalized: ${JSON.stringify(sweep)} ${stuckAfter?.status}`);
-    await orm.update(documents).set({ status: 'proforma' }).where(eq(documents.id, stuck.documentId));
+    // (the document states are set by SQL to stand for what the ERP could do before the guard; each is put back in finally)
+    const placeOverdue = async (phone: string, slug: string, status: 'final' | 'draft') => {
+      const res = await site.post('/api/storefront/v1/orders', buyer(phone, slug, `rk-${status}-${tag}-checkout`));
+      if (res.status !== 201) throw new Error(`place the ${status} order: ${res.status} ${JSON.stringify(res.body)}`);
+      const [row] = await orm.select().from(storefrontOrders).where(eq(storefrontOrders.orderNumber, res.body.data.order.number));
+      orderIds.push(row.id);
+      await orm.update(documents).set({ status }).where(eq(documents.id, row.documentId));
+      await orm.update(storefrontOrders).set({ reserveUntil: new Date(Date.now() - 60_000).toISOString() }).where(eq(storefrontOrders.id, row.id));
+      return row;
+    };
+    const finalized = await placeOverdue(`0917${tag}`, slugA, 'final');
+    try {
+      const drafted = await placeOverdue(`0918${tag}`, slugB, 'draft');
+      await expireDueOrdersOnce();
+      const [finalAfter] = await orm.select({ status: storefrontOrders.status }).from(storefrontOrders).where(eq(storefrontOrders.id, finalized.id));
+      if (finalAfter?.status !== 'awaiting_payment') wrong.push(`the sweep picked an order whose proforma is a final invoice: ${finalAfter?.status}`);
+      // a draft (made one in the ERP before the guard) is voided with its order; red before: the cancel refused a draft
+      const [draftAfter] = await orm.select({ status: storefrontOrders.status }).from(storefrontOrders).where(eq(storefrontOrders.id, drafted.id));
+      const [draftDoc] = await orm.select({ isDeleted: documents.isDeleted }).from(documents).where(eq(documents.id, drafted.documentId));
+      if (draftAfter?.status !== 'cancelled' || draftDoc?.isDeleted !== 1) wrong.push(`an overdue order with a draft: ${draftAfter?.status} doc ${draftDoc?.isDeleted}`);
+    } finally {
+      // back to a proforma, which the sweep then cancels and voids, so no reserving document is left behind
+      await orm.update(documents).set({ status: 'proforma' }).where(eq(documents.id, finalized.documentId));
+      await expireDueOrdersOnce();
+    }
 
     // 11) the ERP list finds the order by phone
     const list = await erp.get(`/api/storefront/orders?q=${phone1}`);

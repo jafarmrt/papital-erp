@@ -263,7 +263,8 @@ export async function rejectReceipt(req: Request, id: number, input: { receiptId
 /** Voids the order's proforma (its reservation is released) and cancels the order; used by the screen and the expiry sweep */
 export async function cancelOpenOrder(tx: DbExecutor, order: OrderRecord, reason: 'staff' | 'expired', actor: { userId?: number; username: string; userFullName?: string }): Promise<OrderRecord> {
   const [doc] = await tx.select({ status: documents.status, isDeleted: documents.isDeleted }).from(documents).where(eq(documents.id, order.documentId));
-  if (doc && doc.isDeleted === 0 && doc.status !== 'proforma') {
+  // a proforma or a draft (made one in the ERP before v12) is voided with the order; a final invoice is the sales return's
+  if (doc && doc.isDeleted === 0 && doc.status === 'final') {
     throw new ConflictError('پیش‌فاکتور این سفارش در ERP قطعی شده است؛ لغو آن از مسیر برگشت از فروش است.', undefined, 'STOREFRONT_PROFORMA_CHANGED');
   }
   // v12 phase 7: the order is cancelled before its proforma is voided, so the documents package's open site order guard

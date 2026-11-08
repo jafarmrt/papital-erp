@@ -340,6 +340,10 @@ export class DocumentLifecycleService {
         .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)))
         .for('update');
       if (!doc) return;
+      // v12 phase 7: an open site order's proforma is voided only by cancelling the order (its SMS, discount use and
+      // receipts). A document that is no longer a proforma (finalized or made a draft before this guard) may still be
+      // voided here: that is the way out for its order, which the reservation sweep then cancels.
+      if (doc.status === 'proforma') await assertNoOpenSiteOrder(tx, doc.id);
 
       // v8.0.6 (TD-265، تصمیم مالک محصول): ابطال سند ورودی‌ای که موجودی‌اش با خروجِ تاریخ‌دار بعدی مصرف شده رد می‌شود
       // (پیش از هر نوشتن)؛ پیش‌تر فقط موجودی لحظه ابطال سنجیده می‌شد و کاردکس به ترتیب تاریخ منفی می‌ماند
@@ -350,8 +354,6 @@ export class DocumentLifecycleService {
       await assertVoidHasNoReturns(tx, { id: doc.id, refNumber: doc.refNumber });
       // v9.0.272 (TD-779، ت۴ الف): و نه سندی که دریافت یا پرداخت زنده خزانه دارد (۴۰۹ با فهرست آن‌ها)
       await assertVoidHasNoTreasuryRows(tx, { id: doc.id, refNumber: doc.refNumber });
-      // v12 phase 7: an open site order's proforma is voided only by cancelling the order (its SMS, discount use and receipts)
-      await assertNoOpenSiteOrder(tx, doc.id);
       // v9.0.337 (TD-785): سند و ردیف‌هایش پیش از ابطال برای تنها ردیف ممیزی ابطال
       const auditBefore = await documentAuditSnapshot(tx, id);
 

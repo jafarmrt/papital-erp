@@ -26,7 +26,7 @@ const notFound = () => new NotFoundError('سفارش پیدا نشد.', undefine
 
 /** `GET /account/orders` */
 export async function myOrders(rawToken: unknown, query: { page: number; limit: number }): Promise<AccountOrderPage> {
-  const account = await requireAccount(rawToken);
+  const account = await requireAccount(rawToken, { ordersOff: true });
   const page = Math.max(1, query.page);
   const limit = Math.min(ACCOUNT_ORDER_PAGE_MAX, Math.max(1, query.limit));
   const mine = eq(storefrontOrders.buyerAccountId, account.id);
@@ -53,7 +53,7 @@ export async function myOrders(rawToken: unknown, query: { page: number; limit: 
 
 /** `GET /account/orders/:number`: one of the account's orders, as its tracking page shows it */
 export async function myOrder(rawToken: unknown, orderNumber: string): Promise<BuyerOrder> {
-  const account = await requireAccount(rawToken);
+  const account = await requireAccount(rawToken, { ordersOff: true });
   if (!/^\d{6,12}$/.test(orderNumber)) throw notFound();
   const [order] = await orm.select().from(storefrontOrders)
     .where(and(eq(storefrontOrders.orderNumber, orderNumber), eq(storefrontOrders.buyerAccountId, account.id)));
@@ -67,7 +67,7 @@ export async function myOrder(rawToken: unknown, orderNumber: string): Promise<B
  * the keyed route; another account's order, or a number the account does not hold, is the same 404.
  */
 export async function sendAccountReceipt(rawToken: unknown, orderNumber: string, input: ReceiptRequest): Promise<BuyerOrder> {
-  const account = await requireAccount(rawToken);
+  const account = await requireAccount(rawToken, { ordersOff: true });
   if (!/^\d{6,12}$/.test(orderNumber)) throw notFound();
   return receiptFor(async (tx) => {
     const [order] = await tx.select().from(storefrontOrders)
