@@ -19,6 +19,7 @@ import {
 } from '../../lib/storefront/storefrontContracts.js';
 import { activeWarehouses, storefrontWarehouseCode } from './storefrontStock.js';
 import { readStorefrontBrand } from './storefrontBrand.service.js';
+import { forgetOnSale } from './storefrontOnSaleCache.js';
 
 /**
  * v11 phase 8.1 (package 18): the storefront settings in `app_settings` (`sf_*`): the card and IBAN buyers pay to, the
@@ -235,6 +236,8 @@ export async function saveStorefrontSettings(req: Request, input: StorefrontSett
     });
   });
   invalidateSettingsCache();
+  // v12 phase 7: the site's kept list of items depends on these settings (the price list, the switch)
+  forgetOnSale();
   return readStorefrontSettings(orm);
 }
 

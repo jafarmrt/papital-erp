@@ -81,6 +81,21 @@ const writeLimiter = rateLimit({
   keyGenerator: (req) => `storefront-write:${ipKeyGenerator(buyerAddress(req))}`,
   validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
 });
+/**
+ * v12 phase 7 (site review 1.4): the catalog reads the site makes for one visitor (a search its cache cannot answer) name
+ * the visitor in `X-Storefront-Client-IP`, and each visitor gets this many a minute of their own, so one script cannot
+ * fill the shared read limit above. Reads without the header (the site's shared, cached reads) count only there.
+ */
+export const STOREFRONT_VISITOR_READS_PER_MINUTE = 120;
+const visitorReadLimiter = rateLimit({
+  windowMs: 60_000,
+  max: STOREFRONT_VISITOR_READS_PER_MINUTE,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => !net.isIP(String(req.headers['x-storefront-client-ip'] ?? '').trim()),
+  keyGenerator: (req) => `storefront-read:${ipKeyGenerator(buyerAddress(req))}`,
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+});
 const orderKeyOf = (req: Request): string => String(req.headers['x-order-key'] ?? '').trim().slice(0, ACCESS_KEY_MAX + 1);
 /** v11 phase 8.2b: a signed-in buyer's session token (the app keeps it in an httpOnly cookie and forwards it) */
 const sessionOf = (req: Request): string => String(req.headers['x-buyer-session'] ?? '').trim().slice(0, BUYER_TOKEN_MAX + 1);
@@ -139,7 +154,7 @@ router.get('/redirects', asyncHandler(async (_req: Request, res: Response) => {
   res.json({ data: await publicRedirects() });
 }));
 
-router.get('/products', validate(catalogSchema), asyncHandler(async (req: Request, res: Response) => {
+router.get('/products', visitorReadLimiter, validate(catalogSchema), asyncHandler(async (req: Request, res: Response) => {
   const query = req.query as { page?: number; limit?: number; q?: string; collection?: string; category?: string; sort?: CatalogSort };
   res.json(await catalogPage({
     page: query.page ?? 1, limit: Math.min(query.limit ?? 24, CATALOG_PAGE_MAX), q: query.q ?? '',

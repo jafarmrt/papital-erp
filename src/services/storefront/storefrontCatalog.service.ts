@@ -15,6 +15,7 @@ import type { StorefrontSettingsInput } from '../../lib/storefront/storefrontCon
 import { listShippingMethods } from './storefrontShipping.service.js';
 import { imagesOf, pricesOf } from './storefrontItemData.js';
 import { smsLoginOn } from './storefrontSmsSettings.service.js';
+import { keptOnSale } from './storefrontOnSaleCache.js';
 
 /**
  * v11 phase 8.1 (package 18): what the Storefront API answers the site app, read only. An item is on the site while its
@@ -95,6 +96,13 @@ export async function orderableItems(executor: DbExecutor, settings: StorefrontS
   return new Map((await itemsOnSale(executor, settings, undefined, slugs)).map(item => [item.slug, item]));
 }
 
+/**
+ * v12 phase 7 (site review 1.4): every item on the site for the public reads, kept a few seconds
+ * (`storefrontOnSaleCache.ts`); never for an order, a quote or a price a buyer pays
+ */
+const publicOnSale = (settings: StorefrontSettingsInput): Promise<readonly OnSale[]> =>
+  keptOnSale(settings.retailPriceList, () => itemsOnSale(orm, settings));
+
 /** v11 phase 8.2b: every item the site offers now, to price for a buyer group */
 export async function catalogItems(executor: DbExecutor, settings: StorefrontSettingsInput): Promise<OnSale[]> {
   return itemsOnSale(executor, settings);
@@ -106,7 +114,7 @@ const compareRial = (a: string, b: string) => {
   return x < y ? -1 : x > y ? 1 : 0;
 };
 
-function sorted(list: OnSale[], sort: CatalogSort): OnSale[] {
+function sorted(list: readonly OnSale[], sort: CatalogSort): readonly OnSale[] {
   if (sort === 'newest') return [...list].sort((a, b) => b.itemId - a.itemId);
   if (sort === 'price_asc') return [...list].sort((a, b) => compareRial(a.retailPrice, b.retailPrice) || (a.itemId - b.itemId));
   if (sort === 'price_desc') return [...list].sort((a, b) => compareRial(b.retailPrice, a.retailPrice) || (a.itemId - b.itemId));
@@ -135,7 +143,7 @@ export async function catalogPage(query: CatalogQuery): Promise<StorefrontCatalo
   const limit = Math.min(CATALOG_PAGE_MAX, Math.max(1, query.limit));
   const q = folded(query.q);
   const settings = await storefrontSettingValues(orm);
-  const matching = (await itemsOnSale(orm, settings)).filter(item =>
+  const matching = (await publicOnSale(settings)).filter(item =>
     (!query.collection || item.collections.includes(query.collection))
     && (!query.category || item.category === query.category)
     && (!q || folded(`${item.name} ${item.sku} ${item.collections.join(' ')}`).includes(q)));
@@ -158,7 +166,7 @@ export async function catalogPage(query: CatalogQuery): Promise<StorefrontCatalo
  */
 export async function campaignCards(products: { itemIds: number[] } | { collection: string }, limit: number): Promise<StorefrontProductCard[]> {
   const settings = await storefrontSettingValues(orm);
-  const onSale = await itemsOnSale(orm, settings);
+  const onSale = await publicOnSale(settings);
   let chosen: OnSale[];
   if ('itemIds' in products) {
     const byId = new Map(onSale.map(item => [item.itemId, item]));
@@ -186,7 +194,7 @@ export async function productBySlug(slug: string): Promise<StorefrontProductDeta
   // v11 phase 8.3 (owner, 2026-11-03): the items that share the transfer code are «هم‌طرح»; the site shows them under that
   // name, not as a field (a standard product code still carries the code in its third part, as on every label)
   const twins = item.designKey
-    ? (await itemsOnSale(orm, settings)).filter(other => other.designKey === item.designKey && other.itemId !== item.itemId).slice(0, SAME_DESIGN_MAX)
+    ? (await publicOnSale(settings)).filter(other => other.designKey === item.designKey && other.itemId !== item.itemId).slice(0, SAME_DESIGN_MAX)
     : [];
   const ids = [item.itemId, ...twins.map(t => t.itemId)];
   const sellable = await storefrontSellable(orm, ids, settings.warehouseCode);
@@ -212,7 +220,7 @@ function facet(values: string[]): StorefrontFacet[] {
 
 /** The collections and categories that have an item on the site, with their counts */
 export async function catalogFacets(): Promise<{ collections: StorefrontFacet[]; categories: StorefrontFacet[] }> {
-  const onSale = await itemsOnSale(orm, await storefrontSettingValues(orm));
+  const onSale = await publicOnSale(await storefrontSettingValues(orm));
   return { collections: facet(onSale.flatMap(i => i.collections)), categories: facet(onSale.map(i => i.category)) };
 }
 

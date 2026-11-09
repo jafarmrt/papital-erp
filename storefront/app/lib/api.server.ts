@@ -50,12 +50,13 @@ function remember(path: string, entry: Entry) {
   cache.set(path, entry);
 }
 
-async function fetchJson<T>(path: string, ttlMs: number): Promise<T> {
+async function fetchJson<T>(path: string, ttlMs: number, visitor = ''): Promise<T> {
   const { apiUrl, apiKey } = siteEnv();
   let res: Response;
   try {
     res = await fetch(`${apiUrl}${path}`, {
-      headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
+      // v12 phase 7 (site review 1.4): a visitor's own read (a search) names the visitor, so the ERP limits each one apart
+      headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json', ...(visitor ? { 'X-Storefront-Client-IP': visitor } : {}) },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch {
@@ -68,13 +69,13 @@ async function fetchJson<T>(path: string, ttlMs: number): Promise<T> {
   return value;
 }
 
-async function get<T>(path: string, ttlMs: number): Promise<T> {
+async function get<T>(path: string, ttlMs: number, visitor = ''): Promise<T> {
   const hit = kept(path);
   if (hit?.status === 404 && Date.now() - hit.at < NOT_FOUND_TTL_MS) throw new StorefrontApiError(404, path);
   if (hit && hit.status === undefined && Date.now() - hit.at < ttlMs) return hit.value as T;
   let pending = inFlight.get(path) as Promise<T> | undefined;
   if (!pending) {
-    pending = fetchJson<T>(path, ttlMs).finally(() => inFlight.delete(path));
+    pending = fetchJson<T>(path, ttlMs, visitor).finally(() => inFlight.delete(path));
     inFlight.set(path, pending);
   }
   return pending;
@@ -89,7 +90,8 @@ export interface CatalogQuery {
   sort?: CatalogSort;
 }
 
-export function catalog(query: CatalogQuery): Promise<StorefrontCatalogPage> {
+/** `visitor`: the searching visitor's address ('' = a shared read), passed on to the ERP when the answer is not kept */
+export function catalog(query: CatalogQuery, visitor = ''): Promise<StorefrontCatalogPage> {
   const params = new URLSearchParams();
   if (query.page && query.page > 1) params.set('page', String(query.page));
   params.set('limit', String(query.limit ?? CATALOG_PAGE_SIZE));
@@ -97,7 +99,7 @@ export function catalog(query: CatalogQuery): Promise<StorefrontCatalogPage> {
   if (query.collection) params.set('collection', query.collection);
   if (query.category) params.set('category', query.category);
   if (query.sort && query.sort !== 'default') params.set('sort', query.sort);
-  return get<StorefrontCatalogPage>(`/products?${params}`, CATALOG_TTL_MS);
+  return get<StorefrontCatalogPage>(`/products?${params}`, CATALOG_TTL_MS, visitor);
 }
 
 /** A name longer than the API takes cannot match anything: the page is a 404 (the API itself would answer 400) */

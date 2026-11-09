@@ -16,6 +16,7 @@ import type {
 import { storefrontSellable } from './storefrontStock.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
 import { imagesOf, pricesOf } from './storefrontItemData.js';
+import { forgetOnSale } from './storefrontOnSaleCache.js';
 
 /**
  * v11 phase 8.1 (package 18): which items the site offers, under which address and SEO texts. The list shows every live
@@ -148,6 +149,8 @@ export async function saveStorefrontProduct(req: Request, itemId: number, input:
       description: `کالای ${item.code} «${item.name}» ${verb}`, details: { before, after },
     });
   });
+  // v12 phase 7: the site's kept list of items is read again, so a publish or an unpublish shows at once
+  forgetOnSale();
   const [row] = await adminRows(and(eq(items.id, itemId), eq(items.isDeleted, 0)), 1, 0);
   if (!row) throw new NotFoundError('کالا پیدا نشد.', undefined, 'STOREFRONT_ITEM_NOT_FOUND');
   return row;

@@ -152,3 +152,26 @@ describe('account pages', () => {
     expect((await page('/account/sign-out')).status).toBe(302);
   });
 });
+
+// v12 phase 7 (site review 1.4): a search is limited per visitor, names the visitor to the ERP, and only that visitor
+// gets the «too many searches» page
+describe('the per-visitor search limit', () => {
+  const search = async (q: string, ip: string) => {
+    const res = await handle(new Request(`http://localhost/products?q=${encodeURIComponent(q)}`, { headers: { 'X-Real-IP': ip } }));
+    return { status: res.status, html: await res.text(), retryAfter: res.headers.get('retry-after') };
+  };
+
+  it('passes the visitor to the ERP and answers 429 past thirty searches a minute, for that visitor only', async () => {
+    const first = await search('انگشتر ۰', '203.0.113.50');
+    expect(first.status).toBe(200);
+    expect((await last()).clientIp).toBe('203.0.113.50');
+    for (let i = 1; i < 30; i++) expect((await search(`انگشتر ${i}`, '203.0.113.50')).status).toBe(200);
+    const over = await search('انگشتر ۳۱', '203.0.113.50');
+    expect(over.status).toBe(429);
+    expect(over.html).toContain('جست‌وجوی زیادی در یک دقیقه');
+    expect(Number(over.retryAfter)).toBeGreaterThan(0);
+    expect((await search('انگشتر ۳۱', '198.51.100.20')).status).toBe(200);
+    // browsing without a search is never limited
+    expect((await page('/products')).status).toBe(200);
+  });
+});

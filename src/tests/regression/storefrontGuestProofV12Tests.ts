@@ -57,7 +57,7 @@ export async function runStorefrontGuestProofV12Tests(shouldRun: (id: string, ..
   const id = 'reg_storefront_guest_proof_v12_p7d';
   if (!shouldRun(id, 'v12', 'phase7', 'storefront', 'orders', 'sms', 'reservation', 'security')) return results;
 
-  const name = 'v12 phase 7d: the retail cap of five at the quote and the order; with the texts on a guest order needs its own phone proof, a refused order leaves no customer or reservation and keeps the proof, a used proof is refused but a replay answers the order, a signed-in account needs none; with the texts off nothing changes';
+  const name = 'v12 phase 7d and 7e: the retail cap of five at the quote and the order; with the texts on a guest order needs its own phone proof, a refused order leaves no customer or reservation and keeps the proof, a used proof is refused but a replay answers the order, a signed-in account needs none; with the texts off nothing changes; a per-visitor limit on catalog reads';
   const tStart = Date.now();
   const itemIds: number[] = [];
   const phoneKeys: string[] = [];
@@ -220,10 +220,24 @@ export async function runStorefrontGuestProofV12Tests(shouldRun: (id: string, ..
     const member = await site(token).post('/api/storefront/v1/orders', order(phoneMember, `rk-member-${tag}-proof-check`, [{ slug: slugTen, quantity: 1 }]));
     if (member.status !== 201) wrong.push(`a signed-in order without a proof: ${member.status} ${JSON.stringify(member.body)}`);
 
+    // 7) v12 phase 7e (site review 1.4): a visitor's catalog reads have a limit of their own; another visitor and the
+    // site's shared reads (no visitor named) still read
+    const { STOREFRONT_VISITOR_READS_PER_MINUTE } = await import('../../routes/storefrontApi.routes.js');
+    const visitorRead = (ip: string, q: string) => request(app).get(`/api/storefront/v1/products?q=${encodeURIComponent(q)}`)
+      .set('Authorization', `Bearer ${apiKey}`).set('X-Storefront-Client-IP', ip);
+    const reader = `10.32.${Number(tag.slice(-2)) % 250}.7`;
+    let lastStatus = 0;
+    for (let i = 0; i <= STOREFRONT_VISITOR_READS_PER_MINUTE; i++) lastStatus = (await visitorRead(reader, `proof-${i}`)).status;
+    if (lastStatus !== 429) wrong.push(`read ${STOREFRONT_VISITOR_READS_PER_MINUTE + 1} of one visitor: ${lastStatus}, not 429`);
+    const otherReader = await visitorRead(`10.33.${Number(tag.slice(-2)) % 250}.8`, 'proof');
+    if (otherReader.status !== 200) wrong.push(`another visitor after one was limited: ${otherReader.status}`);
+    const shared = await request(app).get('/api/storefront/v1/products?q=proof').set('Authorization', `Bearer ${apiKey}`);
+    if (shared.status !== 200) wrong.push(`a shared read after one visitor was limited: ${shared.status}`);
+
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'six of an item was 422 STOREFRONT_RETAIL_LINE_CAP at the quote and the order and reserved nothing, five was quoted; with the texts off a guest ordered without a proof; with the texts on a guest order without a proof and with another phone\'s proof was 422 and left no order, customer or reservation; the own proof survived a 409 short order and then placed the order; a replay with the used proof answered the same order and key, a new order with it was 422; a signed-in account ordered without a proof',
+      details: 'six of an item was 422 STOREFRONT_RETAIL_LINE_CAP at the quote and the order and reserved nothing, five was quoted; with the texts off a guest ordered without a proof; with the texts on a guest order without a proof and with another phone\'s proof was 422 and left no order, customer or reservation; the own proof survived a 409 short order and then placed the order; a replay with the used proof answered the same order and key, a new order with it was 422; a signed-in account ordered without a proof; one visitor\'s catalog read past the per-visitor limit was 429 while another visitor and the site\'s shared reads still read',
     }));
   } catch (err) {
     results.push(makeTestCase({

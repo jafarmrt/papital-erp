@@ -125,6 +125,16 @@ export default function App() {
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   const notFound = isRouteErrorResponse(error) && error.status === 404;
+  // v12 phase 7: one visitor's searches past the limit (the shop itself is fine)
+  if (isRouteErrorResponse(error) && error.status === 429) {
+    return (
+      <section className="mx-auto max-w-xl px-4 py-24 text-center">
+        <h1 className="text-2xl font-extrabold">جست‌وجوی زیادی در یک دقیقه</h1>
+        <p className="mt-3 text-muted-foreground">یک دقیقهٔ دیگر دوباره جست‌وجو کنید. دیدن محصولات و کالکشن‌ها همین حالا هم کار می‌کند.</p>
+        <a href="/products" className="mt-8 inline-flex min-h-11 items-center rounded-control bg-primary px-6 font-medium text-primary-foreground">همهٔ محصولات</a>
+      </section>
+    );
+  }
   return (
     <section className="mx-auto max-w-xl px-4 py-24 text-center">
       <h1 className="text-2xl font-extrabold">{notFound ? 'این صفحه پیدا نشد' : 'فروشگاه الان در دسترس نیست'}</h1>
