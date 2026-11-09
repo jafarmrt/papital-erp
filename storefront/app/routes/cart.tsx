@@ -5,6 +5,7 @@ import type { StorefrontGroupPrices } from '@erp/storefront/storefrontBuyerContr
 import { product as productBySlug, publicSettings } from '../lib/api.server';
 import { accountCall, crossSite, sameSite, sessionOf } from '../lib/account.server';
 import { CART_FULL, cartCookie, cartOf, changeCart, formQuantity, type CartChange } from '../lib/cart.server';
+import { RETAIL_LINE_QUANTITY_MAX, ORDER_LINE_QUANTITY_MAX } from '@erp/storefront/storefrontOrderRules';
 import { siteEnv } from '../lib/site.server';
 import { productPath } from '../lib/brand';
 import { faNumber, formatPrice } from '../lib/format';
@@ -16,7 +17,15 @@ import { FormError } from '../components/AccountForm';
  * v11 phase 8.2: the cart. Every change is a plain form posted here (the product page's «افزودن به سبد» too), so it
  * works without JavaScript. The prices shown are a guide: the ERP prices the cart again at the checkout. A signed-in
  * buyer of a group sees the group's price of each product the group may buy.
+ *
+ * v12 phase 7 (site review 2.10): each row has the most the buyer may order of it, the retail cap (none for a group's
+ * buyer) and the count on the site when the shop shows counts; «یکی بیشتر» stops there, and a row above it is said and
+ * holds the checkout back. The ERP checks both again when the order is placed.
  */
+/** The most of one row the buyer may order, and whether the count on the site (not the cap) is what holds it */
+const lineLimit = (cap: number, onSite: number | null) =>
+  onSite !== null && onSite < cap ? { limit: Math.max(0, onSite), byStock: true } : { limit: cap, byStock: false };
+
 export async function loader({ request }: Route.LoaderArgs) {
   const settings = await publicSettings();
   if (!settings.ordering) throw new Response('پیدا نشد', { status: 404 });
@@ -26,6 +35,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     sessionOf(request) ? accountCall<StorefrontGroupPrices>(request, 'GET', '/account/prices') : Promise.resolve(null),
   ]);
   const groupPrice = new Map((prices?.data?.prices ?? []).map(p => [p.slug, p.price]));
+  const group = prices?.data?.group ?? '';
   const rows = lines.map((line, i) => {
     const item = items[i];
     const unit = item ? groupPrice.get(line.slug) ?? item.retailPrice : '';
@@ -40,10 +50,11 @@ export async function loader({ request }: Route.LoaderArgs) {
       amount: unit && /^\d+$/.test(unit) ? (BigInt(unit) * BigInt(line.quantity)).toString() : '',
       gone: !item,
       wholesale: groupPrice.has(line.slug),
+      ...lineLimit(group ? ORDER_LINE_QUANTITY_MAX : RETAIL_LINE_QUANTITY_MAX, item?.stock?.quantity ?? null),
     };
   });
   const total = rows.reduce((sum, r) => (r.amount ? sum + BigInt(r.amount) : sum), 0n).toString();
-  return { rows, total, group: prices?.data?.group ?? '', siteUrl: siteEnv().siteUrl };
+  return { rows, total, group, siteUrl: siteEnv().siteUrl };
 }
 
 /** the buyer's own cart, address or order: never kept by a browser or a cache in between */
@@ -76,7 +87,7 @@ export async function action({ request }: Route.ActionArgs) {
 export default function CartPage({ loaderData, actionData }: Route.ComponentProps) {
   const { rows, total, group } = loaderData;
   const busy = useNavigation().state === 'submitting';
-  const blocked = rows.some(r => r.gone || r.stock?.status === 'out');
+  const blocked = rows.some(r => r.gone || r.stock?.status === 'out' || r.quantity > r.limit);
 
   return (
     <div className="mx-auto max-w-3xl px-4 pt-6 pb-16 lg:pt-10">
@@ -105,7 +116,14 @@ export default function CartPage({ loaderData, actionData }: Route.ComponentProp
                     <>
                       <Link to={productPath(row.slug)} className="line-clamp-2 font-bold leading-7 hover:underline">{row.name}</Link>
                       <p className="text-sm text-muted-foreground">{formatPrice(row.unit)}{row.wholesale ? ' (قیمت گروه شما)' : ''}</p>
-                      {row.stock?.status === 'out' ? <p className="text-sm font-bold text-destructive">فعلاً ناموجود؛ آن را از سبد بردارید.</p> : null}
+                      {row.stock?.status === 'out' ? <p className="text-sm font-bold text-destructive">فعلاً ناموجود؛ آن را از سبد بردارید.</p>
+                        : row.quantity > row.limit ? (
+                          <p className="text-sm font-bold text-destructive">
+                            {row.byStock
+                              ? `فقط ${faNumber(row.limit)} عدد موجود است؛ تعداد را کم کنید.`
+                              : `در خرید تکی از هر کالا حداکثر ${faNumber(row.limit)} عدد سفارش داده می‌شود؛ تعداد را کم کنید.`}
+                          </p>
+                        ) : null}
                     </>
                   )}
                   <div className="flex flex-wrap items-center gap-3">
@@ -117,7 +135,7 @@ export default function CartPage({ loaderData, actionData }: Route.ComponentProp
                           <Minus className="size-4" aria-hidden />
                         </button>
                         <span className="min-w-8 text-center font-bold" aria-label={`تعداد ${faNumber(row.quantity)}`}>{faNumber(row.quantity)}</span>
-                        <button type="submit" name="quantity" value={row.quantity + 1} disabled={busy} aria-label="یکی بیشتر" className="flex size-11 items-center justify-center disabled:opacity-50">
+                        <button type="submit" name="quantity" value={row.quantity + 1} disabled={busy || row.quantity >= row.limit} aria-label="یکی بیشتر" className="flex size-11 items-center justify-center disabled:opacity-50">
                           <Plus className="size-4" aria-hidden />
                         </button>
                       </Form>
@@ -140,7 +158,7 @@ export default function CartPage({ loaderData, actionData }: Route.ComponentProp
           </div>
           <p className="mt-2 text-sm leading-7 text-muted-foreground">هزینهٔ ارسال در مرحلهٔ بعد، با استان شما، حساب می‌شود. تا ثبت سفارش چیزی برای شما کنار گذاشته نمی‌شود.</p>
           {blocked ? (
-            <p className="mt-6 text-center font-bold text-destructive">برای ادامه، کالای ناموجود را از سبد بردارید.</p>
+            <p className="mt-6 text-center font-bold text-destructive">برای ادامه، کالای ناموجود را از سبد بردارید یا تعداد را کم کنید.</p>
           ) : (
             <Link to="/checkout" className="mt-6 flex min-h-13 w-full items-center justify-center rounded-control bg-primary px-6 text-lg font-bold text-primary-foreground hover:bg-primary/90">ادامهٔ خرید و ثبت نشانی</Link>
           )}

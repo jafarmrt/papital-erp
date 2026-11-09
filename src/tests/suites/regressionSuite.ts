@@ -11223,6 +11223,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v11 phase 8.5b: «صفحه‌های ویژه», the campaign pages of the site
   const { runStorefrontCampaignsV11Tests } = await import('../regression/storefrontCampaignsV11Tests.js');
   results.push(...await runStorefrontCampaignsV11Tests(shouldRun));
+  // v12 phase 7d (site review 1.3, 2.10): the retail cap and a guest's phone proof at the order
+  const { runStorefrontGuestProofV12Tests } = await import('../regression/storefrontGuestProofV12Tests.js');
+  results.push(...await runStorefrontGuestProofV12Tests(shouldRun));
 
   return results;
 }

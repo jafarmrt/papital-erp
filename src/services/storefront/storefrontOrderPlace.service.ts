@@ -6,15 +6,17 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { phoneMatchKey } from '../../lib/search/phoneMatchKey.js';
 import { money } from '../../lib/money.js';
 import {
-  ADDRESS_MAX, ADDRESS_MIN, BUYER_NOTE_MAX, CITY_MAX, OPEN_ORDER_STATUSES, RECIPIENT_NAME_MAX, cartLinesError, cleanText, isIranProvince,
-  isPaymentMethod, normalizeMobile, normalizePostalCode, type PaymentMethod,
+  ADDRESS_MAX, ADDRESS_MIN, BUYER_NOTE_MAX, CITY_MAX, OPEN_ORDER_STATUSES, RECIPIENT_NAME_MAX, RETAIL_LINE_CAP_MESSAGE, cartLinesError, cleanText,
+  isIranProvince, isPaymentMethod, normalizeMobile, normalizePostalCode, retailLineOverCap, type CartLineInput, type PaymentMethod,
 } from '../../lib/storefront/storefrontOrderRules.js';
 import type { PlaceOrderRequest, PlacedOrder, ShippingQuoteAnswer, ShippingQuoteRequest } from '../../lib/storefront/storefrontOrderContracts.js';
 import type { StorefrontSettingsInput } from '../../lib/storefront/storefrontContracts.js';
 import { DocumentService } from '../document.service.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { STOREFRONT_BOT_USER, resolveSiteCustomer } from './storefrontCustomer.js';
-import { activeGroupOf, sessionAccount, type AccountRecord, type GroupRecord } from './storefrontBuyerAuth.service.js';
+import { activeGroupOf, phoneProofInvalid, sessionAccount, type AccountRecord, type GroupRecord } from './storefrontBuyerAuth.service.js';
+import { smsLoginOn } from './storefrontSmsSettings.service.js';
+import { consumePhoneProof } from './storefrontSmsOtp.service.js';
 import { priceCart, shippingOptions } from './storefrontOrderCart.js';
 import { isOrderAccessKey, newAccessSalt, orderAccessKey, requestHashOf } from './storefrontOrderKeys.js';
 import { notifySiteOrder } from './storefrontOrderNotices.js';
@@ -33,6 +35,12 @@ import { normalizeDiscountCode, spreadDiscount } from '../../lib/storefront/stor
  * reservation ends. The proforma is issued through `DocumentService`, so the documents package keeps its own rules; it is
  * not sent to the approval workflow (start plan decision 2: confirming the payment is the approval). A repeat of the same
  * request key and body answers the same order and key; the same key with another body is refused.
+ *
+ * v12 phase 7 (site review 1.3): while the site signs in by SMS, a guest's order presents a phone proof for its phone
+ * (`POST /auth/otp/verify`), used up in the order's own transaction, so a refused order (no stock, a code that ran out)
+ * leaves the proof for the next try. The proof is not part of the request hash: a lost answer repeated with the same key
+ * replays the order without a second proof. A signed-in account orders without one. While the texts are off nothing
+ * changes. A retail buyer orders at most `RETAIL_LINE_QUANTITY_MAX` of an item; a wholesale group keeps the cart limit.
  */
 const ORDER_NOTE_PREFIX = 'سفارش سایت';
 
@@ -52,6 +60,9 @@ interface CleanOrder {
   /** v11 phase 8.2c: the code as normalized; left out when none, so the hash of an order without one is as before */
   discountCode?: string;
 }
+
+/** v12 phase 7: the guest's phone proof, kept out of `CleanOrder` so the request hash never carries it */
+const phoneProofOf = (input: PlaceOrderRequest): string => String(input.phoneProof ?? '').trim();
 
 const fieldError = (field: string, message: string) => new ValidationError(message, { field }, 'STOREFRONT_ORDER_FIELD_INVALID');
 
@@ -112,6 +123,25 @@ async function orderBuyer(executor: DbExecutor, rawSession: unknown): Promise<Or
   return { account, group: account ? await activeGroupOf(executor, account) : null };
 }
 
+/** v12 phase 7 (site review 1.3, 2.10): a buyer without a live group orders at most the retail cap of each item */
+function assertRetailCap(buyer: OrderBuyer, lines: readonly CartLineInput[]): void {
+  if (buyer.group) return;
+  const slug = retailLineOverCap(lines);
+  if (slug !== null) throw new ValidationError(RETAIL_LINE_CAP_MESSAGE, { field: 'lines', slug }, 'STOREFRONT_RETAIL_LINE_CAP');
+}
+
+/**
+ * v12 phase 7 (site review 1.3): inside the order's transaction, a guest's phone proof is used up while the site signs
+ * in by SMS. A signed-in account needs none; with the texts off nothing is asked (the start plan: today's behavior stays
+ * until a proof is possible).
+ */
+async function assertGuestPhoneProven(tx: DbTransaction, buyer: OrderBuyer, phone: string, proof: string): Promise<void> {
+  if (buyer.account || !(await smsLoginOn(tx))) return;
+  if (!proof || !(await consumePhoneProof(tx, phone, proof))) throw phoneProofInvalid();
+}
+
+const isPhoneProofRefusal = (err: unknown): boolean => err instanceof ValidationError && err.code === 'STOREFRONT_PHONE_PROOF_REQUIRED';
+
 function assertPaymentAllowed(buyer: OrderBuyer, method: PaymentMethod): void {
   const group = buyer.group;
   const allowed = method === 'card' ? !group || group.allowCard === 1 : Boolean(group && group.allowOnAccount === 1);
@@ -137,6 +167,7 @@ export async function quoteShipping(input: ShippingQuoteRequest, rawSession?: un
   const lines = (Array.isArray(input.lines) ? input.lines : []).map(l => ({ slug: String(l?.slug ?? '').trim(), quantity: Number(l?.quantity) }));
   const linesError = cartLinesError(lines);
   if (linesError) throw fieldError('lines', linesError);
+  assertRetailCap(buyer, lines);
   const cart = await priceCart(orm, settings, lines, buyer.group);
   const code = typedDiscountCode(input.discountCode);
   // the quote has no phone yet: the phone's own uses and first order are checked again when the order is placed
@@ -178,20 +209,24 @@ export async function placeOrder(input: PlaceOrderRequest, rawSession?: unknown)
   const existing = await findByRequestKey(orm, order.requestKey);
   if (existing) return replay(existing, requestHash);
   try {
-    const placed = await orm.transaction(tx => placeInTransaction(tx, order, requestHash, rawSession));
+    const placed = await orm.transaction(tx => placeInTransaction(tx, order, requestHash, rawSession, phoneProofOf(input)));
     return placed;
   } catch (err) {
-    if (!isRequestKeyViolation(err)) throw err;
+    // the same request racing itself: the first one used the proof (or the key) and committed; the second answers its order
+    if (!isRequestKeyViolation(err) && !isPhoneProofRefusal(err)) throw err;
     const raced = await findByRequestKey(orm, order.requestKey);
     if (!raced) throw err;
     return replay(raced, requestHash);
   }
 }
 
-async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestHash: string, rawSession: unknown): Promise<PlacedOrder> {
+async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestHash: string, rawSession: unknown, phoneProof: string): Promise<PlacedOrder> {
   const settings = await settingsForOrders(tx);
   const buyer = await orderBuyer(tx, rawSession);
   assertPaymentAllowed(buyer, order.paymentMethod);
+  assertRetailCap(buyer, order.lines);
+  // before anything is locked, reserved or made: an order without its proof leaves no customer, proforma or text behind
+  await assertGuestPhoneProven(tx, buyer, order.phone, phoneProof);
   const onAccount = order.paymentMethod === 'on_account';
   // one phone's orders one at a time, so the open-orders limit holds under concurrent requests; then the items (§2.6)
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`storefront-phone:${order.phoneKey}`}))`);

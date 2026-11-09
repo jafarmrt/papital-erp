@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   EXPIRING_ORDER_STATUSES, NEXT_FULFILMENT, OPEN_ORDER_STATUSES, ORDER_LINES_MAX, ORDER_STATUSES, ORDER_STATUS_TITLES, PAYMENT_METHODS,
-  PAYMENT_METHOD_TITLES, cartLinesError, cleanText, isIranProvince, isOrderStatus, isPaymentMethod, normalizeCardLast4, normalizeMobile, normalizePostalCode, normalizeReference, tomanText,
+  PAYMENT_METHOD_TITLES, RETAIL_LINE_CAP_MESSAGE, RETAIL_LINE_QUANTITY_MAX, cartLinesError, cleanText, retailLineOverCap, isIranProvince, isOrderStatus, isPaymentMethod, normalizeCardLast4, normalizeMobile, normalizePostalCode, normalizeReference, tomanText,
 } from '../../lib/storefront/storefrontOrderRules';
 
 describe('normalizeMobile', () => {
@@ -89,3 +89,15 @@ describe('storefront order rules, 8.2b part 2', () => {
   });
 });
 
+
+describe('the retail cap (v12 phase 7, site review 2.10)', () => {
+  it('lets a retail buyer order five of an item and names the first line above it', () => {
+    expect(RETAIL_LINE_QUANTITY_MAX).toBe(5);
+    expect(retailLineOverCap([{ slug: 'a', quantity: 5 }, { slug: 'b', quantity: 1 }])).toBeNull();
+    expect(retailLineOverCap([{ slug: 'a', quantity: 1 }, { slug: 'b', quantity: 6 }, { slug: 'c', quantity: 9 }])).toBe('b');
+  });
+  it('says the cap in Persian digits and points to the shop for more', () => {
+    expect(RETAIL_LINE_CAP_MESSAGE).toContain('۵');
+    expect(RETAIL_LINE_CAP_MESSAGE).toContain('با فروشگاه تماس بگیرید');
+  });
+});

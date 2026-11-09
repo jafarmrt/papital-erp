@@ -93,7 +93,7 @@ const orderSchema = z.object({
     requestKey: z.string().max(80), recipientName: z.string().max(200), phone: z.string().max(40), province: z.string().max(60),
     city: z.string().max(120), address: z.string().max(800), postalCode: z.string().max(40), note: z.string().max(1000),
     shippingMethod: z.string().max(60), lines: cartLines, paymentMethod: z.enum(PAYMENT_METHODS).optional(),
-    discountCode: z.string().max(40).optional(),
+    discountCode: z.string().max(40).optional(), phoneProof: z.string().max(PHONE_PROOF_MAX + 1).optional(),
   }).strict(),
 });
 const orderNumberParams = z.object({ number: z.string().min(1).max(20) }).passthrough();
