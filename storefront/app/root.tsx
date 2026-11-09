@@ -123,6 +123,15 @@ export default function App() {
   );
 }
 
+// v12 phase 7: a page this boundary renders gets the headers of the root only, so the search limit's `Retry-After`
+// (thrown with the 429 by /products) is passed on here; nothing else of a thrown response reaches the page
+export function headers({ errorHeaders }: Route.HeadersArgs) {
+  const headers = new Headers();
+  const retryAfter = errorHeaders?.get('Retry-After');
+  if (retryAfter) headers.set('Retry-After', retryAfter);
+  return headers;
+}
+
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   const notFound = isRouteErrorResponse(error) && error.status === 404;
   // v12 phase 7: one visitor's searches past the limit (the shop itself is fine)
