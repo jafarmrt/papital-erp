@@ -57,6 +57,19 @@ export function proofOf(request: Request, phone: string): string {
 export const proofCookie = (phone: string, proof: string) => `${PROOF_COOKIE}=${encodeURIComponent(`${phone}.${proof}`)}; Path=/account; HttpOnly; SameSite=Lax; Max-Age=${PROOF_MAX_AGE}${secure()}`;
 export const clearProofCookie = () => `${PROOF_COOKIE}=; Path=/account; HttpOnly; SameSite=Lax; Max-Age=0${secure()}`;
 
+/**
+ * v12 phase 7: a guest's phone proof at the checkout, kept between the code and a second «ثبت سفارش» (a refused order,
+ * such as one item short, leaves the proof unused). Its own cookie and path, so the account pages never read it.
+ */
+const CHECKOUT_PROOF_COOKIE = 'sf_checkout_proof';
+export function checkoutProofOf(request: Request, phone: string): string {
+  const [kept, proof] = cookieOf(request, CHECKOUT_PROOF_COOKIE).split('.');
+  return kept && kept === phone && proof && TOKEN.test(proof) ? proof : '';
+}
+export const checkoutProofCookie = (phone: string, proof: string) =>
+  `${CHECKOUT_PROOF_COOKIE}=${encodeURIComponent(`${phone}.${proof}`)}; Path=/checkout; HttpOnly; SameSite=Lax; Max-Age=${PROOF_MAX_AGE}${secure()}`;
+export const clearCheckoutProofCookie = () => `${CHECKOUT_PROOF_COOKIE}=; Path=/checkout; HttpOnly; SameSite=Lax; Max-Age=0${secure()}`;
+
 /** The phone the proof cookie is for ('' = none) */
 export function provenPhoneOf(request: Request): string {
   const [phone, proof] = cookieOf(request, PROOF_COOKIE).split('.');

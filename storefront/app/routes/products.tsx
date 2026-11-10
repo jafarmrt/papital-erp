@@ -3,6 +3,8 @@ import type { Route } from './+types/products';
 import { catalog, tooLongForCatalog } from '../lib/api.server';
 import { CATALOG_PAGE_SIZE, CATALOG_SORTS, parsePage, parseSort } from '../lib/catalog';
 import { siteEnv } from '../lib/site.server';
+import { clientAddress } from '../lib/account.server';
+import { allowSearch, searchRetryAfter } from '../lib/visitorLimit.server';
 import { SORT_TITLES, categoryPath, collectionPath } from '../lib/brand';
 import { faNumber } from '../lib/format';
 import { pageMeta } from '../lib/meta';
@@ -22,7 +24,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const sort = parseSort(url.searchParams.get('sort'));
   const page = parsePage(url.searchParams.get('page'));
   if (tooLongForCatalog(collection, category)) throw new Response('پیدا نشد', { status: 404 });
-  const result = await catalog({ page, collection, category, q, sort });
+  // v12 phase 7 (site review 1.4): a search is limited per visitor, and the ERP is told who searched
+  const visitor = clientAddress(request);
+  if (q && !allowSearch(visitor)) {
+    throw new Response('جست‌وجوی زیاد', { status: 429, headers: { 'Retry-After': String(searchRetryAfter(visitor)) } });
+  }
+  const result = await catalog({ page, collection, category, q, sort }, q ? visitor : '');
   // a collection that holds nothing is not a page; a filter that empties a real collection is only an empty list
   if (collection && result.total === 0 && !category && !q && page === 1) throw new Response('پیدا نشد', { status: 404 });
   return { result, collection, category, q, sort, page, siteUrl: siteEnv().siteUrl, path: url.pathname + url.search };

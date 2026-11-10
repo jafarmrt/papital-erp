@@ -165,6 +165,15 @@ const orderView = o => {
 const latin = v => String(v ?? '').replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
 const accountOf = req => sessions.get(String(req.headers['x-buyer-session'] ?? ''));
 const fieldError = (res, field, error) => send(res, 422, { error, code: 'STOREFRONT_ORDER_FIELD_INVALID', details: { field } });
+// v12 phase 7 (the ERP's rules): a retail buyer orders at most 5 of an item (the mock has no buyer groups), and while the
+// site signs in by SMS a guest's order presents the phone proof of its phone
+const RETAIL_LINE_QUANTITY_MAX = 5;
+const overRetailCap = (res, lines) => {
+  const over = lines.find(l => l.quantity > RETAIL_LINE_QUANTITY_MAX);
+  if (!over) return false;
+  send(res, 422, { error: 'در خرید تکی از هر کالا حداکثر ۵ عدد سفارش داده می‌شود؛ برای تعداد بیشتر با فروشگاه تماس بگیرید.', code: 'STOREFRONT_RETAIL_LINE_CAP', details: { field: 'lines', slug: over.slug } });
+  return true;
+};
 
 async function ordering(req, res, route) {
   if (!settings.ordering) return send(res, 404, { error: 'پیدا نشد' });
@@ -175,6 +184,7 @@ async function ordering(req, res, route) {
     if (!body.province) return fieldError(res, 'province', 'استان را از فهرست انتخاب کنید.');
     const lines = priced(body.lines);
     if (!lines) return fieldError(res, 'lines', 'این کالا روی سایت فروخته نمی‌شود.');
+    if (overRetailCap(res, lines)) return undefined;
     const discount = discountOf(body.discountCode, lines.reduce((sum, l) => sum + BigInt(l.lineAmount), 0n));
     return discount === 'bad' ? discountRefused(res) : send(res, 200, { data: quoteOf(body.province, lines, discount) });
   }
@@ -187,6 +197,10 @@ async function ordering(req, res, route) {
     if (body.paymentMethod === 'on_account') return fieldError(res, 'paymentMethod', 'پرداخت «به حساب» برای این حساب باز نیست.');
     const lines = priced(body.lines);
     if (!lines) return fieldError(res, 'lines', 'این کالا روی سایت فروخته نمی‌شود.');
+    if (overRetailCap(res, lines)) return undefined;
+    if (settings.smsLogin && !accountOf(req) && !proofOk(latin(body.phone), body.phoneProof)) {
+      return send(res, 422, { error: 'شمارهٔ همراه را با کد پیامکی تأیید کنید؛ اگر کد گرفته‌اید و مهلتش گذشته، کد تازه بخواهید.', code: 'STOREFRONT_PHONE_PROOF_REQUIRED', details: { field: 'phoneProof' } });
+    }
     const discount = discountOf(body.discountCode, lines.reduce((sum, l) => sum + BigInt(l.lineAmount), 0n));
     if (discount === 'bad') return discountRefused(res);
     const quote = quoteOf(body.province, lines, discount);
@@ -248,6 +262,11 @@ createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://mock');
   const route = url.pathname.replace(/^\/api\/storefront\/v1/, '');
   if (url.pathname === '/__mock/last') return send(res, 200, { ...last, post: lastPost });
+  // v12 phase 7: the tests turn the SMS sign-in on and off while the mock runs (the guest's phone proof at the checkout)
+  if (url.pathname === '/__mock/sms-login') {
+    settings.smsLogin = url.searchParams.get('on') === '1';
+    return send(res, 200, { smsLogin: settings.smsLogin });
+  }
   if (req.headers.authorization !== `Bearer ${key}`) return send(res, 401, { error: 'کلید برنامه سایت پذیرفته نشد.' });
   last = { clientIp: String(req.headers['x-storefront-client-ip'] ?? ''), session: String(req.headers['x-buyer-session'] ?? '') };
   if (req.method === 'POST' && route.startsWith('/auth/')) return auth(req, res, route);

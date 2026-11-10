@@ -51,6 +51,13 @@ export interface PlaceOrderRequest {
   paymentMethod?: PaymentMethod;
   /** v11 phase 8.2c: a discount code; the order is refused (422 on `discountCode`) when it no longer applies */
   discountCode?: string;
+  /**
+   * v12 phase 7: while the site signs in by SMS (`smsLogin` of the public settings), a guest's order presents the phone
+   * proof of `POST /auth/otp/verify` for `phone`; without it, or with a used, expired or another phone's proof, the order
+   * is 422 `STOREFRONT_PHONE_PROOF_REQUIRED` and nothing is made. A signed-in account sends none. Not part of the request:
+   * a repeat with the same key and body replays the order without it.
+   */
+  phoneProof?: string;
 }
 
 export interface OrderPaymentInfo {

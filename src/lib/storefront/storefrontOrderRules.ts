@@ -123,6 +123,20 @@ export function cartLinesError(lines: readonly CartLineInput[]): string | null {
   return null;
 }
 
+/**
+ * v12 phase 7 (site review 1.3, 2.10): units of one item a retail buyer (no live buyer group) orders at once. A
+ * wholesale group keeps `ORDER_LINE_QUANTITY_MAX`. Together with the sellable gate at placement, a guest cannot hold a
+ * whole shelf with one order.
+ */
+export const RETAIL_LINE_QUANTITY_MAX = 5;
+
+/** The first line a retail buyer may not order (more than `RETAIL_LINE_QUANTITY_MAX` units), as its slug, or null */
+export function retailLineOverCap(lines: readonly CartLineInput[]): string | null {
+  return lines.find(line => line.quantity > RETAIL_LINE_QUANTITY_MAX)?.slug ?? null;
+}
+
+export const RETAIL_LINE_CAP_MESSAGE = `در خرید تکی از هر کالا حداکثر ${RETAIL_LINE_QUANTITY_MAX.toLocaleString('fa-IR')} عدد سفارش داده می‌شود؛ برای تعداد بیشتر با فروشگاه تماس بگیرید.`;
+
 /** Rials as tomans for the buyer's eyes (whole rials only; the remainder below ten rials is dropped) */
 export function tomanText(rial: string): string {
   const clean = rialAmountText(rial, { allowZero: true });

@@ -246,3 +246,65 @@ describe('«هدیهٔ سازمانی»', () => {
     expect((await post('/corporate-gift', { organization: 'x' }, '', { 'Sec-Fetch-Site': 'cross-site' })).status).toBe(403);
   });
 });
+
+// v12 phase 7 (site review 1.3, 2.10): a retail buyer orders at most five of an item, and while the ERP signs in by SMS a
+// guest proves the phone at «ثبت سفارش» (the code on the same form; the proof waits in a cookie of the checkout page only)
+describe('the retail cap and the guest phone proof', () => {
+  const smsLogin = (on: boolean) => fetch(`http://127.0.0.1:${PORT}/__mock/sms-login?on=${on ? 1 : 0}`);
+  afterAll(async () => { await smsLogin(false); });
+
+  it('stops «یکی بیشتر» at five, says why a row above it cannot be ordered and holds the checkout back', async () => {
+    const atCap = cookieValue((await post('/cart', { intent: 'add', slug: 'tile-earrings-sample', quantity: '5' })).cookies, 'sf_cart');
+    const capped = await page('/cart', atCap);
+    expect(capped.html).toMatch(/disabled=""[^>]*aria-label="یکی بیشتر"/);
+    expect(capped.html).toContain('ادامهٔ خرید و ثبت نشانی');
+    const over = cookieValue((await post('/cart', { intent: 'add', slug: 'tile-earrings-sample', quantity: '6' })).cookies, 'sf_cart');
+    const view = await page('/cart', over);
+    expect(view.html).toContain('در خرید تکی از هر کالا حداکثر ۵ عدد');
+    expect(view.html).not.toContain('ادامهٔ خرید و ثبت نشانی');
+    // a cart edited by hand reaches the checkout: the ERP refuses the quote and the page links back to the cart
+    const quote = await post('/checkout', { intent: 'quote', requestKey: 'rk-retail-cap-check-01', ...address }, over);
+    expect(quote.html).toContain('حداکثر ۵ عدد');
+    expect(quote.html).toContain('بازگشت به سبد خرید');
+  });
+
+  it('sends a code at the first «ثبت سفارش» of a guest, places the order with the proof and clears it', async () => {
+    await smsLogin(true);
+    const cart = cookieValue((await post('/cart', { intent: 'add', slug: 'tile-earrings-sample', quantity: '1' })).cookies, 'sf_cart');
+    const requestKey = 'rk-guest-proof-check-0001';
+    const asked = await post('/checkout', { intent: 'place', requestKey, ...address, shippingMethod: 'post' }, cart);
+    expect(asked.status).toBe(200);
+    expect(asked.html).toContain('کد تأیید به');
+    expect(asked.html).toContain('name="code"');
+    expect(asked.html).toContain('name="codeFor" value="09121234567"');
+
+    const wrong = await post('/checkout', { intent: 'place', requestKey, ...address, shippingMethod: 'post', codeFor: '09121234567', code: '000000' }, cart);
+    expect(wrong.html).toContain('کد درست نیست');
+    expect(wrong.html).toContain('name="code"');
+
+    // a refusal after the code (here the postal code): the order rolled back, so the proof waits for the next tap
+    const refused = await post('/checkout', { intent: 'place', requestKey, ...address, postalCode: '123', shippingMethod: 'post', codeFor: '09121234567', code: '123456' }, cart);
+    expect(refused.html).toContain('کد پستی باید ۱۰ رقم باشد');
+    const proof = refused.cookies.find(c => c.startsWith('sf_checkout_proof='))!;
+    expect(proof).toMatch(/HttpOnly/);
+    expect(proof).toMatch(/Path=\/checkout/);
+
+    const nextKey = /name="requestKey" value="([^"]+)"/.exec(refused.html)?.[1] ?? '';
+    const placed = await post('/checkout', { intent: 'place', requestKey: nextKey, ...address, shippingMethod: 'post' }, `${cart}; ${cookieValue(refused.cookies, 'sf_checkout_proof')}`);
+    expect(placed.status).toBe(302);
+    expect((await lastPost()).body).toMatchObject({ phoneProof: 'pp_mock09121234567' });
+    expect(placed.cookies.some(c => c.startsWith('sf_checkout_proof=;') && c.includes('Max-Age=0'))).toBe(true);
+  });
+
+  it('asks a signed-in buyer for no code', async () => {
+    await smsLogin(true);
+    const proven = await post('/account/sign-up', { intent: 'verify-code', phone: '09127654321', code: '123456' });
+    const made = await post('/account/sign-up', { intent: 'register', phone: '09127654321', name: 'خریدار حساب‌دار', password: 'رمز-آزمون-1405' }, cookieValue(proven.cookies, 'sf_proof'));
+    const session = cookieValue(made.cookies, 'sf_session');
+    expect(session).toMatch(/^sf_session=/);
+    const cart = cookieValue((await post('/cart', { intent: 'add', slug: 'tile-earrings-sample', quantity: '1' }, session)).cookies, 'sf_cart');
+    const placed = await post('/checkout', { intent: 'place', requestKey: 'rk-signed-in-proof-0001', ...address, phone: '09127654321', shippingMethod: 'post' }, `${cart}; ${session}`);
+    expect(placed.status).toBe(302);
+    expect((await lastPost()).body).not.toHaveProperty('phoneProof');
+  });
+});

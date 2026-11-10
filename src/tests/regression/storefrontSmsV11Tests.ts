@@ -90,7 +90,8 @@ export async function runStorefrontSmsV11Tests(shouldRun: (id: string, ...extra:
     const phoneB = `0916${tag}`;
     const phoneC = `0917${tag}`;
     const phoneD = `0918${tag}`;
-    phoneKeys.push(...[phoneA, phoneB, phoneC, phoneD].map(p => p.slice(1)));
+    const phoneE = `0919${tag}`;
+    phoneKeys.push(...[phoneA, phoneB, phoneC, phoneD, phoneE].map(p => p.slice(1)));
 
     // the shop: a retail list, one item of 3 units, a flat method, a bank account, the site on and taking orders
     const retailList = `تکی پیامک ${tag}`;
@@ -130,15 +131,25 @@ export async function runStorefrontSmsV11Tests(shouldRun: (id: string, ...extra:
     const slug = `bracelet-sms-${tag}`;
     const pub = await erp.put(`/api/storefront/products/${item.id}`, { published: true, slug, seoTitle: '', seoDescription: '', sortOrder: 0, version: 0 });
     if (pub.status !== 200) throw new Error(`publish: ${pub.status} ${JSON.stringify(pub.body)}`);
-    const order = async (phone: string, n: number) => {
+    // v12 phase 7d: while the site signs in by SMS, a guest order carries a phone proof for its own phone
+    const order = async (phone: string, n: number, phoneProof = '') => {
       const res = await site('10.20.0.1').post('/api/storefront/v1/orders', {
         requestKey: `rk-sms-${n}-${tag}-checkout`, recipientName: `خریدار پیامک ${tag}`, phone, province: 'تهران', city: 'تهران',
         address: 'خیابان آزمون، پلاک ۲', postalCode: '1234567890', note: '', shippingMethod: `sfs-${tag}`, lines: [{ slug, quantity: 1 }],
+        ...(phoneProof ? { phoneProof } : {}),
       });
       if (res.status !== 201) throw new Error(`place: ${res.status} ${JSON.stringify(res.body)}`);
       const [row] = await orm.select().from(storefrontOrders).where(eq(storefrontOrders.orderNumber, res.body.data.order.number));
       orderIds.push(row.id);
       return row;
+    };
+    const proofFor = async (phone: string): Promise<string> => {
+      const asked = await site('10.20.0.8').post('/api/storefront/v1/auth/otp/request', { phone });
+      if (asked.status !== 202) throw new Error(`otp request for an order: ${asked.status} ${JSON.stringify(asked.body)}`);
+      const code = String((JSON.parse(sms.captured.at(-1)?.body ?? '{}') as { parameters?: Array<{ value: string }> }).parameters?.[0]?.value ?? '');
+      const verified = await site('10.20.0.8').post('/api/storefront/v1/auth/otp/verify', { phone, code });
+      if (verified.status !== 200) throw new Error(`otp verify for an order: ${verified.status} ${JSON.stringify(verified.body)}`);
+      return String(verified.body.data.phoneProof);
     };
     const messagesOf = (orderId: number) => orm.select().from(storefrontSmsMessages).where(eq(storefrontSmsMessages.orderId, orderId)).orderBy(asc(storefrontSmsMessages.id));
 
@@ -173,7 +184,9 @@ export async function runStorefrontSmsV11Tests(shouldRun: (id: string, ...extra:
     const on = await erp.put('/api/storefront/sms/settings', { ...base, enabled: true, templates, version: smsView.version });
     if (on.status !== 200) throw new Error(`sms on: ${on.status} ${JSON.stringify(on.body)}`);
     smsView = on.body.data;
-    const loud = await order(phoneB, 2);
+    // the proof of step 7's order is taken now: past the hourly budget no code can be asked for
+    const proofOverBudget = await proofFor(phoneE);
+    const loud = await order(phoneB, 2, await proofFor(phoneB));
     const queued = await messagesOf(loud.id);
     if (queued.length !== 1 || queued[0].kind !== 'order_placed' || queued[0].status !== 'queued' || queued[0].params !== JSON.stringify({ ORDER: loud.orderNumber }) || queued[0].phone !== phoneB) {
       wrong.push(`the order text: ${JSON.stringify(queued.map(q => ({ k: q.kind, s: q.status, p: q.params, ph: q.phone })))}`);
@@ -260,7 +273,7 @@ export async function runStorefrontSmsV11Tests(shouldRun: (id: string, ...extra:
     const overBudget = await site('10.20.0.4').post('/api/storefront/v1/auth/otp/request', { phone: phoneA });
     if (overBudget.status !== 429) wrong.push(`over the hourly budget: ${overBudget.status} ${overBudget.body.code}`);
     // the budget is shared: an order's text over it is written `skipped` and never sent
-    const overOrder = await order(phoneB, 3);
+    const overOrder = await order(phoneE, 3, proofOverBudget);
     const [skippedText] = await messagesOf(overOrder.id);
     if (skippedText?.status !== 'skipped' || !skippedText.error) wrong.push(`an order text over the budget: ${skippedText?.status} ${skippedText?.error}`);
     const { otp: _otp, ...noOtp } = templates;

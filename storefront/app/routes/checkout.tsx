@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Form, Link, redirect, useNavigation } from 'react-router';
+import { Form, Link, data, redirect, useNavigation } from 'react-router';
 import type { Route } from './+types/checkout';
 import type { PlacedOrder, ShippingOption, ShippingQuoteAnswer } from '@erp/storefront/storefrontOrderContracts';
 import type { AppliedDiscount } from '@erp/storefront/storefrontDiscountContracts';
@@ -7,13 +7,15 @@ import type { StorefrontAccountView } from '@erp/storefront/storefrontBuyerContr
 import { ADDRESS_MAX, BUYER_NOTE_MAX, CITY_MAX, RECIPIENT_NAME_MAX } from '@erp/storefront/storefrontOrderRules';
 import { IRAN_PROVINCES } from '@erp/storefront/storefrontRules';
 import { publicSettings } from '../lib/api.server';
-import { accountCall, crossSite, sameSite, sessionOf } from '../lib/account.server';
+import {
+  accountCall, checkoutProofCookie, checkoutProofOf, clearCheckoutProofCookie, crossSite, normalizePhone, sameSite, sessionOf,
+} from '../lib/account.server';
 import { cartOf, clearCartCookie } from '../lib/cart.server';
 import { rememberOrderCookie } from '../lib/orderKeys.server';
 import { siteEnv } from '../lib/site.server';
 import { faNumber, formatPrice } from '../lib/format';
 import { pageMeta } from '../lib/meta';
-import { Field, FormError, PhoneField, SelectField, SubmitButton, TextAreaField } from '../components/AccountForm';
+import { CodeField, Field, FormError, FormNote, PhoneField, SelectField, SubmitButton, TextAreaField } from '../components/AccountForm';
 
 /**
  * v11 phase 8.2: the checkout, one form for the phone. The buyer writes the address, «هزینهٔ ارسال» asks the ERP which
@@ -27,6 +29,10 @@ import { Field, FormError, PhoneField, SelectField, SubmitButton, TextAreaField 
  * - A discount code (8.2c) goes with the quote and the order; the ERP checks it and answers its amount. A code that does
  *   not apply is said under its field and the quote is asked again without it, so the buyer still sees the methods.
  * - The placed order's tracking key goes in the `sf_orders` cookie and the buyer lands on its page; the cart is emptied.
+ * - v12 phase 7 (site review 1.3): while the ERP signs in by SMS, a guest proves the phone at «ثبت سفارش»: the first tap
+ *   sends a code and the same form shows a code field; the second tap verifies it and places the order with the proof.
+ *   The proof waits in an httpOnly cookie for this page only, so an order the ERP refused (an item short) is placed again
+ *   without a new code. A signed-in buyer, and every buyer while the texts are off, orders as before.
  */
 const FIELDS = ['recipientName', 'phone', 'province', 'city', 'address', 'postalCode', 'note'] as const;
 type Fields = Record<typeof FIELDS[number], string>;
@@ -45,6 +51,8 @@ interface ActionAnswer {
   discount: AppliedDiscount | null;
   error?: string;
   field?: string;
+  /** v12 phase 7: the phone a code was sent to; the form then asks for the code before placing */
+  codeFor?: string;
 }
 
 async function accountOf(request: Request): Promise<StorefrontAccountView | null> {
@@ -65,6 +73,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     paymentMethods: account?.group?.paymentMethods ?? ['card'],
     groupTitle: account?.group?.title ?? '',
     signedIn: Boolean(account),
+    smsLogin: settings.smsLogin === true,
     reservationHours: settings.reservationHours,
     siteUrl: siteEnv().siteUrl,
   };
@@ -79,7 +88,9 @@ export function meta({ data }: Route.MetaArgs) {
 
 const fieldsOf = (form: FormData) => Object.fromEntries(FIELDS.map(f => [f, String(form.get(f) ?? '').slice(0, FIELD_MAX[f] + 1)])) as Fields;
 
-export async function action({ request }: Route.ActionArgs): Promise<ActionAnswer | Response> {
+const PHONE_WRONG = 'شمارهٔ همراه را درست بنویسید (مانند ۰۹۱۲۱۲۳۴۵۶۷).';
+
+export async function action({ request }: Route.ActionArgs) {
   if (!sameSite(request)) return crossSite();
   const form = await request.formData();
   const lines = cartOf(request);
@@ -101,24 +112,68 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionAnswe
     quote = await quoteOf('');
     if (quote.data) return answer({ options: quote.data.options, itemsAmount: quote.data.itemsAmount, error: refused, field: 'discountCode' });
   }
-  if (!quote.data) return answer({ error: quote.error, field: quote.field === 'province' ? 'province' : '' });
+  if (!quote.data) return answer({ error: quote.error, field: quote.field === 'province' || quote.field === 'lines' ? quote.field : '' });
   const quoted = { options: quote.data.options, itemsAmount: quote.data.itemsAmount, discount: quote.data.discount };
-  if (String(form.get('intent') ?? '') !== 'place') return answer(quoted);
+  const intent = String(form.get('intent') ?? '');
+  if (intent !== 'place' && intent !== 'send-code') return answer(quoted);
+
+  // v12 phase 7: a guest's phone proof while the ERP signs in by SMS. The page's settings may be a minute old, so the
+  // ERP has the last word: an order it refuses for a missing proof sends a code and the form then carries `codeFor`,
+  // after which the proof is asked whatever the settings or a session cookie say. A proof kept from an earlier tap is
+  // always sent (the ERP ignores it for a signed-in buyer or while the texts are off).
+  const phone = normalizePhone(fields.phone);
+  const askedBefore = String(form.get('codeFor') ?? '') !== '';
+  const needsProof = askedBefore || ((await publicSettings()).smsLogin === true && !sessionOf(request));
+  /** a code for the phone; `null` when the ERP no longer signs in by SMS (its code route is 404), so no proof is needed */
+  const sendCode = async (said?: string): Promise<ActionAnswer | null> => {
+    const sent = await accountCall(request, 'POST', '/auth/otp/request', { phone });
+    if (sent.status === 404 && !askedBefore) return null;
+    // a code sent a moment ago (429, «wait a little») still works: the code field stays
+    if (sent.status !== 202) return answer({ ...quoted, codeFor: askedBefore || sent.status === 429 ? phone : undefined, error: sent.error, field: sent.field === 'phone' ? 'phone' : '' });
+    return answer({ ...quoted, codeFor: phone, ...(said ? { error: said } : {}) });
+  };
+  if (needsProof && !phone) return answer({ ...quoted, error: PHONE_WRONG, field: 'phone' });
+  if (intent === 'send-code') return (needsProof && await sendCode()) || answer(quoted);
+  let proof = phone ? checkoutProofOf(request, phone) : '';
+  let freshProof = false;
+  const typedCode = String(form.get('code') ?? '').trim().slice(0, 12);
+  if (needsProof && !proof) {
+    if (typedCode) {
+      const verified = await accountCall<{ phoneProof: string }>(request, 'POST', '/auth/otp/verify', { phone, code: typedCode });
+      if (!verified.data) return answer({ ...quoted, codeFor: phone, error: verified.error, field: 'code' });
+      proof = verified.data.phoneProof;
+      freshProof = true;
+    } else {
+      const asked = await sendCode();
+      if (asked) return asked;
+    }
+  }
 
   const placed = await accountCall<PlacedOrder>(request, 'POST', '/orders', {
     requestKey, ...fields, shippingMethod, lines, ...(paymentMethod === 'on_account' ? { paymentMethod } : {}), ...(discountCode ? { discountCode } : {}),
+    ...(proof ? { phoneProof: proof } : {}),
   });
   if (!placed.data) {
-    return answer({ ...quoted, error: placed.error, field: placed.field ?? '', requestKey: placed.status >= 500 ? requestKey : randomUUID() });
+    const nextKey = placed.status >= 500 ? requestKey : randomUUID();
+    // the ERP wants a proof (a guest while the texts are on, a session it no longer knows, a proof that ran out): a fresh
+    // code goes out at once, and the old proof cookie goes
+    if (placed.code === 'STOREFRONT_PHONE_PROOF_REQUIRED' && phone) {
+      const asked = (await sendCode(placed.error)) ?? answer({ ...quoted, error: placed.error });
+      return data({ ...asked, requestKey: nextKey }, { headers: { 'Set-Cookie': clearCheckoutProofCookie() } });
+    }
+    const refused = answer({ ...quoted, error: placed.error, field: placed.field ?? '', requestKey: nextKey, codeFor: undefined });
+    // any other refusal rolled the order back, so a proof made just now is still good for the next tap
+    return freshProof ? data(refused, { headers: { 'Set-Cookie': checkoutProofCookie(phone, proof) } }) : refused;
   }
   const headers = new Headers();
   headers.append('Set-Cookie', rememberOrderCookie(request, placed.data.order.number, placed.data.accessKey));
   headers.append('Set-Cookie', clearCartCookie());
+  if (proof) headers.append('Set-Cookie', clearCheckoutProofCookie());
   return redirect(`/orders/${placed.data.order.number}?placed=1`, { headers });
 }
 
 export default function CheckoutPage({ loaderData, actionData }: Route.ComponentProps) {
-  const { prefill, paymentMethods, groupTitle, signedIn, count, reservationHours } = loaderData;
+  const { prefill, paymentMethods, groupTitle, signedIn, smsLogin, count, reservationHours } = loaderData;
   const answer = actionData as ActionAnswer | undefined;
   const busy = useNavigation().state === 'submitting';
   const value = (f: typeof FIELDS[number]) => answer?.fields[f] ?? (f in prefill ? prefill[f as keyof typeof prefill] : '');
@@ -140,12 +195,16 @@ export default function CheckoutPage({ loaderData, actionData }: Route.Component
       {!signedIn ? (
         <p className="mt-4 text-base leading-8 text-muted-foreground">
           بی حساب هم می‌توانید سفارش دهید. <Link to="/account/sign-in?next=%2Fcheckout" className="font-bold text-brand hover:underline">ورود به حساب</Link> سفارش را در حساب شما نگه می‌دارد.
+          {smsLogin ? ' هنگام ثبت سفارش، شمارهٔ همراه با یک کد پیامکی تأیید می‌شود.' : null}
         </p>
       ) : null}
 
       <Form method="post" className="mt-6 space-y-5" replace>
         <input type="hidden" name="requestKey" value={answer?.requestKey ?? loaderData.requestKey} />
         <FormError message={answer?.error} />
+        {answer?.field === 'lines' ? (
+          <p className="text-base leading-8"><Link to="/cart" className="font-bold text-brand hover:underline">بازگشت به سبد خرید</Link> و تغییر تعداد</p>
+        ) : null}
         <Field label="نام و نام خانوادگی گیرنده" name="recipientName" autoComplete="name" maxLength={RECIPIENT_NAME_MAX} defaultValue={value('recipientName')} invalid={bad('recipientName')} />
         <PhoneField defaultValue={value('phone')} invalid={bad('phone')} />
         <SelectField label="استان" name="province" options={IRAN_PROVINCES} autoComplete="address-level1" defaultValue={value('province')} invalid={bad('province')} />
@@ -211,9 +270,18 @@ export default function CheckoutPage({ loaderData, actionData }: Route.Component
           </div>
         ) : null}
 
+        {options && options.length && answer?.codeFor ? (
+          <div className="space-y-3 border-t border-border pt-5">
+            {answer.field !== 'code' ? <FormNote>کد تأیید به <span dir="ltr">{answer.codeFor}</span> پیامک شد. آن را بنویسید و سفارش را ثبت کنید.</FormNote> : null}
+            <input type="hidden" name="codeFor" value={answer.codeFor} />
+            <CodeField />
+          </div>
+        ) : null}
+
         {options && options.length ? (
           <>
-            <SubmitButton intent="place" busy={busy}>ثبت سفارش</SubmitButton>
+            <SubmitButton intent="place" busy={busy}>{answer?.codeFor ? 'تأیید شماره و ثبت سفارش' : 'ثبت سفارش'}</SubmitButton>
+            {answer?.codeFor ? <SubmitButton intent="send-code" busy={busy} secondary>کد نرسید؟ دوباره بفرست</SubmitButton> : null}
             <SubmitButton intent="quote" busy={busy} secondary>نشانی را عوض کردم؛ هزینهٔ ارسال دوباره</SubmitButton>
           </>
         ) : (
