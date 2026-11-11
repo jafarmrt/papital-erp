@@ -10,12 +10,12 @@ import { invalidateSettingsCache } from '../../lib/memoryCache.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { ItemPricingService } from '../items/itemPricing.service.js';
 import {
-  LOW_STOCK_THRESHOLD_DEFAULT, LOW_STOCK_THRESHOLD_MAX, RESERVATION_HOURS_DEFAULT, RESERVATION_HOURS_MAX, cardNumberError, digitsOnly,
+  APPROVAL_HOURS_DEFAULT, LOW_STOCK_THRESHOLD_DEFAULT, LOW_STOCK_THRESHOLD_MAX, RESERVATION_HOURS_DEFAULT, RESERVATION_HOURS_MAX, cardNumberError, digitsOnly,
   ibanError, isStockDisplay, normalizeIban, normalizeWhatsappNumber, rialAmountText, whatsappNumberError,
 } from '../../lib/storefront/storefrontRules.js';
 import { OPEN_ORDERS_PER_PHONE_DEFAULT, OPEN_ORDERS_PER_PHONE_MAX } from '../../lib/storefront/storefrontOrderRules.js';
 import {
-  STOREFRONT_SETTING_KEYS as KEYS, type StorefrontSettingsInput, type StorefrontSettingsView,
+  STOREFRONT_SETTING_KEYS as KEYS, type StorefrontSettingValues, type StorefrontSettingsInput, type StorefrontSettingsView,
 } from '../../lib/storefront/storefrontContracts.js';
 import { activeWarehouses, storefrontWarehouseCode } from './storefrontStock.js';
 import { readStorefrontBrand } from './storefrontBrand.service.js';
@@ -43,12 +43,18 @@ async function readStored(executor: DbExecutor, keys: readonly string[]): Promis
 const GROUP_KEYS = [
   KEYS.cardNumber, KEYS.cardHolder, KEYS.bankName, KEYS.iban, KEYS.freeShippingThreshold, KEYS.reservationHours,
   KEYS.retailPriceList, KEYS.wholesalePriceList, KEYS.lowStockThreshold, KEYS.stockDisplay, KEYS.warehouseCode, KEYS.whatsappNumber, KEYS.whatsappEnabled,
-  KEYS.enabled, KEYS.ordersEnabled, KEYS.treasuryAccountId, KEYS.openOrdersPerPhone, KEYS.version, KEYS.apiKeyHint, KEYS.apiKeyCreatedAt, KEYS.apiKeySha256,
+  KEYS.enabled, KEYS.ordersEnabled, KEYS.treasuryAccountId, KEYS.openOrdersPerPhone, KEYS.approvalHours, KEYS.version, KEYS.apiKeyHint, KEYS.apiKeyCreatedAt, KEYS.apiKeySha256,
 ] as const;
 
 function reservationHoursOf(stored: string | undefined): number {
   const hours = Number(stored);
   return Number.isInteger(hours) && hours >= 1 && hours <= RESERVATION_HOURS_MAX ? hours : RESERVATION_HOURS_DEFAULT;
+}
+
+/** v12 phase 8b: the wait of an «به حساب» order, within the same bounds as the reservation */
+function approvalHoursOf(stored: string | undefined): number {
+  const hours = Number(stored);
+  return Number.isInteger(hours) && hours >= 1 && hours <= RESERVATION_HOURS_MAX ? hours : APPROVAL_HOURS_DEFAULT;
 }
 
 function lowStockThresholdOf(stored: string | undefined): number {
@@ -79,7 +85,7 @@ export async function storefrontTreasuryAccounts(executor: DbExecutor): Promise<
   return rows.filter(r => (r.currency || 'IRR').toUpperCase() === 'IRR').map(r => ({ id: r.id, title: r.title, bankName: r.bankName ?? '' }));
 }
 
-function inputOf(stored: Stored): StorefrontSettingsInput {
+function inputOf(stored: Stored): StorefrontSettingValues {
   return {
     cardNumber: stored[KEYS.cardNumber] ?? '',
     cardHolder: stored[KEYS.cardHolder] ?? '',
@@ -98,6 +104,7 @@ function inputOf(stored: Stored): StorefrontSettingsInput {
     ordersEnabled: stored[KEYS.ordersEnabled] === '1',
     treasuryAccountId: treasuryAccountIdOf(stored[KEYS.treasuryAccountId]),
     openOrdersPerPhone: openOrdersPerPhoneOf(stored[KEYS.openOrdersPerPhone]),
+    approvalHours: approvalHoursOf(stored[KEYS.approvalHours]),
     version: Number(stored[KEYS.version]) || 0,
   };
 }
@@ -122,11 +129,11 @@ export async function readStorefrontSettings(executor: DbExecutor): Promise<Stor
 }
 
 /** The values the Storefront API and the order flow read */
-export async function storefrontSettingValues(executor: DbExecutor): Promise<StorefrontSettingsInput> {
+export async function storefrontSettingValues(executor: DbExecutor): Promise<StorefrontSettingValues> {
   return inputOf(await readStored(executor, GROUP_KEYS));
 }
 
-function checkedInput(input: StorefrontSettingsInput, priceLists: string[], warehouseCodes: string[], treasuryIds: number[]): Omit<StorefrontSettingsInput, 'version'> {
+function checkedInput(input: StorefrontSettingValues, priceLists: string[], warehouseCodes: string[], treasuryIds: number[]): Omit<StorefrontSettingValues, 'version'> {
   const cardError = cardNumberError(input.cardNumber);
   if (cardError) throw new ValidationError(cardError, undefined, 'STOREFRONT_CARD_INVALID');
   const shebaError = ibanError(input.iban);
@@ -179,6 +186,9 @@ function checkedInput(input: StorefrontSettingsInput, priceLists: string[], ware
   if (!Number.isInteger(input.openOrdersPerPhone) || input.openOrdersPerPhone < 1 || input.openOrdersPerPhone > OPEN_ORDERS_PER_PHONE_MAX) {
     throw new ValidationError(`سقف سفارش‌های پرداخت‌نشدهٔ هر شماره باید ۱ تا ${OPEN_ORDERS_PER_PHONE_MAX.toLocaleString('fa-IR')} باشد.`, undefined, 'STOREFRONT_OPEN_ORDERS_INVALID');
   }
+  if (!Number.isInteger(input.approvalHours) || input.approvalHours < 1 || input.approvalHours > RESERVATION_HOURS_MAX) {
+    throw new ValidationError(`مهلت تأیید سفارش «به حساب» باید ۱ تا ${RESERVATION_HOURS_MAX.toLocaleString('fa-IR')} ساعت باشد.`, undefined, 'STOREFRONT_APPROVAL_HOURS_INVALID');
+  }
   const ordersEnabled = input.ordersEnabled === true;
   if (ordersEnabled && (!cardNumber && !iban)) {
     throw new ValidationError('برای روشن کردن ثبت سفارش، کارت یا شبای دریافت پول لازم است.', undefined, 'STOREFRONT_ORDERS_NEED_PAYMENT');
@@ -193,7 +203,7 @@ function checkedInput(input: StorefrontSettingsInput, priceLists: string[], ware
     cardNumber, cardHolder, bankName, iban, freeShippingThreshold, reservationHours: input.reservationHours, retailPriceList, wholesalePriceList,
     lowStockThreshold: input.lowStockThreshold, stockDisplay: input.stockDisplay, warehouseCode,
     whatsappNumber, whatsappEnabled: input.whatsappEnabled === true, enabled: input.enabled === true,
-    ordersEnabled, treasuryAccountId: input.treasuryAccountId, openOrdersPerPhone: input.openOrdersPerPhone,
+    ordersEnabled, treasuryAccountId: input.treasuryAccountId, openOrdersPerPhone: input.openOrdersPerPhone, approvalHours: input.approvalHours,
   };
 }
 
@@ -217,8 +227,9 @@ export async function saveStorefrontSettings(req: Request, input: StorefrontSett
     const current = await lockVersion(tx, input.version);
     const warehouseCodes = (await activeWarehouses(tx)).map(w => w.code);
     const treasuryIds = (await storefrontTreasuryAccounts(tx)).map(a => a.id);
-    const values = checkedInput(input, await ItemPricingService.getPricingStrategies(tx), warehouseCodes, treasuryIds);
     const before = inputOf(await readStored(tx, GROUP_KEYS));
+    // v12 phase 8b: a form without the approval wait keeps the stored one
+    const values = checkedInput({ ...input, approvalHours: input.approvalHours ?? before.approvalHours }, await ItemPricingService.getPricingStrategies(tx), warehouseCodes, treasuryIds);
     const changes: Record<string, { before: unknown; after: unknown }> = {};
     const fields = Object.keys(values) as Array<keyof typeof values>;
     for (const field of fields) {

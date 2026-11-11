@@ -11,7 +11,8 @@ import {
   OTP_VERIFY_ATTEMPTS_MAX, OTP_WRONG_PER_PHONE_DAY_MAX, PHONE_PROOF_MAX, PHONE_PROOF_PREFIX, PHONE_PROOF_TTL_SECONDS, normalizeOtpCode,
 } from '../../lib/storefront/storefrontSmsRules.js';
 import type { OtpRequestResult, OtpVerifyResult } from '../../lib/storefront/storefrontSmsContracts.js';
-import { deliverMessage, smsBudgetSpent } from './storefrontSms.service.js';
+import { deliverMessage } from './storefrontSms.service.js';
+import { smsBudgetSpent, warnIfBudgetNearlySpent } from './storefrontSmsBudget.js';
 import { activeTemplate, smsRuntimeSettings } from './storefrontSmsSettings.service.js';
 
 /**
@@ -24,7 +25,8 @@ import { activeTemplate, smsRuntimeSettings } from './storefrontSmsSettings.serv
  *   over all its codes, so asking for fresh codes gives no fresh guesses.
  * - Limits against guessing and against draining the SMS credit («SMS pumping»), all decided under one advisory lock so
  *   concurrent requests cannot pass them together: one code per phone per `OTP_RESEND_SECONDS`, per phone per hour and
- *   per day, per buyer address per hour, and the site's budget of texts (`smsBudgetSpent`, shared with the order texts).
+ *   per day, per buyer address per hour, and the login codes' budget of texts (`smsBudgetSpent`; v12 phase 8b: its own,
+ *   apart from the order texts', with the bell at 80%).
  *   Only Iranian mobiles (09…) are taken. The route adds a per-address request limit in front. A code whose text could
  *   not be sent is closed at once and does not hold the resend wait, but still counts toward the caps.
  * - A right code answers a random single-use phone proof (only its SHA-256 is kept) that the sign-up or sign-in that
@@ -98,7 +100,7 @@ export async function requestOtp(rawPhone: string, address: string): Promise<Otp
     if (await countSince(tx, eq(storefrontSmsCodes.addressKey, addressKey), 3600) >= OTP_PER_ADDRESS_HOUR_MAX) {
       throw new TooManyCodesError('از این دستگاه کد زیادی خواسته شده است؛ ساعتی دیگر دوباره بخواهید.', 3600);
     }
-    if (await smsBudgetSpent(tx, settings.hourlyCap)) {
+    if (await smsBudgetSpent(tx, settings.hourlyCap, 'codes')) {
       throw new TooManyCodesError('ورود پیامکی اکنون شلوغ است؛ چند دقیقه دیگر دوباره بخواهید.', 300);
     }
     const [row] = await tx.insert(storefrontSmsMessages).values({
@@ -107,6 +109,7 @@ export async function requestOtp(rawPhone: string, address: string): Promise<Otp
     const [codeRow] = await tx.insert(storefrontSmsCodes).values({
       phoneKey, codeHash, addressKey, messageId: row.id, expiresAt: sql`now() + make_interval(secs => ${OTP_TTL_SECONDS})`,
     }).returning({ id: storefrontSmsCodes.id });
+    await warnIfBudgetNearlySpent(tx, settings.hourlyCap, 'codes');
     return { row, codeId: codeRow.id };
   });
   // sent after the commit: the code row exists before the buyer can type it

@@ -19,6 +19,7 @@ export const NOTIFICATION_CATEGORIES = [
   'site_order',
   'site_buyer',
   'site_inquiry',
+  'site_sms',
 ] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
@@ -36,11 +37,13 @@ export const NOTIFICATION_CATEGORY_LABELS: Readonly<Record<NotificationCategory,
   // 10.3 package 5 (ت۴۷ item 5): for the system admins, e.g. «آستانه تراکنش کلان خزانه» changed by another user
   settings_change: 'تغییر تنظیمات حساس سامانه',
   // v11 phase 8.2a: a new order or card-to-card receipt from the new site, for the holders of site_orders.manage
-  site_order: 'سفارش و رسید تازه از سایت',
+  site_order: 'سفارش، رسید و مهلت تأیید سفارش‌های سایت',
   // v11 phase 8.2b: a new wholesale application from the new site, for the holders of site_buyers.manage
   site_buyer: 'درخواست تازهٔ خرید عمده از سایت',
   // v11 phase 8.2c: a corporate gift request from the new site (a new CRM lead), for the holders of crm.manage
   site_inquiry: 'درخواست هدیهٔ سازمانی از سایت',
+  // v12 phase 8b (site review 2.11): a budget of the site's texts is nearly spent, for the holders of storefront.manage
+  site_sms: 'سقف پیامک‌های سایت',
 };
 
 /** One row of «در پیام‌رسان هم بفرست» in the profile (`GET /messenger/preferences/mine`) */
@@ -83,9 +86,11 @@ const GENERIC_SENTENCES: Readonly<Partial<Record<NotificationCategory, string>>>
   payslip: 'فیش حقوق شما تأیید شد.',
   workshop: 'یک کار یا گزارش در کارتابل کارگاه منتظر شماست.',
   settings_change: 'یکی از تنظیمات حساس سامانه تغییر کرد.',
-  site_order: 'یک خرید یا رسید کارت‌به‌کارت تازه از سایت رسید.',
+  // v12 phase 8b: also the bell that an «به حساب» order's wait for confirmation runs out
+  site_order: 'یک خرید تازه، رسید کارت‌به‌کارت یا مهلت تأیید خرید عمده از سایت منتظر رسیدگی شماست.',
   site_buyer: 'یک فروشگاه یا خریدار تازه از سایت می‌خواهد عمده بخرد.',
   site_inquiry: 'یک سازمان از سایت هدیهٔ سازمانی خواسته است؛ پرونده فروش تازه‌ای ساخته شد.',
+  site_sms: 'پیامک‌های سایت در این ساعت به نزدیکی سقف خود رسیده‌اند؛ تنظیمات پیامک سایت را ببینید.',
 };
 const GENERIC_DEFAULT_SENTENCE = 'اعلان تازه‌ای در برنامه پاپیتال برای شما آمده است.';
 

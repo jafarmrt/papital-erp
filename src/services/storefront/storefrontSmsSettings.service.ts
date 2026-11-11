@@ -24,7 +24,7 @@ import {
  * budget of login codes. One save writes the group under the lock of its version row with one audit row in the same
  * transaction; the audit row never holds the key.
  */
-const GROUP_KEYS = [KEYS.enabled, KEYS.provider, KEYS.apiKey, KEYS.apiKeyHint, KEYS.templates, KEYS.hourlyCap, KEYS.version, STOREFRONT_SETTING_KEYS.enabled] as const;
+const GROUP_KEYS = [KEYS.enabled, KEYS.provider, KEYS.apiKey, KEYS.apiKeyHint, KEYS.templates, KEYS.hourlyCap, KEYS.orderHourlyCap, KEYS.version, STOREFRONT_SETTING_KEYS.enabled] as const;
 
 type Stored = Record<string, string>;
 
@@ -62,7 +62,9 @@ export interface SmsRuntimeSettings {
   provider: SmsProvider;
   apiKey: string | null;
   templates: SmsTemplates;
+  /** login codes in an hour (v12 phase 8b: order texts have `orderHourlyCap`) */
   hourlyCap: number;
+  orderHourlyCap: number;
 }
 
 function runtimeOf(stored: Stored): SmsRuntimeSettings {
@@ -74,6 +76,7 @@ function runtimeOf(stored: Stored): SmsRuntimeSettings {
     apiKey: sealed ? decryptSecret(sealed) : '',
     templates: templatesOf(stored[KEYS.templates]),
     hourlyCap: hourlyCapOf(stored[KEYS.hourlyCap]),
+    orderHourlyCap: hourlyCapOf(stored[KEYS.orderHourlyCap]),
   };
 }
 
@@ -101,6 +104,7 @@ export async function readSmsSettings(executor: DbExecutor): Promise<StorefrontS
     apiKey: { configured: Boolean(stored[KEYS.apiKey]), hint: stored[KEYS.apiKeyHint] ?? '', readable: runtime.apiKey !== null },
     templates: runtime.templates,
     hourlyCap: runtime.hourlyCap,
+    orderHourlyCap: runtime.orderHourlyCap,
     version: Number(stored[KEYS.version]) || 0,
     secretsKeyConfigured: isSecretsKeyConfigured(),
   };
@@ -138,7 +142,11 @@ export async function saveSmsSettings(req: Request, input: StorefrontSmsSettings
   const keyProblem = apiKeyError(newKey);
   if (keyProblem) throw new ValidationError(keyProblem, { field: 'apiKey' }, 'STOREFRONT_SMS_KEY_INVALID');
   if (!Number.isInteger(input.hourlyCap) || input.hourlyCap < 1 || input.hourlyCap > SMS_HOURLY_CAP_MAX) {
-    throw new ValidationError(`سقف پیامک‌های سایت در ساعت باید ۱ تا ${SMS_HOURLY_CAP_MAX.toLocaleString('fa-IR')} باشد.`, { field: 'hourlyCap' }, 'STOREFRONT_SMS_CAP_INVALID');
+    throw new ValidationError(`سقف کد ورود در ساعت باید ۱ تا ${SMS_HOURLY_CAP_MAX.toLocaleString('fa-IR')} باشد.`, { field: 'hourlyCap' }, 'STOREFRONT_SMS_CAP_INVALID');
+  }
+  const orderCapInput = input.orderHourlyCap;
+  if (orderCapInput !== undefined && (!Number.isInteger(orderCapInput) || orderCapInput < 1 || orderCapInput > SMS_HOURLY_CAP_MAX)) {
+    throw new ValidationError(`سقف پیامک سفارش در ساعت باید ۱ تا ${SMS_HOURLY_CAP_MAX.toLocaleString('fa-IR')} باشد.`, { field: 'orderHourlyCap' }, 'STOREFRONT_SMS_CAP_INVALID');
   }
   const templates = checkedTemplates(input.provider, input.templates ?? {});
   // encrypted before the transaction: no secrets key = 503 and nothing written
@@ -164,6 +172,8 @@ export async function saveSmsSettings(req: Request, input: StorefrontSmsSettings
     if (before.provider !== input.provider) changes.provider = { before: before.provider, after: input.provider };
     if (JSON.stringify(before.templates) !== JSON.stringify(templates)) changes.templates = { before: before.templates, after: templates };
     if (before.hourlyCap !== input.hourlyCap) changes.hourlyCap = { before: before.hourlyCap, after: input.hourlyCap };
+    const orderHourlyCap = orderCapInput ?? before.orderHourlyCap;
+    if (before.orderHourlyCap !== orderHourlyCap) changes.orderHourlyCap = { before: before.orderHourlyCap, after: orderHourlyCap };
     const keyChanged = keyAfter !== (stored[KEYS.apiKey] ?? '');
     const hintAfter = !keyAfter ? '' : sealedKey ? newKey.slice(-4) : stored[KEYS.apiKeyHint] ?? '';
     // the key itself never enters the audit row: only that it changed and its last four letters
@@ -173,6 +183,7 @@ export async function saveSmsSettings(req: Request, input: StorefrontSmsSettings
     await writeValue(tx, KEYS.provider, input.provider);
     await writeValue(tx, KEYS.templates, JSON.stringify(templates));
     await writeValue(tx, KEYS.hourlyCap, String(input.hourlyCap));
+    await writeValue(tx, KEYS.orderHourlyCap, String(orderHourlyCap));
     if (keyChanged) {
       await writeValue(tx, KEYS.apiKey, keyAfter);
       await writeValue(tx, KEYS.apiKeyHint, hintAfter);

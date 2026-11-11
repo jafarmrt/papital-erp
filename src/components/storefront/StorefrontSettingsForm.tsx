@@ -7,7 +7,7 @@ import { useSaveStorefrontSettingsMutation } from '../../hooks/queries/useStoref
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import type { StorefrontSettingsInput, StorefrontSettingsView } from '../../lib/storefront/storefrontContracts';
 import {
-  LOW_STOCK_THRESHOLD_MAX, RESERVATION_HOURS_MAX, STOCK_DISPLAYS, STOCK_DISPLAY_TITLES, cardNumberError, ibanError, whatsappNumberError, type StockDisplay,
+  APPROVAL_HOURS_DEFAULT, LOW_STOCK_THRESHOLD_MAX, RESERVATION_HOURS_MAX, STOCK_DISPLAYS, STOCK_DISPLAY_TITLES, approvalReminderHours, cardNumberError, ibanError, whatsappNumberError, type StockDisplay,
 } from '../../lib/storefront/storefrontRules';
 import { OPEN_ORDERS_PER_PHONE_MAX } from '../../lib/storefront/storefrontOrderRules';
 import { formatPersianNumber } from '../../utils/persianNumber';
@@ -29,7 +29,7 @@ const formOf = (view: StorefrontSettingsView): StorefrontSettingsInput => ({
   lowStockThreshold: view.lowStockThreshold, stockDisplay: view.stockDisplay, warehouseCode: view.warehouseCode,
   whatsappNumber: view.whatsappNumber, whatsappEnabled: view.whatsappEnabled, enabled: view.enabled,
   ordersEnabled: view.ordersEnabled, treasuryAccountId: view.treasuryAccountId, openOrdersPerPhone: view.openOrdersPerPhone,
-  version: view.version,
+  approvalHours: view.approvalHours, version: view.version,
 });
 
 export function StorefrontSettingsForm({ view, canManage }: { view: StorefrontSettingsView; canManage: boolean }) {
@@ -131,6 +131,15 @@ export function StorefrontSettingsForm({ view, canManage }: { view: StorefrontSe
               <DecimalInput id={`${id}-hold`} className={field} grouped={false} value={form.reservationHours} min={1} max={RESERVATION_HOURS_MAX} step={1}
                 onValueChange={v => set('reservationHours', Number(v) || 0)} />
               <p className={hint}>سفارش پرداخت‌نشده تا این مدت موجودی را نگه می‌دارد و بعد آزاد می‌شود.</p>
+            </div>
+            {/* v12 phase 8b (site review 2.7): an «به حساب» order waits longer, for a colleague's confirmation */}
+            <div>
+              <label htmlFor={`${id}-approval`} className={label}>مهلت تأیید سفارش «به حساب» (ساعت)</label>
+              <DecimalInput id={`${id}-approval`} className={field} grouped={false} value={form.approvalHours ?? APPROVAL_HOURS_DEFAULT} min={1} max={RESERVATION_HOURS_MAX} step={1}
+                onValueChange={v => set('approvalHours', Number(v) || 0)} />
+              <p className={hint}>
+                سفارش خریدار عمده که «به حساب» است تا این مدت منتظر تأیید همکاران می‌ماند و بعد لغو می‌شود. {formatPersianNumber(approvalReminderHours(form.approvalHours ?? APPROVAL_HOURS_DEFAULT))} ساعت پیش از پایان، زنگولهٔ رسیدگی‌کنندگان سفارش‌های سایت به صدا درمی‌آید.
+              </p>
             </div>
           </div>
         </section>

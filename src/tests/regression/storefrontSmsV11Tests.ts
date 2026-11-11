@@ -1,11 +1,11 @@
 import http from 'http';
 import type { AddressInfo } from 'net';
 import request from 'supertest';
-import { and, asc, desc, eq, inArray, like, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, like, ne, or, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import {
-  accounts, activityLogs, appSettings, bankAccounts, itemPrices, items, storefrontOrders, storefrontPaymentReceipts, storefrontProducts,
+  accounts, activityLogs, appSettings, bankAccounts, itemPrices, items, notifications, storefrontOrders, storefrontPaymentReceipts, storefrontProducts,
   storefrontShippingMethods, storefrontSmsCodes, storefrontSmsMessages, warehouses,
 } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
@@ -91,7 +91,10 @@ export async function runStorefrontSmsV11Tests(shouldRun: (id: string, ...extra:
     const phoneC = `0917${tag}`;
     const phoneD = `0918${tag}`;
     const phoneE = `0919${tag}`;
-    phoneKeys.push(...[phoneA, phoneB, phoneC, phoneD, phoneE].map(p => p.slice(1)));
+    // v12 phase 8b: fresh phones for the two budgets (the others have used up their own hourly codes by step 7)
+    const phoneF = `0910${tag}`;
+    const phoneG = `0911${tag}`;
+    phoneKeys.push(...[phoneA, phoneB, phoneC, phoneD, phoneE, phoneF, phoneG].map(p => p.slice(1)));
 
     // the shop: a retail list, one item of 3 units, a flat method, a bank account, the site on and taking orders
     const retailList = `تکی پیامک ${tag}`;
@@ -264,18 +267,35 @@ export async function runStorefrontSmsV11Tests(shouldRun: (id: string, ...extra:
     const capWrong = await site('10.20.0.7').post('/api/storefront/v1/auth/otp/verify', { phone: phoneD, code: codeD });
     if (capWrong.status !== 422 || capWrong.body.code !== 'STOREFRONT_OTP_INVALID') wrong.push(`a right code past the day's wrong tries: ${capWrong.status} ${capWrong.body.code}`);
 
-    // 7) the site's hourly budget; and no login template = the route is 404
-    const [{ total }] = await orm.select({ total: sql<number>`count(*)::int` }).from(storefrontSmsMessages)
-      .where(and(eq(storefrontSmsMessages.isTest, 0), sql`${storefrontSmsMessages.status} <> 'skipped'`, sql`${storefrontSmsMessages.createdAt} > now() - interval '1 hour'`));
-    const capped = await erp.put('/api/storefront/sms/settings', { ...base, enabled: true, templates, hourlyCap: Math.max(1, total), version: smsView.version });
-    if (capped.status !== 200) throw new Error(`cap: ${capped.status} ${JSON.stringify(capped.body)}`);
+    // 7) v12 phase 8b (site review 2.11): login codes and order texts each have their own hourly budget, with a bell at
+    //    80% of it; and no login template = the route is 404
+    const spentOf = async (codes: boolean) => (await orm.select({ total: sql<number>`count(*)::int` }).from(storefrontSmsMessages)
+      .where(and(eq(storefrontSmsMessages.isTest, 0), sql`${storefrontSmsMessages.status} <> 'skipped'`, sql`${storefrontSmsMessages.createdAt} > now() - interval '1 hour'`,
+        codes ? eq(storefrontSmsMessages.kind, 'otp') : ne(storefrontSmsMessages.kind, 'otp'))))[0].total;
+    const codesBefore = await spentOf(true);
+    // the order texts' budget spent and one code left in the codes' budget
+    const capped = await erp.put('/api/storefront/sms/settings', {
+      ...base, enabled: true, templates, hourlyCap: codesBefore + 1, orderHourlyCap: Math.max(1, await spentOf(false)), version: smsView.version,
+    });
+    if (capped.status !== 200 || capped.body.data.orderHourlyCap !== Math.max(1, await spentOf(false))) throw new Error(`cap: ${capped.status} ${JSON.stringify(capped.body)}`);
     smsView = capped.body.data;
-    const overBudget = await site('10.20.0.4').post('/api/storefront/v1/auth/otp/request', { phone: phoneA });
-    if (overBudget.status !== 429) wrong.push(`over the hourly budget: ${overBudget.status} ${overBudget.body.code}`);
-    // the budget is shared: an order's text over it is written `skipped` and never sent
+    // an order's text over its budget is written `skipped` and never sent
     const overOrder = await order(phoneE, 3, proofOverBudget);
     const [skippedText] = await messagesOf(overOrder.id);
-    if (skippedText?.status !== 'skipped' || !skippedText.error) wrong.push(`an order text over the budget: ${skippedText?.status} ${skippedText?.error}`);
+    if (skippedText?.status !== 'skipped' || !skippedText.error) wrong.push(`an order text over its budget: ${skippedText?.status} ${skippedText?.error}`);
+    // the codes' budget is apart: a code still goes, and that last one of the hour rings the codes' bell
+    const codeTitle = 'سقف ساعتی کد ورود سایت نزدیک است';
+    const bellsOf = async (title: string) => (await orm.select({ id: notifications.id }).from(notifications).where(eq(notifications.title, title))).length;
+    const codeStillGoes = await site('10.20.0.9').post('/api/storefront/v1/auth/otp/request', { phone: phoneF });
+    if (codeStillGoes.status !== 202) wrong.push(`a code while the order texts are spent: ${codeStillGoes.status} ${codeStillGoes.body.code}`);
+    const codeBells = await bellsOf(codeTitle);
+    if (codeBells < 1) wrong.push('no bell at 80% of the codes\' budget');
+    if (await bellsOf('سقف ساعتی پیامک سفارش سایت نزدیک است') !== 0) wrong.push('a bell for the order texts, none of which was sent');
+    const { warnIfBudgetNearlySpent } = await import('../../services/storefront/storefrontSmsBudget.js');
+    await warnIfBudgetNearlySpent(orm, codesBefore + 1, 'codes');
+    if (await bellsOf(codeTitle) !== codeBells) wrong.push('the codes\' bell rang twice in an hour');
+    const overBudget = await site('10.20.0.4').post('/api/storefront/v1/auth/otp/request', { phone: phoneG });
+    if (overBudget.status !== 429) wrong.push(`over the codes' hourly budget: ${overBudget.status} ${overBudget.body.code}`);
     const { otp: _otp, ...noOtp } = templates;
     const offOtp = await erp.put('/api/storefront/sms/settings', { ...base, enabled: true, templates: noOtp, version: smsView.version });
     smsView = offOtp.body.data;
@@ -296,7 +316,7 @@ export async function runStorefrontSmsV11Tests(shouldRun: (id: string, ...extra:
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'texts on without a key was 422 and a word as an sms.ir template 422; the key was stored encrypted, answered only as its last four letters and kept out of the audit row; an order queued nothing while texts were off; once on, an order queued one text with its number only and the sender sent template 222 with the key in X-API-KEY; a cancel queued its text, a 503 left it queued and the next pass sent it; another provider with the stored key was 422; a login code was sent with six digits and stored only as a keyed hash, a second within the minute was 429; a wrong code counted a try, the right one in Persian digits gave a proof and the same code again was 422; the proof was refused for another phone, taken once and refused the second time; a code whose text failed was 503, closed and held no resend wait; the wrong tries of the day stopped a right code; the hourly budget answered 429 and an order text over it was skipped; without a login template the route was 404; a test text used the shipped template with two values and the log masked the phone',
+      details: 'texts on without a key was 422 and a word as an sms.ir template 422; the key was stored encrypted, answered only as its last four letters and kept out of the audit row; an order queued nothing while texts were off; once on, an order queued one text with its number only and the sender sent template 222 with the key in X-API-KEY; a cancel queued its text, a 503 left it queued and the next pass sent it; another provider with the stored key was 422; a login code was sent with six digits and stored only as a keyed hash, a second within the minute was 429; a wrong code counted a try, the right one in Persian digits gave a proof and the same code again was 422; the proof was refused for another phone, taken once and refused the second time; a code whose text failed was 503, closed and held no resend wait; the wrong tries of the day stopped a right code; the order texts budget skipped an order text while a code still went (and rang the codes bell once at 80%), then the codes budget answered 429; without a login template the route was 404; a test text used the shipped template with two values and the log masked the phone',
     }));
   } catch (err) {
     results.push(makeTestCase({
