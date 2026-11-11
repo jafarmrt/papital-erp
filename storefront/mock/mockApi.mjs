@@ -73,7 +73,7 @@ const readBody = req => new Promise(resolve => {
   req.on('end', () => { try { resolve(JSON.parse(body || '{}')); } catch { resolve({}); } });
 });
 const proofOk = (phone, proof) => typeof proof === 'string' && proof === `pp_mock${phone}`;
-const view = a => ({ name: a.name, phone: a.phone, city: '', kind: 'retail', application: 'none', companyName: '', phoneVerified: a.verified, group: null });
+const view = a => ({ name: a.name, phone: a.phone, city: '', kind: 'retail', application: a.application ?? 'none', companyName: a.companyName ?? '', phoneVerified: a.verified, group: null });
 const session = a => {
   const token = `bs_mock${sessions.size + 1}x${a.phone}`;
   sessions.set(token, a.phone);
@@ -149,7 +149,7 @@ const quoteOf = (province, lines, discount = null) => {
   const free = settings.freeShippingThreshold && items - BigInt(discount?.amount ?? 0) >= BigInt(settings.freeShippingThreshold);
   const options = [{ code: 'post', title: 'پست پیشتاز', description: '', kind: 'cost', amount: free ? '0' : '500000', amountToman: free ? '0' : '50000', free: Boolean(free) }];
   if (province === 'تهران') options.push({ code: 'snapp', title: 'اسنپ باکس', description: 'فقط در تهران، همان روز.', kind: 'on_delivery', amount: '0', amountToman: '0', free: false });
-  return { itemsAmount: items.toString(), discount, options };
+  return { itemsAmount: items.toString(), lines: lines.map(l => ({ slug: l.slug, quantity: l.quantity, amount: l.lineAmount })), discount, options };
 };
 const orderView = o => {
   const waiting = o.status === 'awaiting_payment';
@@ -278,6 +278,22 @@ createServer(async (req, res) => {
     if (String(body.organization ?? '').trim().length < 2) return fieldError(res, 'organization', 'نام سازمان یا شرکت را بنویسید.');
     if (!/^\+?\d{8,15}$/.test(latin(body.phone).replace(/[\s()-]/g, ''))) return fieldError(res, 'phone', 'شمارهٔ تماس را با پیش‌شماره بنویسید (۸ تا ۱۵ رقم).');
     return send(res, 201, { data: { reference: String(nextLead++) } });
+  }
+  // v12 phase 8a: the wholesale request (the ERP's rules in storefrontWholesaleApply.service.ts): a guest's request makes a
+  // pending account for its phone, so it needs the phone's proof while SMS is on and refuses a phone with an account
+  if (route === '/wholesale/apply' && req.method === 'POST') {
+    const body = await readBody(req);
+    lastPost = { route, orderKey: '', session: String(req.headers['x-buyer-session'] ?? ''), body };
+    const signed = accountOf(req);
+    const phone = signed ?? latin(body.phone);
+    if (String(body.companyName ?? '').trim().length < 2) return send(res, 422, { error: 'نام فروشگاه یا شرکت را بنویسید.', code: 'STOREFRONT_ACCOUNT_FIELD_INVALID', details: { field: 'companyName' } });
+    if (!signed && settings.smsLogin && !proofOk(phone, body.phoneProof)) return send(res, 422, { error: 'شمارهٔ همراه را با کد پیامکی تأیید کنید.', code: 'STOREFRONT_PHONE_PROOF_REQUIRED' });
+    const existing = accounts.get(phone);
+    if (!signed && existing) return send(res, 409, { error: 'برای این شمارهٔ همراه حساب ساخته شده است؛ وارد شوید.', code: 'STOREFRONT_ACCOUNT_EXISTS' });
+    const account = existing ?? { name: String(body.name ?? ''), phone, password: '', verified: Boolean(body.phoneProof) };
+    Object.assign(account, { application: 'pending', companyName: String(body.companyName) });
+    accounts.set(phone, account);
+    return send(res, 201, { data: view(account) });
   }
   if (route === '/account/prices') return send(res, 200, { data: { group: '', prices: [] } });
   if (route === '/account') {

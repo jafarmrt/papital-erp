@@ -7,7 +7,7 @@ import { phoneMatchKey } from '../../lib/search/phoneMatchKey.js';
 import { money } from '../../lib/money.js';
 import {
   ADDRESS_MAX, ADDRESS_MIN, BUYER_NOTE_MAX, CITY_MAX, OPEN_ORDER_STATUSES, RECIPIENT_NAME_MAX, RETAIL_LINE_CAP_MESSAGE, cartLinesError, cleanText,
-  isIranProvince, isPaymentMethod, normalizeMobile, normalizePostalCode, retailLineOverCap, type CartLineInput, type PaymentMethod,
+  isIranProvince, isPaymentMethod, normalizeMobile, normalizePostalCode, retailLineOverCap, type CartLineInput, type PaymentMethod, payableWith,
 } from '../../lib/storefront/storefrontOrderRules.js';
 import type { PlaceOrderRequest, PlacedOrder, ShippingQuoteAnswer, ShippingQuoteRequest } from '../../lib/storefront/storefrontOrderContracts.js';
 import type { StorefrontSettingsInput } from '../../lib/storefront/storefrontContracts.js';
@@ -174,6 +174,7 @@ export async function quoteShipping(input: ShippingQuoteRequest, rawSession?: un
   const choice = code ? await chooseDiscount(orm, code, cart.itemsAmount, { ...buyer, phoneKey: '' }) : null;
   return {
     itemsAmount: cart.itemsAmount,
+    lines: cart.lines.map(l => ({ slug: l.item.slug, quantity: l.quantity, amount: l.lineAmount })),
     discount: choice ? appliedDiscount(choice.code.code, choice.code.title, choice.amount.toString()) : null,
     options: await shippingOptions(orm, settings, cart, province, discountedSubtotal(cart.itemsAmount, choice)),
   };
@@ -259,7 +260,7 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
   const option = (await shippingOptions(tx, settings, cart, order.province, discountedSubtotal(cart.itemsAmount, choice))).find(o => o.code === order.shippingMethod);
   if (!option) throw fieldError('shippingMethod', 'این روش ارسال برای این سبد و استان در دسترس نیست؛ روش دیگری انتخاب کنید.');
   const shippingAmount = option.kind === 'cost' ? option.amount : '0';
-  const payable = (BigInt(cart.itemsAmount) - BigInt(discountAmount) + BigInt(shippingAmount)).toString();
+  const payable = payableWith(cart.itemsAmount, discountAmount, option);
 
   const [{ value: sequence }] = (await tx.execute(sql`SELECT nextval('storefront_order_number_seq')::text AS value`)).rows as Array<{ value: string }>;
   const orderNumber = String(sequence);

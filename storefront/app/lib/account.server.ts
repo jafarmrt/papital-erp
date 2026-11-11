@@ -7,8 +7,12 @@ import { siteEnv } from './site.server';
  * - The session token lives in the `sf_session` cookie: httpOnly (no script on the page can read it), `SameSite=Lax`
  *   (a form posted from another site carries no session), `Secure` on the live https site, 30 days like the session.
  *   It goes to the ERP in `X-Buyer-Session`, never in an address.
- * - After an SMS code is verified, its phone proof is kept for ten minutes in the `sf_proof` cookie (httpOnly, only
- *   under /account) so the sign-up that follows an SMS sign-in without an account can present it.
+ * - After an SMS code is verified, its phone proof is kept for ten minutes in the `sf_proof` cookie (httpOnly) so the
+ *   sign-up that follows an SMS sign-in without an account can present it.
+ * - v12 phase 8a review: each proof cookie has its own name, and every one is on `Path=/`. A narrower path never reached
+ *   the page's own data requests once its script runs (React Router posts `/wholesale` to `/wholesale.data`, which a
+ *   cookie for `/wholesale` does not match), so a proven phone was asked again on every tap. The name, not the path,
+ *   keeps each page to its own proof.
  * - Every call says the buyer's own address in `X-Storefront-Client-IP`, so the ERP's limits count each buyer (without it
  *   every buyer would share this server's address and one budget). The address is the one the web server in front
  *   writes: `X-Real-IP`, else the last `X-Forwarded-For` hop (the one it appended; earlier hops are the browser's word).
@@ -54,12 +58,12 @@ export function proofOf(request: Request, phone: string): string {
   return kept && kept === phone && proof && TOKEN.test(proof) ? proof : '';
 }
 
-export const proofCookie = (phone: string, proof: string) => `${PROOF_COOKIE}=${encodeURIComponent(`${phone}.${proof}`)}; Path=/account; HttpOnly; SameSite=Lax; Max-Age=${PROOF_MAX_AGE}${secure()}`;
-export const clearProofCookie = () => `${PROOF_COOKIE}=; Path=/account; HttpOnly; SameSite=Lax; Max-Age=0${secure()}`;
+export const proofCookie = (phone: string, proof: string) => `${PROOF_COOKIE}=${encodeURIComponent(`${phone}.${proof}`)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${PROOF_MAX_AGE}${secure()}`;
+export const clearProofCookie = () => `${PROOF_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure()}`;
 
 /**
  * v12 phase 7: a guest's phone proof at the checkout, kept between the code and a second «ثبت سفارش» (a refused order,
- * such as one item short, leaves the proof unused). Its own cookie and path, so the account pages never read it.
+ * such as one item short, leaves the proof unused). Its own cookie, so the account pages never read it.
  */
 const CHECKOUT_PROOF_COOKIE = 'sf_checkout_proof';
 export function checkoutProofOf(request: Request, phone: string): string {
@@ -67,8 +71,21 @@ export function checkoutProofOf(request: Request, phone: string): string {
   return kept && kept === phone && proof && TOKEN.test(proof) ? proof : '';
 }
 export const checkoutProofCookie = (phone: string, proof: string) =>
-  `${CHECKOUT_PROOF_COOKIE}=${encodeURIComponent(`${phone}.${proof}`)}; Path=/checkout; HttpOnly; SameSite=Lax; Max-Age=${PROOF_MAX_AGE}${secure()}`;
-export const clearCheckoutProofCookie = () => `${CHECKOUT_PROOF_COOKIE}=; Path=/checkout; HttpOnly; SameSite=Lax; Max-Age=0${secure()}`;
+  `${CHECKOUT_PROOF_COOKIE}=${encodeURIComponent(`${phone}.${proof}`)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${PROOF_MAX_AGE}${secure()}`;
+export const clearCheckoutProofCookie = () => `${CHECKOUT_PROOF_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure()}`;
+
+/**
+ * v12 phase 8a (site review 2.3): a guest's phone proof on the wholesale request, kept between the code and the form
+ * that sends it. Its own cookie, as at the checkout.
+ */
+const WHOLESALE_PROOF_COOKIE = 'sf_wholesale_proof';
+export function wholesaleProofOf(request: Request): { phone: string; proof: string } {
+  const [phone, proof] = cookieOf(request, WHOLESALE_PROOF_COOKIE).split('.');
+  return phone && /^09\d{9}$/.test(phone) && proof && TOKEN.test(proof) ? { phone, proof } : { phone: '', proof: '' };
+}
+export const wholesaleProofCookie = (phone: string, proof: string) =>
+  `${WHOLESALE_PROOF_COOKIE}=${encodeURIComponent(`${phone}.${proof}`)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${PROOF_MAX_AGE}${secure()}`;
+export const clearWholesaleProofCookie = () => `${WHOLESALE_PROOF_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure()}`;
 
 /** The phone the proof cookie is for ('' = none) */
 export function provenPhoneOf(request: Request): string {

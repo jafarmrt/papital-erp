@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
+import { useState } from 'react';
 import { Form, Link, data, redirect, useNavigation } from 'react-router';
 import type { Route } from './+types/checkout';
-import type { PlacedOrder, ShippingOption, ShippingQuoteAnswer } from '@erp/storefront/storefrontOrderContracts';
+import type { PlacedOrder, QuotedLine, ShippingOption, ShippingQuoteAnswer } from '@erp/storefront/storefrontOrderContracts';
 import type { AppliedDiscount } from '@erp/storefront/storefrontDiscountContracts';
 import type { StorefrontAccountView } from '@erp/storefront/storefrontBuyerContracts';
-import { ADDRESS_MAX, BUYER_NOTE_MAX, CITY_MAX, RECIPIENT_NAME_MAX } from '@erp/storefront/storefrontOrderRules';
+import { ADDRESS_MAX, BUYER_NOTE_MAX, CITY_MAX, RECIPIENT_NAME_MAX, payableWith } from '@erp/storefront/storefrontOrderRules';
 import { IRAN_PROVINCES } from '@erp/storefront/storefrontRules';
-import { publicSettings } from '../lib/api.server';
+import { product as productBySlug, publicSettings } from '../lib/api.server';
 import {
   accountCall, checkoutProofCookie, checkoutProofOf, clearCheckoutProofCookie, crossSite, normalizePhone, sameSite, sessionOf,
 } from '../lib/account.server';
@@ -33,6 +34,12 @@ import { CodeField, Field, FormError, FormNote, PhoneField, SelectField, SubmitB
  *   sends a code and the same form shows a code field; the second tap verifies it and places the order with the proof.
  *   The proof waits in an httpOnly cookie for this page only, so an order the ERP refused (an item short) is placed again
  *   without a new code. A signed-in buyer, and every buyer while the texts are off, orders as before.
+ * - v12 phase 8a (site review 2.4): once the methods are quoted, a summary right above «ثبت سفارش» names the items with
+ *   their quantities and amounts and says the shipping and, large, «مبلغ قابل پرداخت»: the ERP's own sums (the quote)
+ *   with the ERP's own rule (`payableWith`). It follows the method the buyer picks; without JavaScript, the one picked
+ *   last time. The form carries the payable it showed, and «ثبت سفارش» places nothing when the fresh quote makes another
+ *   (the province, the code or the cart changed since): the form comes back with the new summary, so the order is placed
+ *   at the amount the buyer saw.
  */
 const FIELDS = ['recipientName', 'phone', 'province', 'city', 'address', 'postalCode', 'note'] as const;
 type Fields = Record<typeof FIELDS[number], string>;
@@ -47,6 +54,8 @@ interface ActionAnswer {
   paymentMethod: string;
   options: ShippingOption[] | null;
   itemsAmount: string;
+  /** v12 phase 8a review: the quoted lines with this buyer's amounts, for the summary */
+  lines: QuotedLine[];
   discountCode: string;
   discount: AppliedDiscount | null;
   error?: string;
@@ -65,8 +74,9 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (!settings.ordering) throw new Response('پیدا نشد', { status: 404 });
   const lines = cartOf(request);
   if (!lines.length) throw redirect('/cart');
-  const account = await accountOf(request);
+  const [account, products] = await Promise.all([accountOf(request), Promise.all(lines.map(l => productBySlug(l.slug)))]);
   return {
+    items: lines.map((l, i) => ({ slug: l.slug, name: products[i]?.name ?? '', quantity: l.quantity })),
     requestKey: randomUUID(),
     count: lines.reduce((sum, l) => sum + l.quantity, 0),
     prefill: { recipientName: account?.name ?? '', phone: account?.phone ?? '', city: account?.city ?? '' },
@@ -89,6 +99,7 @@ export function meta({ data }: Route.MetaArgs) {
 const fieldsOf = (form: FormData) => Object.fromEntries(FIELDS.map(f => [f, String(form.get(f) ?? '').slice(0, FIELD_MAX[f] + 1)])) as Fields;
 
 const PHONE_WRONG = 'شمارهٔ همراه را درست بنویسید (مانند ۰۹۱۲۱۲۳۴۵۶۷).';
+const PAYABLE_CHANGED = 'مبلغ قابل پرداخت عوض شد؛ خلاصهٔ تازهٔ سفارش را ببینید و دوباره «ثبت سفارش» را بزنید.';
 
 export async function action({ request }: Route.ActionArgs) {
   if (!sameSite(request)) return crossSite();
@@ -102,7 +113,7 @@ export async function action({ request }: Route.ActionArgs) {
   const paymentMethod = String(form.get('paymentMethod') ?? 'card') === 'on_account' ? 'on_account' : 'card';
   const discountCode = String(form.get('discountCode') ?? '').trim().slice(0, 40);
   const answer = (rest: Partial<ActionAnswer>): ActionAnswer => ({
-    fields, requestKey, shippingMethod, paymentMethod, options: null, itemsAmount: '', discountCode, discount: null, ...rest,
+    fields, requestKey, shippingMethod, paymentMethod, options: null, itemsAmount: '', lines: [], discountCode, discount: null, ...rest,
   });
 
   const quoteOf = (code: string) => accountCall<ShippingQuoteAnswer>(request, 'POST', '/shipping/quote', { province: fields.province, lines, ...(code ? { discountCode: code } : {}) });
@@ -110,12 +121,21 @@ export async function action({ request }: Route.ActionArgs) {
   if (!quote.data && discountCode && quote.field === 'discountCode') {
     const refused = quote.error;
     quote = await quoteOf('');
-    if (quote.data) return answer({ options: quote.data.options, itemsAmount: quote.data.itemsAmount, error: refused, field: 'discountCode' });
+    if (quote.data) return answer({ options: quote.data.options, itemsAmount: quote.data.itemsAmount, lines: quote.data.lines ?? [], error: refused, field: 'discountCode' });
   }
   if (!quote.data) return answer({ error: quote.error, field: quote.field === 'province' || quote.field === 'lines' ? quote.field : '' });
-  const quoted = { options: quote.data.options, itemsAmount: quote.data.itemsAmount, discount: quote.data.discount };
+  const quoted = { options: quote.data.options, itemsAmount: quote.data.itemsAmount, lines: quote.data.lines ?? [], discount: quote.data.discount };
   const intent = String(form.get('intent') ?? '');
   if (intent !== 'place' && intent !== 'send-code') return answer(quoted);
+  // v12 phase 8a review: «ثبت سفارش» places the order at the amount the buyer saw. The form carries the payable its
+  // summary showed; when the fresh quote makes another (the province, the code or the cart changed since), the order is
+  // not placed and the form comes back with the new summary
+  const shown = String(form.get('shownPayable') ?? '');
+  const method = quote.data.options.find(o => o.code === shippingMethod);
+  if (intent === 'place' && shown && method && shown !== payableWith(quote.data.itemsAmount, quote.data.discount?.amount ?? '0', method)) {
+    const codeFor = String(form.get('codeFor') ?? '') ? normalizePhone(fields.phone) || undefined : undefined;
+    return answer({ ...quoted, codeFor, error: PAYABLE_CHANGED });
+  }
 
   // v12 phase 7: a guest's phone proof while the ERP signs in by SMS. The page's settings may be a minute old, so the
   // ERP has the last word: an order it refuses for a missing proof sends a code and the form then carries `codeFor`,
@@ -173,7 +193,7 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function CheckoutPage({ loaderData, actionData }: Route.ComponentProps) {
-  const { prefill, paymentMethods, groupTitle, signedIn, smsLogin, count, reservationHours } = loaderData;
+  const { prefill, paymentMethods, groupTitle, signedIn, smsLogin, count, reservationHours, items } = loaderData;
   const answer = actionData as ActionAnswer | undefined;
   const busy = useNavigation().state === 'submitting';
   const value = (f: typeof FIELDS[number]) => answer?.fields[f] ?? (f in prefill ? prefill[f as keyof typeof prefill] : '');
@@ -183,7 +203,11 @@ export default function CheckoutPage({ loaderData, actionData }: Route.Component
   const onAccount = paymentMethods.includes('on_account');
   const cardAllowed = paymentMethods.includes('card');
   const discount = answer?.discount ?? null;
-  const afterDiscount = discount && answer ? (BigInt(answer.itemsAmount || '0') - BigInt(discount.amount)).toString() : '';
+  // the method the summary reckons with: the one tapped on this page, else the one the form came back with
+  const [picked, setPicked] = useState('');
+  const method = options?.find(o => o.code === picked) ?? options?.find(o => o.code === chosen) ?? null;
+  const payable = method && answer?.itemsAmount ? payableWith(answer.itemsAmount, discount?.amount ?? '0', method) : '';
+  const lineAmounts = new Map((answer?.lines ?? []).map(l => [l.slug, l.amount]));
 
   return (
     <div className="mx-auto w-full max-w-xl px-4 pt-6 pb-16 lg:pt-10">
@@ -217,7 +241,7 @@ export default function CheckoutPage({ loaderData, actionData }: Route.Component
           defaultValue={answer?.discountCode ?? ''} invalid={bad('discountCode')} hint={discount ? `«${discount.title || discount.code}» روی این سبد نشست.` : 'اگر کدی دارید بنویسید؛ با «هزینهٔ ارسال» سنجیده می‌شود.'} />
 
         {options ? (
-          <fieldset className="space-y-3" aria-invalid={bad('shippingMethod') || undefined}>
+          <fieldset className="space-y-3" aria-invalid={bad('shippingMethod') || undefined} onChange={e => { if (e.target instanceof HTMLInputElement) setPicked(e.target.value); }}>
             <legend className="text-base font-bold">روش ارسال</legend>
             {options.length === 0 ? (
               <p className="text-sm leading-7 text-destructive">برای این استان و این سبد روش ارسالی نیست؛ با فروشگاه تماس بگیرید.</p>
@@ -255,19 +279,37 @@ export default function CheckoutPage({ loaderData, actionData }: Route.Component
           </fieldset>
         ) : null}
 
-        {options ? (
-          <div className="space-y-2 border-t border-border pt-5">
-            <p className="flex justify-between text-lg"><span>جمع کالاها</span><span className="font-extrabold">{formatPrice(answer?.itemsAmount ?? '')}</span></p>
-            {discount ? (
-              <>
-                <p className="flex justify-between text-base text-brand"><span>تخفیف <span dir="ltr">{discount.code}</span></span><span className="font-bold">− {formatPrice(discount.amount)}</span></p>
-                <p className="flex justify-between text-lg"><span>پس از تخفیف</span><span className="font-extrabold">{formatPrice(afterDiscount)}</span></p>
-              </>
-            ) : null}
-            <p className="text-sm leading-7 text-muted-foreground">
-              هزینهٔ ارسال روش انتخابی به این مبلغ افزوده می‌شود. پس از ثبت، کالاها {faNumber(reservationHours)} ساعت برای شما کنار گذاشته می‌شوند تا پرداخت را انجام دهید.
+        {options && options.length && method ? (
+          <section aria-labelledby="order-summary" className="space-y-3 rounded-control border border-border bg-card p-4" data-order-summary>
+            <h2 id="order-summary" className="text-base font-bold">خلاصهٔ سفارش</h2>
+            <ul className="space-y-1 text-sm leading-7">
+              {items.map(i => (
+                <li key={i.slug} className="flex justify-between gap-3" data-summary-line>
+                  <span>{`${i.name || i.slug} × ${faNumber(i.quantity)}`}</span>
+                  <span className="shrink-0">{lineAmounts.has(i.slug) ? formatPrice(lineAmounts.get(i.slug) ?? '') : `${faNumber(i.quantity)} عدد`}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="space-y-2 border-t border-border pt-3 text-base">
+              <p className="flex justify-between gap-3"><span>جمع کالاها</span><span className="font-bold">{formatPrice(answer?.itemsAmount ?? '')}</span></p>
+              {discount ? (
+                <p className="flex justify-between gap-3 text-brand"><span>تخفیف <span dir="ltr">{discount.code}</span></span><span className="font-bold">− {formatPrice(discount.amount)}</span></p>
+              ) : null}
+              <p className="flex justify-between gap-3">
+                <span>{`ارسال (${method.title})`}</span>
+                <span className="font-bold">{method.kind === 'on_delivery' ? 'هنگام تحویل' : method.free ? 'رایگان' : formatPrice(method.amount)}</span>
+              </p>
+            </div>
+            <p className="flex items-baseline justify-between gap-3 border-t border-border pt-3">
+              <span className="text-lg font-bold">مبلغ قابل پرداخت</span>
+              <span className="text-2xl font-extrabold" data-payable>{formatPrice(payable)}</span>
+              <input type="hidden" name="shownPayable" value={payable} />
             </p>
-          </div>
+            {method.kind === 'on_delivery' ? <p className="text-sm leading-7 text-muted-foreground">هزینهٔ ارسال این روش را هنگام تحویل به پیک می‌دهید.</p> : null}
+            <p className="text-sm leading-7 text-muted-foreground">
+              پس از ثبت، کالاها {faNumber(reservationHours)} ساعت برای شما کنار گذاشته می‌شوند تا پرداخت را انجام دهید.
+            </p>
+          </section>
         ) : null}
 
         {options && options.length && answer?.codeFor ? (

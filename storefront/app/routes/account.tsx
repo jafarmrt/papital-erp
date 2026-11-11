@@ -62,6 +62,10 @@ export default function AccountPage({ loaderData }: Route.ComponentProps) {
           </div>
         ) : null}
         {application ? <p className="mt-3 border-t border-border pt-3 text-sm">{application}</p> : null}
+        {/* v12 phase 8a (site review 2.3): a retail account sends its wholesale request from here */}
+        {account.kind === 'retail' && (account.application === 'none' || account.application === 'declined') ? (
+          <Link to="/wholesale" data-wholesale-request className="mt-3 inline-flex min-h-11 items-center border-t border-border pt-3 text-sm font-bold text-brand hover:underline">درخواست خرید عمده</Link>
+        ) : null}
       </section>
 
       <section className="mt-10" aria-labelledby="orders">

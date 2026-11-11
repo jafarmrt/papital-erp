@@ -23,6 +23,7 @@ beforeAll(async () => {
   process.env.STOREFRONT_API_KEY = KEY;
   process.env.STOREFRONT_SITE_URL = 'https://shop.example';
   process.env.STOREFRONT_TRUST_PROXY = '1';
+  process.env.STOREFRONT_FORM_MIN_SECONDS = '0';
   const build = await import(path.join(import.meta.dirname, '../build/server/index.js')) as ServerBuild;
   // as server.mjs does: the site's own host is an allowed origin of a form post
   handle = createRequestHandler({ ...build, allowedActionOrigins: ['shop.example'] }, 'production');
@@ -43,6 +44,9 @@ const post = async (pathname: string, fields: Record<string, string>, headers: R
   }));
   return { status: res.status, location: res.headers.get('location') ?? '', cookies: res.headers.getSetCookie(), html: res.status === 200 ? await res.text() : '' };
 };
+
+// v12 phase 8a: the robot-trap stamp a form page carries (any page's stamp is good, and the minimum time is 0 here)
+const stamp = async () => /name="formAt" value="([^"]+)"/.exec((await page('/corporate-gift')).html)?.[1] ?? '';
 
 const cookieValue = (cookies: string[], name: string) => (cookies.find(c => c.startsWith(`${name}=`)) ?? '').split(';')[0];
 const last = async () => (await fetch(`http://127.0.0.1:${PORT}/__mock/last`)).json() as Promise<{ clientIp: string; session: string }>;
@@ -74,13 +78,14 @@ describe('account pages', () => {
     expect(proof).toMatch(/HttpOnly/);
     expect(proof).toMatch(/SameSite=Lax/);
     expect(proof).toMatch(/Secure/);
-    expect(proof).toMatch(/Path=\/account/);
+    // v12 phase 8a review: on the whole site, so the page's own data requests (/account/sign-up.data) carry it
+    expect(proof).toMatch(/Path=\/;/);
 
     const details = await page('/account/sign-up?next=%2Fp%2Ftile-necklace-sample', cookieValue(verified.cookies, 'sf_proof'));
     expect(details.html).toContain('تأیید شد');
     expect(details.html).toMatch(/autocomplete="new-password"/i);
 
-    const made = await post('/account/sign-up', { intent: 'register', phone: '09123456789', name: 'خریدار آزمون', password: 'رمز-آزمون-1405', next: '/p/tile-necklace-sample' },
+    const made = await post('/account/sign-up', { intent: 'register', phone: '09123456789', name: 'خریدار آزمون', password: 'رمز-آزمون-1405', next: '/p/tile-necklace-sample', formAt: await stamp() },
       { cookie: cookieValue(verified.cookies, 'sf_proof') });
     expect(made.status).toBe(302);
     expect(made.location).toBe('/p/tile-necklace-sample');
@@ -129,7 +134,7 @@ describe('account pages', () => {
   });
 
   it('refuses a sign-up without a proven phone while SMS sign-in is on', async () => {
-    const made = await post('/account/sign-up', { intent: 'register', phone: '09129998877', name: 'بی کد', password: 'رمز-آزمون-1405' });
+    const made = await post('/account/sign-up', { intent: 'register', phone: '09129998877', name: 'بی کد', password: 'رمز-آزمون-1405', formAt: await stamp() });
     expect(made.status).toBe(200);
     expect(made.html).toContain('با کد پیامکی تأیید کنید');
   });

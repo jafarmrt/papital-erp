@@ -5,6 +5,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createRequestHandler, type ServerBuild } from 'react-router';
+import { formatPrice } from '../app/lib/format';
 
 const PORT = 3913;
 const KEY = 'test-key-not-a-secret';
@@ -23,6 +24,7 @@ beforeAll(async () => {
   process.env.STOREFRONT_API_URL = `http://127.0.0.1:${PORT}/api/storefront/v1`;
   process.env.STOREFRONT_API_KEY = KEY;
   process.env.STOREFRONT_SITE_URL = 'https://shop.example';
+  process.env.STOREFRONT_FORM_MIN_SECONDS = '0';
   const build = await import(path.join(import.meta.dirname, '../build/server/index.js')) as ServerBuild;
   handle = createRequestHandler({ ...build, allowedActionOrigins: ['shop.example'] }, 'production');
 });
@@ -44,6 +46,9 @@ const post = async (pathname: string, body: Record<string, string> | FormData, c
   }));
   return { status: res.status, location: res.headers.get('location') ?? '', cookies: res.headers.getSetCookie(), html: res.status === 200 ? await res.text() : '' };
 };
+
+// v12 phase 8a: the robot-trap stamp a form page carries (any page's stamp is good, and the minimum time is 0 here)
+const stamp = async () => /name="formAt" value="([^"]+)"/.exec((await page('/corporate-gift')).html)?.[1] ?? '';
 
 const cookieValue = (cookies: string[], name: string) => (cookies.find(c => c.startsWith(`${name}=`)) ?? '').split(';')[0];
 const lastPost = async () => (await (await fetch(`http://127.0.0.1:${PORT}/__mock/last`)).json() as { post: { route: string; orderKey: string; session: string; body: Record<string, unknown> } }).post;
@@ -114,7 +119,7 @@ describe('cart and checkout', () => {
     expect(refused.html).toContain('پست پیشتاز');
 
     const quoted = await post('/checkout', { intent: 'quote', requestKey: 'rk-discount-check-0001', ...address, discountCode: ' yalda ' }, cart);
-    expect(quoted.html).toContain('پس از تخفیف');
+    expect(quoted.html).toContain('مبلغ قابل پرداخت');
     expect(quoted.html).toContain('YALDA');
     expect((await lastPost()).body).toMatchObject({ discountCode: 'yalda' });
 
@@ -199,7 +204,7 @@ describe('«حساب من»', () => {
   });
 
   it('lists the account\'s orders, adds a guest order with its key, and sends a receipt through the account', async () => {
-    const made = await post('/account/sign-up', { intent: 'register', phone: '09129998877', name: 'خریدار حساب', password: 'رمز-آزمون-1405', next: '/' });
+    const made = await post('/account/sign-up', { intent: 'register', phone: '09129998877', name: 'خریدار حساب', password: 'رمز-آزمون-1405', next: '/', formAt: await stamp() });
     const session = cookieValue(made.cookies, 'sf_session');
     expect(session).toMatch(/^sf_session=bs_/);
     expect((await page('/account', session)).html).toContain('هنوز سفارشی در این حساب نیست');
@@ -237,10 +242,10 @@ describe('«هدیهٔ سازمانی»', () => {
     const form = await page('/corporate-gift');
     expect(form.status).toBe(200);
     expect(form.html).toContain('نام سازمان یا شرکت');
-    const refused = await post('/corporate-gift', { organization: 'شرکت نمونه', contactName: 'رابط نمونه', phone: '12', quantity: '', budget: '', neededBy: '', note: '' });
+    const refused = await post('/corporate-gift', { organization: 'شرکت نمونه', contactName: 'رابط نمونه', phone: '12', quantity: '', budget: '', neededBy: '', note: '', formAt: await stamp() });
     expect(refused.html).toContain('شمارهٔ تماس را با پیش‌شماره بنویسید');
     expect(refused.html).toMatch(/id="field-phone"[^>]*aria-invalid="true"/);
-    const sent = await post('/corporate-gift', { organization: 'شرکت نمونه', contactName: 'رابط نمونه', phone: '۰۲۱-۸۸۷۷۶۶۵۵', quantity: '۱۲۰', budget: '۲۰۰٬۰۰۰٬۰۰۰', neededBy: '۱۴۰۵/۱۰/۱۵', note: '' });
+    const sent = await post('/corporate-gift', { organization: 'شرکت نمونه', contactName: 'رابط نمونه', phone: '۰۲۱-۸۸۷۷۶۶۵۵', quantity: '۱۲۰', budget: '۲۰۰٬۰۰۰٬۰۰۰', neededBy: '۱۴۰۵/۱۰/۱۵', note: '', formAt: await stamp() });
     expect(sent.html).toContain('درخواست شما رسید');
     expect((await lastPost()).body).toMatchObject({ organization: 'شرکت نمونه', phone: '۰۲۱-۸۸۷۷۶۶۵۵', quantity: 120, budget: '2000000000', neededBy: '۱۴۰۵/۱۰/۱۵' });
     expect((await post('/corporate-gift', { organization: 'x' }, '', { 'Sec-Fetch-Site': 'cross-site' })).status).toBe(403);
@@ -287,7 +292,8 @@ describe('the retail cap and the guest phone proof', () => {
     expect(refused.html).toContain('کد پستی باید ۱۰ رقم باشد');
     const proof = refused.cookies.find(c => c.startsWith('sf_checkout_proof='))!;
     expect(proof).toMatch(/HttpOnly/);
-    expect(proof).toMatch(/Path=\/checkout/);
+    // on the whole site: React Router posts this page to /checkout.data once its script runs, which a /checkout cookie misses
+    expect(proof).toMatch(/Path=\/;/);
 
     const nextKey = /name="requestKey" value="([^"]+)"/.exec(refused.html)?.[1] ?? '';
     const placed = await post('/checkout', { intent: 'place', requestKey: nextKey, ...address, shippingMethod: 'post' }, `${cart}; ${cookieValue(refused.cookies, 'sf_checkout_proof')}`);
@@ -299,12 +305,151 @@ describe('the retail cap and the guest phone proof', () => {
   it('asks a signed-in buyer for no code', async () => {
     await smsLogin(true);
     const proven = await post('/account/sign-up', { intent: 'verify-code', phone: '09127654321', code: '123456' });
-    const made = await post('/account/sign-up', { intent: 'register', phone: '09127654321', name: 'خریدار حساب‌دار', password: 'رمز-آزمون-1405' }, cookieValue(proven.cookies, 'sf_proof'));
+    const made = await post('/account/sign-up', { intent: 'register', phone: '09127654321', name: 'خریدار حساب‌دار', password: 'رمز-آزمون-1405', formAt: await stamp() }, cookieValue(proven.cookies, 'sf_proof'));
     const session = cookieValue(made.cookies, 'sf_session');
     expect(session).toMatch(/^sf_session=/);
     const cart = cookieValue((await post('/cart', { intent: 'add', slug: 'tile-earrings-sample', quantity: '1' }, session)).cookies, 'sf_cart');
     const placed = await post('/checkout', { intent: 'place', requestKey: 'rk-signed-in-proof-0001', ...address, phone: '09127654321', shippingMethod: 'post' }, `${cart}; ${session}`);
     expect(placed.status).toBe(302);
     expect((await lastPost()).body).not.toHaveProperty('phoneProof');
+  });
+});
+
+// v12 phase 8a: the phone's bottom bar and its two pages, the checkout's summary (site review 2.4), the wholesale request
+// page (2.3) and the robot trap of the forms (2.12)
+describe('phase 8a: the bottom bar, the order summary, the wholesale page and the robot trap', () => {
+  const smsLogin = (on: boolean) => fetch(`http://127.0.0.1:${PORT}/__mock/sms-login?on=${on ? 1 : 0}`);
+  const api = async <T,>(route: string, body: unknown) => ((await (await fetch(`http://127.0.0.1:${PORT}/api/storefront/v1${route}`, {
+    method: 'POST', headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  })).json()) as { data: T }).data;
+  afterAll(async () => { await smsLogin(false); });
+
+  it('puts the five-button bar on every page, for phones only, with the cart count', async () => {
+    const cart = cookieValue((await post('/cart', { intent: 'add', slug: 'tile-earrings-sample', quantity: '2' })).cookies, 'sf_cart');
+    for (const pathname of ['/', '/products', '/p/tile-earrings-sample']) {
+      const { html } = await page(pathname, cart);
+      const bar = /<nav aria-label="پیمایش اصلی"[^>]*>(.*?)<\/nav>/s.exec(html);
+      expect(bar, pathname).not.toBeNull();
+      expect(bar![0]).toMatch(/md:hidden/);
+      for (const href of ['/', '/categories', '/search', '/cart', '/account/sign-in']) expect(bar![1], `${pathname} ${href}`).toContain(`href="${href}"`);
+      expect(bar![1]).toContain('aria-label="سبد، ۲ کالا"');
+    }
+    expect((await page('/')).html).toMatch(/<nav aria-label="پیمایش اصلی"[^>]*>.*?aria-current="page"[^>]*>.*?خانه/s);
+  });
+
+  it('lists the categories and collections, and searches the products from its own page', async () => {
+    const categories = await page('/categories');
+    expect(categories.status).toBe(200);
+    expect(categories.html).toContain('href="/products"');
+    expect(categories.html).toContain('کالکشن‌ها');
+    expect(categories.html).toMatch(/href="\/products\?category=/);
+    const search = await page('/search');
+    expect(search.status).toBe(200);
+    expect(search.html).toMatch(/<form(?=[^>]*method="get")(?=[^>]*action="\/products")[^>]*>/);
+    expect(search.html).toContain('name="q"');
+    expect(search.html).toContain('name="robots" content="noindex"');
+  });
+
+  it('sums the order above «ثبت سفارش» with the ERP\'s own figures, for the method picked', async () => {
+    const cart = cookieValue((await post('/cart', { intent: 'add', slug: 'tile-earrings-sample', quantity: '2' })).cookies, 'sf_cart');
+    const lines = [{ slug: 'tile-earrings-sample', quantity: 2 }];
+    const quote = await api<{ itemsAmount: string; discount: { amount: string } | null }>('/shipping/quote', { province: 'تهران', lines });
+    const withCode = await api<{ itemsAmount: string; discount: { amount: string } }>('/shipping/quote', { province: 'تهران', lines, discountCode: 'YALDA' });
+    const product = await (await fetch(`http://127.0.0.1:${PORT}/api/storefront/v1/products/tile-earrings-sample`, { headers: { Authorization: `Bearer ${KEY}` } })).json() as { data: { name: string } };
+    const summary = (html: string) => /<section[^>]*data-order-summary[^>]*>(.*?)<\/section>/s.exec(html)?.[1] ?? '';
+
+    const post1 = summary((await post('/checkout', { intent: 'quote', requestKey: 'rk-summary-check-00001', ...address, shippingMethod: 'post' }, cart)).html);
+    expect(post1).toContain(product.data.name);
+    expect(post1).toContain('× ۲');
+    expect(post1).toMatch(new RegExp(`data-summary-line.*${formatPrice(quote.itemsAmount)}`, 's'));
+    expect(post1).toContain('ارسال (پست پیشتاز)');
+    expect(post1).toContain('مبلغ قابل پرداخت');
+    expect(post1).toContain(formatPrice((BigInt(quote.itemsAmount) + 500000n).toString()));
+
+    const courier = summary((await post('/checkout', { intent: 'quote', requestKey: 'rk-summary-check-00001', ...address, shippingMethod: 'snapp' }, cart)).html);
+    expect(courier).toContain('هنگام تحویل');
+    expect(courier).toContain(formatPrice(quote.itemsAmount));
+
+    const discounted = summary((await post('/checkout', { intent: 'quote', requestKey: 'rk-summary-check-00001', ...address, shippingMethod: 'post', discountCode: 'yalda' }, cart)).html);
+    expect(discounted).toContain('YALDA');
+    expect(discounted).toContain(formatPrice((BigInt(withCode.itemsAmount) - BigInt(withCode.discount.amount) + 500000n).toString()));
+
+    // «ثبت سفارش» with a summary that no longer holds (the code was added after it was shown): the order is not placed,
+    // the form comes back with the new summary; with the shown amount right, it is placed
+    const shownBefore = /name="shownPayable" value="(\d+)"/.exec((await post('/checkout', { intent: 'quote', requestKey: 'rk-summary-check-00002', ...address, shippingMethod: 'post' }, cart)).html)?.[1];
+    expect(shownBefore).toBe((BigInt(quote.itemsAmount) + 500000n).toString());
+    const stale = await post('/checkout', { intent: 'place', requestKey: 'rk-summary-check-00002', ...address, shippingMethod: 'post', discountCode: 'yalda', shownPayable: shownBefore! }, cart);
+    expect(stale.status).toBe(200);
+    expect(stale.html).toContain('مبلغ قابل پرداخت عوض شد');
+    expect((await lastPost()).route).toBe('/shipping/quote');
+    const fresh = /name="shownPayable" value="(\d+)"/.exec(stale.html)?.[1];
+    const placed = await post('/checkout', { intent: 'place', requestKey: 'rk-summary-check-00002', ...address, shippingMethod: 'post', discountCode: 'yalda', shownPayable: fresh! }, cart);
+    expect(placed.status).toBe(302);
+  });
+
+  it('takes a guest\'s wholesale request after the phone\'s code, with the proof kept on its own page only', async () => {
+    await smsLogin(true);
+    // the page's settings may be a minute old: a request the ERP refuses for a missing proof comes back on the phone step
+    const unproven = await post('/wholesale', { intent: 'apply', phone: '09131112233', name: 'خریدار عمدهٔ آزمون', companyName: 'گالری آزمون', city: 'اصفهان', formAt: await stamp() });
+    expect(unproven.html).toContain('با کد پیامکی تأیید کنید');
+    expect(unproven.html).toContain('فرستادن کد تأیید');
+    const asked = await post('/wholesale', { intent: 'send-code', phone: '۰۹۱۳۱۱۱۲۲۳۳' });
+    expect(asked.html).toContain('کد تأیید به');
+    expect(asked.html).toContain('name="code"');
+    const verified = await post('/wholesale', { intent: 'verify-code', phone: '09131112233', code: '123456' });
+    expect(verified.status).toBe(302);
+    const proof = verified.cookies.find(c => c.startsWith('sf_wholesale_proof='))!;
+    expect(proof).toMatch(/HttpOnly/);
+    expect(proof).toMatch(/Path=\/;/);
+    const kept = cookieValue(verified.cookies, 'sf_wholesale_proof');
+    const details = await page('/wholesale', kept);
+    expect(details.html).toContain('شمارهٔ <span dir="ltr">09131112233</span> تأیید شد');
+    expect(details.html).toContain('name="companyName"');
+
+    const sent = await post('/wholesale', {
+      intent: 'apply', phone: '09131112233', name: 'خریدار عمدهٔ آزمون', companyName: 'گالری آزمون', city: 'اصفهان', nationalId: '', economicCode: '', note: '', formAt: await stamp(),
+    }, kept);
+    expect(sent.html).toContain('درخواست شما رسید');
+    const write = await lastPost();
+    expect(write.route).toBe('/wholesale/apply');
+    expect(write.body).toMatchObject({ phone: '09131112233', companyName: 'گالری آزمون', city: 'اصفهان', phoneProof: 'pp_mock09131112233' });
+    expect(sent.cookies.some(c => c.startsWith('sf_wholesale_proof=;') && c.includes('Max-Age=0'))).toBe(true);
+
+    // the same phone again: it has an account now, so the page sends the buyer to sign in
+    const again = await post('/wholesale', { intent: 'apply', phone: '09131112233', name: 'دوباره', companyName: 'گالری آزمون', city: 'اصفهان', formAt: await stamp() }, kept);
+    expect(again.html).toContain('حساب ساخته شده است');
+    expect(again.html).toContain('href="/account/sign-in?next=%2Fwholesale"');
+  });
+
+  it('sends a signed-in buyer\'s request as the account, and then says it is under review', async () => {
+    await smsLogin(false);
+    const made = await post('/account/sign-up', { intent: 'register', phone: '09134445566', name: 'خریدار حساب عمده', password: 'رمز-آزمون-1405', formAt: await stamp() });
+    const session = cookieValue(made.cookies, 'sf_session');
+    expect((await page('/account', session)).html).toContain('data-wholesale-request');
+    const form = await page('/wholesale', session);
+    expect(form.html).toContain('به نام خریدار حساب عمده');
+    expect(form.html).not.toContain('name="name"');
+    const sent = await post('/wholesale', { intent: 'apply', companyName: 'فروشگاه حساب‌دار', city: 'شیراز', formAt: await stamp() }, session);
+    expect(sent.html).toContain('درخواست شما رسید');
+    const write = await lastPost();
+    expect(write.body).toMatchObject({ name: 'خریدار حساب عمده', phone: '09134445566', companyName: 'فروشگاه حساب‌دار' });
+    expect(write.body).not.toHaveProperty('phoneProof');
+    expect((await page('/wholesale', session)).html).toContain('در دست بررسی است');
+    expect((await page('/account', session)).html).not.toContain('data-wholesale-request');
+  });
+
+  it('refuses a trapped form on the site\'s own server, so nothing reaches the ERP', async () => {
+    await smsLogin(false);
+    const before = await lastPost();
+    const filled = await post('/corporate-gift', { organization: 'ربات', contactName: 'ربات', phone: '02188776655', formAt: await stamp(), contact_website: 'https://spam.example' });
+    expect(filled.html).toContain('فرستادن این فرم پذیرفته نشد');
+    const unstamped = await post('/wholesale', { intent: 'apply', phone: '09135556677', name: 'ربات', companyName: 'ربات', city: 'تهران' });
+    expect(unstamped.html).toContain('صفحه را تازه کنید');
+    const signUp = await post('/account/sign-up', { intent: 'register', phone: '09135556677', name: 'ربات', password: 'رمز-آزمون-1405', formAt: await stamp(), contact_website: 'x' });
+    expect(signUp.html).toContain('فرستادن این فرم پذیرفته نشد');
+    expect(await lastPost()).toEqual(before);
+    // the page renders the stamp it was sent back, so the fixed form goes through at once
+    const kept = /name="formAt" value="([^"]+)"/.exec(filled.html)?.[1];
+    expect(kept).toMatch(/^\d{13}\./);
   });
 });

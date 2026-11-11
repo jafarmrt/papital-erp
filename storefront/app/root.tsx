@@ -7,6 +7,7 @@ import { imageVersion } from './lib/brandImage.server';
 import { siteEnv } from './lib/site.server';
 import { SiteHeader } from './components/SiteHeader';
 import { SiteFooter } from './components/SiteFooter';
+import { BottomNav, BottomNavSpace } from './components/BottomNav';
 import { AnalyticsScripts, MatomoPageViews } from './components/Analytics';
 import { siteSeo } from './lib/seo.server';
 import { sessionOf } from './lib/account.server';
@@ -84,6 +85,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <SiteHeader categories={data?.categories ?? []} logoUrl={data?.logoUrl ?? ''} ordering={data?.ordering ?? false} cartCount={data?.cartCount ?? 0} signedIn={data?.signedIn ?? false} />
         <main id="main" className="flex-1">{children}</main>
         <SiteFooter data={data} />
+        <BottomNavSpace />
+        <BottomNav ordering={data?.ordering ?? false} cartCount={data?.cartCount ?? 0} signedIn={data?.signedIn ?? false} />
         <ScrollRestoration />
         <Scripts />
       </body>
