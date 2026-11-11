@@ -34,3 +34,29 @@ describe('the wait of an on-account order', () => {
     expect(approvalReminderHours(1)).toBe(0.5);
   });
 });
+
+describe('the bells of the limits (v12 phase 8b review)', () => {
+  const failing = () => ({
+    transaction: async () => { throw new Error('lock timeout'); },
+    select: () => { throw new Error('the bell read outside its savepoint'); },
+  });
+
+  it('fails the approval reminder when its bell fails, so the next minute rings again; other order bells stay quiet', async () => {
+    const { notifySiteOrder } = await import('../../services/storefront/storefrontOrderNotices');
+    const order = { id: 1, orderNumber: '1405001' };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(notifySiteOrder(failing() as any, 'approval_due', order, { rethrow: true })).rejects.toThrow('lock timeout');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(notifySiteOrder(failing() as any, 'placed', order)).resolves.toBeUndefined();
+  });
+
+  it('counts and rings a budget only inside its savepoint, so a failed read never aborts the text\'s transaction', async () => {
+    const { warnIfBudgetNearlySpent } = await import('../../services/storefront/storefrontSmsBudget');
+    let readOutside = false;
+    const tx = { ...failing(), select: () => { readOutside = true; throw new Error('statement timeout'); } };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(warnIfBudgetNearlySpent(tx as any, 10, 'codes')).resolves.toBeUndefined();
+    // a read on the caller's own transaction would have aborted it (red before: the count and the dedup read ran there)
+    expect(readOutside).toBe(false);
+  });
+});
