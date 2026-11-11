@@ -7,10 +7,13 @@ export const EMAIL_SECURITY_MODES = ['tls', 'starttls', 'none'] as const;
 export type EmailSecurity = typeof EMAIL_SECURITY_MODES[number];
 
 export const EMAIL_SECURITY_TITLES: Readonly<Record<EmailSecurity, string>> = {
-  tls: 'رمزگذاری از آغاز (درگاه ۴۶۵)',
-  starttls: 'رمزگذاری پس از سلام (درگاه ۵۸۷)',
-  none: 'بی رمزگذاری',
+  tls: 'رمزگذاری کامل (معمولاً درگاه ۴۶۵)',
+  starttls: 'رمزگذاری پس از آغاز اتصال (معمولاً درگاه ۵۸۷)',
+  none: 'بی رمزگذاری (ناامن؛ فقط سرور بی نام کاربری)',
 };
+
+/** The port a mode usually takes, put in the form when the mode is picked */
+export const EMAIL_SECURITY_PORTS: Readonly<Record<EmailSecurity, number>> = { tls: 465, starttls: 587, none: 25 };
 
 export const isEmailSecurity = (value: unknown): value is EmailSecurity => (EMAIL_SECURITY_MODES as readonly unknown[]).includes(value);
 
@@ -37,6 +40,12 @@ export const emailMatchKey = (email: string): string => normalizeEmail(email).to
 
 /** A mail server's name: a host name or an IPv4 address, no scheme, port or path */
 export const isEmailHost = (value: string): boolean => HOST.test(value) || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(value);
+
+/** A mail server's user name in an audit row: masked like an address when it is one, else its first letter only */
+export function maskedUsername(username: string): string {
+  if (!username) return '';
+  return username.includes('@') ? maskedEmail(username) : `${username[0]}…`;
+}
 
 /** An address shown in the log, an audit row or a report: its first letter and its domain (AGENTS.md §5.5) */
 export function maskedEmail(email: string): string {

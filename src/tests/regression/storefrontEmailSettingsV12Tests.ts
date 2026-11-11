@@ -19,7 +19,8 @@ import { EMAIL_TEST_SMTP_ENV } from '../../services/storefront/storefrontEmailCl
  *   masked; a stale version is 409.
  * - A test mail reaches the server signed in with the stored user and password and carries the fixed subject and text.
  * - A stored password never follows a changed server or user name; a wrong password is a Persian refusal, never the
- *   server's own words; an inside address (and this machine on any other port) is refused before any connection.
+ *   server's own words; an inside address (and this machine on any other port) is refused at the save, and so is a user
+ *   name without encryption (only this test's own server speaks plain).
  */
 
 interface Session { cookie: string; csrfToken: string }
@@ -80,7 +81,7 @@ export async function runStorefrontEmailSettingsV12Tests(shouldRun: (id: string,
   const id = 'reg_storefront_email_settings_v12_p8e';
   if (!shouldRun(id, 'v12', 'phase8', 'storefront', 'email', 'security')) return results;
 
-  const name = 'v12 phase 8e: site email settings: off until whole, the password encrypted and never answered or audited, the sender audited masked, a stale save 409; a test mail signs in and arrives; a stored password never follows a new server; a refused sign-in and an inside address are Persian refusals';
+  const name = 'v12 phase 8e: site email settings: off until whole, the password encrypted and never answered or audited, the sender and user audited masked, a stale save 409; a test mail signs in and arrives; a stored password never follows a new server; a refused sign-in is a Persian refusal; an inside address and a plain sign-in are refused at the save';
   const tStart = Date.now();
   const savedSettings = await orm.select().from(appSettings).where(like(appSettings.key, 'sf\\_email\\_%'));
   const savedEnv = process.env[EMAIL_TEST_SMTP_ENV];
@@ -132,7 +133,7 @@ export async function runStorefrontEmailSettingsV12Tests(shouldRun: (id: string,
     const [audit] = await orm.select({ details: activityLogs.details }).from(activityLogs)
       .where(and(eq(activityLogs.entity, 'فروشگاه سایت'), eq(activityLogs.entityId, 'email'))).orderBy(desc(activityLogs.id)).limit(1);
     const auditText = JSON.stringify(audit?.details ?? '');
-    if (!audit || auditText.includes(PASSWORD) || auditText.includes(sender) || !auditText.includes('papital-test.example')) wrong.push(`audit row: ${auditText.slice(0, 300)}`);
+    if (!audit || auditText.includes(PASSWORD) || auditText.includes(sender) || auditText.includes(USER) || !auditText.includes('papital-test.example')) wrong.push(`audit row: ${auditText.slice(0, 300)}`);
     const stale = await erp.put('/api/storefront/email/settings', { ...base, enabled: false, version: view.version - 1 });
     if (stale.status !== 409) wrong.push(`a stale save: ${stale.status}`);
 
@@ -148,7 +149,7 @@ export async function runStorefrontEmailSettingsV12Tests(shouldRun: (id: string,
 
     // 4) the stored password never follows a new server or user name
     const moved = await erp.put('/api/storefront/email/settings', {
-      ...base, enabled: true, host: 'mail.papital-test.example', username: USER, fromAddress: sender, version: view.version,
+      ...base, enabled: true, host: 'mail.papital-test.example', security: 'starttls', username: USER, fromAddress: sender, version: view.version,
     });
     if (moved.status !== 422 || moved.body.code !== 'STOREFRONT_EMAIL_PASSWORD_FOR_OTHER_SERVER') wrong.push(`a new server with the stored password: ${moved.status} ${moved.body.code}`);
 
@@ -162,22 +163,22 @@ export async function runStorefrontEmailSettingsV12Tests(shouldRun: (id: string,
       wrong.push(`a refused sign-in: ${JSON.stringify(refused.body)}`);
     }
 
-    // 6) an inside address, and this machine on another port, are refused before any connection
-    const before = mail.received.length;
+    // 6) an inside address, and this machine on another port, are refused at the save; a user name without encryption too
     for (const host of ['10.20.30.40', '127.0.0.1']) {
       const res = await erp.put('/api/storefront/email/settings', {
         ...base, enabled: false, host, port: mail.port + 1, username: '', clearPassword: true, fromAddress: sender, version: view.version,
       });
-      view = res.body.data;
-      const inside = await erp.post('/api/storefront/email/test', { to });
-      if (inside.body.data?.sent !== false || !/داخلی یا رزروشده/.test(inside.body.data?.error ?? '')) wrong.push(`${host}: ${JSON.stringify(inside.body)}`);
+      if (res.status !== 422 || res.body.code !== 'STOREFRONT_EMAIL_HOST_INSIDE') wrong.push(`${host} saved: ${res.status} ${res.body.code}`);
     }
-    if (mail.received.length !== before) wrong.push('a refused server still got a mail');
+    const plain = await erp.put('/api/storefront/email/settings', {
+      ...base, enabled: false, host: 'mail.papital-test.example', username: USER, password: PASSWORD, fromAddress: sender, version: view.version,
+    });
+    if (plain.status !== 422 || plain.body.code !== 'STOREFRONT_EMAIL_PLAIN_SIGN_IN') wrong.push(`a user name without encryption: ${plain.status} ${plain.body.code}`);
 
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'email was off and empty; on without a server or sender, a scheme in the server, a malformed sender, a user without a password and a header in the sender name were each 422; a whole save was ready with the password encrypted, absent from the answer and the audit row, and the sender audited masked; a stale save was 409; a test mail signed in with the stored user and password and arrived with an encoded Persian subject; a malformed recipient was 422; a new server with the stored password was 422; a refused sign-in was a Persian sentence without the server\'s words; an inside address and this machine on another port were refused before any connection',
+      details: 'email was off and empty; on without a server or sender, a scheme in the server, a malformed sender, a user without a password and a header in the sender name were each 422; a whole save was ready with the password encrypted, absent from the answer and the audit row, and the sender and user name audited masked; a stale save was 409; a test mail signed in with the stored user and password and arrived with an encoded Persian subject; a malformed recipient was 422; a new server with the stored password was 422; a refused sign-in was a Persian sentence without the server\'s words; an inside address, this machine on another port and a user name without encryption were refused at the save',
     }));
   } catch (err) {
     results.push(makeTestCase({

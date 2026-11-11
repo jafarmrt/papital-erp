@@ -28,8 +28,13 @@ const settingsSchema = z.object({
   }).strict(),
 });
 const testSchema = z.object({ body: z.object({ to: z.string().max(EMAIL_ADDRESS_MAX) }).strict() });
-// each press is a real connection to the mail server: a few a minute
-const testLimiter = rateLimit({ windowMs: 60_000, max: 5, standardHeaders: true, legacyHeaders: false });
+// each press is a real connection to the mail server: a few a minute for each colleague
+const testLimiter = rateLimit({
+  windowMs: 60_000, max: 5, standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req) => `storefront-email-test:${String((req as Request & { user?: { id?: unknown } }).user?.id ?? 'none')}`,
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+  message: { error: 'ایمیل‌های آزمایشی زیاد بود؛ یک دقیقه صبر کنید.', code: 'STOREFRONT_EMAIL_TEST_LIMIT' },
+});
 
 router.use(authenticateToken);
 

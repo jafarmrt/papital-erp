@@ -6,7 +6,9 @@ import {
   useSaveStorefrontEmailSettingsMutation, useSendTestEmailMutation, useStorefrontEmailSettingsQuery,
 } from '../../hooks/queries/useStorefrontEmailQueries';
 import type { StorefrontEmailSettingsInput, StorefrontEmailSettingsView } from '../../lib/storefront/storefrontEmailContracts';
-import { EMAIL_SECURITY_MODES, EMAIL_SECURITY_TITLES, type EmailSecurity } from '../../lib/storefront/storefrontEmailRules';
+import {
+  EMAIL_PORT_DEFAULT, EMAIL_SECURITY_MODES, EMAIL_SECURITY_PORTS, EMAIL_SECURITY_TITLES, type EmailSecurity,
+} from '../../lib/storefront/storefrontEmailRules';
 import { errorMessageOf } from '../../utils';
 
 /**
@@ -64,11 +66,11 @@ function EmailSettingsForm({ view, canManage }: { view: StorefrontEmailSettingsV
               <div>
                 <label htmlFor={`${id}-port`} className={label}>درگاه</label>
                 <DecimalInput id={`${id}-port`} className={field} grouped={false} value={form.port} min={1} max={65535} step={1}
-                  onValueChange={v => set('port', Math.trunc(Number(v)) || 1)} />
+                  onValueChange={v => set('port', Math.trunc(Number(v)) || EMAIL_PORT_DEFAULT)} />
               </div>
               <div>
                 <label htmlFor={`${id}-security`} className={label}>رمزگذاری</label>
-                <select id={`${id}-security`} className={field} value={form.security} onChange={e => set('security', e.target.value as EmailSecurity)}>
+                <select id={`${id}-security`} className={field} value={form.security} onChange={e => { const mode = e.target.value as EmailSecurity; setForm(f => ({ ...f, security: mode, port: EMAIL_SECURITY_PORTS[mode] })); }}>
                   {EMAIL_SECURITY_MODES.map(m => <option key={m} value={m}>{EMAIL_SECURITY_TITLES[m]}</option>)}
                 </select>
               </div>
@@ -76,13 +78,14 @@ function EmailSettingsForm({ view, canManage }: { view: StorefrontEmailSettingsV
             <div>
               <label htmlFor={`${id}-user`} className={label}>نام کاربری</label>
               <input id={`${id}-user`} dir="ltr" className={field} value={form.username} autoComplete="off" onChange={e => set('username', e.target.value)} />
-              <p className={hint}>اگر سرور بی ورود نامه می‌پذیرد، خالی بگذارید.</p>
+              <p className={hint}>اگر سرور بی ورود نامه می‌پذیرد، خالی بگذارید. با نام کاربری، یکی از دو رمزگذاری لازم است.</p>
+              {form.username.trim() && form.security === 'none' && <p className="mt-1 text-xs text-rose-700">نام کاربری و رمز بی رمزگذاری فرستاده نمی‌شود؛ یکی از دو رمزگذاری را برگزینید.</p>}
             </div>
             <div>
               <label htmlFor={`${id}-password`} className={label}>رمز</label>
               <input id={`${id}-password`} dir="ltr" type="password" autoComplete="new-password" className={field} value={form.password}
                 placeholder={view.password.configured ? 'ذخیره شده' : ''} onChange={e => set('password', e.target.value)} />
-              <p className={hint}>{view.password.configured ? 'برای نگه داشتن رمز کنونی خالی بگذارید.' : ''} رمز رمزشده ذخیره می‌شود و دیگر نشان داده نمی‌شود.</p>
+              <p className={hint}>{view.password.configured ? 'برای نگه داشتن رمز کنونی خالی بگذارید.' : ''} رمز به‌صورت رمزنگاری‌شده ذخیره می‌شود و دیگر نشان داده نمی‌شود.</p>
               {serverChanged && !form.password && !form.clearPassword && <p className="mt-1 text-xs text-amber-800">رمز ذخیره‌شده مال سرور یا نام کاربری پیشین است؛ رمز تازه را هم وارد کنید.</p>}
               {view.password.configured && !view.password.readable && <p className="mt-1 text-xs text-rose-700">رمز ذخیره‌شده با کلید رمزنگاری کنونی سرور باز نمی‌شود؛ آن را دوباره وارد کنید.</p>}
               {!view.secretsKeyConfigured && <p className="mt-1 text-xs text-rose-700">کلید رمزنگاری سرور تنظیم نشده است و تا آن زمان رمز ذخیره نمی‌شود.</p>}

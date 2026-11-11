@@ -7,14 +7,16 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { OptimisticLockError } from '../../lib/occHelper.js';
 import { invalidateSettingsCache } from '../../lib/memoryCache.js';
 import { decryptSecret, encryptSecret, isSecretsKeyConfigured } from '../../lib/secretBox.js';
+import { isPrivateOrReservedIp } from '../../lib/ssrfGuard.js';
+import net from 'node:net';
 import {
-  EMAIL_FROM_NAME_MAX, EMAIL_PASSWORD_MAX, EMAIL_PORT_DEFAULT, EMAIL_USERNAME_MAX, isEmailHost, isEmailSecurity, maskedEmail, normalizeEmail,
+  EMAIL_FROM_NAME_MAX, EMAIL_PASSWORD_MAX, EMAIL_PORT_DEFAULT, EMAIL_USERNAME_MAX, isEmailHost, isEmailSecurity, maskedEmail, maskedUsername, normalizeEmail,
   type EmailSecurity,
 } from '../../lib/storefront/storefrontEmailRules.js';
 import {
   STOREFRONT_EMAIL_SETTING_KEYS as KEYS, type StorefrontEmailSettingsInput, type StorefrontEmailSettingsView, type StorefrontEmailTestResult,
 } from '../../lib/storefront/storefrontEmailContracts.js';
-import { sendEmail, type EmailServer } from './storefrontEmailClient.js';
+import { isTestMailServer, sendEmail, type EmailServer } from './storefrontEmailClient.js';
 
 /**
  * v12 phase 8e (start plan §5, owner's decision 7): the settings of the site's email in `app_settings` (`sf_email_*`), a
@@ -113,8 +115,13 @@ function checkedInput(input: StorefrontEmailSettingsInput) {
   const host = String(input.host ?? '').trim().toLowerCase();
   if (host && !isEmailHost(host)) throw invalid('نام سرور ایمیل را بی «://» و بی مسیر بنویسید (مانند mail.example.com).', 'host', 'STOREFRONT_EMAIL_HOST_INVALID');
   if (!Number.isInteger(input.port) || input.port < 1 || input.port > 65535) throw invalid('درگاه سرور ایمیل باید عددی از ۱ تا ۶۵۵۳۵ باشد.', 'port', 'STOREFRONT_EMAIL_PORT_INVALID');
+  if (host && net.isIP(host) && isPrivateOrReservedIp(host) && !isTestMailServer(host, input.port)) {
+    throw invalid('نشانی سرور ایمیل داخلی یا رزروشده است و برای امنیت پذیرفته نمی‌شود.', 'host', 'STOREFRONT_EMAIL_HOST_INSIDE');
+  }
   if (!isEmailSecurity(input.security)) throw invalid('نوع رمزگذاری شناخته نیست.', 'security', 'STOREFRONT_EMAIL_SECURITY_INVALID');
   const username = String(input.username ?? '').trim();
+  // a user name and password never cross the network in the clear (only the database tests' server on this machine speaks plain)
+  if (username && input.security === 'none' && !isTestMailServer(host, input.port)) throw invalid('سروری که نام کاربری و رمز می‌خواهد بی رمزگذاری پذیرفته نیست؛ یکی از دو رمزگذاری را برگزینید.', 'security', 'STOREFRONT_EMAIL_PLAIN_SIGN_IN');
   if (username.length > EMAIL_USERNAME_MAX || /[\r\n]/.test(username)) throw invalid('نام کاربری سرور ایمیل درست نیست.', 'username', 'STOREFRONT_EMAIL_USERNAME_INVALID');
   const password = String(input.password ?? '');
   if (password.length > EMAIL_PASSWORD_MAX || /[\r\n]/.test(password)) throw invalid('رمز سرور ایمیل درست نیست.', 'password', 'STOREFRONT_EMAIL_PASSWORD_INVALID');
@@ -152,8 +159,11 @@ export async function saveEmailSettings(req: Request, input: StorefrontEmailSett
     const changes: Record<string, { before: unknown; after: unknown }> = {};
     for (const [key, value] of Object.entries(after)) {
       const was = before[key as keyof typeof after];
-      // the addresses themselves stay out of the audit row (AGENTS.md §5.5), only that they changed and their domain
-      if (was !== value) changes[key] = key === 'fromAddress' ? { before: was ? maskedEmail(String(was)) : '', after: value ? maskedEmail(String(value)) : '' } : { before: was, after: value };
+      // the addresses and the user name stay out of the audit row (AGENTS.md §5.5), only that they changed and their domain
+      if (was === value) continue;
+      if (key === 'fromAddress') changes[key] = { before: was ? maskedEmail(String(was)) : '', after: value ? maskedEmail(String(value)) : '' };
+      else if (key === 'username') changes[key] = { before: maskedUsername(String(was)), after: maskedUsername(String(value)) };
+      else changes[key] = { before: was, after: value };
     }
     const passwordChanged = sealedAfter !== (stored[KEYS.password] ?? '');
     // the password never enters the audit row: only that it changed
@@ -186,6 +196,7 @@ export async function sendTestEmail(req: Request, input: { to: string }): Promis
   if (!to) throw invalid('نشانی ایمیل را درست بنویسید (مانند name@example.com).', 'to', 'STOREFRONT_EMAIL_TO_INVALID');
   const settings = await emailRuntimeSettings(orm);
   if (settings.password === null) throw invalid('رمز ذخیره‌شدهٔ سرور ایمیل با کلید رمزنگاری کنونی سرور باز نمی‌شود؛ آن را دوباره وارد کنید.', 'password', 'STOREFRONT_EMAIL_PASSWORD_UNREADABLE');
+  if (settings.username && settings.security === 'none' && !isTestMailServer(settings.host, settings.port)) throw invalid('سروری که نام کاربری و رمز می‌خواهد بی رمزگذاری پذیرفته نیست؛ یکی از دو رمزگذاری را برگزینید.', 'security', 'STOREFRONT_EMAIL_PLAIN_SIGN_IN');
   const server = usableServer(settings);
   if (!server) throw invalid('اول نام سرور ایمیل، نشانی فرستنده و (اگر نام کاربری دارد) رمز را ذخیره کنید.', 'host', 'STOREFRONT_EMAIL_NOT_SET');
   const result = await sendEmail(server, { to, subject: TEST_SUBJECT, text: TEST_TEXT });
