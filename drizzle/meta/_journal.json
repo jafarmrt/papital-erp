@@ -162,6 +162,13 @@
       "when": 1797753600000,
       "tag": "0022_storefront_campaigns",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1797840000000,
+      "tag": "0023_storefront_limits",
+      "breakpoints": true
     }
   ]
 }

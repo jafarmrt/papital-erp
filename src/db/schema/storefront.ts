@@ -107,6 +107,8 @@ export const storefrontOrders = pgTable('storefront_orders', {
   buyerGroupId: integer('buyer_group_id').references((): AnyPgColumn => storefrontBuyerGroups.id),
   paymentMethod: text('payment_method').notNull().default('card'),
   confirmedAt: timestamp('confirmed_at', { withTimezone: true, mode: 'string' }),
+  /** v12 phase 8b (migration 0023): when the colleagues were reminded that an «به حساب» order's wait runs out; null = not yet */
+  approvalRemindedAt: timestamp('approval_reminded_at', { withTimezone: true, mode: 'string' }),
   // v11 phase 8.2c (migration 0021): the discount code the order used, as typed then, and its amount over the lines
   discountCodeId: integer('discount_code_id').references((): AnyPgColumn => storefrontDiscountCodes.id),
   discountCode: text('discount_code').notNull().default(''),

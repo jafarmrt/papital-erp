@@ -33,6 +33,14 @@ export const LOW_STOCK_THRESHOLD_DEFAULT = 3;
 export const LOW_STOCK_THRESHOLD_MAX = 1000;
 export const RESERVATION_HOURS_DEFAULT = 24;
 export const RESERVATION_HOURS_MAX = 168;
+/**
+ * v12 phase 8b (site review 2.7, owner's decision 14): an «به حساب» order waits for a colleague's confirmation this long
+ * (a weekend or a holiday fits), and the colleagues get a bell `APPROVAL_REMINDER_HOURS` before it runs out (half the wait
+ * when the wait is shorter than twice that)
+ */
+export const APPROVAL_HOURS_DEFAULT = 72;
+export const APPROVAL_REMINDER_HOURS = 12;
+export const approvalReminderHours = (approvalHours: number): number => Math.min(APPROVAL_REMINDER_HOURS, approvalHours / 2);
 
 export function slugError(slug: string): string | null {
   if (!slug) return 'نشانی لاتین محصول لازم است.';
