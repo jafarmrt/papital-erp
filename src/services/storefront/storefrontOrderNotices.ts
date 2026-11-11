@@ -13,14 +13,18 @@ import { STOREFRONT_BOT_USER } from './storefrontCustomer.js';
  */
 export const SITE_ORDER_NOTIFY_PERMISSION = 'site_orders.manage';
 
-export type SiteOrderNotice = 'placed' | 'receipt';
+export type SiteOrderNotice = 'placed' | 'receipt' | 'approval_due';
 
 const TEXTS: Readonly<Record<SiteOrderNotice, { title: (n: string) => string; message: string }>> = {
   placed: { title: n => `سفارش تازه از سایت: ${n}`, message: 'کالاها برای این سفارش نگه داشته شده‌اند تا خریدار پرداخت کند.' },
   receipt: { title: n => `رسید کارت‌به‌کارت سفارش ${n}`, message: 'خریدار رسید پرداخت فرستاد؛ آن را بررسی و تأیید یا رد کنید.' },
+  // v12 phase 8b (site review 2.7): an «به حساب» order whose wait for a colleague's confirmation runs out soon
+  approval_due: { title: n => `مهلت تأیید سفارش به حساب ${n} نزدیک است`, message: 'اگر تا پایان مهلت تأیید نشود، سفارش خودکار لغو و کالاهایش آزاد می‌شود.' },
 };
 
-export async function notifySiteOrder(tx: DbTransaction, kind: SiteOrderNotice, order: { id: number; orderNumber: string }): Promise<void> {
+export async function notifySiteOrder(
+  tx: DbTransaction, kind: SiteOrderNotice, order: { id: number; orderNumber: string }, options: { rethrow?: boolean } = {},
+): Promise<void> {
   try {
     await tx.transaction(async (sp) => {
       const recipients = await permissionHolderUserIdsWith(sp, SITE_ORDER_NOTIFY_PERMISSION);
@@ -37,5 +41,8 @@ export async function notifySiteOrder(tx: DbTransaction, kind: SiteOrderNotice, 
     });
   } catch (err) {
     logger.error({ message: 'Error notifying colleagues of a site order', orderId: order.id, kind, error: err });
+    // v12 phase 8b review: where the bell is the whole action (the approval reminder), a failed bell fails the action,
+    // so it is not marked done and the next minute rings again
+    if (options.rethrow) throw err;
   }
 }

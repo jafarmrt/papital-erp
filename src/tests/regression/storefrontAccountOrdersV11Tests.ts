@@ -47,7 +47,7 @@ export async function runStorefrontAccountOrdersV11Tests(shouldRun: (id: string,
   try {
     const { getTestApp, getAdminSession, loginTestUserWithSession } = await import('../fixtures/httpTestHelper.js');
     const { createTestItem, createTestRole, createTestUser } = await import('../fixtures/factories.js');
-    const { expireDueOrdersOnce } = await import('../../services/storefront/storefrontOrderExpiry.service.js');
+    const { expireDueOrdersOnce, remindDueApprovalsOnce } = await import('../../services/storefront/storefrontOrderExpiry.service.js');
     const app = await getTestApp();
     const as = (s: Session) => ({
       get: (url: string) => request(app).get(url).set('Cookie', s.cookie).set('x-csrf-token', s.csrfToken),
@@ -227,7 +227,23 @@ export async function runStorefrontAccountOrdersV11Tests(shouldRun: (id: string,
     // 5) an on-account order no colleague confirmed expires like an unpaid one
     const late = await site.post('/orders', order(phoneW, slugA, 3, { paymentMethod: 'on_account' }), wholesale);
     if (late.status !== 201) throw new Error(`second on-account order: ${late.status} ${JSON.stringify(late.body)}`);
-    await orm.update(storefrontOrders).set({ reserveUntil: sql`now() - interval '1 minute'` }).where(eq(storefrontOrders.orderNumber, String(late.body.data.order.number)));
+    const lateNumber = String(late.body.data.order.number);
+    // v12 phase 8b (site review 2.7): it waits 72 hours for a colleague (a card order waits the 24-hour reservation)
+    const [wait] = (await orm.execute(sql`SELECT round(extract(epoch FROM reserve_until - created_at) / 3600)::int AS hours FROM storefront_orders WHERE order_number = ${lateNumber}`)).rows as Array<{ hours: number }>;
+    if (wait?.hours !== 72) wrong.push(`the on-account wait: ${wait?.hours} hours`);
+    // twelve hours before its wait runs out the colleagues get one bell, and only one, with its audit row
+    await orm.update(storefrontOrders).set({ reserveUntil: sql`now() + interval '6 hours'` }).where(eq(storefrontOrders.orderNumber, lateNumber));
+    const reminderTitle = `مهلت تأیید سفارش به حساب ${lateNumber} نزدیک است`;
+    const bells = async () => (await orm.select({ id: notifications.id }).from(notifications).where(eq(notifications.title, reminderTitle))).length;
+    if (await remindDueApprovalsOnce() < 1) wrong.push('the approval reminder did not ring');
+    const [reminded] = await orm.select().from(storefrontOrders).where(eq(storefrontOrders.orderNumber, lateNumber));
+    const rang = await bells();
+    if (!reminded?.approvalRemindedAt || rang < 1) wrong.push(`the approval reminder: ${reminded?.approvalRemindedAt} ${rang}`);
+    await remindDueApprovalsOnce();
+    if (await bells() !== rang) wrong.push(`the approval reminder rang twice: ${await bells()} after ${rang}`);
+    const [{ audits }] = (await orm.execute(sql`SELECT count(*)::int AS audits FROM activity_logs WHERE description = ${`یادآوری مهلت تأیید سفارش به حساب ${lateNumber} به همکاران رفت`}`)).rows as Array<{ audits: number }>;
+    if (audits !== 1) wrong.push(`the reminder's audit rows: ${audits}`);
+    await orm.update(storefrontOrders).set({ reserveUntil: sql`now() - interval '1 minute'` }).where(eq(storefrontOrders.orderNumber, lateNumber));
     await expireDueOrdersOnce();
     const [gone] = await orm.select().from(storefrontOrders).where(eq(storefrontOrders.orderNumber, String(late.body.data.order.number)));
     if (gone?.status !== 'cancelled' || gone.cancelReason !== 'expired') wrong.push(`on-account expiry: ${gone?.status} ${gone?.cancelReason}`);
@@ -235,7 +251,7 @@ export async function runStorefrontAccountOrdersV11Tests(shouldRun: (id: string,
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'a retail account listed and read only its own orders with exact fields; a guest order joined only with its key and could not be claimed twice; the account sent a receipt for its own order without the key (another session 404, none 401); a retail account could not pay on account; the approved buyer was quoted and charged its group price, and an item outside its collections, a line below its minimum, an order below its minimum and card payment were refused by field; the on-account order waited for approval on the linked customer, needed the finalize key, became final and shipped; an unconfirmed on-account order expired',
+      details: 'a retail account listed and read only its own orders with exact fields; a guest order joined only with its key and could not be claimed twice; the account sent a receipt for its own order without the key (another session 404, none 401); a retail account could not pay on account; the approved buyer was quoted and charged its group price, and an item outside its collections, a line below its minimum, an order below its minimum and card payment were refused by field; the on-account order waited for approval on the linked customer, needed the finalize key, became final and shipped; an on-account order waited 72 hours, rang one reminder bell with one audit row twelve hours before its end however often the sweep ran, and expired unconfirmed',
     }));
   } catch (err) {
     results.push(makeTestCase({

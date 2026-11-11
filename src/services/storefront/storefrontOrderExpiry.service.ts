@@ -1,12 +1,14 @@
-import { and, asc, eq, inArray, lte, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { documents, storefrontOrders } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { logger } from '../../middleware/logger.js';
 import { EXPIRING_ORDER_STATUSES, type OrderStatus } from '../../lib/storefront/storefrontOrderRules.js';
+import { approvalReminderHours } from '../../lib/storefront/storefrontRules.js';
 import { STOREFRONT_BOT_USER } from './storefrontCustomer.js';
 import { cancelOpenOrder } from './storefrontOrderAdmin.service.js';
-import { isStorefrontEnabled } from './storefrontSettings.service.js';
+import { notifySiteOrder } from './storefrontOrderNotices.js';
+import { isStorefrontEnabled, storefrontSettingValues } from './storefrontSettings.service.js';
 
 /**
  * v11 phase 8.2a (start plan §5): the end of a reservation. Once a minute each order still
@@ -61,6 +63,51 @@ export async function expireDueOrdersOnce(): Promise<{ expired: number; failed: 
   return { expired, failed };
 }
 
+/**
+ * v12 phase 8b (site review 2.7, owner's decision 14): an «به حساب» order waits `approvalHours` for a colleague's
+ * confirmation; `approvalReminderHours` before its wait runs out, the colleagues who handle site orders get one bell for
+ * it (and their messenger copy, the category's fixed sentence). `approval_reminded_at` is set under the order's lock in
+ * the same transaction as the bell and its audit row, so a bell rings once, however many sweeps see the order. An order
+ * confirmed or cancelled in between is left alone. Runs while the site is on, like the expiry.
+ */
+export async function remindDueApprovalsOnce(): Promise<number> {
+  if (!(await isStorefrontEnabled())) return 0;
+  const leadSeconds = Math.round(approvalReminderHours((await storefrontSettingValues(orm)).approvalHours) * 3600);
+  const within = (reserveUntil: typeof storefrontOrders.reserveUntil) => lte(reserveUntil, sql`now() + make_interval(secs => ${leadSeconds})`);
+  const due = await orm.select({ id: storefrontOrders.id }).from(storefrontOrders)
+    .where(and(
+      eq(storefrontOrders.status, 'awaiting_approval'), isNull(storefrontOrders.approvalRemindedAt),
+      within(storefrontOrders.reserveUntil), gt(storefrontOrders.reserveUntil, sql`now()`),
+    ))
+    .orderBy(asc(storefrontOrders.reserveUntil), asc(storefrontOrders.id)).limit(STOREFRONT_EXPIRY_BATCH);
+  let reminded = 0;
+  for (const { id } of due) {
+    try {
+      const done = await orm.transaction(async (tx) => {
+        const [order] = await tx.select().from(storefrontOrders)
+          .where(and(eq(storefrontOrders.id, id), eq(storefrontOrders.status, 'awaiting_approval'), isNull(storefrontOrders.approvalRemindedAt)))
+          .for('update');
+        if (!order) return false;
+        const [stamped] = await tx.update(storefrontOrders).set({ approvalRemindedAt: sql`now()` })
+          .where(and(eq(storefrontOrders.id, order.id), isNull(storefrontOrders.approvalRemindedAt)))
+          .returning({ at: storefrontOrders.approvalRemindedAt });
+        if (!stamped) return false;
+        await notifySiteOrder(tx, 'approval_due', order, { rethrow: true });
+        await logActivity({
+          tx, username: STOREFRONT_BOT_USER, action: 'UPDATE', entity: 'سفارش سایت', entityId: order.id,
+          description: `یادآوری مهلت تأیید سفارش به حساب ${order.orderNumber} به همکاران رفت`,
+          details: { before: { approvalRemindedAt: null }, after: { approvalRemindedAt: stamped.at, reserveUntil: order.reserveUntil } },
+        });
+        return true;
+      });
+      if (done) reminded++;
+    } catch (err) {
+      logger.warn({ message: `[Storefront] order ${id} could not be reminded`, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  return reminded;
+}
+
 /** The minute timer `server.ts` starts and stops; a minute whose sweep is still running is skipped */
 export class StorefrontOrderWorker {
   private static timer: ReturnType<typeof setInterval> | null = null;
@@ -72,8 +119,10 @@ export class StorefrontOrderWorker {
       if (this.running) return;
       this.running = true;
       void expireDueOrdersOnce()
-        .then(({ expired, failed }) => {
+        .then(async ({ expired, failed }) => {
           if (expired || failed) logger.info(`[Storefront] reservation sweep: ${expired} expired, ${failed} failed`);
+          const reminded = await remindDueApprovalsOnce();
+          if (reminded) logger.info(`[Storefront] approval reminders: ${reminded} sent`);
         })
         .catch(err => logger.warn({ message: '[Storefront] reservation sweep failed', error: err instanceof Error ? err.message : String(err) }))
         .finally(() => { this.running = false; });

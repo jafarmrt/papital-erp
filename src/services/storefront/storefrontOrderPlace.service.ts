@@ -291,7 +291,8 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
     province: order.province, city: order.city, address: order.address, postalCode: order.postalCode, buyerNote: order.note,
     shippingMethodCode: option.code, shippingMethodTitle: option.title, shippingOnDelivery: option.kind === 'on_delivery' ? 1 : 0,
     shippingAmount: money(shippingAmount), itemsAmount: money(cart.itemsAmount), payableAmount: money(payable),
-    reserveUntil: sql`now() + make_interval(hours => ${settings.reservationHours})`,
+    // v12 phase 8b (site review 2.7): an «به حساب» order waits for a colleague's confirmation, longer than a buyer's payment
+    reserveUntil: sql`now() + make_interval(hours => ${onAccount ? settings.approvalHours : settings.reservationHours})`,
     buyerAccountId: buyer.account?.id ?? null, buyerGroupId: buyer.group?.id ?? null, paymentMethod: order.paymentMethod,
     discountCodeId: choice?.code.id ?? null, discountCode: choice?.code.code ?? '', discountAmount: money(discountAmount),
     updatedBy: STOREFRONT_BOT_USER,

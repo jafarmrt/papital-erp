@@ -70,6 +70,7 @@ const settingsSchema = z.object({
     whatsappNumber: text(30), whatsappEnabled: z.boolean(), enabled: z.boolean(),
     ordersEnabled: z.boolean(), treasuryAccountId: z.number().int().min(0).max(2_147_483_647),
     openOrdersPerPhone: z.number().int().min(1).max(OPEN_ORDERS_PER_PHONE_MAX),
+    approvalHours: z.number().int().min(1).max(RESERVATION_HOURS_MAX).optional(),
     version,
   }).strict(),
 });

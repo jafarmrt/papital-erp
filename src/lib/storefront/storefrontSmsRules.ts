@@ -115,10 +115,17 @@ export const OTP_PER_ADDRESS_HOUR_MAX = 10;
 /** Wrong codes one phone may type in a day over all its codes, so a fresh code does not give fresh guesses */
 export const OTP_WRONG_PER_PHONE_DAY_MAX = 10;
 /**
- * The site's whole budget of texts (login codes and order texts) in an hour and in a day (the day is 12 hours' worth),
- * so neither a spread attack on login codes nor orders placed for strangers' numbers can drain the SMS credit
+ * The site's budgets of texts in an hour and in a day (the day is 12 hours' worth), so neither a spread attack on login
+ * codes nor orders placed for strangers' numbers can drain the SMS credit. v12 phase 8b (site review 2.11): login codes
+ * and order texts each have a budget of their own, so filling one (codes asked for strangers' numbers) never stops the
+ * other (a real buyer's order texts), and the colleagues who keep the texts hear of a budget at `SMS_BUDGET_WARN_PERCENT`.
  */
 export const SMS_HOURLY_CAP_DEFAULT = 200;
+export const SMS_BUDGET_WARN_PERCENT = 80;
+export type SmsBudgetPool = 'codes' | 'orders';
+export const SMS_BUDGET_POOL_TITLES: Readonly<Record<SmsBudgetPool, string>> = { codes: 'کد ورود', orders: 'پیامک سفارش' };
+/** The texts in an hour at which a budget's bell rings: `SMS_BUDGET_WARN_PERCENT` of it, at least one */
+export const smsBudgetWarnAt = (hourlyCap: number): number => Math.max(1, Math.ceil(hourlyCap * SMS_BUDGET_WARN_PERCENT / 100));
 export const SMS_HOURLY_CAP_MAX = 5000;
 export const SMS_DAILY_CAP_HOURS = 12;
 /** Order texts one phone may get in a day (an order and its cancel are two) */
