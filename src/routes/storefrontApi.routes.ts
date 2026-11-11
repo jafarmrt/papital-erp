@@ -370,12 +370,13 @@ router.post('/account/orders/claim', writeLimiter, validate(claimSchema), asyncH
 
 // v12 phase 8c: the account's address book (kept from the checkout; listed, made the default and removed from «حساب من»)
 const addressSchema = z.object({ params: z.object({ id: z.string().regex(/^[1-9]\d{0,9}$/) }).strict() });
+const addressDefaultSchema = addressSchema.extend({ body: z.object({}).strict().optional() });
 
 router.get('/account/addresses', asyncHandler(async (req: Request, res: Response) => {
   res.json({ data: await myAddresses(sessionOf(req)) });
 }));
 
-router.post('/account/addresses/:id/default', writeLimiter, validate(addressSchema), asyncHandler(async (req: Request, res: Response) => {
+router.post('/account/addresses/:id/default', writeLimiter, validate(addressDefaultSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ data: await setDefaultAddress(sessionOf(req), Number(req.params.id)) });
 }));
 

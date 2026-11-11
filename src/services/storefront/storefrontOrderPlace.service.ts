@@ -162,11 +162,15 @@ function assertRetailCap(buyer: OrderBuyer, lines: readonly CartLineInput[]): vo
 
 /**
  * v12 phase 7 (site review 1.3): inside the order's transaction, a guest's phone proof is used up while the site signs
- * in by SMS. A signed-in account needs none; with the texts off nothing is asked (the start plan: today's behavior stays
- * until a proof is possible).
+ * in by SMS. A signed-in account ordering with its own phone needs none; with the texts off nothing is asked (the start
+ * plan: today's behavior stays until a proof is possible).
+ *
+ * v12 phase 8c review: since 8c the order's phone is its buyer's (the customer, the texts, the open-order limit), so a
+ * signed-in account that types another phone proves that phone like a guest; else a session would let anyone order in
+ * a stranger's name and on a stranger's customer.
  */
 async function assertGuestPhoneProven(tx: DbTransaction, buyer: OrderBuyer, phone: string, proof: string): Promise<void> {
-  if (buyer.account || !(await smsLoginOn(tx))) return;
+  if (buyer.account?.phoneKey === phoneMatchKey(phone) || !(await smsLoginOn(tx))) return;
   if (!proof || !(await consumePhoneProof(tx, phone, proof))) throw phoneProofInvalid();
 }
 
