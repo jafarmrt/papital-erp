@@ -439,3 +439,91 @@ describe('phase 8a: the bottom bar, the order summary, the wholesale page and th
     expect(kept).toMatch(/^\d{13}\./);
   });
 });
+
+// v12 phase 8c (site review 2.5, owner's decision 13): the buyer apart from the recipient, a free gift with its card's
+// message, and a signed-in buyer's address book
+describe('phase 8c: buyer and recipient, the gift and the address book', () => {
+  const place = (cart: string, fields: Record<string, string>, cookie = '') =>
+    post('/checkout', { intent: 'place', ...address, shippingMethod: 'post', ...fields }, cookie ? `${cart}; ${cookie}` : cart);
+
+  it('sends a gift for someone else: the buyer, the recipient and the card, and shows them on the order', async () => {
+    const cart = cookieValue((await post('/cart', { intent: 'add', slug: 'tile-earrings-sample', quantity: '1' })).cookies, 'sf_cart');
+    const form = await page('/checkout', cart);
+    expect(form.html).toContain('گیرنده خودم هستم');
+    expect(form.html).toMatch(/id="same-recipient"[^>]*checked/);
+    expect(form.html).toContain('group-has-[#same-recipient:checked]:hidden');
+    const placed = await place(cart, {
+      requestKey: 'rk-gift-for-someone-01', buyerName: 'خریدار هدیه', phone: '09125550001', recipientName: 'گیرندهٔ هدیه', recipientPhone: '۰۹۱۲۵۵۵۰۰۰۲',
+      gift: 'on', giftMessage: 'تولدت مبارک', note: '',
+    });
+    expect(placed.status).toBe(302);
+    const sent = (await lastPost()).body;
+    expect(sent).toMatchObject({ buyerName: 'خریدار هدیه', phone: '09125550001', recipientName: 'گیرندهٔ هدیه', recipientPhone: '۰۹۱۲۵۵۵۰۰۰۲', gift: true, giftMessage: 'تولدت مبارک' });
+    expect(sent).not.toHaveProperty('saveAddress');
+    const shown = await page(placed.location.split('?')[0], cookieValue(placed.cookies, 'sf_orders'));
+    expect(shown.html).toContain('خریدار: خریدار هدیه');
+    expect(shown.html).toContain('هدیه است؛ پیام کارت: تولدت مبارک');
+  });
+
+  it('while «گیرنده خودم هستم» is on, sends the buyer as the recipient and no recipient phone or card without a gift', async () => {
+    const cart = cookieValue((await post('/cart', { intent: 'add', slug: 'tile-earrings-sample', quantity: '1' })).cookies, 'sf_cart');
+    const placed = await place(cart, {
+      requestKey: 'rk-buyer-is-recipient-01', sameRecipient: 'on', buyerName: 'خریدار خودش', phone: '09125550003', recipientName: 'نام کهنه',
+      recipientPhone: '09125550004', giftMessage: 'نباید برود', note: '',
+    });
+    expect(placed.status).toBe(302);
+    const sent = (await lastPost()).body;
+    expect(sent).toMatchObject({ buyerName: 'خریدار خودش', recipientName: 'خریدار خودش', phone: '09125550003' });
+    expect(sent).not.toHaveProperty('recipientPhone');
+    expect(sent).not.toHaveProperty('gift');
+    expect(sent).not.toHaveProperty('giftMessage');
+    const shown = await page(placed.location.split('?')[0], cookieValue(placed.cookies, 'sf_orders'));
+    expect(shown.html).not.toContain('data-ordered-by');
+    expect(shown.html).not.toContain('data-gift');
+  });
+
+  it('keeps a signed-in buyer\'s address, fills the next checkout from it and lets «حساب من» manage the book', async () => {
+    const made = await post('/account/sign-up', { intent: 'register', phone: '09126660001', name: 'خریدار دفترچه', password: 'رمز-آزمون-1405', formAt: await stamp() });
+    const session = cookieValue(made.cookies, 'sf_session');
+    const cart = () => post('/cart', { intent: 'add', slug: 'tile-earrings-sample', quantity: '1' }, session).then(r => cookieValue(r.cookies, 'sf_cart'));
+    const first = await page('/checkout', `${await cart()}; ${session}`);
+    expect(first.html).toContain('این نشانی را در دفترچهٔ نشانی نگه دار');
+    expect(first.html).not.toContain('name="savedAddress"');
+
+    const kept = await place(await cart(), {
+      requestKey: 'rk-address-book-0001', buyerName: 'خریدار دفترچه', phone: '09126660001', recipientName: 'مادر خریدار', recipientPhone: '',
+      province: 'اصفهان', city: 'اصفهان', address: 'خیابان چهارباغ، کوچهٔ آزمون، پلاک ۴', postalCode: '8133333333', saveAddress: 'on', note: '',
+    }, session);
+    expect(kept.status).toBe(302);
+    expect((await lastPost()).body).toMatchObject({ saveAddress: true });
+    await place(await cart(), {
+      requestKey: 'rk-address-book-0002', sameRecipient: 'on', buyerName: 'خریدار دفترچه', phone: '09126660001', saveAddress: 'on', note: '',
+    }, session);
+
+    // the newest is the default and fills the form; the other one fills it on «پر کردن از این نشانی»
+    const next = await page('/checkout', `${await cart()}; ${session}`);
+    expect(next.html).toContain('name="savedAddress"');
+    expect(next.html).toMatch(/id="same-recipient"[^>]*checked/);
+    expect(next.html).toContain(address.address);
+    const mother = /<option value="(\d+)">مادر خریدار، اصفهان<\/option>/.exec(next.html)?.[1];
+    expect(mother).toBeDefined();
+    const filled = await post('/checkout', { intent: 'use-address', savedAddress: mother!, requestKey: 'rk-address-book-0003', buyerName: 'خریدار دفترچه', phone: '09126660001', ...address }, `${await cart()}; ${session}`);
+    expect(filled.html).toContain('خیابان چهارباغ، کوچهٔ آزمون، پلاک ۴');
+    expect(filled.html).toContain('value="مادر خریدار"');
+    expect(filled.html).not.toMatch(/id="same-recipient"[^>]*checked/);
+    expect(filled.html).toContain('پست پیشتاز');
+
+    const book = await page('/account', session);
+    expect(book.html).toContain('دفترچهٔ نشانی');
+    expect(book.html).toContain('مادر خریدار');
+    expect(book.html).toContain('پیش‌فرض شود');
+    const made2 = await post('/account', { intent: 'address-default', addressId: mother! }, session);
+    expect(made2.status).toBe(302);
+    expect((await lastPost()).route).toBe(`/account/addresses/${mother}/default`);
+    const removed = await post('/account', { intent: 'address-remove', addressId: mother! }, session);
+    expect(removed.status).toBe(302);
+    expect((await page('/account', session)).html).not.toContain('مادر خریدار');
+    expect((await post('/account', { intent: 'address-remove', addressId: '999' }, session)).html).toContain('این نشانی پیدا نشد');
+    expect((await post('/account', { intent: 'address-remove', addressId: mother! }, session, { 'Sec-Fetch-Site': 'cross-site' })).status).toBe(403);
+  });
+});

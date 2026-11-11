@@ -111,7 +111,7 @@ const UNREACHABLE = 'ارتباط با فروشگاه برقرار نشد؛ چن
 
 /** One call to the ERP's account routes; never throws for a refusal, so each form can say what went wrong */
 export async function accountCall<T>(
-  request: Request, method: 'GET' | 'POST', path: string, body?: unknown, options: { orderKey?: string } = {},
+  request: Request, method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown, options: { orderKey?: string } = {},
 ): Promise<ApiAnswer<T>> {
   const { apiUrl, apiKey } = siteEnv();
   const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' };

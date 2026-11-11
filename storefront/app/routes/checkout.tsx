@@ -2,10 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { useState } from 'react';
 import { Form, Link, data, redirect, useNavigation } from 'react-router';
 import type { Route } from './+types/checkout';
-import type { PlacedOrder, ShippingOption, ShippingQuoteAnswer } from '@erp/storefront/storefrontOrderContracts';
+import type { BuyerAddress, BuyerAddressBook, PlacedOrder, ShippingOption, ShippingQuoteAnswer } from '@erp/storefront/storefrontOrderContracts';
 import type { AppliedDiscount } from '@erp/storefront/storefrontDiscountContracts';
 import type { StorefrontAccountView } from '@erp/storefront/storefrontBuyerContracts';
-import { ADDRESS_MAX, BUYER_NOTE_MAX, CITY_MAX, RECIPIENT_NAME_MAX, payableWith } from '@erp/storefront/storefrontOrderRules';
+import { ADDRESS_MAX, BUYER_NOTE_MAX, CITY_MAX, GIFT_MESSAGE_MAX, RECIPIENT_NAME_MAX, payableWith } from '@erp/storefront/storefrontOrderRules';
 import { IRAN_PROVINCES } from '@erp/storefront/storefrontRules';
 import { product as productBySlug, publicSettings } from '../lib/api.server';
 import {
@@ -38,15 +38,24 @@ import { CodeField, Field, FormError, FormNote, PhoneField, SelectField, SubmitB
  *   says the shipping and, large, «مبلغ قابل پرداخت»: the ERP's own sums (the quote) with the ERP's own rule
  *   (`payableWith`), so it is the order's amount. It follows the method the buyer picks; without JavaScript, the one
  *   picked last time.
+ * - v12 phase 8c (site review 2.5, owner's decision 13): «خریدار» (name and mobile: the ERP's customer, the texts and the
+ *   code go by it) apart from «گیرنده» (name, own mobile and the address), with «گیرنده خودم هستم» on by default: while
+ *   it is on the recipient's two fields are hidden by the page's own CSS (no script needed) and not sent. «هدیه است» is
+ *   free and takes a short message for its card. A signed-in buyer fills the recipient from the address book (the
+ *   default comes ready; «پر کردن از این نشانی» takes another) and may keep a new address in it.
  */
-const FIELDS = ['recipientName', 'phone', 'province', 'city', 'address', 'postalCode', 'note'] as const;
+const FIELDS = ['buyerName', 'phone', 'recipientName', 'recipientPhone', 'province', 'city', 'address', 'postalCode', 'giftMessage', 'note'] as const;
 type Fields = Record<typeof FIELDS[number], string>;
 const FIELD_MAX: Record<typeof FIELDS[number], number> = {
-  recipientName: RECIPIENT_NAME_MAX, phone: 20, province: 60, city: CITY_MAX, address: ADDRESS_MAX, postalCode: 20, note: BUYER_NOTE_MAX,
+  buyerName: RECIPIENT_NAME_MAX, phone: 20, recipientName: RECIPIENT_NAME_MAX, recipientPhone: 20, province: 60, city: CITY_MAX, address: ADDRESS_MAX,
+  postalCode: 20, giftMessage: GIFT_MESSAGE_MAX, note: BUYER_NOTE_MAX,
 };
+/** v12 phase 8c: the form's three boxes */
+interface Checks { sameRecipient: boolean; gift: boolean; saveAddress: boolean }
 
 interface ActionAnswer {
   fields: Fields;
+  checks: Checks;
   requestKey: string;
   shippingMethod: string;
   paymentMethod: string;
@@ -58,6 +67,8 @@ interface ActionAnswer {
   field?: string;
   /** v12 phase 7: the phone a code was sent to; the form then asks for the code before placing */
   codeFor?: string;
+  /** v12 phase 8c: the kept address the recipient was just filled from; the form is drawn afresh with it */
+  filled?: number;
 }
 
 async function accountOf(request: Request): Promise<StorefrontAccountView | null> {
@@ -65,17 +76,36 @@ async function accountOf(request: Request): Promise<StorefrontAccountView | null
   return (await accountCall<StorefrontAccountView>(request, 'GET', '/account')).data;
 }
 
+/** v12 phase 8c: a signed-in buyer's address book, or none (a guest, or the ERP could not be read: the form still works) */
+async function bookOf(request: Request): Promise<BuyerAddressBook | null> {
+  if (!sessionOf(request)) return null;
+  return (await accountCall<BuyerAddressBook>(request, 'GET', '/account/addresses')).data;
+}
+
+/** The recipient part of the form from a kept address; «خودم» when it is the account's own name with no other phone */
+const fromAddress = (a: BuyerAddress, ownName: string) => ({
+  fields: { recipientName: a.recipientName, recipientPhone: a.recipientPhone, province: a.province, city: a.city, address: a.address, postalCode: a.postalCode },
+  sameRecipient: a.recipientName === ownName && !a.recipientPhone,
+});
+
 export async function loader({ request }: Route.LoaderArgs) {
   const settings = await publicSettings();
   if (!settings.ordering) throw new Response('پیدا نشد', { status: 404 });
   const lines = cartOf(request);
   if (!lines.length) throw redirect('/cart');
-  const [account, products] = await Promise.all([accountOf(request), Promise.all(lines.map(l => productBySlug(l.slug)))]);
+  const [account, book, products] = await Promise.all([accountOf(request), bookOf(request), Promise.all(lines.map(l => productBySlug(l.slug)))]);
+  const addresses = account ? book?.data ?? [] : [];
+  const kept = addresses[0] ? fromAddress(addresses[0], account?.name ?? '') : null;
   return {
     items: lines.map((l, i) => ({ slug: l.slug, name: products[i]?.name ?? '', quantity: l.quantity })),
     requestKey: randomUUID(),
     count: lines.reduce((sum, l) => sum + l.quantity, 0),
-    prefill: { recipientName: account?.name ?? '', phone: account?.phone ?? '', city: account?.city ?? '' },
+    prefill: {
+      buyerName: account?.name ?? '', phone: account?.phone ?? '', city: account?.city ?? '', ...kept?.fields,
+    } as Partial<Fields>,
+    sameRecipient: kept?.sameRecipient ?? true,
+    addresses,
+    canSaveAddress: Boolean(account) && addresses.length < (book?.max ?? 0),
     paymentMethods: account?.group?.paymentMethods ?? ['card'],
     groupTitle: account?.group?.title ?? '',
     signedIn: Boolean(account),
@@ -101,14 +131,28 @@ export async function action({ request }: Route.ActionArgs) {
   const form = await request.formData();
   const lines = cartOf(request);
   if (!lines.length) return redirect('/cart');
-  const fields = fieldsOf(form);
+  let fields = fieldsOf(form);
+  let filled: number | undefined;
+  const checks: Checks = { sameRecipient: form.get('sameRecipient') === 'on', gift: form.get('gift') === 'on', saveAddress: form.get('saveAddress') === 'on' };
+  const intent = String(form.get('intent') ?? '');
+  // v12 phase 8c: «پر کردن از این نشانی» puts a kept address in the recipient's fields, then the methods are quoted for it
+  if (intent === 'use-address') {
+    const chosen = (await bookOf(request))?.data.find(a => a.id === Number(form.get('savedAddress')));
+    if (chosen) {
+      const kept = fromAddress(chosen, fields.buyerName);
+      fields = { ...fields, ...kept.fields };
+      checks.sameRecipient = kept.sameRecipient;
+      checks.saveAddress = false;
+      filled = chosen.id;
+    }
+  }
   const typedKey = String(form.get('requestKey') ?? '');
   const requestKey = /^[A-Za-z0-9_-]{16,80}$/.test(typedKey) ? typedKey : randomUUID();
   const shippingMethod = String(form.get('shippingMethod') ?? '').slice(0, 60);
   const paymentMethod = String(form.get('paymentMethod') ?? 'card') === 'on_account' ? 'on_account' : 'card';
   const discountCode = String(form.get('discountCode') ?? '').trim().slice(0, 40);
   const answer = (rest: Partial<ActionAnswer>): ActionAnswer => ({
-    fields, requestKey, shippingMethod, paymentMethod, options: null, itemsAmount: '', discountCode, discount: null, ...rest,
+    fields, checks, requestKey, shippingMethod, paymentMethod, options: null, itemsAmount: '', discountCode, discount: null, filled, ...rest,
   });
 
   const quoteOf = (code: string) => accountCall<ShippingQuoteAnswer>(request, 'POST', '/shipping/quote', { province: fields.province, lines, ...(code ? { discountCode: code } : {}) });
@@ -120,7 +164,6 @@ export async function action({ request }: Route.ActionArgs) {
   }
   if (!quote.data) return answer({ error: quote.error, field: quote.field === 'province' || quote.field === 'lines' ? quote.field : '' });
   const quoted = { options: quote.data.options, itemsAmount: quote.data.itemsAmount, discount: quote.data.discount };
-  const intent = String(form.get('intent') ?? '');
   if (intent !== 'place' && intent !== 'send-code') return answer(quoted);
 
   // v12 phase 7: a guest's phone proof while the ERP signs in by SMS. The page's settings may be a minute old, so the
@@ -156,7 +199,13 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const placed = await accountCall<PlacedOrder>(request, 'POST', '/orders', {
-    requestKey, ...fields, shippingMethod, lines, ...(paymentMethod === 'on_account' ? { paymentMethod } : {}), ...(discountCode ? { discountCode } : {}),
+    // v12 phase 8c: the buyer (whom the phone and the customer are) and the recipient, who is the buyer while the box is on
+    requestKey, phone: fields.phone, buyerName: fields.buyerName, recipientName: checks.sameRecipient ? fields.buyerName : fields.recipientName,
+    ...(!checks.sameRecipient && fields.recipientPhone.trim() ? { recipientPhone: fields.recipientPhone } : {}),
+    province: fields.province, city: fields.city, address: fields.address, postalCode: fields.postalCode, note: fields.note,
+    ...(checks.gift ? { gift: true, ...(fields.giftMessage.trim() ? { giftMessage: fields.giftMessage } : {}) } : {}),
+    ...(checks.saveAddress && sessionOf(request) ? { saveAddress: true } : {}),
+    shippingMethod, lines, ...(paymentMethod === 'on_account' ? { paymentMethod } : {}), ...(discountCode ? { discountCode } : {}),
     ...(proof ? { phoneProof: proof } : {}),
   });
   if (!placed.data) {
@@ -167,7 +216,9 @@ export async function action({ request }: Route.ActionArgs) {
       const asked = (await sendCode(placed.error)) ?? answer({ ...quoted, error: placed.error });
       return data({ ...asked, requestKey: nextKey }, { headers: { 'Set-Cookie': clearCheckoutProofCookie() } });
     }
-    const refused = answer({ ...quoted, error: placed.error, field: placed.field ?? '', requestKey: nextKey, codeFor: undefined });
+    // the recipient's name is the buyer's while the box is on, so its refusal belongs to the buyer's field
+    const field = placed.field === 'recipientName' && checks.sameRecipient ? 'buyerName' : placed.field ?? '';
+    const refused = answer({ ...quoted, error: placed.error, field, requestKey: nextKey, codeFor: undefined });
     // any other refusal rolled the order back, so a proof made just now is still good for the next tap
     return freshProof ? data(refused, { headers: { 'Set-Cookie': checkoutProofCookie(phone, proof) } }) : refused;
   }
@@ -179,9 +230,10 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function CheckoutPage({ loaderData, actionData }: Route.ComponentProps) {
-  const { prefill, paymentMethods, groupTitle, signedIn, smsLogin, count, reservationHours, items } = loaderData;
+  const { prefill, paymentMethods, groupTitle, signedIn, smsLogin, count, reservationHours, items, addresses, canSaveAddress } = loaderData;
   const answer = actionData as ActionAnswer | undefined;
   const busy = useNavigation().state === 'submitting';
+  const sameRecipient = answer?.checks.sameRecipient ?? loaderData.sameRecipient;
   const value = (f: typeof FIELDS[number]) => answer?.fields[f] ?? (f in prefill ? prefill[f as keyof typeof prefill] : '');
   const bad = (f: string) => answer?.field === f;
   const options = answer?.options ?? null;
@@ -208,18 +260,70 @@ export default function CheckoutPage({ loaderData, actionData }: Route.Component
         </p>
       ) : null}
 
-      <Form method="post" className="mt-6 space-y-5" replace>
+      <Form key={`checkout-${answer?.filled ?? 0}`} method="post" className="mt-6 space-y-5" replace>
         <input type="hidden" name="requestKey" value={answer?.requestKey ?? loaderData.requestKey} />
         <FormError message={answer?.error} />
         {answer?.field === 'lines' ? (
           <p className="text-base leading-8"><Link to="/cart" className="font-bold text-brand hover:underline">بازگشت به سبد خرید</Link> و تغییر تعداد</p>
         ) : null}
-        <Field label="نام و نام خانوادگی گیرنده" name="recipientName" autoComplete="name" maxLength={RECIPIENT_NAME_MAX} defaultValue={value('recipientName')} invalid={bad('recipientName')} />
-        <PhoneField defaultValue={value('phone')} invalid={bad('phone')} />
-        <SelectField label="استان" name="province" options={IRAN_PROVINCES} autoComplete="address-level1" defaultValue={value('province')} invalid={bad('province')} />
-        <Field label="شهر" name="city" autoComplete="address-level2" maxLength={CITY_MAX} defaultValue={value('city')} invalid={bad('city')} />
-        <TextAreaField label="نشانی" name="address" autoComplete="street-address" maxLength={ADDRESS_MAX} defaultValue={value('address')} hint="خیابان، کوچه، پلاک و واحد" invalid={bad('address')} />
-        <Field label="کد پستی" name="postalCode" inputMode="numeric" autoComplete="postal-code" dir="ltr" maxLength={20} defaultValue={value('postalCode')} hint="ده رقم، بی خط تیره" invalid={bad('postalCode')} />
+        {/* v12 phase 8c (site review 2.5): the buyer, whom the ERP's customer, the texts and the code are for */}
+        <fieldset className="space-y-5">
+          <legend className="text-base font-bold">خریدار</legend>
+          <Field label="نام و نام خانوادگی" name="buyerName" autoComplete="name" maxLength={RECIPIENT_NAME_MAX} defaultValue={value('buyerName')} invalid={bad('buyerName')} />
+          <PhoneField defaultValue={value('phone')} invalid={bad('phone')} />
+        </fieldset>
+
+        {/* the recipient's two fields hide while «گیرنده خودم هستم» is on, by CSS alone, and are not sent then */}
+        <fieldset className="group space-y-5 border-t border-border pt-5">
+          <legend className="sr-only">گیرنده و نشانی</legend>
+          <p className="text-base font-bold" aria-hidden>گیرنده و نشانی</p>
+          {addresses.length ? (
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="min-w-0 flex-1 space-y-2">
+                <span className="block text-base font-medium">از دفترچهٔ نشانی</span>
+                <select name="savedAddress" defaultValue={addresses[0]?.id} className="h-12 w-full rounded-control border border-border bg-card px-3 text-base">
+                  {addresses.map(a => <option key={a.id} value={a.id}>{`${a.recipientName}، ${a.city}${a.isDefault ? ' (پیش‌فرض)' : ''}`}</option>)}
+                </select>
+              </label>
+              <SubmitButton intent="use-address" busy={busy} secondary>پر کردن از این نشانی</SubmitButton>
+            </div>
+          ) : null}
+          <label className="flex min-h-12 cursor-pointer items-center gap-3">
+            <input type="checkbox" id="same-recipient" name="sameRecipient" defaultChecked={sameRecipient} className="size-5 accent-[var(--color-brand)]" />
+            <span className="font-medium">گیرنده خودم هستم</span>
+          </label>
+          <div className="space-y-5 group-has-[#same-recipient:checked]:hidden" data-recipient-fields>
+            <Field label="نام و نام خانوادگی گیرنده" name="recipientName" autoComplete="off" maxLength={RECIPIENT_NAME_MAX} required={false} defaultValue={value('recipientName')} invalid={bad('recipientName')} />
+            <Field label="شمارهٔ همراه گیرنده (اختیاری)" name="recipientPhone" type="tel" inputMode="tel" autoComplete="off" dir="ltr" maxLength={20} required={false}
+              defaultValue={value('recipientPhone')} hint="برای هماهنگی پیک؛ پیامک و کد به آن نمی‌رود." invalid={bad('recipientPhone')} />
+          </div>
+          <SelectField label="استان" name="province" options={IRAN_PROVINCES} autoComplete="address-level1" defaultValue={value('province')} invalid={bad('province')} />
+          <Field label="شهر" name="city" autoComplete="address-level2" maxLength={CITY_MAX} defaultValue={value('city')} invalid={bad('city')} />
+          <TextAreaField label="نشانی" name="address" autoComplete="street-address" maxLength={ADDRESS_MAX} defaultValue={value('address')} hint="خیابان، کوچه، پلاک و واحد" invalid={bad('address')} />
+          <Field label="کد پستی" name="postalCode" inputMode="numeric" autoComplete="postal-code" dir="ltr" maxLength={20} defaultValue={value('postalCode')} hint="ده رقم، بی خط تیره" invalid={bad('postalCode')} />
+          {canSaveAddress ? (
+            <label className="flex min-h-12 cursor-pointer items-center gap-3">
+              <input type="checkbox" name="saveAddress" defaultChecked={answer?.checks.saveAddress ?? false} className="size-5 accent-[var(--color-brand)]" />
+              <span className="font-medium">این نشانی را در دفترچهٔ نشانی نگه دار</span>
+            </label>
+          ) : null}
+        </fieldset>
+
+        {/* owner's decision 13: a gift is free, with a short message for its card and no price on the package */}
+        <fieldset className="group space-y-3 border-t border-border pt-5">
+          <legend className="sr-only">هدیه</legend>
+          <label className="flex min-h-12 cursor-pointer items-start gap-3">
+            <input type="checkbox" id="is-gift" name="gift" defaultChecked={answer?.checks.gift ?? false} className="mt-1 size-5 accent-[var(--color-brand)]" />
+            <span className="space-y-1">
+              <span className="block font-medium">هدیه است</span>
+              <span className="block text-sm leading-6 text-muted-foreground">رایگان؛ قیمت روی بسته نمی‌آید.</span>
+            </span>
+          </label>
+          <div className="hidden group-has-[#is-gift:checked]:block">
+            <TextAreaField label="پیام کارت هدیه (اختیاری)" name="giftMessage" autoComplete="off" maxLength={GIFT_MESSAGE_MAX} required={false} defaultValue={value('giftMessage')} invalid={bad('giftMessage')} />
+          </div>
+        </fieldset>
+
         <TextAreaField label="توضیح (اختیاری)" name="note" autoComplete="off" maxLength={BUYER_NOTE_MAX} defaultValue={value('note')} required={false} invalid={bad('note')} />
 
         <Field label="کد تخفیف (اختیاری)" name="discountCode" autoComplete="off" dir="ltr" maxLength={40} required={false}
