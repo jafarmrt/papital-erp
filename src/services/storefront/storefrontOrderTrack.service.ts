@@ -19,7 +19,7 @@ import { storefrontSettingValues } from './storefrontSettings.service.js';
  * proof answers the order's tracking key, which the site keeps in that browser as if it had placed the order.
  *
  * - Only the order's buyer opens it: the phone is the one the order was placed with (since 8c the buyer's, not the
- *   recipient's), and the proof is a live, unused proof of that phone. A missing order, another phone and a wrong, used or
+ *   recipient's) and proven then (`phone_proven`), and the proof is a live, unused proof of that phone. A missing order, another phone and a wrong, used or
  *   expired proof are the same 404 with the same words, so the answer says nothing about which orders exist or whose.
  * - The proof is used up only when it opens the order, so a mistyped number does not cost the buyer a new code; a
  *   proof only ever opens its own phone's orders. The route limits the tries per visitor and per order.
@@ -34,9 +34,12 @@ export async function orderAccessByPhone(orderNumber: string, input: OrderAccess
   const proof = String(input.phoneProof ?? '');
   if (!/^\d{6,12}$/.test(orderNumber) || !phone || !proof || proof.length > PHONE_PROOF_MAX || !proof.startsWith(PHONE_PROOF_PREFIX)) throw notFound();
   const opened = await orm.transaction(async (tx) => {
-    const [order] = await tx.select({ id: storefrontOrders.id, orderNumber: storefrontOrders.orderNumber, accessSalt: storefrontOrders.accessSalt, phoneKey: storefrontOrders.phoneKey })
+    const [order] = await tx.select({ id: storefrontOrders.id, orderNumber: storefrontOrders.orderNumber, accessSalt: storefrontOrders.accessSalt, phoneKey: storefrontOrders.phoneKey,
+      phoneProven: storefrontOrders.phoneProven })
       .from(storefrontOrders).where(eq(storefrontOrders.orderNumber, orderNumber));
-    if (!order || order.phoneKey !== phoneMatchKey(phone)) return null;
+    // only an order whose phone was proven when placed (8d review): before 8c an order's phone was its recipient's, and
+    // with the texts off or an unproven account phone nobody showed the phone was the buyer's
+    if (!order || order.phoneProven !== 1 || order.phoneKey !== phoneMatchKey(phone)) return null;
     if (!(await consumePhoneProof(tx, phone, proof))) return null;
     await logActivity({
       tx, username: STOREFRONT_BOT_USER, action: 'VIEW', entity: 'سفارش سایت', entityId: order.id,

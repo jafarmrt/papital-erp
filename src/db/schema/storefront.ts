@@ -113,6 +113,8 @@ export const storefrontOrders = pgTable('storefront_orders', {
   buyerName: text('buyer_name').notNull().default(''),
   recipientPhone: text('recipient_phone').notNull().default(''),
   isGift: integer('is_gift').notNull().default(0),
+  /** v12 phase 8d review: 1 = the order's phone was proven when it was placed, so that phone may open it elsewhere */
+  phoneProven: integer('phone_proven').notNull().default(0),
   giftMessage: text('gift_message').notNull().default(''),
   // v11 phase 8.2c (migration 0021): the discount code the order used, as typed then, and its amount over the lines
   discountCodeId: integer('discount_code_id').references((): AnyPgColumn => storefrontDiscountCodes.id),

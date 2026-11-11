@@ -223,8 +223,16 @@ export async function runStorefrontGuestTrackingV12Tests(shouldRun: (id: string,
     const visitor = `10.52.${Number(tag.slice(-2)) % 250}.9`;
     await ageCodes(phoneThird);
     const third = await placedOf(phoneThird, `rk-track-c-${tag}`);
+    // 8d review: an order whose phone was not proven when placed (before 8c its phone was the recipient's) never opens
+    const [placedRow] = await orm.select({ phoneProven: storefrontOrders.phoneProven }).from(storefrontOrders).where(eq(storefrontOrders.orderNumber, third.number));
+    if (placedRow?.phoneProven !== 1) wrong.push(`an order placed with a proof is phone_proven ${placedRow?.phoneProven}`);
+    await orm.update(storefrontOrders).set({ phoneProven: 0 }).where(eq(storefrontOrders.orderNumber, third.number));
     await ageCodes(phoneThird);
-    const openedFirst = await access(third.number, { phone: phoneThird, phoneProof: await proofFor(phoneThird) }, visitor);
+    const unprovenProof = await proofFor(phoneThird);
+    const unproven = await access(third.number, { phone: phoneThird, phoneProof: unprovenProof });
+    if (refusal(unproven) !== first) wrong.push(`an order with an unproven phone: ${refusal(unproven)}`);
+    await orm.update(storefrontOrders).set({ phoneProven: 1 }).where(eq(storefrontOrders.orderNumber, third.number));
+    const openedFirst = await access(third.number, { phone: phoneThird, phoneProof: unprovenProof }, visitor);
     if (openedFirst.status !== 200) wrong.push(`the visitor's own order: ${openedFirst.status}`);
     for (let i = 0; i < ORDER_TRACK_TRIES_PER_VISITOR_HOUR; i++) {
       const res = await access(`8${tag}${String(i).padStart(2, '0')}`, { phone: phoneThird, phoneProof: `pp_wrong-visitor-try-${i}-${tag}` }, visitor);
@@ -235,10 +243,18 @@ export async function runStorefrontGuestTrackingV12Tests(shouldRun: (id: string,
     const otherVisitor = await access(`8${tag}98`, { phone: phoneThird, phoneProof: `pp_wrong-other-visitor-${tag}` }, `10.53.${Number(tag.slice(-2)) % 250}.9`);
     if (otherVisitor.status !== 404) wrong.push(`another visitor after one was limited: ${otherVisitor.status}`);
 
+    // 7) a request that names no visitor (the site without STOREFRONT_TRUST_PROXY) shares no visitor budget with others
+    const unnamed = (number: string, body: Body) => request(app).post(`/api/storefront/v1/orders/${number}/access`)
+      .set('Authorization', `Bearer ${apiKey}`).send(body);
+    for (let i = 0; i <= ORDER_TRACK_TRIES_PER_VISITOR_HOUR; i++) {
+      const res = await unnamed(`7${tag}${String(i).padStart(2, '0')}`, { phone: phoneThird, phoneProof: `pp_wrong-unnamed-try-${i}-${tag}` });
+      if (res.status !== 404) { wrong.push(`unnamed failed try ${i + 1}: ${res.status}, not 404`); break; }
+    }
+
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'the buyer\'s phone and its proof answered the order\'s own key, which read the order, and used the proof; another phone, another phone\'s proof, a number that is no order, a wrong proof and the used proof were the same 404 with the same words; a refused try left the proof good; one audit row named the order without the phone; failed tries closed one order to everyone and one visitor to every order for the hour, while another visitor still tried and a try that opened an order did not count',
+      details: 'the buyer\'s phone and its proof answered the order\'s own key, which read the order, and used the proof; another phone, another phone\'s proof, a number that is no order, a wrong proof and the used proof were the same 404 with the same words; a refused try left the proof good; one audit row named the order without the phone; failed tries closed one order to everyone and one visitor to every order for the hour, while another visitor still tried and a try that opened an order did not count; an order whose phone was not proven when placed did not open and left the proof good; requests naming no visitor shared no visitor budget',
     }));
   } catch (err) {
     results.push(makeTestCase({
