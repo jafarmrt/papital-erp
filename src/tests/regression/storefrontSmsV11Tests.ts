@@ -156,6 +156,15 @@ export async function runStorefrontSmsV11Tests(shouldRun: (id: string, ...extra:
     };
     const messagesOf = (orderId: number) => orm.select().from(storefrontSmsMessages).where(eq(storefrontSmsMessages.orderId, orderId)).orderBy(asc(storefrontSmsMessages.id));
 
+    // 0) v12 phase 8b review: until the order budget is saved, it is the cap the owner set for all texts before the split
+    await orm.delete(appSettings).where(inArray(appSettings.key, ['sf_sms_order_hourly_cap', 'sf_sms_hourly_cap']));
+    await orm.insert(appSettings).values({ key: 'sf_sms_hourly_cap', value: '37' });
+    invalidateSettingsCache();
+    const beforeSplit = (await erp.get('/api/storefront/sms/settings')).body.data;
+    if (beforeSplit?.orderHourlyCap !== 37 || beforeSplit?.hourlyCap !== 37) wrong.push(`the order budget before it was saved: ${beforeSplit?.orderHourlyCap}, not the stored cap 37`);
+    await orm.delete(appSettings).where(eq(appSettings.key, 'sf_sms_hourly_cap'));
+    invalidateSettingsCache();
+
     // 1) the settings: on needs a key; the key is stored encrypted and never answered or audited
     let smsView = (await erp.get('/api/storefront/sms/settings')).body.data;
     if (smsView?.enabled !== false || smsView?.apiKey?.configured !== false) wrong.push(`sms default: ${JSON.stringify(smsView)}`);
