@@ -21,7 +21,7 @@ describe('the text budgets', () => {
   });
 });
 
-describe('the wait of an «به حساب» order', () => {
+describe('the wait of an on-account order', () => {
   it('waits 72 hours by default and reminds 12 hours before its end (owner\'s decision 14)', () => {
     expect(APPROVAL_HOURS_DEFAULT).toBe(72);
     expect(APPROVAL_REMINDER_HOURS).toBe(12);
