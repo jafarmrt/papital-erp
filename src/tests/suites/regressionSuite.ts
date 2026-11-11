@@ -11229,6 +11229,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v12 phase 8c (site review 2.5): the buyer apart from the recipient, the gift and the address book
   const { runStorefrontBuyerRecipientV12Tests } = await import('../regression/storefrontBuyerRecipientV12Tests.js');
   results.push(...await runStorefrontBuyerRecipientV12Tests(shouldRun));
+  const { runStorefrontGuestTrackingV12Tests } = await import('../regression/storefrontGuestTrackingV12Tests.js');
+  results.push(...await runStorefrontGuestTrackingV12Tests(shouldRun));
 
   return results;
 }

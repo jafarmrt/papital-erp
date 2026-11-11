@@ -83,6 +83,20 @@ export const wholesaleProofCookie = (phone: string, proof: string) =>
   `${WHOLESALE_PROOF_COOKIE}=${encodeURIComponent(`${phone}.${proof}`)}; Path=/wholesale; HttpOnly; SameSite=Lax; Max-Age=${PROOF_MAX_AGE}${secure()}`;
 export const clearWholesaleProofCookie = () => `${WHOLESALE_PROOF_COOKIE}=; Path=/wholesale; HttpOnly; SameSite=Lax; Max-Age=0${secure()}`;
 
+/**
+ * v12 phase 8d (site review 2.2): the buyer's phone proof on «پیگیری سفارش», kept between the code and the order
+ * number, so a mistyped number does not cost a new code. Its own cookie on the whole site (the page's data requests are
+ * `/orders/track.data`), so no other page reads it.
+ */
+const TRACK_PROOF_COOKIE = 'sf_track_proof';
+export function trackProofOf(request: Request): { phone: string; proof: string } {
+  const [phone, proof] = cookieOf(request, TRACK_PROOF_COOKIE).split('.');
+  return phone && /^09\d{9}$/.test(phone) && proof && TOKEN.test(proof) ? { phone, proof } : { phone: '', proof: '' };
+}
+export const trackProofCookie = (phone: string, proof: string) =>
+  `${TRACK_PROOF_COOKIE}=${encodeURIComponent(`${phone}.${proof}`)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${PROOF_MAX_AGE}${secure()}`;
+export const clearTrackProofCookie = () => `${TRACK_PROOF_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure()}`;
+
 /** The phone the proof cookie is for ('' = none) */
 export function provenPhoneOf(request: Request): string {
   const [phone, proof] = cookieOf(request, PROOF_COOKIE).split('.');

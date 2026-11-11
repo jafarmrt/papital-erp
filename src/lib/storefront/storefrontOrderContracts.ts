@@ -224,6 +224,20 @@ export interface ClaimOrderRequest {
 }
 
 /**
+ * v12 phase 8d (site review 2.2): `POST /api/storefront/v1/orders/:number/access`, a guest order opened on another phone:
+ * the buyer's phone and a live proof of it (`/auth/otp/verify`) answer the order's tracking key. A wrong number, a phone
+ * that is not the order's buyer and a used or wrong proof all get the same 404.
+ */
+export interface OrderAccessRequest {
+  phone: string;
+  phoneProof: string;
+}
+
+export interface OrderAccessAnswer {
+  accessKey: string;
+}
+
+/**
  * v12 phase 8c: one address of a buyer account's address book (`GET /api/storefront/v1/account/addresses`), the
  * account's own only. The checkout fills its recipient from one; «حساب من» lists them.
  */
