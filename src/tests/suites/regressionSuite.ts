@@ -11226,6 +11226,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v12 phase 7d (site review 1.3, 2.10): the retail cap and a guest's phone proof at the order
   const { runStorefrontGuestProofV12Tests } = await import('../regression/storefrontGuestProofV12Tests.js');
   results.push(...await runStorefrontGuestProofV12Tests(shouldRun));
+  const { runStorefrontEmailSettingsV12Tests } = await import('../regression/storefrontEmailSettingsV12Tests.js');
+  results.push(...await runStorefrontEmailSettingsV12Tests(shouldRun));
 
   return results;
 }
