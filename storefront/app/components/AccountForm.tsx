@@ -126,3 +126,22 @@ export function TextAreaField(props: {
     </div>
   );
 }
+
+/**
+ * v12 phase 8a (site review 2.12): the robot trap of a form (app/lib/botTrap.server.ts): the page's signed stamp, and a
+ * field people never see or reach (clipped to nothing, out of the tab order, hidden from screen readers) that only a
+ * robot filling every field fills
+ */
+export function BotTrapFields({ stamp }: { stamp: string }) {
+  return (
+    <>
+      <input type="hidden" name="formAt" value={stamp} />
+      <div aria-hidden="true" className="sr-only">
+        <label>
+          این خانه را خالی بگذارید
+          <input type="text" name="contact_website" tabIndex={-1} autoComplete="off" defaultValue="" />
+        </label>
+      </div>
+    </>
+  );
+}

@@ -212,11 +212,18 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               برای هدیهٔ مناسبتی کارکنان و مشتریان، یا فروش در فروشگاه و گالری خودتان، با قیمت عمده و فاکتور رسمی سفارش بدهید.
             </p>
           </div>
-          {root?.whatsapp ? (
-            <a href={whatsappLink(root.whatsapp, 'سلام، دربارهٔ خرید سازمانی و عمده سؤال دارم.')} rel="noopener" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-control bg-primary-foreground px-6 text-lg font-bold text-primary">
-              گفت‌وگو دربارهٔ سفارش<ArrowLeft className="size-5" aria-hidden />
-            </a>
-          ) : null}
+          {/* v12 phase 8a (site review 2.3): the wholesale request and the corporate gift form, then a chat for questions */}
+          <div className="flex flex-col gap-3">
+            <Link to="/wholesale" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-control bg-primary-foreground px-6 text-lg font-bold text-primary">
+              درخواست خرید عمده<ArrowLeft className="size-5" aria-hidden />
+            </Link>
+            <Link to="/corporate-gift" className="inline-flex min-h-12 items-center justify-center rounded-control border border-primary-foreground/40 px-6 font-bold">هدیهٔ سازمانی</Link>
+            {root?.whatsapp ? (
+              <a href={whatsappLink(root.whatsapp, 'سلام، دربارهٔ خرید سازمانی و عمده سؤال دارم.')} rel="noopener" className="inline-flex min-h-11 items-center justify-center font-medium underline-offset-4 hover:underline">
+                پرسش در واتس‌اپ
+              </a>
+            ) : null}
+          </div>
         </div>
       </section>
       <JsonLdScripts blocks={homeLd(siteUrl, root?.logoUrl ?? '')} siteUrl={siteUrl} />

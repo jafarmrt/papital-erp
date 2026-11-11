@@ -7,7 +7,7 @@ import { phoneMatchKey } from '../../lib/search/phoneMatchKey.js';
 import { money } from '../../lib/money.js';
 import {
   ADDRESS_MAX, ADDRESS_MIN, BUYER_NOTE_MAX, CITY_MAX, GIFT_MESSAGE_MAX, OPEN_ORDER_STATUSES, RECIPIENT_NAME_MAX, RETAIL_LINE_CAP_MESSAGE, cartLinesError, cleanText,
-  isIranProvince, isPaymentMethod, normalizeMobile, normalizePostalCode, retailLineOverCap, type CartLineInput, type PaymentMethod,
+  isIranProvince, isPaymentMethod, normalizeMobile, normalizePostalCode, retailLineOverCap, type CartLineInput, type PaymentMethod, payableWith,
 } from '../../lib/storefront/storefrontOrderRules.js';
 import type { PlaceOrderRequest, PlacedOrder, ShippingQuoteAnswer, ShippingQuoteRequest } from '../../lib/storefront/storefrontOrderContracts.js';
 import type { StorefrontSettingsInput } from '../../lib/storefront/storefrontContracts.js';
@@ -289,7 +289,7 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
   const option = (await shippingOptions(tx, settings, cart, order.province, discountedSubtotal(cart.itemsAmount, choice))).find(o => o.code === order.shippingMethod);
   if (!option) throw fieldError('shippingMethod', 'این روش ارسال برای این سبد و استان در دسترس نیست؛ روش دیگری انتخاب کنید.');
   const shippingAmount = option.kind === 'cost' ? option.amount : '0';
-  const payable = (BigInt(cart.itemsAmount) - BigInt(discountAmount) + BigInt(shippingAmount)).toString();
+  const payable = payableWith(cart.itemsAmount, discountAmount, option);
 
   const [{ value: sequence }] = (await tx.execute(sql`SELECT nextval('storefront_order_number_seq')::text AS value`)).rows as Array<{ value: string }>;
   const orderNumber = String(sequence);

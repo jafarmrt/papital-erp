@@ -70,6 +70,19 @@ export const checkoutProofCookie = (phone: string, proof: string) =>
   `${CHECKOUT_PROOF_COOKIE}=${encodeURIComponent(`${phone}.${proof}`)}; Path=/checkout; HttpOnly; SameSite=Lax; Max-Age=${PROOF_MAX_AGE}${secure()}`;
 export const clearCheckoutProofCookie = () => `${CHECKOUT_PROOF_COOKIE}=; Path=/checkout; HttpOnly; SameSite=Lax; Max-Age=0${secure()}`;
 
+/**
+ * v12 phase 8a (site review 2.3): a guest's phone proof on the wholesale request, kept between the code and the form
+ * that sends it. Its own cookie and path, as at the checkout.
+ */
+const WHOLESALE_PROOF_COOKIE = 'sf_wholesale_proof';
+export function wholesaleProofOf(request: Request): { phone: string; proof: string } {
+  const [phone, proof] = cookieOf(request, WHOLESALE_PROOF_COOKIE).split('.');
+  return phone && /^09\d{9}$/.test(phone) && proof && TOKEN.test(proof) ? { phone, proof } : { phone: '', proof: '' };
+}
+export const wholesaleProofCookie = (phone: string, proof: string) =>
+  `${WHOLESALE_PROOF_COOKIE}=${encodeURIComponent(`${phone}.${proof}`)}; Path=/wholesale; HttpOnly; SameSite=Lax; Max-Age=${PROOF_MAX_AGE}${secure()}`;
+export const clearWholesaleProofCookie = () => `${WHOLESALE_PROOF_COOKIE}=; Path=/wholesale; HttpOnly; SameSite=Lax; Max-Age=0${secure()}`;
+
 /** The phone the proof cookie is for ('' = none) */
 export function provenPhoneOf(request: Request): string {
   const [phone, proof] = cookieOf(request, PROOF_COOKIE).split('.');
