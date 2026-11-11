@@ -4,7 +4,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import {
   accounts, activityLogs, appSettings, bankAccounts, customers, documents, itemPrices, items, storefrontBuyerAccounts, storefrontBuyerAddresses,
-  storefrontBuyerSessions, storefrontOrders, storefrontProducts, storefrontShippingMethods, warehouses,
+  storefrontBuyerSessions, storefrontOrders, storefrontPaymentReceipts, storefrontProducts, storefrontShippingMethods, treasuryTransactions, warehouses,
 } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 import { invalidateSettingsCache } from '../../lib/memoryCache.js';
@@ -154,6 +154,23 @@ export async function runStorefrontBuyerRecipientV12Tests(shouldRun: (id: string
     if (replay.status !== 201 || String(replay.body.data?.order?.number) !== giftNumber) wrong.push(`the replay: ${replay.status} ${replay.body.data?.order?.number}`);
     const reused = await site().post('/api/storefront/v1/orders', { ...giftBody, giftMessage: 'پیام دیگر' });
     if (reused.status !== 422 || reused.body.code !== 'STOREFRONT_REQUEST_KEY_REUSED') wrong.push(`the same key with another card: ${reused.status} ${reused.body.code}`);
+    // the receipt names the ERP customer as the ERP keeps it (review of 8c: the name the buyer typed was written), here a
+    // customer the colleagues renamed since
+    const keptName = `مشتری قدیمی ${tag}`;
+    await orm.update(customers).set({ name: keptName }).where(eq(customers.id, giftRow.customerId));
+    const receipt = await site().post(`/api/storefront/v1/orders/${giftNumber}/receipts`, {
+      reference: `G${tag}1`, paidAt: new Date().toISOString(), cardLast4: '1234', amount: String(seen.payableAmount),
+    }).set('X-Order-Key', String(gift.body.data.accessKey));
+    if (receipt.status !== 201) throw new Error(`gift receipt: ${receipt.status} ${JSON.stringify(receipt.body)}`);
+    const giftDetail = (await erp.get(`/api/storefront/orders/${giftRow.id}`)).body.data;
+    const pendingReceipt = (giftDetail?.receipts ?? []).find((r: Body) => r.status === 'pending');
+    const paid = await erp.post(`/api/storefront/orders/${giftRow.id}/confirm`, { receiptId: pendingReceipt?.id, version: giftDetail?.version });
+    if (paid.status !== 200) throw new Error(`confirm the gift: ${paid.status} ${JSON.stringify(paid.body)}`);
+    const [acceptedReceipt] = await orm.select({ treasuryId: storefrontPaymentReceipts.treasuryTransactionId }).from(storefrontPaymentReceipts)
+      .where(eq(storefrontPaymentReceipts.id, Number(pendingReceipt?.id)));
+    const [posted] = await orm.select({ partyName: treasuryTransactions.partyName, partyId: treasuryTransactions.partyId }).from(treasuryTransactions)
+      .where(eq(treasuryTransactions.id, Number(acceptedReceipt?.treasuryId)));
+    if (posted?.partyName !== keptName || posted?.partyId !== giftRow.customerId) wrong.push(`the receipt's party: ${JSON.stringify(posted)}, not ${keptName}`);
 
     // 2) wrong fields; a card without a gift is dropped; an order without the new fields is the recipient's own
     const badPhone = await site().post('/api/storefront/v1/orders', order(phoneBuyer, `rk-bad-${tag}-recipient-phone`, { recipientPhone: '123' }));
@@ -191,6 +208,14 @@ export async function runStorefrontBuyerRecipientV12Tests(shouldRun: (id: string
     book = await bookOf(tokenA);
     const first = book.data.find(a => a.recipientName === `گیرندهٔ هدیه ${tag}`);
     if (book.data.length !== 2 || book.data[0].recipientName !== `گیرندهٔ دوم ${tag}` || !book.data[0].isDefault || first?.isDefault !== false) wrong.push(`a second address: ${JSON.stringify(book.data)}`);
+    // an order to the first address again makes it the default, and says so in the log (review of 8c: it wrote no row)
+    await placeKept(tokenA, {});
+    book = await bookOf(tokenA);
+    if (book.data[0]?.id !== first?.id) wrong.push(`an order to a kept address did not make it the default: ${JSON.stringify(book.data)}`);
+    const redefaulted = await orm.select({ id: activityLogs.id }).from(activityLogs)
+      .where(and(eq(activityLogs.entity, 'نشانی خریدار سایت'), eq(activityLogs.entityId, String(first?.id)), eq(activityLogs.action, 'UPDATE')));
+    if (redefaulted.length !== 1) wrong.push(`${redefaulted.length} audit rows for an order making a kept address the default, not 1`);
+    await placeKept(tokenA, { recipientName: `گیرندهٔ دوم ${tag}`, city: 'کرج', province: 'البرز' });
     const madeDefault = await site(tokenA).post(`/api/storefront/v1/account/addresses/${first?.id}/default`, {});
     if (madeDefault.status !== 200 || madeDefault.body.data.data[0].id !== first?.id) wrong.push(`make the default: ${madeDefault.status} ${JSON.stringify(madeDefault.body)}`);
     // another account reads and removes none of it
@@ -227,6 +252,8 @@ export async function runStorefrontBuyerRecipientV12Tests(shouldRun: (id: string
     }));
   } finally {
     if (phoneKeys.length > 0) {
+      await orm.delete(storefrontPaymentReceipts).where(inArray(storefrontPaymentReceipts.orderId,
+        orm.select({ id: storefrontOrders.id }).from(storefrontOrders).where(inArray(storefrontOrders.phoneKey, phoneKeys)))).catch(() => undefined);
       await orm.delete(storefrontOrders).where(inArray(storefrontOrders.phoneKey, phoneKeys)).catch(() => undefined);
       const ids = (await orm.select({ id: storefrontBuyerAccounts.id }).from(storefrontBuyerAccounts)
         .where(inArray(storefrontBuyerAccounts.phoneKey, phoneKeys)).catch(() => [])).map(r => r.id);

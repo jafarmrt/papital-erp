@@ -63,7 +63,12 @@ export async function keepOrderAddress(tx: DbExecutor, accountId: number, order:
   const same = rows.find(r => r.recipientName === fields.recipientName && r.recipientPhone === fields.recipientPhone && r.province === fields.province
     && r.city === fields.city && r.address === fields.address && r.postalCode === fields.postalCode);
   if (same) {
-    if (same.isDefault !== 1) await makeDefault(tx, accountId, same.id);
+    if (same.isDefault === 1) return;
+    await makeDefault(tx, accountId, same.id);
+    await logActivity({
+      tx, username: STOREFRONT_BOT_USER, action: 'UPDATE', entity: 'نشانی خریدار سایت', entityId: same.id,
+      description: 'نشانی سفارش تازه، نشانی پیش‌فرض حساب خریدار سایت شد', details: { before: { isDefault: false }, after: { accountId, isDefault: true } },
+    });
     return;
   }
   if (rows.length >= BUYER_ADDRESSES_MAX) return;

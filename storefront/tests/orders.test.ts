@@ -507,7 +507,7 @@ describe('phase 8c: buyer and recipient, the gift and the address book', () => {
     expect(next.html).toContain(address.address);
     const mother = /<option value="(\d+)">مادر خریدار، اصفهان<\/option>/.exec(next.html)?.[1];
     expect(mother).toBeDefined();
-    const filled = await post('/checkout', { intent: 'use-address', savedAddress: mother!, requestKey: 'rk-address-book-0003', buyerName: 'خریدار دفترچه', phone: '09126660001', ...address }, `${await cart()}; ${session}`);
+    const filled = await post('/checkout', { ...address, intent: 'use-address', savedAddress: mother!, requestKey: 'rk-address-book-0003', buyerName: 'خریدار دفترچه', phone: '09126660001' }, `${await cart()}; ${session}`);
     expect(filled.html).toContain('خیابان چهارباغ، کوچهٔ آزمون، پلاک ۴');
     expect(filled.html).toContain('value="مادر خریدار"');
     expect(filled.html).not.toMatch(/id="same-recipient"[^>]*checked/);

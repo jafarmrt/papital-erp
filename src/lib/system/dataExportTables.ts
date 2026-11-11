@@ -109,6 +109,8 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   { table: 'storefront_buyer_groups', group: 'settings' },
   { table: 'storefront_discount_codes', group: 'settings' },
   { table: 'storefront_buyer_accounts', group: 'customers' },
+  // v12 phase 8c: the buyer accounts' address books
+  { table: 'storefront_buyer_addresses', group: 'customers' },
   // v11 phase 8.5: the old addresses of the WooCommerce site and where each goes
   { table: 'storefront_redirects', group: 'settings' },
   // v11 phase 8.5b: «صفحه‌های ویژه», the site's campaign pages

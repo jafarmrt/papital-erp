@@ -23,7 +23,7 @@ import { phoneMatchKey } from '../../lib/search/phoneMatchKey.js';
  *   and no reservation behind (red before: any phone number ordered and made a customer).
  * - A proof used by an order that was then refused (an item short) is still good: the order's transaction rolled it back.
  * - A placed order's proof is used up: a new order with it is 422, while a repeat of the same request replays the order.
- * - A signed-in account orders without a proof.
+ * - A signed-in account orders with its own phone without a proof; with another phone it proves that one (v12 phase 8c review).
  */
 
 interface Session { cookie: string; csrfToken: string }
@@ -211,7 +211,7 @@ export async function runStorefrontGuestProofV12Tests(shouldRun: (id: string, ..
     if (reused.status !== 422 || reused.body.code !== 'STOREFRONT_PHONE_PROOF_REQUIRED') wrong.push(`a used proof on a new order: ${reused.status} ${reused.body.code}`);
     if ((await ordersOf(phoneGuest)).length !== 1) wrong.push(`the guest phone has ${(await ordersOf(phoneGuest)).length} orders, not 1`);
 
-    // 6) a signed-in account (made with its proof) orders without one
+    // 6) a signed-in account (made with its proof) orders with its own phone without one, with another phone with its proof
     await ageCodes(phoneMember);
     const memberProof = await proofFor(phoneMember);
     const registered = await site().post('/api/storefront/v1/auth/register', { name: `عضو اثبات ${tag}`, phone: phoneMember, password: PASSWORD, phoneProof: memberProof });
@@ -219,6 +219,12 @@ export async function runStorefrontGuestProofV12Tests(shouldRun: (id: string, ..
     if (registered.status !== 201 || !token) throw new Error(`register: ${registered.status} ${JSON.stringify(registered.body)}`);
     const member = await site(token).post('/api/storefront/v1/orders', order(phoneMember, `rk-member-${tag}-proof-check`, [{ slug: slugTen, quantity: 1 }]));
     if (member.status !== 201) wrong.push(`a signed-in order without a proof: ${member.status} ${JSON.stringify(member.body)}`);
+    // v12 phase 8c review: the order's phone is its buyer's, so a session ordering with another phone proves that phone
+    const notMine = await site(token).post('/api/storefront/v1/orders', order(phoneOther, `rk-member-${tag}-another-phone`, [{ slug: slugTen, quantity: 1 }]));
+    if (notMine.status !== 422 || notMine.body.code !== 'STOREFRONT_PHONE_PROOF_REQUIRED') wrong.push(`a signed-in order with another phone and no proof: ${notMine.status} ${notMine.body.code}`);
+    await ageCodes(phoneOther);
+    const provenOther = await site(token).post('/api/storefront/v1/orders', order(phoneOther, `rk-member-${tag}-another-proven`, [{ slug: slugTen, quantity: 1 }], { phoneProof: await proofFor(phoneOther) }));
+    if (provenOther.status !== 201) wrong.push(`a signed-in order with another phone and its proof: ${provenOther.status} ${JSON.stringify(provenOther.body)}`);
 
     // 7) v12 phase 7e (site review 1.4): a visitor's catalog reads have a limit of their own; another visitor and the
     // site's shared reads (no visitor named) still read
