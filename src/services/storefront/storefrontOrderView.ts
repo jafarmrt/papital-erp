@@ -72,9 +72,13 @@ async function common(executor: DbExecutor, order: OrderRecord) {
     statusTitle: ORDER_STATUS_TITLES[orderStatus],
     createdAt: order.createdAt,
     payBefore: orderStatus === 'awaiting_payment' ? order.reserveUntil : null,
+    // v12 phase 8c (site review 2.5): the recipient's own phone when another person gave one, else the buyer's
     recipient: {
-      name: order.recipientName, phone: order.phone, province: order.province, city: order.city, address: order.address, postalCode: order.postalCode,
+      name: order.recipientName, phone: order.recipientPhone || order.phone, province: order.province, city: order.city, address: order.address,
+      postalCode: order.postalCode,
     },
+    orderedBy: { name: order.buyerName || order.recipientName, phone: order.phone },
+    gift: order.isGift === 1 ? { message: order.giftMessage } : null,
     note: order.buyerNote,
     shipping: {
       code: order.shippingMethodCode, title: order.shippingMethodTitle,

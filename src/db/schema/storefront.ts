@@ -109,6 +109,11 @@ export const storefrontOrders = pgTable('storefront_orders', {
   confirmedAt: timestamp('confirmed_at', { withTimezone: true, mode: 'string' }),
   /** v12 phase 8b (migration 0023): when the colleagues were reminded that an «به حساب» order's wait runs out; null = not yet */
   approvalRemindedAt: timestamp('approval_reminded_at', { withTimezone: true, mode: 'string' }),
+  // v12 phase 8c (migration 0024, site review 2.5): the buyer apart from the recipient, and a gift with its card's message
+  buyerName: text('buyer_name').notNull().default(''),
+  recipientPhone: text('recipient_phone').notNull().default(''),
+  isGift: integer('is_gift').notNull().default(0),
+  giftMessage: text('gift_message').notNull().default(''),
   // v11 phase 8.2c (migration 0021): the discount code the order used, as typed then, and its amount over the lines
   discountCodeId: integer('discount_code_id').references((): AnyPgColumn => storefrontDiscountCodes.id),
   discountCode: text('discount_code').notNull().default(''),
@@ -217,6 +222,26 @@ export const storefrontBuyerAccounts = pgTable('storefront_buyer_accounts', {
   idx_storefront_buyer_accounts_group_id: index('idx_storefront_buyer_accounts_group_id').on(table.groupId).where(sql`${table.groupId} IS NOT NULL`),
   idx_storefront_buyer_accounts_customer_id: index('idx_storefront_buyer_accounts_customer_id').on(table.customerId).where(sql`${table.customerId} IS NOT NULL`),
   idx_storefront_buyer_accounts_application: index('idx_storefront_buyer_accounts_application').on(table.applicationStatus, table.appliedAt.desc(), table.id.desc()),
+}));
+
+/** v12 phase 8c (migration 0024): the address book of a buyer account; removing an address is a soft delete */
+export const storefrontBuyerAddresses = pgTable('storefront_buyer_addresses', {
+  id: serial('id').primaryKey(),
+  accountId: integer('account_id').notNull().references(() => storefrontBuyerAccounts.id),
+  recipientName: text('recipient_name').notNull(),
+  recipientPhone: text('recipient_phone').notNull().default(''),
+  province: text('province').notNull(),
+  city: text('city').notNull(),
+  address: text('address').notNull(),
+  postalCode: text('postal_code').notNull(),
+  isDefault: integer('is_default').notNull().default(0),
+  isDeleted: integer('is_deleted').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  version: integer('version').notNull().default(1),
+}, (table) => ({
+  idx_storefront_buyer_addresses_account_id: index('idx_storefront_buyer_addresses_account_id').on(table.accountId, table.isDeleted),
+  uq_storefront_buyer_addresses_default: uniqueIndex('uq_storefront_buyer_addresses_default').on(table.accountId).where(sql`${table.isDefault} = 1 AND ${table.isDeleted} = 0`),
 }));
 
 /** A sign-in session of a buyer account; only the SHA-256 of its token is kept */

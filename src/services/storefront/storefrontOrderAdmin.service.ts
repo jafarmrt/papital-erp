@@ -167,7 +167,7 @@ export async function confirmPayment(req: Request, id: number, input: { receiptI
     await assertLiveProforma(tx, order);
     const posted = await TreasuryTransactionService.createTreasuryTransaction({
       type: 'receipt', method: 'bank_transfer', amount: Number(payable), currency: 'IRR', bankAccountId: settings.treasuryAccountId,
-      partyType: 'customer', partyId: order.customerId, partyName: order.recipientName, trackingNumber: receipt.reference,
+      partyType: 'customer', partyId: order.customerId, partyName: order.buyerName || order.recipientName, trackingNumber: receipt.reference,
       documentId: order.documentId, description: `دریافت کارت‌به‌کارت سفارش سایت ${order.orderNumber}`,
       userId: actor.userId, username: actor.username, audit: { req, userFullName: actor.userFullName },
     }, tx);

@@ -11,8 +11,9 @@ import {
 } from '../services/storefront/storefrontCatalog.service.js';
 import { STOREFRONT_QUERY_TEXT_MAX, STOREFRONT_SLUG_MAX } from '../lib/storefront/storefrontRules.js';
 import { publicBrand } from '../services/storefront/storefrontBrand.service.js';
-import { ORDER_LINES_MAX, PAYMENT_METHODS } from '../lib/storefront/storefrontOrderRules.js';
+import { GIFT_MESSAGE_MAX, ORDER_LINES_MAX, PAYMENT_METHODS } from '../lib/storefront/storefrontOrderRules.js';
 import { claimOrder, myOrder, myOrders, sendAccountReceipt } from '../services/storefront/storefrontAccountOrders.service.js';
+import { myAddresses, removeAddress, setDefaultAddress } from '../services/storefront/storefrontBuyerAddresses.service.js';
 import { placeOrder, quoteShipping } from '../services/storefront/storefrontOrderPlace.service.js';
 import { buyerOrder, sendReceipt } from '../services/storefront/storefrontOrderBuyer.service.js';
 import { ACCESS_KEY_MAX } from '../services/storefront/storefrontOrderKeys.js';
@@ -109,6 +110,9 @@ const orderSchema = z.object({
     city: z.string().max(120), address: z.string().max(800), postalCode: z.string().max(40), note: z.string().max(1000),
     shippingMethod: z.string().max(60), lines: cartLines, paymentMethod: z.enum(PAYMENT_METHODS).optional(),
     discountCode: z.string().max(40).optional(), phoneProof: z.string().max(PHONE_PROOF_MAX + 1).optional(),
+    // v12 phase 8c: the buyer apart from the recipient, a gift and the address book
+    buyerName: z.string().max(200).optional(), recipientPhone: z.string().max(40).optional(), gift: z.boolean().optional(),
+    giftMessage: z.string().max(GIFT_MESSAGE_MAX * 2).optional(), saveAddress: z.boolean().optional(),
   }).strict(),
 });
 const orderNumberParams = z.object({ number: z.string().min(1).max(20) }).passthrough();
@@ -344,6 +348,21 @@ router.post('/account/orders/:number/receipts', writeLimiter, validate(receiptSc
 
 router.post('/account/orders/claim', writeLimiter, validate(claimSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ data: await claimOrder(sessionOf(req), req.body) });
+}));
+
+// v12 phase 8c: the account's address book (kept from the checkout; listed, made the default and removed from «حساب من»)
+const addressSchema = z.object({ params: z.object({ id: z.string().regex(/^[1-9]\d{0,9}$/) }).strict() });
+
+router.get('/account/addresses', asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await myAddresses(sessionOf(req)) });
+}));
+
+router.post('/account/addresses/:id/default', writeLimiter, validate(addressSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await setDefaultAddress(sessionOf(req), Number(req.params.id)) });
+}));
+
+router.delete('/account/addresses/:id', writeLimiter, validate(addressSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await removeAddress(sessionOf(req), Number(req.params.id)) });
 }));
 
 export default router;
