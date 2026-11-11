@@ -30,5 +30,9 @@ export default [
   route('corporate-gift', 'routes/corporateGift.tsx'),
   // v11 phase 8.5b: «صفحه‌های ویژه», the campaign and occasion pages (Yalda first)
   route('campaigns/:slug', 'routes/campaign.tsx'),
+  // v12 phase 8a: the phone's bottom bar (دسته‌ها، جست‌وجو) and «درخواست خرید عمده» (site review 2.3)
+  route('categories', 'routes/categories.tsx'),
+  route('search', 'routes/search.tsx'),
+  route('wholesale', 'routes/wholesale.tsx'),
   route('*', 'routes/notFound.tsx'),
 ] satisfies RouteConfig;

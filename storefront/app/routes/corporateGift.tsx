@@ -6,12 +6,14 @@ import { accountCall, crossSite, sameSite } from '../lib/account.server';
 import { siteEnv } from '../lib/site.server';
 import { pageMeta } from '../lib/meta';
 import { faNumber } from '../lib/format';
-import { AccountShell, Field, FormError, SubmitButton, TextAreaField } from '../components/AccountForm';
+import { formStamp, keptStamp, trapRefusal } from '../lib/botTrap.server';
+import { AccountShell, BotTrapFields, Field, FormError, SubmitButton, TextAreaField } from '../components/AccountForm';
 
 /**
  * v11 phase 8.2c (start plan §7): «هدیهٔ سازمانی». An organization writes who to call, about how many gifts, the budget
  * and the day it needs them; the ERP makes a sales lead in its CRM and a colleague calls back. A plain form posted here,
  * so it works without JavaScript; the budget is typed in toman, like every price on the site, and sent in rial.
+ * v12 phase 8a (site review 2.12): each send makes a lead and a bell, so the robot trap is checked before the ERP is asked.
  */
 const FIELDS = ['organization', 'contactName', 'phone', 'quantity', 'budget', 'neededBy', 'note'] as const;
 type Fields = Record<typeof FIELDS[number], string>;
@@ -21,10 +23,12 @@ interface ActionAnswer {
   error?: string;
   field?: string;
   reference?: string;
+  /** the form's robot-trap stamp, kept after an error so a quick fix is not «too fast» */
+  stamp?: string;
 }
 
 export function loader() {
-  return { siteUrl: siteEnv().siteUrl };
+  return { siteUrl: siteEnv().siteUrl, stamp: formStamp() };
 }
 
 export function meta({ data }: Route.MetaArgs) {
@@ -40,19 +44,22 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionAnswe
   if (!sameSite(request)) return crossSite();
   const form = await request.formData();
   const fields = Object.fromEntries(FIELDS.map(f => [f, String(form.get(f) ?? '').slice(0, f === 'note' ? GIFT_NOTE_MAX + 1 : 300)])) as Fields;
+  const stamp = keptStamp(form);
+  const trapped = trapRefusal(form);
+  if (trapped) return { fields, error: trapped, stamp };
   const quantity = digitsOf(fields.quantity);
-  if (quantity && !/^\d{1,7}$/.test(quantity)) return { fields, error: 'تعداد تقریبی را فقط با رقم بنویسید.', field: 'quantity' };
+  if (quantity && !/^\d{1,7}$/.test(quantity)) return { fields, error: 'تعداد تقریبی را فقط با رقم بنویسید.', field: 'quantity', stamp };
   const budgetToman = digitsOf(fields.budget);
-  if (budgetToman && !/^\d{1,13}$/.test(budgetToman)) return { fields, error: 'بودجهٔ تقریبی را فقط با رقم و به تومان بنویسید.', field: 'budget' };
+  if (budgetToman && !/^\d{1,13}$/.test(budgetToman)) return { fields, error: 'بودجهٔ تقریبی را فقط با رقم و به تومان بنویسید.', field: 'budget', stamp };
   const sent = await accountCall<CorporateGiftAnswer>(request, 'POST', '/inquiries/corporate-gift', {
     organization: fields.organization, contactName: fields.contactName, phone: fields.phone, note: fields.note, neededBy: fields.neededBy,
     ...(quantity ? { quantity: Number(quantity) } : {}), ...(budgetToman ? { budget: `${budgetToman}0` } : {}),
   });
-  if (!sent.data) return { fields, error: sent.error, field: sent.field ?? '' };
+  if (!sent.data) return { fields, error: sent.error, field: sent.field ?? '', stamp };
   return { reference: sent.data.reference };
 }
 
-export default function CorporateGiftPage({ actionData }: Route.ComponentProps) {
+export default function CorporateGiftPage({ loaderData, actionData }: Route.ComponentProps) {
   const answer = actionData as ActionAnswer | undefined;
   const busy = useNavigation().state === 'submitting';
   const value = (f: typeof FIELDS[number]) => answer?.fields?.[f] ?? '';
@@ -71,6 +78,7 @@ export default function CorporateGiftPage({ actionData }: Route.ComponentProps) 
     <AccountShell title="هدیهٔ سازمانی" intro="برای هدیهٔ همکاران، مشتریان یا مناسبت‌های سازمان، چند خط بنویسید تا با شما تماس بگیریم. فاکتور رسمی صادر می‌شود.">
       <Form method="post" className="space-y-5" replace>
         <FormError message={answer?.error} />
+        <BotTrapFields stamp={answer?.stamp ?? loaderData.stamp} />
         <Field label="نام سازمان یا شرکت" name="organization" autoComplete="organization" maxLength={GIFT_ORGANIZATION_MAX} defaultValue={value('organization')} invalid={bad('organization')} />
         <Field label="نام رابط" name="contactName" autoComplete="name" maxLength={GIFT_CONTACT_MAX} defaultValue={value('contactName')} invalid={bad('contactName')} />
         <Field label="شمارهٔ تماس" name="phone" type="tel" inputMode="tel" autoComplete="tel" dir="ltr" maxLength={20} defaultValue={value('phone')} hint="همراه یا تلفن ثابت با پیش‌شماره" invalid={bad('phone')} />
