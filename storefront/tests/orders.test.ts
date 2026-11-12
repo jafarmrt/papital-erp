@@ -279,7 +279,7 @@ describe('the retail cap and the guest phone proof', () => {
     const requestKey = 'rk-guest-proof-check-0001';
     const asked = await post('/checkout', { intent: 'place', requestKey, ...address, shippingMethod: 'post' }, cart);
     expect(asked.status).toBe(200);
-    expect(asked.html).toContain('کد تأیید به');
+    expect(asked.html).toContain('کد تأیید با پیامک به');
     expect(asked.html).toContain('name="code"');
     expect(asked.html).toContain('name="codeFor" value="09121234567"');
 
@@ -304,7 +304,7 @@ describe('the retail cap and the guest phone proof', () => {
 
   it('asks a signed-in buyer for no code', async () => {
     await smsLogin(true);
-    const proven = await post('/account/sign-up', { intent: 'verify-code', phone: '09127654321', code: '123456' });
+    const proven = await post('/account/sign-up', { intent: 'verify-code', contact: '09127654321', code: '123456' });
     const made = await post('/account/sign-up', { intent: 'register', phone: '09127654321', name: 'خریدار حساب‌دار', password: 'رمز-آزمون-1405', formAt: await stamp() }, cookieValue(proven.cookies, 'sf_proof'));
     const session = cookieValue(made.cookies, 'sf_session');
     expect(session).toMatch(/^sf_session=/);
@@ -555,20 +555,20 @@ describe('«پیگیری سفارش» with the buyer\'s phone (v12 phase 8d)', (
       requestKey: 'rk-track-by-phone-0001', ...address, phone: '09125550001', shippingMethod: 'post', lines: [{ slug: 'tile-earrings-sample', quantity: 1 }], phoneProof: 'pp_mock09125550001',
     });
     const number = placed.order.number;
-    const asked = await post('/orders/track', { intent: 'send-code', number, phone: '۰۹۱۲۵۵۵۰۰۰۱' });
-    expect(asked.html).toContain('کد تأیید به');
+    const asked = await post('/orders/track', { intent: 'send-code', number, contact: '۰۹۱۲۵۵۵۰۰۰۱' });
+    expect(asked.html).toContain('کد تأیید با پیامک به');
     expect(asked.html).toContain('name="code"');
 
     // a mistyped number with the right code: the words of any wrong pair, and the proof waits for the right number
     const SAME = 'سفارشی با این شماره برای این شمارهٔ همراه پیدا نشد';
-    const mistyped = await post('/orders/track', { intent: 'verify-code', number: '999999', phone: '09125550001', code: '123456' });
+    const mistyped = await post('/orders/track', { intent: 'verify-code', number: '999999', contact: '09125550001', code: '123456' });
     expect(mistyped.html).toContain(SAME);
     const proof = mistyped.cookies.find(c => c.startsWith('sf_track_proof='))!;
     expect(proof).toMatch(/HttpOnly/);
     expect(proof).toMatch(/Path=\/;/);
-    const anotherPhone = await post('/orders/track', { intent: 'verify-code', number, phone: '09125550002', code: '123456' });
+    const anotherPhone = await post('/orders/track', { intent: 'verify-code', number, contact: '09125550002', code: '123456' });
     expect(anotherPhone.html).toContain(SAME);
-    expect((await post('/orders/track', { intent: 'verify-code', number, phone: '09125550001', code: '000000' })).html).toContain('کد درست نیست');
+    expect((await post('/orders/track', { intent: 'verify-code', number, contact: '09125550001', code: '000000' })).html).toContain('کد درست نیست');
 
     const opened = await post('/orders/track', { intent: 'by-phone', number }, cookieValue(mistyped.cookies, 'sf_track_proof'));
     expect(opened.status).toBe(302);

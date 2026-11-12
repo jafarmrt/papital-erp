@@ -38,9 +38,9 @@ const inputClass = 'block min-h-12 w-full rounded-control border border-border b
 export function Field(props: {
   label: string;
   name: string;
-  type?: 'text' | 'tel' | 'password';
+  type?: 'text' | 'tel' | 'password' | 'email';
   autoComplete: string;
-  inputMode?: 'text' | 'tel' | 'numeric';
+  inputMode?: 'text' | 'tel' | 'numeric' | 'email';
   defaultValue?: string;
   hint?: string;
   dir?: 'ltr' | 'rtl';
@@ -72,10 +72,24 @@ export function PhoneField({ defaultValue, autoFocus, invalid }: { defaultValue?
   );
 }
 
-export function CodeField() {
+/** v12 phase 8e: a phone or an email in one field (`contact`); the page says which the ERP takes now */
+export function ContactField({ label, ways, defaultValue, autoFocus, invalid }: {
+  label: string; ways: { sms: boolean; email: boolean }; defaultValue?: string; autoFocus?: boolean; invalid?: boolean;
+}) {
+  // the keypad and autofill of the one way on (a phone keeps its tel keypad while the email is off)
+  const phoneOnly = !ways.email;
+  const emailOnly = ways.email && !ways.sms;
   return (
-    <Field label="کد پیامک‌شده" name="code" inputMode="numeric" autoComplete="one-time-code" dir="ltr" maxLength={12} autoFocus
-      hint="کد شش‌رقمی سه دقیقه اعتبار دارد." />
+    <Field label={label} name="contact" type={phoneOnly ? 'tel' : emailOnly ? 'email' : 'text'} dir="ltr" maxLength={254} defaultValue={defaultValue}
+      autoComplete={phoneOnly ? 'tel' : emailOnly ? 'email' : 'username'} inputMode={phoneOnly ? 'tel' : emailOnly ? 'email' : 'text'}
+      autoFocus={autoFocus} invalid={invalid} hint={phoneOnly ? 'مانند ۰۹۱۲۱۲۳۴۵۶۷' : undefined} />
+  );
+}
+
+export function CodeField({ byEmail }: { byEmail?: boolean } = {}) {
+  return (
+    <Field label={byEmail ? 'کد تأیید' : 'کد پیامک‌شده'} name="code" inputMode="numeric" autoComplete="one-time-code" dir="ltr" maxLength={12} autoFocus
+      hint={byEmail ? "کد شش‌رقمی ده دقیقه اعتبار دارد؛ اگر نرسید، پوشهٔ هرزنامه را هم ببینید." : "کد شش‌رقمی سه دقیقه اعتبار دارد."} />
   );
 }
 

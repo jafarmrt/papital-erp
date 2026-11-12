@@ -5,6 +5,7 @@ import type { AccountOrderPage, BuyerAddressBook } from '@erp/storefront/storefr
 import type { StorefrontAccountView } from '@erp/storefront/storefrontBuyerContracts';
 import { accountCall, clearSessionCookie, crossSite, sameSite, sessionOf } from '../lib/account.server';
 import { siteEnv } from '../lib/site.server';
+import { publicSettings } from '../lib/api.server';
 import { faDateTime, faDigits, faNumber, formatPrice } from '../lib/format';
 import { pageMeta } from '../lib/meta';
 import { Pagination } from '../components/Pagination';
@@ -26,14 +27,18 @@ export async function loader({ request }: Route.LoaderArgs) {
   const signIn = () => redirect(`/account/sign-in?next=${encodeURIComponent(url.pathname + url.search)}`, { headers: { 'Set-Cookie': clearSessionCookie() } });
   if (!sessionOf(request)) throw redirect(`/account/sign-in?next=${encodeURIComponent(url.pathname + url.search)}`);
   const page = Math.max(1, Math.min(100_000, Number(url.searchParams.get('page')) || 1));
-  const [account, orders, book] = await Promise.all([
+  const [account, orders, book, settings] = await Promise.all([
     accountCall<StorefrontAccountView>(request, 'GET', '/account'),
     accountCall<AccountOrderPage>(request, 'GET', `/account/orders?page=${page}&limit=${PAGE_SIZE}`),
     accountCall<BuyerAddressBook>(request, 'GET', '/account/addresses'),
+    publicSettings(),
   ]);
   if (account.status === 401 || orders.status === 401) throw signIn();
   if (!account.data || !orders.data) throw new Response('در دسترس نیست', { status: 503 });
-  return { account: account.data, orders: orders.data, addresses: book.data?.data ?? [], siteUrl: siteEnv().siteUrl };
+  return {
+    account: account.data, orders: orders.data, addresses: book.data?.data ?? [], siteUrl: siteEnv().siteUrl,
+    smsLogin: settings.smsLogin === true, emailLogin: settings.emailLogin === true,
+  };
 }
 
 /** v12 phase 8c: «پیش‌فرض شود» and «حذف» of a kept address */
@@ -58,7 +63,10 @@ export function meta({ data }: Route.MetaArgs) {
 }
 
 export default function AccountPage({ loaderData, actionData }: Route.ComponentProps) {
-  const { account, orders, addresses } = loaderData;
+  const { account, orders, addresses, smsLogin, emailLogin } = loaderData;
+  // v12 phase 8e review: «ایمیل و شمارهٔ حساب» offers only a way the ERP takes now
+  const contactLink = account.email && account.phone ? (emailLogin || smsLogin ? 'عوض کردن ایمیل یا شماره' : '')
+    : !account.email ? (emailLogin ? 'افزودن ایمیل' : '') : smsLogin ? 'افزودن شمارهٔ همراه' : '';
   const said = (actionData as { error?: string } | undefined)?.error;
   const pages = Math.max(1, Math.ceil(orders.total / orders.limit));
   const application = APPLICATION_TITLES[account.application];
@@ -70,7 +78,10 @@ export default function AccountPage({ loaderData, actionData }: Route.ComponentP
 
       <section className="mt-6 space-y-2 rounded-surface border border-border bg-card p-5 leading-7">
         <p className="text-lg font-bold">{account.name}</p>
-        <p dir="ltr" className="text-start text-muted-foreground">{faDigits(account.phone)}</p>
+        {account.phone ? <p dir="ltr" className="text-start text-muted-foreground">{faDigits(account.phone)}</p> : null}
+        {/* v12 phase 8e: the account's proven email, and the page that adds or replaces an email or phone */}
+        {account.email ? <p dir="ltr" className="text-start text-muted-foreground" data-account-email>{account.email}</p> : null}
+        {contactLink ? <Link to="/account/contact" className="inline-flex min-h-11 items-center text-sm font-bold text-brand hover:underline">{contactLink}</Link> : null}
         {account.companyName ? <p>{account.companyName}</p> : null}
         {account.group ? (
           <div className="mt-3 border-t border-border pt-3 text-sm">
