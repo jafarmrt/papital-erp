@@ -247,6 +247,16 @@ async function ordering(req, res, route) {
     order.receipts.push({ reference: body.reference, paidAt: body.paidAt, cardLast4: String(body.cardLast4).slice(-4), amount: body.amount, status: 'pending', statusTitle: 'در انتظار بررسی', rejectReason: '', createdAt: new Date().toISOString() });
     return send(res, 201, { data: orderView(order) });
   };
+  // v12 phase 8d: a guest order opened with its buyer's phone and that phone's proof; any wrong pair is the same 404
+  const access = /^\/orders\/(\d+)\/access$/.exec(route);
+  if (access && req.method === 'POST') {
+    const order = orders.get(access[1]);
+    const phone = latin(body.phone).replace(/\s+/g, '');
+    if (!order || latin(order.recipient.phone) !== phone || !proofOk(phone, body.phoneProof)) {
+      return send(res, 404, { error: 'سفارشی با این شماره برای این شمارهٔ همراه پیدا نشد.', code: 'STOREFRONT_ORDER_NOT_FOUND' });
+    }
+    return send(res, 200, { data: { accessKey: keyOf(order.number) } });
+  }
   const keyed = /^\/orders\/(\d+)(\/receipts)?$/.exec(route);
   if (keyed) {
     const order = orders.get(keyed[1]);

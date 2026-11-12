@@ -81,6 +81,12 @@ export const BUYER_NOTE_MAX = 500;
 export const GIFT_MESSAGE_MAX = 200;
 /** v12 phase 8c: the addresses one buyer account keeps in its address book */
 export const BUYER_ADDRESSES_MAX = 10;
+/**
+ * v12 phase 8d (site review 2.2): the tries a visitor gets, and the tries an order gets from everyone, to open a guest
+ * order on another phone with its buyer's phone and a code, per hour; a try that opens the order does not count.
+ */
+export const ORDER_TRACK_TRIES_PER_VISITOR_HOUR = 10;
+export const ORDER_TRACK_TRIES_PER_ORDER_HOUR = 5;
 export const REJECT_REASON_MAX = 300;
 export const TRACKING_CODE_MAX = 40;
 

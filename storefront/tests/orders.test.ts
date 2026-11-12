@@ -541,3 +541,43 @@ describe('phase 8c: buyer and recipient, the gift and the address book', () => {
     expect((await post('/account', { intent: 'address-remove', addressId: mother! }, session, { 'Sec-Fetch-Site': 'cross-site' })).status).toBe(403);
   });
 });
+
+describe('«پیگیری سفارش» with the buyer\'s phone (v12 phase 8d)', () => {
+  const smsLogin = (on: boolean) => fetch(`http://127.0.0.1:${PORT}/__mock/sms-login?on=${on ? 1 : 0}`);
+  const api = async <T,>(route: string, body: unknown) => ((await (await fetch(`http://127.0.0.1:${PORT}/api/storefront/v1${route}`, {
+    method: 'POST', headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  })).json()) as { data: T }).data;
+  afterAll(async () => { await smsLogin(false); });
+
+  it('opens a guest order on another phone with its number, the buyer\'s phone and a code, and reads the same for any wrong pair', async () => {
+    await smsLogin(true);
+    const placed = await api<{ order: { number: string } }>('/orders', {
+      requestKey: 'rk-track-by-phone-0001', ...address, phone: '09125550001', shippingMethod: 'post', lines: [{ slug: 'tile-earrings-sample', quantity: 1 }], phoneProof: 'pp_mock09125550001',
+    });
+    const number = placed.order.number;
+    const asked = await post('/orders/track', { intent: 'send-code', number, phone: '۰۹۱۲۵۵۵۰۰۰۱' });
+    expect(asked.html).toContain('کد تأیید به');
+    expect(asked.html).toContain('name="code"');
+
+    // a mistyped number with the right code: the words of any wrong pair, and the proof waits for the right number
+    const SAME = 'سفارشی با این شماره برای این شمارهٔ همراه پیدا نشد';
+    const mistyped = await post('/orders/track', { intent: 'verify-code', number: '999999', phone: '09125550001', code: '123456' });
+    expect(mistyped.html).toContain(SAME);
+    const proof = mistyped.cookies.find(c => c.startsWith('sf_track_proof='))!;
+    expect(proof).toMatch(/HttpOnly/);
+    expect(proof).toMatch(/Path=\/;/);
+    const anotherPhone = await post('/orders/track', { intent: 'verify-code', number, phone: '09125550002', code: '123456' });
+    expect(anotherPhone.html).toContain(SAME);
+    expect((await post('/orders/track', { intent: 'verify-code', number, phone: '09125550001', code: '000000' })).html).toContain('کد درست نیست');
+
+    const opened = await post('/orders/track', { intent: 'by-phone', number }, cookieValue(mistyped.cookies, 'sf_track_proof'));
+    expect(opened.status).toBe(302);
+    expect(opened.location).toBe(`/orders/${number}`);
+    expect(cookieValue(opened.cookies, 'sf_orders')).toContain(number);
+    expect(opened.cookies.some(c => c.startsWith('sf_track_proof=;') && c.includes('Max-Age=0'))).toBe(true);
+    const write = await lastPost();
+    expect(write.route).toBe(`/orders/${number}/access`);
+    expect(write.body.phoneProof).toBe('pp_mock09125550001');
+    expect((await page(`/orders/${number}`, cookieValue(opened.cookies, 'sf_orders'))).status).toBe(200);
+  });
+});

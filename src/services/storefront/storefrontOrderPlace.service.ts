@@ -169,9 +169,13 @@ function assertRetailCap(buyer: OrderBuyer, lines: readonly CartLineInput[]): vo
  * signed-in account that types another phone proves that phone like a guest; else a session would let anyone order in
  * a stranger's name and on a stranger's customer.
  */
-async function assertGuestPhoneProven(tx: DbTransaction, buyer: OrderBuyer, phone: string, proof: string): Promise<void> {
-  if (buyer.account?.phoneKey === phoneMatchKey(phone) || !(await smsLoginOn(tx))) return;
+async function assertGuestPhoneProven(tx: DbTransaction, buyer: OrderBuyer, phone: string, proof: string): Promise<boolean> {
+  // 8d review: whether the order's phone is proven (a proof used now, or the account's own proven phone) is kept on the
+  // order, since only a proven phone may later open it on another device
+  if (buyer.account?.phoneKey === phoneMatchKey(phone)) return Boolean(buyer.account.phoneVerifiedAt);
+  if (!(await smsLoginOn(tx))) return false;
   if (!proof || !(await consumePhoneProof(tx, phone, proof))) throw phoneProofInvalid();
+  return true;
 }
 
 const isPhoneProofRefusal = (err: unknown): boolean => err instanceof ValidationError && err.code === 'STOREFRONT_PHONE_PROOF_REQUIRED';
@@ -261,7 +265,7 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
   assertPaymentAllowed(buyer, order.paymentMethod);
   assertRetailCap(buyer, order.lines);
   // before anything is locked, reserved or made: an order without its proof leaves no customer, proforma or text behind
-  await assertGuestPhoneProven(tx, buyer, order.phone, phoneProof);
+  const phoneProven = await assertGuestPhoneProven(tx, buyer, order.phone, phoneProof);
   const onAccount = order.paymentMethod === 'on_account';
   // one phone's orders one at a time, so the open-orders limit holds under concurrent requests; then the items (§2.6)
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`storefront-phone:${order.phoneKey}`}))`);
@@ -323,7 +327,7 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
 
   const [row] = await tx.insert(storefrontOrders).values({
     orderNumber, accessSalt: newAccessSalt(), requestKey: order.requestKey, requestHash, documentId, customerId: customer.id,
-    status: onAccount ? 'awaiting_approval' : 'awaiting_payment', recipientName: order.recipientName, phone: order.phone, phoneKey: order.phoneKey,
+    status: onAccount ? 'awaiting_approval' : 'awaiting_payment', recipientName: order.recipientName, phone: order.phone, phoneKey: order.phoneKey, phoneProven: phoneProven ? 1 : 0,
     province: order.province, city: order.city, address: order.address, postalCode: order.postalCode, buyerNote: order.note,
     shippingMethodCode: option.code, shippingMethodTitle: option.title, shippingOnDelivery: option.kind === 'on_delivery' ? 1 : 0,
     shippingAmount: money(shippingAmount), itemsAmount: money(cart.itemsAmount), payableAmount: money(payable),
