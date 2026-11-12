@@ -31,6 +31,7 @@ export const STOREFRONT_SETTING_KEYS = {
   ordersEnabled: 'sf_orders_enabled',
   treasuryAccountId: 'sf_treasury_account',
   openOrdersPerPhone: 'sf_open_orders_per_phone',
+  approvalHours: 'sf_approval_hours',
 } as const;
 
 export interface StorefrontSettingsInput {
@@ -60,10 +61,16 @@ export interface StorefrontSettingsInput {
   treasuryAccountId: number;
   /** the unpaid orders one phone number may hold at once */
   openOrdersPerPhone: number;
+  /** v12 phase 8b (site review 2.7): the hours an «به حساب» order waits for a colleague's confirmation; absent keeps the stored */
+  approvalHours?: number;
   version: number;
 }
 
+/** The settings as the server reads them: every value present */
+export type StorefrontSettingValues = StorefrontSettingsInput & { approvalHours: number };
+
 export interface StorefrontSettingsView extends StorefrontSettingsInput {
+  approvalHours: number;
   /** the configured price lists the two price list fields choose from */
   priceLists: string[];
   /** the active warehouses the warehouse field chooses from */

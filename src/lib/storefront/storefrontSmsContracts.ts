@@ -11,6 +11,7 @@ export const STOREFRONT_SMS_SETTING_KEYS = {
   apiKeyHint: 'sf_sms_api_key_hint',
   templates: 'sf_sms_templates',
   hourlyCap: 'sf_sms_hourly_cap',
+  orderHourlyCap: 'sf_sms_order_hourly_cap',
   version: 'sf_sms_version',
 } as const;
 
@@ -24,8 +25,10 @@ export interface StorefrontSmsSettingsInput {
   /** true removes the stored key (and turns sending off) */
   clearApiKey: boolean;
   templates: SmsTemplates;
-  /** texts of every kind the site sends in an hour; a day holds `SMS_DAILY_CAP_HOURS` times it */
+  /** v12 phase 8b (site review 2.11): login codes the site sends in an hour; a day holds `SMS_DAILY_CAP_HOURS` times it */
   hourlyCap: number;
+  /** v12 phase 8b: order texts the site sends in an hour, a budget of their own; absent keeps the stored one */
+  orderHourlyCap?: number;
   version: number;
 }
 
@@ -35,6 +38,7 @@ export interface StorefrontSmsSettingsView {
   apiKey: { configured: boolean; hint: string; readable: boolean };
   templates: SmsTemplates;
   hourlyCap: number;
+  orderHourlyCap: number;
   version: number;
   /** whether the server can keep a provider key at all (`ERP_SECRETS_KEY` is set) */
   secretsKeyConfigured: boolean;

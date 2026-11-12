@@ -11,10 +11,14 @@ import {
 } from '../services/storefront/storefrontCatalog.service.js';
 import { STOREFRONT_QUERY_TEXT_MAX, STOREFRONT_SLUG_MAX } from '../lib/storefront/storefrontRules.js';
 import { publicBrand } from '../services/storefront/storefrontBrand.service.js';
-import { ORDER_LINES_MAX, PAYMENT_METHODS } from '../lib/storefront/storefrontOrderRules.js';
+import {
+  GIFT_MESSAGE_MAX, ORDER_LINES_MAX, ORDER_TRACK_TRIES_PER_ORDER_HOUR, ORDER_TRACK_TRIES_PER_VISITOR_HOUR, PAYMENT_METHODS,
+} from '../lib/storefront/storefrontOrderRules.js';
 import { claimOrder, myOrder, myOrders, sendAccountReceipt } from '../services/storefront/storefrontAccountOrders.service.js';
+import { myAddresses, removeAddress, setDefaultAddress } from '../services/storefront/storefrontBuyerAddresses.service.js';
 import { placeOrder, quoteShipping } from '../services/storefront/storefrontOrderPlace.service.js';
 import { buyerOrder, sendReceipt } from '../services/storefront/storefrontOrderBuyer.service.js';
+import { orderAccessByPhone } from '../services/storefront/storefrontOrderTrack.service.js';
 import { ACCESS_KEY_MAX } from '../services/storefront/storefrontOrderKeys.js';
 import { publicSeo } from '../services/storefront/storefrontSeo.service.js';
 import { catalogFeed } from '../services/storefront/storefrontFeed.service.js';
@@ -109,6 +113,9 @@ const orderSchema = z.object({
     city: z.string().max(120), address: z.string().max(800), postalCode: z.string().max(40), note: z.string().max(1000),
     shippingMethod: z.string().max(60), lines: cartLines, paymentMethod: z.enum(PAYMENT_METHODS).optional(),
     discountCode: z.string().max(40).optional(), phoneProof: z.string().max(PHONE_PROOF_MAX + 1).optional(),
+    // v12 phase 8c: the buyer apart from the recipient, a gift and the address book
+    buyerName: z.string().max(200).optional(), recipientPhone: z.string().max(40).optional(), gift: z.boolean().optional(),
+    giftMessage: z.string().max(GIFT_MESSAGE_MAX * 2).optional(), saveAddress: z.boolean().optional(),
   }).strict(),
 });
 const orderNumberParams = z.object({ number: z.string().min(1).max(20) }).passthrough();
@@ -215,6 +222,24 @@ router.post('/orders', writeLimiter, validate(orderSchema), asyncHandler(async (
 
 router.get('/orders/:number', validate(orderReadSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ data: await buyerOrder(String(req.params.number), orderKeyOf(req)) });
+}));
+
+/**
+ * v12 phase 8d (site review 2.2): a guest order opened on another phone with its buyer's phone and a proof of it. A
+ * failed try counts against the visitor and against the order, each per hour; a try that opens the order does not.
+ */
+const trackLimiter = (max: number, key: (req: Request) => string, skip?: (req: Request) => boolean) => rateLimit({
+  windowMs: 3_600_000, max, standardHeaders: true, legacyHeaders: false, skipSuccessfulRequests: true, keyGenerator: key, skip,
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+});
+// 8d review: a request that does not name its visitor (the site without STOREFRONT_TRUST_PROXY) is not counted per
+// visitor, else every buyer would share one budget and one person could close the way for all; the per-order limit stands
+const trackVisitorLimiter = trackLimiter(ORDER_TRACK_TRIES_PER_VISITOR_HOUR, (req) => `storefront-track:${ipKeyGenerator(buyerAddress(req))}`,
+  (req) => !net.isIP(String(req.headers['x-storefront-client-ip'] ?? '').trim()));
+const trackOrderLimiter = trackLimiter(ORDER_TRACK_TRIES_PER_ORDER_HOUR, (req) => `storefront-track-order:${String(req.params.number ?? '').slice(0, 20)}`);
+const accessSchema = z.object({ params: orderNumberParams, body: z.object({ phone: z.string().max(40), phoneProof: z.string().max(PHONE_PROOF_MAX + 1) }).strict() });
+router.post('/orders/:number/access', writeLimiter, trackVisitorLimiter, trackOrderLimiter, validate(accessSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await orderAccessByPhone(String(req.params.number), req.body) });
 }));
 
 router.post('/orders/:number/receipts', writeLimiter, validate(receiptSchema), asyncHandler(async (req: Request, res: Response) => {
@@ -344,6 +369,22 @@ router.post('/account/orders/:number/receipts', writeLimiter, validate(receiptSc
 
 router.post('/account/orders/claim', writeLimiter, validate(claimSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ data: await claimOrder(sessionOf(req), req.body) });
+}));
+
+// v12 phase 8c: the account's address book (kept from the checkout; listed, made the default and removed from «حساب من»)
+const addressSchema = z.object({ params: z.object({ id: z.string().regex(/^[1-9]\d{0,9}$/) }).strict() });
+const addressDefaultSchema = addressSchema.extend({ body: z.object({}).strict().optional() });
+
+router.get('/account/addresses', asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await myAddresses(sessionOf(req)) });
+}));
+
+router.post('/account/addresses/:id/default', writeLimiter, validate(addressDefaultSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await setDefaultAddress(sessionOf(req), Number(req.params.id)) });
+}));
+
+router.delete('/account/addresses/:id', writeLimiter, validate(addressSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await removeAddress(sessionOf(req), Number(req.params.id)) });
 }));
 
 export default router;

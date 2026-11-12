@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   EXPIRING_ORDER_STATUSES, NEXT_FULFILMENT, OPEN_ORDER_STATUSES, ORDER_LINES_MAX, ORDER_STATUSES, ORDER_STATUS_TITLES, PAYMENT_METHODS,
-  PAYMENT_METHOD_TITLES, RETAIL_LINE_CAP_MESSAGE, RETAIL_LINE_QUANTITY_MAX, cartLinesError, cleanText, retailLineOverCap, isIranProvince, isOrderStatus, isPaymentMethod, normalizeCardLast4, normalizeMobile, normalizePostalCode, normalizeReference, tomanText,
+  PAYMENT_METHOD_TITLES, RETAIL_LINE_CAP_MESSAGE, RETAIL_LINE_QUANTITY_MAX, cartLinesError, cleanText, retailLineOverCap, isIranProvince, payableWith, isOrderStatus, isPaymentMethod, normalizeCardLast4, normalizeMobile, normalizePostalCode, normalizeReference, tomanText,
 } from '../../lib/storefront/storefrontOrderRules';
 
 describe('normalizeMobile', () => {
@@ -99,5 +99,19 @@ describe('the retail cap (v12 phase 7, site review 2.10)', () => {
   it('says the cap in Persian digits and points to the shop for more', () => {
     expect(RETAIL_LINE_CAP_MESSAGE).toContain('۵');
     expect(RETAIL_LINE_CAP_MESSAGE).toContain('با فروشگاه تماس بگیرید');
+  });
+});
+
+// v12 phase 8a (site review 2.4): the one sum the checkout's summary and the placed order both show
+describe('payableWith', () => {
+  it('adds a costed method, never a paid-on-delivery one, after the discount', () => {
+    expect(payableWith('4350000', '0', { kind: 'cost', amount: '500000' })).toBe('4850000');
+    expect(payableWith('4350000', '435000', { kind: 'cost', amount: '500000' })).toBe('4415000');
+    expect(payableWith('4350000', '435000', { kind: 'on_delivery', amount: '900000' })).toBe('3915000');
+    expect(payableWith('4350000', '0', { kind: 'cost', amount: '0' })).toBe('4350000');
+  });
+
+  it('keeps whole rial past the safe range of a JavaScript number', () => {
+    expect(payableWith('9007199254740993', '1', { kind: 'cost', amount: '10' })).toBe('9007199254741002');
   });
 });

@@ -213,6 +213,11 @@ export default function OrderPage({ loaderData, actionData }: Route.ComponentPro
         <p>{order.recipient.name}، <bdi dir="ltr">{faDigits(order.recipient.phone)}</bdi></p>
         <p>{order.recipient.province}، {order.recipient.city}، {order.recipient.address}</p>
         <p>کد پستی <bdi dir="ltr">{faDigits(order.recipient.postalCode)}</bdi></p>
+        {/* v12 phase 8c: the buyer, when someone else receives it, and a gift with its card's message */}
+        {order.orderedBy && (order.orderedBy.name !== order.recipient.name || order.orderedBy.phone !== order.recipient.phone) ? (
+          <p data-ordered-by>{`خریدار: ${order.orderedBy.name}، `}<bdi dir="ltr">{faDigits(order.orderedBy.phone)}</bdi></p>
+        ) : null}
+        {order.gift ? <p data-gift className="font-bold">{order.gift.message ? `هدیه است؛ پیام کارت: ${order.gift.message}` : 'هدیه است'}</p> : null}
       </section>
 
       {source === 'key' && signedIn && answer?.done !== 'claim' ? (

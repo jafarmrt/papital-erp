@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import { and, asc, desc, eq, inArray, lte, ne, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lte, sql, type SQL } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { storefrontOrders, storefrontSmsMessages } from '../../db/schema.js';
 import { ValidationError } from '../../errors/customErrors.js';
@@ -9,13 +9,14 @@ import { phoneMatchKey } from '../../lib/search/phoneMatchKey.js';
 import { logger } from '../../middleware/logger.js';
 import { normalizeMobile } from '../../lib/storefront/storefrontOrderRules.js';
 import {
-  ORDER_SMS_PER_PHONE_DAY_MAX, SMS_DAILY_CAP_HOURS, SMS_KIND_PARAMS, SMS_KIND_TITLES, SMS_QUEUED_MAX_HOURS, isSmsKind, maskedMobile,
+  ORDER_SMS_PER_PHONE_DAY_MAX, SMS_KIND_PARAMS, SMS_KIND_TITLES, SMS_QUEUED_MAX_HOURS, isSmsKind, maskedMobile,
   smsParamValue,
   type OrderSmsKind, type SmsKind, type SmsMessageStatus, type SmsParams,
 } from '../../lib/storefront/storefrontSmsRules.js';
 import type { SmsMessagePage, SmsTestResult } from '../../lib/storefront/storefrontSmsContracts.js';
 import { sendTemplateSms, type SmsSendResult } from './storefrontSmsClient.js';
 import { activeTemplate, smsRuntimeSettings, type SmsRuntimeSettings } from './storefrontSmsSettings.service.js';
+import { smsBudgetSpent, spentSince, warnIfBudgetNearlySpent } from './storefrontSmsBudget.js';
 
 /**
  * v11 phase 8.4a (start plan §3): the site's text messages to buyers.
@@ -42,32 +43,10 @@ export function orderSmsParams(kind: OrderSmsKind, order: { orderNumber: string;
 }
 
 /**
- * Texts the site has spent (or is spending) in the last `seconds`: every kind, tests and skipped rows aside. One phone's
- * order texts when `phoneKey` is given.
- */
-async function spentSince(tx: DbExecutor, seconds: number, phoneKey?: string): Promise<number> {
-  const conditions: SQL[] = [
-    eq(storefrontSmsMessages.isTest, 0), ne(storefrontSmsMessages.status, 'skipped'),
-    sql`${storefrontSmsMessages.createdAt} > now() - make_interval(secs => ${seconds})`,
-  ];
-  if (phoneKey) conditions.push(eq(storefrontSmsMessages.phoneKey, phoneKey), ne(storefrontSmsMessages.kind, 'otp'));
-  const [{ count }] = await tx.select({ count: sql<number>`count(*)::int` }).from(storefrontSmsMessages).where(and(...conditions));
-  return count;
-}
-
-/**
- * Whether the site's budget of texts is spent: `hourlyCap` in the last hour, or `hourlyCap × SMS_DAILY_CAP_HOURS` in the
- * last day (start plan §4). Login codes and order texts share it, so orders placed for strangers' numbers cannot drain
- * the SMS credit any more than a spread attack on login codes can.
- */
-export async function smsBudgetSpent(tx: DbExecutor, hourlyCap: number): Promise<boolean> {
-  return await spentSince(tx, 3600) >= hourlyCap || await spentSince(tx, 86_400) >= hourlyCap * SMS_DAILY_CAP_HOURS;
-}
-
-/**
  * Queues one message to an order's buyer inside the order change's own transaction. Returns whether a row was queued
  * (false while sending is off, or this kind has no template). A shipped order without a tracking code still gets its
- * message, with «-» in the template's place. Over the site's budget, or past `ORDER_SMS_PER_PHONE_DAY_MAX` texts to this
+ * message, with «-» in the template's place. Over the order texts' budget (v12 phase 8b: its own, apart from the login
+ * codes'), or past `ORDER_SMS_PER_PHONE_DAY_MAX` texts to this
  * phone in a day, the row is written `skipped` with the reason (the log shows it; nothing is sent). The counts are read
  * without a lock, so concurrent orders may pass a cap by a message or two: the caps are a budget, not an exact count.
  */
@@ -81,13 +60,14 @@ export async function queueOrderSms(
   const phone = normalizeMobile(order.phone);
   if (!phone) return false;
   const phoneKey = order.phoneKey || phoneMatchKey(phone);
-  const skipped = await smsBudgetSpent(tx, settings.hourlyCap)
-    ? 'سقف پیامک‌های سایت پر شده بود'
-    : await spentSince(tx, 86_400, phoneKey) >= ORDER_SMS_PER_PHONE_DAY_MAX ? 'سقف روزانهٔ پیامک این شماره پر شده بود' : '';
+  const skipped = await smsBudgetSpent(tx, settings.orderHourlyCap, 'orders')
+    ? 'سقف پیامک سفارش سایت پر شده بود'
+    : await spentSince(tx, 86_400, { phoneKey }) >= ORDER_SMS_PER_PHONE_DAY_MAX ? 'سقف روزانهٔ پیامک این شماره پر شده بود' : '';
   await tx.insert(storefrontSmsMessages).values({
     kind, phone, phoneKey, orderId: order.id, params: JSON.stringify(orderSmsParams(kind, order)),
     status: skipped ? 'skipped' : 'queued', error: skipped, provider: settings.provider,
   });
+  if (!skipped) await warnIfBudgetNearlySpent(tx, settings.orderHourlyCap, 'orders');
   return !skipped;
 }
 

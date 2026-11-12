@@ -26,8 +26,17 @@ export interface ShippingOption {
   free: boolean;
 }
 
+/** v12 phase 8a review: one cart line at the price this buyer pays (the group's price for a wholesale account) */
+export interface QuotedLine {
+  slug: string;
+  quantity: number;
+  amount: string;
+}
+
 export interface ShippingQuoteAnswer {
   itemsAmount: string;
+  /** v12 phase 8a review: the cart's lines with their amounts, for the order summary (their sum is `itemsAmount`) */
+  lines: QuotedLine[];
   /** v11 phase 8.2c: the code that applied (free shipping is reckoned on the items after it), or null */
   discount: AppliedDiscount | null;
   /** the methods this cart and province can use, in the site's order (a weight-priced method needs every item's weight) */
@@ -39,7 +48,20 @@ export interface PlaceOrderRequest {
   /** a random key the app makes once per checkout (16 to 80 of A-Z a-z 0-9 _ -, e.g. a UUID); the same key and body answer the same order and its tracking key again, so it must not be guessable */
   requestKey: string;
   recipientName: string;
+  /**
+   * the buyer's mobile: the ERP's customer is found or made by it, the order's texts and a guest's phone proof are for it,
+   * and its open orders are counted. v12 phase 8c: the recipient's own phone, when another person, is `recipientPhone`.
+   */
   phone: string;
+  /** v12 phase 8c (site review 2.5): the buyer's name, whom the ERP's customer is named after; absent or '' = the recipient */
+  buyerName?: string;
+  /** v12 phase 8c: the recipient's mobile, a contact for the courier only (no code, no texts); absent or '' = the buyer's */
+  recipientPhone?: string;
+  /** v12 phase 8c (owner's decision 13): a gift, free, with an optional message for its card (`GIFT_MESSAGE_MAX`) */
+  gift?: boolean;
+  giftMessage?: string;
+  /** v12 phase 8c: a signed-in buyer keeps the address in the account's address book (ignored for a guest, or a full book) */
+  saveAddress?: boolean;
   province: string;
   city: string;
   address: string;
@@ -95,6 +117,10 @@ export interface BuyerOrder {
   /** until when the stock is held for an unpaid order (null once a receipt waits or the order is past payment) */
   payBefore: string | null;
   recipient: { name: string; phone: string; province: string; city: string; address: string; postalCode: string };
+  /** v12 phase 8c (site review 2.5): who placed the order (the ERP's customer), apart from the recipient */
+  orderedBy: { name: string; phone: string };
+  /** v12 phase 8c: a gift, with its card's message ('' = none); null = not a gift */
+  gift: { message: string } | null;
   note: string;
   shipping: { code: string; title: string; kind: 'cost' | 'on_delivery'; amount: string };
   lines: BuyerOrderLine[];
@@ -204,4 +230,41 @@ export interface AccountOrderPage {
 export interface ClaimOrderRequest {
   number: string;
   accessKey: string;
+}
+
+/**
+ * v12 phase 8d (site review 2.2): `POST /api/storefront/v1/orders/:number/access`, a guest order opened on another phone:
+ * the buyer's phone and a live proof of it (`/auth/otp/verify`) answer the order's tracking key. A wrong number, a phone
+ * that is not the order's buyer and a used or wrong proof all get the same 404.
+ */
+export interface OrderAccessRequest {
+  phone: string;
+  phoneProof: string;
+}
+
+export interface OrderAccessAnswer {
+  accessKey: string;
+}
+
+/**
+ * v12 phase 8c: one address of a buyer account's address book (`GET /api/storefront/v1/account/addresses`), the
+ * account's own only. The checkout fills its recipient from one; «حساب من» lists them.
+ */
+export interface BuyerAddress {
+  id: number;
+  recipientName: string;
+  /** '' = the account's own phone */
+  recipientPhone: string;
+  province: string;
+  city: string;
+  address: string;
+  postalCode: string;
+  isDefault: boolean;
+}
+
+export interface BuyerAddressBook {
+  /** the default first, then the newest */
+  data: BuyerAddress[];
+  /** how many the book holds at most (`BUYER_ADDRESSES_MAX`) */
+  max: number;
 }

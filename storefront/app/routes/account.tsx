@@ -1,9 +1,9 @@
 import { Form, Link, redirect } from 'react-router';
 import { ChevronLeft } from 'lucide-react';
 import type { Route } from './+types/account';
-import type { AccountOrderPage } from '@erp/storefront/storefrontOrderContracts';
+import type { AccountOrderPage, BuyerAddressBook } from '@erp/storefront/storefrontOrderContracts';
 import type { StorefrontAccountView } from '@erp/storefront/storefrontBuyerContracts';
-import { accountCall, clearSessionCookie, sessionOf } from '../lib/account.server';
+import { accountCall, clearSessionCookie, crossSite, sameSite, sessionOf } from '../lib/account.server';
 import { siteEnv } from '../lib/site.server';
 import { faDateTime, faDigits, faNumber, formatPrice } from '../lib/format';
 import { pageMeta } from '../lib/meta';
@@ -13,6 +13,8 @@ import { Pagination } from '../components/Pagination';
  * v11 phase 8.2b part 2: «حساب من». A signed-out visitor (or an expired session) goes to the sign-in and comes back here.
  * The page shows the account, its buyer group and the wholesale request as the buyer may see them, and the account's own
  * orders, newest first, ten to a page.
+ * v12 phase 8c: and the address book the checkout keeps addresses in: the default first, with «پیش‌فرض شود» and «حذف» as
+ * plain forms posted here (a book the ERP cannot read leaves the rest of the page as it is).
  */
 const PAGE_SIZE = 10;
 const APPLICATION_TITLES: Record<StorefrontAccountView['application'], string> = {
@@ -24,13 +26,29 @@ export async function loader({ request }: Route.LoaderArgs) {
   const signIn = () => redirect(`/account/sign-in?next=${encodeURIComponent(url.pathname + url.search)}`, { headers: { 'Set-Cookie': clearSessionCookie() } });
   if (!sessionOf(request)) throw redirect(`/account/sign-in?next=${encodeURIComponent(url.pathname + url.search)}`);
   const page = Math.max(1, Math.min(100_000, Number(url.searchParams.get('page')) || 1));
-  const [account, orders] = await Promise.all([
+  const [account, orders, book] = await Promise.all([
     accountCall<StorefrontAccountView>(request, 'GET', '/account'),
     accountCall<AccountOrderPage>(request, 'GET', `/account/orders?page=${page}&limit=${PAGE_SIZE}`),
+    accountCall<BuyerAddressBook>(request, 'GET', '/account/addresses'),
   ]);
   if (account.status === 401 || orders.status === 401) throw signIn();
   if (!account.data || !orders.data) throw new Response('در دسترس نیست', { status: 503 });
-  return { account: account.data, orders: orders.data, siteUrl: siteEnv().siteUrl };
+  return { account: account.data, orders: orders.data, addresses: book.data?.data ?? [], siteUrl: siteEnv().siteUrl };
+}
+
+/** v12 phase 8c: «پیش‌فرض شود» and «حذف» of a kept address */
+export async function action({ request }: Route.ActionArgs) {
+  if (!sameSite(request)) return crossSite();
+  const form = await request.formData();
+  const id = String(form.get('addressId') ?? '');
+  if (!/^[1-9]\d{0,9}$/.test(id)) return { error: 'این نشانی پیدا نشد.' };
+  const intent = String(form.get('intent') ?? '');
+  const done = intent === 'address-default'
+    ? await accountCall<BuyerAddressBook>(request, 'POST', `/account/addresses/${id}/default`, {})
+    : intent === 'address-remove' ? await accountCall<BuyerAddressBook>(request, 'DELETE', `/account/addresses/${id}`) : null;
+  if (!done) return { error: '' };
+  if (done.status === 401) return redirect('/account/sign-in?next=%2Faccount', { headers: { 'Set-Cookie': clearSessionCookie() } });
+  return done.data ? redirect('/account') : { error: done.error };
 }
 
 export const headers = () => ({ 'Cache-Control': 'no-store' });
@@ -39,8 +57,9 @@ export function meta({ data }: Route.MetaArgs) {
   return [...pageMeta({ title: 'حساب من', description: 'حساب خرید شما در پاپیتال', path: '/account', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
 }
 
-export default function AccountPage({ loaderData }: Route.ComponentProps) {
-  const { account, orders } = loaderData;
+export default function AccountPage({ loaderData, actionData }: Route.ComponentProps) {
+  const { account, orders, addresses } = loaderData;
+  const said = (actionData as { error?: string } | undefined)?.error;
   const pages = Math.max(1, Math.ceil(orders.total / orders.limit));
   const application = APPLICATION_TITLES[account.application];
 
@@ -62,6 +81,38 @@ export default function AccountPage({ loaderData }: Route.ComponentProps) {
           </div>
         ) : null}
         {application ? <p className="mt-3 border-t border-border pt-3 text-sm">{application}</p> : null}
+        {/* v12 phase 8a (site review 2.3): a retail account sends its wholesale request from here */}
+        {account.kind === 'retail' && (account.application === 'none' || account.application === 'declined') ? (
+          <Link to="/wholesale" data-wholesale-request className="mt-3 inline-flex min-h-11 items-center border-t border-border pt-3 text-sm font-bold text-brand hover:underline">درخواست خرید عمده</Link>
+        ) : null}
+      </section>
+
+      <section className="mt-10" aria-labelledby="addresses" data-address-book>
+        <h2 id="addresses" className="text-lg font-extrabold">دفترچهٔ نشانی</h2>
+        {said ? <p role="alert" className="mt-3 text-sm text-destructive">{said}</p> : null}
+        {addresses.length === 0 ? (
+          <p className="mt-3 text-muted-foreground">هنوز نشانی‌ای نگه نداشته‌اید. هنگام ثبت سفارش، «این نشانی را در دفترچهٔ نشانی نگه دار» را بزنید.</p>
+        ) : (
+          <ul className="mt-3 divide-y divide-border border-y border-border">
+            {addresses.map(a => (
+              <li key={a.id} className="space-y-2 py-4 text-sm leading-7">
+                <p className="font-bold">{a.recipientName}{a.isDefault ? <span className="ms-2 rounded-full bg-brand/10 px-2 text-xs text-brand">پیش‌فرض</span> : null}</p>
+                <p>{`${a.province}، ${a.city}، ${a.address}`}</p>
+                <p className="text-muted-foreground">{`کد پستی ${faDigits(a.postalCode)}`}{a.recipientPhone ? <span dir="ltr" className="ms-3">{faDigits(a.recipientPhone)}</span> : null}</p>
+                <div className="flex gap-4">
+                  {!a.isDefault ? (
+                    <Form method="post"><input type="hidden" name="addressId" value={a.id} />
+                      <button type="submit" name="intent" value="address-default" className="min-h-11 font-bold text-brand hover:underline">پیش‌فرض شود</button>
+                    </Form>
+                  ) : null}
+                  <Form method="post"><input type="hidden" name="addressId" value={a.id} />
+                    <button type="submit" name="intent" value="address-remove" className="min-h-11 font-bold text-muted-foreground hover:text-destructive">حذف</button>
+                  </Form>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="mt-10" aria-labelledby="orders">

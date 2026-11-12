@@ -62,11 +62,31 @@ export const ORDER_LINE_QUANTITY_MAX = 99;
 export const OPEN_ORDERS_PER_PHONE_DEFAULT = 3;
 export const OPEN_ORDERS_PER_PHONE_MAX = 20;
 
+/**
+ * v12 phase 8a (site review 2.4): what the buyer pays with one shipping method, in whole rial as text: the items, less the
+ * discount, plus the method's cost (nothing when the courier is paid on delivery). The order the ERP places and the
+ * checkout's summary above «ثبت سفارش» both use this, so the sum the buyer sees is the order's.
+ */
+export function payableWith(itemsAmount: string, discountAmount: string, shipping: { kind: string; amount: string }): string {
+  const cost = shipping.kind === 'cost' ? BigInt(shipping.amount) : 0n;
+  return (BigInt(itemsAmount) - BigInt(discountAmount) + cost).toString();
+}
+
 export const RECIPIENT_NAME_MAX = 80;
 export const CITY_MAX = 60;
 export const ADDRESS_MIN = 10;
 export const ADDRESS_MAX = 400;
 export const BUYER_NOTE_MAX = 500;
+/** v12 phase 8c (owner's decision 13): the message of a gift's card, free, on the order only */
+export const GIFT_MESSAGE_MAX = 200;
+/** v12 phase 8c: the addresses one buyer account keeps in its address book */
+export const BUYER_ADDRESSES_MAX = 10;
+/**
+ * v12 phase 8d (site review 2.2): the tries a visitor gets, and the tries an order gets from everyone, to open a guest
+ * order on another phone with its buyer's phone and a code, per hour; a try that opens the order does not count.
+ */
+export const ORDER_TRACK_TRIES_PER_VISITOR_HOUR = 10;
+export const ORDER_TRACK_TRIES_PER_ORDER_HOUR = 5;
 export const REJECT_REASON_MAX = 300;
 export const TRACKING_CODE_MAX = 40;
 

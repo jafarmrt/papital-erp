@@ -61,6 +61,22 @@ function OrderBody({ order, canManage, busy, run }: { order: AdminOrderDetail; c
       {order.cancelReasonTitle && <p className="rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700">{order.cancelReasonTitle}</p>}
       <BuyerBox order={order} />
 
+      {/* v12 phase 8c (site review 2.5): the buyer, whom the customer is, when someone else receives the order */}
+      {(order.orderedBy.name !== order.recipient.name || order.orderedBy.phone !== order.recipient.phone) && (
+        <section aria-label="خریدار" className="space-y-1">
+          <h4 className="text-xs font-black text-slate-500">خریدار</h4>
+          <p className="font-bold text-slate-800">{order.orderedBy.name}</p>
+          <a href={`tel:${order.orderedBy.phone}`} className="inline-flex min-h-11 items-center gap-1.5 font-bold text-sky-700" dir="ltr">
+            <Phone className="h-4 w-4" />{formatPersianCode(order.orderedBy.phone)}
+          </a>
+        </section>
+      )}
+      {order.gift && (
+        <p className="rounded-xl bg-violet-50 p-3 text-xs leading-6 text-violet-900">
+          <span className="font-black">هدیه است:</span> قیمت روی بسته نیاید.{order.gift.message ? ` پیام کارت: ${order.gift.message}` : ''}
+        </p>
+      )}
+
       <section aria-label="گیرنده" className="space-y-1">
         <h4 className="text-xs font-black text-slate-500">گیرنده</h4>
         <p className="font-bold text-slate-800">{order.recipient.name}</p>

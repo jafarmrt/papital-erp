@@ -3,7 +3,7 @@ import type { Request } from 'express';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { and, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { documentItems, documents, storefrontOrders, storefrontPaymentReceipts } from '../../db/schema.js';
+import { customers, documentItems, documents, storefrontOrders, storefrontPaymentReceipts } from '../../db/schema.js';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
@@ -165,9 +165,12 @@ export async function confirmPayment(req: Request, id: number, input: { receiptI
       .where(and(eq(documentItems.documentId, order.documentId), eq(documentItems.isDeleted, 0)));
     await lockStockItems(tx, lines.map(l => l.itemId));
     await assertLiveProforma(tx, order);
+    // v12 phase 8c review: the receipt names the order's ERP customer as the ERP keeps it (an existing customer found by
+    // the phone keeps its own name, whatever name the buyer typed), as the invoice's voucher row does
+    const [party] = await tx.select({ name: customers.name }).from(customers).where(eq(customers.id, order.customerId));
     const posted = await TreasuryTransactionService.createTreasuryTransaction({
       type: 'receipt', method: 'bank_transfer', amount: Number(payable), currency: 'IRR', bankAccountId: settings.treasuryAccountId,
-      partyType: 'customer', partyId: order.customerId, partyName: order.recipientName, trackingNumber: receipt.reference,
+      partyType: 'customer', partyId: order.customerId, partyName: party?.name || order.buyerName || order.recipientName, trackingNumber: receipt.reference,
       documentId: order.documentId, description: `دریافت کارت‌به‌کارت سفارش سایت ${order.orderNumber}`,
       userId: actor.userId, username: actor.username, audit: { req, userFullName: actor.userFullName },
     }, tx);

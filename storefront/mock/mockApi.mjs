@@ -73,7 +73,7 @@ const readBody = req => new Promise(resolve => {
   req.on('end', () => { try { resolve(JSON.parse(body || '{}')); } catch { resolve({}); } });
 });
 const proofOk = (phone, proof) => typeof proof === 'string' && proof === `pp_mock${phone}`;
-const view = a => ({ name: a.name, phone: a.phone, city: '', kind: 'retail', application: 'none', companyName: '', phoneVerified: a.verified, group: null });
+const view = a => ({ name: a.name, phone: a.phone, city: '', kind: 'retail', application: a.application ?? 'none', companyName: a.companyName ?? '', phoneVerified: a.verified, group: null });
 const session = a => {
   const token = `bs_mock${sessions.size + 1}x${a.phone}`;
   sessions.set(token, a.phone);
@@ -122,6 +122,24 @@ async function auth(req, res, route) {
 // the courier is paid on delivery and only in Tehran. A key is `ok_mock` + the number, padded to the ERP's length.
 const orders = new Map();
 const byRequestKey = new Map();
+// v12 phase 8c: each account's address book, by its phone
+const books = new Map();
+let nextAddress = 1;
+const BUYER_ADDRESSES_MAX = 10;
+const bookOf = phone => books.get(phone) ?? [];
+const bookView = phone => ({ data: [...bookOf(phone)].sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || b.id - a.id), max: BUYER_ADDRESSES_MAX });
+const keepAddress = (phone, to, recipientPhone) => {
+  const book = bookOf(phone);
+  const fields = { recipientName: to.name, recipientPhone, province: to.province, city: to.city, address: to.address, postalCode: to.postalCode };
+  let row = book.find(a => Object.entries(fields).every(([k, v]) => a[k] === v));
+  if (!row) {
+    if (book.length >= BUYER_ADDRESSES_MAX) return;
+    row = { id: nextAddress++, ...fields, isDefault: false };
+    book.push(row);
+  }
+  for (const a of book) a.isDefault = a === row;
+  books.set(phone, book);
+};
 let nextNumber = 100001;
 let nextLead = 501;
 const keyOf = number => `ok_mock${number}`.padEnd(46, 'x');
@@ -149,13 +167,14 @@ const quoteOf = (province, lines, discount = null) => {
   const free = settings.freeShippingThreshold && items - BigInt(discount?.amount ?? 0) >= BigInt(settings.freeShippingThreshold);
   const options = [{ code: 'post', title: 'پست پیشتاز', description: '', kind: 'cost', amount: free ? '0' : '500000', amountToman: free ? '0' : '50000', free: Boolean(free) }];
   if (province === 'تهران') options.push({ code: 'snapp', title: 'اسنپ باکس', description: 'فقط در تهران، همان روز.', kind: 'on_delivery', amount: '0', amountToman: '0', free: false });
-  return { itemsAmount: items.toString(), discount, options };
+  return { itemsAmount: items.toString(), lines: lines.map(l => ({ slug: l.slug, quantity: l.quantity, amount: l.lineAmount })), discount, options };
 };
 const orderView = o => {
   const waiting = o.status === 'awaiting_payment';
   return {
     number: o.number, status: o.status, statusTitle: STATUS_TITLES[o.status], createdAt: o.createdAt, payBefore: waiting ? new Date(Date.parse(o.createdAt) + 24 * 3600e3).toISOString() : null,
-    recipient: o.recipient, note: o.note, shipping: o.shipping, lines: o.lines, itemsAmount: o.itemsAmount, payableAmount: o.payableAmount,
+    recipient: { ...o.recipient, phone: o.recipientPhone || o.recipient.phone }, orderedBy: { name: o.buyerName || o.recipient.name, phone: o.recipient.phone },
+    gift: o.gift ? { message: o.giftMessage ?? '' } : null, note: o.note, shipping: o.shipping, lines: o.lines, itemsAmount: o.itemsAmount, payableAmount: o.payableAmount,
     payableToman: (BigInt(o.payableAmount) / 10n).toString(), payment: waiting ? settings.payment : null, canSendReceipt: waiting, receipts: o.receipts,
     trackingCode: '', cancelReason: null, cancelReasonTitle: '', paymentMethod: 'card', paymentMethodTitle: 'کارت‌به‌کارت', wholesale: false,
     discount: o.discount ?? null,
@@ -211,10 +230,14 @@ async function ordering(req, res, route) {
       number, status: 'awaiting_payment', createdAt: new Date().toISOString(), account: accountOf(req) ?? null,
       recipient: { name: body.recipientName, phone: body.phone, province: body.province, city: body.city, address: body.address, postalCode: body.postalCode },
       note: body.note ?? '', shipping: { code: option.code, title: option.title, kind: option.kind, amount: option.amount }, lines,
+      // v12 phase 8c: the buyer apart from the recipient, and a gift
+      buyerName: String(body.buyerName ?? ''), recipientPhone: String(body.recipientPhone ?? ''), gift: body.gift === true, giftMessage: body.gift === true ? String(body.giftMessage ?? '') : '',
       itemsAmount: quote.itemsAmount, payableAmount: (BigInt(quote.itemsAmount) - BigInt(discount?.amount ?? 0) + BigInt(option.amount)).toString(), receipts: [], discount,
     };
     orders.set(number, order);
     byRequestKey.set(body.requestKey, order);
+    // v12 phase 8c: a signed-in buyer keeps the address as the default (the same one again is only made the default)
+    if (body.saveAddress === true && accountOf(req)) keepAddress(accountOf(req), order.recipient, String(body.recipientPhone ?? ''));
     return send(res, 201, { data: { order: orderView(order), accessKey: keyOf(number) } });
   }
   const receipt = (order) => {
@@ -224,6 +247,16 @@ async function ordering(req, res, route) {
     order.receipts.push({ reference: body.reference, paidAt: body.paidAt, cardLast4: String(body.cardLast4).slice(-4), amount: body.amount, status: 'pending', statusTitle: 'در انتظار بررسی', rejectReason: '', createdAt: new Date().toISOString() });
     return send(res, 201, { data: orderView(order) });
   };
+  // v12 phase 8d: a guest order opened with its buyer's phone and that phone's proof; any wrong pair is the same 404
+  const access = /^\/orders\/(\d+)\/access$/.exec(route);
+  if (access && req.method === 'POST') {
+    const order = orders.get(access[1]);
+    const phone = latin(body.phone).replace(/\s+/g, '');
+    if (!order || latin(order.recipient.phone) !== phone || !proofOk(phone, body.phoneProof)) {
+      return send(res, 404, { error: 'سفارشی با این شماره برای این شمارهٔ همراه پیدا نشد.', code: 'STOREFRONT_ORDER_NOT_FOUND' });
+    }
+    return send(res, 200, { data: { accessKey: keyOf(order.number) } });
+  }
   const keyed = /^\/orders\/(\d+)(\/receipts)?$/.exec(route);
   if (keyed) {
     const order = orders.get(keyed[1]);
@@ -278,6 +311,39 @@ createServer(async (req, res) => {
     if (String(body.organization ?? '').trim().length < 2) return fieldError(res, 'organization', 'نام سازمان یا شرکت را بنویسید.');
     if (!/^\+?\d{8,15}$/.test(latin(body.phone).replace(/[\s()-]/g, ''))) return fieldError(res, 'phone', 'شمارهٔ تماس را با پیش‌شماره بنویسید (۸ تا ۱۵ رقم).');
     return send(res, 201, { data: { reference: String(nextLead++) } });
+  }
+  // v12 phase 8a: the wholesale request (the ERP's rules in storefrontWholesaleApply.service.ts): a guest's request makes a
+  // pending account for its phone, so it needs the phone's proof while SMS is on and refuses a phone with an account
+  if (route === '/wholesale/apply' && req.method === 'POST') {
+    const body = await readBody(req);
+    lastPost = { route, orderKey: '', session: String(req.headers['x-buyer-session'] ?? ''), body };
+    const signed = accountOf(req);
+    const phone = signed ?? latin(body.phone);
+    if (String(body.companyName ?? '').trim().length < 2) return send(res, 422, { error: 'نام فروشگاه یا شرکت را بنویسید.', code: 'STOREFRONT_ACCOUNT_FIELD_INVALID', details: { field: 'companyName' } });
+    if (!signed && settings.smsLogin && !proofOk(phone, body.phoneProof)) return send(res, 422, { error: 'شمارهٔ همراه را با کد پیامکی تأیید کنید.', code: 'STOREFRONT_PHONE_PROOF_REQUIRED' });
+    const existing = accounts.get(phone);
+    if (!signed && existing) return send(res, 409, { error: 'برای این شمارهٔ همراه حساب ساخته شده است؛ وارد شوید.', code: 'STOREFRONT_ACCOUNT_EXISTS' });
+    const account = existing ?? { name: String(body.name ?? ''), phone, password: '', verified: Boolean(body.phoneProof) };
+    Object.assign(account, { application: 'pending', companyName: String(body.companyName) });
+    accounts.set(phone, account);
+    return send(res, 201, { data: view(account) });
+  }
+  if (route === '/account/addresses' || route.startsWith('/account/addresses/')) {
+    const phone = accountOf(req);
+    if (!phone) return send(res, 401, { error: 'برای این کار وارد حساب خود شوید.', code: 'STOREFRONT_SESSION_REQUIRED' });
+    if (route === '/account/addresses' && req.method === 'GET') return send(res, 200, { data: bookView(phone) });
+    const one = /^\/account\/addresses\/(\d+)(\/default)?$/.exec(route);
+    const book = bookOf(phone);
+    const row = one ? book.find(a => a.id === Number(one[1])) : null;
+    if (!row) return send(res, 404, { error: 'این نشانی پیدا نشد.', code: 'STOREFRONT_ADDRESS_NOT_FOUND' });
+    lastPost = { route, orderKey: '', session: String(req.headers['x-buyer-session'] ?? ''), body: { method: req.method } };
+    if (one[2] && req.method === 'POST') { for (const a of book) a.isDefault = a === row; return send(res, 200, { data: bookView(phone) }); }
+    if (!one[2] && req.method === 'DELETE') {
+      book.splice(book.indexOf(row), 1);
+      if (row.isDefault && book.length) [...book].sort((a, b) => b.id - a.id)[0].isDefault = true;
+      return send(res, 200, { data: bookView(phone) });
+    }
+    return send(res, 404, { error: 'پیدا نشد' });
   }
   if (route === '/account/prices') return send(res, 200, { data: { group: '', prices: [] } });
   if (route === '/account') {

@@ -6,15 +6,17 @@ import {
   accountCall, clearProofCookie, crossSite, normalizePhone, proofCookie, proofOf, provenPhoneOf, safeNext, sameSite, sessionCookie, type SessionAnswer,
 } from '../lib/account.server';
 import { pageMeta } from '../lib/meta';
-import { AccountShell, CodeField, Field, FormError, FormNote, PhoneField, SubmitButton } from '../components/AccountForm';
+import { formStamp, keptStamp, trapRefusal } from '../lib/botTrap.server';
+import { AccountShell, BotTrapFields, CodeField, Field, FormError, FormNote, PhoneField, SubmitButton } from '../components/AccountForm';
 
 /**
  * v11 phase 8.4b: making a retail account. While the ERP signs in by SMS the phone is proven first (phone, then the
  * code), and the proof waits in an httpOnly cookie while the buyer writes the name and password; the sign-up presents it.
  * While SMS is off it is one form, as in 8.2b. The ERP decides every rule (a phone with an account, a weak password).
+ * v12 phase 8a (site review 2.12): the form that makes the account carries the robot trap, checked before the ERP is asked.
  */
 type Step = 'phone' | 'code' | 'details';
-interface ActionAnswer { step: Step; phone: string; error?: string; name?: string }
+interface ActionAnswer { step: Step; phone: string; error?: string; name?: string; stamp?: string }
 
 export async function loader({ request }: Route.LoaderArgs) {
   const settings = await publicSettings();
@@ -23,6 +25,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     provenPhone: provenPhoneOf(request),
     next: safeNext(new URL(request.url).searchParams.get('next')),
     siteUrl: siteEnv().siteUrl,
+    stamp: formStamp(),
   };
 }
 
@@ -41,7 +44,7 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionAnswe
   const phone = normalizePhone(typed);
   const here = `/account/sign-up${next !== '/' ? `?next=${encodeURIComponent(next)}` : ''}`;
   if (intent === 'another-phone') return redirect(here, { headers: { 'Set-Cookie': clearProofCookie() } });
-  if (!phone) return { step: intent === 'register' ? 'details' : 'phone', phone: typed, error: PHONE_WRONG };
+  if (!phone) return { step: intent === 'register' ? 'details' : 'phone', phone: typed, error: PHONE_WRONG, ...(intent === 'register' ? { stamp: keptStamp(form) } : {}) };
 
   if (intent === 'send-code') {
     const answer = await accountCall(request, 'POST', '/auth/otp/request', { phone });
@@ -55,6 +58,9 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionAnswe
   }
   if (intent === 'register') {
     const name = String(form.get('name') ?? '').slice(0, 200);
+    const stamp = keptStamp(form);
+    const trapped = trapRefusal(form);
+    if (trapped) return { step: 'details', phone, name, error: trapped, stamp };
     const proof = proofOf(request, phone);
     const answer = await accountCall<SessionAnswer>(request, 'POST', '/auth/register', {
       name, phone, password: String(form.get('password') ?? '').slice(0, 200), ...(proof ? { phoneProof: proof } : {}),
@@ -67,7 +73,7 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionAnswe
     }
     // a proof that ran out sends the buyer back to the code
     if (answer.code === 'STOREFRONT_PHONE_PROOF_REQUIRED') return { step: 'phone', phone, error: answer.error };
-    return { step: 'details', phone, name, error: answer.error };
+    return { step: 'details', phone, name, error: answer.error, stamp };
   }
   return { step: 'phone', phone };
 }
@@ -112,6 +118,7 @@ export default function SignUpPage({ loaderData, actionData }: Route.ComponentPr
         <Form method="post" className="space-y-5" replace>
           <input type="hidden" name="next" value={next} />
           <FormError message={answer?.error} />
+          <BotTrapFields stamp={answer?.stamp ?? loaderData.stamp} />
           {smsLogin ? (
             <>
               <input type="hidden" name="phone" value={phone} />

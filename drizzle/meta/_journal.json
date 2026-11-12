@@ -162,6 +162,27 @@
       "when": 1797753600000,
       "tag": "0022_storefront_campaigns",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1797840000000,
+      "tag": "0023_storefront_limits",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1797926400000,
+      "tag": "0024_storefront_buyer_recipient",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1798012800000,
+      "tag": "0025_storefront_order_phone_proven",
+      "breakpoints": true
     }
   ]
 }

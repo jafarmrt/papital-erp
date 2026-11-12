@@ -51,7 +51,8 @@ export function SiteFooter({ data }: { data: RootData | undefined }) {
             {data?.shippingTitles.length ? <li>ارسال با {data.shippingTitles.join('، ')}</li> : null}
             {data?.freeShippingThreshold ? <li>ارسال رایگان برای خرید از {formatPrice(data.freeShippingThreshold)} به بالا</li> : null}
             <li>پرداخت کارت‌به‌کارت</li>
-            <li><Link to="/corporate-gift" className="inline-flex min-h-10 items-center underline-offset-4 hover:underline">هدیهٔ سازمانی</Link> و خرید عمده با فاکتور رسمی</li>
+            <li><Link to="/corporate-gift" className="inline-flex min-h-10 items-center underline-offset-4 hover:underline">هدیهٔ سازمانی</Link> با فاکتور رسمی</li>
+            <li><Link to="/wholesale" className="inline-flex min-h-10 items-center underline-offset-4 hover:underline">درخواست خرید عمده</Link></li>
           </ul>
         </div>
         <nav aria-label="پاپیتال">
