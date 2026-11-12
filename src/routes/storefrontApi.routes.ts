@@ -118,6 +118,8 @@ const orderSchema = z.object({
     // v12 phase 8c: the buyer apart from the recipient, a gift and the address book
     buyerName: z.string().max(200).optional(), recipientPhone: z.string().max(40).optional(), gift: z.boolean().optional(),
     giftMessage: z.string().max(GIFT_MESSAGE_MAX * 2).optional(), saveAddress: z.boolean().optional(),
+    // v12 phase 8e: the buyer's email and its proof («حالت بی پیامک»)
+    email: z.string().max(EMAIL_ADDRESS_MAX + 6).optional(), emailProof: z.string().max(EMAIL_PROOF_MAX + 1).optional(),
   }).strict(),
 });
 const orderNumberParams = z.object({ number: z.string().min(1).max(20) }).passthrough();
@@ -239,7 +241,13 @@ const trackLimiter = (max: number, key: (req: Request) => string, skip?: (req: R
 const trackVisitorLimiter = trackLimiter(ORDER_TRACK_TRIES_PER_VISITOR_HOUR, (req) => `storefront-track:${ipKeyGenerator(buyerAddress(req))}`,
   (req) => !net.isIP(String(req.headers['x-storefront-client-ip'] ?? '').trim()));
 const trackOrderLimiter = trackLimiter(ORDER_TRACK_TRIES_PER_ORDER_HOUR, (req) => `storefront-track-order:${String(req.params.number ?? '').slice(0, 20)}`);
-const accessSchema = z.object({ params: orderNumberParams, body: z.object({ phone: z.string().max(40), phoneProof: z.string().max(PHONE_PROOF_MAX + 1) }).strict() });
+const accessSchema = z.object({
+  params: orderNumberParams,
+  body: z.union([
+    z.object({ phone: z.string().max(40), phoneProof: z.string().max(PHONE_PROOF_MAX + 1) }).strict(),
+    z.object({ email: z.string().max(EMAIL_ADDRESS_MAX + 6), emailProof: z.string().max(EMAIL_PROOF_MAX + 1) }).strict(),
+  ]),
+});
 router.post('/orders/:number/access', writeLimiter, trackVisitorLimiter, trackOrderLimiter, validate(accessSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ data: await orderAccessByPhone(String(req.params.number), req.body) });
 }));

@@ -135,6 +135,12 @@ export const SMS_QUEUED_MAX_HOURS = 24;
 /** After a right code: the phone proof the sign-up or sign-in that follows presents once */
 export const PHONE_PROOF_TTL_SECONDS = 600;
 export const PHONE_PROOF_PREFIX = 'pp_';
+/**
+ * v12 phase 8e (start plan §5, «حالت بی پیامک»): when this many of the latest login texts, all within the window, failed,
+ * the site stops asking for SMS codes and turns to email until the window has passed with no failures left in it.
+ */
+export const SMS_FAILURE_PAUSE_COUNT = 5;
+export const SMS_FAILURE_PAUSE_MINUTES = 30;
 export const PHONE_PROOF_MAX = 80;
 
 /** The code as the buyer typed it (Persian, Arabic or latin digits, spaces ignored), or null when it is not a code */

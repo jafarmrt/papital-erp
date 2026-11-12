@@ -52,9 +52,12 @@ export function orderSmsParams(kind: OrderSmsKind, order: { orderNumber: string;
  */
 export async function queueOrderSms(
   tx: DbExecutor,
-  order: { id: number; orderNumber: string; phone: string; phoneKey: string; trackingCode: string },
+  order: { id: number; orderNumber: string; phone: string; phoneKey: string; trackingCode: string; emailKey?: string; phoneProven?: number },
   kind: OrderSmsKind,
 ): Promise<boolean> {
+  // v12 phase 8e: an order an email code proved, whose phone nobody proved, sends no text: a stranger who typed someone
+  // else's number with their own email must not make the site text that person
+  if (order.emailKey && order.phoneProven !== 1) return false;
   const settings = await smsRuntimeSettings(tx);
   if (!activeTemplate(settings, kind)) return false;
   const phone = normalizeMobile(order.phone);

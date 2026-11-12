@@ -13,7 +13,7 @@ import {
 import type { OtpRequestResult, OtpVerifyResult } from '../../lib/storefront/storefrontSmsContracts.js';
 import { deliverMessage } from './storefrontSms.service.js';
 import { smsBudgetSpent, warnIfBudgetNearlySpent } from './storefrontSmsBudget.js';
-import { activeTemplate, smsRuntimeSettings } from './storefrontSmsSettings.service.js';
+import { activeTemplate, smsLoginOn, smsRuntimeSettings } from './storefrontSmsSettings.service.js';
 
 /**
  * v11 phase 8.4a (start plan §4): the login code a buyer asks for on the site, and the phone proof a right code gives.
@@ -79,6 +79,8 @@ async function countSince(tx: DbExecutor, where: ReturnType<typeof eq>, seconds:
 
 export async function requestOtp(rawPhone: string, address: string): Promise<OtpRequestResult> {
   const settings = await otpTemplateOn();
+  // v12 phase 8e: «حالت بی پیامک» (by hand, or the latest login texts all failing): no code is sent; the site turns to email
+  if (!(await smsLoginOn(orm))) throw new AppError('ورود با پیامک اکنون ممکن نیست؛ با ایمیل ادامه دهید.', 503, 'STOREFRONT_SMS_PAUSED');
   const { phone, phoneKey } = mobileOf(rawPhone);
   const addressKey = hmac(ADDRESS_PURPOSE, address || 'unknown');
   const code = newCode();

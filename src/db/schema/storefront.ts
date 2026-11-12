@@ -115,6 +115,9 @@ export const storefrontOrders = pgTable('storefront_orders', {
   isGift: integer('is_gift').notNull().default(0),
   /** v12 phase 8d review: 1 = the order's phone was proven when it was placed, so that phone may open it elsewhere */
   phoneProven: integer('phone_proven').notNull().default(0),
+  /** v12 phase 8e (migration 0027): the email an email code proved when the order was placed; '' = none */
+  email: text('email').notNull().default(''),
+  emailKey: text('email_key').notNull().default(''),
   giftMessage: text('gift_message').notNull().default(''),
   // v11 phase 8.2c (migration 0021): the discount code the order used, as typed then, and its amount over the lines
   discountCodeId: integer('discount_code_id').references((): AnyPgColumn => storefrontDiscountCodes.id),
@@ -133,6 +136,7 @@ export const storefrontOrders = pgTable('storefront_orders', {
   uq_storefront_orders_document: uniqueIndex('uq_storefront_orders_document').on(table.documentId),
   idx_storefront_orders_customer_id: index('idx_storefront_orders_customer_id').on(table.customerId),
   idx_storefront_orders_status_reserve: index('idx_storefront_orders_status_reserve').on(table.status, table.reserveUntil),
+  idx_storefront_orders_email_key: index('idx_storefront_orders_email_key').on(table.emailKey, table.status).where(sql`${table.emailKey} <> ''`),
   idx_storefront_orders_phone_status: index('idx_storefront_orders_phone_status').on(table.phoneKey, table.status),
   idx_storefront_orders_created: index('idx_storefront_orders_created').on(table.createdAt.desc(), table.id.desc()),
 }));
