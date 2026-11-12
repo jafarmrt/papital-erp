@@ -13,6 +13,7 @@ import {
 } from '../lib/account.server';
 import { cartOf, clearCartCookie } from '../lib/cart.server';
 import { rememberOrderCookie } from '../lib/orderKeys.server';
+import { placeWithEmail } from '../lib/checkoutEmail.server';
 import { siteEnv } from '../lib/site.server';
 import { faNumber, formatPrice } from '../lib/format';
 import { pageMeta } from '../lib/meta';
@@ -46,10 +47,10 @@ import { CodeField, Field, FormError, FormNote, PhoneField, SelectField, SubmitB
  *   free and takes a short message for its card. A signed-in buyer fills the recipient from the address book (the
  *   default comes ready; «پر کردن از این نشانی» takes another) and may keep a new address in it.
  */
-const FIELDS = ['buyerName', 'phone', 'recipientName', 'recipientPhone', 'province', 'city', 'address', 'postalCode', 'giftMessage', 'note'] as const;
+const FIELDS = ['buyerName', 'phone', 'email', 'recipientName', 'recipientPhone', 'province', 'city', 'address', 'postalCode', 'giftMessage', 'note'] as const;
 type Fields = Record<typeof FIELDS[number], string>;
 const FIELD_MAX: Record<typeof FIELDS[number], number> = {
-  buyerName: RECIPIENT_NAME_MAX, phone: 20, recipientName: RECIPIENT_NAME_MAX, recipientPhone: 20, province: 60, city: CITY_MAX, address: ADDRESS_MAX,
+  buyerName: RECIPIENT_NAME_MAX, phone: 20, email: 254, recipientName: RECIPIENT_NAME_MAX, recipientPhone: 20, province: 60, city: CITY_MAX, address: ADDRESS_MAX,
   postalCode: 20, giftMessage: GIFT_MESSAGE_MAX, note: BUYER_NOTE_MAX,
 };
 /** v12 phase 8c: the form's three boxes */
@@ -71,6 +72,8 @@ interface ActionAnswer {
   field?: string;
   /** v12 phase 7: the phone a code was sent to; the form then asks for the code before placing */
   codeFor?: string;
+  /** v12 phase 8e: the code went to the buyer's email («حالت بی پیامک»), so `codeFor` is that email */
+  codeVia?: 'email';
   /** v12 phase 8c: the kept address the recipient was just filled from; the form is drawn afresh with it */
   filled?: number;
 }
@@ -114,6 +117,8 @@ export async function loader({ request }: Route.LoaderArgs) {
     groupTitle: account?.group?.title ?? '',
     signedIn: Boolean(account),
     smsLogin: settings.smsLogin === true,
+    // v12 phase 8e: a guest proves an email while the texts cannot prove a phone and the site's email is on
+    emailProof: !account && settings.smsLogin !== true && settings.emailLogin === true,
     reservationHours: settings.reservationHours,
     siteUrl: siteEnv().siteUrl,
   };
@@ -185,6 +190,23 @@ export async function action({ request }: Route.ActionArgs) {
   // after which the proof is asked whatever the settings or a session cookie say. A proof kept from an earlier tap is
   // always sent (the ERP ignores it for a signed-in buyer or while the texts are off).
   const phone = normalizePhone(fields.phone);
+  /** v12 phase 8e: the order as the form says, with the proof the path gathered (a phone's or an email's) */
+  const placeOrder = (proofs: Record<string, string>) => accountCall<PlacedOrder>(request, 'POST', '/orders', {
+    // v12 phase 8c: the buyer (whom the phone and the customer are) and the recipient, who is the buyer while the box is on
+    requestKey, phone: fields.phone, buyerName: fields.buyerName, recipientName: checks.sameRecipient ? fields.buyerName : fields.recipientName,
+    ...(!checks.sameRecipient && fields.recipientPhone.trim() ? { recipientPhone: fields.recipientPhone } : {}),
+    province: fields.province, city: fields.city, address: fields.address, postalCode: fields.postalCode, note: fields.note,
+    ...(checks.gift ? { gift: true, ...(fields.giftMessage.trim() ? { giftMessage: fields.giftMessage } : {}) } : {}),
+    ...(checks.saveAddress && sessionOf(request) ? { saveAddress: true } : {}),
+    shippingMethod, lines, ...(paymentMethod === 'on_account' ? { paymentMethod } : {}), ...(discountCode ? { discountCode } : {}),
+    ...proofs,
+  });
+  // v12 phase 8e («حالت بی پیامک»): the guest proves an email instead; the ERP's refusal for a missing email proof turns
+  // the form to it too (the settings may be a minute old)
+  const settingsNow = await publicSettings();
+  const viaEmail = String(form.get('codeVia') ?? '') === 'email'
+    || (!sessionOf(request) && settingsNow.smsLogin !== true && settingsNow.emailLogin === true);
+  if (viaEmail) return placeWithEmail({ request, form, fields, quoted, answer, requestKey, placeOrder });
   const askedBefore = String(form.get('codeFor') ?? '') !== '';
   const needsProof = askedBefore || ((await publicSettings()).smsLogin === true && !sessionOf(request));
   /** a code for the phone; `null` when the ERP no longer signs in by SMS (its code route is 404), so no proof is needed */
@@ -212,16 +234,10 @@ export async function action({ request }: Route.ActionArgs) {
     }
   }
 
-  const placed = await accountCall<PlacedOrder>(request, 'POST', '/orders', {
-    // v12 phase 8c: the buyer (whom the phone and the customer are) and the recipient, who is the buyer while the box is on
-    requestKey, phone: fields.phone, buyerName: fields.buyerName, recipientName: checks.sameRecipient ? fields.buyerName : fields.recipientName,
-    ...(!checks.sameRecipient && fields.recipientPhone.trim() ? { recipientPhone: fields.recipientPhone } : {}),
-    province: fields.province, city: fields.city, address: fields.address, postalCode: fields.postalCode, note: fields.note,
-    ...(checks.gift ? { gift: true, ...(fields.giftMessage.trim() ? { giftMessage: fields.giftMessage } : {}) } : {}),
-    ...(checks.saveAddress && sessionOf(request) ? { saveAddress: true } : {}),
-    shippingMethod, lines, ...(paymentMethod === 'on_account' ? { paymentMethod } : {}), ...(discountCode ? { discountCode } : {}),
-    ...(proof ? { phoneProof: proof } : {}),
-  });
+  const placed = await placeOrder(proof ? { phoneProof: proof } : {});
+  if (!placed.data && placed.code === 'STOREFRONT_EMAIL_PROOF_REQUIRED') {
+    return answer({ ...quoted, error: placed.error, field: 'email', codeVia: 'email', requestKey: placed.status >= 500 ? requestKey : randomUUID() });
+  }
   if (!placed.data) {
     const nextKey = placed.status >= 500 ? requestKey : randomUUID();
     // the ERP wants a proof (a guest while the texts are on, a session it no longer knows, a proof that ran out): a fresh
@@ -244,7 +260,7 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function CheckoutPage({ loaderData, actionData }: Route.ComponentProps) {
-  const { prefill, paymentMethods, groupTitle, signedIn, smsLogin, count, reservationHours, items, addresses, canSaveAddress } = loaderData;
+  const { prefill, paymentMethods, groupTitle, signedIn, smsLogin, emailProof, count, reservationHours, items, addresses, canSaveAddress } = loaderData;
   const answer = actionData as ActionAnswer | undefined;
   const busy = useNavigation().state === 'submitting';
   const sameRecipient = answer?.checks.sameRecipient ?? loaderData.sameRecipient;
@@ -271,7 +287,7 @@ export default function CheckoutPage({ loaderData, actionData }: Route.Component
       {!signedIn ? (
         <p className="mt-4 text-base leading-8 text-muted-foreground">
           بی حساب هم می‌توانید سفارش دهید. <Link to="/account/sign-in?next=%2Fcheckout" className="font-bold text-brand hover:underline">ورود به حساب</Link> سفارش را در حساب شما نگه می‌دارد.
-          {smsLogin ? ' هنگام ثبت سفارش، شمارهٔ همراه با یک کد پیامکی تأیید می‌شود.' : null}
+          {smsLogin ? ' هنگام ثبت سفارش، شمارهٔ همراه با یک کد پیامکی تأیید می‌شود.' : emailProof ? ' هنگام ثبت سفارش، ایمیل شما با یک کد تأیید می‌شود.' : null}
         </p>
       ) : null}
 
@@ -286,6 +302,12 @@ export default function CheckoutPage({ loaderData, actionData }: Route.Component
           <legend className="text-base font-bold">خریدار</legend>
           <Field label="نام و نام خانوادگی" name="buyerName" autoComplete="name" maxLength={RECIPIENT_NAME_MAX} defaultValue={value('buyerName')} invalid={bad('buyerName')} />
           <PhoneField defaultValue={value('phone')} invalid={bad('phone')} />
+          {/* v12 phase 8e («حالت بی پیامک»): a guest's email, proven with a code at «ثبت سفارش» */}
+          {(emailProof || answer?.codeVia === 'email') && !signedIn ? (
+            <Field label="ایمیل" name="email" type="email" inputMode="email" autoComplete="email" dir="ltr" maxLength={254} defaultValue={value('email')}
+              invalid={bad('email')} hint="کد تأیید سفارش به این ایمیل فرستاده می‌شود." />
+          ) : null}
+          {answer?.codeVia === 'email' ? <input type="hidden" name="codeVia" value="email" /> : null}
         </fieldset>
 
         {/* the recipient's two fields hide while «گیرنده خودم هستم» is on, by CSS alone, and are not sent then */}
@@ -418,7 +440,7 @@ export default function CheckoutPage({ loaderData, actionData }: Route.Component
 
         {options && options.length && answer?.codeFor ? (
           <div className="space-y-3 border-t border-border pt-5">
-            {answer.field !== 'code' ? <FormNote>کد تأیید به <span dir="ltr">{answer.codeFor}</span> پیامک شد. آن را بنویسید و سفارش را ثبت کنید.</FormNote> : null}
+            {answer.field !== 'code' ? <FormNote>کد تأیید {answer.codeVia === 'email' ? 'به ایمیل' : 'با پیامک به'} <span dir="ltr">{answer.codeFor}</span> فرستاده شد. آن را بنویسید و سفارش را ثبت کنید.</FormNote> : null}
             <input type="hidden" name="codeFor" value={answer.codeFor} />
             <CodeField />
           </div>
@@ -426,7 +448,7 @@ export default function CheckoutPage({ loaderData, actionData }: Route.Component
 
         {options && options.length ? (
           <>
-            <SubmitButton intent="place" busy={busy}>{answer?.codeFor ? 'تأیید شماره و ثبت سفارش' : 'ثبت سفارش'}</SubmitButton>
+            <SubmitButton intent="place" busy={busy}>{answer?.codeFor ? (answer.codeVia === 'email' ? 'تأیید ایمیل و ثبت سفارش' : 'تأیید شماره و ثبت سفارش') : 'ثبت سفارش'}</SubmitButton>
             {answer?.codeFor ? <SubmitButton intent="send-code" busy={busy} secondary>کد نرسید؟ دوباره بفرست</SubmitButton> : null}
             <SubmitButton intent="quote" busy={busy} secondary>نشانی را عوض کردم؛ هزینهٔ ارسال دوباره</SubmitButton>
           </>

@@ -19,6 +19,8 @@ export default [
   route('account/sign-in', 'routes/accountSignIn.tsx'),
   route('account/sign-up', 'routes/accountSignUp.tsx'),
   route('account/set-password', 'routes/accountSetPassword.tsx'),
+  route('account/forgot-password', 'routes/accountForgotPassword.tsx'),
+  route('account/contact', 'routes/accountContact.tsx'),
   route('account/sign-out', 'routes/accountSignOut.ts'),
   // v11 phase 8.2: the cart, the checkout, an order's page and the account's own orders
   route('account', 'routes/account.tsx'),

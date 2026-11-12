@@ -70,7 +70,10 @@ export default function AccountPage({ loaderData, actionData }: Route.ComponentP
 
       <section className="mt-6 space-y-2 rounded-surface border border-border bg-card p-5 leading-7">
         <p className="text-lg font-bold">{account.name}</p>
-        <p dir="ltr" className="text-start text-muted-foreground">{faDigits(account.phone)}</p>
+        {account.phone ? <p dir="ltr" className="text-start text-muted-foreground">{faDigits(account.phone)}</p> : null}
+        {/* v12 phase 8e: the account's proven email, and the page that adds or replaces an email or phone */}
+        {account.email ? <p dir="ltr" className="text-start text-muted-foreground" data-account-email>{account.email}</p> : null}
+        <Link to="/account/contact" className="inline-flex min-h-11 items-center text-sm font-bold text-brand hover:underline">{account.email && account.phone ? 'عوض کردن ایمیل یا شماره' : account.email ? 'افزودن شمارهٔ همراه' : 'افزودن ایمیل'}</Link>
         {account.companyName ? <p>{account.companyName}</p> : null}
         {account.group ? (
           <div className="mt-3 border-t border-border pt-3 text-sm">

@@ -29,6 +29,8 @@ const settings = await readFile(path.join(dir, 'settings.json'), 'utf8').then(JS
 
 // v11 phase 8.4b: the SMS sign-in, on unless MOCK_SMS_LOGIN=0
 settings.smsLogin = process.env.MOCK_SMS_LOGIN !== '0';
+// v12 phase 8e: the email codes, off unless MOCK_EMAIL_LOGIN=1 (or /__mock/email-login?on=1); the right code is 654321
+settings.emailLogin = process.env.MOCK_EMAIL_LOGIN === '1';
 // v11 phase 8.2: ordering (the cart and checkout), on only with MOCK_ORDERING=1; the card to pay to is a made-up one
 settings.ordering = process.env.MOCK_ORDERING === '1';
 if (settings.ordering && !settings.payment.cardNumber) settings.payment = { cardNumber: '6037990000000000', cardHolder: 'فروشگاه نمونه', bankName: 'بانک نمونه', iban: 'IR000000000000000000000000' };
@@ -73,10 +75,18 @@ const readBody = req => new Promise(resolve => {
   req.on('end', () => { try { resolve(JSON.parse(body || '{}')); } catch { resolve({}); } });
 });
 const proofOk = (phone, proof) => typeof proof === 'string' && proof === `pp_mock${phone}`;
-const view = a => ({ name: a.name, phone: a.phone, city: '', kind: 'retail', application: a.application ?? 'none', companyName: a.companyName ?? '', phoneVerified: a.verified, group: null });
+const emailKey = email => String(email ?? '').trim().toLowerCase();
+const emailProofOk = (email, proof) => typeof proof === 'string' && proof === `ep_mock${Buffer.from(emailKey(email)).toString('hex')}`;
+const view = a => ({
+  name: a.name, phone: a.phone, email: a.email ?? '', city: '', kind: 'retail', application: a.application ?? 'none', companyName: a.companyName ?? '',
+  phoneVerified: a.verified, emailVerified: Boolean(a.email), group: null,
+});
+// an account is found by its phone or its email (v12 phase 8e); the session names the key it was made by
+const accountKey = a => a.phone || emailKey(a.email);
+const findAccount = ({ phone, email }) => (phone ? accounts.get(phone) : [...accounts.values()].find(a => emailKey(a.email) === emailKey(email)));
 const session = a => {
-  const token = `bs_mock${sessions.size + 1}x${a.phone}`;
-  sessions.set(token, a.phone);
+  const token = `bs_mock${sessions.size + 1}x${Buffer.from(accountKey(a)).toString('hex').slice(0, 40)}`;
+  sessions.set(token, accountKey(a));
   return { sessionToken: token, expiresAt: new Date(Date.now() + 30 * 864e5).toISOString(), account: view(a) };
 };
 
@@ -93,17 +103,46 @@ async function auth(req, res, route) {
     account.verified = true;
     return send(res, 200, { data: session(account) });
   }
-  if (route === '/auth/register') {
-    if (accounts.has(phone)) return refuse(409, 'STOREFRONT_ACCOUNT_EXISTS', 'برای این شمارهٔ همراه حساب ساخته شده است؛ وارد شوید.');
-    if ((settings.smsLogin || body.phoneProof) && !proofOk(phone, body.phoneProof)) return refuse(422, 'STOREFRONT_PHONE_PROOF_REQUIRED', 'شمارهٔ همراه را با کد پیامکی تأیید کنید.');
+  const email = String(body.email ?? '');
+  // v12 phase 8e: the email codes and the email sign-in
+  if (route === '/auth/email-code/request') {
+    if (!settings.emailLogin) return refuse(404, 'NOT_FOUND', 'پیدا نشد');
+    return /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(email) ? send(res, 200, { data: { resendAfter: 60, expiresIn: 600 } }) : refuse(422, 'STOREFRONT_EMAIL_INVALID', 'نشانی ایمیل را درست بنویسید.');
+  }
+  if (route === '/auth/email-code/verify') {
+    return body.code === '654321' ? send(res, 200, { data: { emailProof: `ep_mock${Buffer.from(emailKey(email)).toString('hex')}`, expiresIn: 600 } })
+      : refuse(422, 'STOREFRONT_EMAIL_CODE_INVALID', 'کد درست نیست یا مهلتش گذشته است؛ کد را دوباره بخواهید.');
+  }
+  if (route === '/auth/email-login') {
+    if (!emailProofOk(email, body.emailProof)) return refuse(422, 'STOREFRONT_EMAIL_PROOF_REQUIRED', 'ایمیل را با کد ایمیلی تأیید کنید.');
+    const account = findAccount({ email });
+    if (!account) return refuse(404, 'STOREFRONT_ACCOUNT_NOT_FOUND', 'حسابی با این نشانی نیست؛ حساب تازه بسازید.');
+    return send(res, 200, { data: session(account) });
+  }
+  if (route === '/auth/reset-password') {
+    const byPhone = Boolean(body.phone);
+    if (byPhone ? !proofOk(phone, body.phoneProof) : !emailProofOk(email, body.emailProof)) return refuse(422, byPhone ? 'STOREFRONT_PHONE_PROOF_REQUIRED' : 'STOREFRONT_EMAIL_PROOF_REQUIRED', 'کد را دوباره بخواهید.');
+    const account = findAccount(byPhone ? { phone } : { email });
+    if (!account) return refuse(404, 'STOREFRONT_ACCOUNT_NOT_FOUND', 'حسابی با این نشانی نیست؛ حساب تازه بسازید.');
     if (String(body.password ?? '').length < 8) return refuse(422, 'STOREFRONT_ACCOUNT_FIELD_INVALID', 'رمز دست‌کم ۸ نویسه است.');
-    const account = { name: String(body.name ?? ''), phone, password: String(body.password), verified: Boolean(body.phoneProof) };
-    accounts.set(phone, account);
+    account.password = String(body.password);
+    for (const [token, owner] of sessions) if (owner === accountKey(account)) sessions.delete(token);
+    return send(res, 200, { data: session(account) });
+  }
+  if (route === '/auth/register') {
+    if (phone && accounts.has(phone)) return refuse(409, 'STOREFRONT_ACCOUNT_EXISTS', 'برای این شمارهٔ همراه حساب ساخته شده است؛ وارد شوید.');
+    if (email && findAccount({ email })) return refuse(409, 'STOREFRONT_EMAIL_TAKEN', 'این ایمیل حساب دیگری است؛ وارد شوید.');
+    if (!phone && !email) return refuse(422, 'STOREFRONT_ACCOUNT_FIELD_INVALID', 'شمارهٔ همراه یا ایمیل را بنویسید.');
+    if (phone && (settings.smsLogin || body.phoneProof) && !proofOk(phone, body.phoneProof)) return refuse(422, 'STOREFRONT_PHONE_PROOF_REQUIRED', 'شمارهٔ همراه را با کد پیامکی تأیید کنید.');
+    if (email && !emailProofOk(email, body.emailProof)) return refuse(422, 'STOREFRONT_EMAIL_PROOF_REQUIRED', 'ایمیل را با کد ایمیلی تأیید کنید.');
+    if (String(body.password ?? '').length < 8) return refuse(422, 'STOREFRONT_ACCOUNT_FIELD_INVALID', 'رمز دست‌کم ۸ نویسه است.');
+    const account = { name: String(body.name ?? ''), phone, email, password: String(body.password), verified: Boolean(body.phoneProof) };
+    accounts.set(accountKey(account), account);
     return send(res, 201, { data: session(account) });
   }
   if (route === '/auth/login') {
-    const account = accounts.get(phone);
-    return account && account.password === body.password ? send(res, 200, { data: session(account) }) : refuse(401, 'STOREFRONT_SIGN_IN_FAILED', 'شمارهٔ همراه یا رمز درست نیست.');
+    const account = findAccount({ phone, email });
+    return account && account.password === body.password ? send(res, 200, { data: session(account) }) : refuse(401, 'STOREFRONT_SIGN_IN_FAILED', 'شمارهٔ همراه، ایمیل یا رمز درست نیست.');
   }
   if (route === '/auth/set-password') {
     if (body.token !== 'pw_mocklink0001') return refuse(404, 'STOREFRONT_PASSWORD_LINK_INVALID', 'این پیوند تعیین رمز دیگر کار نمی‌کند.');
@@ -217,7 +256,11 @@ async function ordering(req, res, route) {
     const lines = priced(body.lines);
     if (!lines) return fieldError(res, 'lines', 'این کالا روی سایت فروخته نمی‌شود.');
     if (overRetailCap(res, lines)) return undefined;
-    if (settings.smsLogin && !accountOf(req) && !proofOk(latin(body.phone), body.phoneProof)) {
+    // v12 phase 8e: a guest's email proof while the texts cannot prove a phone
+    if (!accountOf(req) && !settings.smsLogin && settings.emailLogin && !emailProofOk(body.email, body.emailProof)) {
+      return send(res, 422, { error: 'نشانی ایمیل را با کدی که به آن فرستاده می‌شود تأیید کنید.', code: 'STOREFRONT_EMAIL_PROOF_REQUIRED', details: { field: 'email' } });
+    }
+    if (settings.smsLogin && !accountOf(req) && !body.emailProof && !proofOk(latin(body.phone), body.phoneProof)) {
       return send(res, 422, { error: 'شمارهٔ همراه را با کد پیامکی تأیید کنید؛ اگر کد گرفته‌اید و مهلتش گذشته، کد تازه بخواهید.', code: 'STOREFRONT_PHONE_PROOF_REQUIRED', details: { field: 'phoneProof' } });
     }
     const discount = discountOf(body.discountCode, lines.reduce((sum, l) => sum + BigInt(l.lineAmount), 0n));
@@ -227,7 +270,7 @@ async function ordering(req, res, route) {
     if (!option) return fieldError(res, 'shippingMethod', 'این روش ارسال برای این سبد و استان در دسترس نیست؛ روش دیگری انتخاب کنید.');
     const number = String(nextNumber++);
     const order = {
-      number, status: 'awaiting_payment', createdAt: new Date().toISOString(), account: accountOf(req) ?? null,
+      number, status: 'awaiting_payment', createdAt: new Date().toISOString(), account: accountOf(req) ?? null, email: body.emailProof ? emailKey(body.email) : '',
       recipient: { name: body.recipientName, phone: body.phone, province: body.province, city: body.city, address: body.address, postalCode: body.postalCode },
       note: body.note ?? '', shipping: { code: option.code, title: option.title, kind: option.kind, amount: option.amount }, lines,
       // v12 phase 8c: the buyer apart from the recipient, and a gift
@@ -251,8 +294,11 @@ async function ordering(req, res, route) {
   const access = /^\/orders\/(\d+)\/access$/.exec(route);
   if (access && req.method === 'POST') {
     const order = orders.get(access[1]);
-    const phone = latin(body.phone).replace(/\s+/g, '');
-    if (!order || latin(order.recipient.phone) !== phone || !proofOk(phone, body.phoneProof)) {
+    const phone = latin(body.phone ?? '').replace(/\s+/g, '');
+    const byEmail = body.email !== undefined;
+    const right = byEmail ? order && order.email && order.email === emailKey(body.email) && emailProofOk(body.email, body.emailProof)
+      : order && latin(order.recipient.phone) === phone && proofOk(phone, body.phoneProof);
+    if (!right) {
       return send(res, 404, { error: 'سفارشی با این شماره برای این شمارهٔ همراه پیدا نشد.', code: 'STOREFRONT_ORDER_NOT_FOUND' });
     }
     return send(res, 200, { data: { accessKey: keyOf(order.number) } });
@@ -296,6 +342,10 @@ createServer(async (req, res) => {
   const route = url.pathname.replace(/^\/api\/storefront\/v1/, '');
   if (url.pathname === '/__mock/last') return send(res, 200, { ...last, post: lastPost });
   // v12 phase 7: the tests turn the SMS sign-in on and off while the mock runs (the guest's phone proof at the checkout)
+  if (url.pathname === '/__mock/email-login') {
+    settings.emailLogin = url.searchParams.get('on') === '1';
+    return send(res, 200, { emailLogin: settings.emailLogin });
+  }
   if (url.pathname === '/__mock/sms-login') {
     settings.smsLogin = url.searchParams.get('on') === '1';
     return send(res, 200, { smsLogin: settings.smsLogin });
@@ -347,8 +397,8 @@ createServer(async (req, res) => {
   }
   if (route === '/account/prices') return send(res, 200, { data: { group: '', prices: [] } });
   if (route === '/account') {
-    const phone = sessions.get(String(req.headers['x-buyer-session'] ?? ''));
-    return phone ? send(res, 200, { data: view(accounts.get(phone)) }) : send(res, 401, { error: 'برای این کار وارد حساب خود شوید.', code: 'STOREFRONT_SESSION_REQUIRED' });
+    const owner = sessions.get(String(req.headers['x-buyer-session'] ?? ''));
+    return owner ? send(res, 200, { data: view(accounts.get(owner)) }) : send(res, 401, { error: 'برای این کار وارد حساب خود شوید.', code: 'STOREFRONT_SESSION_REQUIRED' });
   }
   if (route === '/settings') return send(res, 200, { data: settings });
   if (route === '/brand') return send(res, 200, { data: brand });

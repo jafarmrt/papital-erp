@@ -38,9 +38,9 @@ const inputClass = 'block min-h-12 w-full rounded-control border border-border b
 export function Field(props: {
   label: string;
   name: string;
-  type?: 'text' | 'tel' | 'password';
+  type?: 'text' | 'tel' | 'password' | 'email';
   autoComplete: string;
-  inputMode?: 'text' | 'tel' | 'numeric';
+  inputMode?: 'text' | 'tel' | 'numeric' | 'email';
   defaultValue?: string;
   hint?: string;
   dir?: 'ltr' | 'rtl';
@@ -69,6 +69,14 @@ export function PhoneField({ defaultValue, autoFocus, invalid }: { defaultValue?
   return (
     <Field label="شمارهٔ همراه" name="phone" type="tel" inputMode="tel" autoComplete="tel" dir="ltr" maxLength={20}
       defaultValue={defaultValue} autoFocus={autoFocus} hint="مانند ۰۹۱۲۱۲۳۴۵۶۷" invalid={invalid} />
+  );
+}
+
+/** v12 phase 8e: a phone or an email in one field (`contact`); the page says which the ERP takes now */
+export function ContactField({ label, defaultValue, autoFocus, invalid }: { label: string; defaultValue?: string; autoFocus?: boolean; invalid?: boolean }) {
+  return (
+    <Field label={label} name="contact" autoComplete="username" inputMode="email" dir="ltr" maxLength={254} defaultValue={defaultValue}
+      autoFocus={autoFocus} invalid={invalid} />
   );
 }
 
