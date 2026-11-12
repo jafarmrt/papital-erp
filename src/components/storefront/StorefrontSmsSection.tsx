@@ -153,7 +153,7 @@ function SmsSettingsForm({ view, canManage }: { view: StorefrontSmsSettingsView;
             حالت بی پیامک
           </label>
           <p className={hint}>
-            وقتی روشن است، سایت کد ورود پیامکی نمی‌فرستد و ورود، ساخت حساب، فراموشی رمز و خرید مهمان با کد ایمیلی انجام می‌شود (اگر ایمیل سایت تنظیم شده باشد). پیامک سفارش‌ها همچنان می‌رود. اگر {formatPersianNumber(SMS_FAILURE_PAUSE_COUNT)} پیامک ورود پیاپی در {formatPersianNumber(SMS_FAILURE_PAUSE_MINUTES)} دقیقه فرستاده نشود، سایت خودبه‌خود همین کار را می‌کند تا آن مدت بگذرد.
+            وقتی روشن است، سایت کد ورود پیامکی نمی‌فرستد و ورود، ساخت حساب، فراموشی رمز و خرید مهمان با کد ایمیلی انجام می‌شود (اگر ایمیل سایت تنظیم شده باشد). پیامک سفارش‌ها همچنان می‌رود. اگر {formatPersianNumber(SMS_FAILURE_PAUSE_COUNT)} پیامک ورود پیاپی در {formatPersianNumber(SMS_FAILURE_PAUSE_MINUTES)} دقیقه فرستاده نشود، سایت خودبه‌خود همین کار را می‌کند تا آن مدت بگذرد و زنگولهٔ مدیران فروشگاه سایت به صدا درمی‌آید. اگر ایمیل سایت روشن نباشد، در این حالت خرید مهمان و ساختن حساب با شماره تا بازگشت پیامک ممکن نیست.
           </p>
           {view.autoPaused && <p role="status" className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">پیامک‌های ورود اخیر فرستاده نشده‌اند؛ سایت اکنون بی پیامک کار می‌کند.</p>}
         </section>

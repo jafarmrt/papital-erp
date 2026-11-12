@@ -141,6 +141,8 @@ export const PHONE_PROOF_PREFIX = 'pp_';
  */
 export const SMS_FAILURE_PAUSE_COUNT = 5;
 export const SMS_FAILURE_PAUSE_MINUTES = 30;
+/** 8e3 review: the failed texts come from at least this many visitors (so one script cannot pause the site's SMS) */
+export const SMS_FAILURE_PAUSE_VISITORS = 3;
 export const PHONE_PROOF_MAX = 80;
 
 /** The code as the buyer typed it (Persian, Arabic or latin digits, spaces ignored), or null when it is not a code */

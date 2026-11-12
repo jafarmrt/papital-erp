@@ -16,7 +16,7 @@ import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { STOREFRONT_BOT_USER, resolveSiteCustomer } from './storefrontCustomer.js';
 import { activeGroupOf, sessionAccount, type AccountRecord, type GroupRecord } from './storefrontBuyerAuth.service.js';
 import { isProofRefusal, proveOrderBuyer, type OrderProof } from './storefrontOrderProof.js';
-import { normalizeEmail } from '../../lib/storefront/storefrontEmailRules.js';
+import { inboxKey, normalizeEmail } from '../../lib/storefront/storefrontEmailRules.js';
 import { priceCart, shippingOptions } from './storefrontOrderCart.js';
 import { isOrderAccessKey, newAccessSalt, orderAccessKey, requestHashOf } from './storefrontOrderKeys.js';
 import { notifySiteOrder } from './storefrontOrderNotices.js';
@@ -259,16 +259,24 @@ async function placeInTransaction(
   const onAccount = order.paymentMethod === 'on_account';
   // one buyer's orders one at a time, so the open-orders limit holds under concurrent requests; then the items (§2.6).
   // v12 phase 8e: an order proven by an email counts by that email (its phone is nobody's proven word)
+  // 8e3 review: by the mailbox (a `+tag` folded), and a phone's count leaves out the email-proven orders typed with it,
+  // so a stranger's orders never use up the phone owner's limit
   const byEmail = Boolean(proof.emailKey) && !phoneProven;
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${byEmail ? `storefront-email:${proof.emailKey}` : `storefront-phone:${order.phoneKey}`}))`);
+  const inbox = byEmail ? inboxKey(proof.emailKey) : '';
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${byEmail ? `storefront-email:${inbox}` : `storefront-phone:${order.phoneKey}`}))`);
   const [{ open }] = await tx.select({ open: sql<number>`count(*)::int` }).from(storefrontOrders)
-    .where(and(byEmail ? eq(storefrontOrders.emailKey, proof.emailKey) : eq(storefrontOrders.phoneKey, order.phoneKey), inArray(storefrontOrders.status, [...OPEN_ORDER_STATUSES])));
+    .where(and(
+      byEmail ? sql`regexp_replace(${storefrontOrders.emailKey}, '[+][^@]*@', '@') = ${inbox}` : and(eq(storefrontOrders.phoneKey, order.phoneKey), eq(storefrontOrders.emailKey, '')),
+      inArray(storefrontOrders.status, [...OPEN_ORDER_STATUSES]),
+    ));
   if (open >= settings.openOrdersPerPhone) {
     throw new ConflictError(byEmail
       ? 'برای این ایمیل سفارش پرداخت‌نشدهٔ دیگری هست؛ اول آن را پرداخت کنید یا منتظر پایان مهلتش بمانید.'
       : 'برای این شمارهٔ همراه سفارش پرداخت‌نشدهٔ دیگری هست؛ اول آن را پرداخت کنید یا منتظر پایان مهلتش بمانید.', undefined, 'STOREFRONT_TOO_MANY_OPEN_ORDERS');
   }
 
+  // 8e3 review: an email-proven order's discount uses and first order go by its mailbox, never by its unproven phone
+  const discountKeys = byEmail ? { phoneKey: `email:${inbox}`, inboxKey: inbox } : { phoneKey: order.phoneKey };
   const cart = await priceCart(tx, settings, order.lines, buyer.group);
   await lockStockItems(tx, cart.lines.map(l => l.item.itemId));
   const warehouse = await storefrontWarehouseCode(tx, settings.warehouseCode);
@@ -285,7 +293,7 @@ async function placeInTransaction(
 
   // the code under its row lock, so its uses counted here hold until the commit (two orders never take its last use)
   const choice = order.discountCode
-    ? await chooseDiscount(tx, order.discountCode, cart.itemsAmount, { ...buyer, phoneKey: order.phoneKey }, { lock: true })
+    ? await chooseDiscount(tx, order.discountCode, cart.itemsAmount, { ...buyer, ...discountKeys }, { lock: true })
     : null;
   const discountAmount = (choice?.amount ?? 0n).toString();
   const lineDiscounts = spreadDiscount(cart.lines.map(l => BigInt(l.lineAmount)), choice?.amount ?? 0n);
@@ -333,7 +341,7 @@ async function placeInTransaction(
     updatedBy: STOREFRONT_BOT_USER,
   }).returning();
   if (order.saveAddress && buyer.account) await keepOrderAddress(tx, buyer.account.id, order);
-  if (choice) await redeemDiscount(tx, choice, { id: row.id, phoneKey: order.phoneKey, buyerAccountId: row.buyerAccountId });
+  if (choice) await redeemDiscount(tx, choice, { id: row.id, phoneKey: discountKeys.phoneKey, buyerAccountId: row.buyerAccountId });
   // v11 phase 8.4a: the buyer's text, queued with the order (sent after the commit; nothing while sending is off). Its
   // text asks for a card-to-card payment, so an on-account order sends none.
   if (!onAccount) await queueOrderSms(tx, row, 'order_placed');

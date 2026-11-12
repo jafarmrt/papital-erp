@@ -1,19 +1,19 @@
-import http from 'http';
-import net from 'net';
-import type { AddressInfo } from 'net';
+import { createHash } from 'crypto';
 import request from 'supertest';
-import { and, asc, eq, inArray, like } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, like, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
+import { decodeMail, fakeMailServer, fakeSmsServer } from './storefrontEmailTestServers.js';
 import { orm } from '../../db/drizzle.js';
 import {
-  accounts, appSettings, bankAccounts, customers, itemPrices, items, storefrontBuyerAccounts, storefrontBuyerSessions, storefrontEmailCodes, storefrontOrders,
+  accounts, appSettings, bankAccounts, customers, itemPrices, notifications, items, storefrontBuyerAccounts, storefrontBuyerSessions, storefrontEmailCodes, storefrontOrders,
   storefrontProducts, storefrontShippingMethods, storefrontSmsCodes, storefrontSmsMessages, warehouses,
 } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 import { invalidateSettingsCache } from '../../lib/memoryCache.js';
 import { readPricingStrategies } from '../../lib/items/pricingStrategies.js';
 import { phoneMatchKey } from '../../lib/search/phoneMatchKey.js';
-import { SMS_FAILURE_PAUSE_COUNT, SMS_FAILURE_PAUSE_MINUTES } from '../../lib/storefront/storefrontSmsRules.js';
+import { SMS_FAILURE_PAUSE_COUNT, SMS_FAILURE_PAUSE_MINUTES, SMS_FAILURE_PAUSE_VISITORS } from '../../lib/storefront/storefrontSmsRules.js';
+import { warnIfSmsLoginPaused } from '../../services/storefront/storefrontSmsBudget.js';
 import { EMAIL_TEST_SMTP_ENV } from '../../services/storefront/storefrontEmailClient.js';
 
 /**
@@ -32,94 +32,18 @@ import { EMAIL_TEST_SMTP_ENV } from '../../services/storefront/storefrontEmailCl
 
 interface Session { cookie: string; csrfToken: string }
 type Body = Record<string, unknown>;
-interface Received { auth: string; from: string; to: string[]; data: string }
 
 const VALID_CARD = '6037991234567893';
 const VALID_IBAN = 'IR050170000000123456789012';
 const SMS_KEY = 'TestSmsKey0123456789abcdefXYZ';
 const PRICE = '9000000';
 
-async function fakeSmsServer() {
-  const bodies: string[] = [];
-  const server = http.createServer((req, res) => {
-    let body = '';
-    req.on('data', (chunk: Buffer) => { body += chunk.toString('utf8'); });
-    req.on('end', () => {
-      bodies.push(body);
-      res.setHeader('Content-Type', 'application/json');
-      res.statusCode = 200;
-      res.end(JSON.stringify({ status: 1, message: 'موفق', data: { messageId: bodies.length } }));
-    });
-  });
-  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-  const { port } = server.address() as AddressInfo;
-  return { bodies, base: `http://127.0.0.1:${port}`, close: () => new Promise<void>(resolve => server.close(() => resolve())) };
-}
-
-/** A mail server that speaks just enough SMTP for one mail per connection, signing in with PLAIN */
-async function fakeMailServer() {
-  const received: Received[] = [];
-  const server = net.createServer((socket) => {
-    let buffer = '';
-    let inData = false;
-    const current: Received = { auth: '', from: '', to: [], data: '' };
-    socket.write('220 fake.mail ESMTP\r\n');
-    socket.on('data', (chunk) => {
-      buffer += chunk.toString('utf8');
-      while (true) {
-        if (inData) {
-          const end = buffer.indexOf('\r\n.\r\n');
-          if (end < 0) return;
-          current.data = buffer.slice(0, end);
-          buffer = buffer.slice(end + 5);
-          inData = false;
-          received.push({ ...current, to: [...current.to] });
-          socket.write('250 2.0.0 queued\r\n');
-          continue;
-        }
-        const nl = buffer.indexOf('\r\n');
-        if (nl < 0) return;
-        const line = buffer.slice(0, nl);
-        buffer = buffer.slice(nl + 2);
-        const verb = line.split(' ')[0].toUpperCase();
-        if (verb === 'EHLO' || verb === 'HELO') socket.write('250-fake.mail\r\n250-AUTH PLAIN\r\n250 8BITMIME\r\n');
-        else if (verb === 'AUTH') {
-          const plain = Buffer.from(line.split(' ')[2] ?? '', 'base64').toString('utf8');
-          current.auth = plain;
-          socket.write('235 2.7.0 ok\r\n');
-        } else if (verb === 'MAIL') { current.from = line; socket.write('250 ok\r\n'); }
-        else if (verb === 'RCPT') { current.to.push(line); socket.write('250 ok\r\n'); }
-        else if (verb === 'DATA') { inData = true; socket.write('354 go\r\n'); }
-        else if (verb === 'QUIT') { socket.end('221 bye\r\n'); return; }
-        else if (verb === 'RSET' || verb === 'NOOP') socket.write('250 ok\r\n');
-        else socket.write('502 no\r\n');
-      }
-    });
-    socket.on('error', () => undefined);
-  });
-  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', () => resolve()));
-  const port = (server.address() as net.AddressInfo).port;
-  return { received, port, close: () => new Promise<void>(resolve => server.close(() => resolve())) };
-}
-
-/** The text of a mail as the fake server got it: its body, with quoted-printable or base64 undone */
-function decodeMail(raw: string): string {
-  const [headers, ...rest] = raw.split('\r\n\r\n');
-  const body = rest.join('\r\n\r\n');
-  if (/Content-Transfer-Encoding: base64/i.test(headers)) return Buffer.from(body.replace(/\s+/g, ''), 'base64').toString('utf8');
-  if (/Content-Transfer-Encoding: quoted-printable/i.test(headers)) {
-    const soft = body.replace(/=\r?\n/g, '');
-    return Buffer.from(soft.replace(/=([0-9A-F]{2})/gi, (_m, h: string) => String.fromCharCode(parseInt(h, 16))), 'latin1').toString('utf8');
-  }
-  return body;
-}
-
 export async function runStorefrontEmailOrdersV12Tests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   const id = 'reg_storefront_email_orders_v12_p8e';
   if (!shouldRun(id, 'v12', 'phase8', 'storefront', 'email', 'orders', 'security')) return results;
 
-  const name = 'v12 phase 8e: a guest order proven by an email code goes on the customer with that email (never one found by the unproven phone), counts its open orders by the email, sends no text, and opens elsewhere with the email and a new code; «حالت بی پیامک» by the owner or by failing login texts turns the site to email; an email-only account orders without a proof';
+  const name = 'v12 phase 8e: a guest order proven by an email code goes on the customer with that email (never one found by the unproven phone), counts its open orders by the email, sends no text, and opens elsewhere with the email and a new code; the no-SMS mode, by the owner or by failing login texts, turns the site to email; an email-only account orders without a proof';
   const emailKeys: string[] = [];
   const mail = await fakeMailServer();
   const tStart = Date.now();
@@ -206,6 +130,15 @@ export async function runStorefrontEmailOrdersV12Tests(shouldRun: (id: string, .
       });
       if (res.status !== 200) throw new Error(`sms settings: ${res.status} ${JSON.stringify(res.body)}`);
       smsVersion = Number(res.body.data.version);
+    };
+    const proofFor = async (phone: string): Promise<string> => {
+      const buyer = site();
+      const asked = await buyer.post('/api/storefront/v1/auth/otp/request', { phone });
+      if (asked.status !== 202) throw new Error(`otp request: ${asked.status} ${JSON.stringify(asked.body)}`);
+      const code = String((JSON.parse(sms.bodies.at(-1) ?? '{}') as { parameters?: Array<{ value: string }> }).parameters?.[0]?.value ?? '');
+      const verified = await buyer.post('/api/storefront/v1/auth/otp/verify', { phone, code });
+      if (verified.status !== 200) throw new Error(`otp verify: ${verified.status} ${JSON.stringify(verified.body)}`);
+      return String(verified.body.data.phoneProof);
     };
     // a phone gets a new code only after the resend wait: the test moves its last code back in time instead of waiting
     const ageCodes = (phone: string) => orm.update(storefrontSmsCodes).set({ createdAt: new Date(Date.now() - 120_000).toISOString() })
@@ -331,14 +264,34 @@ export async function runStorefrontEmailOrdersV12Tests(shouldRun: (id: string, .
     if (await publicFlags() !== 'true/true') wrong.push(`unpaused: flags ${await publicFlags()}`);
 
     // 8) the latest login texts all failing pause the SMS sign-in the same way, and the owner's screen says so
-    await orm.insert(storefrontSmsMessages).values(Array.from({ length: SMS_FAILURE_PAUSE_COUNT }, () => ({
-      kind: 'otp', phone: phoneD, phoneKey: phoneMatchKey(phoneD), status: 'failed', error: 'test failure',
-    })));
+    const failTexts = async (visitors: number) => {
+      const rows = await orm.insert(storefrontSmsMessages).values(Array.from({ length: SMS_FAILURE_PAUSE_COUNT }, () => ({
+        kind: 'otp', phone: phoneD, phoneKey: phoneMatchKey(phoneD), status: 'failed', error: 'test failure',
+      }))).returning({ id: storefrontSmsMessages.id });
+      await orm.insert(storefrontSmsCodes).values(rows.map((r, i) => ({
+        phoneKey: phoneMatchKey(phoneD), codeHash: createHash('sha256').update(`code-${tag}-${r.id}`).digest('hex'),
+        addressKey: createHash('sha256').update(`visitor-${tag}-${i % visitors}`).digest('hex'), messageId: r.id,
+        expiresAt: new Date().toISOString(),
+      })));
+    };
+    const ageFailures = () => orm.update(storefrontSmsMessages).set({ createdAt: new Date(Date.now() - (SMS_FAILURE_PAUSE_MINUTES + 1) * 60_000).toISOString() })
+      .where(eq(storefrontSmsMessages.phoneKey, phoneMatchKey(phoneD)));
+    // review: one visitor's failures (a script asking codes for numbers that get no text) pause nothing
+    await failTexts(1);
+    if (await publicFlags() !== 'true/true') wrong.push(`one visitor's failed texts paused the SMS: ${await publicFlags()}`);
+    await ageFailures();
+    await failTexts(SMS_FAILURE_PAUSE_VISITORS);
     const failingFlags = await publicFlags();
+    // review: the colleagues hear of it with one bell
+    const bellsNow = async () => (await orm.select({ id: notifications.id }).from(notifications)
+      .where(and(eq(notifications.title, 'پیامک‌های ورود سایت فرستاده نمی‌شوند'), gt(notifications.createdAt, sql`now() - interval '5 minutes'`)))).length;
+    await warnIfSmsLoginPaused();
+    const firstBells = await bellsNow();
+    await warnIfSmsLoginPaused();
+    if (firstBells === 0 || await bellsNow() !== firstBells) wrong.push(`bells for the paused SMS sign-in: ${firstBells}, then ${await bellsNow()}`);
     const failingView = (await erp.get('/api/storefront/sms/settings')).body.data;
     if (failingFlags !== 'false/true' || failingView?.autoPaused !== true) wrong.push(`failing texts: flags ${failingFlags}, autoPaused ${failingView?.autoPaused}`);
-    await orm.update(storefrontSmsMessages).set({ createdAt: new Date(Date.now() - (SMS_FAILURE_PAUSE_MINUTES + 1) * 60_000).toISOString() })
-      .where(eq(storefrontSmsMessages.phoneKey, phoneMatchKey(phoneD)));
+    await ageFailures();
     if (await publicFlags() !== 'true/true') wrong.push(`after the failures aged out: flags ${await publicFlags()}`);
 
     // 9) a signed-in email-only account orders without a proof, with its own email
@@ -352,12 +305,69 @@ export async function runStorefrontEmailOrdersV12Tests(shouldRun: (id: string, .
       if (row.emailKey !== mailC.toLowerCase()) wrong.push(`the account's order email_key '${row.emailKey}'`);
     }
 
+    // 10) review: an email-proven order typed with someone's phone does not count against that phone's open orders
+    const limitAgain = await erp.get('/api/storefront/settings');
+    await erp.put('/api/storefront/settings', settingsBody(limitAgain.body.data, 1));
+    invalidateSettingsCache();
+    await smsSwitch(false, { otp: '111', order_placed: '222' });
+    const phoneVictim = `0935${tag}`;
+    phoneKeys.push(phoneMatchKey(phoneVictim));
+    const stranger = await site().post('/api/storefront/v1/orders', order(phoneVictim, `rk-mail-g-${tag}`, { email: mailD, emailProof: await emailProofFor(mailD) }));
+    // a plus alias of the same mailbox is the same mailbox for the limit
+    const alias = mailD.replace('@', '+x@');
+    emailKeys.push(alias.toLowerCase());
+    const aliased = await site().post('/api/storefront/v1/orders', order(phoneVictim, `rk-mail-h-${tag}`, { email: alias, emailProof: await emailProofFor(alias) }));
+    await smsSwitch(true, { otp: '111', order_placed: '222' });
+    await ageCodes(phoneVictim);
+    const victimOwn = await site().post('/api/storefront/v1/orders', order(phoneVictim, `rk-mail-i-${tag}`, { phoneProof: await proofFor(phoneVictim) }));
+    if (stranger.status !== 201 || aliased.status !== 409 || victimOwn.status !== 201) {
+      wrong.push(`the limits: a stranger's email order ${stranger.status}, its plus alias ${aliased.status}, the phone owner's own ${victimOwn.status}`);
+    }
+    for (const placedRes of [stranger, victimOwn]) if (placedRes.status === 201) customerIds.push((await orderRow(String(placedRes.body.data.order.number))).customerId);
+
+    // 11) review: the texts set up but paused, the email off: a guest order and a phone-only sign-up wait for a proof
+    await pause(true);
+    const emailOff = (await erp.get('/api/storefront/email/settings')).body.data;
+    await erp.put('/api/storefront/email/settings', { ...emailOff, enabled: false, password: '', clearPassword: false, ready: undefined, secretsKeyConfigured: undefined, version: emailOff.version });
+    invalidateSettingsCache();
+    const lockedOrder = await site().post('/api/storefront/v1/orders', order(phoneVictim, `rk-mail-j-${tag}`));
+    const lockedSignUp = await site().post('/api/storefront/v1/auth/register', { name: `در مکث ${tag}`, phone: `0936${tag}`, password: PASSWORD });
+    phoneKeys.push(phoneMatchKey(`0936${tag}`));
+    if (await publicFlags() !== 'false/false' || lockedOrder.status !== 422 || lockedSignUp.status !== 422) {
+      wrong.push(`paused with the email off: flags ${await publicFlags()}, a guest order ${lockedOrder.status} ${lockedOrder.body.code}, a phone-only sign-up ${lockedSignUp.status}`);
+    }
+    const emailBack = (await erp.get('/api/storefront/email/settings')).body.data;
+    await erp.put('/api/storefront/email/settings', { ...emailBack, enabled: true, password: '', clearPassword: false, ready: undefined, secretsKeyConfigured: undefined, version: emailBack.version });
+    invalidateSettingsCache();
+
+    // 12) review: an account made in the pause with someone's phone beside its own proven email orders by the email:
+    // not on the phone's customer, and no text to that phone, also once the texts are back
+    const squatPhone = `0937${tag}`;
+    phoneKeys.push(phoneMatchKey(squatPhone));
+    const [squatOwner] = await orm.insert(customers).values({ name: `صاحب شماره دوم ${tag}`, phone: squatPhone, notes: 'ERP-TEST-MARKER' }).returning({ id: customers.id });
+    customerIds.push(squatOwner.id);
+    const squatter = await site().post('/api/storefront/v1/auth/register', { name: `ساکن ${tag}`, phone: squatPhone, email: mailF, emailProof: await emailProofFor(mailF), password: PASSWORD });
+    await pause(false);
+    const squatSession = String(squatter.body.data?.sessionToken ?? '');
+    const squatOrder = await site(squatSession).post('/api/storefront/v1/orders', order(squatPhone, `rk-mail-k-${tag}`));
+    if (squatter.status !== 201 || squatOrder.status !== 201) wrong.push(`the squatter's account and order: ${squatter.status} ${squatOrder.status} ${JSON.stringify(squatOrder.body)}`);
+    else {
+      const row = await orderRow(String(squatOrder.body.data.order.number));
+      customerIds.push(row.customerId);
+      const texts = await orm.select({ id: storefrontSmsMessages.id }).from(storefrontSmsMessages).where(eq(storefrontSmsMessages.orderId, row.id));
+      if (row.customerId === squatOwner.id || row.emailKey !== mailF.toLowerCase() || texts.length !== 0) {
+        wrong.push(`the squatter's order: customer ${row.customerId === squatOwner.id ? 'the phone owner' : 'by email'}, email_key '${row.emailKey}', ${texts.length} texts`);
+      }
+    }
+    await erp.put('/api/storefront/settings', settingsBody((await erp.get('/api/storefront/settings')).body.data, 20));
+    invalidateSettingsCache();
+
     if (savedEmailEnv === undefined) delete process.env[EMAIL_TEST_SMTP_ENV];
     else process.env[EMAIL_TEST_SMTP_ENV] = savedEmailEnv;
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'with the texts off a guest order without a proof was 422, a phone-only sign-up was asked for an email, and an order with an email proof was 201; it went on a new customer with the email and no phone, not on the customer with the typed phone, and kept the email; the same email found the same customer; a third open order of one email was 409; with the texts on such an order queued no text; it opened elsewhere with its email and a new code while another email was 404; the owner\'s «حالت بی پیامک» and failing login texts each turned the public flags to email and refused SMS codes, and both came back; an email-only account ordered without a proof',
+      details: 'with the texts off a guest order without a proof was 422, a phone-only sign-up was asked for an email, and an order with an email proof was 201; it went on a new customer with the email and no phone, not on the customer with the typed phone, and kept the email; the same email found the same customer; a third open order of one email was 409; with the texts on such an order queued no text; it opened elsewhere with its email and a new code while another email was 404; the no-SMS mode by the owner and by failing login texts each turned the public flags to email and refused SMS codes, and both came back; an email-only account ordered without a proof; one visitor\'s failed texts paused nothing and several rang one bell; an email-proven order typed with a phone did not use that phone\'s limit while a plus alias of its mailbox did; paused with the email off a guest order and a phone-only sign-up waited for a proof; an account with someone\'s phone beside its proven email ordered by the email with no text',
     }));
   } catch (err) {
     results.push(makeTestCase({

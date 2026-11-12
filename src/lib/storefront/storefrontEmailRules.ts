@@ -38,6 +38,12 @@ export function normalizeEmail(raw: unknown): string {
 /** The key an address is matched by (one account per address, whatever its case) */
 export const emailMatchKey = (email: string): string => normalizeEmail(email).toLowerCase();
 
+/**
+ * 8e3 review: the mailbox behind a matching key, its `+tag` dropped (`a+1@x` and `a@x` are one inbox at most providers),
+ * for limits only (open orders, discount uses); the account and the customer keep the address as proven.
+ */
+export const inboxKey = (emailKey: string): string => emailKey.replace(/\+[^@]*@/, '@');
+
 /** A mail server's name: a host name or an IPv4 address, no scheme, port or path */
 export const isEmailHost = (value: string): boolean => HOST.test(value) || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(value);
 

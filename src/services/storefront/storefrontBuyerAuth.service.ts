@@ -20,7 +20,7 @@ import { catalogItems } from './storefrontCatalog.service.js';
 import { pricesOf } from './storefrontItemData.js';
 import { rialText } from './storefrontShipping.service.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
-import { smsLoginOn } from './storefrontSmsSettings.service.js';
+import { smsLoginConfigured, smsLoginOn } from './storefrontSmsSettings.service.js';
 import { emailCodesOn } from './storefrontEmailOtp.service.js';
 import { consumePhoneProof } from './storefrontSmsOtp.service.js';
 import {
@@ -159,12 +159,15 @@ export async function registerAccount(input: RegisterRequest): Promise<Storefron
   const password = String(input.password ?? '');
   const weak = passwordError(password, phone);
   if (weak) throw accountFieldError('password', weak);
-  const proofNeeded = Boolean(phone) && await smsLoginOn(orm);
+  const smsOn = Boolean(phone) && await smsLoginOn(orm);
   // v12 phase 8e3 («حالت بی پیامک»): while no SMS code can prove the phone but an email code can, the account proves an
   // email instead, so no account is made of a phone nobody proved while a proof is at hand
-  if (phone && !email && !proofNeeded && await emailCodesOn(orm)) {
+  if (phone && !email && !smsOn && await emailCodesOn(orm)) {
     throw accountFieldError('email', 'ورود با پیامک اکنون ممکن نیست؛ ایمیل خود را هم بنویسید و با کدی که به آن می‌رسد تأیید کنید.');
   }
+  // 8e3 review: with the texts set up but paused and no email beside it, the phone still needs its proof (so the
+  // account waits); a phone beside a proven email stays unproven, and orders then go by the email
+  const proofNeeded = smsOn || (Boolean(phone) && !email && await smsLoginConfigured(orm));
   if (proofNeeded && !input.phoneProof) throw phoneProofInvalid();
   if (email && !input.emailProof) throw emailProofInvalid();
   const passwordHash = await hashPassword(password);

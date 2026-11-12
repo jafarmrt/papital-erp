@@ -26,8 +26,10 @@ type CodeRecord = typeof storefrontDiscountCodes.$inferSelect;
 export interface DiscountBuyer {
   account: AccountRecord | null;
   group: GroupRecord | null;
-  /** the phone's match key; '' at a quote (the phone is not known yet) */
+  /** the phone's match key; '' at a quote (the phone is not known yet); `email:<inbox>` for an email-proven order */
   phoneKey: string;
+  /** 8e3 review: the mailbox of an email-proven order, whose earlier orders are found by it (not by the typed phone) */
+  inboxKey?: string;
 }
 
 export interface DiscountChoice {
@@ -54,7 +56,8 @@ async function usesOf(executor: DbExecutor, codeId: number, buyer?: DiscountBuye
 
 async function hasEarlierOrder(executor: DbExecutor, buyer: DiscountBuyer): Promise<boolean> {
   const mine = [
-    ...(buyer.phoneKey ? [eq(storefrontOrders.phoneKey, buyer.phoneKey)] : []),
+    ...(buyer.inboxKey ? [sql`regexp_replace(${storefrontOrders.emailKey}, '[+][^@]*@', '@') = ${buyer.inboxKey}`]
+      : buyer.phoneKey ? [and(eq(storefrontOrders.phoneKey, buyer.phoneKey), eq(storefrontOrders.emailKey, ''))!] : []),
     ...(buyer.account ? [eq(storefrontOrders.buyerAccountId, buyer.account.id)] : []),
   ];
   if (mine.length === 0) return false;

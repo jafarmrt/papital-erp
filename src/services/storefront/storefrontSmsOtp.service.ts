@@ -12,7 +12,7 @@ import {
 } from '../../lib/storefront/storefrontSmsRules.js';
 import type { OtpRequestResult, OtpVerifyResult } from '../../lib/storefront/storefrontSmsContracts.js';
 import { deliverMessage } from './storefrontSms.service.js';
-import { smsBudgetSpent, warnIfBudgetNearlySpent } from './storefrontSmsBudget.js';
+import { smsBudgetSpent, warnIfBudgetNearlySpent, warnIfSmsLoginPaused } from './storefrontSmsBudget.js';
 import { activeTemplate, smsLoginOn, smsRuntimeSettings } from './storefrontSmsSettings.service.js';
 
 /**
@@ -119,6 +119,8 @@ export async function requestOtp(rawPhone: string, address: string): Promise<Otp
   if (!result.ok) {
     // a code the buyer never got is closed, so it cannot be guessed
     await orm.update(storefrontSmsCodes).set({ expiresAt: sql`now()` }).where(eq(storefrontSmsCodes.id, message.codeId));
+    // v12 phase 8e3 review: the colleagues hear of a pause this failure may have started
+    await warnIfSmsLoginPaused();
     throw new AppError('فرستادن پیامک اکنون ممکن نشد؛ چند دقیقه دیگر دوباره بخواهید.', 503, 'STOREFRONT_OTP_NOT_SENT');
   }
   return { resendAfter: OTP_RESEND_SECONDS, expiresIn: OTP_TTL_SECONDS };
