@@ -10,6 +10,7 @@ import { StorefrontProductsSection } from '../storefront/StorefrontProductsSecti
 import { BuyerGroupsSection } from '../storefront/BuyerGroupsSection';
 import { DiscountCodesSection } from '../storefront/DiscountCodesSection';
 import { StorefrontSmsSection } from '../storefront/StorefrontSmsSection';
+import { StorefrontEmailSection } from '../storefront/StorefrontEmailSection';
 import { StorefrontSeoSection } from '../storefront/StorefrontSeoForm';
 import { StorefrontRedirectsSection } from '../storefront/StorefrontRedirectsSection';
 import { StorefrontCampaignsSection } from '../storefront/StorefrontCampaignsSection';
@@ -19,7 +20,7 @@ import { StorefrontCampaignsSection } from '../storefront/StorefrontCampaignsSec
  * which runs as its own app on the site's domain and reads the ERP through the Storefront API. `storefront.view` sees,
  * `storefront.manage` changes.
  */
-type Section = 'products' | 'settings' | 'brand' | 'shipping' | 'groups' | 'discounts' | 'campaigns' | 'sms' | 'seo' | 'redirects' | 'key';
+type Section = 'products' | 'settings' | 'brand' | 'shipping' | 'groups' | 'discounts' | 'campaigns' | 'sms' | 'email' | 'seo' | 'redirects' | 'key';
 const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: 'products', label: 'کالاهای سایت' },
   { id: 'settings', label: 'پرداخت، قیمت و موجودی' },
@@ -29,6 +30,7 @@ const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: 'discounts', label: 'کدهای تخفیف' },
   { id: 'campaigns', label: 'صفحه‌های ویژه' },
   { id: 'sms', label: 'پیامک' },
+  { id: 'email', label: 'ایمیل' },
   { id: 'seo', label: 'جست‌وجو و آمار بازدید' },
   { id: 'redirects', label: 'نشانی‌های سایت قبلی' },
   { id: 'key', label: 'کلید برنامه سایت' },
@@ -64,6 +66,7 @@ export function StorefrontTab({ canManage }: { canManage: boolean }) {
       {section === 'discounts' && <DiscountCodesSection canManage={canManage} />}
       {section === 'campaigns' && <StorefrontCampaignsSection canManage={canManage} />}
       {section === 'sms' && <StorefrontSmsSection canManage={canManage} />}
+      {section === 'email' && <StorefrontEmailSection canManage={canManage} />}
       {section === 'seo' && <StorefrontSeoSection canManage={canManage} />}
       {section === 'redirects' && <StorefrontRedirectsSection canManage={canManage} />}
       {(section === 'settings' || section === 'brand' || section === 'key') && (
