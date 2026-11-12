@@ -63,6 +63,17 @@ export async function findActiveCustomerByName(name: string, db: DbExecutor = or
   return row;
 }
 
+/**
+ * v12 phase 8e: the first active customer (lowest id) whose email matches this key (lower case, trimmed); none for ''.
+ * A site order proven only by an email code finds its customer this way, never by its unproven phone.
+ */
+export async function findActiveCustomerByEmailKey(emailKey: string, db: DbExecutor): Promise<CustomerRow | undefined> {
+  if (!emailKey) return undefined;
+  const [row] = await db.select().from(customers)
+    .where(and(eq(customers.isDeleted, 0), sql`lower(btrim(${customers.email})) = ${emailKey}`)).orderBy(asc(customers.id)).limit(1);
+  return row;
+}
+
 export const CUSTOMER_NAME_TAKEN_MESSAGE = 'طرف حساب با این نام قبلاً ثبت شده است.';
 
 export async function assertCustomerNameAvailable(name: string, db: DbExecutor = orm, excludeId?: number): Promise<void> {

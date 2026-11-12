@@ -15,6 +15,7 @@ import type { StorefrontSettingsInput } from '../../lib/storefront/storefrontCon
 import { listShippingMethods } from './storefrontShipping.service.js';
 import { imagesOf, pricesOf } from './storefrontItemData.js';
 import { smsLoginOn } from './storefrontSmsSettings.service.js';
+import { emailCodesOn } from './storefrontEmailOtp.service.js';
 import { keptOnSale } from './storefrontOnSaleCache.js';
 
 /**
@@ -236,6 +237,7 @@ export async function publicSettings(): Promise<StorefrontPublicSettings> {
     stockDisplay: settings.stockDisplay,
     whatsapp: settings.whatsappEnabled ? settings.whatsappNumber : '',
     smsLogin: await smsLoginOn(orm),
+    emailLogin: await emailCodesOn(orm),
     ordering: settings.enabled && settings.ordersEnabled,
     shippingMethods: methods.map(({ id: _id, version: _version, isActive: _active, sortOrder: _sort, ...method }) => method),
   };

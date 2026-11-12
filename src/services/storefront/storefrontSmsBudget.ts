@@ -1,5 +1,5 @@
 import { and, eq, gt, ne, sql, type SQL } from 'drizzle-orm';
-import type { DbExecutor } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { notifications, storefrontSmsMessages } from '../../db/schema.js';
 import { logger } from '../../middleware/logger.js';
 import {
@@ -8,6 +8,7 @@ import {
 import { createNotifications } from '../notifications/notificationCreator.js';
 import { permissionHolderUserIdsWith } from '../notifications/notificationRecipients.js';
 import { STOREFRONT_BOT_USER } from './storefrontCustomer.js';
+import { smsLoginFailing } from './storefrontSmsSettings.service.js';
 
 /**
  * v11 phase 8.4a, v12 phase 8b (site review 2.11): the site's budgets of texts. Login codes (`codes`) and order texts
@@ -67,5 +68,31 @@ export async function warnIfBudgetNearlySpent(tx: DbExecutor, hourlyCap: number,
     });
   } catch (err) {
     logger.error({ message: 'Error warning colleagues of the site SMS budget', pool, error: err });
+  }
+}
+
+/**
+ * v12 phase 8e3 review: «حالت بی پیامک» came on by itself (the latest login texts all failed, from several visitors): the
+ * holders of `storefront.manage` get one bell an hour, as for the budgets, so a pause is never seen only on the settings
+ * screen. Like the budget bell it never undoes or blocks what the buyer asked.
+ */
+export async function warnIfSmsLoginPaused(): Promise<void> {
+  try {
+    await orm.transaction(async (sp) => {
+      if (!(await smsLoginFailing(sp))) return;
+      const title = 'پیامک‌های ورود سایت فرستاده نمی‌شوند';
+      const [rang] = await sp.select({ id: notifications.id }).from(notifications)
+        .where(and(eq(notifications.senderName, STOREFRONT_BOT_USER), eq(notifications.title, title), gt(notifications.createdAt, sql`now() - interval '1 hour'`)))
+        .limit(1);
+      if (rang) return;
+      const recipients = await permissionHolderUserIdsWith(sp, SMS_BUDGET_NOTIFY_PERMISSION);
+      await createNotifications(sp, recipients.map(userId => ({
+        userId, category: 'site_sms' as const, type: 'system', senderName: STOREFRONT_BOT_USER, title,
+        message: 'چند پیامک ورود پیاپی فرستاده نشد؛ سایت تا رفع آن ورود و خرید را با ایمیل پیش می‌برد (اگر ایمیل سایت تنظیم شده باشد). سرویس پیامک را بررسی کنید.',
+        link: '/settings',
+      })));
+    });
+  } catch (err) {
+    logger.error({ message: 'Error warning colleagues of the paused site SMS login', error: err });
   }
 }

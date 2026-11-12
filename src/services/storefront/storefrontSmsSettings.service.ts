@@ -1,7 +1,8 @@
 import type { Request } from 'express';
-import { eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { appSettings } from '../../db/schema.js';
+import { appSettings, storefrontSmsCodes, storefrontSmsMessages } from '../../db/schema.js';
+import { emailCodesOn } from './storefrontEmailOtp.service.js';
 import { STOREFRONT_SETTING_KEYS } from '../../lib/storefront/storefrontContracts.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
@@ -9,7 +10,7 @@ import { OptimisticLockError } from '../../lib/occHelper.js';
 import { invalidateSettingsCache } from '../../lib/memoryCache.js';
 import { decryptSecret, encryptSecret, isSecretsKeyConfigured } from '../../lib/secretBox.js';
 import {
-  SMS_HOURLY_CAP_DEFAULT, SMS_HOURLY_CAP_MAX, SMS_KINDS, SMS_KIND_TITLES, apiKeyError, isSmsKind, isSmsProvider, templateIdError,
+  SMS_FAILURE_PAUSE_COUNT, SMS_FAILURE_PAUSE_MINUTES, SMS_FAILURE_PAUSE_VISITORS, SMS_HOURLY_CAP_DEFAULT, SMS_HOURLY_CAP_MAX, SMS_KINDS, SMS_KIND_TITLES, apiKeyError, isSmsKind, isSmsProvider, templateIdError,
   type SmsKind, type SmsProvider,
 } from '../../lib/storefront/storefrontSmsRules.js';
 import {
@@ -24,7 +25,7 @@ import {
  * budget of login codes. One save writes the group under the lock of its version row with one audit row in the same
  * transaction; the audit row never holds the key.
  */
-const GROUP_KEYS = [KEYS.enabled, KEYS.provider, KEYS.apiKey, KEYS.apiKeyHint, KEYS.templates, KEYS.hourlyCap, KEYS.orderHourlyCap, KEYS.version, STOREFRONT_SETTING_KEYS.enabled] as const;
+const GROUP_KEYS = [KEYS.enabled, KEYS.provider, KEYS.apiKey, KEYS.apiKeyHint, KEYS.templates, KEYS.hourlyCap, KEYS.orderHourlyCap, KEYS.loginPaused, KEYS.version, STOREFRONT_SETTING_KEYS.enabled] as const;
 
 type Stored = Record<string, string>;
 
@@ -65,6 +66,8 @@ export interface SmsRuntimeSettings {
   /** login codes in an hour (v12 phase 8b: order texts have `orderHourlyCap`) */
   hourlyCap: number;
   orderHourlyCap: number;
+  /** v12 phase 8e: «حالت بی پیامک» by hand: no login code is sent (order texts still go) */
+  loginPaused: boolean;
 }
 
 function runtimeOf(stored: Stored): SmsRuntimeSettings {
@@ -78,6 +81,7 @@ function runtimeOf(stored: Stored): SmsRuntimeSettings {
     hourlyCap: hourlyCapOf(stored[KEYS.hourlyCap]),
     // v12 phase 8b review: until the order budget is saved, it is the cap the owner set for all texts before the split
     orderHourlyCap: hourlyCapOf(stored[KEYS.orderHourlyCap] || stored[KEYS.hourlyCap]),
+    loginPaused: stored[KEYS.loginPaused] === '1',
   };
 }
 
@@ -92,8 +96,40 @@ export function activeTemplate(settings: SmsRuntimeSettings, kind: SmsKind): str
 }
 
 /** v11 phase 8.4b: whether the site signs buyers in by SMS now (its texts on with a login code template) */
-export async function smsLoginOn(executor: DbExecutor): Promise<boolean> {
+/**
+ * v12 phase 8e (start plan §5, «حالت بی پیامک»): the latest `SMS_FAILURE_PAUSE_COUNT` login texts, all sent within the
+ * last `SMS_FAILURE_PAUSE_MINUTES`, failed. Test texts do not count.
+ */
+export async function smsLoginFailing(executor: DbExecutor): Promise<boolean> {
+  const latest = await executor.select({ status: storefrontSmsMessages.status, addressKey: storefrontSmsCodes.addressKey }).from(storefrontSmsMessages)
+    .leftJoin(storefrontSmsCodes, eq(storefrontSmsCodes.messageId, storefrontSmsMessages.id))
+    .where(and(eq(storefrontSmsMessages.kind, 'otp'), eq(storefrontSmsMessages.isTest, 0),
+      gt(storefrontSmsMessages.createdAt, sql`now() - make_interval(mins => ${SMS_FAILURE_PAUSE_MINUTES})`)))
+    .orderBy(desc(storefrontSmsMessages.createdAt), desc(storefrontSmsMessages.id)).limit(SMS_FAILURE_PAUSE_COUNT);
+  // 8e3 review: failures from one or two visitors (a script asking codes for numbers that cannot get a text) pause nothing
+  const visitors = new Set(latest.map(r => r.addressKey ?? ''));
+  return latest.length === SMS_FAILURE_PAUSE_COUNT && latest.every(r => r.status === 'failed') && visitors.size >= SMS_FAILURE_PAUSE_VISITORS;
+}
+
+/**
+ * 8e3 review: the texts are set to prove phones (on, with a login template), paused or not. While they are, an order or
+ * a sign-up never goes without a proof: in «حالت بی پیامک» it proves an email, or waits when the email is off too; only
+ * a site that never set the texts up orders as before.
+ */
+export async function smsLoginConfigured(executor: DbExecutor): Promise<boolean> {
   return activeTemplate(await smsRuntimeSettings(executor), 'otp') !== null;
+}
+
+/**
+ * Whether the site signs in and proves phones by SMS: the texts on with a login template, and v12 phase 8e: not in
+ * «حالت بی پیامک» (the owner's switch, or the latest login texts all failing). While it is off the site turns to email.
+ */
+export async function smsLoginOn(executor: DbExecutor): Promise<boolean> {
+  const settings = await smsRuntimeSettings(executor);
+  if (activeTemplate(settings, 'otp') === null || settings.loginPaused) return false;
+  // 8e3 delta review: the automatic pause only turns the site to email; with the email off it would gain nothing (codes
+  // that fail, fail anyway) and only stop buyers, so failing texts pause nothing then
+  return !(await smsLoginFailing(executor)) || !(await emailCodesOn(executor));
 }
 
 export async function readSmsSettings(executor: DbExecutor): Promise<StorefrontSmsSettingsView> {
@@ -106,6 +142,8 @@ export async function readSmsSettings(executor: DbExecutor): Promise<StorefrontS
     templates: runtime.templates,
     hourlyCap: runtime.hourlyCap,
     orderHourlyCap: runtime.orderHourlyCap,
+    loginPaused: runtime.loginPaused,
+    autoPaused: await smsLoginFailing(executor) && await emailCodesOn(executor),
     version: Number(stored[KEYS.version]) || 0,
     secretsKeyConfigured: isSecretsKeyConfigured(),
   };
@@ -175,6 +213,8 @@ export async function saveSmsSettings(req: Request, input: StorefrontSmsSettings
     if (before.hourlyCap !== input.hourlyCap) changes.hourlyCap = { before: before.hourlyCap, after: input.hourlyCap };
     const orderHourlyCap = orderCapInput ?? before.orderHourlyCap;
     if (before.orderHourlyCap !== orderHourlyCap) changes.orderHourlyCap = { before: before.orderHourlyCap, after: orderHourlyCap };
+    const loginPaused = input.loginPaused ?? before.loginPaused;
+    if (before.loginPaused !== loginPaused) changes.loginPaused = { before: before.loginPaused, after: loginPaused };
     const keyChanged = keyAfter !== (stored[KEYS.apiKey] ?? '');
     const hintAfter = !keyAfter ? '' : sealedKey ? newKey.slice(-4) : stored[KEYS.apiKeyHint] ?? '';
     // the key itself never enters the audit row: only that it changed and its last four letters
@@ -185,6 +225,7 @@ export async function saveSmsSettings(req: Request, input: StorefrontSmsSettings
     await writeValue(tx, KEYS.templates, JSON.stringify(templates));
     await writeValue(tx, KEYS.hourlyCap, String(input.hourlyCap));
     await writeValue(tx, KEYS.orderHourlyCap, String(orderHourlyCap));
+    await writeValue(tx, KEYS.loginPaused, loginPaused ? '1' : '0');
     if (keyChanged) {
       await writeValue(tx, KEYS.apiKey, keyAfter);
       await writeValue(tx, KEYS.apiKeyHint, hintAfter);

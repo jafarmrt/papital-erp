@@ -12,6 +12,8 @@ export const STOREFRONT_SMS_SETTING_KEYS = {
   templates: 'sf_sms_templates',
   hourlyCap: 'sf_sms_hourly_cap',
   orderHourlyCap: 'sf_sms_order_hourly_cap',
+  /** v12 phase 8e: the owner's «حالت بی پیامک» switch ('1' = login codes paused) */
+  loginPaused: 'sf_sms_login_paused',
   version: 'sf_sms_version',
 } as const;
 
@@ -29,6 +31,8 @@ export interface StorefrontSmsSettingsInput {
   hourlyCap: number;
   /** v12 phase 8b: order texts the site sends in an hour, a budget of their own; absent keeps the stored one */
   orderHourlyCap?: number;
+  /** v12 phase 8e: «حالت بی پیامک», login codes paused by hand; absent keeps the stored one */
+  loginPaused?: boolean;
   version: number;
 }
 
@@ -39,6 +43,10 @@ export interface StorefrontSmsSettingsView {
   templates: SmsTemplates;
   hourlyCap: number;
   orderHourlyCap: number;
+  /** v12 phase 8e: «حالت بی پیامک» switched on by hand */
+  loginPaused: boolean;
+  /** v12 phase 8e: the latest login texts all failed, so the site works without SMS until a while has passed */
+  autoPaused: boolean;
   version: number;
   /** whether the server can keep a provider key at all (`ERP_SECRETS_KEY` is set) */
   secretsKeyConfigured: boolean;

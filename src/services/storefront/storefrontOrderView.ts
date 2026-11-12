@@ -77,7 +77,7 @@ async function common(executor: DbExecutor, order: OrderRecord) {
       name: order.recipientName, phone: order.recipientPhone || order.phone, province: order.province, city: order.city, address: order.address,
       postalCode: order.postalCode,
     },
-    orderedBy: { name: order.buyerName || order.recipientName, phone: order.phone },
+    orderedBy: { name: order.buyerName || order.recipientName, phone: order.phone, email: order.email },
     gift: order.isGift === 1 ? { message: order.giftMessage } : null,
     note: order.buyerNote,
     shipping: {

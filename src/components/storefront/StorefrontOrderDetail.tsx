@@ -62,13 +62,19 @@ function OrderBody({ order, canManage, busy, run }: { order: AdminOrderDetail; c
       <BuyerBox order={order} />
 
       {/* v12 phase 8c (site review 2.5): the buyer, whom the customer is, when someone else receives the order */}
-      {(order.orderedBy.name !== order.recipient.name || order.orderedBy.phone !== order.recipient.phone) && (
+      {(order.orderedBy.name !== order.recipient.name || order.orderedBy.phone !== order.recipient.phone || order.orderedBy.email) && (
         <section aria-label="خریدار" className="space-y-1">
           <h4 className="text-xs font-black text-slate-500">خریدار</h4>
           <p className="font-bold text-slate-800">{order.orderedBy.name}</p>
           <a href={`tel:${order.orderedBy.phone}`} className="inline-flex min-h-11 items-center gap-1.5 font-bold text-sky-700" dir="ltr">
             <Phone className="h-4 w-4" />{formatPersianCode(order.orderedBy.phone)}
           </a>
+          {/* v12 phase 8e: an order proven by an email code; its phone was not proven, and the customer goes by the email */}
+          {order.orderedBy.email && (
+            <p className="text-xs text-slate-600">
+              ایمیل تأییدشده: <a href={`mailto:${order.orderedBy.email}`} dir="ltr" className="font-bold text-sky-700">{order.orderedBy.email}</a> (شمارهٔ همراه تأیید نشده است)
+            </p>
+          )}
         </section>
       )}
       {order.gift && (

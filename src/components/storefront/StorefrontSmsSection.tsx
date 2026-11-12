@@ -7,7 +7,7 @@ import {
 } from '../../hooks/queries/useStorefrontSmsQueries';
 import type { StorefrontSmsSettingsInput, StorefrontSmsSettingsView } from '../../lib/storefront/storefrontSmsContracts';
 import {
-  ORDER_SMS_PER_PHONE_DAY_MAX, OTP_PER_PHONE_DAY_MAX, OTP_PER_PHONE_HOUR_MAX, SMS_BUDGET_WARN_PERCENT, SMS_DAILY_CAP_HOURS, SMS_HOURLY_CAP_DEFAULT, SMS_HOURLY_CAP_MAX, SMS_KINDS, SMS_KIND_PARAMS, SMS_KIND_TITLES, SMS_MESSAGE_STATUSES, SMS_MESSAGE_STATUS_TITLES, SMS_PROVIDERS,
+  ORDER_SMS_PER_PHONE_DAY_MAX, OTP_PER_PHONE_DAY_MAX, OTP_PER_PHONE_HOUR_MAX, SMS_BUDGET_WARN_PERCENT, SMS_DAILY_CAP_HOURS, SMS_FAILURE_PAUSE_COUNT, SMS_FAILURE_PAUSE_MINUTES, SMS_HOURLY_CAP_DEFAULT, SMS_HOURLY_CAP_MAX, SMS_KINDS, SMS_KIND_PARAMS, SMS_KIND_TITLES, SMS_MESSAGE_STATUSES, SMS_MESSAGE_STATUS_TITLES, SMS_PROVIDERS,
   SMS_PROVIDER_TITLES, apiKeyError, suggestedTemplateText, templateIdError, type SmsKind, type SmsMessageStatus, type SmsProvider,
 } from '../../lib/storefront/storefrontSmsRules';
 import { formatPersianCode, formatPersianNumber } from '../../utils/persianNumber';
@@ -26,7 +26,7 @@ const hint = 'mt-1 text-xs leading-6 text-slate-500';
 
 const formOf = (view: StorefrontSmsSettingsView): StorefrontSmsSettingsInput => ({
   enabled: view.enabled, provider: view.provider, apiKey: '', clearApiKey: false, templates: { ...view.templates },
-  hourlyCap: view.hourlyCap, orderHourlyCap: view.orderHourlyCap, version: view.version,
+  hourlyCap: view.hourlyCap, orderHourlyCap: view.orderHourlyCap, loginPaused: view.loginPaused, version: view.version,
 });
 
 const STATUS_TONE: Readonly<Record<SmsMessageStatus, string>> = {
@@ -144,6 +144,18 @@ function SmsSettingsForm({ view, canManage }: { view: StorefrontSmsSettingsView;
           <p className={hint}>
             جلوی کسی را می‌گیرد که با شماره‌های بسیار یا سفارش‌های ساختگی، اعتبار پنل پیامک را خرج کند. سقف روزانهٔ هر کدام {formatPersianNumber(SMS_DAILY_CAP_HOURS)} برابر سقف ساعتی‌اش است. هر شماره هم جدا در هر دقیقه یک کد، در ساعت {formatPersianNumber(OTP_PER_PHONE_HOUR_MAX)} و در روز {formatPersianNumber(OTP_PER_PHONE_DAY_MAX)} کد و {formatPersianNumber(ORDER_SMS_PER_PHONE_DAY_MAX)} پیامک سفارش بیشتر نمی‌گیرد. پیامکی که از سقف بگذرد، با وضعیت «فرستاده نشد» در گزارش می‌ماند.
           </p>
+        </section>
+
+        <section aria-label="حالت بی پیامک" className="rounded-2xl border border-slate-200 bg-white p-5 space-y-2">
+          {/* v12 phase 8e (start plan §5): the site turns to email while login texts cannot go */}
+          <label className="flex items-center gap-2 text-sm font-bold text-slate-800">
+            <input type="checkbox" checked={form.loginPaused === true} onChange={e => set('loginPaused', e.target.checked)} />
+            حالت بی پیامک
+          </label>
+          <p className={hint}>
+            وقتی روشن است، سایت کد ورود پیامکی نمی‌فرستد و ورود، ساخت حساب، فراموشی رمز و خرید مهمان با کد ایمیلی انجام می‌شود (اگر ایمیل سایت تنظیم شده باشد). پیامک سفارش‌ها همچنان می‌رود. اگر {formatPersianNumber(SMS_FAILURE_PAUSE_COUNT)} پیامک ورود پیاپی در {formatPersianNumber(SMS_FAILURE_PAUSE_MINUTES)} دقیقه فرستاده نشود، سایت خودبه‌خود همین کار را می‌کند تا آن مدت بگذرد و زنگولهٔ مدیران فروشگاه سایت به صدا درمی‌آید. اگر ایمیل سایت روشن نباشد، در این حالت خرید مهمان و ساختن حساب با شماره تا بازگشت پیامک ممکن نیست.
+          </p>
+          {view.autoPaused && <p role="status" className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">پیامک‌های ورود اخیر فرستاده نشده‌اند؛ سایت اکنون بی پیامک کار می‌کند.</p>}
         </section>
       </fieldset>
       {canManage && (

@@ -12,8 +12,8 @@ import {
 } from '../../lib/storefront/storefrontSmsRules.js';
 import type { OtpRequestResult, OtpVerifyResult } from '../../lib/storefront/storefrontSmsContracts.js';
 import { deliverMessage } from './storefrontSms.service.js';
-import { smsBudgetSpent, warnIfBudgetNearlySpent } from './storefrontSmsBudget.js';
-import { activeTemplate, smsRuntimeSettings } from './storefrontSmsSettings.service.js';
+import { smsBudgetSpent, warnIfBudgetNearlySpent, warnIfSmsLoginPaused } from './storefrontSmsBudget.js';
+import { activeTemplate, smsLoginOn, smsRuntimeSettings } from './storefrontSmsSettings.service.js';
 
 /**
  * v11 phase 8.4a (start plan §4): the login code a buyer asks for on the site, and the phone proof a right code gives.
@@ -79,6 +79,8 @@ async function countSince(tx: DbExecutor, where: ReturnType<typeof eq>, seconds:
 
 export async function requestOtp(rawPhone: string, address: string): Promise<OtpRequestResult> {
   const settings = await otpTemplateOn();
+  // v12 phase 8e: «حالت بی پیامک» (by hand, or the latest login texts all failing): no code is sent; the site turns to email
+  if (!(await smsLoginOn(orm))) throw new AppError('ورود با پیامک اکنون ممکن نیست؛ با ایمیل ادامه دهید.', 503, 'STOREFRONT_SMS_PAUSED');
   const { phone, phoneKey } = mobileOf(rawPhone);
   const addressKey = hmac(ADDRESS_PURPOSE, address || 'unknown');
   const code = newCode();
@@ -117,6 +119,8 @@ export async function requestOtp(rawPhone: string, address: string): Promise<Otp
   if (!result.ok) {
     // a code the buyer never got is closed, so it cannot be guessed
     await orm.update(storefrontSmsCodes).set({ expiresAt: sql`now()` }).where(eq(storefrontSmsCodes.id, message.codeId));
+    // v12 phase 8e3 review: the colleagues hear of a pause this failure may have started
+    await warnIfSmsLoginPaused();
     throw new AppError('فرستادن پیامک اکنون ممکن نشد؛ چند دقیقه دیگر دوباره بخواهید.', 503, 'STOREFRONT_OTP_NOT_SENT');
   }
   return { resendAfter: OTP_RESEND_SECONDS, expiresIn: OTP_TTL_SECONDS };

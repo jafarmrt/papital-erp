@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import { orm, type DbExecutor, type DbTransaction } from '../../db/drizzle.js';
 import { customers, storefrontOrders } from '../../db/schema.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
@@ -14,9 +14,9 @@ import type { StorefrontSettingsInput } from '../../lib/storefront/storefrontCon
 import { DocumentService } from '../document.service.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { STOREFRONT_BOT_USER, resolveSiteCustomer } from './storefrontCustomer.js';
-import { activeGroupOf, phoneProofInvalid, sessionAccount, type AccountRecord, type GroupRecord } from './storefrontBuyerAuth.service.js';
-import { smsLoginOn } from './storefrontSmsSettings.service.js';
-import { consumePhoneProof } from './storefrontSmsOtp.service.js';
+import { activeGroupOf, sessionAccount, type AccountRecord, type GroupRecord } from './storefrontBuyerAuth.service.js';
+import { isProofRefusal, proveOrderBuyer, type OrderProof } from './storefrontOrderProof.js';
+import { inboxKey, normalizeEmail } from '../../lib/storefront/storefrontEmailRules.js';
 import { priceCart, shippingOptions } from './storefrontOrderCart.js';
 import { isOrderAccessKey, newAccessSalt, orderAccessKey, requestHashOf } from './storefrontOrderKeys.js';
 import { notifySiteOrder } from './storefrontOrderNotices.js';
@@ -73,10 +73,12 @@ interface CleanOrder {
   gift?: true;
   giftMessage?: string;
   saveAddress?: true;
+  /** v12 phase 8e: the buyer's email as typed and normalized; left out when none, so the hash of an order without one is as before */
+  email?: string;
 }
 
-/** v12 phase 7: the guest's phone proof, kept out of `CleanOrder` so the request hash never carries it */
-const phoneProofOf = (input: PlaceOrderRequest): string => String(input.phoneProof ?? '').trim();
+/** v12 phase 7 and 8e: the guest's proofs, kept out of `CleanOrder` so the request hash never carries them */
+const proofsOf = (input: PlaceOrderRequest) => ({ phoneProof: String(input.phoneProof ?? '').trim(), emailProof: String(input.emailProof ?? '').trim() });
 
 const fieldError = (field: string, message: string) => new ValidationError(message, { field }, 'STOREFRONT_ORDER_FIELD_INVALID');
 
@@ -127,6 +129,9 @@ export function cleanOrderRequest(input: PlaceOrderRequest): CleanOrder {
   const giftText = gift ? String(input.giftMessage ?? '').trim() : '';
   const giftMessage = giftText ? cleanText(giftText, GIFT_MESSAGE_MAX, { multiline: true }) : '';
   if (giftMessage === null) throw fieldError('giftMessage', `پیام کارت هدیه حداکثر ${GIFT_MESSAGE_MAX.toLocaleString('fa-IR')} نویسه است.`);
+  const emailText = String(input.email ?? '').trim();
+  const email = emailText ? normalizeEmail(emailText) : '';
+  if (emailText && !email) throw fieldError('email', 'نشانی ایمیل را درست بنویسید (مانند name@example.com).');
   return {
     requestKey, recipientName, phone, phoneKey: phoneMatchKey(phone), province, city, address, postalCode, note, shippingMethod, lines, paymentMethod,
     ...(discountCode ? { discountCode } : {}),
@@ -135,6 +140,7 @@ export function cleanOrderRequest(input: PlaceOrderRequest): CleanOrder {
     ...(gift ? { gift: true as const } : {}),
     ...(giftMessage ? { giftMessage } : {}),
     ...(input.saveAddress === true ? { saveAddress: true as const } : {}),
+    ...(email ? { email } : {}),
   };
 }
 
@@ -160,25 +166,6 @@ function assertRetailCap(buyer: OrderBuyer, lines: readonly CartLineInput[]): vo
   if (slug !== null) throw new ValidationError(RETAIL_LINE_CAP_MESSAGE, { field: 'lines', slug }, 'STOREFRONT_RETAIL_LINE_CAP');
 }
 
-/**
- * v12 phase 7 (site review 1.3): inside the order's transaction, a guest's phone proof is used up while the site signs
- * in by SMS. A signed-in account ordering with its own phone needs none; with the texts off nothing is asked (the start
- * plan: today's behavior stays until a proof is possible).
- *
- * v12 phase 8c review: since 8c the order's phone is its buyer's (the customer, the texts, the open-order limit), so a
- * signed-in account that types another phone proves that phone like a guest; else a session would let anyone order in
- * a stranger's name and on a stranger's customer.
- */
-async function assertGuestPhoneProven(tx: DbTransaction, buyer: OrderBuyer, phone: string, proof: string): Promise<boolean> {
-  // 8d review: whether the order's phone is proven (a proof used now, or the account's own proven phone) is kept on the
-  // order, since only a proven phone may later open it on another device
-  if (buyer.account?.phoneKey === phoneMatchKey(phone)) return Boolean(buyer.account.phoneVerifiedAt);
-  if (!(await smsLoginOn(tx))) return false;
-  if (!proof || !(await consumePhoneProof(tx, phone, proof))) throw phoneProofInvalid();
-  return true;
-}
-
-const isPhoneProofRefusal = (err: unknown): boolean => err instanceof ValidationError && err.code === 'STOREFRONT_PHONE_PROOF_REQUIRED';
 
 function assertPaymentAllowed(buyer: OrderBuyer, method: PaymentMethod): void {
   const group = buyer.group;
@@ -248,33 +235,48 @@ export async function placeOrder(input: PlaceOrderRequest, rawSession?: unknown)
   const existing = await findByRequestKey(orm, order.requestKey);
   if (existing) return replay(existing, requestHash);
   try {
-    const placed = await orm.transaction(tx => placeInTransaction(tx, order, requestHash, rawSession, phoneProofOf(input)));
+    const placed = await orm.transaction(tx => placeInTransaction(tx, order, requestHash, rawSession, proofsOf(input)));
     return placed;
   } catch (err) {
     // the same request racing itself: the first one used the proof (or the key) and committed; the second answers its order
-    if (!isRequestKeyViolation(err) && !isPhoneProofRefusal(err)) throw err;
+    if (!isRequestKeyViolation(err) && !isProofRefusal(err)) throw err;
     const raced = await findByRequestKey(orm, order.requestKey);
     if (!raced) throw err;
     return replay(raced, requestHash);
   }
 }
 
-async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestHash: string, rawSession: unknown, phoneProof: string): Promise<PlacedOrder> {
+async function placeInTransaction(
+  tx: DbTransaction, order: CleanOrder, requestHash: string, rawSession: unknown, proofs: { phoneProof: string; emailProof: string },
+): Promise<PlacedOrder> {
   const settings = await settingsForOrders(tx);
   const buyer = await orderBuyer(tx, rawSession);
   assertPaymentAllowed(buyer, order.paymentMethod);
   assertRetailCap(buyer, order.lines);
   // before anything is locked, reserved or made: an order without its proof leaves no customer, proforma or text behind
-  const phoneProven = await assertGuestPhoneProven(tx, buyer, order.phone, phoneProof);
+  const proof = await proveOrderBuyer(tx, buyer.account, { phone: order.phone, email: order.email ?? '', ...proofs });
+  const { phoneProven } = proof;
   const onAccount = order.paymentMethod === 'on_account';
-  // one phone's orders one at a time, so the open-orders limit holds under concurrent requests; then the items (§2.6)
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`storefront-phone:${order.phoneKey}`}))`);
+  // one buyer's orders one at a time, so the open-orders limit holds under concurrent requests; then the items (§2.6).
+  // v12 phase 8e: an order proven by an email counts by that email (its phone is nobody's proven word)
+  // 8e3 review: by the mailbox (a `+tag` folded), and a phone's count leaves out the email-proven orders typed with it,
+  // so a stranger's orders never use up the phone owner's limit
+  const byEmail = Boolean(proof.emailKey) && !phoneProven;
+  const inbox = byEmail ? inboxKey(proof.emailKey) : '';
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${byEmail ? `storefront-email:${inbox}` : `storefront-phone:${order.phoneKey}`}))`);
   const [{ open }] = await tx.select({ open: sql<number>`count(*)::int` }).from(storefrontOrders)
-    .where(and(eq(storefrontOrders.phoneKey, order.phoneKey), inArray(storefrontOrders.status, [...OPEN_ORDER_STATUSES])));
+    .where(and(
+      byEmail ? and(ne(storefrontOrders.emailKey, ''), sql`regexp_replace(${storefrontOrders.emailKey}, '[+][^@]*@', '@') = ${inbox}`) : and(eq(storefrontOrders.phoneKey, order.phoneKey), eq(storefrontOrders.emailKey, '')),
+      inArray(storefrontOrders.status, [...OPEN_ORDER_STATUSES]),
+    ));
   if (open >= settings.openOrdersPerPhone) {
-    throw new ConflictError('برای این شمارهٔ همراه سفارش پرداخت‌نشدهٔ دیگری هست؛ اول آن را پرداخت کنید یا منتظر پایان مهلتش بمانید.', undefined, 'STOREFRONT_TOO_MANY_OPEN_ORDERS');
+    throw new ConflictError(byEmail
+      ? 'برای این ایمیل سفارش پرداخت‌نشدهٔ دیگری هست؛ اول آن را پرداخت کنید یا منتظر پایان مهلتش بمانید.'
+      : 'برای این شمارهٔ همراه سفارش پرداخت‌نشدهٔ دیگری هست؛ اول آن را پرداخت کنید یا منتظر پایان مهلتش بمانید.', undefined, 'STOREFRONT_TOO_MANY_OPEN_ORDERS');
   }
 
+  // 8e3 review: an email-proven order's discount uses and first order go by its mailbox, never by its unproven phone
+  const discountKeys = byEmail ? { phoneKey: `email:${inbox}`, inboxKey: inbox } : { phoneKey: order.phoneKey };
   const cart = await priceCart(tx, settings, order.lines, buyer.group);
   await lockStockItems(tx, cart.lines.map(l => l.item.itemId));
   const warehouse = await storefrontWarehouseCode(tx, settings.warehouseCode);
@@ -291,7 +293,7 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
 
   // the code under its row lock, so its uses counted here hold until the commit (two orders never take its last use)
   const choice = order.discountCode
-    ? await chooseDiscount(tx, order.discountCode, cart.itemsAmount, { ...buyer, phoneKey: order.phoneKey }, { lock: true })
+    ? await chooseDiscount(tx, order.discountCode, cart.itemsAmount, { ...buyer, ...discountKeys }, { lock: true })
     : null;
   const discountAmount = (choice?.amount ?? 0n).toString();
   const lineDiscounts = spreadDiscount(cart.lines.map(l => BigInt(l.lineAmount)), choice?.amount ?? 0n);
@@ -303,7 +305,7 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
   const [{ value: sequence }] = (await tx.execute(sql`SELECT nextval('storefront_order_number_seq')::text AS value`)).rows as Array<{ value: string }>;
   const orderNumber = String(sequence);
   // an approved buyer's orders go on the customer a colleague linked at approval; any other order finds or makes one by phone
-  const customer = await customerOf(tx, buyer, orderNumber, order);
+  const customer = await customerOf(tx, buyer, orderNumber, order, byEmail ? proof : null);
   // v12 phase 8c: the proforma's shipping address names the recipient when the buyer is someone else
   const recipientLine = order.buyerName || order.recipientPhone ? `گیرنده: ${order.recipientName}${order.recipientPhone ? ` (${order.recipientPhone})` : ''}، ` : '';
   const fullAddress = `${recipientLine}${order.province}، ${order.city}، ${order.address}، کد پستی ${order.postalCode}`;
@@ -327,7 +329,7 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
 
   const [row] = await tx.insert(storefrontOrders).values({
     orderNumber, accessSalt: newAccessSalt(), requestKey: order.requestKey, requestHash, documentId, customerId: customer.id,
-    status: onAccount ? 'awaiting_approval' : 'awaiting_payment', recipientName: order.recipientName, phone: order.phone, phoneKey: order.phoneKey, phoneProven: phoneProven ? 1 : 0,
+    status: onAccount ? 'awaiting_approval' : 'awaiting_payment', recipientName: order.recipientName, phone: order.phone, phoneKey: order.phoneKey, phoneProven: phoneProven ? 1 : 0, email: proof.email, emailKey: proof.emailKey,
     province: order.province, city: order.city, address: order.address, postalCode: order.postalCode, buyerNote: order.note,
     shippingMethodCode: option.code, shippingMethodTitle: option.title, shippingOnDelivery: option.kind === 'on_delivery' ? 1 : 0,
     shippingAmount: money(shippingAmount), itemsAmount: money(cart.itemsAmount), payableAmount: money(payable),
@@ -339,7 +341,7 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
     updatedBy: STOREFRONT_BOT_USER,
   }).returning();
   if (order.saveAddress && buyer.account) await keepOrderAddress(tx, buyer.account.id, order);
-  if (choice) await redeemDiscount(tx, choice, { id: row.id, phoneKey: order.phoneKey, buyerAccountId: row.buyerAccountId });
+  if (choice) await redeemDiscount(tx, choice, { id: row.id, phoneKey: discountKeys.phoneKey, buyerAccountId: row.buyerAccountId });
   // v11 phase 8.4a: the buyer's text, queued with the order (sent after the commit; nothing while sending is off). Its
   // text asks for a card-to-card payment, so an on-account order sends none.
   if (!onAccount) await queueOrderSms(tx, row, 'order_placed');
@@ -358,7 +360,7 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
   return { order: await buyerOrderView(tx, row, settings), accessKey: orderAccessKey(orderNumber, row.accessSalt) };
 }
 
-async function customerOf(tx: DbTransaction, buyer: OrderBuyer, orderNumber: string, order: CleanOrder): Promise<{ id: number; name: string }> {
+async function customerOf(tx: DbTransaction, buyer: OrderBuyer, orderNumber: string, order: CleanOrder, byEmail: OrderProof | null): Promise<{ id: number; name: string }> {
   if (buyer.group && buyer.account?.customerId) {
     const [linked] = await tx.select({ id: customers.id, name: customers.name }).from(customers)
       .where(and(eq(customers.id, buyer.account.customerId), eq(customers.isDeleted, 0)));
@@ -368,6 +370,8 @@ async function customerOf(tx: DbTransaction, buyer: OrderBuyer, orderNumber: str
   const ownAddress = !order.buyerName && !order.recipientPhone;
   return resolveSiteCustomer(tx, `سفارش سایت ${orderNumber}`, {
     name: order.buyerName ?? order.recipientName, phone: order.phone, city: ownAddress ? order.city : '', address: ownAddress ? order.address : '',
+    // v12 phase 8e (owner's decision of 21 Aban 1405): an order proven by an email goes on the customer with that email
+    ...(byEmail ? { email: byEmail.email } : {}),
   });
 }
 

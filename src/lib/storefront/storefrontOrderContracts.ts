@@ -80,6 +80,15 @@ export interface PlaceOrderRequest {
    * a repeat with the same key and body replays the order without it.
    */
   phoneProof?: string;
+  /**
+   * v12 phase 8e (start plan §5, owner's decision of 21 Aban 1405): the buyer's email and its proof
+   * (`POST /auth/email-code/verify`), the guest's proof while `smsLogin` is off and `emailLogin` on («حالت بی پیامک»);
+   * a signed-in account whose email is proven needs no proof for its own email. Such an order goes on the customer with
+   * that email (never one found by the phone, which nobody proved), and no text goes to its phone. The email enters the
+   * request hash only when given; the proof never does.
+   */
+  email?: string;
+  emailProof?: string;
 }
 
 export interface OrderPaymentInfo {
@@ -118,7 +127,7 @@ export interface BuyerOrder {
   payBefore: string | null;
   recipient: { name: string; phone: string; province: string; city: string; address: string; postalCode: string };
   /** v12 phase 8c (site review 2.5): who placed the order (the ERP's customer), apart from the recipient */
-  orderedBy: { name: string; phone: string };
+  orderedBy: { name: string; phone: string; /** v12 phase 8e: the proven email of an order placed with one, else '' */ email: string };
   /** v12 phase 8c: a gift, with its card's message ('' = none); null = not a gift */
   gift: { message: string } | null;
   note: string;
@@ -237,10 +246,10 @@ export interface ClaimOrderRequest {
  * the buyer's phone and a live proof of it (`/auth/otp/verify`) answer the order's tracking key. A wrong number, a phone
  * that is not the order's buyer and a used or wrong proof all get the same 404.
  */
-export interface OrderAccessRequest {
-  phone: string;
-  phoneProof: string;
-}
+export type OrderAccessRequest =
+  | { phone: string; phoneProof: string }
+  /** v12 phase 8e: an order placed with a proven email opens with that email and a new email code */
+  | { email: string; emailProof: string };
 
 export interface OrderAccessAnswer {
   accessKey: string;
