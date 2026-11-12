@@ -9,6 +9,7 @@ import { createNotifications } from '../notifications/notificationCreator.js';
 import { permissionHolderUserIdsWith } from '../notifications/notificationRecipients.js';
 import { STOREFRONT_BOT_USER } from './storefrontCustomer.js';
 import { smsLoginFailing } from './storefrontSmsSettings.service.js';
+import { emailCodesOn } from './storefrontEmailOtp.service.js';
 
 /**
  * v11 phase 8.4a, v12 phase 8b (site review 2.11): the site's budgets of texts. Login codes (`codes`) and order texts
@@ -86,9 +87,12 @@ export async function warnIfSmsLoginPaused(): Promise<void> {
         .limit(1);
       if (rang) return;
       const recipients = await permissionHolderUserIdsWith(sp, SMS_BUDGET_NOTIFY_PERMISSION);
+      const emailOn = await emailCodesOn(sp);
       await createNotifications(sp, recipients.map(userId => ({
         userId, category: 'site_sms' as const, type: 'system', senderName: STOREFRONT_BOT_USER, title,
-        message: 'چند پیامک ورود پیاپی فرستاده نشد؛ سایت تا رفع آن ورود و خرید را با ایمیل پیش می‌برد (اگر ایمیل سایت تنظیم شده باشد). سرویس پیامک را بررسی کنید.',
+        message: emailOn
+          ? 'چند پیامک ورود پیاپی فرستاده نشد؛ سایت تا رفع آن ورود و خرید را با ایمیل پیش می‌برد. سرویس پیامک را بررسی کنید.'
+          : 'چند پیامک ورود پیاپی فرستاده نشد و ایمیل سایت روشن نیست، پس خریداران اکنون کد نمی‌گیرند. سرویس پیامک را بررسی کنید.',
         link: '/settings',
       })));
     });
