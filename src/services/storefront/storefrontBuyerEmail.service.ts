@@ -13,11 +13,11 @@ import type {
 } from '../../lib/storefront/storefrontBuyerContracts.js';
 import { STOREFRONT_BOT_USER } from './storefrontCustomer.js';
 import {
-  DROP_EMAIL, type AccountRecord, accountByPhoneKey, accountExists, accountFieldError, accountView, assertAccountsOpen, currentSessionId, lockPhone,
-  newSession, phoneProofInvalid, provenPhoneAt, requireAccount, revokeSessions, suspendedAccount,
+  DROP_EMAIL, type AccountRecord, accountByPhoneKey, accountExists, accountFieldError, accountView, assertAccountsOpen, confirmAccountPassword,
+  currentSessionId, lockPhone, newSession, phoneProofInvalid, provenPhoneAt, requireAccount, revokeSessions, signInNeeded, suspendedAccount,
 } from './storefrontBuyerAuth.service.js';
 import { accountByEmailKey, emailProofInvalid, emailTaken, lockEmail, provenEmailAt } from './storefrontBuyerEmailKeys.js';
-import { hashPassword, verifyPassword } from './storefrontBuyerSecrets.js';
+import { hashPassword } from './storefrontBuyerSecrets.js';
 import { emailCodesOn } from './storefrontEmailOtp.service.js';
 import { smsLoginOn } from './storefrontSmsSettings.service.js';
 
@@ -125,14 +125,11 @@ export async function resetPassword(input: ResetPasswordRequest): Promise<Storef
  * the account already has needs the account's password too, so a stolen session cannot move the account to an address
  * of the thief's. A replacement ends every other session and set-password link. The account is re-read under its lock.
  */
-async function assertMayChange(account: AccountRecord, replacing: boolean, password: unknown): Promise<void> {
+async function assertMayChange(tx: DbTransaction, rawToken: unknown, account: AccountRecord, replacing: boolean, passwordConfirmed: boolean): Promise<void> {
+  // the session and the account are checked again under the account's lock (a takeover may have ended the session)
+  if (!(await currentSessionId(tx, rawToken))) throw signInNeeded();
   if (account.status !== 'active') throw suspendedAccount();
-  if (!replacing) return;
-  const typed = String(password ?? '');
-  if (!account.passwordHash) {
-    throw accountFieldError('password', 'برای عوض کردن آن، اول با «فراموشی رمز» برای حساب رمز بگذارید.');
-  }
-  if (!typed || !(await verifyPassword(typed, account.passwordHash))) throw accountFieldError('password', 'رمز حساب درست نیست.');
+  if (replacing && !passwordConfirmed) throw accountFieldError('password', 'برای عوض کردن آن، رمز حساب را هم بنویسید.');
 }
 
 async function endOtherSessions(tx: DbTransaction, accountId: number, rawToken: unknown, now: string): Promise<void> {
@@ -148,6 +145,9 @@ export async function setAccountEmail(rawToken: unknown, input: AccountEmailRequ
   const email = normalizeEmail(input.email);
   if (!email) throw accountFieldError('email', 'نشانی ایمیل را درست بنویسید (مانند name@example.com).');
   const emailKey = emailMatchKey(email);
+  // a replacement asks the password first, counted and committed before any proof is used
+  const confirmed = Boolean(signedIn.emailKey) && signedIn.emailKey !== emailKey;
+  if (confirmed) await confirmAccountPassword(signedIn.id, input.password);
   return orm.transaction(async (tx) => {
     await lockEmail(tx, emailKey);
     const now = await provenEmailAt(tx, email, input.emailProof);
@@ -156,7 +156,7 @@ export async function setAccountEmail(rawToken: unknown, input: AccountEmailRequ
     const [account] = await tx.select().from(storefrontBuyerAccounts).where(eq(storefrontBuyerAccounts.id, signedIn.id)).for('update');
     if (account.emailKey === emailKey && account.email === email) return accountView(tx, account);
     const replacing = Boolean(account.emailKey) && account.emailKey !== emailKey;
-    await assertMayChange(account, replacing, input.password);
+    await assertMayChange(tx, rawToken, account, replacing, confirmed);
     const updated = { email, emailKey, emailVerifiedAt: now, updatedAt: now, updatedBy: STOREFRONT_BOT_USER, version: nextVersion(account.version) };
     await tx.update(storefrontBuyerAccounts).set(updated).where(eq(storefrontBuyerAccounts.id, account.id));
     if (replacing) await endOtherSessions(tx, account.id, rawToken, now);
@@ -176,6 +176,8 @@ export async function setAccountPhone(rawToken: unknown, input: AccountPhoneRequ
   const phone = normalizeMobile(input.phone);
   if (!phone) throw accountFieldError('phone', 'شمارهٔ همراه باید ۱۱ رقم و با ۰۹ آغاز شود.');
   const phoneKey = phoneMatchKey(phone);
+  const confirmed = Boolean(signedIn.phoneKey) && signedIn.phoneKey !== phoneKey;
+  if (confirmed) await confirmAccountPassword(signedIn.id, input.password);
   return orm.transaction(async (tx) => {
     await lockPhone(tx, phoneKey);
     const now = await provenPhoneAt(tx, phone, input.phoneProof, true) as string;
@@ -189,7 +191,7 @@ export async function setAccountPhone(rawToken: unknown, input: AccountPhoneRequ
     if (account.phoneKey === phoneKey && account.phone === phone && account.phoneVerifiedAt) return accountView(tx, account);
     // proving the account's own unproven phone is not a replacement
     const replacing = Boolean(account.phoneKey) && account.phoneKey !== phoneKey;
-    await assertMayChange(account, replacing, input.password);
+    await assertMayChange(tx, rawToken, account, replacing, confirmed);
     const updated = { phone, phoneKey, phoneVerifiedAt: now, updatedAt: now, updatedBy: STOREFRONT_BOT_USER, version: nextVersion(account.version) };
     await tx.update(storefrontBuyerAccounts).set(updated).where(eq(storefrontBuyerAccounts.id, account.id));
     if (replacing) await endOtherSessions(tx, account.id, rawToken, now);

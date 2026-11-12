@@ -13,6 +13,7 @@ import { money } from '../../lib/money.js';
 import { invalidateSettingsCache } from '../../lib/memoryCache.js';
 import { readPricingStrategies } from '../../lib/items/pricingStrategies.js';
 import { phoneMatchKey } from '../../lib/search/phoneMatchKey.js';
+import { LOGIN_FAILURES_MAX } from '../../lib/storefront/storefrontBuyerRules.js';
 import { EMAIL_TEST_SMTP_ENV } from '../../services/storefront/storefrontEmailClient.js';
 
 /**
@@ -313,7 +314,7 @@ export async function runStorefrontEmailAccountsV12Tests(shouldRun: (id: string,
     await ageCodes(phoneA);
     const addPhone = await site(sessionA2).post('/api/storefront/v1/account/phone', { phone: phoneA, phoneProof: await proofFor(phoneA) });
     if (addPhone.status !== 200 || addPhone.body.data?.phone !== phoneA || addPhone.body.data?.phoneVerified !== true) wrong.push(`a phone added: ${addPhone.status} ${JSON.stringify(addPhone.body)}`);
-    const heldEmail = await site(sessionB2).post('/api/storefront/v1/account/email', { email: mailA, emailProof: await emailProofFor(mailA) });
+    const heldEmail = await site(sessionB2).post('/api/storefront/v1/account/email', { email: mailA, emailProof: await emailProofFor(mailA), password: `${PASSWORD}-sms` });
     if (heldEmail.status !== 409 || heldEmail.body.code !== 'STOREFRONT_EMAIL_TAKEN') wrong.push(`another account's email: ${heldEmail.status} ${heldEmail.body.code}`);
     // account B has mailB since its sign-up: replacing it takes the password (7b checks the refusals)
     const addEmail = await site(sessionB2).post('/api/storefront/v1/account/email', { email: mailC, emailProof: await emailProofFor(mailC), password: `${PASSWORD}-sms` });
@@ -355,6 +356,17 @@ export async function runStorefrontEmailAccountsV12Tests(shouldRun: (id: string,
     const squatterReset = await site().post('/api/storefront/v1/auth/reset-password', { email: mailF, emailProof: await emailProofFor(mailF), password: `${PASSWORD}-steal` });
     if (squatterReset.status !== 404) wrong.push(`the squatter's email reset after the SMS reset: ${squatterReset.status}`);
 
+    // 7e) review: the password asked before a replacement counts against the sign-in lock, before the proof is used
+    const lockProof = await emailProofFor(mailE);
+    const guesses: number[] = [];
+    for (let i = 0; i <= LOGIN_FAILURES_MAX; i++) {
+      guesses.push((await site(sessionA2).post('/api/storefront/v1/account/email', { email: mailE, emailProof: lockProof, password: `guess-${i}-${tag}` })).status);
+    }
+    const lockedSignIn = await site().post('/api/storefront/v1/auth/login', { email: mailA, password: `${PASSWORD}-new` });
+    if (guesses.slice(0, LOGIN_FAILURES_MAX).some(st => st !== 422) || guesses[LOGIN_FAILURES_MAX] !== 429 || lockedSignIn.status !== 429) {
+      wrong.push(`wrong passwords on a replacement: ${guesses.join(',')}, then the sign-in ${lockedSignIn.status}`);
+    }
+
     // 8) the audit rows name no email in full
     const logs = await orm.select({ description: activityLogs.description, details: activityLogs.details }).from(activityLogs)
       .where(and(eq(activityLogs.entity, 'حساب خریدار سایت'), sql`${activityLogs.timestamp} > now() - interval '10 minutes'`));
@@ -371,7 +383,7 @@ export async function runStorefrontEmailAccountsV12Tests(shouldRun: (id: string,
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'an email code came with the code and fixed words only and was stored as a hash; a second within the minute was 429; a wrong code 422; the right one gave a single-use proof; an email without its proof was 422; an email-only account was made and signed in; the same email in other letters was 409 and left its proof, which signed in by email; the password signed in by email and a wrong password and an unknown email were the same 401; an email sign-in with no account was 404 and left the proof for the sign-up; a forgotten password by email and by SMS set a new one and ended the old password and sessions; an email-only account was refused wholesale until it had a phone; another account\'s phone and email were 409; a proven phone and email were added; replacing an email needed the password of the account and ended its other sessions; an email a squatter added to an unproven phone went with the SMS sign-in of the phone owner and SMS reset, after which it signed in and reset nowhere; no audit row named an email in full; with the email off its routes were 404',
+      details: 'an email code came with the code and fixed words only and was stored as a hash; a second within the minute was 429; a wrong code 422; the right one gave a single-use proof; an email without its proof was 422; an email-only account was made and signed in; the same email in other letters was 409 and left its proof, which signed in by email; the password signed in by email and a wrong password and an unknown email were the same 401; an email sign-in with no account was 404 and left the proof for the sign-up; a forgotten password by email and by SMS set a new one and ended the old password and sessions; an email-only account was refused wholesale until it had a phone; another account\'s phone and email were 409; a proven phone and email were added; replacing an email needed the password of the account, whose wrong tries locked the account as at the sign-in, and ended its other sessions; an email a squatter added to an unproven phone went with the SMS sign-in of the phone owner and SMS reset, after which it signed in and reset nowhere; no audit row named an email in full; with the email off its routes were 404',
     }));
   } catch (err) {
     results.push(makeTestCase({

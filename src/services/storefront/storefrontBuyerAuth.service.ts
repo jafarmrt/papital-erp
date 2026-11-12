@@ -186,6 +186,35 @@ export async function registerAccount(input: RegisterRequest): Promise<Storefron
   });
 }
 
+/**
+ * v12 phase 8e review: the password of a signed-in account, asked again before its email or phone is replaced. It counts
+ * against the same lock as a sign-in (`LOGIN_FAILURES_MAX` wrong tries lock it for `LOGIN_LOCK_MINUTES`), each wrong try
+ * committed on its own, before any proof is used, so a stolen session cannot guess the password without limit.
+ */
+export async function confirmAccountPassword(accountId: number, rawPassword: unknown): Promise<void> {
+  const password = String(rawPassword ?? '');
+  const [found] = await orm.select().from(storefrontBuyerAccounts).where(eq(storefrontBuyerAccounts.id, accountId));
+  if (!found) throw signInNeeded();
+  if (found.lockedUntil && Date.parse(found.lockedUntil) > Date.now()) {
+    throw new AppError(`تلاش‌های نادرست زیاد بود؛ ${LOGIN_LOCK_MINUTES.toLocaleString('fa-IR')} دقیقهٔ دیگر دوباره امتحان کنید.`, 429, 'STOREFRONT_SIGN_IN_LOCKED');
+  }
+  if (!found.passwordHash) throw accountFieldError('password', 'برای عوض کردن آن، اول با «فراموشی رمز» برای حساب رمز بگذارید.');
+  const matches = Boolean(password) && await verifyPassword(password, found.passwordHash);
+  await orm.transaction(async (tx) => {
+    const [account] = await tx.select().from(storefrontBuyerAccounts).where(eq(storefrontBuyerAccounts.id, accountId)).for('update');
+    if (matches && account.passwordHash === found.passwordHash) {
+      if (account.failedLogins !== 0) await tx.update(storefrontBuyerAccounts).set({ failedLogins: 0 }).where(eq(storefrontBuyerAccounts.id, accountId));
+      return;
+    }
+    const failures = account.failedLogins + 1;
+    const locks = failures >= LOGIN_FAILURES_MAX;
+    await tx.update(storefrontBuyerAccounts).set({
+      failedLogins: locks ? 0 : failures, lockedUntil: locks ? nowPlus(LOGIN_LOCK_MINUTES * 60_000) : account.lockedUntil,
+    }).where(eq(storefrontBuyerAccounts.id, accountId));
+  });
+  if (!matches) throw accountFieldError('password', 'رمز حساب درست نیست.');
+}
+
 /** `POST /auth/login` */
 export async function signIn(input: LoginRequest): Promise<StorefrontSessionAnswer> {
   await assertAccountsOpen(orm);
@@ -279,7 +308,7 @@ export async function sessionAccount(executor: DbExecutor, rawToken: unknown): P
   return row.account;
 }
 
-const signInNeeded = () => new AppError('برای این کار وارد حساب خود شوید.', 401, 'STOREFRONT_SESSION_REQUIRED');
+export const signInNeeded = () => new AppError('برای این کار وارد حساب خود شوید.', 401, 'STOREFRONT_SESSION_REQUIRED');
 
 /**
  * The account of the request's session, or 401. v12 phase 7 (site review 1.5): `ordersOff` (the account's own orders and
