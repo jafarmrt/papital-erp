@@ -19,7 +19,7 @@ import {
   accountByPhoneKey, accountExists, accountFieldError, accountView, assertAccountsOpen, lockPhone, phoneProofInvalid, provenPhoneAt,
   sessionAccount,
 } from './storefrontBuyerAuth.service.js';
-import { smsLoginOn } from './storefrontSmsSettings.service.js';
+import { smsLoginConfigured } from './storefrontSmsSettings.service.js';
 
 /**
  * v11 phase 8.2b (start plan §6): the «خرید عمده» form of the site. Without a session it makes a new account in
@@ -84,7 +84,8 @@ export async function applyForWholesale(input: WholesaleApplyRequest, rawSession
     throw new ValidationError('برای درخواست خرید عمده، اول شمارهٔ همراه را در «حساب من» به حساب بیفزایید.', { field: 'phone' }, 'STOREFRONT_ACCOUNT_PHONE_NEEDED');
   }
   // 8.4b: a form without a session makes an account for its phone, so the phone is proven first while SMS is on
-  const proofNeeded = !signedIn && await smsLoginOn(orm);
+  // 8e3 review: a pause of the texts («حالت بی پیامک») does not let an anonymous request go without its phone proof
+  const proofNeeded = !signedIn && await smsLoginConfigured(orm);
   if (proofNeeded && !input.phoneProof) throw phoneProofInvalid();
   const phoneKey = phoneMatchKey(signedIn ? signedIn.phone : form.phone);
   const fields = {

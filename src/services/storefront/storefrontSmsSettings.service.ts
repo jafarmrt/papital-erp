@@ -1,7 +1,7 @@
 import type { Request } from 'express';
 import { and, desc, eq, gt, inArray, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { appSettings, storefrontSmsMessages } from '../../db/schema.js';
+import { appSettings, storefrontSmsCodes, storefrontSmsMessages } from '../../db/schema.js';
 import { STOREFRONT_SETTING_KEYS } from '../../lib/storefront/storefrontContracts.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
@@ -9,7 +9,7 @@ import { OptimisticLockError } from '../../lib/occHelper.js';
 import { invalidateSettingsCache } from '../../lib/memoryCache.js';
 import { decryptSecret, encryptSecret, isSecretsKeyConfigured } from '../../lib/secretBox.js';
 import {
-  SMS_FAILURE_PAUSE_COUNT, SMS_FAILURE_PAUSE_MINUTES, SMS_HOURLY_CAP_DEFAULT, SMS_HOURLY_CAP_MAX, SMS_KINDS, SMS_KIND_TITLES, apiKeyError, isSmsKind, isSmsProvider, templateIdError,
+  SMS_FAILURE_PAUSE_COUNT, SMS_FAILURE_PAUSE_MINUTES, SMS_FAILURE_PAUSE_VISITORS, SMS_HOURLY_CAP_DEFAULT, SMS_HOURLY_CAP_MAX, SMS_KINDS, SMS_KIND_TITLES, apiKeyError, isSmsKind, isSmsProvider, templateIdError,
   type SmsKind, type SmsProvider,
 } from '../../lib/storefront/storefrontSmsRules.js';
 import {
@@ -100,11 +100,23 @@ export function activeTemplate(settings: SmsRuntimeSettings, kind: SmsKind): str
  * last `SMS_FAILURE_PAUSE_MINUTES`, failed. Test texts do not count.
  */
 export async function smsLoginFailing(executor: DbExecutor): Promise<boolean> {
-  const latest = await executor.select({ status: storefrontSmsMessages.status }).from(storefrontSmsMessages)
+  const latest = await executor.select({ status: storefrontSmsMessages.status, addressKey: storefrontSmsCodes.addressKey }).from(storefrontSmsMessages)
+    .leftJoin(storefrontSmsCodes, eq(storefrontSmsCodes.messageId, storefrontSmsMessages.id))
     .where(and(eq(storefrontSmsMessages.kind, 'otp'), eq(storefrontSmsMessages.isTest, 0),
       gt(storefrontSmsMessages.createdAt, sql`now() - make_interval(mins => ${SMS_FAILURE_PAUSE_MINUTES})`)))
     .orderBy(desc(storefrontSmsMessages.createdAt), desc(storefrontSmsMessages.id)).limit(SMS_FAILURE_PAUSE_COUNT);
-  return latest.length === SMS_FAILURE_PAUSE_COUNT && latest.every(r => r.status === 'failed');
+  // 8e3 review: failures from one or two visitors (a script asking codes for numbers that cannot get a text) pause nothing
+  const visitors = new Set(latest.map(r => r.addressKey ?? ''));
+  return latest.length === SMS_FAILURE_PAUSE_COUNT && latest.every(r => r.status === 'failed') && visitors.size >= SMS_FAILURE_PAUSE_VISITORS;
+}
+
+/**
+ * 8e3 review: the texts are set to prove phones (on, with a login template), paused or not. While they are, an order or
+ * a sign-up never goes without a proof: in «حالت بی پیامک» it proves an email, or waits when the email is off too; only
+ * a site that never set the texts up orders as before.
+ */
+export async function smsLoginConfigured(executor: DbExecutor): Promise<boolean> {
+  return activeTemplate(await smsRuntimeSettings(executor), 'otp') !== null;
 }
 
 /**

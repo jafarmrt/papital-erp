@@ -39,7 +39,7 @@ export async function resolveSiteCustomer(tx: DbExecutor, source: string, buyer:
     // the audit row names the email masked (start plan §5); the customer's own name keeps it whole, to tell namesakes apart
     const auditName = namesake && byEmail ? `${buyer.name} (${maskedEmail(buyer.email ?? '')})` : name;
     if (namesake && await findActiveCustomerByName(name, tx)) {
-      throw new ValidationError('ثبت با این نام و شماره ممکن نشد؛ لطفاً با فروشگاه تماس بگیرید.', undefined, 'STOREFRONT_CUSTOMER_NAME_TAKEN');
+      throw new ValidationError(`ثبت با این نام و ${byEmail ? 'ایمیل' : 'شماره'} ممکن نشد؛ لطفاً با فروشگاه تماس بگیرید.`, undefined, 'STOREFRONT_CUSTOMER_NAME_TAKEN');
     }
     try {
       let createdId = 0;
