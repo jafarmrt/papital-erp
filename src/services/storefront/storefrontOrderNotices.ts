@@ -22,7 +22,9 @@ const TEXTS: Readonly<Record<SiteOrderNotice, { title: (n: string) => string; me
   approval_due: { title: n => `مهلت تأیید سفارش به حساب ${n} نزدیک است`, message: 'اگر تا پایان مهلت تأیید نشود، سفارش خودکار لغو و کالاهایش آزاد می‌شود.' },
 };
 
-export async function notifySiteOrder(tx: DbTransaction, kind: SiteOrderNotice, order: { id: number; orderNumber: string }): Promise<void> {
+export async function notifySiteOrder(
+  tx: DbTransaction, kind: SiteOrderNotice, order: { id: number; orderNumber: string }, options: { rethrow?: boolean } = {},
+): Promise<void> {
   try {
     await tx.transaction(async (sp) => {
       const recipients = await permissionHolderUserIdsWith(sp, SITE_ORDER_NOTIFY_PERMISSION);
@@ -39,5 +41,8 @@ export async function notifySiteOrder(tx: DbTransaction, kind: SiteOrderNotice, 
     });
   } catch (err) {
     logger.error({ message: 'Error notifying colleagues of a site order', orderId: order.id, kind, error: err });
+    // v12 phase 8b review: where the bell is the whole action (the approval reminder), a failed bell fails the action,
+    // so it is not marked done and the next minute rings again
+    if (options.rethrow) throw err;
   }
 }

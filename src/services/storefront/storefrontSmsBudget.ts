@@ -38,24 +38,30 @@ export async function smsBudgetSpent(tx: DbExecutor, hourlyCap: number, pool: Sm
 
 const warningTitle = (pool: SmsBudgetPool) => `سقف ساعتی ${SMS_BUDGET_POOL_TITLES[pool]} سایت نزدیک است`;
 
+const BUDGET_HINTS: Readonly<Record<SmsBudgetPool, string>> = {
+  codes: 'اگر خریداران واقعی‌اند سقف را بالا ببرید؛ وگرنه شاید کسی برای شماره‌های دیگران کد می‌خواهد.',
+  orders: 'اگر سفارش‌ها واقعی‌اند سقف را بالا ببرید؛ وگرنه شاید سفارش ساختگی ثبت می‌شود.',
+};
+
 /**
  * After a text of `pool` was queued: once its hour reaches the warning share of `hourlyCap`, the bell, unless this
- * budget's bell already rang in the last hour. Written in a savepoint of the caller's transaction, so a failed notice
- * is logged and never undoes the text.
+ * budget's bell already rang in the last hour. Every read and write is in a savepoint of the caller's transaction, so a
+ * failed count or notice is logged and never undoes the text (v12 phase 8b review: the reads were outside it, and a
+ * failed one aborted the caller's transaction).
  */
 export async function warnIfBudgetNearlySpent(tx: DbExecutor, hourlyCap: number, pool: SmsBudgetPool): Promise<void> {
   try {
-    if (await spentSince(tx, 3600, { pool }) < smsBudgetWarnAt(hourlyCap)) return;
-    const title = warningTitle(pool);
-    const [rang] = await tx.select({ id: notifications.id }).from(notifications)
-      .where(and(eq(notifications.senderName, STOREFRONT_BOT_USER), eq(notifications.title, title), gt(notifications.createdAt, sql`now() - interval '1 hour'`)))
-      .limit(1);
-    if (rang) return;
     await tx.transaction(async (sp) => {
+      if (await spentSince(sp, 3600, { pool }) < smsBudgetWarnAt(hourlyCap)) return;
+      const title = warningTitle(pool);
+      const [rang] = await sp.select({ id: notifications.id }).from(notifications)
+        .where(and(eq(notifications.senderName, STOREFRONT_BOT_USER), eq(notifications.title, title), gt(notifications.createdAt, sql`now() - interval '1 hour'`)))
+        .limit(1);
+      if (rang) return;
       const recipients = await permissionHolderUserIdsWith(sp, SMS_BUDGET_NOTIFY_PERMISSION);
       await createNotifications(sp, recipients.map(userId => ({
         userId, category: 'site_sms' as const, type: 'system', senderName: STOREFRONT_BOT_USER, title,
-        message: `بیش از ${smsBudgetWarnAt(hourlyCap).toLocaleString('fa-IR')} پیامک از سقف ${hourlyCap.toLocaleString('fa-IR')} در این ساعت رفته است. اگر خریداران واقعی‌اند سقف را بالا ببرید؛ وگرنه شاید کسی برای شماره‌های دیگران کد می‌خواهد.`,
+        message: `دست‌کم ${smsBudgetWarnAt(hourlyCap).toLocaleString('fa-IR')} پیامک از سقف ${hourlyCap.toLocaleString('fa-IR')} در این ساعت رفته است. ${BUDGET_HINTS[pool]}`,
         link: '/settings',
       })));
     });

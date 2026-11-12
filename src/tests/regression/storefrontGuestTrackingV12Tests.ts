@@ -243,17 +243,32 @@ export async function runStorefrontGuestTrackingV12Tests(shouldRun: (id: string,
     const otherVisitor = await access(`8${tag}98`, { phone: phoneThird, phoneProof: `pp_wrong-other-visitor-${tag}` }, `10.53.${Number(tag.slice(-2)) % 250}.9`);
     if (otherVisitor.status !== 404) wrong.push(`another visitor after one was limited: ${otherVisitor.status}`);
 
-    // 7) a request that names no visitor (the site without STOREFRONT_TRUST_PROXY) shares no visitor budget with others
-    const unnamed = (number: string, body: Body) => request(app).post(`/api/storefront/v1/orders/${number}/access`)
-      .set('Authorization', `Bearer ${apiKey}`).send(body);
-    for (let i = 0; i <= ORDER_TRACK_TRIES_PER_VISITOR_HOUR; i++) {
-      const res = await unnamed(`7${tag}${String(i).padStart(2, '0')}`, { phone: phoneThird, phoneProof: `pp_wrong-unnamed-try-${i}-${tag}` });
-      if (res.status === 404) continue;
-      // the shared write limit of this test process (other tests' unnamed requests) may answer first; only the
-      // visitor limit's own 429 is a failure here
-      const policy = String(res.headers['ratelimit-policy'] ?? '');
-      if (res.status !== 429 || policy === `${ORDER_TRACK_TRIES_PER_VISITOR_HOUR};w=3600`) wrong.push(`unnamed failed try ${i + 1}: ${res.status} ${policy}`);
-      break;
+    // 7) a request that names no visitor (the site without STOREFRONT_TRUST_PROXY) shares no visitor budget with others.
+    // These requests come from a loopback address of their own, so the shared write limit of this test process (every
+    // other test's unnamed requests come from 127.0.0.1) cannot answer before the visitor limit would
+    const server = http.createServer(app);
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', () => resolve()));
+    const from = `127.0.${(Number(tag.slice(-3)) % 250) + 2}.${(Number(tag.slice(-6, -3)) % 250) + 2}`;
+    const unnamed = (number: string, body: Body) => new Promise<{ status: number; policy: string }>((resolve, reject) => {
+      const payload = JSON.stringify(body);
+      const call = http.request({
+        host: '127.0.0.1', port: (server.address() as AddressInfo).port, localAddress: from, method: 'POST',
+        path: `/api/storefront/v1/orders/${number}/access`,
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+      }, (res) => {
+        res.resume();
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, policy: String(res.headers['ratelimit-policy'] ?? '') }));
+      });
+      call.on('error', reject);
+      call.end(payload);
+    });
+    try {
+      for (let i = 0; i <= ORDER_TRACK_TRIES_PER_VISITOR_HOUR; i++) {
+        const res = await unnamed(`7${tag}${String(i).padStart(2, '0')}`, { phone: phoneThird, phoneProof: `pp_wrong-unnamed-try-${i}-${tag}` });
+        if (res.status !== 404) { wrong.push(`unnamed failed try ${i + 1}: ${res.status} ${res.policy}, not 404`); break; }
+      }
+    } finally {
+      await new Promise<void>(resolve => server.close(() => resolve()));
     }
 
     // 8) 8d delta review: an order placed with the texts off keeps an unproven phone

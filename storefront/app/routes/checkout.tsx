@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { useState } from 'react';
 import { Form, Link, data, redirect, useNavigation } from 'react-router';
 import type { Route } from './+types/checkout';
-import type { BuyerAddress, BuyerAddressBook, PlacedOrder, ShippingOption, ShippingQuoteAnswer } from '@erp/storefront/storefrontOrderContracts';
+import type { BuyerAddress, BuyerAddressBook, PlacedOrder, QuotedLine, ShippingOption, ShippingQuoteAnswer } from '@erp/storefront/storefrontOrderContracts';
 import type { AppliedDiscount } from '@erp/storefront/storefrontDiscountContracts';
 import type { StorefrontAccountView } from '@erp/storefront/storefrontBuyerContracts';
 import { ADDRESS_MAX, BUYER_NOTE_MAX, CITY_MAX, GIFT_MESSAGE_MAX, RECIPIENT_NAME_MAX, payableWith } from '@erp/storefront/storefrontOrderRules';
@@ -34,10 +34,12 @@ import { CodeField, Field, FormError, FormNote, PhoneField, SelectField, SubmitB
  *   sends a code and the same form shows a code field; the second tap verifies it and places the order with the proof.
  *   The proof waits in an httpOnly cookie for this page only, so an order the ERP refused (an item short) is placed again
  *   without a new code. A signed-in buyer, and every buyer while the texts are off, orders as before.
- * - v12 phase 8a (site review 2.4): once the methods are quoted, a summary right above «ثبت سفارش» names the items and
- *   says the shipping and, large, «مبلغ قابل پرداخت»: the ERP's own sums (the quote) with the ERP's own rule
- *   (`payableWith`), so it is the order's amount. It follows the method the buyer picks; without JavaScript, the one
- *   picked last time.
+ * - v12 phase 8a (site review 2.4): once the methods are quoted, a summary right above «ثبت سفارش» names the items with
+ *   their quantities and amounts and says the shipping and, large, «مبلغ قابل پرداخت»: the ERP's own sums (the quote)
+ *   with the ERP's own rule (`payableWith`). It follows the method the buyer picks; without JavaScript, the one picked
+ *   last time. The form carries the payable it showed, and «ثبت سفارش» places nothing when the fresh quote makes another
+ *   (the province, the code or the cart changed since): the form comes back with the new summary, so the order is placed
+ *   at the amount the buyer saw.
  * - v12 phase 8c (site review 2.5, owner's decision 13): «خریدار» (name and mobile: the ERP's customer, the texts and the
  *   code go by it) apart from «گیرنده» (name, own mobile and the address), with «گیرنده خودم هستم» on by default: while
  *   it is on the recipient's two fields are hidden by the page's own CSS (no script needed) and not sent. «هدیه است» is
@@ -61,6 +63,8 @@ interface ActionAnswer {
   paymentMethod: string;
   options: ShippingOption[] | null;
   itemsAmount: string;
+  /** v12 phase 8a review: the quoted lines with this buyer's amounts, for the summary */
+  lines: QuotedLine[];
   discountCode: string;
   discount: AppliedDiscount | null;
   error?: string;
@@ -125,6 +129,7 @@ export function meta({ data }: Route.MetaArgs) {
 const fieldsOf = (form: FormData) => Object.fromEntries(FIELDS.map(f => [f, String(form.get(f) ?? '').slice(0, FIELD_MAX[f] + 1)])) as Fields;
 
 const PHONE_WRONG = 'شمارهٔ همراه را درست بنویسید (مانند ۰۹۱۲۱۲۳۴۵۶۷).';
+const PAYABLE_CHANGED = 'مبلغ قابل پرداخت عوض شد؛ خلاصهٔ تازهٔ سفارش را ببینید و دوباره «ثبت سفارش» را بزنید.';
 
 export async function action({ request }: Route.ActionArgs) {
   if (!sameSite(request)) return crossSite();
@@ -152,7 +157,7 @@ export async function action({ request }: Route.ActionArgs) {
   const paymentMethod = String(form.get('paymentMethod') ?? 'card') === 'on_account' ? 'on_account' : 'card';
   const discountCode = String(form.get('discountCode') ?? '').trim().slice(0, 40);
   const answer = (rest: Partial<ActionAnswer>): ActionAnswer => ({
-    fields, checks, requestKey, shippingMethod, paymentMethod, options: null, itemsAmount: '', discountCode, discount: null, filled, ...rest,
+    fields, checks, requestKey, shippingMethod, paymentMethod, options: null, itemsAmount: '', lines: [], discountCode, discount: null, filled, ...rest,
   });
 
   const quoteOf = (code: string) => accountCall<ShippingQuoteAnswer>(request, 'POST', '/shipping/quote', { province: fields.province, lines, ...(code ? { discountCode: code } : {}) });
@@ -160,11 +165,20 @@ export async function action({ request }: Route.ActionArgs) {
   if (!quote.data && discountCode && quote.field === 'discountCode') {
     const refused = quote.error;
     quote = await quoteOf('');
-    if (quote.data) return answer({ options: quote.data.options, itemsAmount: quote.data.itemsAmount, error: refused, field: 'discountCode' });
+    if (quote.data) return answer({ options: quote.data.options, itemsAmount: quote.data.itemsAmount, lines: quote.data.lines ?? [], error: refused, field: 'discountCode' });
   }
   if (!quote.data) return answer({ error: quote.error, field: quote.field === 'province' || quote.field === 'lines' ? quote.field : '' });
-  const quoted = { options: quote.data.options, itemsAmount: quote.data.itemsAmount, discount: quote.data.discount };
+  const quoted = { options: quote.data.options, itemsAmount: quote.data.itemsAmount, lines: quote.data.lines ?? [], discount: quote.data.discount };
   if (intent !== 'place' && intent !== 'send-code') return answer(quoted);
+  // v12 phase 8a review: «ثبت سفارش» places the order at the amount the buyer saw. The form carries the payable its
+  // summary showed; when the fresh quote makes another (the province, the code or the cart changed since), the order is
+  // not placed and the form comes back with the new summary
+  const shown = String(form.get('shownPayable') ?? '');
+  const method = quote.data.options.find(o => o.code === shippingMethod);
+  if (intent === 'place' && shown && method && shown !== payableWith(quote.data.itemsAmount, quote.data.discount?.amount ?? '0', method)) {
+    const codeFor = String(form.get('codeFor') ?? '') ? normalizePhone(fields.phone) || undefined : undefined;
+    return answer({ ...quoted, codeFor, error: PAYABLE_CHANGED });
+  }
 
   // v12 phase 7: a guest's phone proof while the ERP signs in by SMS. The page's settings may be a minute old, so the
   // ERP has the last word: an order it refuses for a missing proof sends a code and the form then carries `codeFor`,
@@ -245,6 +259,7 @@ export default function CheckoutPage({ loaderData, actionData }: Route.Component
   const [picked, setPicked] = useState('');
   const method = options?.find(o => o.code === picked) ?? options?.find(o => o.code === chosen) ?? null;
   const payable = method && answer?.itemsAmount ? payableWith(answer.itemsAmount, discount?.amount ?? '0', method) : '';
+  const lineAmounts = new Map((answer?.lines ?? []).map(l => [l.slug, l.amount]));
 
   return (
     <div className="mx-auto w-full max-w-xl px-4 pt-6 pb-16 lg:pt-10">
@@ -373,7 +388,10 @@ export default function CheckoutPage({ loaderData, actionData }: Route.Component
             <h2 id="order-summary" className="text-base font-bold">خلاصهٔ سفارش</h2>
             <ul className="space-y-1 text-sm leading-7">
               {items.map(i => (
-                <li key={i.slug} className="flex justify-between gap-3"><span>{i.name || i.slug}</span><span className="shrink-0">{`${faNumber(i.quantity)} عدد`}</span></li>
+                <li key={i.slug} className="flex justify-between gap-3" data-summary-line>
+                  <span>{`${i.name || i.slug} × ${faNumber(i.quantity)}`}</span>
+                  <span className="shrink-0">{lineAmounts.has(i.slug) ? formatPrice(lineAmounts.get(i.slug) ?? '') : `${faNumber(i.quantity)} عدد`}</span>
+                </li>
               ))}
             </ul>
             <div className="space-y-2 border-t border-border pt-3 text-base">
@@ -389,6 +407,7 @@ export default function CheckoutPage({ loaderData, actionData }: Route.Component
             <p className="flex items-baseline justify-between gap-3 border-t border-border pt-3">
               <span className="text-lg font-bold">مبلغ قابل پرداخت</span>
               <span className="text-2xl font-extrabold" data-payable>{formatPrice(payable)}</span>
+              <input type="hidden" name="shownPayable" value={payable} />
             </p>
             {method.kind === 'on_delivery' ? <p className="text-sm leading-7 text-muted-foreground">هزینهٔ ارسال این روش را هنگام تحویل به پیک می‌دهید.</p> : null}
             <p className="text-sm leading-7 text-muted-foreground">
