@@ -191,7 +191,7 @@
 - **فایل‌ها:** `src/data/changelogs/11.ts` با ۱۲ مدخل و اثر انگشتش به `CLOSED_CHANGELOG_SERIES` رفت؛ `src/data/changelogs/12.ts` فعال است؛ `package.json`، `package-lock.json` و سرخط `README.md` نسخهٔ `12.0.0` دارند؛ `docs/rules/DEBT_LESSONS.md` بخش «نسخه ۱۲» گرفت؛ `docs/rules/release.md` و `AGENTS.md` §9 به سری ۱۲ اشاره می‌کنند؛ آزمون `unit_changelog_series_closure_v11` جای خود را به `unit_changelog_series_closure_v12` داد.
 - **نقشهٔ راه:** `docs/roadmap/V12_MASTER_ROADMAP.md` فعال است. فازهای ۱ تا ۶ آن همان مرحله‌های ۸.۱ تا ۸.۶ هستند. `docs/roadmap/V11_MASTER_ROADMAP.md` بسته شد و گزارش بستن در بخش ۶ آن است.
 - **آنچه عوض نشد:** نام برنامه‌های آغاز (`V11_STOREFRONT_*.md`)، مهاجرت‌های `0013` تا `0022`، شناسهٔ آزمون‌های سایت، کلیدها و رفتار برنامه. این تغییر فقط شماره و اسناد است و هیچ گام دستی روی سرور ندارد.
-- **v12.1.0** وقتی بریده می‌شود که papitalgallery.com روی سایت تازه برود (پایان فاز ۶).
+- **v12.1.0** پایان فاز ۷ و ۸ است (تصمیم مالک، ۲۰ آبان ۱۴۰۵؛ بخش ۱۹)؛ سوئیچ papitalgallery.com در پایان برنامه می‌آید.
 
 ## ۱۹. فازهای ۷ تا ۱۲ نسخهٔ ۱۲ (۱۷ آبان ۱۴۰۵)
 - **برنامه:** `docs/roadmap/V12_SITE_NEXT_START_PLAN.md`. v12.0.0 روی سرور جعفر نصب شد و سایت روی `new.papitalgallery.com` است.
