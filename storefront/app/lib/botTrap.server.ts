@@ -14,6 +14,8 @@ import { siteEnv } from './site.server';
  *   one is a click away).
  *
  * A trapped form gets a plain sentence, never a fake «sent»: a person who tripped it by accident knows to send again.
+ * It is a simple trap (the start plan): a stamp is not tied to one form or one use, so a robot that reads a page and
+ * waits passes it for a day; the ERP's own limits per address and per phone stay in front of every one of these forms.
  */
 export const TRAP_FIELD = 'contact_website';
 export const STAMP_FIELD = 'formAt';
@@ -31,10 +33,22 @@ function signingKey(): Buffer {
 
 const signatureOf = (key: Buffer, at: string) => createHmac('sha256', key).update(at).digest('base64url');
 
+/** an unset or empty setting is the default 3 seconds, never 0 */
 const minimumMs = () => {
-  const seconds = Number(process.env.STOREFRONT_FORM_MIN_SECONDS ?? '3');
+  const raw = (process.env.STOREFRONT_FORM_MIN_SECONDS ?? '').trim();
+  const seconds = raw === '' ? 3 : Number(raw);
   return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : 3000;
 };
+
+/** the stamp's time when it is this server's own, else null (the signature compared in constant time) */
+function genuineAt(sent: string, key: Buffer): number | null {
+  const stamp = STAMP.exec(sent);
+  if (!stamp) return null;
+  const [, at, signature] = stamp;
+  const expected = Buffer.from(signatureOf(key, at));
+  const given = Buffer.from(signature);
+  return given.length === expected.length && timingSafeEqual(given, expected) ? Number(at) : null;
+}
 
 /** the stamp a page puts in its form when it is made */
 export function formStamp(now = Date.now(), key = signingKey()): string {
@@ -51,13 +65,9 @@ export const STAMP_EXPIRED = 'این صفحه کهنه شده است؛ صفحه 
  */
 export function trapRefusal(form: FormData, now = Date.now(), key = signingKey(), minMs = minimumMs()): string | null {
   if (String(form.get(TRAP_FIELD) ?? '') !== '') return TRAP_REFUSED;
-  const stamp = STAMP.exec(String(form.get(STAMP_FIELD) ?? ''));
-  if (!stamp) return STAMP_EXPIRED;
-  const [, at, signature] = stamp;
-  const expected = Buffer.from(signatureOf(key, at));
-  const given = Buffer.from(signature);
-  if (given.length !== expected.length || !timingSafeEqual(given, expected)) return STAMP_EXPIRED;
-  const age = now - Number(at);
+  const at = genuineAt(String(form.get(STAMP_FIELD) ?? ''), key);
+  if (at === null) return STAMP_EXPIRED;
+  const age = now - at;
   if (age > MAX_AGE_MS || age < -60_000) return STAMP_EXPIRED;
   if (age < minMs) return TRAP_REFUSED;
   return null;
@@ -69,7 +79,6 @@ export function trapRefusal(form: FormData, now = Date.now(), key = signingKey()
  */
 export function keptStamp(form: FormData, now = Date.now(), key = signingKey()): string {
   const sent = String(form.get(STAMP_FIELD) ?? '');
-  const stamp = STAMP.exec(sent);
-  const good = stamp !== null && signatureOf(key, stamp[1]) === stamp[2] && now - Number(stamp[1]) <= MAX_AGE_MS;
-  return good ? sent : formStamp(now, key);
+  const at = genuineAt(sent, key);
+  return at !== null && now - at <= MAX_AGE_MS ? sent : formStamp(now, key);
 }

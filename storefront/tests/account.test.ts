@@ -78,7 +78,8 @@ describe('account pages', () => {
     expect(proof).toMatch(/HttpOnly/);
     expect(proof).toMatch(/SameSite=Lax/);
     expect(proof).toMatch(/Secure/);
-    expect(proof).toMatch(/Path=\/account/);
+    // v12 phase 8a review: on the whole site, so the page's own data requests (/account/sign-up.data) carry it
+    expect(proof).toMatch(/Path=\/;/);
 
     const details = await page('/account/sign-up?next=%2Fp%2Ftile-necklace-sample', cookieValue(verified.cookies, 'sf_proof'));
     expect(details.html).toContain('تأیید شد');
