@@ -2,6 +2,7 @@ import type { Request } from 'express';
 import { and, desc, eq, gt, inArray, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { appSettings, storefrontSmsCodes, storefrontSmsMessages } from '../../db/schema.js';
+import { emailCodesOn } from './storefrontEmailOtp.service.js';
 import { STOREFRONT_SETTING_KEYS } from '../../lib/storefront/storefrontContracts.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
@@ -126,7 +127,9 @@ export async function smsLoginConfigured(executor: DbExecutor): Promise<boolean>
 export async function smsLoginOn(executor: DbExecutor): Promise<boolean> {
   const settings = await smsRuntimeSettings(executor);
   if (activeTemplate(settings, 'otp') === null || settings.loginPaused) return false;
-  return !(await smsLoginFailing(executor));
+  // 8e3 delta review: the automatic pause only turns the site to email; with the email off it would gain nothing (codes
+  // that fail, fail anyway) and only stop buyers, so failing texts pause nothing then
+  return !(await smsLoginFailing(executor)) || !(await emailCodesOn(executor));
 }
 
 export async function readSmsSettings(executor: DbExecutor): Promise<StorefrontSmsSettingsView> {
@@ -140,7 +143,7 @@ export async function readSmsSettings(executor: DbExecutor): Promise<StorefrontS
     hourlyCap: runtime.hourlyCap,
     orderHourlyCap: runtime.orderHourlyCap,
     loginPaused: runtime.loginPaused,
-    autoPaused: await smsLoginFailing(executor),
+    autoPaused: await smsLoginFailing(executor) && await emailCodesOn(executor),
     version: Number(stored[KEYS.version]) || 0,
     secretsKeyConfigured: isSecretsKeyConfigured(),
   };
