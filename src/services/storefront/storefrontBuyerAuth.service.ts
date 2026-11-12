@@ -98,6 +98,22 @@ export async function accountView(executor: DbExecutor, account: AccountRecord):
 }
 
 /** Ends every live session of an account (inside the caller's transaction) */
+/**
+ * v12 phase 8e review: whoever made an account with a phone nobody proved may not own that phone; an email they added
+ * would outlive the phone owner taking the account over (an SMS sign-in, an SMS password reset, a colleague's approval),
+ * so every takeover drops it too, with the password and the sessions.
+ */
+export const DROP_EMAIL = { email: '', emailKey: '', emailVerifiedAt: null } as const;
+
+/** v12 phase 8e review: the id of the live session a token names (0 = none), to keep it while the others end */
+export async function currentSessionId(executor: DbExecutor, rawToken: unknown): Promise<number> {
+  const token = presentedToken(rawToken, SESSION_TOKEN_PREFIX);
+  if (!token) return 0;
+  const [row] = await executor.select({ id: storefrontBuyerSessions.id }).from(storefrontBuyerSessions)
+    .where(and(eq(storefrontBuyerSessions.tokenHash, tokenHash(token)), isNull(storefrontBuyerSessions.revokedAt)));
+  return row?.id ?? 0;
+}
+
 export async function revokeSessions(tx: DbExecutor, accountId: number, exceptId?: number): Promise<void> {
   const conditions = [eq(storefrontBuyerSessions.accountId, accountId), isNull(storefrontBuyerSessions.revokedAt)];
   if (exceptId !== undefined) conditions.push(sql`${storefrontBuyerSessions.id} <> ${exceptId}`);
@@ -170,6 +186,35 @@ export async function registerAccount(input: RegisterRequest): Promise<Storefron
   });
 }
 
+/**
+ * v12 phase 8e review: the password of a signed-in account, asked again before its email or phone is replaced. It counts
+ * against the same lock as a sign-in (`LOGIN_FAILURES_MAX` wrong tries lock it for `LOGIN_LOCK_MINUTES`), each wrong try
+ * committed on its own, before any proof is used, so a stolen session cannot guess the password without limit.
+ */
+export async function confirmAccountPassword(accountId: number, rawPassword: unknown): Promise<void> {
+  const password = String(rawPassword ?? '');
+  const [found] = await orm.select().from(storefrontBuyerAccounts).where(eq(storefrontBuyerAccounts.id, accountId));
+  if (!found) throw signInNeeded();
+  if (found.lockedUntil && Date.parse(found.lockedUntil) > Date.now()) {
+    throw new AppError(`تلاش‌های نادرست زیاد بود؛ ${LOGIN_LOCK_MINUTES.toLocaleString('fa-IR')} دقیقهٔ دیگر دوباره امتحان کنید.`, 429, 'STOREFRONT_SIGN_IN_LOCKED');
+  }
+  if (!found.passwordHash) throw accountFieldError('password', 'برای عوض کردن آن، اول با «فراموشی رمز» برای حساب رمز بگذارید.');
+  const matches = Boolean(password) && await verifyPassword(password, found.passwordHash);
+  await orm.transaction(async (tx) => {
+    const [account] = await tx.select().from(storefrontBuyerAccounts).where(eq(storefrontBuyerAccounts.id, accountId)).for('update');
+    if (matches && account.passwordHash === found.passwordHash) {
+      if (account.failedLogins !== 0) await tx.update(storefrontBuyerAccounts).set({ failedLogins: 0 }).where(eq(storefrontBuyerAccounts.id, accountId));
+      return;
+    }
+    const failures = account.failedLogins + 1;
+    const locks = failures >= LOGIN_FAILURES_MAX;
+    await tx.update(storefrontBuyerAccounts).set({
+      failedLogins: locks ? 0 : failures, lockedUntil: locks ? nowPlus(LOGIN_LOCK_MINUTES * 60_000) : account.lockedUntil,
+    }).where(eq(storefrontBuyerAccounts.id, accountId));
+  });
+  if (!matches) throw accountFieldError('password', 'رمز حساب درست نیست.');
+}
+
 /** `POST /auth/login` */
 export async function signIn(input: LoginRequest): Promise<StorefrontSessionAnswer> {
   await assertAccountsOpen(orm);
@@ -230,7 +275,7 @@ export async function smsSignIn(input: SmsLoginRequest): Promise<StorefrontSessi
     const takeover = !account.phoneVerifiedAt;
     const updated = {
       phoneVerifiedAt: account.phoneVerifiedAt ?? now, failedLogins: 0, lockedUntil: null, lastLoginAt: now,
-      ...(takeover ? { passwordHash: '', updatedAt: now, updatedBy: STOREFRONT_BOT_USER, version: nextVersion(account.version) } : {}),
+      ...(takeover ? { passwordHash: '', ...DROP_EMAIL, updatedAt: now, updatedBy: STOREFRONT_BOT_USER, version: nextVersion(account.version) } : {}),
     };
     await tx.update(storefrontBuyerAccounts).set(updated).where(eq(storefrontBuyerAccounts.id, account.id));
     if (takeover) {
@@ -241,7 +286,8 @@ export async function smsSignIn(input: SmsLoginRequest): Promise<StorefrontSessi
         .where(and(eq(storefrontPasswordTokens.accountId, account.id), isNull(storefrontPasswordTokens.usedAt)));
       await logActivity({
         tx, username: STOREFRONT_BOT_USER, action: 'UPDATE', entity: 'حساب خریدار سایت', entityId: account.id,
-        description: `شمارهٔ ${account.phone} با پیامک تأیید شد؛ رمز و نشست‌های پیشین حساب پاک شد`, details: { hadPassword: Boolean(account.passwordHash) },
+        description: `شمارهٔ ${account.phone} با پیامک تأیید شد؛ رمز، ایمیل و نشست‌های پیشین حساب پاک شد`,
+        details: { before: { passwordSet: Boolean(account.passwordHash), emailSet: Boolean(account.emailKey) }, after: { passwordSet: false, emailSet: false } },
       });
     }
     return newSession(tx, { ...account, ...updated });
@@ -262,7 +308,7 @@ export async function sessionAccount(executor: DbExecutor, rawToken: unknown): P
   return row.account;
 }
 
-const signInNeeded = () => new AppError('برای این کار وارد حساب خود شوید.', 401, 'STOREFRONT_SESSION_REQUIRED');
+export const signInNeeded = () => new AppError('برای این کار وارد حساب خود شوید.', 401, 'STOREFRONT_SESSION_REQUIRED');
 
 /**
  * The account of the request's session, or 401. v12 phase 7 (site review 1.5): `ordersOff` (the account's own orders and

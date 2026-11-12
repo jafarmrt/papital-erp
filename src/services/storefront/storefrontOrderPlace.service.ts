@@ -199,6 +199,7 @@ export async function quoteShipping(input: ShippingQuoteRequest, rawSession?: un
   const choice = code ? await chooseDiscount(orm, code, cart.itemsAmount, { ...buyer, phoneKey: '' }) : null;
   return {
     itemsAmount: cart.itemsAmount,
+    lines: cart.lines.map(l => ({ slug: l.item.slug, quantity: l.quantity, amount: l.lineAmount })),
     discount: choice ? appliedDiscount(choice.code.code, choice.code.title, choice.amount.toString()) : null,
     options: await shippingOptions(orm, settings, cart, province, discountedSubtotal(cart.itemsAmount, choice)),
   };

@@ -92,7 +92,7 @@ export async function remindDueApprovalsOnce(): Promise<number> {
           .where(and(eq(storefrontOrders.id, order.id), isNull(storefrontOrders.approvalRemindedAt)))
           .returning({ at: storefrontOrders.approvalRemindedAt });
         if (!stamped) return false;
-        await notifySiteOrder(tx, 'approval_due', order);
+        await notifySiteOrder(tx, 'approval_due', order, { rethrow: true });
         await logActivity({
           tx, username: STOREFRONT_BOT_USER, action: 'UPDATE', entity: 'سفارش سایت', entityId: order.id,
           description: `یادآوری مهلت تأیید سفارش به حساب ${order.orderNumber} به همکاران رفت`,

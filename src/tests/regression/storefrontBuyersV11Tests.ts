@@ -191,11 +191,18 @@ export async function runStorefrontBuyersV11Tests(shouldRun: (id: string, ...ext
     // 7) approve: a customer is made, any password cleared, sessions ended, and a one-time link answered
     const listed = await erp.get(`/api/storefront/buyers?filter=pending&q=${phone3}`);
     if (listed.status !== 200 || !(listed.body.data ?? []).some((r: Body) => r.id === pending.id)) wrong.push(`the pending list: ${listed.status}`);
+    // v12 phase 8e review: an email whoever made the request added to its unproven phone goes with the approval
+    const squatEmail = `squat.${tag}@papital-test.example`;
+    await orm.update(storefrontBuyerAccounts).set({ email: squatEmail, emailKey: squatEmail, emailVerifiedAt: new Date().toISOString() })
+      .where(eq(storefrontBuyerAccounts.id, pending.id));
     const approved = await erp.post(`/api/storefront/buyers/${pending.id}/approve`, { groupId, customerId: 0, version: pending.version });
     const link = String(approved.body.data?.token ?? '');
     if (approved.status !== 200 || !link.startsWith('pw_') || approved.body.data.account.applicationStatus !== 'approved' || !approved.body.data.account.customerId) {
       throw new Error(`approve: ${approved.status} ${JSON.stringify(approved.body)}`);
     }
+    const [afterApproval] = await orm.select({ emailKey: storefrontBuyerAccounts.emailKey, emailVerifiedAt: storefrontBuyerAccounts.emailVerifiedAt })
+      .from(storefrontBuyerAccounts).where(eq(storefrontBuyerAccounts.id, pending.id));
+    if (afterApproval?.emailKey !== '' || afterApproval?.emailVerifiedAt !== null) wrong.push(`an unproven phone's request kept its email at approval: '${afterApproval?.emailKey}'`);
     const [linkRow] = await orm.select({ hash: storefrontPasswordTokens.tokenHash }).from(storefrontPasswordTokens).where(eq(storefrontPasswordTokens.accountId, pending.id));
     if (!linkRow || linkRow.hash.includes(link)) wrong.push('the set-password link is not kept as a hash');
     const setPw = await site.post('/auth/set-password', { token: link, password: PASSWORD });

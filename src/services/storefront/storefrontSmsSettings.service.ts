@@ -78,7 +78,8 @@ function runtimeOf(stored: Stored): SmsRuntimeSettings {
     apiKey: sealed ? decryptSecret(sealed) : '',
     templates: templatesOf(stored[KEYS.templates]),
     hourlyCap: hourlyCapOf(stored[KEYS.hourlyCap]),
-    orderHourlyCap: hourlyCapOf(stored[KEYS.orderHourlyCap]),
+    // v12 phase 8b review: until the order budget is saved, it is the cap the owner set for all texts before the split
+    orderHourlyCap: hourlyCapOf(stored[KEYS.orderHourlyCap] || stored[KEYS.hourlyCap]),
     loginPaused: stored[KEYS.loginPaused] === '1',
   };
 }

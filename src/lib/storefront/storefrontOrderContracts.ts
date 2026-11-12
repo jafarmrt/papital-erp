@@ -26,8 +26,17 @@ export interface ShippingOption {
   free: boolean;
 }
 
+/** v12 phase 8a review: one cart line at the price this buyer pays (the group's price for a wholesale account) */
+export interface QuotedLine {
+  slug: string;
+  quantity: number;
+  amount: string;
+}
+
 export interface ShippingQuoteAnswer {
   itemsAmount: string;
+  /** v12 phase 8a review: the cart's lines with their amounts, for the order summary (their sum is `itemsAmount`) */
+  lines: QuotedLine[];
   /** v11 phase 8.2c: the code that applied (free shipping is reckoned on the items after it), or null */
   discount: AppliedDiscount | null;
   /** the methods this cart and province can use, in the site's order (a weight-priced method needs every item's weight) */

@@ -292,7 +292,8 @@ describe('the retail cap and the guest phone proof', () => {
     expect(refused.html).toContain('کد پستی باید ۱۰ رقم باشد');
     const proof = refused.cookies.find(c => c.startsWith('sf_checkout_proof='))!;
     expect(proof).toMatch(/HttpOnly/);
-    expect(proof).toMatch(/Path=\/checkout/);
+    // on the whole site: React Router posts this page to /checkout.data once its script runs, which a /checkout cookie misses
+    expect(proof).toMatch(/Path=\/;/);
 
     const nextKey = /name="requestKey" value="([^"]+)"/.exec(refused.html)?.[1] ?? '';
     const placed = await post('/checkout', { intent: 'place', requestKey: nextKey, ...address, shippingMethod: 'post' }, `${cart}; ${cookieValue(refused.cookies, 'sf_checkout_proof')}`);
@@ -359,7 +360,8 @@ describe('phase 8a: the bottom bar, the order summary, the wholesale page and th
 
     const post1 = summary((await post('/checkout', { intent: 'quote', requestKey: 'rk-summary-check-00001', ...address, shippingMethod: 'post' }, cart)).html);
     expect(post1).toContain(product.data.name);
-    expect(post1).toContain('۲ عدد');
+    expect(post1).toContain('× ۲');
+    expect(post1).toMatch(new RegExp(`data-summary-line.*${formatPrice(quote.itemsAmount)}`, 's'));
     expect(post1).toContain('ارسال (پست پیشتاز)');
     expect(post1).toContain('مبلغ قابل پرداخت');
     expect(post1).toContain(formatPrice((BigInt(quote.itemsAmount) + 500000n).toString()));
@@ -371,6 +373,18 @@ describe('phase 8a: the bottom bar, the order summary, the wholesale page and th
     const discounted = summary((await post('/checkout', { intent: 'quote', requestKey: 'rk-summary-check-00001', ...address, shippingMethod: 'post', discountCode: 'yalda' }, cart)).html);
     expect(discounted).toContain('YALDA');
     expect(discounted).toContain(formatPrice((BigInt(withCode.itemsAmount) - BigInt(withCode.discount.amount) + 500000n).toString()));
+
+    // «ثبت سفارش» with a summary that no longer holds (the code was added after it was shown): the order is not placed,
+    // the form comes back with the new summary; with the shown amount right, it is placed
+    const shownBefore = /name="shownPayable" value="(\d+)"/.exec((await post('/checkout', { intent: 'quote', requestKey: 'rk-summary-check-00002', ...address, shippingMethod: 'post' }, cart)).html)?.[1];
+    expect(shownBefore).toBe((BigInt(quote.itemsAmount) + 500000n).toString());
+    const stale = await post('/checkout', { intent: 'place', requestKey: 'rk-summary-check-00002', ...address, shippingMethod: 'post', discountCode: 'yalda', shownPayable: shownBefore! }, cart);
+    expect(stale.status).toBe(200);
+    expect(stale.html).toContain('مبلغ قابل پرداخت عوض شد');
+    expect((await lastPost()).route).toBe('/shipping/quote');
+    const fresh = /name="shownPayable" value="(\d+)"/.exec(stale.html)?.[1];
+    const placed = await post('/checkout', { intent: 'place', requestKey: 'rk-summary-check-00002', ...address, shippingMethod: 'post', discountCode: 'yalda', shownPayable: fresh! }, cart);
+    expect(placed.status).toBe(302);
   });
 
   it('takes a guest\'s wholesale request after the phone\'s code, with the proof kept on its own page only', async () => {
@@ -386,7 +400,7 @@ describe('phase 8a: the bottom bar, the order summary, the wholesale page and th
     expect(verified.status).toBe(302);
     const proof = verified.cookies.find(c => c.startsWith('sf_wholesale_proof='))!;
     expect(proof).toMatch(/HttpOnly/);
-    expect(proof).toMatch(/Path=\/wholesale/);
+    expect(proof).toMatch(/Path=\/;/);
     const kept = cookieValue(verified.cookies, 'sf_wholesale_proof');
     const details = await page('/wholesale', kept);
     expect(details.html).toContain('شمارهٔ <span dir="ltr">09131112233</span> تأیید شد');

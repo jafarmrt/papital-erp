@@ -187,6 +187,9 @@ export async function runStorefrontAccountOrdersV11Tests(shouldRun: (id: string,
     const wholesale = String(setPw.body.data?.sessionToken ?? '');
     const quote = await site.post('/shipping/quote', { province: 'تهران', lines: [{ slug: slugA, quantity: 3 }] }, wholesale);
     if (quote.status !== 200 || quote.body.data.itemsAmount !== (BigInt(GROUP_PRICE) * 3n).toString()) wrong.push(`group quote: ${quote.status} ${JSON.stringify(quote.body)}`);
+    // v12 phase 8a review: the quote names each line at the group's price, for the summary above «ثبت سفارش»
+    const quotedLines = JSON.stringify(quote.body.data?.lines);
+    if (quotedLines !== JSON.stringify([{ slug: slugA, quantity: 3, amount: (BigInt(GROUP_PRICE) * 3n).toString() }])) wrong.push(`group quote lines: ${quotedLines}`);
     const expectCode = async (body: Body, code: string, what: string) => {
       const res = await site.post('/orders', body, wholesale);
       if (res.status !== 422 || (res.body.code !== code && res.body.details?.field !== code)) wrong.push(`${what}: ${res.status} ${JSON.stringify(res.body)}`);
