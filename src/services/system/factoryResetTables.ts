@@ -18,7 +18,7 @@ import {
   integrationDeliveryJobs, eventActionRuleRetirements, webhookEventPatternRepairs, itemPriceTitleCleanup,
   dailyLogVisibilityRepairs, statutoryRemittanceLines, settlementAllocations, payrollStatutoryRates, payrollEidiRates, itemCodeHistory,
   mediaAssets, mediaSections, storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontRedirects, storefrontSmsCodes, storefrontSmsMessages,
-  storefrontBuyerGroups, storefrontBuyerAccounts, storefrontBuyerSessions, storefrontPasswordTokens, storefrontDiscountCodes, storefrontDiscountRedemptions, storefrontCampaigns, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
+  storefrontBuyerGroups, storefrontBuyerAccounts, storefrontBuyerAddresses, storefrontBuyerSessions, storefrontPasswordTokens, storefrontDiscountCodes, storefrontDiscountRedemptions, storefrontCampaigns, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
 } from '../../db/schema.js';
 
 /**
@@ -73,6 +73,8 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   // v11 phase 8.2b: buyer sessions and set-password links before their accounts; accounts reference customers and groups
   { name: 'storefront_buyer_sessions', table: storefrontBuyerSessions },
   { name: 'storefront_password_tokens', table: storefrontPasswordTokens },
+  // v12 phase 8c: the address book before its accounts
+  { name: 'storefront_buyer_addresses', table: storefrontBuyerAddresses },
   { name: 'storefront_buyer_accounts', table: storefrontBuyerAccounts },
   { name: 'storefront_buyer_groups', table: storefrontBuyerGroups },
   { name: 'fiscal_periods', table: fiscalPeriods },

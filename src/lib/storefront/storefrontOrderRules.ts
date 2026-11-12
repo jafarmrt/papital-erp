@@ -77,6 +77,10 @@ export const CITY_MAX = 60;
 export const ADDRESS_MIN = 10;
 export const ADDRESS_MAX = 400;
 export const BUYER_NOTE_MAX = 500;
+/** v12 phase 8c (owner's decision 13): the message of a gift's card, free, on the order only */
+export const GIFT_MESSAGE_MAX = 200;
+/** v12 phase 8c: the addresses one buyer account keeps in its address book */
+export const BUYER_ADDRESSES_MAX = 10;
 export const REJECT_REASON_MAX = 300;
 export const TRACKING_CODE_MAX = 40;
 

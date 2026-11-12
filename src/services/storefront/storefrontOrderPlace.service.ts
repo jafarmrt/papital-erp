@@ -6,7 +6,7 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { phoneMatchKey } from '../../lib/search/phoneMatchKey.js';
 import { money } from '../../lib/money.js';
 import {
-  ADDRESS_MAX, ADDRESS_MIN, BUYER_NOTE_MAX, CITY_MAX, OPEN_ORDER_STATUSES, RECIPIENT_NAME_MAX, RETAIL_LINE_CAP_MESSAGE, cartLinesError, cleanText,
+  ADDRESS_MAX, ADDRESS_MIN, BUYER_NOTE_MAX, CITY_MAX, GIFT_MESSAGE_MAX, OPEN_ORDER_STATUSES, RECIPIENT_NAME_MAX, RETAIL_LINE_CAP_MESSAGE, cartLinesError, cleanText,
   isIranProvince, isPaymentMethod, normalizeMobile, normalizePostalCode, retailLineOverCap, type CartLineInput, type PaymentMethod, payableWith,
 } from '../../lib/storefront/storefrontOrderRules.js';
 import type { PlaceOrderRequest, PlacedOrder, ShippingQuoteAnswer, ShippingQuoteRequest } from '../../lib/storefront/storefrontOrderContracts.js';
@@ -26,6 +26,7 @@ import { storefrontSettingValues } from './storefrontSettings.service.js';
 import { queueOrderSms } from './storefrontSms.service.js';
 import { appliedDiscount, chooseDiscount, redeemDiscount, type DiscountChoice } from './storefrontDiscountApply.js';
 import { normalizeDiscountCode, spreadDiscount } from '../../lib/storefront/storefrontDiscountRules.js';
+import { keepOrderAddress } from './storefrontBuyerAddresses.service.js';
 
 /**
  * v11 phase 8.2a (start plan §4): placing a site order, in one transaction. The server prices the cart (the request's
@@ -41,6 +42,13 @@ import { normalizeDiscountCode, spreadDiscount } from '../../lib/storefront/stor
  * leaves the proof for the next try. The proof is not part of the request hash: a lost answer repeated with the same key
  * replays the order without a second proof. A signed-in account orders without one. While the texts are off nothing
  * changes. A retail buyer orders at most `RETAIL_LINE_QUANTITY_MAX` of an item; a wholesale group keeps the cart limit.
+ *
+ * v12 phase 8c (site review 2.5, owner's decision 13): the buyer apart from the recipient. `phone` is the buyer's mobile
+ * (the customer, the texts, the proof and the open-orders limit go by it) and `buyerName` the buyer's name, whom the
+ * customer is named after; the recipient's name, own mobile (`recipientPhone`, a contact for the courier only) and
+ * address go on the order and the proforma's shipping address. A gift is free, and its card's message stays on the order.
+ * A signed-in buyer may keep the address in the account's address book, in the order's own transaction. Each new field
+ * enters the request hash only when given, so the hash of an order without them is as before.
  */
 const ORDER_NOTE_PREFIX = 'سفارش سایت';
 
@@ -59,6 +67,12 @@ interface CleanOrder {
   paymentMethod: PaymentMethod;
   /** v11 phase 8.2c: the code as normalized; left out when none, so the hash of an order without one is as before */
   discountCode?: string;
+  /** v12 phase 8c: left out when the buyer is the recipient, the recipient's phone the buyer's, or no gift */
+  buyerName?: string;
+  recipientPhone?: string;
+  gift?: true;
+  giftMessage?: string;
+  saveAddress?: true;
 }
 
 /** v12 phase 7: the guest's phone proof, kept out of `CleanOrder` so the request hash never carries it */
@@ -102,9 +116,25 @@ export function cleanOrderRequest(input: PlaceOrderRequest): CleanOrder {
   const paymentMethod = input.paymentMethod === undefined || input.paymentMethod === null ? 'card' : input.paymentMethod;
   if (!isPaymentMethod(paymentMethod)) throw fieldError('paymentMethod', 'روش پرداخت را انتخاب کنید.');
   const discountCode = typedDiscountCode(input.discountCode);
+  // v12 phase 8c: the buyer apart from the recipient, and a gift
+  const buyerText = String(input.buyerName ?? '').trim();
+  const buyerName = buyerText ? cleanText(buyerText, RECIPIENT_NAME_MAX) : recipientName;
+  if (!buyerName || buyerName.length < 2) throw fieldError('buyerName', 'نام و نام خانوادگی خریدار را بنویسید.');
+  const recipientText = String(input.recipientPhone ?? '').trim();
+  const recipientPhone = recipientText ? normalizeMobile(recipientText) : '';
+  if (recipientPhone === null) throw fieldError('recipientPhone', 'شمارهٔ همراه گیرنده باید ۱۱ رقم و با ۰۹ آغاز شود.');
+  const gift = input.gift === true;
+  const giftText = gift ? String(input.giftMessage ?? '').trim() : '';
+  const giftMessage = giftText ? cleanText(giftText, GIFT_MESSAGE_MAX, { multiline: true }) : '';
+  if (giftMessage === null) throw fieldError('giftMessage', `پیام کارت هدیه حداکثر ${GIFT_MESSAGE_MAX.toLocaleString('fa-IR')} نویسه است.`);
   return {
     requestKey, recipientName, phone, phoneKey: phoneMatchKey(phone), province, city, address, postalCode, note, shippingMethod, lines, paymentMethod,
     ...(discountCode ? { discountCode } : {}),
+    ...(buyerName !== recipientName ? { buyerName } : {}),
+    ...(recipientPhone && recipientPhone !== phone ? { recipientPhone } : {}),
+    ...(gift ? { gift: true as const } : {}),
+    ...(giftMessage ? { giftMessage } : {}),
+    ...(input.saveAddress === true ? { saveAddress: true as const } : {}),
   };
 }
 
@@ -132,11 +162,15 @@ function assertRetailCap(buyer: OrderBuyer, lines: readonly CartLineInput[]): vo
 
 /**
  * v12 phase 7 (site review 1.3): inside the order's transaction, a guest's phone proof is used up while the site signs
- * in by SMS. A signed-in account needs none; with the texts off nothing is asked (the start plan: today's behavior stays
- * until a proof is possible).
+ * in by SMS. A signed-in account ordering with its own phone needs none; with the texts off nothing is asked (the start
+ * plan: today's behavior stays until a proof is possible).
+ *
+ * v12 phase 8c review: since 8c the order's phone is its buyer's (the customer, the texts, the open-order limit), so a
+ * signed-in account that types another phone proves that phone like a guest; else a session would let anyone order in
+ * a stranger's name and on a stranger's customer.
  */
 async function assertGuestPhoneProven(tx: DbTransaction, buyer: OrderBuyer, phone: string, proof: string): Promise<void> {
-  if (buyer.account || !(await smsLoginOn(tx))) return;
+  if (buyer.account?.phoneKey === phoneMatchKey(phone) || !(await smsLoginOn(tx))) return;
   if (!proof || !(await consumePhoneProof(tx, phone, proof))) throw phoneProofInvalid();
 }
 
@@ -266,11 +300,13 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
   const orderNumber = String(sequence);
   // an approved buyer's orders go on the customer a colleague linked at approval; any other order finds or makes one by phone
   const customer = await customerOf(tx, buyer, orderNumber, order);
-  const fullAddress = `${order.province}، ${order.city}، ${order.address}، کد پستی ${order.postalCode}`;
+  // v12 phase 8c: the proforma's shipping address names the recipient when the buyer is someone else
+  const recipientLine = order.buyerName || order.recipientPhone ? `گیرنده: ${order.recipientName}${order.recipientPhone ? ` (${order.recipientPhone})` : ''}، ` : '';
+  const fullAddress = `${recipientLine}${order.province}، ${order.city}، ${order.address}، کد پستی ${order.postalCode}`;
   const documentId = await DocumentService.createDocument({
     docType: 'invoice', status: 'proforma', inOut: 'out', user: STOREFRONT_BOT_USER,
     partyId: customer.id, buyerName: customer.name, buyerPhone: order.phone, buyerCity: order.city, buyerAddress: fullAddress,
-    notes: `${ORDER_NOTE_PREFIX} ${orderNumber}، ارسال: ${option.title}${option.kind === 'on_delivery' ? ' (هزینه در محل)' : ''}${onAccount ? '، پرداخت به حساب' : ''}${buyer.group ? `، گروه خریدار «${buyer.group.title}»` : ''}${choice ? `، کد تخفیف ${choice.code.code}` : ''}`,
+    notes: `${ORDER_NOTE_PREFIX} ${orderNumber}، ارسال: ${option.title}${option.kind === 'on_delivery' ? ' (هزینه در محل)' : ''}${onAccount ? '، پرداخت به حساب' : ''}${buyer.group ? `، گروه خریدار «${buyer.group.title}»` : ''}${choice ? `، کد تخفیف ${choice.code.code}` : ''}${order.gift ? '، هدیه است (بی قیمت روی بسته)' : ''}`,
     currency: 'IRR', vatAmount: 0, vatPercent: 0, serviceChargeAmount: shippingAmount,
     items: cart.lines.map((l, i) => ({
       itemId: l.item.itemId, quantity: l.quantity, unit_price: Number(l.unitPrice), location: warehouse,
@@ -295,8 +331,10 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
     reserveUntil: sql`now() + make_interval(hours => ${onAccount ? settings.approvalHours : settings.reservationHours})`,
     buyerAccountId: buyer.account?.id ?? null, buyerGroupId: buyer.group?.id ?? null, paymentMethod: order.paymentMethod,
     discountCodeId: choice?.code.id ?? null, discountCode: choice?.code.code ?? '', discountAmount: money(discountAmount),
+    buyerName: order.buyerName ?? '', recipientPhone: order.recipientPhone ?? '', isGift: order.gift ? 1 : 0, giftMessage: order.giftMessage ?? '',
     updatedBy: STOREFRONT_BOT_USER,
   }).returning();
+  if (order.saveAddress && buyer.account) await keepOrderAddress(tx, buyer.account.id, order);
   if (choice) await redeemDiscount(tx, choice, { id: row.id, phoneKey: order.phoneKey, buyerAccountId: row.buyerAccountId });
   // v11 phase 8.4a: the buyer's text, queued with the order (sent after the commit; nothing while sending is off). Its
   // text asks for a card-to-card payment, so an on-account order sends none.
@@ -308,7 +346,7 @@ async function placeInTransaction(tx: DbTransaction, order: CleanOrder, requestH
       after: {
         orderNumber, documentId, customerId: customer.id, shippingMethod: option.code, itemsAmount: cart.itemsAmount,
         shippingAmount, discountCode: row.discountCode, discountAmount, payableAmount: payable, reserveUntil: row.reserveUntil, paymentMethod: order.paymentMethod,
-        buyerAccountId: row.buyerAccountId, buyerGroupId: row.buyerGroupId,
+        buyerAccountId: row.buyerAccountId, buyerGroupId: row.buyerGroupId, buyerName: row.buyerName, isGift: row.isGift,
       },
     },
   });
@@ -322,7 +360,11 @@ async function customerOf(tx: DbTransaction, buyer: OrderBuyer, orderNumber: str
       .where(and(eq(customers.id, buyer.account.customerId), eq(customers.isDeleted, 0)));
     if (linked) return linked;
   }
-  return resolveSiteCustomer(tx, `سفارش سایت ${orderNumber}`, { name: order.recipientName, phone: order.phone, city: order.city, address: order.address });
+  // v12 phase 8c (site review 2.5): the customer is the buyer; a gift's recipient address is not the buyer's own
+  const ownAddress = !order.buyerName && !order.recipientPhone;
+  return resolveSiteCustomer(tx, `سفارش سایت ${orderNumber}`, {
+    name: order.buyerName ?? order.recipientName, phone: order.phone, city: ownAddress ? order.city : '', address: ownAddress ? order.address : '',
+  });
 }
 
 /** An order of the buyer who holds its key; a missing order and a wrong key are the same 404 */

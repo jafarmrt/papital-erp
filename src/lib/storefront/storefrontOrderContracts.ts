@@ -48,7 +48,20 @@ export interface PlaceOrderRequest {
   /** a random key the app makes once per checkout (16 to 80 of A-Z a-z 0-9 _ -, e.g. a UUID); the same key and body answer the same order and its tracking key again, so it must not be guessable */
   requestKey: string;
   recipientName: string;
+  /**
+   * the buyer's mobile: the ERP's customer is found or made by it, the order's texts and a guest's phone proof are for it,
+   * and its open orders are counted. v12 phase 8c: the recipient's own phone, when another person, is `recipientPhone`.
+   */
   phone: string;
+  /** v12 phase 8c (site review 2.5): the buyer's name, whom the ERP's customer is named after; absent or '' = the recipient */
+  buyerName?: string;
+  /** v12 phase 8c: the recipient's mobile, a contact for the courier only (no code, no texts); absent or '' = the buyer's */
+  recipientPhone?: string;
+  /** v12 phase 8c (owner's decision 13): a gift, free, with an optional message for its card (`GIFT_MESSAGE_MAX`) */
+  gift?: boolean;
+  giftMessage?: string;
+  /** v12 phase 8c: a signed-in buyer keeps the address in the account's address book (ignored for a guest, or a full book) */
+  saveAddress?: boolean;
   province: string;
   city: string;
   address: string;
@@ -104,6 +117,10 @@ export interface BuyerOrder {
   /** until when the stock is held for an unpaid order (null once a receipt waits or the order is past payment) */
   payBefore: string | null;
   recipient: { name: string; phone: string; province: string; city: string; address: string; postalCode: string };
+  /** v12 phase 8c (site review 2.5): who placed the order (the ERP's customer), apart from the recipient */
+  orderedBy: { name: string; phone: string };
+  /** v12 phase 8c: a gift, with its card's message ('' = none); null = not a gift */
+  gift: { message: string } | null;
   note: string;
   shipping: { code: string; title: string; kind: 'cost' | 'on_delivery'; amount: string };
   lines: BuyerOrderLine[];
@@ -213,4 +230,27 @@ export interface AccountOrderPage {
 export interface ClaimOrderRequest {
   number: string;
   accessKey: string;
+}
+
+/**
+ * v12 phase 8c: one address of a buyer account's address book (`GET /api/storefront/v1/account/addresses`), the
+ * account's own only. The checkout fills its recipient from one; «حساب من» lists them.
+ */
+export interface BuyerAddress {
+  id: number;
+  recipientName: string;
+  /** '' = the account's own phone */
+  recipientPhone: string;
+  province: string;
+  city: string;
+  address: string;
+  postalCode: string;
+  isDefault: boolean;
+}
+
+export interface BuyerAddressBook {
+  /** the default first, then the newest */
+  data: BuyerAddress[];
+  /** how many the book holds at most (`BUYER_ADDRESSES_MAX`) */
+  max: number;
 }
