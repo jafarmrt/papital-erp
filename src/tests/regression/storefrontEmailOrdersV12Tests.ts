@@ -330,6 +330,12 @@ export async function runStorefrontEmailOrdersV12Tests(shouldRun: (id: string, .
     const emailOff = (await erp.get('/api/storefront/email/settings')).body.data;
     await erp.put('/api/storefront/email/settings', { ...emailOff, enabled: false, password: '', clearPassword: false, ready: undefined, secretsKeyConfigured: undefined, version: emailOff.version });
     invalidateSettingsCache();
+    // delta review: with the email off, failing texts pause nothing (the pause would only stop buyers)
+    await pause(false);
+    await failTexts(SMS_FAILURE_PAUSE_VISITORS);
+    if (await publicFlags() !== 'true/false') wrong.push(`failing texts with the email off: flags ${await publicFlags()}`);
+    await ageFailures();
+    await pause(true);
     const lockedOrder = await site().post('/api/storefront/v1/orders', order(phoneVictim, `rk-mail-j-${tag}`));
     const lockedSignUp = await site().post('/api/storefront/v1/auth/register', { name: `در مکث ${tag}`, phone: `0936${tag}`, password: PASSWORD });
     phoneKeys.push(phoneMatchKey(`0936${tag}`));

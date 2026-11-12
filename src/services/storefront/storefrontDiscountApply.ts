@@ -56,7 +56,7 @@ async function usesOf(executor: DbExecutor, codeId: number, buyer?: DiscountBuye
 
 async function hasEarlierOrder(executor: DbExecutor, buyer: DiscountBuyer): Promise<boolean> {
   const mine = [
-    ...(buyer.inboxKey ? [sql`regexp_replace(${storefrontOrders.emailKey}, '[+][^@]*@', '@') = ${buyer.inboxKey}`]
+    ...(buyer.inboxKey ? [and(ne(storefrontOrders.emailKey, ''), sql`regexp_replace(${storefrontOrders.emailKey}, '[+][^@]*@', '@') = ${buyer.inboxKey}`)!]
       : buyer.phoneKey ? [and(eq(storefrontOrders.phoneKey, buyer.phoneKey), eq(storefrontOrders.emailKey, ''))!] : []),
     ...(buyer.account ? [eq(storefrontOrders.buyerAccountId, buyer.account.id)] : []),
   ];

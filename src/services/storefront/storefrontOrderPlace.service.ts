@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import { orm, type DbExecutor, type DbTransaction } from '../../db/drizzle.js';
 import { customers, storefrontOrders } from '../../db/schema.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
@@ -266,7 +266,7 @@ async function placeInTransaction(
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${byEmail ? `storefront-email:${inbox}` : `storefront-phone:${order.phoneKey}`}))`);
   const [{ open }] = await tx.select({ open: sql<number>`count(*)::int` }).from(storefrontOrders)
     .where(and(
-      byEmail ? sql`regexp_replace(${storefrontOrders.emailKey}, '[+][^@]*@', '@') = ${inbox}` : and(eq(storefrontOrders.phoneKey, order.phoneKey), eq(storefrontOrders.emailKey, '')),
+      byEmail ? and(ne(storefrontOrders.emailKey, ''), sql`regexp_replace(${storefrontOrders.emailKey}, '[+][^@]*@', '@') = ${inbox}`) : and(eq(storefrontOrders.phoneKey, order.phoneKey), eq(storefrontOrders.emailKey, '')),
       inArray(storefrontOrders.status, [...OPEN_ORDER_STATUSES]),
     ));
   if (open >= settings.openOrdersPerPhone) {
