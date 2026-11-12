@@ -167,7 +167,7 @@ const quoteOf = (province, lines, discount = null) => {
   const free = settings.freeShippingThreshold && items - BigInt(discount?.amount ?? 0) >= BigInt(settings.freeShippingThreshold);
   const options = [{ code: 'post', title: 'پست پیشتاز', description: '', kind: 'cost', amount: free ? '0' : '500000', amountToman: free ? '0' : '50000', free: Boolean(free) }];
   if (province === 'تهران') options.push({ code: 'snapp', title: 'اسنپ باکس', description: 'فقط در تهران، همان روز.', kind: 'on_delivery', amount: '0', amountToman: '0', free: false });
-  return { itemsAmount: items.toString(), discount, options };
+  return { itemsAmount: items.toString(), lines: lines.map(l => ({ slug: l.slug, quantity: l.quantity, amount: l.lineAmount })), discount, options };
 };
 const orderView = o => {
   const waiting = o.status === 'awaiting_payment';
