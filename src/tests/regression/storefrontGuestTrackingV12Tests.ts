@@ -271,10 +271,22 @@ export async function runStorefrontGuestTrackingV12Tests(shouldRun: (id: string,
       await new Promise<void>(resolve => server.close(() => resolve()));
     }
 
+    // 8) 8d delta review: an order placed with the texts off keeps an unproven phone
+    await smsSwitch(false);
+    const phoneOff = `0922${tag}`;
+    phoneKeys.push(phoneMatchKey(phoneOff));
+    const offPlaced = await site().post('/api/storefront/v1/orders', order(phoneOff, `rk-track-d-${tag}`, [{ slug: slugTen, quantity: 1 }]));
+    if (offPlaced.status !== 201) wrong.push(`an order with the texts off: ${offPlaced.status}`);
+    else {
+      const [offRow] = await orm.select({ phoneProven: storefrontOrders.phoneProven }).from(storefrontOrders)
+        .where(eq(storefrontOrders.orderNumber, String(offPlaced.body.data.order.number)));
+      if (offRow?.phoneProven !== 0) wrong.push(`an order with the texts off is phone_proven ${offRow?.phoneProven}`);
+    }
+
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'the buyer\'s phone and its proof answered the order\'s own key, which read the order, and used the proof; another phone, another phone\'s proof, a number that is no order, a wrong proof and the used proof were the same 404 with the same words; a refused try left the proof good; one audit row named the order without the phone; failed tries closed one order to everyone and one visitor to every order for the hour, while another visitor still tried and a try that opened an order did not count; an order whose phone was not proven when placed did not open and left the proof good; requests naming no visitor shared no visitor budget',
+      details: 'the buyer\'s phone and its proof answered the order\'s own key, which read the order, and used the proof; another phone, another phone\'s proof, a number that is no order, a wrong proof and the used proof were the same 404 with the same words; a refused try left the proof good; one audit row named the order without the phone; failed tries closed one order to everyone and one visitor to every order for the hour, while another visitor still tried and a try that opened an order did not count; an order whose phone was not proven when placed did not open and left the proof good; requests naming no visitor shared no visitor budget; an order placed with the texts off kept phone_proven 0',
     }));
   } catch (err) {
     results.push(makeTestCase({

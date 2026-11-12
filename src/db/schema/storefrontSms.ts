@@ -59,3 +59,28 @@ export const storefrontSmsCodes = pgTable('storefront_sms_codes', {
   idx_storefront_sms_codes_message_id: index('idx_storefront_sms_codes_message_id').on(table.messageId).where(sql`${table.messageId} IS NOT NULL`),
   uq_storefront_sms_codes_proof: uniqueIndex('uq_storefront_sms_codes_proof').on(table.proofHash).where(sql`${table.proofHash} IS NOT NULL`),
 }));
+
+/**
+ * v12 phase 8e (start plan §5, owner's decision 7): the one-time email codes of the site, like `storefront_sms_codes`: an
+ * HMAC of the code and of the buyer's address, the tries and the single-use proof's SHA-256, never the code or address.
+ * `sent` = the mail server took the mail (a code whose mail failed is closed and holds no resend wait).
+ */
+export const storefrontEmailCodes = pgTable('storefront_email_codes', {
+  id: serial('id').primaryKey(),
+  emailKey: text('email_key').notNull(),
+  codeHash: text('code_hash').notNull(),
+  addressKey: text('address_key').notNull(),
+  attempts: integer('attempts').notNull().default(0),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
+  verifiedAt: timestamp('verified_at', { withTimezone: true, mode: 'string' }),
+  proofHash: text('proof_hash'),
+  proofExpiresAt: timestamp('proof_expires_at', { withTimezone: true, mode: 'string' }),
+  proofUsedAt: timestamp('proof_used_at', { withTimezone: true, mode: 'string' }),
+  sent: integer('sent').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+}, (table) => ({
+  idx_storefront_email_codes_email: index('idx_storefront_email_codes_email').on(table.emailKey, table.createdAt.desc()),
+  idx_storefront_email_codes_address: index('idx_storefront_email_codes_address').on(table.addressKey, table.createdAt.desc()),
+  idx_storefront_email_codes_created: index('idx_storefront_email_codes_created').on(table.createdAt.desc()),
+  uq_storefront_email_codes_proof: uniqueIndex('uq_storefront_email_codes_proof').on(table.proofHash).where(sql`${table.proofHash} IS NOT NULL`),
+}));

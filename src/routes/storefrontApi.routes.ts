@@ -19,6 +19,8 @@ import { myAddresses, removeAddress, setDefaultAddress } from '../services/store
 import { placeOrder, quoteShipping } from '../services/storefront/storefrontOrderPlace.service.js';
 import { buyerOrder, sendReceipt } from '../services/storefront/storefrontOrderBuyer.service.js';
 import { orderAccessByPhone } from '../services/storefront/storefrontOrderTrack.service.js';
+import { EMAIL_ADDRESS_MAX, EMAIL_PROOF_MAX } from '../lib/storefront/storefrontEmailRules.js';
+import { storefrontEmailRoutes } from './storefrontApiEmail.routes.js';
 import { ACCESS_KEY_MAX } from '../services/storefront/storefrontOrderKeys.js';
 import { publicSeo } from '../services/storefront/storefrontSeo.service.js';
 import { catalogFeed } from '../services/storefront/storefrontFeed.service.js';
@@ -289,9 +291,16 @@ const authLimiter = rateLimit({
 const password = z.string().max(PASSWORD_MAX * 2);
 // 8.4b: the phone proof of `POST /auth/otp/verify`, needed while the site signs in by SMS
 const phoneProof = z.string().max(PHONE_PROOF_MAX + 1);
-const registerSchema = z.object({ body: z.object({ name: z.string().max(200), phone: z.string().max(40), password, phoneProof: phoneProof.optional() }).strict() });
+// v12 phase 8e: a phone, an email or both; an email comes with its proof
+const email = z.string().max(EMAIL_ADDRESS_MAX + 6);
+const registerSchema = z.object({
+  body: z.object({
+    name: z.string().max(200), phone: z.string().max(40).optional(), email: email.optional(), password, phoneProof: phoneProof.optional(),
+    emailProof: z.string().max(EMAIL_PROOF_MAX + 1).optional(),
+  }).strict(),
+});
 const smsLoginSchema = z.object({ body: z.object({ phone: z.string().max(40), phoneProof }).strict() });
-const loginSchema = z.object({ body: z.object({ phone: z.string().max(40), password }).strict() });
+const loginSchema = z.object({ body: z.union([z.object({ phone: z.string().max(40), password }).strict(), z.object({ email, password }).strict()]) });
 const setPasswordSchema = z.object({ body: z.object({ token: z.string().max(BUYER_TOKEN_MAX + 1), password }).strict() });
 const applySchema = z.object({
   body: z.object({
@@ -320,6 +329,8 @@ router.post('/auth/logout', writeLimiter, asyncHandler(async (req: Request, res:
 router.post('/auth/set-password', authLimiter, validate(setPasswordSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ data: await setPasswordWithLink(req.body) });
 }));
+
+router.use(storefrontEmailRoutes({ writeLimiter, authLimiter, otpLimiter, buyerAddress, sessionOf }));
 
 router.post('/wholesale/apply', authLimiter, validate(applySchema), asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json({ data: await applyForWholesale(req.body, sessionOf(req)) });

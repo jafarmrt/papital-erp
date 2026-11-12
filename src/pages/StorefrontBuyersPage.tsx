@@ -71,7 +71,7 @@ export default function StorefrontBuyersPage() {
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-2 text-sm text-slate-600">
                   <span className="truncate">{row.companyName ? `${row.name} · ` : ''}{row.city || '—'}</span>
-                  <span dir="ltr" className="shrink-0">{formatPersianCode(row.phone)}</span>
+                  <span dir="ltr" className="shrink-0">{row.phone ? formatPersianCode(row.phone) : row.email}</span>
                 </div>
                 <div className="mt-1 flex items-center justify-between gap-2 text-xs text-slate-500">
                   <span>{formatPersianDateTime(row.appliedAt ?? row.createdAt)}</span>

@@ -11226,13 +11226,15 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v12 phase 7d (site review 1.3, 2.10): the retail cap and a guest's phone proof at the order
   const { runStorefrontGuestProofV12Tests } = await import('../regression/storefrontGuestProofV12Tests.js');
   results.push(...await runStorefrontGuestProofV12Tests(shouldRun));
-  const { runStorefrontEmailSettingsV12Tests } = await import('../regression/storefrontEmailSettingsV12Tests.js');
-  results.push(...await runStorefrontEmailSettingsV12Tests(shouldRun));
   // v12 phase 8c (site review 2.5): the buyer apart from the recipient, the gift and the address book
   const { runStorefrontBuyerRecipientV12Tests } = await import('../regression/storefrontBuyerRecipientV12Tests.js');
   results.push(...await runStorefrontBuyerRecipientV12Tests(shouldRun));
   const { runStorefrontGuestTrackingV12Tests } = await import('../regression/storefrontGuestTrackingV12Tests.js');
   results.push(...await runStorefrontGuestTrackingV12Tests(shouldRun));
+  const { runStorefrontEmailSettingsV12Tests } = await import('../regression/storefrontEmailSettingsV12Tests.js');
+  results.push(...await runStorefrontEmailSettingsV12Tests(shouldRun));
+  const { runStorefrontEmailAccountsV12Tests } = await import('../regression/storefrontEmailAccountsV12Tests.js');
+  results.push(...await runStorefrontEmailAccountsV12Tests(shouldRun));
 
   return results;
 }

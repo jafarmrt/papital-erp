@@ -69,9 +69,12 @@ function BuyerBody({ buyer, canManage, busy, run }: { buyer: BuyerAccountDetail;
     <div className="space-y-4 text-sm">
       <dl className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white px-4">
         <Row label="نام">{buyer.name}</Row>
-        <Row label="شمارهٔ همراه">
-          <a href={`tel:${buyer.phone}`} dir="ltr" className="inline-flex items-center gap-1 font-bold text-violet-700"><Phone className="h-3.5 w-3.5" />{formatPersianCode(buyer.phone)}</a>
-        </Row>
+        {buyer.phone && (
+          <Row label="شمارهٔ همراه">
+            <a href={`tel:${buyer.phone}`} dir="ltr" className="inline-flex items-center gap-1 font-bold text-violet-700"><Phone className="h-3.5 w-3.5" />{formatPersianCode(buyer.phone)}</a>
+          </Row>
+        )}
+        {buyer.email && <Row label="ایمیل"><a href={`mailto:${buyer.email}`} dir="ltr" className="font-bold text-violet-700">{buyer.email}</a></Row>}
         {buyer.companyName && <Row label="فروشگاه یا شرکت">{buyer.companyName}</Row>}
         {buyer.city && <Row label="شهر">{buyer.city}</Row>}
         {buyer.nationalId && <Row label="شناسهٔ ملی">{formatPersianCode(buyer.nationalId)}</Row>}
@@ -81,7 +84,8 @@ function BuyerBody({ buyer, canManage, busy, run }: { buyer: BuyerAccountDetail;
         {buyer.appliedAt && <Row label="زمان درخواست">{formatPersianDateTime(buyer.appliedAt)}</Row>}
         {buyer.reviewedBy && <Row label="بررسی">{buyer.reviewedBy}{buyer.reviewedAt ? `، ${formatPersianDateTime(buyer.reviewedAt)}` : ''}</Row>}
         <Row label="رمز">{buyer.hasPassword ? 'گذاشته شده' : 'هنوز ندارد'}</Row>
-        <Row label="تأیید شماره">{buyer.phoneVerified ? 'با پیامک تأیید شده' : 'با پیامک تأیید نشده'}</Row>
+        {buyer.phone && <Row label="تأیید شماره">{buyer.phoneVerified ? 'با پیامک تأیید شده' : 'با پیامک تأیید نشده'}</Row>}
+        {buyer.email && <Row label="تأیید ایمیل">{buyer.emailVerified ? 'با کد ایمیلی تأیید شده' : 'تأیید نشده'}</Row>}
         {buyer.passwordLinkExpiresAt && <Row label="پیوند تعیین رمز">تا {formatPersianDateTime(buyer.passwordLinkExpiresAt)}</Row>}
         {buyer.lastLoginAt && <Row label="آخرین ورود">{formatPersianDateTime(buyer.lastLoginAt)}</Row>}
         {buyer.lockedUntil && <Row label="قفل ورود">تا {formatPersianDateTime(buyer.lockedUntil)}</Row>}
@@ -180,9 +184,11 @@ function PasswordLinkBox({ answer }: { answer: PasswordLinkAnswer }) {
       <p className="text-sm font-black text-emerald-800">پیوند تعیین رمز (فقط همین یک بار نشان داده می‌شود)</p>
       <p dir="ltr" className="break-all rounded-xl bg-white p-2 text-xs text-slate-700">{url}</p>
       <div className="flex flex-wrap gap-2">
-        <a href={whatsapp} target="_blank" rel="noopener noreferrer" className={`${button} inline-flex items-center gap-1 bg-emerald-600 text-white`}>
-          <MessageCircle className="h-4 w-4" />فرستادن در واتس‌اپ
-        </a>
+        {answer.account.phone && (
+          <a href={whatsapp} target="_blank" rel="noopener noreferrer" className={`${button} inline-flex items-center gap-1 bg-emerald-600 text-white`}>
+            <MessageCircle className="h-4 w-4" />فرستادن در واتس‌اپ
+          </a>
+        )}
         <button type="button" onClick={copy} className={`${button} inline-flex items-center gap-1 border border-emerald-300 text-emerald-800`}>
           <Copy className="h-4 w-4" />کپی پیوند
         </button>

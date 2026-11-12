@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 603
+تعداد مسیرها: 609
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -491,16 +491,22 @@
 | GET | `/api/storefront/v1/account/addresses` | public |
 | DELETE | `/api/storefront/v1/account/addresses/:id` | public |
 | POST | `/api/storefront/v1/account/addresses/:id/default` | public |
+| POST | `/api/storefront/v1/account/email` | public |
 | GET | `/api/storefront/v1/account/orders` | public |
 | GET | `/api/storefront/v1/account/orders/:number` | public |
 | POST | `/api/storefront/v1/account/orders/:number/receipts` | public |
 | POST | `/api/storefront/v1/account/orders/claim` | public |
+| POST | `/api/storefront/v1/account/phone` | public |
 | GET | `/api/storefront/v1/account/prices` | public |
+| POST | `/api/storefront/v1/auth/email-code/request` | public |
+| POST | `/api/storefront/v1/auth/email-code/verify` | public |
+| POST | `/api/storefront/v1/auth/email-login` | public |
 | POST | `/api/storefront/v1/auth/login` | public |
 | POST | `/api/storefront/v1/auth/logout` | public |
 | POST | `/api/storefront/v1/auth/otp/request` | public |
 | POST | `/api/storefront/v1/auth/otp/verify` | public |
 | POST | `/api/storefront/v1/auth/register` | public |
+| POST | `/api/storefront/v1/auth/reset-password` | public |
 | POST | `/api/storefront/v1/auth/set-password` | public |
 | POST | `/api/storefront/v1/auth/sms-login` | public |
 | GET | `/api/storefront/v1/brand` | public |

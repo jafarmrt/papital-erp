@@ -183,6 +183,13 @@
       "when": 1798012800000,
       "tag": "0025_storefront_order_phone_proven",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1798099200000,
+      "tag": "0026_storefront_email_accounts",
+      "breakpoints": true
     }
   ]
 }

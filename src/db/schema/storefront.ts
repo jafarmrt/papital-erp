@@ -215,12 +215,18 @@ export const storefrontBuyerAccounts = pgTable('storefront_buyer_accounts', {
   lastLoginAt: timestamp('last_login_at', { withTimezone: true, mode: 'string' }),
   /** v11 phase 8.4b: when an SMS code proved the phone; null = not proven */
   phoneVerifiedAt: timestamp('phone_verified_at', { withTimezone: true, mode: 'string' }),
+  /** v12 phase 8e: the account's email as typed and its matching key ('' = none; phone and email are never both '') */
+  email: text('email').notNull().default(''),
+  emailKey: text('email_key').notNull().default(''),
+  /** when an email code proved the email (every stored email is proven) */
+  emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true, mode: 'string' }),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedBy: text('updated_by').notNull().default(''),
   version: integer('version').notNull().default(1),
 }, (table) => ({
-  uq_storefront_buyer_accounts_phone_key: uniqueIndex('uq_storefront_buyer_accounts_phone_key').on(table.phoneKey),
+  uq_storefront_buyer_accounts_phone_key: uniqueIndex('uq_storefront_buyer_accounts_phone_key').on(table.phoneKey).where(sql`${table.phoneKey} <> ''`),
+  uq_storefront_buyer_accounts_email_key: uniqueIndex('uq_storefront_buyer_accounts_email_key').on(table.emailKey).where(sql`${table.emailKey} <> ''`),
   idx_storefront_buyer_accounts_group_id: index('idx_storefront_buyer_accounts_group_id').on(table.groupId).where(sql`${table.groupId} IS NOT NULL`),
   idx_storefront_buyer_accounts_customer_id: index('idx_storefront_buyer_accounts_customer_id').on(table.customerId).where(sql`${table.customerId} IS NOT NULL`),
   idx_storefront_buyer_accounts_application: index('idx_storefront_buyer_accounts_application').on(table.applicationStatus, table.appliedAt.desc(), table.id.desc()),
