@@ -98,6 +98,22 @@ export async function accountView(executor: DbExecutor, account: AccountRecord):
 }
 
 /** Ends every live session of an account (inside the caller's transaction) */
+/**
+ * v12 phase 8e review: whoever made an account with a phone nobody proved may not own that phone; an email they added
+ * would outlive the phone owner taking the account over (an SMS sign-in, an SMS password reset, a colleague's approval),
+ * so every takeover drops it too, with the password and the sessions.
+ */
+export const DROP_EMAIL = { email: '', emailKey: '', emailVerifiedAt: null } as const;
+
+/** v12 phase 8e review: the id of the live session a token names (0 = none), to keep it while the others end */
+export async function currentSessionId(executor: DbExecutor, rawToken: unknown): Promise<number> {
+  const token = presentedToken(rawToken, SESSION_TOKEN_PREFIX);
+  if (!token) return 0;
+  const [row] = await executor.select({ id: storefrontBuyerSessions.id }).from(storefrontBuyerSessions)
+    .where(and(eq(storefrontBuyerSessions.tokenHash, tokenHash(token)), isNull(storefrontBuyerSessions.revokedAt)));
+  return row?.id ?? 0;
+}
+
 export async function revokeSessions(tx: DbExecutor, accountId: number, exceptId?: number): Promise<void> {
   const conditions = [eq(storefrontBuyerSessions.accountId, accountId), isNull(storefrontBuyerSessions.revokedAt)];
   if (exceptId !== undefined) conditions.push(sql`${storefrontBuyerSessions.id} <> ${exceptId}`);
@@ -230,7 +246,7 @@ export async function smsSignIn(input: SmsLoginRequest): Promise<StorefrontSessi
     const takeover = !account.phoneVerifiedAt;
     const updated = {
       phoneVerifiedAt: account.phoneVerifiedAt ?? now, failedLogins: 0, lockedUntil: null, lastLoginAt: now,
-      ...(takeover ? { passwordHash: '', updatedAt: now, updatedBy: STOREFRONT_BOT_USER, version: nextVersion(account.version) } : {}),
+      ...(takeover ? { passwordHash: '', ...DROP_EMAIL, updatedAt: now, updatedBy: STOREFRONT_BOT_USER, version: nextVersion(account.version) } : {}),
     };
     await tx.update(storefrontBuyerAccounts).set(updated).where(eq(storefrontBuyerAccounts.id, account.id));
     if (takeover) {
@@ -241,7 +257,8 @@ export async function smsSignIn(input: SmsLoginRequest): Promise<StorefrontSessi
         .where(and(eq(storefrontPasswordTokens.accountId, account.id), isNull(storefrontPasswordTokens.usedAt)));
       await logActivity({
         tx, username: STOREFRONT_BOT_USER, action: 'UPDATE', entity: 'حساب خریدار سایت', entityId: account.id,
-        description: `شمارهٔ ${account.phone} با پیامک تأیید شد؛ رمز و نشست‌های پیشین حساب پاک شد`, details: { hadPassword: Boolean(account.passwordHash) },
+        description: `شمارهٔ ${account.phone} با پیامک تأیید شد؛ رمز، ایمیل و نشست‌های پیشین حساب پاک شد`,
+        details: { before: { passwordSet: Boolean(account.passwordHash), emailSet: Boolean(account.emailKey) }, after: { passwordSet: false, emailSet: false } },
       });
     }
     return newSession(tx, { ...account, ...updated });

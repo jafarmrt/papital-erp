@@ -16,7 +16,7 @@ import type {
 } from '../../lib/storefront/storefrontBuyerContracts.js';
 import { findActiveCustomerByPhone } from '../customers/customerIdentity.js';
 import { resolveSiteCustomer } from './storefrontCustomer.js';
-import { nowPlus, revokeSessions, type AccountRecord } from './storefrontBuyerAuth.service.js';
+import { DROP_EMAIL, nowPlus, revokeSessions, type AccountRecord } from './storefrontBuyerAuth.service.js';
 import { PASSWORD_TOKEN_PREFIX, newToken, tokenHash } from './storefrontBuyerSecrets.js';
 
 /**
@@ -65,7 +65,7 @@ export async function listBuyerAccounts(query: { page: number; limit: number; q:
   const q = query.q.trim();
   if (q) {
     const matches: SQL[] = [];
-    const text = foldedContains([storefrontBuyerAccounts.name, storefrontBuyerAccounts.companyName, storefrontBuyerAccounts.city], q);
+    const text = foldedContains([storefrontBuyerAccounts.name, storefrontBuyerAccounts.companyName, storefrontBuyerAccounts.city, storefrontBuyerAccounts.emailKey], q);
     if (text) matches.push(text);
     const phoneKey = phoneSearchKey(q);
     if (phoneKey) matches.push(foldedContains([storefrontBuyerAccounts.phoneKey], phoneKey)!);
@@ -153,9 +153,11 @@ export async function approveBuyer(req: Request, id: number, input: ApproveBuyer
     const customer = await customerForApproval(tx, account, input.customerId);
     const now = systemNowUtcIso();
     // 8.4b: an SMS-proven phone keeps its password and sessions; an unproven one may not be the buyer the colleague spoke to
-    const proven = Boolean(account.phoneVerifiedAt);
+    // v12 phase 8e review: an account with no phone has its proven email as its one way in; an unproven phone loses the
+    // email its maker added with the password, so the link reaches the phone's owner alone
+    const proven = account.phone ? Boolean(account.phoneVerifiedAt) : Boolean(account.emailVerifiedAt);
     await tx.update(storefrontBuyerAccounts).set({
-      groupId: group.id, customerId: customer.id, applicationStatus: 'approved', status: 'active', ...(proven ? {} : { passwordHash: '' }), failedLogins: 0,
+      groupId: group.id, customerId: customer.id, applicationStatus: 'approved', status: 'active', ...(proven ? {} : { passwordHash: '', ...DROP_EMAIL }), failedLogins: 0,
       lockedUntil: null, reviewedBy: actor, reviewedAt: now, updatedAt: now, updatedBy: actor, version: nextVersion(account.version),
     }).where(eq(storefrontBuyerAccounts.id, id));
     if (!proven) await revokeSessions(tx, id);
@@ -163,7 +165,10 @@ export async function approveBuyer(req: Request, id: number, input: ApproveBuyer
     await logActivity({
       req, tx, action: 'UPDATE', entity: 'حساب خریدار سایت', entityId: id,
       description: `درخواست خرید عمدهٔ «${account.companyName || account.name}» در گروه «${group.title}» تأیید شد`,
-      details: { before: { applicationStatus: account.applicationStatus, status: account.status }, after: { groupId: group.id, customerId: customer.id }, passwordLink: true },
+      details: {
+        before: { applicationStatus: account.applicationStatus, status: account.status, ...(proven ? {} : { emailSet: Boolean(account.emailKey) }) },
+        after: { groupId: group.id, customerId: customer.id, ...(proven ? {} : { emailSet: false }) }, passwordLink: true,
+      },
     });
     return issued;
   });

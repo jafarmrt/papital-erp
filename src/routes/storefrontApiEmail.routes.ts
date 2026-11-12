@@ -1,4 +1,5 @@
 import { Router, type Request, type RequestHandler, type Response } from 'express';
+import { ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { validate } from '../middleware/validate.js';
@@ -36,15 +37,15 @@ const resetSchema = z.object({
     z.object({ email, emailProof, password }).strict(),
   ]),
 });
-const accountEmailSchema = z.object({ body: z.object({ email, emailProof }).strict() });
-const accountPhoneSchema = z.object({ body: z.object({ phone: z.string().max(40), phoneProof }).strict() });
+const accountEmailSchema = z.object({ body: z.object({ email, emailProof, password: password.optional() }).strict() });
+const accountPhoneSchema = z.object({ body: z.object({ phone: z.string().max(40), phoneProof, password: password.optional() }).strict() });
 
 export function storefrontEmailRoutes(deps: EmailRouteDeps): Router {
   const router = Router();
   const { writeLimiter, authLimiter, otpLimiter, buyerAddress, sessionOf } = deps;
 
   router.post('/auth/email-code/request', writeLimiter, otpLimiter, validate(codeRequestSchema), asyncHandler(async (req: Request, res: Response) => {
-    res.json({ data: await requestEmailCode(req.body.email, buyerAddress(req)) });
+    res.json({ data: await requestEmailCode(req.body.email, ipKeyGenerator(buyerAddress(req))) });
   }));
 
   router.post('/auth/email-code/verify', writeLimiter, validate(codeVerifySchema), asyncHandler(async (req: Request, res: Response) => {

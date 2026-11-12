@@ -27,7 +27,7 @@ ALTER TABLE storefront_buyer_accounts ADD CONSTRAINT chk_storefront_buyer_accoun
 --> statement-breakpoint
 ALTER TABLE storefront_buyer_accounts ADD CONSTRAINT chk_storefront_buyer_accounts_email_verified CHECK (email_key = '' OR email_verified_at IS NOT NULL);
 --> statement-breakpoint
-DROP INDEX IF EXISTS uq_storefront_buyer_accounts_phone_key;
+DO $$ BEGIN EXECUTE format('DROP INDEX IF EXISTS %I.uq_storefront_buyer_accounts_phone_key', current_schema()); END $$;
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS uq_storefront_buyer_accounts_phone_key ON storefront_buyer_accounts (phone_key) WHERE phone_key <> '';
 --> statement-breakpoint

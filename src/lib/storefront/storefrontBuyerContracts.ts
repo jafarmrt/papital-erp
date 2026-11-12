@@ -170,12 +170,16 @@ export interface ResetPasswordRequest {
 export interface AccountEmailRequest {
   email: string;
   emailProof: string;
+  /** v12 phase 8e review: the account's password, needed to replace an email it already has (not to add a first one) */
+  password?: string;
 }
 
 /** v12 phase 8e: `POST /account/phone` */
 export interface AccountPhoneRequest {
   phone: string;
   phoneProof: string;
+  /** v12 phase 8e review: the account's password, needed to replace a phone it already has (not to add a first one) */
+  password?: string;
 }
 
 /** v11 phase 8.4b: `POST /auth/sms-login` */
