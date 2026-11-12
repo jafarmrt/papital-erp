@@ -55,6 +55,8 @@ function clearProofs(headers: Headers) {
   headers.append('Set-Cookie', clearKeptProofCookie(EMAIL_PROOF_COOKIE, '/account'));
 }
 
+const PROOF_EXPIRED = 'مهلت تأیید گذشت؛ دوباره کد بخواهید و تأیید کنید.';
+
 export async function action({ request }: Route.ActionArgs): Promise<ActionAnswer | Response> {
   if (!sameSite(request)) return crossSite();
   const settings = await publicSettings();
@@ -95,6 +97,8 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionAnswe
     // with no code ways on the account is made as in 8.2b, with an unproven phone
     const extraPhone = typedPhone ? normalizePhone(typedPhone) : '';
     // with no code ways on the phone is the account's one way in, as in 8.2b
+    // delta review: with a code way on and no proof kept, the proof ran out (ten minutes): ask for a new code
+    if (!proven && (ways.sms || ways.email) && !typedPhone) return { step: 'contact', contact: '', error: PROOF_EXPIRED };
     if ((typedPhone && !extraPhone) || (!proven && !extraPhone)) return { step: 'details', contact: '', name, error: 'شمارهٔ همراه را درست بنویسید (مانند ۰۹۱۲۱۲۳۴۵۶۷).', stamp, phone: typedPhone };
     const body = {
       name, password: String(form.get('password') ?? '').slice(0, 200),

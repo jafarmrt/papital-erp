@@ -105,7 +105,8 @@ export async function action({ request }: Route.ActionArgs) {
     const contact = contactOf(form.get('contact'));
     if (!contact) return { number, by: 'phone', error: contactWrong(ways.sms, ways.email) } satisfies Answer;
     if (intent === 'send-code') {
-      const sent = await sendCode(request, contact, ways);
+      // with the email off, a phone's 404 says what 8d said: the tracking key or «حساب من»
+      const sent = await sendCode(request, contact, ways, 'پیگیری با کد پیامکی اکنون در دسترس نیست؛ با کد پیگیری سفارش یا از «حساب من» پیگیری کنید.');
       // a code sent a moment ago (429, «wait a little») still works: the code field stays
       return sent.error && !sent.wait ? { number, by: 'phone', error: sent.error } satisfies Answer
         : { number, by: 'phone', codeFor: contact.value, error: sent.error || undefined } satisfies Answer;

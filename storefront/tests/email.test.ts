@@ -79,6 +79,13 @@ describe('email accounts and orders', () => {
     expect((await lastPost()).body).toMatchObject({ email: EMAIL, emailProof: expect.stringMatching(/^ep_mock/) });
   });
 
+  it('asks for a new code when the sign-up proof ran out, never for a phone', async () => {
+    const expired = await post('/account/sign-up', { intent: 'register', name: 'دیرکرده', password: 'رمز-آزمون-1405', phone: '', formAt: await stamp() });
+    expect(expired.html).toContain('مهلت تأیید گذشت');
+    expect(expired.html).not.toContain('شمارهٔ همراه را درست بنویسید');
+    expect(expired.html).toContain('name="contact"');
+  });
+
   it('signs in by an email code and by the email and password, and sets a forgotten password by an email code', async () => {
     const asked = await post('/account/sign-in', { intent: 'send-code', contact: EMAIL, next: '/' });
     expect(asked.html).toContain('کد ورود به ایمیل');

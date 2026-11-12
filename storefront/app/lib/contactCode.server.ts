@@ -25,7 +25,7 @@ export const contactWrong = (sms: boolean, email: boolean) => sms && email
 export { contactLabel } from './contactLabel';
 
 const SMS_OFF_EMAIL = 'کد پیامکی اکنون فرستاده نمی‌شود؛ با ایمیل ادامه دهید.';
-const SMS_OFF = 'کد پیامکی اکنون فرستاده نمی‌شود؛ با کد پیگیری سفارش، رمز حساب یا از «حساب من» ادامه دهید.';
+const SMS_OFF = 'کد پیامکی اکنون فرستاده نمی‌شود؛ کمی بعد دوباره امتحان کنید.';
 const EMAIL_OFF = 'کد ایمیلی اکنون فرستاده نمی‌شود؛ با شمارهٔ همراه ادامه دهید.';
 
 /**
@@ -33,13 +33,15 @@ const EMAIL_OFF = 'کد ایمیلی اکنون فرستاده نمی‌شود؛
  * 404, said here as that way being off now (pointing to email only while the email is on). `wait` = the ERP asked to
  * wait a little (429): a code sent a moment ago still works, so the code field stays.
  */
-export async function sendCode(request: Request, contact: Contact, ways: { sms: boolean; email: boolean }): Promise<{ error: string; wait: boolean }> {
+export async function sendCode(
+  request: Request, contact: Contact, ways: { sms: boolean; email: boolean }, smsOff = SMS_OFF,
+): Promise<{ error: string; wait: boolean }> {
   const answer = contact.kind === 'phone'
     ? await accountCall(request, 'POST', '/auth/otp/request', { phone: contact.value })
     : await accountCall(request, 'POST', '/auth/email-code/request', { email: contact.value });
   if (answer.status === (contact.kind === 'phone' ? 202 : 200)) return { error: '', wait: false };
   const off = answer.status === 404 || answer.code === 'STOREFRONT_SMS_PAUSED';
-  if (off) return { error: contact.kind === 'phone' ? (ways.email ? SMS_OFF_EMAIL : SMS_OFF) : EMAIL_OFF, wait: false };
+  if (off) return { error: contact.kind === 'phone' ? (ways.email ? SMS_OFF_EMAIL : smsOff) : EMAIL_OFF, wait: false };
   return { error: answer.error, wait: answer.status === 429 };
 }
 
