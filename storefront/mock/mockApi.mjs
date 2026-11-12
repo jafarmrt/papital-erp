@@ -92,6 +92,8 @@ const session = a => {
 
 async function auth(req, res, route) {
   const body = await readBody(req);
+  // v12 phase 8e: what a sign-up or a reset sent, for the tests (codes and proofs are made-up mock values)
+  if (route === '/auth/register' || route === '/auth/reset-password') lastPost = { route, orderKey: '', session: '', body };
   const phone = String(body.phone ?? '');
   const refuse = (status, code, error) => send(res, status, { error, code });
   if (route === '/auth/otp/request') return /^09\d{9}$/.test(phone) ? send(res, 202, { data: { resendAfter: 60, expiresIn: 180 } }) : refuse(422, 'STOREFRONT_OTP_PHONE_INVALID', 'شمارهٔ همراه را درست بنویسید.');
@@ -142,7 +144,7 @@ async function auth(req, res, route) {
   }
   if (route === '/auth/login') {
     const account = findAccount({ phone, email });
-    return account && account.password === body.password ? send(res, 200, { data: session(account) }) : refuse(401, 'STOREFRONT_SIGN_IN_FAILED', 'شمارهٔ همراه، ایمیل یا رمز درست نیست.');
+    return account && account.password === body.password ? send(res, 200, { data: session(account) }) : refuse(401, 'STOREFRONT_SIGN_IN_FAILED', 'شمارهٔ همراه یا رمز درست نیست.');
   }
   if (route === '/auth/set-password') {
     if (body.token !== 'pw_mocklink0001') return refuse(404, 'STOREFRONT_PASSWORD_LINK_INVALID', 'این پیوند تعیین رمز دیگر کار نمی‌کند.');

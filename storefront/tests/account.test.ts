@@ -56,22 +56,22 @@ describe('account pages', () => {
     const { status, html } = await page('/account/sign-in');
     expect(status).toBe(200);
     expect(html).toContain('فرستادن کد ورود');
-    expect(html).toMatch(/autocomplete="tel"/i);
+    expect(html).toMatch(/name="contact"/i);
     expect(html).toContain('ورود با رمز');
     expect(html).toContain('name="robots" content="noindex"');
   });
 
   it('sends a code, then signs a new phone on to the sign-up with its proof kept in an httpOnly cookie', async () => {
-    const sent = await post('/account/sign-in', { intent: 'send-code', phone: '۰۹۱۲ ۳۴۵ ۶۷۸۹', next: '/' }, { 'X-Real-IP': '203.0.113.7' });
+    const sent = await post('/account/sign-in', { intent: 'send-code', contact: '۰۹۱۲ ۳۴۵ ۶۷۸۹', next: '/' }, { 'X-Real-IP': '203.0.113.7' });
     expect(sent.status).toBe(200);
     expect(sent.html).toContain('one-time-code');
     expect(sent.html).toContain('09123456789');
     expect((await last()).clientIp).toBe('203.0.113.7');
 
-    const wrongCode = await post('/account/sign-in', { intent: 'verify-code', phone: '09123456789', code: '000000', next: '/' });
+    const wrongCode = await post('/account/sign-in', { intent: 'verify-code', contact: '09123456789', code: '000000', next: '/' });
     expect(wrongCode.html).toContain('کد درست نیست');
 
-    const verified = await post('/account/sign-in', { intent: 'verify-code', phone: '09123456789', code: '123456', next: '/p/tile-necklace-sample' });
+    const verified = await post('/account/sign-in', { intent: 'verify-code', contact: '09123456789', code: '123456', next: '/p/tile-necklace-sample' });
     expect(verified.status).toBe(302);
     expect(verified.location).toBe('/account/sign-up?next=%2Fp%2Ftile-necklace-sample');
     const proof = verified.cookies.find(c => c.startsWith('sf_proof='));
@@ -97,39 +97,39 @@ describe('account pages', () => {
   });
 
   it('signs an existing phone in by SMS, and by password', async () => {
-    const sms = await post('/account/sign-in', { intent: 'verify-code', phone: '09123456789', code: '123456', next: '/' });
+    const sms = await post('/account/sign-in', { intent: 'verify-code', contact: '09123456789', code: '123456', next: '/' });
     expect(sms.status).toBe(302);
     expect(sms.location).toBe('/');
     expect(cookieValue(sms.cookies, 'sf_session')).toMatch(/^sf_session=bs_/);
 
-    const bad = await post('/account/sign-in', { intent: 'password', phone: '09123456789', password: 'not-the-password' });
+    const bad = await post('/account/sign-in', { intent: 'password', contact: '09123456789', password: 'not-the-password' });
     expect(bad.status).toBe(200);
     expect(bad.html).toContain('شمارهٔ همراه یا رمز درست نیست');
-    const good = await post('/account/sign-in', { intent: 'password', phone: '09123456789', password: 'رمز-آزمون-1405' });
+    const good = await post('/account/sign-in', { intent: 'password', contact: '09123456789', password: 'رمز-آزمون-1405' });
     expect(good.status).toBe(302);
     expect(cookieValue(good.cookies, 'sf_session')).toMatch(/^sf_session=bs_/);
   });
 
   it('never sends a buyer to another site after signing in', async () => {
-    const away = await post('/account/sign-in', { intent: 'password', phone: '09123456789', password: 'رمز-آزمون-1405', next: '//evil.example/x' });
+    const away = await post('/account/sign-in', { intent: 'password', contact: '09123456789', password: 'رمز-آزمون-1405', next: '//evil.example/x' });
     expect(away.location).toBe('/');
     for (const next of ['/\t/evil.example', '/%09/evil.example', '/\\evil.example', '/\n/evil.example', 'https://evil.example', '/a\\b']) {
-      const tricked = await post('/account/sign-in', { intent: 'password', phone: '09123456789', password: 'رمز-آزمون-1405', next });
+      const tricked = await post('/account/sign-in', { intent: 'password', contact: '09123456789', password: 'رمز-آزمون-1405', next });
       expect(tricked.location, next).toBe(next === '/%09/evil.example' ? next : '/');
     }
-    const kept = await post('/account/sign-in', { intent: 'password', phone: '09123456789', password: 'رمز-آزمون-1405', next: '/p/tile-necklace-sample?x=1#top' });
+    const kept = await post('/account/sign-in', { intent: 'password', contact: '09123456789', password: 'رمز-آزمون-1405', next: '/p/tile-necklace-sample?x=1#top' });
     expect(kept.location).toBe('/p/tile-necklace-sample?x=1#top');
   });
 
   it('refuses account forms posted from another site', async () => {
     for (const pathname of ['/account/sign-in', '/account/sign-up', '/account/set-password', '/account/sign-out']) {
-      const fromAway = await post(pathname, { intent: 'password', phone: '09123456789', password: 'رمز-آزمون-1405' }, { Origin: 'https://evil.example' });
+      const fromAway = await post(pathname, { intent: 'password', contact: '09123456789', password: 'رمز-آزمون-1405' }, { Origin: 'https://evil.example' });
       expect([400, 403], pathname).toContain(fromAway.status); // React Router's own guard answers 400 first
       expect(fromAway.cookies, pathname).toEqual([]);
-      const fetchSite = await post(pathname, { intent: 'password', phone: '09123456789', password: 'رمز-آزمون-1405' }, { 'Sec-Fetch-Site': 'cross-site' });
+      const fetchSite = await post(pathname, { intent: 'password', contact: '09123456789', password: 'رمز-آزمون-1405' }, { 'Sec-Fetch-Site': 'cross-site' });
       expect(fetchSite.status, pathname).toBe(403);
     }
-    const ownSite = await post('/account/sign-in', { intent: 'password', phone: '09123456789', password: 'رمز-آزمون-1405' }, { Origin: 'https://shop.example', 'Sec-Fetch-Site': 'same-origin' });
+    const ownSite = await post('/account/sign-in', { intent: 'password', contact: '09123456789', password: 'رمز-آزمون-1405' }, { Origin: 'https://shop.example', 'Sec-Fetch-Site': 'same-origin' });
     expect(ownSite.status).toBe(302);
   });
 

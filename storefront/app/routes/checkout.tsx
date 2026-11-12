@@ -440,7 +440,7 @@ export default function CheckoutPage({ loaderData, actionData }: Route.Component
 
         {options && options.length && answer?.codeFor ? (
           <div className="space-y-3 border-t border-border pt-5">
-            {answer.field !== 'code' ? <FormNote>کد تأیید {answer.codeVia === 'email' ? 'به ایمیل' : 'با پیامک به'} <span dir="ltr">{answer.codeFor}</span> فرستاده شد. آن را بنویسید و سفارش را ثبت کنید.</FormNote> : null}
+            {answer.field !== 'code' ? <FormNote>{`کد تأیید ${answer.codeVia === 'email' ? 'به ایمیل' : 'با پیامک به'} `}<span dir="ltr">{answer.codeFor}</span>{' فرستاده شد. آن را بنویسید و سفارش را ثبت کنید.'}</FormNote> : null}
             <input type="hidden" name="codeFor" value={answer.codeFor} />
             <CodeField />
           </div>

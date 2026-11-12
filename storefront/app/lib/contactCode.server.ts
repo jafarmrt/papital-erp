@@ -27,16 +27,17 @@ export { contactLabel } from './contactLabel';
 const SMS_OFF = 'کد پیامکی اکنون فرستاده نمی‌شود؛ با ایمیل ادامه دهید.';
 const EMAIL_OFF = 'کد ایمیلی اکنون فرستاده نمی‌شود؛ با شمارهٔ همراه ادامه دهید.';
 
-/** Sends a code to the contact; '' when it went, else the words to show */
-export async function sendCode(request: Request, contact: Contact, ways: { sms: boolean; email: boolean }): Promise<string> {
+/**
+ * Sends a code to the contact; '' when it went, else the words to show. The site's settings may be a minute old, so the
+ * ERP decides: a way it has off answers 404, said here as that way being off now.
+ */
+export async function sendCode(request: Request, contact: Contact, _ways?: { sms: boolean; email: boolean }): Promise<string> {
   if (contact.kind === 'phone') {
-    if (!ways.sms) return SMS_OFF;
     const answer = await accountCall(request, 'POST', '/auth/otp/request', { phone: contact.value });
-    return answer.status === 202 ? '' : answer.error;
+    return answer.status === 202 ? '' : answer.status === 404 || answer.code === 'STOREFRONT_SMS_PAUSED' ? SMS_OFF : answer.error;
   }
-  if (!ways.email) return EMAIL_OFF;
   const answer = await accountCall(request, 'POST', '/auth/email-code/request', { email: contact.value });
-  return answer.status === 200 ? '' : answer.error;
+  return answer.status === 200 ? '' : answer.status === 404 ? EMAIL_OFF : answer.error;
 }
 
 /** Checks the code the buyer typed: the single-use proof it gives, or the words to show */

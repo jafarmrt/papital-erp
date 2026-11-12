@@ -67,7 +67,7 @@ export default function AccountContactPage({ loaderData, actionData }: Route.Com
   const answer = actionData as ActionAnswer | undefined;
   const busy = useNavigation().state === 'submitting';
   const step: Step = answer?.step === 'code' ? 'code' : 'contact';
-  const typedEmail = answer?.contact.includes('@') === true;
+  const typedEmail = answer?.contact?.includes('@') === true;
   const replacing = step === 'code' && (typedEmail ? Boolean(email) : Boolean(phone));
 
   if (!smsLogin && !emailLogin) {
@@ -89,7 +89,7 @@ export default function AccountContactPage({ loaderData, actionData }: Route.Com
       {step === 'code' && answer && (
         <Form method="post" className="space-y-5" replace>
           <input type="hidden" name="contact" value={answer.contact} />
-          {answer.error ? <FormError message={answer.error} /> : <FormNote>کد تأیید {typedEmail ? 'به ایمیل' : 'با پیامک به'} <span dir="ltr">{answer.contact}</span> فرستاده شد.</FormNote>}
+          {answer.error ? <FormError message={answer.error} /> : <FormNote>{`کد تأیید ${typedEmail ? 'به ایمیل' : 'با پیامک به'} `}<span dir="ltr">{answer.contact}</span>{' فرستاده شد.'}</FormNote>}
           <CodeField />
           {replacing && <Field label="رمز حساب" name="password" type="password" autoComplete="current-password" dir="ltr" maxLength={200} hint={`برای عوض کردن ${typedEmail ? 'ایمیل' : 'شمارهٔ'} حساب، رمز حساب را هم بنویسید.`} />}
           <SubmitButton intent="save" busy={busy}>تأیید و ذخیره</SubmitButton>

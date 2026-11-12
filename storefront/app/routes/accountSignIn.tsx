@@ -89,7 +89,7 @@ export default function SignInPage({ loaderData, actionData }: Route.ComponentPr
   const busy = useNavigation().state === 'submitting';
   const step: Step = codes && answer?.step === 'code' ? 'code' : 'contact';
   const signUp = `/account/sign-up${next !== '/' ? `?next=${encodeURIComponent(next)}` : ''}`;
-  const sentBy = answer?.contact.includes('@') ? 'به ایمیل' : 'با پیامک به';
+  const sentBy = answer?.contact?.includes('@') ? 'به ایمیل' : 'با پیامک به';
 
   return (
     <AccountShell
@@ -109,7 +109,7 @@ export default function SignInPage({ loaderData, actionData }: Route.ComponentPr
         <Form method="post" className="space-y-5" replace>
           <input type="hidden" name="next" value={next} />
           <input type="hidden" name="contact" value={answer.contact} />
-          {answer.error ? <FormError message={answer.error} /> : <FormNote>کد ورود {sentBy} <span dir="ltr">{answer.contact}</span> فرستاده شد.</FormNote>}
+          {answer.error ? <FormError message={answer.error} /> : <FormNote>{`کد ورود ${sentBy} `}<span dir="ltr">{answer.contact}</span>{' فرستاده شد.'}</FormNote>}
           <CodeField />
           <SubmitButton intent="verify-code" busy={busy}>ورود</SubmitButton>
           <SubmitButton intent="send-code" busy={busy} secondary>کد نرسید؟ دوباره بفرست</SubmitButton>

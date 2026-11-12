@@ -61,7 +61,7 @@ export default function ForgotPasswordPage({ loaderData, actionData }: Route.Com
   const answer = actionData as ActionAnswer | undefined;
   const busy = useNavigation().state === 'submitting';
   const step: Step = answer?.step === 'code' ? 'code' : 'contact';
-  const sentBy = answer?.contact.includes('@') ? 'به ایمیل' : 'با پیامک به';
+  const sentBy = answer?.contact?.includes('@') ? 'به ایمیل' : 'با پیامک به';
 
   if (!smsLogin && !emailLogin) {
     return (
@@ -84,7 +84,7 @@ export default function ForgotPasswordPage({ loaderData, actionData }: Route.Com
         <Form method="post" className="space-y-5" replace>
           <input type="hidden" name="next" value={next} />
           <input type="hidden" name="contact" value={answer.contact} />
-          {answer.error ? <FormError message={answer.error} /> : <FormNote>کد {sentBy} <span dir="ltr">{answer.contact}</span> فرستاده شد.</FormNote>}
+          {answer.error ? <FormError message={answer.error} /> : <FormNote>{`کد ${sentBy} `}<span dir="ltr">{answer.contact}</span>{' فرستاده شد.'}</FormNote>}
           <CodeField />
           <Field label="رمز تازه" name="password" type="password" autoComplete="new-password" dir="ltr" maxLength={200} hint="دست‌کم هشت نویسه، و نه خود شمارهٔ همراه." />
           <SubmitButton intent="reset" busy={busy}>گذاشتن رمز تازه</SubmitButton>

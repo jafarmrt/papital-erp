@@ -88,7 +88,7 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionAnswe
     const typedPhone = String(form.get('phone') ?? '').slice(0, 20);
     const trapped = trapRefusal(form);
     if (trapped) return { step: 'details', contact: '', name, error: trapped, stamp, phone: typedPhone };
-    const proven = ways.sms || ways.email ? provenOf(request) : null;
+    const proven = provenOf(request);
     // with no code ways on the account is made as in 8.2b, with an unproven phone
     const extraPhone = typedPhone ? normalizePhone(typedPhone) : '';
     if (typedPhone && !extraPhone) return { step: 'details', contact: '', name, error: 'شمارهٔ همراه را درست بنویسید (مانند ۰۹۱۲۱۲۳۴۵۶۷).', stamp, phone: typedPhone };
@@ -121,7 +121,7 @@ export default function SignUpPage({ loaderData, actionData }: Route.ComponentPr
     : answer?.step === 'contact' ? 'contact'
     : proven ? 'details' : 'contact';
   const signIn = `/account/sign-in${next !== '/' ? `?next=${encodeURIComponent(next)}` : ''}`;
-  const sentBy = answer?.contact.includes('@') ? 'به ایمیل' : 'با پیامک به';
+  const sentBy = answer?.contact?.includes('@') ? 'به ایمیل' : 'با پیامک به';
 
   return (
     <AccountShell
@@ -141,7 +141,7 @@ export default function SignUpPage({ loaderData, actionData }: Route.ComponentPr
         <Form method="post" className="space-y-5" replace>
           <input type="hidden" name="next" value={next} />
           <input type="hidden" name="contact" value={answer.contact} />
-          {answer.error ? <FormError message={answer.error} /> : <FormNote>کد تأیید {sentBy} <span dir="ltr">{answer.contact}</span> فرستاده شد.</FormNote>}
+          {answer.error ? <FormError message={answer.error} /> : <FormNote>{`کد تأیید ${sentBy} `}<span dir="ltr">{answer.contact}</span>{' فرستاده شد.'}</FormNote>}
           <CodeField />
           <SubmitButton intent="verify-code" busy={busy}>تأیید</SubmitButton>
           <SubmitButton intent="send-code" busy={busy} secondary>کد نرسید؟ دوباره بفرست</SubmitButton>
@@ -153,7 +153,7 @@ export default function SignUpPage({ loaderData, actionData }: Route.ComponentPr
           <input type="hidden" name="next" value={next} />
           <FormError message={answer?.error} />
           <BotTrapFields stamp={answer?.stamp ?? loaderData.stamp} />
-          {codes && proven && <FormNote>{proven.kind === 'phone' ? 'شمارهٔ' : 'ایمیل'} <span dir="ltr">{proven.value}</span> تأیید شد.</FormNote>}
+          {codes && proven && <FormNote>{`${proven.kind === 'phone' ? 'شمارهٔ' : 'ایمیل'} `}<span dir="ltr">{proven.value}</span>{' تأیید شد.'}</FormNote>}
           {/* no code ways: the phone as in 8.2b; an email proven with the texts off: a phone may go beside it, unproven */}
           {(!codes || (proven?.kind === 'email' && !smsLogin)) && <PhoneField defaultValue={answer?.phone} />}
           <Field label="نام و نام خانوادگی" name="name" autoComplete="name" maxLength={120} defaultValue={answer?.name} autoFocus={codes} />

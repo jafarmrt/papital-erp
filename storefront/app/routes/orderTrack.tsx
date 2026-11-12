@@ -140,13 +140,13 @@ export default function OrderTrackPage({ loaderData, actionData }: Route.Compone
             <Field label="شمارهٔ سفارش" name="number" inputMode="numeric" autoComplete="off" dir="ltr" maxLength={20} defaultValue={number} />
             {proven ? (
               <>
-                <FormNote>{proven.includes('@') ? 'ایمیل' : 'شمارهٔ'} <span dir="ltr">{proven}</span> تأیید شد؛ شمارهٔ سفارشی را که با آن ثبت کرده‌اید بنویسید.</FormNote>
+                <FormNote>{`${proven.includes('@') ? 'ایمیل' : 'شمارهٔ'} `}<span dir="ltr">{proven}</span>{' تأیید شد؛ شمارهٔ سفارشی را که با آن ثبت کرده‌اید بنویسید.'}</FormNote>
                 <SubmitButton intent="by-phone" busy={busy}>دیدن سفارش</SubmitButton>
                 <SubmitButton intent="another-phone" busy={busy} secondary>شماره یا ایمیل دیگر</SubmitButton>
               </>
             ) : answer?.codeFor ? (
               <>
-                <FormNote>کد تأیید {answer.codeFor.includes('@') ? 'به ایمیل' : 'با پیامک به'} <span dir="ltr">{answer.codeFor}</span> فرستاده شد. آن را بنویسید.</FormNote>
+                <FormNote>{`کد تأیید ${answer.codeFor.includes('@') ? 'به ایمیل' : 'با پیامک به'} `}<span dir="ltr">{answer.codeFor}</span>{' فرستاده شد. آن را بنویسید.'}</FormNote>
                 <input type="hidden" name="contact" value={answer.codeFor} />
                 <CodeField />
                 <SubmitButton intent="verify-code" busy={busy}>دیدن سفارش</SubmitButton>
@@ -154,7 +154,7 @@ export default function OrderTrackPage({ loaderData, actionData }: Route.Compone
               </>
             ) : (
               <>
-                <p className="text-base leading-8 text-muted-foreground">{contactLabel(smsLogin, emailLogin)}ی را که سفارش با آن ثبت شد بنویسید تا کدی به آن فرستاده شود.</p>
+                <p className="text-base leading-8 text-muted-foreground">{`${contactLabel(smsLogin, emailLogin)}ی را که سفارش با آن ثبت شد بنویسید تا کدی به آن فرستاده شود.`}</p>
                 <ContactField label={contactLabel(smsLogin, emailLogin)} />
                 <SubmitButton intent="send-code" busy={busy} secondary>فرستادن کد تأیید</SubmitButton>
               </>
