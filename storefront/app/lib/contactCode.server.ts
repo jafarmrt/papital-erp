@@ -24,21 +24,26 @@ export const contactWrong = (sms: boolean, email: boolean) => sms && email
 
 export { contactLabel } from './contactLabel';
 
-const SMS_OFF = 'کد پیامکی اکنون فرستاده نمی‌شود؛ با ایمیل ادامه دهید.';
+const SMS_OFF_EMAIL = 'کد پیامکی اکنون فرستاده نمی‌شود؛ با ایمیل ادامه دهید.';
+const SMS_OFF = 'کد پیامکی اکنون فرستاده نمی‌شود؛ با کد پیگیری سفارش، رمز حساب یا از «حساب من» ادامه دهید.';
 const EMAIL_OFF = 'کد ایمیلی اکنون فرستاده نمی‌شود؛ با شمارهٔ همراه ادامه دهید.';
 
 /**
- * Sends a code to the contact; '' when it went, else the words to show. The site's settings may be a minute old, so the
- * ERP decides: a way it has off answers 404, said here as that way being off now.
+ * Sends a code to the contact. The site's settings may be a minute old, so the ERP decides: a way it has off answers
+ * 404, said here as that way being off now (pointing to email only while the email is on). `wait` = the ERP asked to
+ * wait a little (429): a code sent a moment ago still works, so the code field stays.
  */
-export async function sendCode(request: Request, contact: Contact, _ways?: { sms: boolean; email: boolean }): Promise<string> {
-  if (contact.kind === 'phone') {
-    const answer = await accountCall(request, 'POST', '/auth/otp/request', { phone: contact.value });
-    return answer.status === 202 ? '' : answer.status === 404 || answer.code === 'STOREFRONT_SMS_PAUSED' ? SMS_OFF : answer.error;
-  }
-  const answer = await accountCall(request, 'POST', '/auth/email-code/request', { email: contact.value });
-  return answer.status === 200 ? '' : answer.status === 404 ? EMAIL_OFF : answer.error;
+export async function sendCode(request: Request, contact: Contact, ways: { sms: boolean; email: boolean }): Promise<{ error: string; wait: boolean }> {
+  const answer = contact.kind === 'phone'
+    ? await accountCall(request, 'POST', '/auth/otp/request', { phone: contact.value })
+    : await accountCall(request, 'POST', '/auth/email-code/request', { email: contact.value });
+  if (answer.status === (contact.kind === 'phone' ? 202 : 200)) return { error: '', wait: false };
+  const off = answer.status === 404 || answer.code === 'STOREFRONT_SMS_PAUSED';
+  if (off) return { error: contact.kind === 'phone' ? (ways.email ? SMS_OFF_EMAIL : SMS_OFF) : EMAIL_OFF, wait: false };
+  return { error: answer.error, wait: answer.status === 429 };
 }
+
+export const isOffRefusal = (error: string) => error === EMAIL_OFF || error === SMS_OFF || error === SMS_OFF_EMAIL;
 
 /** Checks the code the buyer typed: the single-use proof it gives, or the words to show */
 export async function verifyCode(request: Request, contact: Contact, rawCode: unknown): Promise<{ proof: string; error: string }> {
@@ -63,6 +68,8 @@ export const proofFields = (contact: Contact, proof: string) => contact.kind ===
 /** the email proof of the sign-in and sign-up pages (the phone keeps its 8.4b cookie) */
 export const EMAIL_PROOF_COOKIE = 'sf_email_proof';
 const TOKEN = /^[A-Za-z0-9_-]{8,200}$/;
+/** 8e4 review: every proof cookie is on `/` with a name of its own, so the pages' data requests (`/checkout.data`) carry it */
+export const PROOF_PATH = '/';
 export function keptProofOf(request: Request, name: string): { contact: Contact; proof: string } | null {
   const raw = cookieOf(request, name);
   const at = raw.lastIndexOf('.');

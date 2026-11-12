@@ -4,7 +4,7 @@ import type { BuyerOrder, OrderAccessAnswer } from '@erp/storefront/storefrontOr
 import { publicSettings } from '../lib/api.server';
 import { accountCall, clearTrackProofCookie, crossSite, sameSite, trackProofCookie, trackProofOf } from '../lib/account.server';
 import {
-  type Contact, clearKeptProofCookie, contactOf, contactWrong, keptProofCookie, keptProofOf, proofFields, sendCode, verifyCode,
+  PROOF_PATH, type Contact, clearKeptProofCookie, contactOf, contactWrong, keptProofCookie, keptProofOf, proofFields, sendCode, verifyCode,
 } from '../lib/contactCode.server';
 import { isOrderKey, isOrderNumber, rememberOrderCookie } from '../lib/orderKeys.server';
 import { siteEnv } from '../lib/site.server';
@@ -26,7 +26,8 @@ import { AccountShell, CodeField, ContactField, Field, FormError, FormNote, Subm
  * as the ERP can send its code now); its proof waits in a cookie of its own.
  */
 const EMAIL_COOKIE = 'sf_track_email_proof';
-const EMAIL_PATH = '/orders/track';
+// 8e4 review: on `/`, with its own name, so the page's data requests (`/orders/track.data`) carry it
+const EMAIL_PATH = PROOF_PATH;
 const keptContactProof = (request: Request): { contact: Contact; proof: string } | null => {
   const phone = trackProofOf(request);
   if (phone.proof) return { contact: { kind: 'phone', value: phone.phone }, proof: phone.proof };
@@ -50,7 +51,10 @@ export function meta({ data: loaded }: Route.MetaArgs) {
 
 const latin = (value: string) => value.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/\s+/g, '');
 const NOT_FOUND = 'سفارشی با این شماره و کد پیدا نشد؛ هر دو را دوباره نگاه کنید.';
-const NOT_FOUND_BY_PHONE = 'سفارشی با این شماره برای این شمارهٔ همراه یا ایمیل پیدا نشد؛ شمارهٔ سفارش را دوباره نگاه کنید.';
+const NOT_FOUND_BY_PHONE = 'سفارشی با این شماره برای این شمارهٔ همراه پیدا نشد؛ شمارهٔ سفارش را دوباره نگاه کنید.';
+const NOT_FOUND_BY_CONTACT = 'سفارشی با این شماره برای این شمارهٔ همراه یا ایمیل پیدا نشد؛ شمارهٔ سفارش را دوباره نگاه کنید.';
+/** the refusal names email only while the site takes email codes (or the try was by email) */
+const notFoundBy = (email: boolean) => (email ? NOT_FOUND_BY_CONTACT : NOT_FOUND_BY_PHONE);
 
 interface Answer {
   number: string;
@@ -62,7 +66,7 @@ interface Answer {
 }
 
 /** The order's key for a proven phone or email: the order page opens with it kept, or the same refusal for any wrong pair */
-async function openByContact(request: Request, number: string, contact: Contact, proof: string, keepProof: boolean) {
+async function openByContact(request: Request, number: string, contact: Contact, proof: string, keepProof: boolean, emailOn: boolean) {
   const opened = await accountCall<OrderAccessAnswer>(request, 'POST', `/orders/${number}/access`, proofFields(contact, proof));
   if (opened.data) {
     const headers = new Headers();
@@ -71,7 +75,7 @@ async function openByContact(request: Request, number: string, contact: Contact,
     headers.append('Set-Cookie', clearKeptProofCookie(EMAIL_COOKIE, EMAIL_PATH));
     return redirect(`/orders/${number}`, { headers });
   }
-  const answer: Answer = { number, by: 'phone', error: opened.status === 404 ? NOT_FOUND_BY_PHONE : opened.error };
+  const answer: Answer = { number, by: 'phone', error: opened.status === 404 ? notFoundBy(contact.kind === 'email' || emailOn) : opened.error };
   if (!keepProof) return answer;
   const kept = contact.kind === 'phone' ? trackProofCookie(contact.value, proof) : keptProofCookie(EMAIL_COOKIE, EMAIL_PATH, contact, proof);
   return data(answer, { headers: { 'Set-Cookie': kept } });
@@ -90,23 +94,25 @@ export async function action({ request }: Route.ActionArgs) {
     return data({ number, by: 'phone' } satisfies Answer, { headers });
   }
   if (intent === 'send-code' || intent === 'verify-code' || intent === 'by-phone') {
-    if (!isOrderNumber(number)) return { number, by: 'phone', error: NOT_FOUND_BY_PHONE } satisfies Answer;
+    const settings = await publicSettings();
+    const ways = { sms: settings.smsLogin === true, email: settings.emailLogin === true };
+    if (!isOrderNumber(number)) return { number, by: 'phone', error: notFoundBy(ways.email) } satisfies Answer;
     if (intent === 'by-phone') {
       const kept = keptContactProof(request);
       if (!kept) return { number, by: 'phone' } satisfies Answer;
-      return openByContact(request, number, kept.contact, kept.proof, false);
+      return openByContact(request, number, kept.contact, kept.proof, false, ways.email);
     }
-    const settings = await publicSettings();
-    const ways = { sms: settings.smsLogin === true, email: settings.emailLogin === true };
     const contact = contactOf(form.get('contact'));
     if (!contact) return { number, by: 'phone', error: contactWrong(ways.sms, ways.email) } satisfies Answer;
     if (intent === 'send-code') {
-      const refused = await sendCode(request, contact, ways);
-      return refused ? { number, by: 'phone', error: refused } satisfies Answer : { number, by: 'phone', codeFor: contact.value } satisfies Answer;
+      const sent = await sendCode(request, contact, ways);
+      // a code sent a moment ago (429, «wait a little») still works: the code field stays
+      return sent.error && !sent.wait ? { number, by: 'phone', error: sent.error } satisfies Answer
+        : { number, by: 'phone', codeFor: contact.value, error: sent.error || undefined } satisfies Answer;
     }
     const verified = await verifyCode(request, contact, form.get('code'));
     if (!verified.proof) return { number, by: 'phone', codeFor: contact.value, error: verified.error } satisfies Answer;
-    return openByContact(request, number, contact, verified.proof, true);
+    return openByContact(request, number, contact, verified.proof, true, ways.email);
   }
 
   const key = String(form.get('key') ?? '').trim().slice(0, 100);
@@ -148,14 +154,14 @@ export default function OrderTrackPage({ loaderData, actionData }: Route.Compone
               <>
                 <FormNote>{`کد تأیید ${answer.codeFor.includes('@') ? 'به ایمیل' : 'با پیامک به'} `}<span dir="ltr">{answer.codeFor}</span>{' فرستاده شد. آن را بنویسید.'}</FormNote>
                 <input type="hidden" name="contact" value={answer.codeFor} />
-                <CodeField />
+                <CodeField byEmail={answer.codeFor.includes('@')} />
                 <SubmitButton intent="verify-code" busy={busy}>دیدن سفارش</SubmitButton>
                 <SubmitButton intent="send-code" busy={busy} secondary>فرستادن دوبارهٔ کد</SubmitButton>
               </>
             ) : (
               <>
                 <p className="text-base leading-8 text-muted-foreground">{`${contactLabel(smsLogin, emailLogin)}ی را که سفارش با آن ثبت شد بنویسید تا کدی به آن فرستاده شود.`}</p>
-                <ContactField label={contactLabel(smsLogin, emailLogin)} />
+                <ContactField label={contactLabel(smsLogin, emailLogin)} ways={{ sms: smsLogin, email: emailLogin }} />
                 <SubmitButton intent="send-code" busy={busy} secondary>فرستادن کد تأیید</SubmitButton>
               </>
             )}

@@ -40,8 +40,8 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionAnswe
   const contact = contactOf(typed);
   if (!contact) return { step: 'contact', contact: typed, error: contactWrong(ways.sms, ways.email) };
   if (intent === 'send-code') {
-    const refused = await sendCode(request, contact, ways);
-    return refused ? { step: 'contact', contact: contact.value, error: refused } : { step: 'code', contact: contact.value };
+    const sent = await sendCode(request, contact, ways);
+    return sent.error && !sent.wait ? { step: 'contact', contact: contact.value, error: sent.error } : { step: 'code', contact: contact.value, error: sent.error || undefined };
   }
   if (intent === 'reset') {
     const verified = await verifyCode(request, contact, form.get('code'));
@@ -76,7 +76,7 @@ export default function ForgotPasswordPage({ loaderData, actionData }: Route.Com
         <Form method="post" className="space-y-5" replace>
           <input type="hidden" name="next" value={next} />
           <FormError message={answer?.error} />
-          <ContactField label={contactLabel(smsLogin, emailLogin)} defaultValue={answer?.contact} autoFocus />
+          <ContactField label={contactLabel(smsLogin, emailLogin)} ways={{ sms: smsLogin, email: emailLogin }} defaultValue={answer?.contact} autoFocus />
           <SubmitButton intent="send-code" busy={busy}>فرستادن کد</SubmitButton>
         </Form>
       )}
@@ -85,7 +85,7 @@ export default function ForgotPasswordPage({ loaderData, actionData }: Route.Com
           <input type="hidden" name="next" value={next} />
           <input type="hidden" name="contact" value={answer.contact} />
           {answer.error ? <FormError message={answer.error} /> : <FormNote>{`کد ${sentBy} `}<span dir="ltr">{answer.contact}</span>{' فرستاده شد.'}</FormNote>}
-          <CodeField />
+          <CodeField byEmail={answer.contact.includes('@')} />
           <Field label="رمز تازه" name="password" type="password" autoComplete="new-password" dir="ltr" maxLength={200} hint="دست‌کم هشت نویسه، و نه خود شمارهٔ همراه." />
           <SubmitButton intent="reset" busy={busy}>گذاشتن رمز تازه</SubmitButton>
           <SubmitButton intent="send-code" busy={busy} secondary>کد نرسید؟ دوباره بفرست</SubmitButton>

@@ -62,8 +62,8 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionAnswe
     return { step: 'contact', contact: contact.value, error: answer.error, password: true };
   }
   if (intent === 'send-code') {
-    const refused = await sendCode(request, contact, ways);
-    return refused ? { step: 'contact', contact: contact.value, error: refused } : { step: 'code', contact: contact.value };
+    const sent = await sendCode(request, contact, ways);
+    return sent.error && !sent.wait ? { step: 'contact', contact: contact.value, error: sent.error } : { step: 'code', contact: contact.value, error: sent.error || undefined };
   }
   if (intent === 'verify-code') {
     const verified = await verifyCode(request, contact, form.get('code'));
@@ -94,13 +94,13 @@ export default function SignInPage({ loaderData, actionData }: Route.ComponentPr
   return (
     <AccountShell
       title="ورود به حساب"
-      intro={step === 'code' ? 'کدی را که برایتان فرستاده شد بنویسید.' : codes ? `${contactLabel(smsLogin, emailLogin)} خود را بنویسید تا کد ورود برایتان فرستاده شود.` : 'با شمارهٔ همراه یا ایمیل و رمز حساب خود وارد شوید.'}
+      intro={step === 'code' ? 'کدی را که برایتان فرستاده شد بنویسید.' : codes ? `${contactLabel(smsLogin, emailLogin)} خود را بنویسید تا کد ورود برایتان فرستاده شود.` : 'با شمارهٔ همراه و رمز حساب خود وارد شوید.'}
     >
       {codes && step === 'contact' && (
         <Form method="post" className="space-y-5" replace>
           <input type="hidden" name="next" value={next} />
           {!answer?.password && <FormError message={answer?.error} />}
-          <ContactField label={contactLabel(smsLogin, emailLogin)} defaultValue={answer?.contact} autoFocus />
+          <ContactField label={contactLabel(smsLogin, emailLogin)} ways={{ sms: smsLogin, email: emailLogin }} defaultValue={answer?.contact} autoFocus />
           <SubmitButton intent="send-code" busy={busy}>فرستادن کد ورود</SubmitButton>
         </Form>
       )}
@@ -110,7 +110,7 @@ export default function SignInPage({ loaderData, actionData }: Route.ComponentPr
           <input type="hidden" name="next" value={next} />
           <input type="hidden" name="contact" value={answer.contact} />
           {answer.error ? <FormError message={answer.error} /> : <FormNote>{`کد ورود ${sentBy} `}<span dir="ltr">{answer.contact}</span>{' فرستاده شد.'}</FormNote>}
-          <CodeField />
+          <CodeField byEmail={answer.contact.includes('@')} />
           <SubmitButton intent="verify-code" busy={busy}>ورود</SubmitButton>
           <SubmitButton intent="send-code" busy={busy} secondary>کد نرسید؟ دوباره بفرست</SubmitButton>
         </Form>
@@ -118,11 +118,12 @@ export default function SignInPage({ loaderData, actionData }: Route.ComponentPr
 
       {step === 'contact' && (
         <details open={!codes || answer?.password} className="rounded-surface border border-border bg-card p-4">
-          <summary className="min-h-11 cursor-pointer py-2 text-base font-bold">{codes ? 'ورود با رمز' : 'شمارهٔ همراه یا ایمیل و رمز'}</summary>
+          <summary className="min-h-11 cursor-pointer py-2 text-base font-bold">{codes ? 'ورود با رمز' : 'شمارهٔ همراه و رمز'}</summary>
           <Form method="post" className="mt-4 space-y-5" replace>
             <input type="hidden" name="next" value={next} />
             {answer?.password && <FormError message={answer.error} />}
-            <ContactField label="شمارهٔ همراه یا ایمیل" defaultValue={answer?.contact} />
+            {/* an email account signs in with its password even while the email codes are off; the label names email only while they are on */}
+            <ContactField label={emailLogin ? 'شمارهٔ همراه یا ایمیل' : 'شمارهٔ همراه'} ways={{ sms: true, email: emailLogin }} defaultValue={answer?.contact} />
             <Field label="رمز" name="password" type="password" autoComplete="current-password" dir="ltr" maxLength={200} />
             <SubmitButton intent="password" busy={busy}>ورود با رمز</SubmitButton>
           </Form>

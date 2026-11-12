@@ -560,7 +560,7 @@ describe('«پیگیری سفارش» with the buyer\'s phone (v12 phase 8d)', (
     expect(asked.html).toContain('name="code"');
 
     // a mistyped number with the right code: the words of any wrong pair, and the proof waits for the right number
-    const SAME = 'سفارشی با این شماره برای این شمارهٔ همراه یا ایمیل پیدا نشد';
+    const SAME = 'سفارشی با این شماره برای این شمارهٔ همراه پیدا نشد';
     const mistyped = await post('/orders/track', { intent: 'verify-code', number: '999999', contact: '09125550001', code: '123456' });
     expect(mistyped.html).toContain(SAME);
     const proof = mistyped.cookies.find(c => c.startsWith('sf_track_proof='))!;

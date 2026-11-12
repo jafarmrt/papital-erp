@@ -258,8 +258,10 @@ async function ordering(req, res, route) {
     const lines = priced(body.lines);
     if (!lines) return fieldError(res, 'lines', 'این کالا روی سایت فروخته نمی‌شود.');
     if (overRetailCap(res, lines)) return undefined;
-    // v12 phase 8e: a guest's email proof while the texts cannot prove a phone
-    if (!accountOf(req) && !settings.smsLogin && settings.emailLogin && !emailProofOk(body.email, body.emailProof)) {
+    // v12 phase 8e: a guest's email proof while the texts cannot prove a phone, and an account with nothing proven
+    const signedAccount = accountOf(req) && accounts.get(accountOf(req));
+    const unproven = !signedAccount || (!signedAccount.verified && !signedAccount.email);
+    if (unproven && !settings.smsLogin && settings.emailLogin && !emailProofOk(body.email, body.emailProof)) {
       return send(res, 422, { error: 'نشانی ایمیل را با کدی که به آن فرستاده می‌شود تأیید کنید.', code: 'STOREFRONT_EMAIL_PROOF_REQUIRED', details: { field: 'email' } });
     }
     if (settings.smsLogin && !accountOf(req) && !body.emailProof && !proofOk(latin(body.phone), body.phoneProof)) {
@@ -398,6 +400,20 @@ createServer(async (req, res) => {
     return send(res, 404, { error: 'پیدا نشد' });
   }
   if (route === '/account/prices') return send(res, 200, { data: { group: '', prices: [] } });
+  // v12 phase 8e: a proven email or phone on the signed-in account; replacing one needs the password
+  if ((route === '/account/email' || route === '/account/phone') && req.method === 'POST') {
+    const body = await readBody(req);
+    lastPost = { route, orderKey: '', session: String(req.headers['x-buyer-session'] ?? ''), body };
+    const owner = sessions.get(String(req.headers['x-buyer-session'] ?? ''));
+    const account = owner && accounts.get(owner);
+    if (!account) return send(res, 401, { error: 'برای این کار وارد حساب خود شوید.', code: 'STOREFRONT_SESSION_REQUIRED' });
+    const byEmail = route === '/account/email';
+    if (byEmail ? !emailProofOk(body.email, body.emailProof) : !proofOk(latin(body.phone), body.phoneProof)) return send(res, 422, { error: 'کد را دوباره بخواهید.', code: 'STOREFRONT_EMAIL_PROOF_REQUIRED' });
+    const replacing = byEmail ? Boolean(account.email) && emailKey(account.email) !== emailKey(body.email) : Boolean(account.phone) && account.phone !== latin(body.phone);
+    if (replacing && body.password !== account.password) return send(res, 422, { error: 'رمز حساب درست نیست.', code: 'STOREFRONT_ACCOUNT_FIELD_INVALID', details: { field: 'password' } });
+    if (byEmail) account.email = String(body.email); else { account.phone = latin(body.phone); account.verified = true; }
+    return send(res, 200, { data: view(account) });
+  }
   if (route === '/account') {
     const owner = sessions.get(String(req.headers['x-buyer-session'] ?? ''));
     return owner ? send(res, 200, { data: view(accounts.get(owner)) }) : send(res, 401, { error: 'برای این کار وارد حساب خود شوید.', code: 'STOREFRONT_SESSION_REQUIRED' });

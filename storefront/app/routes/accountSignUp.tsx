@@ -74,13 +74,16 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionAnswe
   if (intent === 'send-code' || intent === 'verify-code') {
     if (!contact) return { step: 'contact', contact: typed, error: contactWrong(ways.sms, ways.email) };
     if (intent === 'send-code') {
-      const refused = await sendCode(request, contact, ways);
-      return refused ? { step: 'contact', contact: contact.value, error: refused } : { step: 'code', contact: contact.value };
+      const sent = await sendCode(request, contact, ways);
+      return sent.error && !sent.wait ? { step: 'contact', contact: contact.value, error: sent.error } : { step: 'code', contact: contact.value, error: sent.error || undefined };
     }
     const verified = await verifyCode(request, contact, form.get('code'));
     if (!verified.proof) return { step: 'code', contact: contact.value, error: verified.error };
-    const kept = contact.kind === 'phone' ? proofCookie(contact.value, verified.proof) : keptProofCookie(EMAIL_PROOF_COOKIE, '/account', contact, verified.proof);
-    return redirect(here, { headers: { 'Set-Cookie': kept } });
+    // review: one proof at a time, so a contact proven later is the one the sign-up uses
+    const headers = new Headers();
+    headers.append('Set-Cookie', contact.kind === 'phone' ? clearKeptProofCookie(EMAIL_PROOF_COOKIE, '/account') : clearProofCookie());
+    headers.append('Set-Cookie', contact.kind === 'phone' ? proofCookie(contact.value, verified.proof) : keptProofCookie(EMAIL_PROOF_COOKIE, '/account', contact, verified.proof));
+    return redirect(here, { headers });
   }
   if (intent === 'register') {
     const name = String(form.get('name') ?? '').slice(0, 200);
@@ -91,7 +94,8 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionAnswe
     const proven = provenOf(request);
     // with no code ways on the account is made as in 8.2b, with an unproven phone
     const extraPhone = typedPhone ? normalizePhone(typedPhone) : '';
-    if (typedPhone && !extraPhone) return { step: 'details', contact: '', name, error: 'شمارهٔ همراه را درست بنویسید (مانند ۰۹۱۲۱۲۳۴۵۶۷).', stamp, phone: typedPhone };
+    // with no code ways on the phone is the account's one way in, as in 8.2b
+    if ((typedPhone && !extraPhone) || (!proven && !extraPhone)) return { step: 'details', contact: '', name, error: 'شمارهٔ همراه را درست بنویسید (مانند ۰۹۱۲۱۲۳۴۵۶۷).', stamp, phone: typedPhone };
     const body = {
       name, password: String(form.get('password') ?? '').slice(0, 200),
       ...(proven ? proofFields(proven.contact, proven.proof) : {}),
@@ -132,7 +136,7 @@ export default function SignUpPage({ loaderData, actionData }: Route.ComponentPr
         <Form method="post" className="space-y-5" replace>
           <input type="hidden" name="next" value={next} />
           <FormError message={answer?.error} />
-          <ContactField label={contactLabel(smsLogin, emailLogin)} defaultValue={answer?.contact} autoFocus />
+          <ContactField label={contactLabel(smsLogin, emailLogin)} ways={{ sms: smsLogin, email: emailLogin }} defaultValue={answer?.contact} autoFocus />
           <SubmitButton intent="send-code" busy={busy}>فرستادن کد تأیید</SubmitButton>
         </Form>
       )}
@@ -142,7 +146,7 @@ export default function SignUpPage({ loaderData, actionData }: Route.ComponentPr
           <input type="hidden" name="next" value={next} />
           <input type="hidden" name="contact" value={answer.contact} />
           {answer.error ? <FormError message={answer.error} /> : <FormNote>{`کد تأیید ${sentBy} `}<span dir="ltr">{answer.contact}</span>{' فرستاده شد.'}</FormNote>}
-          <CodeField />
+          <CodeField byEmail={answer.contact.includes('@')} />
           <SubmitButton intent="verify-code" busy={busy}>تأیید</SubmitButton>
           <SubmitButton intent="send-code" busy={busy} secondary>کد نرسید؟ دوباره بفرست</SubmitButton>
         </Form>
@@ -158,7 +162,7 @@ export default function SignUpPage({ loaderData, actionData }: Route.ComponentPr
           {(!codes || (proven?.kind === 'email' && !smsLogin)) && <PhoneField defaultValue={answer?.phone} />}
           <Field label="نام و نام خانوادگی" name="name" autoComplete="name" maxLength={120} defaultValue={answer?.name} autoFocus={codes} />
           <Field label="رمز" name="password" type="password" autoComplete="new-password" dir="ltr" maxLength={200}
-            hint="دست‌کم هشت نویسه، و نه خود شمارهٔ همراه." />
+            hint={proven?.kind === 'email' ? 'دست‌کم هشت نویسه.' : 'دست‌کم هشت نویسه، و نه خود شمارهٔ همراه.'} />
           <SubmitButton intent="register" busy={busy}>ساختن حساب</SubmitButton>
           {codes && <SubmitButton intent="another-phone" busy={busy} secondary>{proven?.kind === 'email' ? 'ایمیل یا شمارهٔ دیگری دارم' : 'شمارهٔ دیگری دارم'}</SubmitButton>}
         </Form>

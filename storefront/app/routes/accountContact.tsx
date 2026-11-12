@@ -6,6 +6,7 @@ import { siteEnv } from '../lib/site.server';
 import { accountCall, clearSessionCookie, crossSite, sameSite, sessionOf } from '../lib/account.server';
 import { contactOf, contactWrong, proofFields, sendCode, verifyCode } from '../lib/contactCode.server';
 import { pageMeta } from '../lib/meta';
+import { faDigits } from '../lib/format';
 import { contactLabel } from '../lib/contactLabel';
 import { AccountShell, CodeField, ContactField, Field, FormError, FormNote, SubmitButton } from '../components/AccountForm';
 
@@ -44,8 +45,8 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionAnswe
   const contact = contactOf(typed);
   if (!contact) return { step: 'contact', contact: typed, error: contactWrong(ways.sms, ways.email) };
   if (intent === 'send-code') {
-    const refused = await sendCode(request, contact, ways);
-    return refused ? { step: 'contact', contact: contact.value, error: refused } : { step: 'code', contact: contact.value };
+    const sent = await sendCode(request, contact, ways);
+    return sent.error && !sent.wait ? { step: 'contact', contact: contact.value, error: sent.error } : { step: 'code', contact: contact.value, error: sent.error || undefined };
   }
   if (intent === 'save') {
     const verified = await verifyCode(request, contact, form.get('code'));
@@ -76,13 +77,13 @@ export default function AccountContactPage({ loaderData, actionData }: Route.Com
   return (
     <AccountShell title="ایمیل و شمارهٔ حساب" intro="ایمیل یا شمارهٔ تازه با کدی که برایش فرستاده می‌شود تأیید و روی حساب گذاشته می‌شود.">
       <FormNote>
-        {phone ? <>شمارهٔ همراه: <span dir="ltr">{phone}</span></> : 'شمارهٔ همراه ندارد.'}{' '}
+        {phone ? <>{'شمارهٔ همراه: '}<span dir="ltr">{faDigits(phone)}</span></> : 'شمارهٔ همراه ندارد.'}{' '}
         {email ? <>ایمیل: <span dir="ltr">{email}</span></> : 'ایمیل ندارد.'}
       </FormNote>
       {step === 'contact' && (
         <Form method="post" className="space-y-5" replace>
           <FormError message={answer?.error} />
-          <ContactField label={contactLabel(smsLogin, emailLogin)} defaultValue={answer?.contact} autoFocus />
+          <ContactField label={contactLabel(smsLogin, emailLogin)} ways={{ sms: smsLogin, email: emailLogin }} defaultValue={answer?.contact} autoFocus />
           <SubmitButton intent="send-code" busy={busy}>فرستادن کد تأیید</SubmitButton>
         </Form>
       )}
@@ -90,7 +91,7 @@ export default function AccountContactPage({ loaderData, actionData }: Route.Com
         <Form method="post" className="space-y-5" replace>
           <input type="hidden" name="contact" value={answer.contact} />
           {answer.error ? <FormError message={answer.error} /> : <FormNote>{`کد تأیید ${typedEmail ? 'به ایمیل' : 'با پیامک به'} `}<span dir="ltr">{answer.contact}</span>{' فرستاده شد.'}</FormNote>}
-          <CodeField />
+          <CodeField byEmail={typedEmail} />
           {replacing && <Field label="رمز حساب" name="password" type="password" autoComplete="current-password" dir="ltr" maxLength={200} hint={`برای عوض کردن ${typedEmail ? 'ایمیل' : 'شمارهٔ'} حساب، رمز حساب را هم بنویسید.`} />}
           <SubmitButton intent="save" busy={busy}>تأیید و ذخیره</SubmitButton>
         </Form>

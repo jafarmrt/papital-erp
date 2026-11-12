@@ -54,6 +54,9 @@ const lastPost = async () => (await (await fetch(`http://127.0.0.1:${PORT}/__moc
 const address = { recipientName: 'گیرندهٔ آزمون', phone: '۰۹۱۲۱۲۳۴۵۶۷', province: 'تهران', city: 'تهران', address: 'خیابان آزمون، کوچهٔ نمونه، پلاک ۱', postalCode: '1234567890', note: '' };
 
 const EMAIL = 'buyer.mail@example.com';
+const api = async <T,>(route: string, body: unknown) => ((await (await fetch(`http://127.0.0.1:${PORT}/api/storefront/v1${route}`, {
+  method: 'POST', headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+})).json()) as { data: T }).data;
 
 describe('email accounts and orders', () => {
   it('makes an account with an email: the code, the proof in an httpOnly cookie, then the details', async () => {
@@ -114,13 +117,45 @@ describe('email accounts and orders', () => {
     expect(other.html).toContain('سفارشی با این شماره برای این شمارهٔ همراه یا ایمیل پیدا نشد');
   });
 
-  it('adds a phone to an email-only account from «ایمیل و شمارهٔ حساب»', async () => {
+  it('offers only the ways on in «حساب من», and replaces an email only with the account password', async () => {
     const signed = await post('/account/sign-in', { intent: 'password', contact: EMAIL, password: 'رمز-تازهٔ-1405', next: '/' });
     const session = cookieValue(signed.cookies, 'sf_session');
+    // the texts are off, so an email-only account is offered no phone
     const account = await page('/account', session);
-    expect(account.html).toContain('/account/contact');
-    expect(account.html).toContain('افزودن شمارهٔ همراه');
+    expect(account.html).toContain(EMAIL);
+    expect(account.html).not.toContain('افزودن شمارهٔ همراه');
     const contactPage = await page('/account/contact', session);
     expect(contactPage.html).toContain('شمارهٔ همراه ندارد.');
+    const sent = await post('/account/contact', { intent: 'send-code', contact: 'new.mail@example.com' }, session);
+    expect(sent.html).toContain('name="password"');
+    const noPassword = await post('/account/contact', { intent: 'save', contact: 'new.mail@example.com', code: '654321' }, session);
+    expect(noPassword.html).toContain('رمز حساب درست نیست');
+    const saved = await post('/account/contact', { intent: 'save', contact: 'new.mail@example.com', code: '654321', password: 'رمز-تازهٔ-1405' }, session);
+    expect(saved.status).toBe(302);
+    expect((await lastPost()).body).toMatchObject({ email: 'new.mail@example.com', password: 'رمز-تازهٔ-1405' });
+  });
+
+  it('keeps the email proofs on the path the pages\' data requests reach', async () => {
+    const cart = cookieValue((await post('/cart', { intent: 'add', slug: 'tile-earrings-sample', quantity: '1' })).cookies, 'sf_cart');
+    // a postal code the ERP refuses: the order is not placed and the proof made now is kept for the next tap
+    const refused = await post('/checkout', { intent: 'place', requestKey: 'rk-email-path-0001', ...address, postalCode: '12345', email: 'path.mail@example.com', codeVia: 'email', codeFor: 'path.mail@example.com', code: '654321', shippingMethod: 'post' }, cart);
+    const kept = refused.cookies.find(c => c.startsWith('sf_checkout_email_proof='));
+    expect(kept).toMatch(/Path=\/;/);
+    expect(kept).toMatch(/HttpOnly/);
+    const track = await post('/orders/track', { intent: 'verify-code', number: '999999', contact: 'path.mail@example.com', code: '654321' });
+    expect(track.cookies.find(c => c.startsWith('sf_track_email_proof='))).toMatch(/Path=\/;/);
+  });
+
+  it('asks a signed-in buyer with nothing proven for an email when the ERP wants it', async () => {
+    const made = await api<{ sessionToken: string }>('/auth/register', { name: 'حساب بی اثبات', phone: '09128887766', password: 'رمز-آزمون-1405' });
+    const session = `sf_session=${made.sessionToken}`;
+    const cart = cookieValue((await post('/cart', { intent: 'add', slug: 'tile-earrings-sample', quantity: '1' }, session)).cookies, 'sf_cart');
+    const asked = await post('/checkout', { intent: 'place', requestKey: 'rk-email-signed-0001', ...address, phone: '09128887766', shippingMethod: 'post' }, `${cart}; ${session}`);
+    expect(asked.html).toContain('name="email"');
+    expect(asked.html).toContain('name="codeVia" value="email"');
+    const first = await post('/checkout', { intent: 'place', requestKey: 'rk-email-signed-0002', ...address, phone: '09128887766', email: 'signed.mail@example.com', codeVia: 'email', shippingMethod: 'post' }, `${cart}; ${session}`);
+    expect(first.html).toContain('کد تأیید به ایمیل');
+    const placed = await post('/checkout', { intent: 'place', requestKey: 'rk-email-signed-0002', ...address, phone: '09128887766', email: 'signed.mail@example.com', codeVia: 'email', codeFor: 'signed.mail@example.com', code: '654321', shippingMethod: 'post' }, `${cart}; ${session}`);
+    expect(placed.status).toBe(302);
   });
 });

@@ -181,8 +181,11 @@ export async function action({ request }: Route.ActionArgs) {
   const shown = String(form.get('shownPayable') ?? '');
   const method = quote.data.options.find(o => o.code === shippingMethod);
   if (intent === 'place' && shown && method && shown !== payableWith(quote.data.itemsAmount, quote.data.discount?.amount ?? '0', method)) {
-    const codeFor = String(form.get('codeFor') ?? '') ? normalizePhone(fields.phone) || undefined : undefined;
-    return answer({ ...quoted, codeFor, error: PAYABLE_CHANGED });
+    // 8e4 review: the email path stays the email path (its code went to the email)
+    const byEmail = String(form.get('codeVia') ?? '') === 'email';
+    const asked = String(form.get('codeFor') ?? '') !== '';
+    const codeFor = asked ? (byEmail ? fields.email.trim() : normalizePhone(fields.phone)) || undefined : undefined;
+    return answer({ ...quoted, codeFor, ...(byEmail ? { codeVia: 'email' as const } : {}), error: PAYABLE_CHANGED });
   }
 
   // v12 phase 7: a guest's phone proof while the ERP signs in by SMS. The page's settings may be a minute old, so the
@@ -303,7 +306,8 @@ export default function CheckoutPage({ loaderData, actionData }: Route.Component
           <Field label="نام و نام خانوادگی" name="buyerName" autoComplete="name" maxLength={RECIPIENT_NAME_MAX} defaultValue={value('buyerName')} invalid={bad('buyerName')} />
           <PhoneField defaultValue={value('phone')} invalid={bad('phone')} />
           {/* v12 phase 8e («حالت بی پیامک»): a guest's email, proven with a code at «ثبت سفارش» */}
-          {(emailProof || answer?.codeVia === 'email') && !signedIn ? (
+          {/* 8e4 review: a signed-in buyer whose account has no proven phone or email is asked by the ERP too */}
+          {(emailProof && !signedIn) || answer?.codeVia === 'email' ? (
             <Field label="ایمیل" name="email" type="email" inputMode="email" autoComplete="email" dir="ltr" maxLength={254} defaultValue={value('email')}
               invalid={bad('email')} hint="کد تأیید سفارش به این ایمیل فرستاده می‌شود." />
           ) : null}
@@ -442,7 +446,7 @@ export default function CheckoutPage({ loaderData, actionData }: Route.Component
           <div className="space-y-3 border-t border-border pt-5">
             {answer.field !== 'code' ? <FormNote>{`کد تأیید ${answer.codeVia === 'email' ? 'به ایمیل' : 'با پیامک به'} `}<span dir="ltr">{answer.codeFor}</span>{' فرستاده شد. آن را بنویسید و سفارش را ثبت کنید.'}</FormNote> : null}
             <input type="hidden" name="codeFor" value={answer.codeFor} />
-            <CodeField />
+            <CodeField byEmail={answer.codeVia === 'email'} />
           </div>
         ) : null}
 
