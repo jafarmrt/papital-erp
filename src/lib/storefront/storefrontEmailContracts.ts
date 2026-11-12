@@ -54,3 +54,15 @@ export interface StorefrontEmailTestResult {
   /** why it was not sent, in Persian ('' when sent) */
   error: string;
 }
+
+/** v12 phase 8e: `POST /api/storefront/v1/auth/email-code/request` */
+export interface EmailCodeRequestResult {
+  resendAfter: number;
+  expiresIn: number;
+}
+
+/** `POST /api/storefront/v1/auth/email-code/verify`: a single-use proof of the address for the step that follows */
+export interface EmailCodeVerifyResult {
+  emailProof: string;
+  expiresIn: number;
+}

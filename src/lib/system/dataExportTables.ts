@@ -138,6 +138,7 @@ export const DATA_EXPORT_EXCLUDED_TABLES: Readonly<Record<string, string>> = {
   user_messenger_links: 'شناسه گفت‌وگوی پیام‌رسان همکاران را دارد',
   messenger_link_codes: 'کدهای موقت اتصال به پیام‌رسان',
   storefront_sms_codes: 'کدهای موقت ورود پیامکی سایت',
+  storefront_email_codes: 'کدهای موقت تأیید ایمیل سایت',
   user_sessions: 'نشست‌های ورود دستگاه‌ها، نشانی IP و شناسه نشست را دارد',
   storefront_buyer_sessions: 'نشست‌های ورود خریداران سایت که با ورود دوباره ساخته می‌شوند',
   storefront_password_tokens: 'پیوندهای یک‌بارمصرف و کوتاه‌عمر تعیین رمز خریداران سایت',

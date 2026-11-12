@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { orm, type DbTransaction } from '../../db/drizzle.js';
 import { storefrontBuyerAccounts } from '../../db/schema.js';
-import { ConflictError } from '../../errors/customErrors.js';
+import { ConflictError, ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { nextVersion } from '../../lib/occHelper.js';
@@ -79,6 +79,10 @@ export async function applyForWholesale(input: WholesaleApplyRequest, rawSession
   await assertAccountsOpen(orm);
   const form = cleanApplication(input);
   const signedIn = await sessionAccount(orm, rawSession);
+  // v12 phase 8e: a wholesale account is known by its phone (a colleague links it to its customer by it)
+  if (signedIn && !signedIn.phone) {
+    throw new ValidationError('برای درخواست خرید عمده، اول شمارهٔ همراه را در «حساب من» به حساب بیفزایید.', { field: 'phone' }, 'STOREFRONT_ACCOUNT_PHONE_NEEDED');
+  }
   // 8.4b: a form without a session makes an account for its phone, so the phone is proven first while SMS is on
   const proofNeeded = !signedIn && await smsLoginOn(orm);
   if (proofNeeded && !input.phoneProof) throw phoneProofInvalid();

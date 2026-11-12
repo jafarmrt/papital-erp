@@ -68,6 +68,8 @@ export async function emailRuntimeSettings(executor: DbExecutor): Promise<EmailR
 export function usableServer(settings: EmailRuntimeSettings): EmailServer | null {
   if (!settings.host || !settings.fromAddress || settings.password === null) return null;
   if (settings.username && !settings.password) return null;
+  // a user name and password never cross the network in the clear (only the database tests' server on this machine)
+  if (settings.username && settings.security === 'none' && !isTestMailServer(settings.host, settings.port)) return null;
   return { ...settings, password: settings.password };
 }
 

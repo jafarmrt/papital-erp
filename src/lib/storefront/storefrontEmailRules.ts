@@ -53,3 +53,23 @@ export function maskedEmail(email: string): string {
   if (at < 1) return '…';
   return `${email[0]}…@${email.slice(at + 1)}`;
 }
+
+/**
+ * v12 phase 8e: the one-time email codes of the site (sign-in, a new account's email, a forgotten password, and from
+ * 8e3 a guest's proof), with the same shape and limits as the SMS codes. A code lives longer than an SMS one, since a
+ * mail may take a minute to arrive.
+ */
+export const EMAIL_CODE_LENGTH = 6;
+export const EMAIL_CODE_TTL_SECONDS = 600;
+export const EMAIL_CODE_RESEND_SECONDS = 60;
+export const EMAIL_CODE_VERIFY_ATTEMPTS_MAX = 5;
+export const EMAIL_CODES_PER_EMAIL_HOUR_MAX = 5;
+export const EMAIL_CODES_PER_EMAIL_DAY_MAX = 10;
+export const EMAIL_CODES_PER_ADDRESS_HOUR_MAX = 10;
+export const EMAIL_WRONG_PER_EMAIL_DAY_MAX = 10;
+/** The site's email codes in an hour, all addresses together (guards the mail server's own sending limit) */
+export const EMAIL_CODES_HOURLY_CAP = 200;
+/** After a right code: the email proof the step that follows presents once */
+export const EMAIL_PROOF_TTL_SECONDS = 600;
+export const EMAIL_PROOF_PREFIX = 'ep_';
+export const EMAIL_PROOF_MAX = 80;

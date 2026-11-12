@@ -35,11 +35,11 @@ type Joined = { account: AccountRecord; groupTitle: string | null; customerName:
 
 function rowOf({ account, groupTitle, customerName }: Joined): BuyerAccountRow {
   return {
-    id: account.id, name: account.name, phone: account.phone, city: account.city, companyName: account.companyName,
+    id: account.id, name: account.name, phone: account.phone, email: account.email, city: account.city, companyName: account.companyName,
     status: isBuyerAccountStatus(account.status) ? account.status : 'suspended',
     applicationStatus: isApplicationStatus(account.applicationStatus) ? account.applicationStatus : 'none',
     groupId: account.groupId, groupTitle: groupTitle ?? '', customerId: account.customerId, customerName: customerName ?? '',
-    hasPassword: Boolean(account.passwordHash), phoneVerified: Boolean(account.phoneVerifiedAt), appliedAt: account.appliedAt, createdAt: account.createdAt, version: account.version,
+    hasPassword: Boolean(account.passwordHash), phoneVerified: Boolean(account.phoneVerifiedAt), emailVerified: Boolean(account.emailVerifiedAt), appliedAt: account.appliedAt, createdAt: account.createdAt, version: account.version,
   };
 }
 

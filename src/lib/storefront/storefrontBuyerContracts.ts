@@ -42,7 +42,10 @@ export interface BuyerGroupsView {
 export interface BuyerAccountRow {
   id: number;
   name: string;
+  /** '' = an account made with an email only (v12 phase 8e) */
   phone: string;
+  /** v12 phase 8e: '' = none */
+  email: string;
   city: string;
   companyName: string;
   status: BuyerAccountStatus;
@@ -54,6 +57,8 @@ export interface BuyerAccountRow {
   hasPassword: boolean;
   /** v11 phase 8.4b: an SMS code proved the phone */
   phoneVerified: boolean;
+  /** v12 phase 8e: an email code proved the email */
+  emailVerified: boolean;
   appliedAt: string | null;
   createdAt: string;
   version: number;
@@ -99,7 +104,10 @@ export interface PasswordLinkAnswer {
 /** Storefront API: what a signed-in buyer sees of their own account */
 export interface StorefrontAccountView {
   name: string;
+  /** '' = an account made with an email only (v12 phase 8e) */
   phone: string;
+  /** v12 phase 8e: '' = none; every stored email is proven */
+  email: string;
   city: string;
   kind: 'retail' | 'wholesale';
   /** the wholesale application, as the buyer may see it */
@@ -107,6 +115,8 @@ export interface StorefrontAccountView {
   companyName: string;
   /** v11 phase 8.4b: an SMS code proved the phone */
   phoneVerified: boolean;
+  /** v12 phase 8e: an email code proved the email */
+  emailVerified: boolean;
   group: null | {
     code: string;
     title: string;
@@ -131,10 +141,41 @@ export interface StorefrontGroupPrices {
 
 export interface RegisterRequest {
   name: string;
-  phone: string;
+  /** v12 phase 8e: a phone, an email or both */
+  phone?: string;
+  email?: string;
   password: string;
-  /** v11 phase 8.4b: required while `smsLogin` is on (from `POST /auth/otp/verify`) */
+  /** v11 phase 8.4b: required with a phone while `smsLogin` is on (from `POST /auth/otp/verify`) */
   phoneProof?: string;
+  /** v12 phase 8e: required with an email (from `POST /auth/email-code/verify`) */
+  emailProof?: string;
+}
+
+/** v12 phase 8e: `POST /auth/email-login` */
+export interface EmailLoginRequest {
+  email: string;
+  emailProof: string;
+}
+
+/** v12 phase 8e: `POST /auth/reset-password`, with the proof of the account's phone or of its email */
+export interface ResetPasswordRequest {
+  phone?: string;
+  phoneProof?: string;
+  email?: string;
+  emailProof?: string;
+  password: string;
+}
+
+/** v12 phase 8e: `POST /account/email` */
+export interface AccountEmailRequest {
+  email: string;
+  emailProof: string;
+}
+
+/** v12 phase 8e: `POST /account/phone` */
+export interface AccountPhoneRequest {
+  phone: string;
+  phoneProof: string;
 }
 
 /** v11 phase 8.4b: `POST /auth/sms-login` */
@@ -144,7 +185,9 @@ export interface SmsLoginRequest {
 }
 
 export interface LoginRequest {
-  phone: string;
+  /** v12 phase 8e: the phone or the email the account has */
+  phone?: string;
+  email?: string;
   password: string;
 }
 

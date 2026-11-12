@@ -32,7 +32,7 @@ const GROUP_PRICE = '9000000';
 const PASSWORD = 'رمز-آزمون-1405';
 
 const keysOf = (value: unknown) => Object.keys((value ?? {}) as Body).sort().join(',');
-const ACCOUNT_KEYS = 'application,city,companyName,group,kind,name,phone,phoneVerified';
+const ACCOUNT_KEYS = 'application,city,companyName,email,emailVerified,group,kind,name,phone,phoneVerified';
 const SESSION_KEYS = 'account,expiresAt,sessionToken';
 
 export async function runStorefrontBuyersV11Tests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {

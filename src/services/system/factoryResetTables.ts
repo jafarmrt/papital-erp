@@ -17,7 +17,7 @@ import {
   projectReservationReleases, inventoryReconciliationAnomalies, itemWarehouseStocks,
   integrationDeliveryJobs, eventActionRuleRetirements, webhookEventPatternRepairs, itemPriceTitleCleanup,
   dailyLogVisibilityRepairs, statutoryRemittanceLines, settlementAllocations, payrollStatutoryRates, payrollEidiRates, itemCodeHistory,
-  mediaAssets, mediaSections, storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontRedirects, storefrontSmsCodes, storefrontSmsMessages,
+  mediaAssets, mediaSections, storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontRedirects, storefrontSmsCodes, storefrontEmailCodes, storefrontSmsMessages,
   storefrontBuyerGroups, storefrontBuyerAccounts, storefrontBuyerAddresses, storefrontBuyerSessions, storefrontPasswordTokens, storefrontDiscountCodes, storefrontDiscountRedemptions, storefrontCampaigns, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
 } from '../../db/schema.js';
 
@@ -64,6 +64,8 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   //    cheques and documents)
   // v11 phase 8.4a: login codes reference site texts, site texts reference site orders
   { name: 'storefront_sms_codes', table: storefrontSmsCodes },
+  // v12 phase 8e: email codes reference nothing
+  { name: 'storefront_email_codes', table: storefrontEmailCodes },
   { name: 'storefront_sms_messages', table: storefrontSmsMessages },
   // v11 phase 8.2a: site receipts reference treasury rows, site orders reference documents and customers
   { name: 'storefront_discount_redemptions', table: storefrontDiscountRedemptions },

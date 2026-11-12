@@ -7,6 +7,8 @@ import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { phoneMatchKey } from '../../lib/search/phoneMatchKey.js';
 import { cleanText, normalizeMobile } from '../../lib/storefront/storefrontOrderRules.js';
+import { emailMatchKey, maskedEmail, normalizeEmail } from '../../lib/storefront/storefrontEmailRules.js';
+import { accountByEmailKey, emailProofInvalid, emailTaken, lockEmail, provenEmailAt } from './storefrontBuyerEmailKeys.js';
 import {
   BUYER_NAME_MAX, LOGIN_FAILURES_MAX, LOGIN_LOCK_MINUTES, SESSION_DAYS, isApplicationStatus, passwordError,
 } from '../../lib/storefront/storefrontBuyerRules.js';
@@ -62,8 +64,8 @@ export async function provenPhoneAt(tx: DbExecutor, phone: string, rawProof: unk
   if (!proof || !(await consumePhoneProof(tx, phone, proof))) throw phoneProofInvalid();
   return systemNowUtcIso();
 }
-const suspendedAccount = () => new ForbiddenError('این حساب معلق است؛ لطفاً با فروشگاه تماس بگیرید.', undefined, 'STOREFRONT_ACCOUNT_SUSPENDED');
-const wrongSignIn = () => new AppError('شمارهٔ همراه یا رمز درست نیست.', 401, 'STOREFRONT_SIGN_IN_FAILED');
+export const suspendedAccount = () => new ForbiddenError('این حساب معلق است؛ لطفاً با فروشگاه تماس بگیرید.', undefined, 'STOREFRONT_ACCOUNT_SUSPENDED');
+const wrongSignIn = () => new AppError('شمارهٔ همراه، ایمیل یا رمز درست نیست.', 401, 'STOREFRONT_SIGN_IN_FAILED');
 
 /** The site's accounts follow its orders switch: off, every account route is the same 404 */
 export async function assertAccountsOpen(executor: DbExecutor): Promise<void> {
@@ -86,8 +88,8 @@ export async function accountView(executor: DbExecutor, account: AccountRecord):
   const group = await activeGroupOf(executor, account);
   const application = isApplicationStatus(account.applicationStatus) ? account.applicationStatus : 'none';
   return {
-    name: account.name, phone: account.phone, city: account.city, kind: group ? 'wholesale' : 'retail', application,
-    companyName: account.companyName, phoneVerified: Boolean(account.phoneVerifiedAt),
+    name: account.name, phone: account.phone, email: account.email, city: account.city, kind: group ? 'wholesale' : 'retail', application,
+    companyName: account.companyName, phoneVerified: Boolean(account.phoneVerifiedAt), emailVerified: Boolean(account.emailVerifiedAt),
     group: group ? {
       code: group.code, title: group.title, minOrderAmount: rialText(group.minOrderAmount), minLineQuantity: group.minLineQuantity,
       paymentMethods: [...(group.allowCard === 1 ? ['card' as const] : []), ...(group.allowOnAccount === 1 ? ['on_account' as const] : [])],
@@ -102,7 +104,7 @@ export async function revokeSessions(tx: DbExecutor, accountId: number, exceptId
   await tx.update(storefrontBuyerSessions).set({ revokedAt: systemNowUtcIso() }).where(and(...conditions));
 }
 
-async function newSession(tx: DbExecutor, account: AccountRecord): Promise<StorefrontSessionAnswer> {
+export async function newSession(tx: DbExecutor, account: AccountRecord): Promise<StorefrontSessionAnswer> {
   const token = newToken(SESSION_TOKEN_PREFIX);
   const expiresAt = nowPlus(SESSION_DAYS * 24 * 3600_000);
   await tx.insert(storefrontBuyerSessions).values({ accountId: account.id, tokenHash: tokenHash(token), expiresAt });
@@ -115,6 +117,8 @@ export async function lockPhone(tx: DbExecutor, phoneKey: string): Promise<void>
 }
 
 export async function accountByPhoneKey(tx: DbExecutor, phoneKey: string, options: { lock?: boolean } = {}): Promise<AccountRecord | undefined> {
+  // v12 phase 8e: an account without a phone has the key '' and is never found by one
+  if (!phoneKey) return undefined;
   const query = tx.select().from(storefrontBuyerAccounts).where(eq(storefrontBuyerAccounts.phoneKey, phoneKey));
   const [account] = options.lock ? await query.for('update') : await query;
   return account;
@@ -129,27 +133,38 @@ export async function registerAccount(input: RegisterRequest): Promise<Storefron
   await assertAccountsOpen(orm);
   const name = cleanText(input.name, BUYER_NAME_MAX);
   if (!name || name.length < 2) throw accountFieldError('name', 'نام و نام خانوادگی را بنویسید.');
-  const phone = normalizeMobile(input.phone);
-  if (!phone) throw accountFieldError('phone', 'شمارهٔ همراه باید ۱۱ رقم و با ۰۹ آغاز شود.');
+  // v12 phase 8e: a phone, an email or both; an email is always proven with its code
+  const phone = input.phone ? normalizeMobile(input.phone) ?? '' : '';
+  if (input.phone && !phone) throw accountFieldError('phone', 'شمارهٔ همراه باید ۱۱ رقم و با ۰۹ آغاز شود.');
+  const email = input.email ? normalizeEmail(input.email) : '';
+  if (input.email && !email) throw accountFieldError('email', 'نشانی ایمیل را درست بنویسید (مانند name@example.com).');
+  if (!phone && !email) throw accountFieldError('phone', 'شمارهٔ همراه یا ایمیل را بنویسید.');
   const password = String(input.password ?? '');
   const weak = passwordError(password, phone);
   if (weak) throw accountFieldError('password', weak);
-  const proofNeeded = await smsLoginOn(orm);
+  const proofNeeded = Boolean(phone) && await smsLoginOn(orm);
   if (proofNeeded && !input.phoneProof) throw phoneProofInvalid();
+  if (email && !input.emailProof) throw emailProofInvalid();
   const passwordHash = await hashPassword(password);
-  const phoneKey = phoneMatchKey(phone);
+  const phoneKey = phone ? phoneMatchKey(phone) : '';
+  const emailKey = email ? emailMatchKey(email) : '';
   return orm.transaction(async (tx) => {
-    await lockPhone(tx, phoneKey);
-    // the proof first: without one the answer must not say whether the phone has an account (a 409 below rolls the
-    // transaction back, so the proof is not used up)
-    const phoneVerifiedAt = await provenPhoneAt(tx, phone, input.phoneProof, proofNeeded);
+    if (phoneKey) await lockPhone(tx, phoneKey);
+    if (emailKey) await lockEmail(tx, emailKey);
+    // the proofs first: without them the answer must not say whether the phone or email has an account (a 409 below
+    // rolls the transaction back, so the proofs are not used up)
+    const phoneVerifiedAt = phone ? await provenPhoneAt(tx, phone, input.phoneProof, proofNeeded) : null;
+    const emailVerifiedAt = email ? await provenEmailAt(tx, email, input.emailProof) : null;
     if (await accountByPhoneKey(tx, phoneKey)) throw accountExists();
+    if (await accountByEmailKey(tx, emailKey)) throw emailTaken();
     const [account] = await tx.insert(storefrontBuyerAccounts).values({
-      name, phone, phoneKey, status: 'active', passwordHash, lastLoginAt: systemNowUtcIso(), phoneVerifiedAt, updatedBy: STOREFRONT_BOT_USER,
+      name, phone, phoneKey, email, emailKey, status: 'active', passwordHash, lastLoginAt: systemNowUtcIso(), phoneVerifiedAt, emailVerifiedAt,
+      updatedBy: STOREFRONT_BOT_USER,
     }).returning();
     await logActivity({
       tx, username: STOREFRONT_BOT_USER, action: 'CREATE', entity: 'حساب خریدار سایت', entityId: account.id,
-      description: `حساب خریدار تکی برای شمارهٔ ${phone} در سایت ساخته شد`, details: { after: { id: account.id, name, kind: 'retail' } },
+      description: `حساب خریدار تکی برای ${phone ? `شمارهٔ ${phone}` : `ایمیل ${maskedEmail(email)}`} در سایت ساخته شد`,
+      details: { after: { id: account.id, name, kind: 'retail', withPhone: Boolean(phone), withEmail: Boolean(email) } },
     });
     return newSession(tx, account);
   });
@@ -158,9 +173,11 @@ export async function registerAccount(input: RegisterRequest): Promise<Storefron
 /** `POST /auth/login` */
 export async function signIn(input: LoginRequest): Promise<StorefrontSessionAnswer> {
   await assertAccountsOpen(orm);
-  const phone = normalizeMobile(input.phone);
+  // v12 phase 8e: by the phone or by the email; one answer for a wrong one and a wrong password
+  const phone = input.phone ? normalizeMobile(input.phone) ?? '' : '';
+  const email = !phone && input.email ? normalizeEmail(input.email) : '';
   const password = String(input.password ?? '');
-  const found = phone ? await accountByPhoneKey(orm, phoneMatchKey(phone)) : undefined;
+  const found = phone ? await accountByPhoneKey(orm, phoneMatchKey(phone)) : email ? await accountByEmailKey(orm, emailMatchKey(email)) : undefined;
   if (found?.lockedUntil && Date.parse(found.lockedUntil) > Date.now()) {
     throw new AppError(`تلاش‌های نادرست زیاد بود؛ ${LOGIN_LOCK_MINUTES.toLocaleString('fa-IR')} دقیقهٔ دیگر دوباره امتحان کنید.`, 429, 'STOREFRONT_SIGN_IN_LOCKED');
   }
@@ -305,7 +322,7 @@ export async function setPasswordWithLink(input: SetPasswordRequest): Promise<St
     await revokeSessions(tx, account.id);
     await logActivity({
       tx, username: STOREFRONT_BOT_USER, action: 'UPDATE', entity: 'حساب خریدار سایت', entityId: account.id,
-      description: `خریدار رمز حساب ${account.phone} را با پیوند تعیین رمز گذاشت`, details: { linkId: row.id },
+      description: `خریدار رمز حساب ${account.phone || maskedEmail(account.email)} را با پیوند تعیین رمز گذاشت`, details: { linkId: row.id },
     });
     return newSession(tx, { ...account, ...updated });
   });
