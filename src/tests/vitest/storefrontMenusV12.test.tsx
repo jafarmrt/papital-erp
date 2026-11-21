@@ -229,33 +229,68 @@ describe('the site menus screen', () => {
     expect(JSON.parse(String(calls.list.find(c => c.init?.method === 'PUT')?.init?.body)).items[0]).toMatchObject({ kind: 'path', target: '/products', pageId: null });
   });
 
-  const withSavedPageLink = (): MenusView => ({
+  /** a saved link to a page and one to a campaign page; `targetTitle` '' is what the server sends for a target that is gone */
+  const withSavedPageLink = (targetTitle: string): MenusView => ({
     menus: rules.MENU_LOCATIONS.map(location => ({
       location, enabled: true, version: 2, updatedBy: '', updatedAt: '',
-      items: location === 'header' ? [{ id: 4, label: 'صفحهٔ قدیمی', kind: 'content', target: '', itemId: null, campaignId: null, pageId: 77, icon: '', isActive: true, targetTitle: 'راهنمای خرید', live: true, children: [] }] : [],
+      items: location === 'header' ? [
+        { id: 4, label: 'صفحهٔ قدیمی', kind: 'content', target: '', itemId: null, campaignId: null, pageId: 77, icon: '', isActive: true, targetTitle, live: targetTitle !== '', children: [] },
+        { id: 5, label: 'یلدای قدیمی', kind: 'campaign', target: '', itemId: null, campaignId: 66, pageId: null, icon: '', isActive: true, targetTitle: targetTitle && 'یلدای پارسال', live: false, children: [] },
+      ] : [],
     })),
   } as MenusView);
 
-  it('calls a saved link\'s page removed only once the list of pages has been read and does not have it', async () => {
-    menus.current = withSavedPageLink();
+  it('calls a saved link\'s page or campaign page removed only once the list has been read and the server sent no name for it', async () => {
+    menus.current = withSavedPageLink('');
     permissions.current = ['site_content.view', 'site_content.manage'];
     page('/site-menus?place=header');
     const panel = within(await screen.findByRole('tabpanel'));
-    await waitFor(() => expect([...(panel.getByLabelText('مقصد') as HTMLSelectElement).options].map(o => o.textContent)).toContain('صفحه‌ای که حذف شده است'));
-    expect((panel.getByLabelText('مقصد') as HTMLSelectElement).value).toBe('77');
+    const targets = () => panel.getAllByLabelText('مقصد') as HTMLSelectElement[];
+    await waitFor(() => expect([...targets()[0].options].map(o => o.textContent)).toContain('صفحه‌ای که حذف شده است'));
+    expect(targets()[0].value).toBe('77');
+    expect([...targets()[1].options].map(o => o.textContent)).toContain('صفحهٔ ویژه‌ای که حذف شده است');
+  });
+
+  it('shows the saved name of a page the list does not have yet (a colleague just made it), and never sends that name back', async () => {
+    menus.current = withSavedPageLink('راهنمای خرید');
+    permissions.current = ['site_content.view', 'site_content.manage'];
+    page('/site-menus?place=header');
+    const panel = within(await screen.findByRole('tabpanel'));
+    await waitFor(() => expect(calls.list.some(c => c.url === '/storefront/menus/link-options')).toBe(true));
+    const shown = [...(panel.getAllByLabelText('مقصد')[0] as HTMLSelectElement).options].map(o => o.textContent);
+    expect(shown).toContain('راهنمای خرید');
+    expect(shown).not.toContain('صفحه‌ای که حذف شده است');
+    fireEvent.change(panel.getAllByLabelText('عنوان')[0], { target: { value: 'راهنما' } });
+    fireEvent.click(panel.getByRole('button', { name: /^ذخیره/ }));
+    await waitFor(() => expect(calls.list.some(c => c.init?.method === 'PUT')).toBe(true));
+    const body = JSON.parse(String(calls.list.find(c => c.init?.method === 'PUT')?.init?.body));
+    // the server's schema is strict: a field of the screen's own would be a 400 on every save
+    for (const sent of body.items) expect(Object.keys(sent).sort()).toEqual(['campaignId', 'children', 'icon', 'id', 'isActive', 'itemId', 'kind', 'label', 'pageId', 'target']);
   });
 
   it.each(['never', 'fail'] as const)('keeps the saved name of a link\'s page while the list of pages is not read (%s)', async (mode) => {
     optionsMode.current = mode;
-    menus.current = withSavedPageLink();
+    menus.current = withSavedPageLink('راهنمای خرید');
     permissions.current = ['site_content.view', 'site_content.manage'];
     page('/site-menus?place=header');
     const panel = within(await screen.findByRole('tabpanel'));
-    await waitFor(() => expect((panel.getByLabelText('مقصد') as HTMLSelectElement).value).toBe('77'));
+    await waitFor(() => expect((panel.getAllByLabelText('مقصد')[0] as HTMLSelectElement).value).toBe('77'));
     if (mode === 'fail') await screen.findByText(/فهرست دسته‌ها، صفحه‌ها و محصولات خوانده نشد/);
-    const shown = [...(panel.getByLabelText('مقصد') as HTMLSelectElement).options].map(o => o.textContent);
-    expect(shown).toContain('راهنمای خرید');
-    expect(shown).not.toContain('صفحه‌ای که حذف شده است');
+    const shown = (panel.getAllByLabelText('مقصد') as HTMLSelectElement[]).flatMap(select => [...select.options].map(o => o.textContent));
+    expect(shown).toEqual(expect.arrayContaining(['راهنمای خرید', 'یلدای پارسال']));
+    expect(shown.join()).not.toContain('حذف شده');
+  });
+
+  it('does not call a target removed whose name is unknown while the list is not read', async () => {
+    optionsMode.current = 'fail';
+    menus.current = withSavedPageLink('');
+    permissions.current = ['site_content.view', 'site_content.manage'];
+    page('/site-menus?place=header');
+    const panel = within(await screen.findByRole('tabpanel'));
+    await screen.findByText(/فهرست دسته‌ها، صفحه‌ها و محصولات خوانده نشد/);
+    const shown = (panel.getAllByLabelText('مقصد') as HTMLSelectElement[]).flatMap(select => [...select.options].map(o => o.textContent));
+    expect(shown.filter(text => text === 'نامش خوانده نشده است')).toHaveLength(2);
+    expect(shown.join()).not.toContain('حذف شده');
   });
 
   it('keeps the saved menu on the screen while the list is still being read again after a save', async () => {

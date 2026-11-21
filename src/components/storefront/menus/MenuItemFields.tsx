@@ -27,6 +27,15 @@ const field = 'w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 te
 const label = 'mb-1 block text-xs font-bold text-slate-600';
 const iconButton = 'rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 disabled:opacity-30';
 
+/**
+ * The words for a saved target that the list of choices does not have. The name the server sent with the saved row wins
+ * (the list is kept half a minute, so a page a colleague just made may not be in it yet); with no name, it is «حذف شده»
+ * once the list has been read, and until then (or when the list could not be read) only that its name is not known.
+ */
+const goneLabel = (item: DraftItem, options: MenuLinkOptions | undefined, removed: string): string => (
+  item.targetTitle || (options ? removed : 'نامش خوانده نشده است')
+);
+
 function TargetField({ item, options, onChange, id }: {
   item: DraftItem; options: MenuLinkOptions | undefined; onChange: (patch: Partial<DraftItem>) => void; id: string;
 }) {
@@ -55,7 +64,7 @@ function TargetField({ item, options, onChange, id }: {
       return (
         <select id={id} className={field} value={item.campaignId ?? ''} onChange={e => onChange({ campaignId: e.target.value ? Number(e.target.value) : null })}>
           <option value="">برگزینید</option>
-          {item.campaignId !== null && !list.some(c => c.id === item.campaignId) && <option value={item.campaignId}>{options ? 'صفحهٔ ویژه‌ای که حذف شده است' : (item.targetTitle || 'در حال خواندن…')}</option>}
+          {item.campaignId !== null && !list.some(c => c.id === item.campaignId) && <option value={item.campaignId}>{goneLabel(item, options, 'صفحهٔ ویژه‌ای که حذف شده است')}</option>}
           {list.map(c => <option key={c.id} value={c.id}>{c.live ? c.title : `${c.title} (اکنون روی سایت نیست)`}</option>)}
         </select>
       );
@@ -65,8 +74,7 @@ function TargetField({ item, options, onChange, id }: {
       return (
         <select id={id} className={field} value={item.pageId ?? ''} onChange={e => onChange({ pageId: e.target.value ? Number(e.target.value) : null })}>
           <option value="">برگزینید</option>
-          {/* «حذف شده» only once the list has been read: until then (or when it could not be read) the saved name stays */}
-          {item.pageId !== null && !list.some(p => p.id === item.pageId) && <option value={item.pageId}>{options ? 'صفحه‌ای که حذف شده است' : (item.targetTitle || 'در حال خواندن…')}</option>}
+          {item.pageId !== null && !list.some(p => p.id === item.pageId) && <option value={item.pageId}>{goneLabel(item, options, 'صفحه‌ای که حذف شده است')}</option>}
           {list.map(p => <option key={p.id} value={p.id}>{p.live ? p.title : `${p.title} (اکنون روی سایت نیست)`}</option>)}
         </select>
       );

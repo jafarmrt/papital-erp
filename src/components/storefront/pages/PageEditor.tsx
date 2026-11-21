@@ -305,8 +305,8 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
                 {(asking === 'delete' || asking === 'unpublish') && linkedFrom && (
                   <span data-menu-warning className="mt-1 block font-bold">
                     {asking === 'delete'
-                      ? `پیوند این صفحه در ${linkedFrom} هم از سایت برداشته می‌شود؛ پس از حذف، آن گزینه را در «فهرست‌های سایت» بردارید یا به صفحهٔ دیگری بدهید.`
-                      : `پیوند این صفحه در ${linkedFrom} هم تا انتشار دوباره از سایت برداشته می‌شود.`}
+                      ? `این صفحه در ${linkedFrom} پیوند دارد. آن پیوند دیگر روی سایت نمی‌آید؛ پس از حذف، آن گزینه را در «فهرست‌های سایت» بردارید یا به صفحهٔ دیگری بدهید.`
+                      : `این صفحه در ${linkedFrom} پیوند دارد. تا انتشار دوباره، آن پیوند روی سایت نمی‌آید.`}
                   </span>
                 )}
               </p>

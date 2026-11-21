@@ -220,17 +220,18 @@ describe('the site pages screen', () => {
   it('says which menus lose their link before a page is taken off the site or removed (v12 phase 10c)', async () => {
     permissions.current = ['site_content.view', 'site_content.manage'];
     open('/site-pages?page=9', detailOf({ status: 'published', menuPlaces: ['header', 'bottom'] }));
+    const places = '«منوی بالا» و «نوار پایین گوشی»';
     fireEvent.click(await screen.findByRole('button', { name: 'برداشتن از روی سایت' }));
-    expect(screen.getByRole('group', { name: 'تأیید این کار' }).textContent).toContain('پیوند این صفحه در «منوی بالا» و «نوار پایین گوشی» هم تا انتشار دوباره از سایت برداشته می‌شود.');
+    expect(screen.getByRole('group', { name: 'تأیید این کار' }).textContent).toContain(`این صفحه در ${places} پیوند دارد. تا انتشار دوباره، آن پیوند روی سایت نمی‌آید.`);
     fireEvent.click(within(screen.getByRole('group', { name: 'تأیید این کار' })).getByRole('button', { name: 'انصراف' }));
     fireEvent.click(screen.getByRole('button', { name: 'حذف صفحه' }));
-    expect(screen.getByRole('group', { name: 'تأیید این کار' }).textContent).toContain('پیوند این صفحه در «منوی بالا» و «نوار پایین گوشی» هم از سایت برداشته می‌شود');
+    expect(screen.getByRole('group', { name: 'تأیید این کار' }).textContent).toContain(`این صفحه در ${places} پیوند دارد. آن پیوند دیگر روی سایت نمی‌آید؛`);
     cleanup();
     fetchJson.mockReset();
     // a page no menu links to says nothing of menus
     open('/site-pages?page=9', detailOf({ status: 'published' }));
     fireEvent.click(await screen.findByRole('button', { name: 'حذف صفحه' }));
-    expect(screen.getByRole('group', { name: 'تأیید این کار' }).textContent).not.toContain('پیوند این صفحه');
+    expect(screen.getByRole('group', { name: 'تأیید این کار' }).textContent).not.toContain('پیوند دارد');
   });
 
   it('shows a page without any way to change it to a holder of the view key', async () => {

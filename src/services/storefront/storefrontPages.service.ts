@@ -12,6 +12,7 @@ import {
   type PageSection, type PageValues, type RichDoc, type RichNode,
 } from '../../lib/storefront/storefrontPageRules.js';
 import type { PageAssetInfo, PageCreateInput, PageDetail, PageListRow, PageSaveInput, PageStatus } from '../../lib/storefront/storefrontPageContracts.js';
+import { MENU_LOCATIONS } from '../../lib/storefront/storefrontMenuRules.js';
 
 /**
  * v12 phase 10b (package 18, V12_SITE_NEXT_START_PLAN.md §7.2): «صفحه‌های سایت» on the ERP side. Reading needs
@@ -365,11 +366,16 @@ export async function pageLinkTargets(executor: DbExecutor, ids?: readonly numbe
   return out;
 }
 
-/** The menu places («فهرست‌های سایت») that link to a page, so removing it or taking it off the site can say what it breaks */
+/**
+ * The menu places («فهرست‌های سایت») with a live item that links to a page, so removing the page or taking it off the
+ * site can say what it touches. An item switched off, or in a place that is off, counts too: it is still a link to mend.
+ */
 async function menuPlacesOf(executor: DbExecutor, pageId: number): Promise<string[]> {
   const rows = await executor.select({ location: storefrontMenuItems.location }).from(storefrontMenuItems)
     .where(and(eq(storefrontMenuItems.targetPageId, pageId), eq(storefrontMenuItems.isDeleted, 0)));
-  return [...new Set(rows.map(r => r.location))].sort();
+  // in the order the menu builder shows its places
+  const found = new Set(rows.map(r => r.location));
+  return MENU_LOCATIONS.filter(location => found.has(location));
 }
 
 /**

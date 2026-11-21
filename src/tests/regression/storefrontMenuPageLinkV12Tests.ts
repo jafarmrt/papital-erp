@@ -87,12 +87,16 @@ export async function runStorefrontMenuPageLinkV12Tests(shouldRun: (id: string, 
     // 2) a menu with it and a base page by its own kind: saved; the ERP marks the draft's link as not on the site, which gets only the others
     const views = (await erp.get('/api/storefront/menus')).body.data.menus as Body[];
     let version = Number(views.find(m => m.location === 'header')?.version);
-    const items = [leaf('داستان ما', 'content', { pageId }), leaf('درباره ما', 'page', { target: 'about' }), leaf('محصولات', 'path', { target: '/products' })];
+    const { children: _none, ...childLink } = leaf('داستان (زیرگزینه)', 'content', { pageId });
+    const items = [
+      leaf('داستان ما', 'content', { pageId }), leaf('درباره ما', 'page', { target: 'about' }), leaf('محصولات', 'path', { target: '/products' }),
+      { ...leaf('بیشتر', 'none'), children: [childLink] },
+    ];
     const saved = await erp.put('/api/storefront/menus/header', { enabled: true, version, items });
     if (saved.status !== 200) throw new Error(`saving the menu: ${saved.status} ${JSON.stringify(saved.body)}`);
     version = Number(saved.body.data.version);
     const rowsOf = (body: Body) => ((body.data as Body).items as Array<Body>).map(i => `${i.label}:${i.kind}:${i.pageId}:${i.targetTitle}:${i.live}`).join('|');
-    if (rowsOf(saved.body) !== `داستان ما:content:${pageId}:داستان منو ${tag}:false|درباره ما:page:null:دربارهٔ پاپیتال:true|محصولات:path:null::true`) {
+    if (rowsOf(saved.body) !== `داستان ما:content:${pageId}:داستان منو ${tag}:false|درباره ما:page:null:دربارهٔ پاپیتال:true|محصولات:path:null::true|بیشتر:none:null::false`) {
       wrong.push(`the saved menu: ${rowsOf(saved.body)}`);
     }
     const stored = await orm.select().from(storefrontMenuItems).where(gt(storefrontMenuItems.id, lastItem ?? 0));
@@ -113,7 +117,8 @@ export async function runStorefrontMenuPageLinkV12Tests(shouldRun: (id: string, 
     if (published.status !== 200) throw new Error(`publishing: ${published.status} ${JSON.stringify(published.body)}`);
     const header = await siteHeader();
     const first = (header ?? [])[0] ?? {};
-    if (first.href !== `/pages/${slug}` || first.external !== false || Object.keys(first).sort().join(',') !== 'children,external,href,icon,label,role') {
+    const child = (((header ?? [])[3] ?? {}).children as Body[] | undefined)?.[0];
+    if (first.href !== `/pages/${slug}` || first.external !== false || Object.keys(first).sort().join(',') !== 'children,external,href,icon,label,role' || child?.href !== `/pages/${slug}`) {
       wrong.push(`the site's link: ${JSON.stringify(first)}`);
     }
     const everyItem = (header ?? []).flatMap(i => [i, ...((i.children ?? []) as Body[])]);
@@ -123,15 +128,26 @@ export async function runStorefrontMenuPageLinkV12Tests(shouldRun: (id: string, 
     // the page's detail in the ERP names the menu that links to it
     const linked = (await erp.get(`/api/storefront/pages/${pageId}`)).body.data?.menuPlaces;
     if (JSON.stringify(linked) !== '["header"]') wrong.push(`the page's menus: ${JSON.stringify(linked)}`);
+    // a second place links to it too: the places come in the builder's own order, each once
+    const footerVersion = Number(((await erp.get('/api/storefront/menus')).body.data.menus as Body[]).find(m => m.location === 'footer')?.version);
+    const footer = await erp.put('/api/storefront/menus/footer', { enabled: false, version: footerVersion, items: [{ ...leaf('ستون', 'none'), children: [childLink, { ...childLink, label: 'دوباره', isActive: false }] }] });
+    const twoPlaces = (await erp.get(`/api/storefront/pages/${pageId}`)).body.data?.menuPlaces;
+    if (footer.status !== 200 || JSON.stringify(twoPlaces) !== '["header","footer"]') wrong.push(`two places: ${footer.status} ${JSON.stringify(footer.body).slice(0, 200)} ${JSON.stringify(twoPlaces)}`);
+    // the item leaves the footer: that place is no longer named (a removed menu item is not a link to mend)
+    const footerEmptied = await erp.put('/api/storefront/menus/footer', { enabled: false, version: Number(footer.body.data?.version), items: [] });
+    const onePlace = (await erp.get(`/api/storefront/pages/${pageId}`)).body.data?.menuPlaces;
+    if (footerEmptied.status !== 200 || JSON.stringify(onePlace) !== '["header"]') wrong.push(`after the footer's item was removed: ${footerEmptied.status} ${JSON.stringify(onePlace)}`);
 
     // 4) off the site: the link leaves; its address changes there; published again: the link has the new address
     const off = await erp.post(`/api/storefront/pages/${pageId}/unpublish`, { version: 3 });
     const whileOff = await hrefs();
+    const [offAudit] = await orm.select().from(activityLogs).where(and(eq(activityLogs.entityId, `page-${pageId}`), eq(activityLogs.action, 'UPDATE'))).orderBy(desc(activityLogs.id)).limit(1);
+    if (JSON.stringify((offAudit?.details as Body | undefined)?.linkedFromMenus) !== '["header"]') wrong.push(`the audit row of taking the page off the site: ${String(JSON.stringify(offAudit?.details)).slice(0, 300)}`);
     const moved = await erp.put(`/api/storefront/pages/${pageId}`, form(4, { slug: `${slug}-moved` }));
     const again = await erp.post(`/api/storefront/pages/${pageId}/publish`, { version: 5 });
     const after = await hrefs();
     if (off.status !== 200 || moved.status !== 200 || again.status !== 200) wrong.push(`moving the page: ${off.status}/${moved.status}/${again.status}`);
-    if (whileOff !== before || after !== `داستان ما→/pages/${slug}-moved|درباره ما→/about|محصولات→/products`) wrong.push(`the link through a move: «${whileOff}» then «${after}»`);
+    if (whileOff !== before || after !== `داستان ما→/pages/${slug}-moved|درباره ما→/about|محصولات→/products|بیشتر→`) wrong.push(`the link through a move: «${whileOff}» then «${after}»`);
 
     // 5) refused when a menu is saved: an unknown page, a base page (it has its own kind), a 'content' link without a page
     const unknown = await erp.put('/api/storefront/menus/header', { enabled: true, version, items: [leaf('ناشناخته', 'content', { pageId: 2_000_000_000 })] });
@@ -143,7 +159,7 @@ export async function runStorefrontMenuPageLinkV12Tests(shouldRun: (id: string, 
     }
     // another kind never carries a page: the server empties it
     const stray = await erp.put('/api/storefront/menus/header', { enabled: true, version, items: [...items, leaf('مسیر', 'path', { target: '/cart', pageId })] });
-    if (stray.status !== 200 || (stray.body.data.items as Body[])[3]?.pageId !== null) wrong.push(`a page on another kind: ${stray.status} ${JSON.stringify((stray.body.data?.items as Body[] | undefined)?.[3])}`);
+    if (stray.status !== 200 || (stray.body.data.items as Body[])[4]?.pageId !== null) wrong.push(`a page on another kind: ${stray.status} ${JSON.stringify((stray.body.data?.items as Body[] | undefined)?.[4])}`);
     version = Number(stray.body.data?.version ?? version);
 
     // 6) the page removed: the site drops the link, the ERP shows it as gone, and the menu cannot be saved with it again
