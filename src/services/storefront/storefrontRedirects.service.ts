@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import { and, asc, desc, eq, ilike, inArray, isNotNull, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, sql, type SQL } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, storefrontPages, storefrontProducts, storefrontRedirects } from '../../db/schema.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
@@ -7,7 +7,6 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { OptimisticLockError, nextVersion } from '../../lib/occHelper.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { foldedContains } from '../../lib/search/searchSql.js';
-import { containsLikePattern } from '../../lib/sqlLike.js';
 import {
   REDIRECTS_MAX, REDIRECT_NOTE_MAX, REDIRECT_TARGET_KIND_TITLES, legacyPathError, legacyPathKey, redirectTargetError,
   type RedirectSource, type RedirectTargetKind,
@@ -267,9 +266,10 @@ export async function redirectMovedPage(req: Request, tx: DbExecutor, move: { fr
   const at = systemNowUtcIso();
 
   // a target is matched by its key, so one written with a last slash, a query, in capitals or behind `/index.php`
-  // (`/pages/a/`, `/pages/a?x=1`, `/pages/A`) follows too: the rows that hold the address anywhere are read, then told apart
+  // (`/pages/a/`, `/pages/a?x=1`, `/pages/A`) follows too: the rows that hold the address anywhere are read through the
+  // lists' own folded search (no pattern is built here), then told apart by their key
   const near = await tx.select().from(storefrontRedirects)
-    .where(and(eq(storefrontRedirects.isDeleted, 0), eq(storefrontRedirects.targetKind, 'path'), ilike(storefrontRedirects.target, containsLikePattern(move.from)))).for('update');
+    .where(and(eq(storefrontRedirects.isDeleted, 0), eq(storefrontRedirects.targetKind, 'path'), foldedContains([storefrontRedirects.target], move.from))).for('update');
   const led = near.filter(row => row.target === move.from || (fromKey !== null && legacyPathKey(row.target) === fromKey));
   for (const row of led) {
     if (row.fromPath === toKey) {
