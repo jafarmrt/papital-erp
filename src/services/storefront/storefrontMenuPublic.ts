@@ -8,6 +8,7 @@ import type { StorefrontPublicMenuItem, StorefrontPublicMenus } from '../../lib/
 import { publicItemsOnSale } from './storefrontCatalog.service.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
 import { campaignOpenNow } from './storefrontCampaigns.service.js';
+import { pageLinkTargets } from './storefrontPagePublic.js';
 
 /**
  * v12 phase 9c (V12_SITE_NEXT_START_PLAN.md §6, `AGENTS.md` §1.9c): `GET /api/storefront/v1/menus`, the menus the site
@@ -37,6 +38,8 @@ export async function publicMenus(): Promise<StorefrontPublicMenus> {
   const campaignSlugs = new Map(campaignIds.length === 0 ? [] : (await orm.select({ id: storefrontCampaigns.id, slug: storefrontCampaigns.slug })
     .from(storefrontCampaigns).where(and(inArray(storefrontCampaigns.id, campaignIds), campaignOpenNow()))).map(r => [r.id, r.slug]));
 
+  const pages = await pageLinkTargets(orm, rows.map(r => r.targetPageId).filter((id): id is number => id !== null));
+
   /** the address of a link the site has now, '' for a heading, null for a link that leads nowhere today */
   const hrefOf = (row: ItemRecord): string | null => {
     const kind = isMenuLinkKind(row.linkKind) ? row.linkKind : null;
@@ -51,6 +54,11 @@ export async function publicMenus(): Promise<StorefrontPublicMenus> {
       case 'campaign': {
         const slug = row.targetCampaignId !== null ? campaignSlugs.get(row.targetCampaignId) : undefined;
         return slug ? `/campaigns/${encodeURIComponent(slug)}` : null;
+      }
+      case 'content': {
+        // v12 phase 10c: the address is the page's own of now, so the link follows a change of it; a page off the site leads nowhere
+        const page = row.targetPageId !== null ? pages.get(row.targetPageId) : undefined;
+        return page?.live ? page.href : null;
       }
       case 'page':
         return !ordering && (row.target === 'cart' || row.target === 'track') ? null : menuRuleHref(kind, row.target);

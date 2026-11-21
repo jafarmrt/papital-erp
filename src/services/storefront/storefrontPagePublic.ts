@@ -1,11 +1,11 @@
 import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm';
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { mediaAssets, storefrontContentAssets, storefrontPages } from '../../db/schema.js';
 import { NotFoundError } from '../../errors/customErrors.js';
 import { mediaFilePath } from '../../lib/media/mediaPaths.js';
 import { serverTimestampToUtcIso } from '../../lib/serverTimestamp.js';
 import {
-  PAGES_MAX, PRODUCT_ROW_MAX, isPageKind, pageAssetIds, pageLink, safeRichDoc, type PageSection, type RichDoc, type RichNode,
+  BASE_PAGES, PAGES_MAX, PRODUCT_ROW_MAX, isPageKind, pageAssetIds, pageLink, safeRichDoc, type PageSection, type RichDoc, type RichNode,
 } from '../../lib/storefront/storefrontPageRules.js';
 import type {
   StorefrontPageImage, StorefrontPageSection, StorefrontPageSummary, StorefrontPublicPage,
@@ -131,6 +131,35 @@ export async function publicPage(slug: string): Promise<StorefrontPublicPage> {
     ...summaryOf(row), seoTitle: published.seoTitle, seoDescription: published.seoDescription,
     shareImage: imageOf(images, published.shareImageAssetId, published.title), sections: out,
   };
+}
+
+export interface PageLinkTarget {
+  title: string;
+  /** the page's address on the site: its own for a base page, under `/pages` for a page the shop made */
+  href: string;
+  /** whether the address answers now: a base page always does (with its fixed text until it is published), a custom page while published */
+  live: boolean;
+}
+
+/**
+ * v12 phase 10c: the live pages a menu link («صفحهٔ متنی») may name, by row id; `ids` narrows the read to the pages a
+ * menu names. A removed page is not in the answer. The title is the copy on the site's while there is one.
+ */
+export async function pageLinkTargets(executor: DbExecutor, ids?: readonly number[]): Promise<Map<number, PageLinkTarget>> {
+  const out = new Map<number, PageLinkTarget>();
+  if (ids && ids.length === 0) return out;
+  const rows = await executor.select({
+    id: storefrontPages.id, kind: storefrontPages.kind, slug: storefrontPages.slug, title: storefrontPages.title, published: storefrontPages.published,
+  }).from(storefrontPages)
+    .where(ids ? and(eq(storefrontPages.isDeleted, 0), inArray(storefrontPages.id, [...new Set(ids)])) : eq(storefrontPages.isDeleted, 0))
+    .orderBy(asc(storefrontPages.id)).limit(PAGES_MAX + BASE_PAGES.length);
+  for (const row of rows) {
+    const base = row.kind === 'base';
+    out.set(row.id, {
+      title: row.published?.title ?? row.title, href: base ? `/${row.slug}` : `/pages/${row.slug}`, live: base || row.published !== null,
+    });
+  }
+  return out;
 }
 
 const MEDIA_FILE = /^([0-9a-f]{64})(-thumb)?\.webp$/;

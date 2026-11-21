@@ -38,6 +38,8 @@ export interface MenuLinkOptions {
   categories: string[];
   collections: string[];
   campaigns: Array<{ id: number; title: string; live: boolean }>;
+  /** v12 phase 10c: the pages of «صفحه‌های سایت» (a custom page also while it is not published, marked) */
+  pages: Array<{ id: number; title: string; live: boolean }>;
   products: Array<{ itemId: number; name: string; sku: string }>;
 }
 

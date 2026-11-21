@@ -24,7 +24,7 @@ vi.mock('../../api', () => ({
   fetchJson: (url: string, init?: { method?: string; body?: string }) => {
     calls.list.push({ url, init });
     if (url === '/storefront/menus') return stall.afterPut && stall.put ? new Promise(() => undefined) : Promise.resolve({ data: menus.current });
-    if (url === '/storefront/menus/link-options') return Promise.resolve({ data: { categories: ['انگشتر', 'دستبند'], collections: ['یلدا'], campaigns: [], products: [] } });
+    if (url === '/storefront/menus/link-options') return Promise.resolve({ data: { categories: ['انگشتر', 'دستبند'], collections: ['یلدا'], campaigns: [], pages: [{ id: 3, title: 'درباره ما', live: true }, { id: 9, title: 'داستان ما', live: false }], products: [] } });
     if (init?.method === 'PUT') {
       stall.put = true;
       const body = JSON.parse(String(init.body));
@@ -153,7 +153,7 @@ describe('the site menus screen', () => {
   it('marks a saved link the site does not show now', async () => {
     const view = emptyMenus();
     view.menus[0].items = [{
-      id: 7, label: 'خالی', kind: 'category', target: 'خالی', itemId: null, campaignId: null, icon: '', isActive: true,
+      id: 7, label: 'خالی', kind: 'category', target: 'خالی', itemId: null, campaignId: null, pageId: null, icon: '', isActive: true,
       targetTitle: '', live: false, children: [],
     }];
     menus.current = view;
@@ -191,6 +191,49 @@ describe('the site menus screen', () => {
     fireEvent.change(panel.getByLabelText('مقصد'), { target: { value: '/about' } });
     fireEvent.change(panel.getByLabelText('پیوند به'), { target: { value: 'url' } });
     expect((panel.getByLabelText('مقصد') as HTMLInputElement).value).toBe('');
+  });
+
+  it('links to a page of the page builder by its row, marks one not on the site, and drops the page when the kind changes (v12 phase 10c)', async () => {
+    menus.current = emptyMenus();
+    permissions.current = ['site_content.view', 'site_content.manage'];
+    page('/site-menus?place=header');
+    await waitFor(() => expect(calls.list.some(c => c.url === '/storefront/menus/link-options')).toBe(true));
+    const panel = within(await screen.findByRole('tabpanel'));
+    fireEvent.click(panel.getByRole('button', { name: /افزودن گزینه/ }));
+    fireEvent.change(panel.getByLabelText('عنوان'), { target: { value: 'داستان ما' } });
+    fireEvent.change(panel.getByLabelText('پیوند به'), { target: { value: 'content' } });
+    const target = panel.getByLabelText('مقصد') as HTMLSelectElement;
+    expect([...target.options].map(o => o.textContent)).toEqual(['برگزینید', 'درباره ما', 'داستان ما (اکنون روی سایت نیست)']);
+    // no page chosen yet: the save is refused on the screen
+    fireEvent.click(panel.getByRole('button', { name: /^ذخیره/ }));
+    expect(vi.mocked(toast.error)).toHaveBeenCalled();
+    expect(calls.list.some(c => c.init?.method === 'PUT')).toBe(false);
+    fireEvent.change(target, { target: { value: '9' } });
+    fireEvent.click(panel.getByRole('button', { name: /^ذخیره/ }));
+    await waitFor(() => expect(calls.list.some(c => c.init?.method === 'PUT')).toBe(true));
+    const body = JSON.parse(String(calls.list.find(c => c.init?.method === 'PUT')?.init?.body));
+    expect(body.items[0]).toMatchObject({ label: 'داستان ما', kind: 'content', pageId: 9, target: '', itemId: null, campaignId: null });
+    // another kind never carries the page along
+    fireEvent.change(panel.getByLabelText('پیوند به'), { target: { value: 'path' } });
+    fireEvent.change(panel.getByLabelText('مقصد'), { target: { value: '/products' } });
+    calls.list = [];
+    fireEvent.click(panel.getByRole('button', { name: /^ذخیره/ }));
+    await waitFor(() => expect(calls.list.some(c => c.init?.method === 'PUT')).toBe(true));
+    expect(JSON.parse(String(calls.list.find(c => c.init?.method === 'PUT')?.init?.body)).items[0]).toMatchObject({ kind: 'path', target: '/products', pageId: null });
+  });
+
+  it('names a page that was removed in a saved link', async () => {
+    menus.current = {
+      menus: rules.MENU_LOCATIONS.map(location => ({
+        location, enabled: true, version: 2, updatedBy: '', updatedAt: '',
+        items: location === 'header' ? [{ id: 4, label: 'صفحهٔ قدیمی', kind: 'content', target: '', itemId: null, campaignId: null, pageId: 77, icon: '', isActive: true, targetTitle: '', live: false, children: [] }] : [],
+      })),
+    } as MenusView;
+    permissions.current = ['site_content.view', 'site_content.manage'];
+    page('/site-menus?place=header');
+    const panel = within(await screen.findByRole('tabpanel'));
+    await waitFor(() => expect((panel.getByLabelText('مقصد') as HTMLSelectElement).value).toBe('77'));
+    expect([...(panel.getByLabelText('مقصد') as HTMLSelectElement).options].map(o => o.textContent)).toContain('صفحه‌ای که حذف شده است');
   });
 
   it('keeps the saved menu on the screen while the list is still being read again after a save', async () => {

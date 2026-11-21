@@ -15,6 +15,7 @@ export interface DraftItem {
   target: string;
   itemId: number | null;
   campaignId: number | null;
+  pageId: number | null;
   icon: MenuIcon | '';
   isActive: boolean;
   children: DraftItem[];
@@ -57,6 +58,16 @@ function TargetField({ item, options, onChange, id }: {
         </select>
       );
     }
+    case 'content': {
+      const list = Array.isArray(options?.pages) ? options.pages : [];
+      return (
+        <select id={id} className={field} value={item.pageId ?? ''} onChange={e => onChange({ pageId: e.target.value ? Number(e.target.value) : null })}>
+          <option value="">برگزینید</option>
+          {item.pageId !== null && !list.some(p => p.id === item.pageId) && <option value={item.pageId}>صفحه‌ای که حذف شده است</option>}
+          {list.map(p => <option key={p.id} value={p.id}>{p.live ? p.title : `${p.title} (اکنون روی سایت نیست)`}</option>)}
+        </select>
+      );
+    }
     case 'product': {
       const list = Array.isArray(options?.products) ? options.products : [];
       return (
@@ -94,7 +105,7 @@ export function MenuItemFields({ item, location, child, options, notOnSite, firs
         <div>
           <label htmlFor={`${id}-kind`} className={label}>پیوند به</label>
           <select id={`${id}-kind`} className={field} value={item.kind}
-            onChange={e => onChange({ kind: e.target.value as MenuLinkKind, target: '', itemId: null, campaignId: null })}>
+            onChange={e => onChange({ kind: e.target.value as MenuLinkKind, target: '', itemId: null, campaignId: null, pageId: null })}>
             {kinds.map(k => <option key={k} value={k}>{MENU_LINK_KIND_TITLES[k]}</option>)}
           </select>
         </div>

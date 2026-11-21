@@ -2,6 +2,7 @@ import { pgTable, text, serial, integer, timestamp, index, type AnyPgColumn } fr
 import { sql } from 'drizzle-orm';
 import { items } from './inventory';
 import { storefrontCampaigns } from './storefrontCampaigns';
+import { storefrontPages } from './storefrontPages';
 
 /**
  * v12 phase 9b (migration 0028, package 18, start plan V12_SITE_NEXT_START_PLAN.md §6): the site's menus. One row of
@@ -28,6 +29,8 @@ export const storefrontMenuItems = pgTable('storefront_menu_items', {
   target: text('target').notNull().default(''),
   targetItemId: integer('target_item_id').references(() => items.id),
   targetCampaignId: integer('target_campaign_id').references(() => storefrontCampaigns.id),
+  /** v12 phase 10c (migration 0030): the page of «صفحه‌های سایت» a 'content' link names */
+  targetPageId: integer('target_page_id').references(() => storefrontPages.id),
   icon: text('icon').notNull().default(''),
   isActive: integer('is_active').notNull().default(1),
   isDeleted: integer('is_deleted').notNull().default(0),
@@ -40,4 +43,5 @@ export const storefrontMenuItems = pgTable('storefront_menu_items', {
   idx_storefront_menu_items_parent_id: index('idx_storefront_menu_items_parent_id').on(table.parentId).where(sql`${table.parentId} IS NOT NULL`),
   idx_storefront_menu_items_target_item_id: index('idx_storefront_menu_items_target_item_id').on(table.targetItemId).where(sql`${table.targetItemId} IS NOT NULL`),
   idx_storefront_menu_items_target_campaign_id: index('idx_storefront_menu_items_target_campaign_id').on(table.targetCampaignId).where(sql`${table.targetCampaignId} IS NOT NULL`),
+  idx_storefront_menu_items_target_page_id: index('idx_storefront_menu_items_target_page_id').on(table.targetPageId).where(sql`${table.targetPageId} IS NOT NULL`),
 }));
