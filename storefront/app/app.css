@@ -82,6 +82,11 @@
   &::-webkit-scrollbar { display: none; }
 }
 
+/* v12 phase 10c: the tile's sky blue, deep enough to read as a word on white (the «آبی کاشی» of a page's text) */
+@utility text-accent-ink {
+  color: oklch(0.5 0.12 245);
+}
+
 /* the thin tile border under section titles: two colors of a tile edge, drawn with gradients, not an image */
 @utility tile-rule {
   height: 6px;

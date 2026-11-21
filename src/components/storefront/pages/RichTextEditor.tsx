@@ -101,7 +101,7 @@ const keptForm = (json: unknown): RichDoc => safeRichDoc(json).doc ?? (json as R
 const ALIGN_ICONS = { right: AlignRight, center: AlignCenter, left: AlignLeft, justify: AlignJustify } as const;
 const ALIGN_TITLES: Readonly<Record<Align, string>> = { right: 'راست‌چین', center: 'وسط‌چین', left: 'چپ‌چین', justify: 'هم‌تراز' };
 const HEADING_TITLES: Readonly<Record<number, string>> = { 2: 'تیتر بزرگ', 3: 'تیتر میانه', 4: 'تیتر کوچک' };
-const COLOR_CLASSES: Readonly<Record<TextColor, string>> = { brand: 'bg-sky-800', accent: 'bg-amber-400', muted: 'bg-slate-400', danger: 'bg-rose-600' };
+const COLOR_CLASSES: Readonly<Record<TextColor, string>> = { brand: 'bg-sky-800', accent: 'bg-sky-500', muted: 'bg-slate-400', danger: 'bg-rose-600' };
 
 const tool = (active: boolean) => `inline-flex h-9 min-w-9 items-center justify-center rounded-lg px-2 text-xs font-bold ${active ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'} disabled:opacity-40`;
 const CONTENT = [
@@ -110,7 +110,7 @@ const CONTENT = [
   '[&_ul]:list-disc [&_ul]:ps-6 [&_ol]:list-decimal [&_ol]:ps-6 [&_blockquote]:border-s-4 [&_blockquote]:border-slate-300 [&_blockquote]:ps-3 [&_blockquote]:text-slate-600',
   '[&_hr]:my-3 [&_hr]:border-slate-300 [&_a]:text-sky-700 [&_a]:underline',
   '[&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-slate-300 [&_td]:p-1.5 [&_th]:border [&_th]:border-slate-300 [&_th]:bg-slate-50 [&_th]:p-1.5',
-  '[&_[data-text-color=brand]]:text-sky-800 [&_[data-text-color=accent]]:text-amber-600 [&_[data-text-color=muted]]:text-slate-500 [&_[data-text-color=danger]]:text-rose-600',
+  '[&_[data-text-color=brand]]:text-sky-800 [&_[data-text-color=accent]]:text-sky-600 [&_[data-text-color=muted]]:text-slate-500 [&_[data-text-color=danger]]:text-rose-600',
 ].join(' ');
 
 function Toolbar({ editor, label, canPickImage }: { editor: Editor; label: string; canPickImage: boolean }) {

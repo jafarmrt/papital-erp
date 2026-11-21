@@ -1,56 +1,47 @@
 import { Link } from 'react-router';
 import type { Route } from './+types/info';
-import { publicSettings } from '../lib/api.server';
+import { page } from '../lib/api.server';
 import { siteEnv } from '../lib/site.server';
-import { faDigits, faNumber, formatPrice } from '../lib/format';
+import { faDigits, faNumber } from '../lib/format';
 import { DEFAULT_SHOP } from '../lib/shopInfo';
-import { pageMeta } from '../lib/meta';
+import { pageMeta, sitePageMeta } from '../lib/meta';
 import { breadcrumbLd } from '../lib/jsonLd';
 import { whatsappLink } from '../lib/whatsapp';
 import { INFO_PAGES, infoPage } from '../content/pages';
 import { JsonLdScripts } from '../components/JsonLdScripts';
+import { ShippingMethodsList } from '../components/PageSections';
+import { SitePageView } from '../components/SitePageView';
+import { shippingView, shippingViewFor } from '../lib/pageView.server';
 import { useRootData } from '../root';
 
 /**
- * About, contact, shipping, terms and privacy share this page (`routes.ts` gives each its own address). The shipping
- * page is written from the live settings of the ERP, so a method switched off there never shows here.
+ * About, contact, shipping, terms and privacy share this page (`routes.ts` gives each its own address).
+ * v12 phase 10c: once the owner publishes one of them in the ERP's «صفحه‌های سایت», the site draws that copy; until then
+ * (and whenever the ERP cannot be read) the address shows the text the site always had (`content/pages.ts`). The fixed
+ * shipping page is written from the live settings of the ERP, so a method switched off there never shows here.
  */
 export async function loader({ request }: Route.LoaderArgs) {
-  const page = infoPage(new URL(request.url).pathname.replace(/^\/+|\/+$/g, ''));
-  if (!page) throw new Response('پیدا نشد', { status: 404 });
-  const settings = page.slug === 'shipping' ? await publicSettings() : null;
-  return {
-    page,
-    shipping: settings
-      ? {
-          methods: settings.shippingMethods.map(m => ({ title: m.title, description: m.description, cost: shippingCost(m.pricing, m.flatRate), free: m.isFreeShippingEligible })),
-          freeShippingThreshold: settings.freeShippingThreshold,
-          reservationHours: settings.reservationHours,
-        }
-      : null,
-    siteUrl: siteEnv().siteUrl,
-  };
-}
-
-/** What a buyer pays for one method, in their words (never the rate table itself, which the checkout works out) */
-function shippingCost(pricing: string, flatRate: string): string {
-  switch (pricing) {
-    case 'flat': return /^[1-9]\d*$/.test(flatRate) ? `هزینهٔ ارسال ${formatPrice(flatRate)}` : 'بدون هزینهٔ ارسال';
-    case 'table': return 'هزینه به وزن بسته و استان مقصد بستگی دارد و هنگام ثبت سفارش نشان داده می‌شود.';
-    case 'on_delivery': return 'هزینهٔ ارسال را هنگام تحویل به پیک می‌پردازید.';
-    case 'free': return 'بدون هزینهٔ ارسال';
-    default: return '';
-  }
+  const fixed = infoPage(new URL(request.url).pathname.replace(/^\/+|\/+$/g, ''));
+  if (!fixed) throw new Response('پیدا نشد', { status: 404 });
+  const { siteUrl } = siteEnv();
+  const published = await page(fixed.slug, { fallback: true });
+  if (published?.kind === 'base') return { published, publishedShipping: await shippingViewFor(published.sections), page: null, shipping: null, siteUrl };
+  return { published: null, publishedShipping: null, page: fixed, shipping: fixed.slug === 'shipping' ? await shippingView() : null, siteUrl };
 }
 
 export function meta({ data, matches }: Route.MetaArgs) {
   if (!data) return [];
+  if (data.published) return sitePageMeta(data.published, data.siteUrl, matches);
+  if (!data.page) return [];
   return pageMeta({ matches, title: data.page.title, description: data.page.description, path: `/${data.page.slug}`, siteUrl: data.siteUrl });
 }
 
 export default function InfoPage({ loaderData }: Route.ComponentProps) {
-  const { page, shipping, siteUrl } = loaderData;
+  const { page, shipping, siteUrl, published, publishedShipping } = loaderData;
   const root = useRootData();
+  if (published) return <SitePageView page={published} shipping={publishedShipping} siteUrl={siteUrl} />;
+  // the fixed text is sent only while it is the page (a published copy sends none of it)
+  if (!page) return null;
   const shop = root?.shop ?? DEFAULT_SHOP;
   const { address, postalCode, phone, mobile, email, hours } = shop.contact;
   const contactLink = 'inline-flex min-h-11 items-center font-medium text-primary underline-offset-4 hover:underline';
@@ -124,20 +115,7 @@ export default function InfoPage({ loaderData }: Route.ComponentProps) {
           <>
             <section className="space-y-4" aria-labelledby="methods">
               <h2 id="methods" className="text-lg font-bold text-foreground">روش‌های ارسال</h2>
-              {shipping.methods.length ? (
-                <ul className="divide-y divide-border rounded-surface border border-border bg-card">
-                  {shipping.methods.map(m => (
-                    <li key={m.title} className="space-y-1 px-4 py-4">
-                      <p className="font-bold text-foreground">{m.title}</p>
-                      {m.description ? <p className="text-muted-foreground">{m.description}</p> : null}
-                      {m.cost ? <p>{m.cost}</p> : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : <p>روش‌های ارسال به‌زودی همین‌جا نوشته می‌شوند.</p>}
-              {/^[1-9]\d*$/.test(shipping.freeShippingThreshold) && shipping.methods.some(m => m.free) ? (
-                <p>برای خرید از {formatPrice(shipping.freeShippingThreshold)} به بالا، ارسال با {shipping.methods.filter(m => m.free).map(m => m.title).join('، ')} رایگان است.</p>
-              ) : null}
+              <ShippingMethodsList shipping={shipping} />
             </section>
             <section className="space-y-4" aria-labelledby="payment">
               <h2 id="payment" className="text-lg font-bold text-foreground">پرداخت</h2>

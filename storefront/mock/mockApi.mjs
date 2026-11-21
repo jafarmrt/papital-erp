@@ -50,6 +50,8 @@ const campaignSummary = ({ slug, title, summary, hero, homeBanner, endsOn }) => 
 // v12 phase 10a: «اطلاعات فروشگاه»; every field empty (the site keeps its own words) unless MOCK_SHOP_INFO gives the answer
 // as JSON (MOCK_SHOP_INFO=fail answers 500 and MOCK_SHOP_INFO=missing 404, as an ERP not yet updated does)
 const shopInfoMode = process.env.MOCK_SHOP_INFO ?? '';
+const pagesMode = process.env.MOCK_PAGES ?? '';
+const pageList = pagesMode && pagesMode !== 'fail' && pagesMode !== 'missing' ? JSON.parse(pagesMode) : [];
 const shopInfo = shopInfoMode && shopInfoMode !== 'fail' && shopInfoMode !== 'missing' ? JSON.parse(shopInfoMode) : {
   brand: { name: '', fullName: '', tagline: '' }, footerNote: '',
   contact: { address: '', postalCode: '', phone: '', mobile: '', email: '', hours: '' },
@@ -460,6 +462,22 @@ createServer(async (req, res) => {
     if (!page) return send(res, 404, { error: 'این صفحه پیدا نشد.', code: 'STOREFRONT_CAMPAIGN_NOT_FOUND' });
     const items = page.products.map(slug => products.find(p => p.slug === slug)).filter(Boolean).map(card);
     return send(res, 200, { data: { ...campaignSummary(page), body: page.body, discountCode: page.discountCode, products: items } });
+  }
+  // v12 phase 10c: «صفحه‌های سایت»: the published pages MOCK_PAGES gives as JSON (a list of pages as the ERP answers them,
+  // where a «ردیف محصولات» section names catalog slugs in `products`); none by default, as an ERP with nothing published.
+  // MOCK_PAGES=fail answers 500 and MOCK_PAGES=missing 404 for the list too, as an ERP not yet updated does.
+  if (route === '/pages' || route.startsWith('/pages/')) {
+    if (pagesMode === 'fail') return send(res, 500, { error: 'mock failure' });
+    if (pagesMode === 'missing') return send(res, 404, { error: 'not found' });
+    if (route === '/pages') {
+      return send(res, 200, { data: pageList.map(({ slug, kind, title, noindex, updatedAt }) => ({ slug, kind, title, noindex, updatedAt })) });
+    }
+    const found = pageList.find(p => p.slug === route.slice('/pages/'.length));
+    if (!found) return send(res, 404, { error: 'صفحه پیدا نشد.', code: 'STOREFRONT_PAGE_NOT_FOUND' });
+    const sections = (found.sections ?? []).map(section => (section.kind === 'products'
+      ? { ...section, products: (section.products ?? []).map(slug => products.find(p => p.slug === slug)).filter(Boolean).map(card) }
+      : section));
+    return send(res, 200, { data: { ...found, sections } });
   }
   if (route === '/facets') {
     return send(res, 200, { data: { collections: facet(products.flatMap(p => p.collections)), categories: facet(products.map(p => p.category)) } });

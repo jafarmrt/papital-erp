@@ -11250,5 +11250,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runStorefrontPagesV12Tests } = await import('../regression/storefrontPagesV12Tests.js');
   results.push(...await runStorefrontPagesV12Tests(shouldRun));
 
+  // v12 phase 10c: the site reads only the published copy of a page, with the reviewed fields, and only its images
+  const { runStorefrontSitePagesV12Tests } = await import('../regression/storefrontSitePagesV12Tests.js');
+  results.push(...await runStorefrontSitePagesV12Tests(shouldRun));
+
   return results;
 }

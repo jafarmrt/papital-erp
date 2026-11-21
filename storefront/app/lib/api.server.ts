@@ -9,6 +9,8 @@ import { STOREFRONT_QUERY_TEXT_MAX, STOREFRONT_SLUG_MAX } from '@erp/storefront/
 import { CATALOG_PAGE_SIZE, type CatalogSort } from './catalog';
 import { NO_MENUS, safeMenus, type SiteMenus } from './menus';
 import { DEFAULT_SHOP, siteShop, type SiteShop } from './shopInfo';
+import type { StorefrontPageSummary } from '@erp/storefront/storefrontPagePublicContracts';
+import { isPageSlug, sitePage, sitePageList, type SitePage } from './pages';
 
 /**
  * The only door to the ERP: the five read routes of the Storefront API (phase 8.1), called from this server with the
@@ -34,7 +36,7 @@ const CACHE_MAX = 500;
  * crawler walking random addresses (each a remembered 404 there) never pushes out the feed or the settings (the security
  * review of 8.5b)
  */
-const PINNED_PATHS = new Set(['/facets', '/settings', '/brand', '/seo', '/redirects', '/feed', '/campaigns', '/menus', '/shop-info']);
+const PINNED_PATHS = new Set(['/facets', '/settings', '/brand', '/seo', '/redirects', '/feed', '/campaigns', '/menus', '/shop-info', '/pages']);
 const pinned = new Map<string, Entry>();
 const kept = (path: string) => (PINNED_PATHS.has(path) ? pinned : cache).get(path);
 /** Many visitors asking for the same address at once make one call */
@@ -235,6 +237,36 @@ export async function campaign(slug: string): Promise<StorefrontCampaignPage | n
     return (await get<{ data: StorefrontCampaignPage }>(`/campaigns/${slug}`, CAMPAIGN_TTL_MS)).data;
   } catch (error) {
     if (error instanceof StorefrontApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+const PAGE_TTL_MS = 60_000;
+
+/**
+ * v12 phase 10c: the pages of «صفحه‌های سایت» on the site now, for the sitemap. Any failure (an ERP not yet updated
+ * answers 404) is no pages, never a down shop: the five base pages then keep the text the site always had.
+ */
+export async function pages(): Promise<StorefrontPageSummary[]> {
+  try {
+    return sitePageList((await get<{ data: unknown }>('/pages', PAGE_TTL_MS)).data);
+  } catch (error) {
+    if (error instanceof StorefrontApiError) return [];
+    throw error;
+  }
+}
+
+/**
+ * One published page; null when there is none by that address. `fallback` is for a base page, which has a fixed text to
+ * show instead: there any failure of the ERP is «no page», while a page the shop made is an error when the ERP is down
+ * (a read error is not «no such page»).
+ */
+export async function page(slug: string, { fallback = false } = {}): Promise<SitePage | null> {
+  if (!isPageSlug(slug)) return null;
+  try {
+    return sitePage((await get<{ data: unknown }>(`/pages/${slug}`, PAGE_TTL_MS)).data);
+  } catch (error) {
+    if (error instanceof StorefrontApiError && (fallback || error.status === 404)) return null;
     throw error;
   }
 }

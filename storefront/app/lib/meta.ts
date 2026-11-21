@@ -1,5 +1,7 @@
 import type { RootData } from '../root';
 import { DEFAULT_SHOP, type SiteBrand } from './shopInfo';
+import { mediaPath } from './brand';
+import { pageCardImage, pageDescription, pagePath, type SitePage } from './pages';
 
 /** The matched routes as a page's `meta` gets them; the root's data holds the shop's name */
 export type MetaMatches = ReadonlyArray<{ id: string; data?: unknown } | undefined>;
@@ -31,6 +33,18 @@ export function pageMeta({ title, description, path, image, siteUrl, matches }: 
     if (image) tags.push({ property: 'og:image', content: `${siteUrl}${image}` });
   }
   return tags;
+}
+
+/** v12 phase 10c: title, description and social card of a page of the ERP; «در موتور جست‌وجو نیاید» is the page's own `noindex` */
+export function sitePageMeta(page: SitePage, siteUrl: string, matches: MetaMatches | undefined) {
+  const image = pageCardImage(page);
+  return [
+    ...pageMeta({
+      matches, title: page.seoTitle.trim() || page.title, description: pageDescription(page), path: pagePath(page),
+      image: image ? mediaPath(image.sha256) : undefined, siteUrl,
+    }),
+    ...(page.noindex ? [{ name: 'robots', content: 'noindex' }] : []),
+  ];
 }
 
 /**
