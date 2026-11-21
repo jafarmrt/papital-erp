@@ -44,12 +44,13 @@ export function MenuEditor({ view, options, canManage }: { view: MenuView; optio
   // save); a newer saved menu replaces an untouched draft, and an edited one keeps it with a notice and a choice.
   const [base, setBase] = useState(view);
   const [dirty, setDirty] = useState(false);
-  if (view !== base && view.version !== base.version && !dirty) {
+  // only a newer saved menu: right after a save the list still holds the older one until it is read again (9b review)
+  if (view !== base && view.version > base.version && !dirty) {
     setBase(view);
     setEnabledState(view.enabled);
     setItemsState(view.items.map(draftOf));
   }
-  const newerSaved = view.version !== base.version && dirty;
+  const newerSaved = view.version > base.version && dirty;
   const setEnabled = (value: boolean) => { setDirty(true); setEnabledState(value); };
   const setItems = (change: (list: DraftItem[]) => DraftItem[]) => { setDirty(true); setItemsState(change); };
   const takeSaved = () => { setDirty(false); setBase(view); setEnabledState(view.enabled); setItemsState(view.items.map(draftOf)); };

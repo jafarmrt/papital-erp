@@ -16,16 +16,20 @@ vi.mock('../../contexts/AuthContext', async () => {
 });
 const calls = vi.hoisted(() => ({ list: [] as Array<{ url: string; init?: { method?: string; body?: string } }> }));
 const menus = vi.hoisted((): { current: unknown } => ({ current: null }));
+/** after a save, the list's next read never answers (a network break) */
+const stall = vi.hoisted(() => ({ afterPut: false, put: false }));
 vi.mock('../../api', () => ({
   API_URL: '/api',
   isAbortError: () => false,
   fetchJson: (url: string, init?: { method?: string; body?: string }) => {
     calls.list.push({ url, init });
-    if (url === '/storefront/menus') return Promise.resolve({ data: menus.current });
+    if (url === '/storefront/menus') return stall.afterPut && stall.put ? new Promise(() => undefined) : Promise.resolve({ data: menus.current });
     if (url === '/storefront/menus/link-options') return Promise.resolve({ data: { categories: ['انگشتر', 'دستبند'], collections: ['یلدا'], campaigns: [], products: [] } });
     if (init?.method === 'PUT') {
+      stall.put = true;
       const body = JSON.parse(String(init.body));
-      return Promise.resolve({ data: { location: url.split('/').pop(), enabled: body.enabled, version: body.version + 1, updatedBy: 'u', updatedAt: '', items: [] } });
+      const items = body.items.map((i: Record<string, unknown>, n: number) => ({ ...i, id: n + 1, live: true, targetTitle: '', children: [] }));
+      return Promise.resolve({ data: { location: url.split('/').pop(), enabled: body.enabled, version: body.version + 1, updatedBy: 'u', updatedAt: '', items } });
     }
     return Promise.resolve({ data: null });
   },
@@ -50,6 +54,8 @@ afterEach(() => {
   cleanup();
   calls.list = [];
   permissions.current = [];
+  stall.afterPut = false;
+  stall.put = false;
   vi.mocked(toast.error).mockClear();
 });
 
@@ -185,5 +191,19 @@ describe('the site menus screen', () => {
     fireEvent.change(panel.getByLabelText('مقصد'), { target: { value: '/about' } });
     fireEvent.change(panel.getByLabelText('پیوند به'), { target: { value: 'url' } });
     expect((panel.getByLabelText('مقصد') as HTMLInputElement).value).toBe('');
+  });
+
+  it('keeps the saved menu on the screen while the list is still being read again after a save', async () => {
+    menus.current = emptyMenus();
+    stall.afterPut = true;
+    permissions.current = ['site_content.view', 'site_content.manage'];
+    page('/site-menus?place=header');
+    await waitFor(() => expect(calls.list.some(c => c.url === '/storefront/menus/link-options')).toBe(true));
+    const panel = within(await screen.findByRole('tabpanel'));
+    fireEvent.click(panel.getByRole('button', { name: /شروع از منوی کنونی سایت/ }));
+    fireEvent.click(panel.getByRole('button', { name: /^ذخیره/ }));
+    await waitFor(() => expect(calls.list.some(c => c.init?.method === 'PUT')).toBe(true));
+    await waitFor(() => expect((panel.getAllByLabelText('عنوان') as HTMLInputElement[]).map(i => i.value)).toEqual(['همهٔ محصولات', 'انگشتر', 'دستبند']));
+    expect(panel.queryByRole('alert')).toBeNull();
   });
 });
