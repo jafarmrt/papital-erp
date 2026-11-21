@@ -1,7 +1,7 @@
 import fs from 'fs';
 import { orm } from '../../db/drizzle.js';
 import { and, eq, ne, sql } from 'drizzle-orm';
-import { fileAttachments, mediaAssets, mediaSections, storefrontMenuItems, storefrontMenus } from '../../db/schema.js';
+import { STOREFRONT_BASE_PAGE_ROWS, fileAttachments, mediaAssets, mediaSections, storefrontMenuItems, storefrontMenus, storefrontPages } from '../../db/schema.js';
 import { FACTORY_RESET_WIPE_ORDER, MEDIA_SYSTEM_SECTION_KIND } from './factoryResetTables.js';
 import { extensionOfType, mediaFilePath } from '../../lib/media/mediaPaths.js';
 import { logger } from '../../middleware/logger.js';
@@ -183,6 +183,11 @@ export class FactoryResetService {
           // v12 phase 9b: the four menu places are made only by migration 0028, so they stay, off again as on a fresh install
           if (table === storefrontMenuItems) {
             await tx.update(storefrontMenus).set({ isEnabled: 0, updatedBy: '', version: sql`${storefrontMenus.version} + 1` });
+          }
+          // v12 phase 10b: the five base pages are made only by migration 0029, so they are made again, empty and off the
+          // site as on a fresh install
+          if (table === storefrontPages) {
+            await tx.insert(storefrontPages).values([...STOREFRONT_BASE_PAGE_ROWS]);
           }
         }
       }

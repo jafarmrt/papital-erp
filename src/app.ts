@@ -52,6 +52,7 @@ import storefrontSmsRoutes from './routes/storefrontSms.routes.js';
 import storefrontEmailRoutes from './routes/storefrontEmail.routes.js';
 import storefrontCampaignRoutes from './routes/storefrontCampaigns.routes.js';
 import storefrontMenuRoutes from './routes/storefrontMenus.routes.js';
+import storefrontPageRoutes from './routes/storefrontPages.routes.js';
 import accountingRoutes from './routes/accounting.routes.js';
 import historyImportRoutes from './routes/historyImport.routes.js';
 import workflowRoutes from './routes/workflow.routes.js';
@@ -374,6 +375,8 @@ export async function createApp(): Promise<express.Express> {
   // v11 phase 8.5b: «صفحه‌های ویژه», the site's campaign pages
   app.use('/api/storefront/campaigns', storefrontCampaignRoutes);
   app.use('/api/storefront/menus', storefrontMenuRoutes);
+  // v12 phase 10b: «صفحه‌های سایت», the page builder
+  app.use('/api/storefront/pages', storefrontPageRoutes);
   app.use('/api/storefront', storefrontRoutes);
   app.use('/api', authRoutes);
   app.use('/api', usersRoutes);

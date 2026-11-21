@@ -111,6 +111,7 @@ export function getMenuGroups(
         { name: 'خریداران سایت', path: '/site-buyers', icon: Handshake, visible: open('/site-buyers') },
         { name: 'کالاها و تنظیمات سایت', path: '/site-settings', icon: SlidersHorizontal, visible: open('/site-settings') },
         { name: 'فهرست‌های سایت', path: '/site-menus', icon: PanelTop, visible: open('/site-menus') },
+        { name: 'صفحه‌های سایت', path: '/site-pages', icon: FileText, visible: open('/site-pages') },
       ]
     },
     {

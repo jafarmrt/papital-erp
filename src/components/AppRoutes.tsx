@@ -52,6 +52,7 @@ const StorefrontOrdersPage = lazyWithRetry(() => import('../pages/StorefrontOrde
 const StorefrontBuyersPage = lazyWithRetry(() => import('../pages/StorefrontBuyersPage'));
 const StorefrontSettingsPage = lazyWithRetry(() => import('../pages/StorefrontSettingsPage'));
 const StorefrontMenusPage = lazyWithRetry(() => import('../pages/StorefrontMenusPage'));
+const StorefrontPagesPage = lazyWithRetry(() => import('../pages/StorefrontPagesPage'));
 const ManagementReportsPage = lazyWithRetry(() => import('../pages/ManagementReportsPage'));
 const ProjectsPage = lazyWithRetry(() => import('../pages/ProjectsPage'));
 const ProjectDetailPage = lazyWithRetry(() => import('../pages/ProjectDetailPage'));
@@ -206,6 +207,7 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
         <Route path="/site-buyers" element={<ProtectedRoute page="/site-buyers" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}><StorefrontBuyersPage /></ProtectedRoute>} />
         <Route path="/site-settings" element={<ProtectedRoute page="/site-settings" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}><StorefrontSettingsPage /></ProtectedRoute>} />
         <Route path="/site-menus" element={<ProtectedRoute page="/site-menus" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}><StorefrontMenusPage /></ProtectedRoute>} />
+        <Route path="/site-pages" element={<ProtectedRoute page="/site-pages" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}><StorefrontPagesPage /></ProtectedRoute>} />
         <Route path="/reserved-items" element={
           <ProtectedRoute page="/reserved-items" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <ReservedItemsReportPage />

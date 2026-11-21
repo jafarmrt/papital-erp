@@ -18,7 +18,7 @@ import {
   integrationDeliveryJobs, eventActionRuleRetirements, webhookEventPatternRepairs, itemPriceTitleCleanup,
   dailyLogVisibilityRepairs, statutoryRemittanceLines, settlementAllocations, payrollStatutoryRates, payrollEidiRates, itemCodeHistory,
   mediaAssets, mediaSections, storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontRedirects, storefrontSmsCodes, storefrontEmailCodes, storefrontSmsMessages,
-  storefrontBuyerGroups, storefrontBuyerAccounts, storefrontBuyerAddresses, storefrontBuyerSessions, storefrontPasswordTokens, storefrontDiscountCodes, storefrontDiscountRedemptions, storefrontCampaigns, storefrontMenuItems, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
+  storefrontBuyerGroups, storefrontBuyerAccounts, storefrontBuyerAddresses, storefrontBuyerSessions, storefrontPasswordTokens, storefrontDiscountCodes, storefrontDiscountRedemptions, storefrontCampaigns, storefrontMenuItems, storefrontPages, storefrontContentAssets, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
 } from '../../db/schema.js';
 
 /**
@@ -165,6 +165,10 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   { name: 'storefront_menu_items', table: storefrontMenuItems },
   // v11 phase 8.5b: the campaign pages point to media images (their hero), so they go before media_assets
   { name: 'storefront_campaigns', table: storefrontCampaigns },
+  // v12 phase 10b: the images published content names and the pages (their sharing image) point to media images too;
+  // the five base pages, which only migration 0029 makes, are made again empty right after the wipe
+  { name: 'storefront_content_assets', table: storefrontContentAssets },
+  { name: 'storefront_pages', table: storefrontPages },
   { name: 'storefront_shipping_rates', table: storefrontShippingRates },
   { name: 'storefront_shipping_methods', table: storefrontShippingMethods },
   { name: 'item_prices', table: itemPrices },

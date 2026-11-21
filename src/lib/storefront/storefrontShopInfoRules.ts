@@ -106,15 +106,19 @@ const CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u20
 // eslint-disable-next-line no-control-regex
 const CONTROL_BUT_NEWLINE = /[\u0000-\u0009\u000b\u000c\u000e-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/;
 
+/** half of a surrogate pair on its own (a broken emoji), which PostgreSQL refuses as text (10b review) */
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+
 /** One line of text as it is kept: trimmed, with runs of spaces as one */
-const oneLine = (value: string): string => value.replace(/[ \t ]+/g, ' ').trim();
+const oneLine = (value: string): string => value.replace(/[ \t\u00a0]+/g, ' ').trim();
 
 /**
  * A host name of letters, digits and hyphens in dot-separated labels, and nothing else. `new URL` also takes «;», «,»,
  * «*», quotes and «=» in a host; the site writes the seal's host into its security policy header, where «;» ends a
  * directive, «,» ends the policy and «*» is a wildcard, so none of them is ever a host here (10a review).
  */
-const PLAIN_HOST = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+// the last label holds a letter, so an address by number (which `new URL` also writes from «0x7f.1») is not a host here
+const PLAIN_HOST = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?=[a-z0-9-]*[a-z])[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 export const isPlainHost = (hostname: string): boolean => hostname.length <= 253 && PLAIN_HOST.test(hostname);
 
 /**
@@ -184,7 +188,7 @@ const fa = (n: number) => n.toLocaleString('fa-IR');
 export function shopInfoError(raw: ShopInfoValues): { field: ShopInfoField; message: string } | null {
   for (const field of TEXT_FIELDS) {
     const text = oneLine(raw[field]);
-    if (CONTROL.test(text)) return { field, message: `«${SHOP_TEXT_TITLES[field]}» یک خط متن ساده است.` };
+    if (CONTROL.test(text) || LONE_SURROGATE.test(text)) return { field, message: `«${SHOP_TEXT_TITLES[field]}» یک خط متن ساده است.` };
     if (text.length > SHOP_TEXT_MAX[field]) return { field, message: `«${SHOP_TEXT_TITLES[field]}» حداکثر ${fa(SHOP_TEXT_MAX[field])} نویسه است.` };
   }
   if (shopPostalCode(raw.postalCode) === null) return { field: 'postalCode', message: `کد پستی ${fa(SHOP_POSTAL_CODE_LENGTH)} رقم است.` };
@@ -196,7 +200,7 @@ export function shopInfoError(raw: ShopInfoValues): { field: ShopInfoField; mess
       return { field: social, message: `نشانی ${SHOP_SOCIAL_TITLES[social]} باید با https:// آغاز شود و حداکثر ${fa(SHOP_LINK_MAX)} نویسه باشد.` };
     }
   }
-  if (CONTROL_BUT_NEWLINE.test(raw.shippingText)) return { field: 'shippingText', message: 'متن ستون ارسال و پرداخت متن ساده است، هر نکته در یک خط.' };
+  if (CONTROL_BUT_NEWLINE.test(raw.shippingText) || LONE_SURROGATE.test(raw.shippingText)) return { field: 'shippingText', message: 'متن ستون ارسال و پرداخت متن ساده است، هر نکته در یک خط.' };
   const lines = shippingLines(raw.shippingText);
   if (lines.length > SHOP_SHIPPING_LINES_MAX) return { field: 'shippingText', message: `ستون ارسال و پرداخت حداکثر ${fa(SHOP_SHIPPING_LINES_MAX)} خط می‌گیرد.` };
   if (lines.some(line => line.length > SHOP_SHIPPING_LINE_MAX)) {

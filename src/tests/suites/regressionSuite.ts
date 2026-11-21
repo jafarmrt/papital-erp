@@ -11246,6 +11246,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v12 phase 10a: «اطلاعات فروشگاه» and what the site reads of it (Storefront API security review)
   const { runStorefrontShopInfoV12Tests } = await import('../regression/storefrontShopInfoV12Tests.js');
   results.push(...await runStorefrontShopInfoV12Tests(shouldRun));
+  // v12 phase 10b: the site's pages (draft and published copy, the content rules, the published images)
+  const { runStorefrontPagesV12Tests } = await import('../regression/storefrontPagesV12Tests.js');
+  results.push(...await runStorefrontPagesV12Tests(shouldRun));
 
   return results;
 }
