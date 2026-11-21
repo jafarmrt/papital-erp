@@ -37,8 +37,6 @@ export interface PageDetail extends PageListRow {
   /** the draft the builder edits */
   draft: PageValues;
   assets: PageAssetInfo[];
-  /** the products the draft's product rows name that are on the site now, by item id */
-  products: Array<{ itemId: number; name: string }>;
 }
 
 export interface PageSaveInput extends PageValues {

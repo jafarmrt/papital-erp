@@ -113,7 +113,8 @@ export interface RichDoc {
   type: 'doc';
   content: RichNode[];
 }
-export const EMPTY_DOC: RichDoc = { type: 'doc', content: [] };
+/** A new, empty text; each call makes its own (a shared one would be shared by every new section) */
+export const emptyDoc = (): RichDoc => ({ type: 'doc', content: [] });
 
 interface SectionBase { background: SectionBackground }
 export interface HeroSection extends SectionBase { kind: 'hero'; title: string; text: string; imageAssetId: number | null; buttonLabel: string; buttonHref: string }
@@ -161,6 +162,12 @@ export const fa = (n: number) => n.toLocaleString('fa-IR');
 const CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/;
 // eslint-disable-next-line no-control-regex
 export const CONTROL_IN_RICH_TEXT = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/;
+/**
+ * Half of a surrogate pair on its own (a broken emoji): PostgreSQL refuses it as text, so it is refused here with a
+ * message instead of failing the save (10b review)
+ */
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+export const hasLoneSurrogate = (value: string): boolean => LONE_SURROGATE.test(value);
 const oneLine = (value: string): string => value.replace(/[ \t\u00a0]+/g, ' ').trim();
 export const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 export const isId = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 2_147_483_647;
@@ -183,14 +190,15 @@ export function pageLink(value: unknown): string | null {
   const text = value.trim();
   if (!text) return '';
   if (text.length > LINK_MAX) return null;
-  if (text.startsWith('/')) return isSafeSitePath(text) ? text : null;
+  // a path of the site never needs a quote, an angle bracket or a backtick as written (a real one is percent-encoded)
+  if (text.startsWith('/')) return isSafeSitePath(text) && !/[<>"'`]/.test(text) ? text : null;
   return httpsLink(text);
 }
 
 export function text(value: unknown, max: number, title: string): string {
   if (typeof value !== 'string') return refuse(`«${title}» باید متن باشد.`, 'STOREFRONT_PAGE_FIELD_INVALID');
   const kept = oneLine(value);
-  if (CONTROL.test(kept)) return refuse(`«${title}» یک خط متن ساده است.`, 'STOREFRONT_PAGE_FIELD_INVALID');
+  if (CONTROL.test(kept) || hasLoneSurrogate(kept)) return refuse(`«${title}» یک خط متن ساده است.`, 'STOREFRONT_PAGE_FIELD_INVALID');
   if (kept.length > max) return refuse(`«${title}» حداکثر ${fa(max)} نویسه است.`, 'STOREFRONT_PAGE_FIELD_TOO_LONG');
   return kept;
 }

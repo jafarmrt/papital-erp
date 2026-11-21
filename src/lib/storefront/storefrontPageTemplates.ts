@@ -1,12 +1,12 @@
-import { EMPTY_DOC, type PageSection, type RichNode, type SectionBackground, type SectionKind } from './storefrontPageParts.js';
+import { emptyDoc, type PageSection, type RichNode, type SectionBackground, type SectionKind } from './storefrontPageParts.js';
 
 /** A new, empty section of a kind, as the builder adds it */
 export function emptySection(kind: SectionKind): PageSection {
   const background: SectionBackground = 'white';
   switch (kind) {
     case 'hero': return { kind, background: 'brand', title: '', text: '', imageAssetId: null, buttonLabel: '', buttonHref: '' };
-    case 'text': return { kind, background, doc: EMPTY_DOC };
-    case 'textImage': return { kind, background, title: '', doc: EMPTY_DOC, imageAssetId: null, imageAlt: '', imageSide: 'right', buttonLabel: '', buttonHref: '' };
+    case 'text': return { kind, background, doc: emptyDoc() };
+    case 'textImage': return { kind, background, title: '', doc: emptyDoc(), imageAssetId: null, imageAlt: '', imageSide: 'right', buttonLabel: '', buttonHref: '' };
     case 'iconCards': return { kind, background, title: '', cards: [{ icon: 'leaf', title: '', text: '' }, { icon: 'handshake', title: '', text: '' }] };
     case 'gallery': return { kind, background, title: '', images: [] };
     case 'people': return { kind, background, title: '', people: [{ imageAssetId: null, name: '', role: '', contact: '' }] };
@@ -14,7 +14,7 @@ export function emptySection(kind: SectionKind): PageSection {
     case 'products': return { kind, background, title: '', source: 'items', itemIds: [], collection: '' };
     case 'button': return { kind, background, label: '', href: '' };
     case 'shippingMethods': return { kind, background, title: 'روش‌های ارسال' };
-    default: return { kind: 'text', background, doc: EMPTY_DOC };
+    default: return { kind: 'text', background, doc: emptyDoc() };
   }
 }
 

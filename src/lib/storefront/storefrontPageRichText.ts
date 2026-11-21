@@ -1,14 +1,35 @@
 import {
   CONTROL_IN_RICH_TEXT, IMAGE_ALT_MAX, RICH_TEXT_CHARS_MAX, RICH_TEXT_DEPTH_MAX, RICH_TEXT_HEADING_LEVELS, RICH_TEXT_NODES_MAX, RICH_TEXT_TABLE_COLUMNS_MAX,
-  RICH_TEXT_TABLE_ROWS_MAX, Refused, TEXT_ALIGNS, TEXT_COLORS, fa, isId, isRecord, link, list, oneOf, refuse, text, type RichDoc, type RichMark, type RichNode,
+  RICH_TEXT_TABLE_ROWS_MAX, Refused, TEXT_ALIGNS, TEXT_COLORS, fa, hasLoneSurrogate, isId, isRecord, link, list, oneOf, refuse, text, type RichDoc, type RichMark,
+  type RichNode,
 } from './storefrontPageParts.js';
 
 /**
  * v12 phase 10b: the text of the editor (Tiptap's JSON) as the site's pages keep it. Only the nodes and marks named here
  * are taken, each rebuilt from its known attributes alone, so an attribute the editor adds of its own, or one a forged
- * request carries (an event handler, an image's address), never reaches the database; an unknown node or mark is
- * refused with a message that names it.
+ * request carries (an event handler, an image's address), never reaches the database; an unknown node or mark, or a
+ * known one where it does not belong, is refused with a message that names it. (An attribute outside the known ones
+ * carries no content of the page and is simply not kept: the editor itself adds several of its own.)
+ * The shapes taken here are exactly the editor's schema (`RichTextEditor.tsx`): a quote and a table cell hold
+ * paragraphs, a list item a paragraph and then lists, and nothing that holds content may be empty.
  */
+
+/** The nodes by the names a colleague knows them by, for the messages */
+const NODE_TITLES: Readonly<Record<string, string>> = {
+  paragraph: 'پاراگراف', heading: 'تیتر', bulletList: 'فهرست نقطه‌ای', orderedList: 'فهرست شماره‌دار', listItem: 'گزینهٔ فهرست', blockquote: 'نقل‌قول',
+  horizontalRule: 'خط جداکننده', libraryImage: 'عکس', table: 'جدول', tableRow: 'ردیف جدول', tableCell: 'خانهٔ جدول', tableHeader: 'خانهٔ سرستون جدول',
+  text: 'متن', hardBreak: 'خط تازه',
+};
+const PARENT_TITLES: Readonly<Record<string, string>> = {
+  doc: 'متن', bulletList: 'فهرست', orderedList: 'فهرست', listItem: 'گزینهٔ فهرست', blockquote: 'نقل‌قول', table: 'جدول', tableRow: 'ردیف جدول',
+  tableCell: 'خانهٔ جدول', tableHeader: 'خانهٔ جدول',
+};
+/** a known node in a place it does not belong, or a node this text never takes */
+const misplaced = (type: string, parent: string): never => (
+  NODE_TITLES[type]
+    ? refuse(`«${NODE_TITLES[type]}» درون ${PARENT_TITLES[parent] ?? 'این بخش'} نمی‌آید؛ آن را بیرون بیاورید.`, 'STOREFRONT_PAGE_NODE_MISPLACED')
+    : refuse(`عنصر ناشناختهٔ «${type.slice(0, 40)}» در متن صفحه پذیرفته نمی‌شود.`, 'STOREFRONT_PAGE_NODE_UNKNOWN')
+);
 
 interface Budget { nodes: number; chars: number }
 
@@ -50,22 +71,22 @@ function inlineOf(value: unknown, budget: Budget): RichNode[] {
     budget.nodes += 1;
     if (!isRecord(raw) || typeof raw.type !== 'string') return refuse('تکه‌ای از متن خوانا نیست.', 'STOREFRONT_PAGE_NODE_UNKNOWN');
     if (raw.type === 'hardBreak') return { type: 'hardBreak' };
-    if (raw.type !== 'text') return refuse(`عنصر «${raw.type.slice(0, 40)}» درون یک خط متن پذیرفته نمی‌شود.`, 'STOREFRONT_PAGE_NODE_UNKNOWN');
+    if (raw.type !== 'text') return misplaced(raw.type, 'paragraph');
     if (typeof raw.text !== 'string' || raw.text === '') return refuse('تکه‌ای از متن خالی است.', 'STOREFRONT_PAGE_NODE_UNKNOWN');
-    if (CONTROL_IN_RICH_TEXT.test(raw.text)) return refuse('متن نویسهٔ کنترلی دارد؛ آن را دوباره بنویسید.', 'STOREFRONT_PAGE_FIELD_INVALID');
+    if (CONTROL_IN_RICH_TEXT.test(raw.text) || hasLoneSurrogate(raw.text)) return refuse('متن نویسهٔ کنترلی دارد؛ آن را دوباره بنویسید.', 'STOREFRONT_PAGE_FIELD_INVALID');
     budget.chars += raw.text.length;
     const marks = marksOf(raw.marks);
     return marks.length ? { type: 'text', text: raw.text, marks } : { type: 'text', text: raw.text };
   });
 }
 
-function blocksOf(value: unknown, budget: Budget, depth: number, allowed: readonly string[]): RichNode[] {
+function blocksOf(value: unknown, budget: Budget, depth: number, allowed: readonly string[], parent: string): RichNode[] {
   if (value === undefined) return [];
   if (depth > RICH_TEXT_DEPTH_MAX) return refuse('فهرست‌های تودرتوی متن بیش از اندازه عمیق‌اند.', 'STOREFRONT_PAGE_TEXT_TOO_DEEP');
   return list(value, RICH_TEXT_NODES_MAX, 'متن').map((raw): RichNode => {
     budget.nodes += 1;
     if (!isRecord(raw) || typeof raw.type !== 'string') return refuse('تکه‌ای از متن خوانا نیست.', 'STOREFRONT_PAGE_NODE_UNKNOWN');
-    if (!allowed.includes(raw.type)) return refuse(`عنصر «${raw.type.slice(0, 40)}» در متن صفحه پذیرفته نمی‌شود.`, 'STOREFRONT_PAGE_NODE_UNKNOWN');
+    if (!allowed.includes(raw.type)) return misplaced(raw.type, parent);
     const attrs = isRecord(raw.attrs) ? raw.attrs : {};
     const withContent = (node: RichNode, content: RichNode[]): RichNode => (content.length ? { ...node, content } : node);
     switch (raw.type) {
@@ -77,20 +98,35 @@ function blocksOf(value: unknown, budget: Budget, depth: number, allowed: readon
         if (!RICH_TEXT_HEADING_LEVELS.includes(attrs.level as 2 | 3 | 4)) return refuse('تیتر متن فقط در سه اندازهٔ ۲ تا ۴ است.', 'STOREFRONT_PAGE_NODE_UNKNOWN');
         return withContent({ type: 'heading', attrs: { level: attrs.level as number, ...alignOf(attrs) } }, inlineOf(raw.content, budget));
       }
-      case 'bulletList': case 'orderedList':
-        return withContent({ type: raw.type }, blocksOf(raw.content, budget, depth + 1, ['listItem']));
-      case 'listItem':
-        return withContent({ type: 'listItem' }, blocksOf(raw.content, budget, depth + 1, ['paragraph', 'bulletList', 'orderedList']));
-      case 'blockquote':
-        return withContent({ type: 'blockquote' }, blocksOf(raw.content, budget, depth + 1, ['paragraph']));
+      case 'bulletList': case 'orderedList': {
+        const items = blocksOf(raw.content, budget, depth + 1, ['listItem'], raw.type);
+        if (items.length === 0) return refuse('فهرست دست‌کم یک گزینه دارد.', 'STOREFRONT_PAGE_NODE_EMPTY');
+        // a numbered list may start past one (a list continued after a paragraph); nothing else of a list is kept
+        const start = raw.type === 'orderedList' && Number.isInteger(attrs.start) && (attrs.start as number) > 1 && (attrs.start as number) <= 9999 ? attrs.start as number : 1;
+        return start > 1 ? { type: raw.type, attrs: { start }, content: items } : { type: raw.type, content: items };
+      }
+      case 'listItem': {
+        const inside = blocksOf(raw.content, budget, depth + 1, ['paragraph', 'bulletList', 'orderedList'], 'listItem');
+        if (inside[0]?.type !== 'paragraph' || inside.slice(1).some(node => node.type === 'paragraph')) {
+          return refuse('هر گزینهٔ فهرست یک پاراگراف دارد و سپس، اگر بخواهید، فهرست‌های درون خودش.', 'STOREFRONT_PAGE_NODE_EMPTY');
+        }
+        return { type: 'listItem', content: inside };
+      }
+      case 'blockquote': {
+        const inside = blocksOf(raw.content, budget, depth + 1, ['paragraph'], 'blockquote');
+        if (inside.length === 0) return refuse('نقل‌قول خالی است.', 'STOREFRONT_PAGE_NODE_EMPTY');
+        return { type: 'blockquote', content: inside };
+      }
       case 'horizontalRule':
+        if (raw.content !== undefined) return refuse('خط جداکننده چیزی درون خود ندارد.', 'STOREFRONT_PAGE_NODE_MISPLACED');
         return { type: 'horizontalRule' };
       case 'libraryImage': {
+        if (raw.content !== undefined) return refuse('عکس چیزی درون خود ندارد.', 'STOREFRONT_PAGE_NODE_MISPLACED');
         if (!isId(attrs.assetId)) return refuse('عکس درون متن باید از کتابخانهٔ تصاویر باشد.', 'STOREFRONT_PAGE_IMAGE_INVALID');
         return { type: 'libraryImage', attrs: { assetId: attrs.assetId, alt: text(attrs.alt ?? '', IMAGE_ALT_MAX, 'متن جایگزین عکس') } };
       }
       case 'table': {
-        const rows = blocksOf(raw.content, budget, depth + 1, ['tableRow']);
+        const rows = blocksOf(raw.content, budget, depth + 1, ['tableRow'], 'table');
         if (rows.length === 0 || rows.length > RICH_TEXT_TABLE_ROWS_MAX) return refuse(`جدول ۱ تا ${fa(RICH_TEXT_TABLE_ROWS_MAX)} ردیف دارد.`, 'STOREFRONT_PAGE_TABLE_INVALID');
         const widths = new Set(rows.map(row => row.content?.length ?? 0));
         if (widths.size !== 1 || widths.has(0) || [...widths][0] > RICH_TEXT_TABLE_COLUMNS_MAX) {
@@ -99,14 +135,16 @@ function blocksOf(value: unknown, budget: Budget, depth: number, allowed: readon
         return { type: 'table', content: rows };
       }
       case 'tableRow':
-        return withContent({ type: 'tableRow' }, blocksOf(raw.content, budget, depth + 1, ['tableCell', 'tableHeader']));
+        return withContent({ type: 'tableRow' }, blocksOf(raw.content, budget, depth + 1, ['tableCell', 'tableHeader'], 'tableRow'));
       case 'tableCell': case 'tableHeader': {
         // a simple table: no cell spans rows or columns
         if ((attrs.colspan ?? 1) !== 1 || (attrs.rowspan ?? 1) !== 1) return refuse('خانه‌های جدول ادغام نمی‌شوند.', 'STOREFRONT_PAGE_TABLE_INVALID');
-        return withContent({ type: raw.type }, blocksOf(raw.content, budget, depth + 1, ['paragraph']));
+        const inside = blocksOf(raw.content, budget, depth + 1, ['paragraph'], raw.type);
+        if (inside.length === 0) return refuse('هر خانهٔ جدول دست‌کم یک پاراگراف دارد (می‌تواند خالی باشد).', 'STOREFRONT_PAGE_NODE_EMPTY');
+        return { type: raw.type, content: inside };
       }
       default:
-        return refuse(`عنصر «${raw.type.slice(0, 40)}» در متن صفحه پذیرفته نمی‌شود.`, 'STOREFRONT_PAGE_NODE_UNKNOWN');
+        return misplaced(raw.type, parent);
     }
   });
 }
@@ -118,7 +156,7 @@ export function richDoc(value: unknown): RichDoc {
   if (value === undefined || value === null) return { type: 'doc', content: [] };
   if (!isRecord(value) || value.type !== 'doc') return refuse('متن بخش خوانا نیست.', 'STOREFRONT_PAGE_NODE_UNKNOWN');
   const budget: Budget = { nodes: 0, chars: 0 };
-  const content = blocksOf(value.content, budget, 1, TOP_BLOCKS);
+  const content = blocksOf(value.content, budget, 1, TOP_BLOCKS, 'doc');
   if (budget.nodes > RICH_TEXT_NODES_MAX) return refuse('متن این بخش بیش از اندازه تکه‌تکه است؛ آن را در دو بخش بنویسید.', 'STOREFRONT_PAGE_TEXT_TOO_LONG');
   if (budget.chars > RICH_TEXT_CHARS_MAX) return refuse(`متن هر بخش حداکثر ${fa(RICH_TEXT_CHARS_MAX)} نویسه است.`, 'STOREFRONT_PAGE_TEXT_TOO_LONG');
   return { type: 'doc', content };

@@ -29,8 +29,20 @@ const idParams = z.object({ id: numericIdString }).passthrough();
 const text = (max: number) => z.string().max(max);
 /** a section is checked field by field in the service; here it is only an object of a bounded size */
 const section = z.record(z.string().max(40), z.unknown());
-const SECTIONS_BYTES_MAX = 600_000;
-const sections = z.array(section).max(PAGE_SECTIONS_MAX * 2).refine(list => JSON.stringify(list).length <= SECTIONS_BYTES_MAX, 'the sections are too large');
+/**
+ * The most characters the sections of one request may be as JSON: thirty sections of the longest text the rules take,
+ * with the editor's own structure around every run. Nesting too deep to write out as JSON is refused the same way (10b
+ * review: it was a 500).
+ */
+const SECTIONS_CHARS_MAX = 2_000_000;
+function withinSize(list: unknown): boolean {
+  try {
+    return JSON.stringify(list).length <= SECTIONS_CHARS_MAX;
+  } catch {
+    return false;
+  }
+}
+const sections = z.array(section).max(PAGE_SECTIONS_MAX * 2).refine(withinSize, 'بخش‌های صفحه بیش از اندازه بزرگ یا تودرتو هستند.');
 
 const detailSchema = z.object({ params: idParams });
 const createSchema = z.object({

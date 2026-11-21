@@ -1,15 +1,18 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { EditorContent, Mark, Node, useEditor, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import { Blockquote } from '@tiptap/extension-blockquote';
+import { ListItem } from '@tiptap/extension-list';
 import TextAlign from '@tiptap/extension-text-align';
-import { TableKit } from '@tiptap/extension-table';
+import { TableCell, TableHeader, TableKit } from '@tiptap/extension-table';
 import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, ImageIcon, Italic, Link2, Link2Off, List, ListOrdered, Minus, Quote, Redo2, Table, Trash2,
   Underline, Undo2,
 } from 'lucide-react';
 import { useHasPermission } from '../../../contexts/AuthContext';
 import {
-  IMAGE_ALT_MAX, RICH_TEXT_HEADING_LEVELS, TEXT_ALIGNS, TEXT_COLORS, TEXT_COLOR_TITLES, pageLink, type RichDoc, type TextAlign as Align, type TextColor,
+  IMAGE_ALT_MAX, RICH_TEXT_HEADING_LEVELS, TEXT_ALIGNS, TEXT_COLORS, TEXT_COLOR_TITLES, pageLink, safeRichDoc, type RichDoc, type TextAlign as Align,
+  type TextColor,
 } from '../../../lib/storefront/storefrontPageRules';
 import { LibraryImageList, libraryThumbUrl } from './LibraryImageField';
 
@@ -62,17 +65,38 @@ const LibraryImage = Node.create({
   },
 });
 
-/** The editor's whole schema: nothing outside it can be typed, pasted or loaded into a page's text */
+/**
+ * The editor's whole schema: nothing outside it can be typed, pasted or loaded into a page's text. Tiptap's own quote
+ * and table cells take any block and its list item any block after its paragraph; the server takes paragraphs there
+ * (and lists inside a list item), so the three are narrowed to the same shapes here. A toolbar button then simply does
+ * nothing where its result would not fit, instead of making a text the save refuses (10b review).
+ */
 export const pageEditorExtensions = () => [
   StarterKit.configure({
-    heading: { levels: [...RICH_TEXT_HEADING_LEVELS] }, code: false, codeBlock: false, strike: false,
-    link: { openOnClick: false, autolink: false, linkOnPaste: false, protocols: ['https'], HTMLAttributes: { rel: null, target: null, class: null } },
+    heading: { levels: [...RICH_TEXT_HEADING_LEVELS] }, code: false, codeBlock: false, strike: false, blockquote: false, listItem: false,
+    // a link is kept only where the server keeps it (`pageLink`): a path of this site or an https address; Tiptap's own
+    // list also takes http, mail and phone links, which the save would then refuse
+    link: {
+      openOnClick: false, autolink: false, linkOnPaste: false, protocols: ['https'], isAllowedUri: url => Boolean(pageLink(url)),
+      HTMLAttributes: { rel: null, target: null, class: null },
+    },
   }),
+  Blockquote.extend({ content: 'paragraph+' }),
+  ListItem.extend({ content: 'paragraph (bulletList | orderedList)*' }),
   TextAlign.configure({ types: ['heading', 'paragraph'], alignments: [...TEXT_ALIGNS] }),
-  TableKit.configure({ table: { resizable: false } }),
+  TableKit.configure({ table: { resizable: false }, tableCell: false, tableHeader: false }),
+  TableCell.extend({ content: 'paragraph+' }),
+  TableHeader.extend({ content: 'paragraph+' }),
   TextColorMark,
   LibraryImage,
 ];
+
+/**
+ * The editor's text in the form the server keeps (`safeRichDoc`), so the builder compares like with like: the editor
+ * writes an empty attribute on every paragraph that the kept form does not have. A text the rules refuse goes out as it
+ * is, and the builder names the problem.
+ */
+const keptForm = (json: unknown): RichDoc => safeRichDoc(json).doc ?? (json as RichDoc);
 
 const ALIGN_ICONS = { right: AlignRight, center: AlignCenter, left: AlignLeft, justify: AlignJustify } as const;
 const ALIGN_TITLES: Readonly<Record<Align, string>> = { right: 'راست‌چین', center: 'وسط‌چین', left: 'چپ‌چین', justify: 'هم‌تراز' };
@@ -203,9 +227,11 @@ export default function RichTextEditor({ label, value, disabled, onChange }: {
     content: value,
     editable: !disabled,
     editorProps: { attributes: { class: CONTENT, dir: 'rtl', role: 'textbox', 'aria-multiline': 'true', 'aria-label': label } },
-    onUpdate: ({ editor: current }) => { onChangeRef.current(current.getJSON() as RichDoc); },
+    onUpdate: ({ editor: current }) => { onChangeRef.current(keptForm(current.getJSON())); },
   });
-  useEffect(() => { editor?.setEditable(!disabled); }, [editor, disabled]);
+  // switching the editor on or off is not an edit: without `false` Tiptap reports an update, and a page just opened
+  // looked changed, so it could never be published (10b review)
+  useEffect(() => { editor?.setEditable(!disabled, false); }, [editor, disabled]);
   if (!editor) return <p className="text-xs text-slate-500">در حال آماده شدن ویرایشگر…</p>;
   return (
     <div>

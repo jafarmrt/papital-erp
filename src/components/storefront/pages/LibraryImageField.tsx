@@ -54,8 +54,10 @@ export function LibraryImageList({ value, onPick }: { value: number | null; onPi
   );
 }
 
-export function LibraryImageField({ label, value, title, unusable = false, onChange }: {
+export function LibraryImageField({ label, where = '', value, title, unusable = false, onChange }: {
   label: string;
+  /** where the image belongs («بخش ۲»), read out with the button so several pickers on a page are told apart */
+  where?: string;
   value: number | null;
   /** the chosen image's title, '' while unknown */
   title: string;
@@ -78,7 +80,7 @@ export function LibraryImageField({ label, value, title, unusable = false, onCha
       {unusable && <p role="alert" className="text-xs text-rose-700">این عکس دیگر در کتابخانهٔ تصاویر نیست یا نسخهٔ سبک ندارد؛ عکس دیگری برگزینید.</p>}
       {!canPick && <p className="text-xs text-slate-500">برای انتخاب عکس تازه، دسترسی «مشاهده کتابخانه تصاویر» لازم است.</p>}
       {canPick && (
-        <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open}
+        <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={`${open ? 'بستن کتابخانهٔ تصاویر' : value === null ? 'انتخاب از کتابخانهٔ تصاویر' : 'عوض کردن عکس'}: ${label}${where ? `، ${where}` : ''}`}
           className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold text-slate-700">
           <ImageIcon className="h-4 w-4" />
           {open ? 'بستن کتابخانهٔ تصاویر' : value === null ? 'انتخاب از کتابخانهٔ تصاویر' : 'عوض کردن عکس'}

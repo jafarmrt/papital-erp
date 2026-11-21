@@ -26,7 +26,9 @@ describe('a link of a page', () => {
     expect(pageLink('/products?category=x')).toBe('/products?category=x');
     expect(pageLink(' https://example.com/a ')).toBe('https://example.com/a');
     for (const bad of ['javascript:alert(1)', 'JaVaScRiPt:alert(1)', 'data:text/html,x', 'http://example.com', '//evil.example', '/\\evil.example', '/a//b',
-      '/a b', 'mailto:a@b.example', 'tel:021', 'https://evil.example;x/y', '/../x', 7, null, `/${'a'.repeat(301)}`]) {
+      '/a b', 'mailto:a@b.example', 'tel:021', 'https://evil.example;x/y', '/../x', 7, null, `/${'a'.repeat(301)}`,
+      // 10b review: a quote or an angle bracket is never part of a path as written, and an address by number is not a host
+      '/x\'"><script>', '/a`b', '/a<b', 'https://0x7f.1/', 'https://127.0.0.1/x', 'https://2130706433/']) {
       expect(pageLink(bad), String(bad)).toBeNull();
     }
   });
@@ -66,8 +68,8 @@ describe('the editor\'s text', () => {
       [doc(p('x', [{ type: 'textColor', attrs: { color: 'red;background:url(https://evil.example)' } }])), 'STOREFRONT_PAGE_FIELD_INVALID'],
       [doc({ type: 'paragraph', attrs: { textAlign: 'center;position:fixed' }, content: [{ type: 'text', text: 'x' }] }), 'STOREFRONT_PAGE_FIELD_INVALID'],
       [doc({ type: 'libraryImage', attrs: { assetId: '12' } }), 'STOREFRONT_PAGE_IMAGE_INVALID'],
-      [doc({ type: 'paragraph', content: [{ type: 'libraryImage', attrs: { assetId: 1 } }] }), 'STOREFRONT_PAGE_NODE_UNKNOWN'],
-      [doc({ type: 'listItem', content: [p('x')] }), 'STOREFRONT_PAGE_NODE_UNKNOWN'],
+      [doc({ type: 'paragraph', content: [{ type: 'libraryImage', attrs: { assetId: 1 } }] }), 'STOREFRONT_PAGE_NODE_MISPLACED'],
+      [doc({ type: 'listItem', content: [p('x')] }), 'STOREFRONT_PAGE_NODE_MISPLACED'],
       [doc({ type: 'table', content: [{ type: 'tableRow', content: [{ type: 'tableCell', attrs: { colspan: 2 }, content: [p('x')] }] }] }), 'STOREFRONT_PAGE_TABLE_INVALID'],
       [doc({ type: 'table', content: [{ type: 'tableRow', content: [{ type: 'tableCell', content: [p('x')] }] }, { type: 'tableRow', content: [] }] }), 'STOREFRONT_PAGE_TABLE_INVALID'],
       [doc(p('x\u0000y')), 'STOREFRONT_PAGE_FIELD_INVALID'],
@@ -82,6 +84,53 @@ describe('the editor\'s text', () => {
     expect(safeRichDoc(doc(deep)).problem?.code).toBe('STOREFRONT_PAGE_TEXT_TOO_DEEP');
     // a tag typed as text is only text
     expect(safeRichDoc(doc(p('<script>alert(1)</script>'))).problem).toBeNull();
+  });
+
+  it('names a known node in the wrong place in the colleague\'s words, never by the editor\'s English name (10b review)', () => {
+    const list = { type: 'bulletList', content: [{ type: 'listItem', content: [p('یک')] }] };
+    const cell = (...content: unknown[]) => doc({ type: 'table', content: [{ type: 'tableRow', content: [{ type: 'tableCell', content }] }] });
+    const cases: Array<[unknown, string]> = [
+      [cell(list), '«فهرست نقطه‌ای» درون خانهٔ جدول نمی‌آید'],
+      [cell({ type: 'libraryImage', attrs: { assetId: 1, alt: '' } }), '«عکس» درون خانهٔ جدول نمی‌آید'],
+      [cell({ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'x' }] }), '«تیتر» درون خانهٔ جدول نمی‌آید'],
+      [doc({ type: 'blockquote', content: [list] }), '«فهرست نقطه‌ای» درون نقل‌قول نمی‌آید'],
+      [doc({ type: 'bulletList', content: [{ type: 'listItem', content: [p('x'), { type: 'horizontalRule' }] }] }), '«خط جداکننده» درون گزینهٔ فهرست نمی‌آید'],
+    ];
+    for (const [value, words] of cases) {
+      const problem = safeRichDoc(value).problem;
+      expect(problem?.code, words).toBe('STOREFRONT_PAGE_NODE_MISPLACED');
+      expect(problem?.message, words).toContain(words);
+      expect(problem?.message, words).not.toMatch(/[A-Za-z]/);
+    }
+  });
+
+  it('refuses a node that must hold something and holds nothing, as the editor itself would (10b review)', () => {
+    // red before: each of these was saved, and the editor then could not open the text
+    for (const empty of [
+      { type: 'bulletList' }, { type: 'orderedList', content: [] }, { type: 'bulletList', content: [{ type: 'listItem' }] },
+      { type: 'bulletList', content: [{ type: 'listItem', content: [{ type: 'bulletList', content: [{ type: 'listItem', content: [p('x')] }] }] }] },
+      { type: 'blockquote' }, { type: 'table', content: [{ type: 'tableRow', content: [{ type: 'tableCell' }] }] },
+    ]) expect(safeRichDoc(doc(empty)).problem?.code, JSON.stringify(empty)).toBe('STOREFRONT_PAGE_NODE_EMPTY');
+    for (const leaf of [{ type: 'horizontalRule', content: [p('x')] }, { type: 'libraryImage', attrs: { assetId: 1 }, content: [p('x')] }]) {
+      expect(safeRichDoc(doc(leaf)).problem?.code, leaf.type).toBe('STOREFRONT_PAGE_NODE_MISPLACED');
+    }
+    // an empty paragraph and an empty cell's paragraph are ordinary
+    expect(safeRichDoc(doc({ type: 'paragraph' }, { type: 'table', content: [{ type: 'tableRow', content: [{ type: 'tableCell', content: [{ type: 'paragraph' }] }] }] })).problem).toBeNull();
+  });
+
+  it('keeps where a numbered list starts, and refuses half of a surrogate pair instead of failing the save (10b review)', () => {
+    const numbered = (attrs?: unknown) => doc({ type: 'orderedList', ...(attrs ? { attrs } : {}), content: [{ type: 'listItem', content: [p('پنجم')] }] });
+    // red before: a list pasted as starting at 5 came back starting at 1
+    expect(safeRichDoc(numbered({ start: 5, type: 'a' })).doc?.content[0]).toMatchObject({ type: 'orderedList', attrs: { start: 5 } });
+    expect(safeRichDoc(numbered({ start: 1 })).doc?.content[0]).not.toHaveProperty('attrs');
+    expect(safeRichDoc(numbered({ start: -3 })).doc?.content[0]).not.toHaveProperty('attrs');
+    expect(safeRichDoc(numbered({ start: '5;x' })).doc?.content[0]).not.toHaveProperty('attrs');
+    // red before: PostgreSQL refused the text and the save answered 500
+    expect(safeRichDoc(doc(p('a\ud800b'))).problem?.code).toBe('STOREFRONT_PAGE_FIELD_INVALID');
+    expect(refusal(page([{ kind: 'hero', title: 'a\udc00b' }]))).toMatchObject({ code: 'STOREFRONT_PAGE_FIELD_INVALID' });
+    expect(refusal(page([], { title: 'a\ud800' }))).toMatchObject({ field: 'title' });
+    // a whole pair (an emoji) is ordinary text
+    expect(safeRichDoc(doc(p('خوش آمدید \ud83d\ude00'))).problem).toBeNull();
   });
 });
 

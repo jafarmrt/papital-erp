@@ -8,12 +8,10 @@ import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { OptimisticLockError, nextVersion } from '../../lib/occHelper.js';
 import { can } from '../../middleware/authorize.js';
 import {
-  BASE_PAGES, PAGES_MAX, PAGE_TEMPLATES, SECTION_KIND_TITLES, checkedPage, isPageKind, pageAssetIds, pageItemIds, type BasePageSlug, type PageSection,
-  type PageValues,
+  BASE_PAGES, PAGES_MAX, PAGE_TEMPLATES, SECTION_KIND_TITLES, checkedPage, isPageKind, pageAssetIds, pageItemIds, sectionAssetIds, type BasePageSlug,
+  type PageSection, type PageValues, type RichDoc, type RichNode,
 } from '../../lib/storefront/storefrontPageRules.js';
 import type { PageAssetInfo, PageCreateInput, PageDetail, PageListRow, PageSaveInput, PageStatus } from '../../lib/storefront/storefrontPageContracts.js';
-import { catalogItems } from './storefrontCatalog.service.js';
-import { storefrontSettingValues } from './storefrontSettings.service.js';
 
 /**
  * v12 phase 10b (package 18, V12_SITE_NEXT_START_PLAN.md §7.2): «صفحه‌های سایت» on the ERP side. Reading needs
@@ -22,7 +20,9 @@ import { storefrontSettingValues } from './storefrontSettings.service.js';
  * empties its published copy. Each of these locks the page's row, refuses a stale version (409), and writes its audit
  * row in the same transaction. Every image a page names is a live image of the media library with a light version, and
  * naming a new one needs «مشاهده کتابخانه تصاویر» too, as a campaign page's hero does. A base page is never removed and
- * keeps its address; a custom page is removed softly.
+ * keeps its address; a custom page is removed softly. A page's address is one value, the one the site reads it by, so it
+ * changes only while the page is off the site: a draft can never move a page that is on the site (10b review). Moving
+ * a published page, with the redirect from its old address, is 10c's.
  */
 type PageRecord = typeof storefrontPages.$inferSelect;
 
@@ -72,12 +72,7 @@ async function assetInfos(executor: DbExecutor, ids: readonly number[]): Promise
 
 async function detailOf(executor: DbExecutor, row: PageRecord): Promise<PageDetail> {
   const draft = draftOf(row);
-  const wanted = pageItemIds(draft);
-  const onSale = wanted.length ? await catalogItems(executor, await storefrontSettingValues(executor)) : [];
-  return {
-    ...listRowOf(row), draft, assets: await assetInfos(executor, pageAssetIds(draft)),
-    products: onSale.filter(item => wanted.includes(item.itemId)).map(item => ({ itemId: item.itemId, name: item.name })),
-  };
+  return { ...listRowOf(row), draft, assets: await assetInfos(executor, pageAssetIds(draft)) };
 }
 
 /** `GET /api/storefront/pages`: every page, the five base ones first */
@@ -108,14 +103,13 @@ async function lockedRow(tx: DbExecutor, id: number, expectedVersion: number): P
 }
 
 /**
- * The images and products a page names exist. `mustBeUsable`: every image is a live image with a light version (a draft
- * may keep one that was removed from the library since, so the colleague can replace it; a published page may not).
+ * The images and products a page names exist. An image must be a live image of the library with a light version;
+ * `mayKeep` names the images the page already had, which a draft may go on naming after they left the library (so the
+ * colleague can open the page and replace them), though a published page may not.
  */
-async function checkReferences(tx: DbExecutor, page: PageValues, mustBeUsable: boolean): Promise<void> {
+async function checkReferences(tx: DbExecutor, page: PageValues, mayKeep: readonly number[]): Promise<void> {
   const assets = await assetInfos(tx, pageAssetIds(page));
-  const unknown = assets.find(asset => asset.title === '' && !asset.usable);
-  const unusable = mustBeUsable ? assets.find(asset => !asset.usable) : undefined;
-  const bad = unknown ?? unusable;
+  const bad = assets.find(asset => !asset.usable && !mayKeep.includes(asset.assetId));
   if (bad) {
     throw invalid('یکی از عکس‌های صفحه در کتابخانهٔ تصاویر نیست یا نسخهٔ سبک ندارد؛ آن را عوض کنید.', 'sections', 'STOREFRONT_PAGE_IMAGE_UNKNOWN', { assetId: bad.assetId });
   }
@@ -138,8 +132,48 @@ async function refuseNewImagesWithoutMedia(req: Request, page: PageValues, befor
   }
 }
 
-/** A short list of a page's sections for the audit row */
-const auditSections = (sections: readonly PageSection[]): string[] => sections.map(s => SECTION_KIND_TITLES[s.kind]);
+const AUDIT_TEXT_MAX = 200;
+
+/** The words and the link addresses of a text, for the audit row */
+function auditDoc(doc: RichDoc): { text: string; links: string[] } {
+  const words: string[] = [];
+  const links: string[] = [];
+  const walk = (node: RichNode | RichDoc) => {
+    const leaf = node as RichNode;
+    if (typeof leaf.text === 'string') words.push(leaf.text);
+    for (const mark of leaf.marks ?? []) if (mark.type === 'link' && mark.attrs?.href) links.push(mark.attrs.href);
+    for (const child of node.content ?? []) walk(child);
+  };
+  walk(doc);
+  return { text: words.join(' ').slice(0, AUDIT_TEXT_MAX), links: [...new Set(links)] };
+}
+
+/**
+ * A section as the audit row keeps it: its kind, its titles and the start of its words, every address it links to, the
+ * images and products it names. Enough to see afterwards what a change put on the public site (a link moved to another
+ * address, a text rewritten, an image swapped), without copying whole pages into the log (10b review).
+ */
+function auditSection(section: PageSection): Record<string, unknown> {
+  const base = { kind: SECTION_KIND_TITLES[section.kind], background: section.background };
+  const images = sectionAssetIds(section);
+  const withImages = images.length ? { images } : {};
+  switch (section.kind) {
+    case 'hero': return { ...base, title: section.title, text: section.text.slice(0, AUDIT_TEXT_MAX), ...(section.buttonHref ? { button: section.buttonLabel, links: [section.buttonHref] } : {}), ...withImages };
+    case 'text': return { ...base, ...auditDoc(section.doc), ...withImages };
+    case 'textImage': {
+      const doc = auditDoc(section.doc);
+      return { ...base, title: section.title, text: doc.text, links: [...doc.links, ...(section.buttonHref ? [section.buttonHref] : [])], ...withImages };
+    }
+    case 'iconCards': return { ...base, title: section.title, cards: section.cards.map(card => `${card.title}: ${card.text}`.slice(0, AUDIT_TEXT_MAX)) };
+    case 'gallery': return { ...base, title: section.title, ...withImages };
+    case 'people': return { ...base, title: section.title, people: section.people.map(person => [person.name, person.role, person.contact].filter(Boolean).join('، ')), ...withImages };
+    case 'map': return { ...base, title: section.title, address: section.address, links: [section.neshanUrl, section.baladUrl, section.googleUrl].filter(Boolean), ...withImages };
+    case 'products': return { ...base, title: section.title, ...(section.source === 'items' ? { items: section.itemIds } : { collection: section.collection }) };
+    case 'button': return { ...base, label: section.label, links: [section.href].filter(Boolean) };
+    default: return { ...base, title: section.title };
+  }
+}
+const auditSections = (sections: readonly PageSection[]): Array<Record<string, unknown>> => sections.map(auditSection);
 const auditOf = (page: PageValues) => ({
   title: page.title, slug: page.slug, seoTitle: page.seoTitle, seoDescription: page.seoDescription, noindex: page.noindex,
   shareImageAssetId: page.shareImageAssetId, sections: auditSections(page.sections),
@@ -183,12 +217,17 @@ export async function saveDraft(req: Request, id: number, input: PageSaveInput):
     const page = checked.page;
     const before = draftOf(row);
     if (page.slug !== row.slug) {
+      if (row.published !== null) {
+        throw invalid('نشانی صفحه‌ای که روی سایت است عوض نمی‌شود؛ نخست آن را از روی سایت بردارید.', 'slug', 'STOREFRONT_PAGE_SLUG_ON_SITE');
+      }
       const [taken] = await tx.select({ id: storefrontPages.id }).from(storefrontPages)
         .where(and(eq(storefrontPages.slug, page.slug), eq(storefrontPages.isDeleted, 0)));
       if (taken) throw new ConflictError('صفحهٔ دیگری همین نشانی را دارد.', { field: 'slug' }, 'STOREFRONT_PAGE_SLUG_TAKEN');
     }
-    await refuseNewImagesWithoutMedia(req, page, pageAssetIds(before));
-    await checkReferences(tx, page, false);
+    // the images the page already has: its draft's, and those of its copy on the site (which «برگرداندن» brings back)
+    const had = [...pageAssetIds(before), ...(row.published ? pageAssetIds(row.published) : [])];
+    await refuseNewImagesWithoutMedia(req, page, had);
+    await checkReferences(tx, page, had);
     const actor = actorOf(req);
     await tx.update(storefrontPages).set({
       slug: page.slug, title: page.title, seoTitle: page.seoTitle, seoDescription: page.seoDescription, noindex: page.noindex ? 1 : 0,
@@ -224,7 +263,7 @@ export async function publishPage(req: Request, id: number, version: number): Pr
     const checked = checkedPage(draftOf(row), { forPublish: true, baseSlug: baseSlugOf(row) });
     if (checked.problem) throw refused(checked.problem);
     const page = checked.page;
-    await checkReferences(tx, page, true);
+    await checkReferences(tx, page, []);
     const copy = publishedCopyOf(page);
     if (sameCopy(copy, row.published)) return;
     const actor = actorOf(req);

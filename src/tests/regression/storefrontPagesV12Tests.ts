@@ -124,11 +124,17 @@ export async function runStorefrontPagesV12Tests(shouldRun: (id: string, ...extr
     if (afterDraft.published !== null || afterDraft.publishedAt !== null) wrong.push('saving a draft put the page on the site');
     if ((await publishedContentAssetIds(orm)).some(assetId => assetIds.includes(assetId))) wrong.push('an image of a draft is named as published');
 
-    // 5) publish: an image without a light version 422, an unfinished page 422, then the draft goes onto the site
+    // 5) publish: a new image without a light version is refused at once; one the draft already has that then loses its
+    //    light version still saves (so it can be replaced) but cannot go onto the site; an unfinished page cannot either
     const withBadImage = await erp.put(`/api/storefront/pages/${pageId}`, form([...finished, { kind: 'hero', background: 'dark', title: 'x', text: '', imageAssetId: imageNoLight, buttonLabel: '', buttonHref: '' }], 2));
-    const publishBadImage = await erp.post(`/api/storefront/pages/${pageId}/publish`, { version: 3 });
-    if (withBadImage.status !== 200 || publishBadImage.status !== 422 || publishBadImage.body.code !== 'STOREFRONT_PAGE_IMAGE_UNKNOWN') {
-      wrong.push(`publishing an image without a light version: save ${withBadImage.status}, publish ${publishBadImage.status} ${publishBadImage.body.code}`);
+    if (withBadImage.status !== 422 || withBadImage.body.code !== 'STOREFRONT_PAGE_IMAGE_UNKNOWN') wrong.push(`a new image without a light version: ${withBadImage.status} ${withBadImage.body.code}`);
+    await orm.update(mediaAssets).set({ lightBytes: null }).where(eq(mediaAssets.id, imageB));
+    const publishBroken = await erp.post(`/api/storefront/pages/${pageId}/publish`, { version: 2 });
+    const keepBroken = await erp.put(`/api/storefront/pages/${pageId}`, form(finished, 2, { seoDescription: 'توضیح' }));
+    await orm.update(mediaAssets).set({ lightBytes: 500 }).where(eq(mediaAssets.id, imageB));
+    if (publishBroken.status !== 422 || publishBroken.body.code !== 'STOREFRONT_PAGE_IMAGE_UNKNOWN' || keepBroken.status !== 200
+      || keepBroken.body.data.assets.find((asset: Body) => asset.assetId === imageB)?.usable !== false) {
+      wrong.push(`an image that lost its light version: publish ${publishBroken.status} ${publishBroken.body.code}, keep in the draft ${keepBroken.status}`);
     }
     const unknownImage = await erp.put(`/api/storefront/pages/${pageId}`, form([{ kind: 'hero', background: 'dark', title: 'x', text: '', imageAssetId: 2_000_000_000, buttonLabel: '', buttonHref: '' }], 3));
     if (unknownImage.status !== 422 || unknownImage.body.code !== 'STOREFRONT_PAGE_IMAGE_UNKNOWN') wrong.push(`an image that is not in the library: ${unknownImage.status} ${unknownImage.body.code}`);
@@ -228,10 +234,82 @@ export async function runStorefrontPagesV12Tests(shouldRun: (id: string, ...extr
     const baseGone = await orm.update(storefrontPages).set({ isDeleted: 1 }).where(eq(storefrontPages.id, about.id)).then(() => false, () => true);
     if (!baseGone) wrong.push('a base page was soft-deleted by a direct write');
 
+    // 12) the review of 10b, on a second page
+    const slug2 = `review-${tag}`;
+    const made2 = await erp.post('/api/storefront/pages', { title: `بازبینی ${tag}`, slug: slug2, template: null });
+    if (made2.status !== 201) throw new Error(`a second page: ${made2.status}`);
+    const page2 = Number(made2.body.data.id);
+    pageIds.push(page2);
+    const form2 = (sections: unknown[], version: number, over: Body = {}) => ({
+      title: `بازبینی ${tag}`, slug: slug2, seoTitle: '', seoDescription: '', noindex: false, shareImageAssetId: null, sections, version, ...over,
+    });
+    const buttonTo = (href: string) => ({ kind: 'button', background: 'white', label: 'خرید', href });
+    const gallery = { kind: 'gallery', background: 'white', title: '', images: [{ assetId: imageA, alt: 'یک' }, { assetId: imageB, alt: 'دو' }] };
+    // a hostile request is answered with a refusal, never a failure of the server
+    const loneInTitle = await erp.put(`/api/storefront/pages/${page2}`, form2([], 1, { title: 'a\ud800b' }));
+    const loneInText = await erp.put(`/api/storefront/pages/${page2}`, form2([textOf(p('a\udc00b'))], 1));
+    if (loneInTitle.status !== 422 || loneInText.status !== 422) wrong.push(`half of a surrogate pair: title ${loneInTitle.status}, text ${loneInText.status} (not 422)`);
+    // nesting too deep to be written out again: sent as text, as only a forged request can
+    const depth = 20_000;
+    const deepDoc = `${'{"type":"bulletList","content":[{"type":"listItem","content":['.repeat(depth)}{"type":"paragraph"}${']}]}'.repeat(depth)}`;
+    const deepBody = JSON.stringify(form2(['DEEP'], 1)).replace('"DEEP"', `{"kind":"text","background":"white","doc":{"type":"doc","content":[${deepDoc}]}}`);
+    const tooDeep = await request(app).put(`/api/storefront/pages/${page2}`).set('Cookie', admin.cookie).set('x-csrf-token', admin.csrfToken)
+      .set('Content-Type', 'application/json').send(deepBody);
+    if (tooDeep.status < 400 || tooDeep.status >= 500) wrong.push(`a text nested twenty thousand deep: ${tooDeep.status} (not a refusal)`);
+    const emptyList = await erp.put(`/api/storefront/pages/${page2}`, form2([textOf({ type: 'bulletList' })], 1));
+    if (emptyList.status !== 422 || emptyList.body.code !== 'STOREFRONT_PAGE_NODE_EMPTY') wrong.push(`an empty list: ${emptyList.status} ${emptyList.body.code}`);
+    const listInCell = await erp.put(`/api/storefront/pages/${page2}`, form2([textOf({ type: 'table', content: [{ type: 'tableRow', content: [{ type: 'tableCell', content: [{ type: 'bulletList', content: [{ type: 'listItem', content: [p('x')] }] }] }] }] })], 1));
+    if (listInCell.status !== 422 || listInCell.body.code !== 'STOREFRONT_PAGE_NODE_MISPLACED' || /[A-Za-z]/.test(String(listInCell.body.message ?? listInCell.body.error ?? ''))) {
+      wrong.push(`a list inside a table cell: ${listInCell.status} ${listInCell.body.code} «${listInCell.body.message ?? listInCell.body.error}»`);
+    }
+    if ((await orm.select().from(storefrontPages).where(eq(storefrontPages.id, page2)))[0].version !== 1) wrong.push('a refused request wrote to the second page');
+    // a numbered list keeps where it starts; the page goes onto the site with a button and two images
+    const numbered = textOf({ type: 'orderedList', attrs: { start: 5, type: 'a' }, content: [{ type: 'listItem', content: [p('پنجم')] }] });
+    const saved2 = await erp.put(`/api/storefront/pages/${page2}`, form2([buttonTo('/products'), numbered, gallery], 1));
+    if (saved2.status !== 200 || JSON.stringify(saved2.body.data.draft.sections[1].doc.content[0].attrs) !== '{"start":5}') {
+      wrong.push(`a list starting at five: ${saved2.status} ${JSON.stringify(saved2.body.data?.draft?.sections?.[1]?.doc?.content?.[0]?.attrs)}`);
+    }
+    const published2 = await erp.post(`/api/storefront/pages/${page2}/publish`, { version: 2 });
+    if (published2.status !== 200) throw new Error(`publish the second page: ${published2.status} ${JSON.stringify(published2.body).slice(0, 300)}`);
+    // the address of a page on the site is not a draft's to move
+    const moved = await erp.put(`/api/storefront/pages/${page2}`, form2([buttonTo('/products'), numbered, gallery], 3, { slug: `${slug2}-moved` }));
+    const rowMoved = (await orm.select().from(storefrontPages).where(eq(storefrontPages.id, page2)))[0];
+    if (moved.status !== 422 || moved.body.code !== 'STOREFRONT_PAGE_SLUG_ON_SITE' || rowMoved.slug !== slug2 || rowMoved.version !== 3) {
+      wrong.push(`moving the address of a page on the site by a draft: ${moved.status} ${moved.body.code}, slug ${rowMoved.slug}`);
+    }
+    // the audit rows show what a change puts on the public site: here a button sent to another address
+    const relinked = await erp.put(`/api/storefront/pages/${page2}`, form2([buttonTo('https://phishing.example/login'), numbered], 3));
+    const republished = await erp.post(`/api/storefront/pages/${page2}/publish`, { version: 4 });
+    const trail = await orm.select({ description: activityLogs.description, details: activityLogs.details }).from(activityLogs).where(eq(activityLogs.entityId, `page-${page2}`));
+    const trailText = JSON.stringify(trail.map(r => r.details));
+    const publishRows = trail.filter(r => String(r.description).includes('منتشر شد'));
+    if (relinked.status !== 200 || republished.status !== 200 || publishRows.length !== 2 || !trailText.includes('https://phishing.example/login') || !trailText.includes('/products')
+      || !trailText.includes('پنجم')) {
+      wrong.push(`the audit rows of a changed link: ${relinked.status}/${republished.status}, ${publishRows.length} publish rows, phishing ${trailText.includes('https://phishing.example/login')}, products ${trailText.includes('/products')}`);
+    }
+    // republished with fewer images: only what the copy on the site names is still named
+    if ((await publishedContentAssetIds(orm)).some(assetId => assetIds.includes(assetId))) wrong.push('images the republished page no longer names are still named as published');
+    // an image the page still has on the site may come back into the draft without the library's key ...
+    const backOnSite = await erp.put(`/api/storefront/pages/${page2}`, form2([buttonTo('/products'), gallery], 5));
+    const backPublished = await erp.post(`/api/storefront/pages/${page2}/publish`, { version: 6 });
+    const withoutGallery = await erp.put(`/api/storefront/pages/${page2}`, form2([buttonTo('/products')], 7));
+    const editorBringsBack = await editor.put(`/api/storefront/pages/${page2}`, form2([buttonTo('/products'), gallery], 8));
+    if (backOnSite.status !== 200 || backPublished.status !== 200 || withoutGallery.status !== 200 || editorBringsBack.status !== 200) {
+      wrong.push(`an editor bringing back an image the published copy still has: ${backOnSite.status}/${backPublished.status}/${withoutGallery.status}/${editorBringsBack.status}`);
+    }
+    // ... but an image that left the library is never taken as a new image, whoever asks
+    await orm.update(mediaAssets).set({ isDeleted: 1 }).where(eq(mediaAssets.id, imageC));
+    const removedImage = await erp.put(`/api/storefront/pages/${page2}`, form2([buttonTo('/products'), gallery, { kind: 'hero', background: 'dark', title: 'x', text: '', imageAssetId: imageC, buttonLabel: '', buttonHref: '' }], 9));
+    if (removedImage.status !== 422 || removedImage.body.code !== 'STOREFRONT_PAGE_IMAGE_UNKNOWN') wrong.push(`a removed image as a new image: ${removedImage.status} ${removedImage.body.code}`);
+    // off the site, the address may change
+    const off2 = await erp.post(`/api/storefront/pages/${page2}/unpublish`, { version: 9 });
+    const movedOff = await erp.put(`/api/storefront/pages/${page2}`, form2([buttonTo('/products')], 10, { slug: `${slug2}-moved` }));
+    if (off2.status !== 200 || movedOff.status !== 200 || movedOff.body.data.slug !== `${slug2}-moved`) wrong.push(`moving the address off the site: ${off2.status}/${movedOff.status} ${movedOff.body.data?.slug}`);
+
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'the five base pages were there unpublished; a page from a template was a draft, its address unique; eight kinds of unsafe content were refused with their section and wrote nothing, and unknown attributes were never kept; a draft saved under its version (stale 409) left the site untouched; publishing refused an image without a light version, an image not in the library and an unfinished section, then put the draft on the site and named its two images; a later draft and a revert left the published copy alone; view-only and storefront.manage alone could not write, a new image needed media.view; off the site switched the image rows off; a base page was neither removed nor renamed, a custom page was removed softly and its address freed; eleven audit rows; six direct writes were refused by the constraints',
+      details: 'the five base pages were there unpublished; a page from a template was a draft, its address unique; eight kinds of unsafe content were refused with their section and wrote nothing, and unknown attributes were never kept; a draft saved under its version (stale 409) left the site untouched; publishing refused an image without a light version, an image not in the library and an unfinished section, then put the draft on the site and named its two images; a later draft and a revert left the published copy alone; view-only and storefront.manage alone could not write, a new image needed media.view; off the site switched the image rows off; a base page was neither removed nor renamed, a custom page was removed softly and its address freed; eleven audit rows; six direct writes were refused by the constraints; and, from the review: half a surrogate pair, a text nested twenty thousand deep, an empty list and a list in a table cell were refusals (not failures), a numbered list kept its start, a draft could not move the address of a page on the site, the audit rows showed the old and the new address of a button, a republish with fewer images dropped the others, an editor could bring back an image the published copy still had, and a removed image was never taken as new',
     }));
   } catch (err) {
     results.push(makeTestCase({

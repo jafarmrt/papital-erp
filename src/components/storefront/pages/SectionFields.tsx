@@ -44,10 +44,10 @@ function RowTools({ index, count, what, onMove, onRemove }: { index: number; cou
   );
 }
 
-export function SectionFields({ section, revision, disabled, assets, options, onChange }: {
+export function SectionFields({ section, name, disabled, assets, options, onChange }: {
   section: PageSection;
-  /** changes when the server's copy replaces the draft, so the text editor starts from it again */
-  revision: number;
+  /** the section as the builder names it («بخش ۲»), so each text editor and image button has a name of its own */
+  name: string;
   disabled: boolean;
   assets: AssetTitles;
   options: MenuLinkOptions | undefined;
@@ -62,14 +62,14 @@ export function SectionFields({ section, revision, disabled, assets, options, on
     </div>
   );
   const image = (title: string, value: number | null, set: (assetId: number | null) => void) => (
-    <LibraryImageField label={title} value={value} title={assets.titleOf(value)} unusable={assets.unusable(value)}
+    <LibraryImageField label={title} where={name} value={value} title={assets.titleOf(value)} unusable={assets.unusable(value)}
       onChange={(assetId, pickedTitle) => { if (assetId !== null) assets.remember(assetId, pickedTitle); set(assetId); }} />
   );
   const editor = (title: string, doc: Extract<PageSection, { kind: 'text' }>['doc'], set: (doc: Extract<PageSection, { kind: 'text' }>['doc']) => void) => (
     <div>
       <p className={label}>{title}</p>
       <Suspense fallback={<p className="text-xs text-slate-500">در حال آماده شدن ویرایشگر…</p>}>
-        <RichTextEditor key={revision} label={title} value={doc} disabled={disabled} onChange={set} />
+        <RichTextEditor label={`${title} ${name}`} value={doc} disabled={disabled} onChange={set} />
       </Suspense>
     </div>
   );

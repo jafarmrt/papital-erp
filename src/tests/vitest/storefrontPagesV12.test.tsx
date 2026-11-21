@@ -40,7 +40,7 @@ const LIST: PageListRow[] = [row({}), row({ id: 2, slug: 'contact', title: 'تم
 const detailOf = (over: Partial<PageDetail> = {}): PageDetail => ({
   ...row({ id: 9, kind: 'custom', slug: 'our-story', title: 'داستان ما', version: 4 }),
   draft: { title: 'داستان ما', slug: 'our-story', seoTitle: '', seoDescription: '', noindex: false, shareImageAssetId: null, sections: [{ kind: 'button', background: 'white', label: 'خرید', href: '/products' }] },
-  assets: [], products: [], ...over,
+  assets: [], ...over,
 });
 
 afterEach(() => {
