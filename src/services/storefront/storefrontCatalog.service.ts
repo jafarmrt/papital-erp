@@ -104,6 +104,11 @@ export async function orderableItems(executor: DbExecutor, settings: StorefrontS
 const publicOnSale = (settings: StorefrontSettingsInput): Promise<readonly OnSale[]> =>
   keptOnSale(settings.retailPriceList, () => itemsOnSale(orm, settings));
 
+/** v12 phase 9c: the items on the site now for a public read that only names them (the menus' product links), kept a few seconds */
+export async function publicItemsOnSale(): Promise<readonly OnSale[]> {
+  return publicOnSale(await storefrontSettingValues(orm));
+}
+
 /** v11 phase 8.2b: every item the site offers now, to price for a buyer group */
 export async function catalogItems(executor: DbExecutor, settings: StorefrontSettingsInput): Promise<OnSale[]> {
   return itemsOnSale(executor, settings);

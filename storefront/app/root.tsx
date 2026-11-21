@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Links, Meta, Outlet, Scripts, ScrollRestoration, isRouteErrorResponse, useNavigation, useRouteLoaderData, type LinksFunction } from 'react-router';
 import type { Route } from './+types/root';
 import './app.css';
-import { brand, facets, publicSettings } from './lib/api.server';
+import { brand, facets, menus, publicSettings } from './lib/api.server';
 import { imageVersion } from './lib/brandImage.server';
 import { siteEnv } from './lib/site.server';
 import { SiteHeader } from './components/SiteHeader';
@@ -19,7 +19,7 @@ export const links: LinksFunction = () => [
 ];
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const [f, settings, images, seo] = await Promise.all([facets(), publicSettings(), brand(), siteSeo()]);
+  const [f, settings, images, seo, menu] = await Promise.all([facets(), publicSettings(), brand(), siteSeo(), menus()]);
   const env = siteEnv();
   return {
     categories: f.categories,
@@ -42,6 +42,8 @@ export async function loader({ request }: Route.LoaderArgs) {
     /** iOS takes only a bitmap as the home-screen icon */
     faviconIsBitmap: Boolean(images.favicon) && !images.favicon.startsWith('data:image/svg+xml'),
     seo,
+    /** v12 phase 9c: the menus of «فهرست‌های سایت»; a null place keeps the fixed menu */
+    menus: menu,
   };
 }
 
@@ -82,11 +84,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {data?.previewNotice ? (
           <p className="bg-brand px-4 py-2 text-center text-sm text-brand-foreground">{data.previewNotice}</p>
         ) : null}
-        <SiteHeader categories={data?.categories ?? []} logoUrl={data?.logoUrl ?? ''} ordering={data?.ordering ?? false} cartCount={data?.cartCount ?? 0} signedIn={data?.signedIn ?? false} />
+        <SiteHeader categories={data?.categories ?? []} logoUrl={data?.logoUrl ?? ''} ordering={data?.ordering ?? false} cartCount={data?.cartCount ?? 0} signedIn={data?.signedIn ?? false}
+          headerMenu={data?.menus.header ?? null} drawerMenu={data?.menus.drawer ?? null} />
         <main id="main" className="flex-1">{children}</main>
         <SiteFooter data={data} />
         <BottomNavSpace />
-        <BottomNav ordering={data?.ordering ?? false} cartCount={data?.cartCount ?? 0} signedIn={data?.signedIn ?? false} />
+        <BottomNav ordering={data?.ordering ?? false} cartCount={data?.cartCount ?? 0} signedIn={data?.signedIn ?? false} menu={data?.menus.bottom ?? null} />
         <ScrollRestoration />
         <Scripts />
       </body>
