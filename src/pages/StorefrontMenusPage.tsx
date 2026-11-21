@@ -65,7 +65,7 @@ export default function StorefrontMenusPage() {
       </div>
       {menus.isLoading && <p className="text-xs text-slate-500">در حال خواندن…</p>}
       {menus.isError && <p className="text-xs text-rose-700">{errorMessageOf(menus.error)}</p>}
-      {options.isError && <p className="text-xs text-amber-800">{`فهرست دسته‌ها و محصولات خوانده نشد: ${errorMessageOf(options.error)}`}</p>}
+      {options.isError && <p className="text-xs text-amber-800">{`فهرست دسته‌ها، صفحه‌ها و محصولات خوانده نشد: ${errorMessageOf(options.error)}`}</p>}
       {/* every place's editor stays mounted, so a draft survives switching tabs (9b review) */}
       {views.map(v => (
         <div key={v.location} role="tabpanel" aria-label={MENU_LOCATION_TITLES[v.location]} hidden={v.location !== place}>

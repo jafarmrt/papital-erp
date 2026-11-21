@@ -8,7 +8,7 @@ import type { StorefrontPublicMenuItem, StorefrontPublicMenus } from '../../lib/
 import { publicItemsOnSale } from './storefrontCatalog.service.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
 import { campaignOpenNow } from './storefrontCampaigns.service.js';
-import { pageLinkTargets } from './storefrontPagePublic.js';
+import { pageLinkTargets } from './storefrontPages.service.js';
 
 /**
  * v12 phase 9c (V12_SITE_NEXT_START_PLAN.md §6, `AGENTS.md` §1.9c): `GET /api/storefront/v1/menus`, the menus the site

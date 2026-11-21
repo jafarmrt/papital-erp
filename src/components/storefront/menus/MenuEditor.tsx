@@ -17,7 +17,8 @@ const keyOf = () => `item-${++nextKey}`;
 function draftOf(item: MenuItemValues | MenuItemRow): DraftItem {
   return {
     key: keyOf(), id: item.id || null, label: item.label, kind: item.kind, target: item.target, itemId: item.itemId,
-    campaignId: item.campaignId, pageId: item.pageId, icon: item.icon, isActive: item.isActive, children: item.children.map(draftOf),
+    campaignId: item.campaignId, pageId: item.pageId, targetTitle: 'targetTitle' in item ? item.targetTitle : '', icon: item.icon, isActive: item.isActive,
+    children: item.children.map(draftOf),
   };
 }
 

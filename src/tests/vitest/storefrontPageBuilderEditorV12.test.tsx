@@ -30,6 +30,7 @@ const text = (words: string, background: PageSection['background'] = 'white'): P
 const detailOf = (sections: PageSection[], over: Partial<PageDetail> = {}): PageDetail => ({
   id: 9, kind: 'custom', slug: 'our-story', title: 'داستان ما', status: 'draft', publishedAt: '', updatedAt: '2026-11-21 10:00:00', updatedBy: '', version: 4,
   draft: { title: 'داستان ما', slug: 'our-story', seoTitle: '', seoDescription: '', noindex: false, shareImageAssetId: null, sections },
+  menuPlaces: [],
   assets: [], ...over,
 });
 

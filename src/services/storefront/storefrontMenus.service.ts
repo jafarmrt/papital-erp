@@ -13,7 +13,7 @@ import {
 import type { MenuItemRow, MenuLinkOptions, MenuSaveInput, MenuView, MenusView } from '../../lib/storefront/storefrontMenuContracts.js';
 import { catalogItems } from './storefrontCatalog.service.js';
 import { campaignOpenNow } from './storefrontCampaigns.service.js';
-import { pageLinkTargets, type PageLinkTarget } from './storefrontPagePublic.js';
+import { pageLinkTargets, type PageLinkTarget } from './storefrontPages.service.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
 
 /**
@@ -194,7 +194,7 @@ async function checkReferences(tx: DbExecutor, list: readonly MenuItemValues[]):
   if (pageIds.length) {
     const found = await pageLinkTargets(tx, pageIds);
     const missing = all.find(i => i.pageId !== null && !found.has(i.pageId));
-    if (missing) throw invalid(`صفحهٔ متنی «${missing.label}» حذف شده است.`, 'items', 'STOREFRONT_MENU_PAGE_UNKNOWN');
+    if (missing) throw invalid(`صفحه‌ای که گزینهٔ «${missing.label}» به آن پیوند دارد حذف شده است؛ صفحهٔ دیگری برگزینید یا این گزینه را بردارید.`, 'items', 'STOREFRONT_MENU_PAGE_UNKNOWN');
   }
 }
 

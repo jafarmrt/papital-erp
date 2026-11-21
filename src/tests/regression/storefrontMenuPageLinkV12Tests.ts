@@ -1,17 +1,17 @@
 import request from 'supertest';
-import { eq, gt, inArray, like, max } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, like, max } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { appSettings, storefrontMenuItems, storefrontMenus, storefrontPages } from '../../db/schema.js';
+import { activityLogs, appSettings, storefrontMenuItems, storefrontMenus, storefrontPages } from '../../db/schema.js';
 import { invalidateSettingsCache } from '../../lib/memoryCache.js';
 import { readPricingStrategies } from '../../lib/items/pricingStrategies.js';
 
 /**
  * v12 phase 10c (migration 0030, docs/roadmap/V12_SITE_NEXT_START_PLAN.md §7.2): a menu link to a page of «صفحه‌های
  * سایت», on real Express routes and PostgreSQL. The link names the page by its row, so the address the site gets is
- * the page's address of now and follows a change of it. A page the shop made is linked only while it is published; a
- * base page always has its address (the site shows its fixed text until it is published). A removed or unknown page is
- * refused when a menu is saved. The site's answer carries no row id. The two CHECK constraints of migration 0030 hold
+ * the page's address of now and follows a change of it. Only a page the shop made is linked this way, and only while it
+ * is published; the five base pages keep their own link kind (their addresses never change). A removed, unknown or
+ * base page is refused when a menu is saved; removing a page records the menus that linked to it. The site's answer carries no row id. The two CHECK constraints of migration 0030 hold
  * against a direct write, and the kinds of 0028 still pass them.
  */
 interface Session { cookie: string; csrfToken: string }
@@ -77,22 +77,22 @@ export async function runStorefrontMenuPageLinkV12Tests(shouldRun: (id: string, 
     const draft = await erp.put(`/api/storefront/pages/${pageId}`, form(1));
     if (draft.status !== 200) throw new Error(`saving the draft: ${draft.status} ${JSON.stringify(draft.body)}`);
 
-    // 1) the pages a link may name: the base pages (always on the site) and the new page (not yet)
+    // 1) the pages a link may name: the page the shop made (not yet on the site), under the title its list shows; no base page
     const options = (await erp.get('/api/storefront/menus/link-options')).body.data?.pages as Array<{ id: number; title: string; live: boolean }> | undefined;
     const optionOf = (wanted: number) => (options ?? []).find(p => p.id === wanted);
-    if (!optionOf(about.id)?.live || optionOf(pageId)?.live !== false || optionOf(pageId)?.title !== `داستان منو ${tag}`) {
+    if (optionOf(about.id) !== undefined || (options ?? []).some(p => p.id <= 5 && p.title === about.title) || optionOf(pageId)?.live !== false || optionOf(pageId)?.title !== `داستان منو ${tag}`) {
       wrong.push(`the link options: ${JSON.stringify([optionOf(about.id), optionOf(pageId)])}`);
     }
 
-    // 2) a menu with both: saved; the ERP marks the draft's link as not on the site, and the site gets only the base page's
+    // 2) a menu with it and a base page by its own kind: saved; the ERP marks the draft's link as not on the site, which gets only the others
     const views = (await erp.get('/api/storefront/menus')).body.data.menus as Body[];
     let version = Number(views.find(m => m.location === 'header')?.version);
-    const items = [leaf('داستان ما', 'content', { pageId }), leaf('درباره ما', 'content', { pageId: about.id }), leaf('محصولات', 'path', { target: '/products' })];
+    const items = [leaf('داستان ما', 'content', { pageId }), leaf('درباره ما', 'page', { target: 'about' }), leaf('محصولات', 'path', { target: '/products' })];
     const saved = await erp.put('/api/storefront/menus/header', { enabled: true, version, items });
     if (saved.status !== 200) throw new Error(`saving the menu: ${saved.status} ${JSON.stringify(saved.body)}`);
     version = Number(saved.body.data.version);
     const rowsOf = (body: Body) => ((body.data as Body).items as Array<Body>).map(i => `${i.label}:${i.kind}:${i.pageId}:${i.targetTitle}:${i.live}`).join('|');
-    if (rowsOf(saved.body) !== `داستان ما:content:${pageId}:داستان منو ${tag}:false|درباره ما:content:${about.id}:${about.title}:true|محصولات:path:null::true`) {
+    if (rowsOf(saved.body) !== `داستان ما:content:${pageId}:داستان منو ${tag}:false|درباره ما:page:null:دربارهٔ پاپیتال:true|محصولات:path:null::true`) {
       wrong.push(`the saved menu: ${rowsOf(saved.body)}`);
     }
     const stored = await orm.select().from(storefrontMenuItems).where(gt(storefrontMenuItems.id, lastItem ?? 0));
@@ -104,7 +104,11 @@ export async function runStorefrontMenuPageLinkV12Tests(shouldRun: (id: string, 
     const before = await hrefs();
     if (before !== 'درباره ما→/about|محصولات→/products') wrong.push(`the site before the page is published: ${before}`);
 
-    // 3) published: the link appears with the page's address; the answer has the reviewed fields only (no row id)
+    // the audit row of the save names the page the link points to
+    const [menuAudit] = await orm.select().from(activityLogs).where(and(eq(activityLogs.entityId, 'header'), eq(activityLogs.action, 'UPDATE'))).orderBy(desc(activityLogs.id)).limit(1);
+    if (!JSON.stringify(menuAudit?.details ?? '').includes(`داستان ما ← content: صفحهٔ متنی ${pageId}`)) wrong.push(`the menu's audit row: ${String(JSON.stringify(menuAudit?.details)).slice(0, 300)}`);
+
+    // 3) published: the link appears with the page's address; every item has the reviewed fields only (no row id)
     const published = await erp.post(`/api/storefront/pages/${pageId}/publish`, { version: 2 });
     if (published.status !== 200) throw new Error(`publishing: ${published.status} ${JSON.stringify(published.body)}`);
     const header = await siteHeader();
@@ -112,7 +116,13 @@ export async function runStorefrontMenuPageLinkV12Tests(shouldRun: (id: string, 
     if (first.href !== `/pages/${slug}` || first.external !== false || Object.keys(first).sort().join(',') !== 'children,external,href,icon,label,role') {
       wrong.push(`the site's link: ${JSON.stringify(first)}`);
     }
-    if (JSON.stringify(header).includes('pageId') || JSON.stringify(header).includes(`"${pageId}"`)) wrong.push(`the site's answer names a row: ${JSON.stringify(header)}`);
+    const everyItem = (header ?? []).flatMap(i => [i, ...((i.children ?? []) as Body[])]);
+    if (everyItem.some(i => Object.keys(i).sort().join(',') !== 'children,external,href,icon,label,role') || /pageId|targetTitle|"id"/.test(JSON.stringify(header))) {
+      wrong.push(`the site's answer names a row: ${JSON.stringify(header)}`);
+    }
+    // the page's detail in the ERP names the menu that links to it
+    const linked = (await erp.get(`/api/storefront/pages/${pageId}`)).body.data?.menuPlaces;
+    if (JSON.stringify(linked) !== '["header"]') wrong.push(`the page's menus: ${JSON.stringify(linked)}`);
 
     // 4) off the site: the link leaves; its address changes there; published again: the link has the new address
     const off = await erp.post(`/api/storefront/pages/${pageId}/unpublish`, { version: 3 });
@@ -123,11 +133,13 @@ export async function runStorefrontMenuPageLinkV12Tests(shouldRun: (id: string, 
     if (off.status !== 200 || moved.status !== 200 || again.status !== 200) wrong.push(`moving the page: ${off.status}/${moved.status}/${again.status}`);
     if (whileOff !== before || after !== `داستان ما→/pages/${slug}-moved|درباره ما→/about|محصولات→/products`) wrong.push(`the link through a move: «${whileOff}» then «${after}»`);
 
-    // 5) refused when a menu is saved: an unknown page, a 'content' link without a page; and nothing is written
+    // 5) refused when a menu is saved: an unknown page, a base page (it has its own kind), a 'content' link without a page
     const unknown = await erp.put('/api/storefront/menus/header', { enabled: true, version, items: [leaf('ناشناخته', 'content', { pageId: 2_000_000_000 })] });
     const empty = await erp.put('/api/storefront/menus/header', { enabled: true, version, items: [leaf('بی صفحه', 'content')] });
-    if (unknown.status !== 422 || unknown.body.code !== 'STOREFRONT_MENU_PAGE_UNKNOWN' || empty.status !== 422 || empty.body.code !== 'STOREFRONT_MENU_TARGET_REQUIRED') {
-      wrong.push(`refusals: ${unknown.status} ${unknown.body.code} / ${empty.status} ${empty.body.code}`);
+    const basePage = await erp.put('/api/storefront/menus/header', { enabled: true, version, items: [leaf('پایه', 'content', { pageId: about.id })] });
+    if (unknown.status !== 422 || unknown.body.code !== 'STOREFRONT_MENU_PAGE_UNKNOWN' || empty.status !== 422 || empty.body.code !== 'STOREFRONT_MENU_TARGET_REQUIRED'
+      || basePage.status !== 422 || basePage.body.code !== 'STOREFRONT_MENU_PAGE_UNKNOWN') {
+      wrong.push(`refusals: ${unknown.status} ${unknown.body.code} / ${empty.status} ${empty.body.code} / ${basePage.status} ${basePage.body.code}`);
     }
     // another kind never carries a page: the server empties it
     const stray = await erp.put('/api/storefront/menus/header', { enabled: true, version, items: [...items, leaf('مسیر', 'path', { target: '/cart', pageId })] });
@@ -144,6 +156,8 @@ export async function runStorefrontMenuPageLinkV12Tests(shouldRun: (id: string, 
     if (![200, 204].includes(removed.status) || afterRemoval !== 'درباره ما→/about|محصولات→/products|مسیر→/cart') {
       wrong.push(`after the page was removed: ${removed.status} «${afterRemoval}»`);
     }
+    const [pageAudit] = await orm.select().from(activityLogs).where(and(eq(activityLogs.entityId, `page-${pageId}`), eq(activityLogs.action, 'DELETE'))).orderBy(desc(activityLogs.id)).limit(1);
+    if (JSON.stringify((pageAudit?.details as Body | undefined)?.linkedFromMenus) !== '["header"]') wrong.push(`the removal's audit row: ${String(JSON.stringify(pageAudit?.details)).slice(0, 300)}`);
     if (gone.live !== false || gone.targetTitle !== '' || resave.status !== 422 || resave.body.code !== 'STOREFRONT_MENU_PAGE_UNKNOWN') {
       wrong.push(`the removed page in the ERP: ${JSON.stringify(gone)} resave ${resave.status} ${resave.body.code}`);
     }
@@ -169,7 +183,7 @@ export async function runStorefrontMenuPageLinkV12Tests(shouldRun: (id: string, 
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'the link options listed the base pages as on the site and a draft as not; a menu naming both was stored by row with no text target; the site got the base page\'s own address at once and the made page\'s only once published, with the reviewed fields and no row id; the link left with the page, and came back with its new address after a move; an unknown page and a link without a page were refused (422) and another kind never kept a page; a removed page left the site\'s menu, showed as gone in the ERP and could not be saved again; six wrong direct writes were refused by the constraints and two right ones written',
+      details: 'the link options listed the page the shop made (a draft, marked) and no base page; a menu naming it was stored by row with no text target and its audit row named the page; the site got the page\'s address only once it was published, every item with the reviewed fields and no row id, and the page\'s detail named the menu; the link left with the page, and came back with its new address after a move; an unknown page, a base page and a link without a page were refused (422) and another kind never kept a page; a removed page left the site\'s menu, its audit row named the menu, it showed as gone in the ERP and could not be saved again; six wrong direct writes were refused by the constraints and two right ones written',
     }));
   } catch (err) {
     results.push(makeTestCase({

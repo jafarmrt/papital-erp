@@ -9,6 +9,7 @@ import {
   SECTION_KINDS, SECTION_KIND_TITLES, SHIPPING_SECTION_PAGE, checkedPage, emptySection, type BasePageSlug, type PageSection, type PageValues,
   type SectionBackground, type SectionKind,
 } from '../../../lib/storefront/storefrontPageRules';
+import { MENU_LOCATION_TITLES, isMenuLocation } from '../../../lib/storefront/storefrontMenuRules';
 import { formatPersianNumber } from '../../../utils/persianNumber';
 import { errorMessageOf } from '../../../utils';
 import { LibraryImageField } from './LibraryImageField';
@@ -63,6 +64,8 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
 
   const baseSlug = baseSlugOf(detail);
   const dirty = useMemo(() => canonical(draft) !== canonical(base.draft), [draft, base.draft]);
+  const places = Array.isArray(detail.menuPlaces) ? detail.menuPlaces : [];
+  const linkedFrom = places.map(place => `«${isMenuLocation(place) ? MENU_LOCATION_TITLES[place] : place}»`).join(' و ');
   const outdated = detail.version !== base.version;
   /**
    * The server's copy replaces the screen's when this screen itself moved the page's version, or when nothing here is
@@ -298,6 +301,14 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
                 {asking === 'revert' && 'تغییرهای پیش‌نویس دور ریخته می‌شود و پیش‌نویس همان نسخهٔ روی سایت می‌شود.'}
                 {asking === 'unpublish' && (detail.kind === 'base' ? 'این صفحه از روی سایت برداشته می‌شود و سایت متن ثابت پیشین خودش را برای آن نشان می‌دهد. پیش‌نویس می‌ماند.' : 'این صفحه از روی سایت برداشته می‌شود و نشانی‌اش «پیدا نشد» می‌شود. پیش‌نویس می‌ماند.')}
                 {asking === 'delete' && `این صفحه حذف می‌شود و اگر روی سایت باشد از آن‌جا هم برداشته می‌شود.${dirty ? ' تغییرهای ذخیره‌نشدهٔ آن هم از میان می‌رود.' : ''}`}
+                {/* v12 phase 10c: the menus that link to this page lose that link on the site (10c review: nothing said so) */}
+                {(asking === 'delete' || asking === 'unpublish') && linkedFrom && (
+                  <span data-menu-warning className="mt-1 block font-bold">
+                    {asking === 'delete'
+                      ? `پیوند این صفحه در ${linkedFrom} هم از سایت برداشته می‌شود؛ پس از حذف، آن گزینه را در «فهرست‌های سایت» بردارید یا به صفحهٔ دیگری بدهید.`
+                      : `پیوند این صفحه در ${linkedFrom} هم تا انتشار دوباره از سایت برداشته می‌شود.`}
+                  </span>
+                )}
               </p>
               <button type="button" disabled={busy} onClick={() => (asking === 'delete' ? removePage() : run(asking))} className="rounded-lg bg-amber-800 px-3 py-1.5 font-bold text-white disabled:opacity-50">بله، انجام شود</button>
               <button type="button" onClick={() => setAsking('none')} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 font-bold">انصراف</button>

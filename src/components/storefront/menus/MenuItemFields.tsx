@@ -16,6 +16,8 @@ export interface DraftItem {
   itemId: number | null;
   campaignId: number | null;
   pageId: number | null;
+  /** the name of the saved link's target as the server sent it (a product, a campaign page, a page); '' for a new item */
+  targetTitle?: string;
   icon: MenuIcon | '';
   isActive: boolean;
   children: DraftItem[];
@@ -53,7 +55,7 @@ function TargetField({ item, options, onChange, id }: {
       return (
         <select id={id} className={field} value={item.campaignId ?? ''} onChange={e => onChange({ campaignId: e.target.value ? Number(e.target.value) : null })}>
           <option value="">برگزینید</option>
-          {item.campaignId !== null && !list.some(c => c.id === item.campaignId) && <option value={item.campaignId}>صفحهٔ ویژه‌ای که حذف شده است</option>}
+          {item.campaignId !== null && !list.some(c => c.id === item.campaignId) && <option value={item.campaignId}>{options ? 'صفحهٔ ویژه‌ای که حذف شده است' : (item.targetTitle || 'در حال خواندن…')}</option>}
           {list.map(c => <option key={c.id} value={c.id}>{c.live ? c.title : `${c.title} (اکنون روی سایت نیست)`}</option>)}
         </select>
       );
@@ -63,7 +65,8 @@ function TargetField({ item, options, onChange, id }: {
       return (
         <select id={id} className={field} value={item.pageId ?? ''} onChange={e => onChange({ pageId: e.target.value ? Number(e.target.value) : null })}>
           <option value="">برگزینید</option>
-          {item.pageId !== null && !list.some(p => p.id === item.pageId) && <option value={item.pageId}>صفحه‌ای که حذف شده است</option>}
+          {/* «حذف شده» only once the list has been read: until then (or when it could not be read) the saved name stays */}
+          {item.pageId !== null && !list.some(p => p.id === item.pageId) && <option value={item.pageId}>{options ? 'صفحه‌ای که حذف شده است' : (item.targetTitle || 'در حال خواندن…')}</option>}
           {list.map(p => <option key={p.id} value={p.id}>{p.live ? p.title : `${p.title} (اکنون روی سایت نیست)`}</option>)}
         </select>
       );
@@ -105,7 +108,7 @@ export function MenuItemFields({ item, location, child, options, notOnSite, firs
         <div>
           <label htmlFor={`${id}-kind`} className={label}>پیوند به</label>
           <select id={`${id}-kind`} className={field} value={item.kind}
-            onChange={e => onChange({ kind: e.target.value as MenuLinkKind, target: '', itemId: null, campaignId: null, pageId: null })}>
+            onChange={e => onChange({ kind: e.target.value as MenuLinkKind, target: '', itemId: null, campaignId: null, pageId: null, targetTitle: '' })}>
             {kinds.map(k => <option key={k} value={k}>{MENU_LINK_KIND_TITLES[k]}</option>)}
           </select>
         </div>
