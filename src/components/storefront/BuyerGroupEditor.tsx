@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { DecimalInput } from '../common/DecimalInput';
 import { RialEquivalent } from '../common/RialEquivalent';
 import { useSaveBuyerGroupMutation } from '../../hooks/queries/useStorefrontBuyerQueries';
+import { useHasPermission } from '../../contexts/AuthContext';
 import type { BuyerGroupInput, BuyerGroupRow } from '../../lib/storefront/storefrontBuyerContracts';
 import { CATALOG_SCOPES, CATALOG_SCOPE_TITLES, type CatalogScope } from '../../lib/storefront/storefrontBuyerRules';
 import { errorMessageOf } from '../../utils';
@@ -26,6 +27,7 @@ export function BuyerGroupEditor({ group, priceLists, collections, onClose }: {
   group: BuyerGroupRow | null; priceLists: string[]; collections: string[]; onClose: () => void;
 }) {
   const id = useId();
+  const mayPrice = useHasPermission('products.edit_price');
   const save = useSaveBuyerGroupMutation();
   const [form, setForm] = useState<BuyerGroupInput>(() => (group ? { ...group } : { ...EMPTY_GROUP }));
   const set = <K extends keyof BuyerGroupInput>(key: K, value: BuyerGroupInput[K]) => setForm(f => ({ ...f, [key]: value }));
@@ -61,10 +63,14 @@ export function BuyerGroupEditor({ group, priceLists, collections, onClose }: {
         </div>
         <div>
           <label htmlFor={`${id}-list`} className={label}>لیست قیمت ERP</label>
-          <select id={`${id}-list`} className={field} value={form.priceList} onChange={e => set('priceList', e.target.value)}>
+          {/* v12 phase 9a review: the server asks products.edit_price to set or change a group's price list (it sets what a
+              buyer pays), so without it the field is read-only, as for the «مدیر سایت» template */}
+          <select id={`${id}-list`} className={field} value={form.priceList} disabled={!mayPrice} aria-describedby={mayPrice ? undefined : `${id}-list-hint`}
+            onChange={e => set('priceList', e.target.value)}>
             <option value="">انتخاب نشده</option>
             {priceLists.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
+          {!mayPrice && <p id={`${id}-list-hint`} className="mt-1 text-xs text-slate-500">تعیین لیست قیمت گروه مجوز ویرایش قیمت کالا را هم می‌خواهد.</p>}
         </div>
         <div>
           <label htmlFor={`${id}-min-order`} className={label}>حداقل مبلغ سفارش (ریال، ۰ یعنی ندارد)</label>

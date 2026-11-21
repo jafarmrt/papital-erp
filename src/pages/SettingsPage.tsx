@@ -18,7 +18,6 @@ import { PayrollEidiRatesSection } from '../components/settings/PayrollEidiRates
 import { SystemOperationsTab, ClearDataModal } from '../components/settings/SystemOperationsTab';
 import { WooCommerceTab } from '../components/settings/WooCommerceTab';
 import { MessengerBotsTab } from '../components/settings/MessengerBotsTab';
-import { Navigate } from 'react-router-dom';
 import { AccountingSettingsTab } from '../components/settings/AccountingSettingsTab';
 import { ChartOfAccountsSettingsTab } from '../components/settings/ChartOfAccountsSettingsTab';
 import { 
@@ -258,9 +257,6 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
         
         {activeTab === 'messenger' && <MessengerBotsTab />}
 
-        {/* v12 phase 9a: the site's sections are the page «کالاها و تنظیمات سایت»; the old tab address and the settings
-            search take a colleague there */}
-        {activeTab === 'storefront' && <Navigate to="/site-settings" replace />}
 
         {activeTab === 'woocommerce' && (
           <WooCommerceTab

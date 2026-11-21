@@ -39,9 +39,6 @@ export const SETTINGS_TAB_ACCESS = {
   task_titles: { gate: anyOf('piecework.manage_tasks'), api: ['GET /api/piecework/tasks', 'POST /api/piecework/tasks'] },
   // v10.0.210 (TD-1087، طرح حقوق ت۴ الف): نرخ‌های سالانه بیمه و مالیات حقوق
   payroll_rates: { gate: anyOf('payroll.rates_manage'), api: ['GET /api/piecework/statutory-rates', 'PUT /api/piecework/statutory-rates/:year'] },
-  // v11 phase 8.1: the new site's tab; its writes need storefront.manage. v12 phase 9a: the sections moved to the page
-  // /site-settings, and this entry only takes a colleague there (the settings search still finds it)
-  storefront: { gate: anyOf('storefront.view'), api: ['GET /api/storefront/products', 'GET /api/storefront/settings', 'GET /api/storefront/shipping-methods', 'GET /api/storefront/buyer-groups'] },
   woocommerce: { gate: anyOf('woocommerce.view'), api: ['GET /api/woocommerce/synced-orders', 'GET /api/woocommerce/order-logs'] },
   health: { gate: 'system_admin', api: ['GET /api/system/health'] },
   system_config: { gate: 'system_admin', api: [] },

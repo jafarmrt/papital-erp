@@ -37,7 +37,10 @@ const { SETTINGS_GROUPS } = await import('../../components/settings/settingsNavi
 const { RialDisplayProvider } = await import('../../contexts/RialDisplayContext');
 const { ShippingMethodEditor } = await import('../../components/storefront/ShippingMethodEditor');
 const StorefrontSettingsPage = (await import('../../pages/StorefrontSettingsPage')).default;
-const SettingsPage = (await import('../../pages/SettingsPage')).default;
+const { AppRoutes } = await import('../../components/AppRoutes');
+const { BuyerGroupEditor } = await import('../../components/storefront/BuyerGroupEditor');
+const { AuditPrintModal } = await import('../../components/audit/AuditPrintModal');
+const { canOpenPage } = await import('../../lib/permissions/pageAccess');
 
 const user = (): User => ({ id: 3, username: 'u3', full_name: 'کاربر', role: 'branch_role' });
 
@@ -98,19 +101,17 @@ describe('the ERP site shop section (v12 phase 9a)', () => {
     expect(screen.getByRole('tab', { name: 'کالاهای سایت' }).getAttribute('aria-selected')).toBe('true');
   });
 
-  it('takes the old settings tab address to the new page', async () => {
-    fetchJson.mockImplementation(() => Promise.resolve([]) as never);
-    window.history.replaceState({}, '', '/settings?tab=storefront');
-    render(withProviders(<SettingsPage currentUser={user()} userPermissions={{ permissions: ['storefront.view'], isAdmin: false }} />, '/settings?tab=storefront'));
+  it('takes the old settings tab address to the new page, even for a colleague who opens no settings tab', async () => {
+    render(withProviders(<AppRoutes user={user()} userPermissions={{ permissions: ['storefront.view'], isAdmin: false }} permissionsLoaded />, '/settings?tab=storefront'));
     await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/site-settings'));
   });
 
-  it('keeps a settings-search entry for the site, pointing at the sidebar section', () => {
-    const tab = SETTINGS_GROUPS.flatMap(g => g.tabs).find(t => t.id === 'storefront');
-    expect(tab?.shortDesc).toContain('فهرست کناری');
+  it('no longer lists the site in the settings page, which storefront.view alone does not open', () => {
+    expect(SETTINGS_GROUPS.flatMap(g => g.tabs).map(t => t.id)).not.toContain('storefront');
+    expect(canOpenPage('/settings', { permissions: ['storefront.view', 'storefront.manage'] })).toBe(false);
   });
 
-  it('sends the bells of the site SMS to the new page, and the messenger link to its section', () => {
+  it('gives the messenger copy of a site SMS bell the page itself', () => {
     expect(messengerLinkPath('site_sms', '/site-settings?section=sms')).toBe('/site-settings');
   });
 });
@@ -119,6 +120,7 @@ describe('the site manager role template (decision 15, proposal 2)', () => {
   const template = ROLE_TEMPLATES.find(t => t.code === 'site_manager');
 
   it('holds every site key and media.view, closed under requires', () => {
+    expect(template).toBeDefined();
     expect(template?.name).toBe('مدیر سایت');
     expect([...(template?.permissions ?? [])].sort()).toEqual([
       'media.view', 'site_buyers.manage', 'site_buyers.view', 'site_orders.manage', 'site_orders.view', 'storefront.manage', 'storefront.view',
@@ -126,7 +128,15 @@ describe('the site manager role template (decision 15, proposal 2)', () => {
     expect(missingRequiredPermissions(template?.permissions ?? [])).toEqual([]);
   });
 
+  it('opens the site shop sidebar section and no settings or business page (decision 1)', () => {
+    const shown = visibleLinks([...(template?.permissions ?? [])]);
+    expect(shown.site).toEqual(['/site-orders', '/site-buyers', '/site-settings']);
+    expect(shown.system ?? []).not.toContain('/settings');
+    expect([...(shown.crm ?? []), ...(shown.accounting ?? []), ...(shown.production ?? [])]).toEqual([]);
+  });
+
   it('has no treasury, accounting, document or stock key, so confirming a payment needs them added by hand', () => {
+    expect(template).toBeDefined();
     const outside = (template?.permissions ?? []).filter(k => /^(accounting|documents|warehouse|products|inventory|payroll)\./.test(k));
     expect(outside).toEqual([]);
   });
@@ -143,6 +153,13 @@ describe('the WooCommerce shop is named the old site (site review 3.2b)', () => 
     expect(auditEntityTitle('انبار')).toBe('انبار');
     expect(auditEntityTitle(null)).toBe('');
     expect(PURGEABLE_AUDIT_ENTITY_LABELS['فروشگاه اینترنتی']).toBe('همگام‌سازی با ووکامرس سایت قدیم');
+  });
+
+  it('prints a WooCommerce audit row and its filter under the new title', () => {
+    const log = { id: 1, username: 'u1', action: 'WC_STOCK_PUSH', entity: 'فروشگاه اینترنتی', entityId: '', description: '', createdAt: '2026-11-20T10:00:00Z' };
+    render(<AuditPrintModal logs={[log]} total={1} onClose={() => undefined} filterSummary={{ entityFilter: 'فروشگاه اینترنتی' }} />);
+    expect(screen.getAllByText(/ووکامرس \(سایت قدیم\)/).length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText(/فروشگاه اینترنتی/)).toBeNull();
   });
 });
 
@@ -161,5 +178,22 @@ describe('toman equivalent of the province rates (site review 3.2f)', () => {
     displayUnit.current = 'IRR';
     render(<QueryClientProvider client={client()}><RialDisplayProvider><ShippingMethodEditor method={method} onClose={() => undefined} /></RialDisplayProvider></QueryClientProvider>);
     expect(screen.queryByText('معادل:')).toBeNull();
+  });
+});
+
+describe('a buyer group price list needs products.edit_price (9a review)', () => {
+  const editor = () => render(<QueryClientProvider client={client()}><RialDisplayProvider><BuyerGroupEditor group={null} priceLists={['عمده']} collections={[]} onClose={() => undefined} /></RialDisplayProvider></QueryClientProvider>);
+
+  it('is read-only with the site keys alone, as the server refuses the change', () => {
+    permissions.current = ['storefront.view', 'storefront.manage'];
+    editor();
+    expect((screen.getByLabelText('لیست قیمت ERP') as HTMLSelectElement).disabled).toBe(true);
+    expect(screen.getByText('تعیین لیست قیمت گروه مجوز ویرایش قیمت کالا را هم می‌خواهد.')).toBeTruthy();
+  });
+
+  it('is open with products.edit_price', () => {
+    permissions.current = ['storefront.view', 'storefront.manage', 'products.edit_price'];
+    editor();
+    expect((screen.getByLabelText('لیست قیمت ERP') as HTMLSelectElement).disabled).toBe(false);
   });
 });

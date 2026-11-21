@@ -79,7 +79,9 @@ export interface AppRoutesProps {
 
 export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoutesProps) {
   // OBS-R2-92: an error caught on one page is cleared when the user moves to another page
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
+  // v12 phase 9a: the former settings tab «فروشگاه سایت» is the page /site-settings; its old address goes there for anyone
+  if (pathname === '/settings' && new URLSearchParams(search).get('tab') === 'storefront') return <Navigate to="/site-settings" replace />;
   return (
     <Suspense fallback={<PageLoader />}>
       {/* V10-1.3: ساعت توافقی واحد — همه فرمتورها از display_timezone تنظیمات تغذیه می‌شوند */}
