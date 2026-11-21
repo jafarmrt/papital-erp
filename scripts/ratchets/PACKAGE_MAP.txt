@@ -36,6 +36,7 @@ G  scripts/check-version-sync.ts
 18 src/routes/storefrontEmail.routes.ts
 18 src/routes/storefrontCampaigns.routes.ts
 18 src/routes/storefrontMenus.routes.ts
+18 src/routes/storefrontPages.routes.ts
 18 src/lib/storefront/**
 18 src/components/storefront/**
 18 src/hooks/queries/useStorefrontQueries.ts

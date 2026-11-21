@@ -107,7 +107,7 @@ const CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u20
 const CONTROL_BUT_NEWLINE = /[\u0000-\u0009\u000b\u000c\u000e-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/;
 
 /** One line of text as it is kept: trimmed, with runs of spaces as one */
-const oneLine = (value: string): string => value.replace(/[ \t ]+/g, ' ').trim();
+const oneLine = (value: string): string => value.replace(/[ \t\u00a0]+/g, ' ').trim();
 
 /**
  * A host name of letters, digits and hyphens in dot-separated labels, and nothing else. `new URL` also takes «;», «,»,

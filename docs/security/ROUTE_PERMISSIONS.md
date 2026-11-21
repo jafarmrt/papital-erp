@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 616
+تعداد مسیرها: 625
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -470,6 +470,15 @@
 | POST | `/api/storefront/orders/:id/fulfil` | site_orders.manage |
 | GET | `/api/storefront/orders/:id/receipts/:receiptId/image` | site_orders.view |
 | POST | `/api/storefront/orders/:id/reject-receipt` | site_orders.manage |
+| GET | `/api/storefront/pages/` | site_content.view |
+| POST | `/api/storefront/pages/` | site_content.manage |
+| DELETE | `/api/storefront/pages/:id` | site_content.manage |
+| GET | `/api/storefront/pages/:id` | site_content.view |
+| PUT | `/api/storefront/pages/:id` | site_content.manage |
+| POST | `/api/storefront/pages/:id/publish` | site_content.manage |
+| POST | `/api/storefront/pages/:id/revert` | site_content.manage |
+| POST | `/api/storefront/pages/:id/unpublish` | site_content.manage |
+| GET | `/api/storefront/pages/image-options` | site_content.view & media.view |
 | GET | `/api/storefront/products` | storefront.view |
 | PUT | `/api/storefront/products/:itemId` | storefront.manage |
 | GET | `/api/storefront/redirects` | storefront.view |
