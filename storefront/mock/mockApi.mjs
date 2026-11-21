@@ -51,7 +51,7 @@ const campaignSummary = ({ slug, title, summary, hero, homeBanner, endsOn }) => 
 // as JSON (MOCK_SHOP_INFO=fail answers 500 and MOCK_SHOP_INFO=missing 404, as an ERP not yet updated does)
 const shopInfoMode = process.env.MOCK_SHOP_INFO ?? '';
 let pagesMode = process.env.MOCK_PAGES ?? '';
-const pageList = pagesMode && pagesMode !== 'fail' && pagesMode !== 'missing' ? JSON.parse(pagesMode) : [];
+const pageList = pagesMode.startsWith('[') ? JSON.parse(pagesMode) : [];
 const shopInfo = shopInfoMode && shopInfoMode !== 'fail' && shopInfoMode !== 'missing' ? JSON.parse(shopInfoMode) : {
   brand: { name: '', fullName: '', tagline: '' }, footerNote: '',
   contact: { address: '', postalCode: '', phone: '', mobile: '', email: '', hours: '' },
@@ -365,7 +365,8 @@ createServer(async (req, res) => {
     settings.emailLogin = url.searchParams.get('on') === '1';
     return send(res, 200, { emailLogin: settings.emailLogin });
   }
-  // v12 phase 10c: the tests make the page routes fail (`fail`), vanish (`missing`) or answer again (`ok`) while the mock runs
+  // v12 phase 10c: the tests make the page routes fail (`fail`), vanish (`missing`), answer something that is no page
+  // (`html`, `empty`, `null`) or answer again (`ok`) while the mock runs
   if (url.pathname === '/__mock/pages') {
     pagesMode = url.searchParams.get('mode') ?? 'ok';
     return send(res, 200, { pages: pagesMode });
@@ -474,13 +475,18 @@ createServer(async (req, res) => {
   if (route === '/pages' || route.startsWith('/pages/')) {
     if (pagesMode === 'fail') return send(res, 500, { error: 'mock failure' });
     if (pagesMode === 'missing') return send(res, 404, { error: 'not found' });
+    // a 200 that is no page: a proxy's own page (`html`), an empty answer (`empty`) and a bare `null` (`null`)
+    if (pagesMode === 'html') return send(res, 200, Buffer.from('<html><body>gateway</body></html>'), { 'Content-Type': 'text/html' });
+    if (pagesMode === 'empty') return send(res, 200, {});
+    if (pagesMode === 'null') return send(res, 200, null);
     if (route === '/pages') {
       return send(res, 200, { data: pageList.map(({ slug, kind, title, noindex, updatedAt }) => ({ slug, kind, title, noindex, updatedAt })) });
     }
     const found = pageList.find(p => p.slug === route.slice('/pages/'.length));
     if (!found) return send(res, 404, { error: 'صفحه پیدا نشد.', code: 'STOREFRONT_PAGE_NOT_FOUND' });
     const sections = (found.sections ?? []).map(section => (section.kind === 'products'
-      ? { ...section, products: (section.products ?? []).map(slug => products.find(p => p.slug === slug)).filter(Boolean).map(card) }
+      // a slug is a product of the catalog; an object is sent as it is (a test's own card, in whatever shape)
+      ? { ...section, products: (section.products ?? []).map(entry => (typeof entry === 'string' ? products.find(p => p.slug === entry) && card(products.find(p => p.slug === entry)) : entry)).filter(Boolean) }
       : section));
     return send(res, 200, { data: { ...found, sections } });
   }

@@ -29,7 +29,9 @@ const FILE_KEY = /^[0-9a-f]{64}$/;
 const UNSEEN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g;
 const TURNS_LINE = /[\u202a-\u202e\u2066-\u2069]/;
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
-const str = (value: unknown, max: number) => (typeof value === 'string' ? value.replace(UNSEEN, '').slice(0, max) : '');
+// half of a pair (an emoji cut in two, by the ERP or by the cut below): no address can be written from it
+const LONE_HALF = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
+const str = (value: unknown, max: number) => (typeof value === 'string' ? value.replace(UNSEEN, '').slice(0, max).replace(LONE_HALF, '') : '');
 const side = (value: unknown) => (typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 20_000 ? value : null);
 const href = (value: unknown) => (typeof value === 'string' && TURNS_LINE.test(value) ? '' : pageLink(value) ?? '');
 const list = (value: unknown, max: number): unknown[] => (Array.isArray(value) ? value.slice(0, max) : []);
@@ -45,7 +47,8 @@ const STOCK = ['in_stock', 'low', 'out'] as const;
 
 /** A product card rebuilt from the fields the site draws, so a field the ERP never meant for it cannot ride along */
 function card(value: unknown): StorefrontProductCard | null {
-  if (!isRecord(value) || typeof value.slug !== 'string' || !value.slug || typeof value.name !== 'string' || typeof value.retailPrice !== 'string') return null;
+  // a product's address is lowercase Latin (the ERP's own rule), so nothing in it can lead out of `/p/`
+  if (!isRecord(value) || typeof value.slug !== 'string' || !PAGE_SLUG.test(value.slug) || value.slug.length > 200 || typeof value.name !== 'string' || typeof value.retailPrice !== 'string') return null;
   const stock = isRecord(value.stock) ? value.stock : {};
   if (!STOCK.includes(stock.status as typeof STOCK[number])) return null;
   const cover = pageImage(value.cover);
@@ -64,23 +67,31 @@ function card(value: unknown): StorefrontProductCard | null {
  */
 const DOC_NODES_MAX = RICH_TEXT_NODES_MAX * 2;
 const DOC_CHARS_MAX = RICH_TEXT_CHARS_MAX * 2;
-const DOC_DEPTH_MAX = RICH_TEXT_DEPTH_MAX + 4;
-const BLOCKS = ['paragraph', 'heading', 'bulletList', 'orderedList', 'listItem', 'blockquote', 'table', 'tableRow', 'tableCell', 'tableHeader'];
+/** the same as the ERP's own limit plus a margin; `RichText` draws to this depth too */
+export const DOC_DEPTH_MAX = RICH_TEXT_DEPTH_MAX + 2;
+const INLINE = ['text', 'hardBreak'] as const;
+/** What each node may hold, as the ERP's own rules have it: a node anywhere else is left out, so what is kept is what is drawn */
+const HOLDS: Readonly<Record<string, readonly string[]>> = {
+  doc: ['paragraph', 'heading', 'bulletList', 'orderedList', 'blockquote', 'horizontalRule', 'libraryImage', 'table'],
+  paragraph: INLINE, heading: INLINE, bulletList: ['listItem'], orderedList: ['listItem'], listItem: ['paragraph', 'bulletList', 'orderedList'],
+  blockquote: ['paragraph'], table: ['tableRow'], tableRow: ['tableCell', 'tableHeader'], tableCell: ['paragraph'], tableHeader: ['paragraph'],
+};
 interface Budget { nodes: number; chars: number }
 
 function marks(value: unknown): RichMark[] {
-  return list(value, 8).flatMap((raw): RichMark[] => {
-    if (!isRecord(raw)) return [];
+  const kept = new Map<string, RichMark>();
+  for (const raw of list(value, 8)) {
+    if (!isRecord(raw) || typeof raw.type !== 'string' || kept.has(raw.type)) continue;
     const attrs = isRecord(raw.attrs) ? raw.attrs : {};
-    if (raw.type === 'bold' || raw.type === 'italic' || raw.type === 'underline') return [{ type: raw.type }];
-    if (raw.type === 'textColor' && TEXT_COLORS.includes(attrs.color as TextColor)) return [{ type: 'textColor', attrs: { color: attrs.color as TextColor } }];
-    if (raw.type === 'link' && href(attrs.href)) return [{ type: 'link', attrs: { href: href(attrs.href) } }];
-    return [];
-  });
+    if (raw.type === 'bold' || raw.type === 'italic' || raw.type === 'underline') kept.set(raw.type, { type: raw.type });
+    else if (raw.type === 'textColor' && TEXT_COLORS.includes(attrs.color as TextColor)) kept.set(raw.type, { type: 'textColor', attrs: { color: attrs.color as TextColor } });
+    else if (raw.type === 'link' && href(attrs.href)) kept.set(raw.type, { type: 'link', attrs: { href: href(attrs.href) } });
+  }
+  return [...kept.values()];
 }
 
-function node(raw: unknown, depth: number, budget: Budget): RichNode | null {
-  if (!isRecord(raw) || typeof raw.type !== 'string' || depth > DOC_DEPTH_MAX || budget.nodes >= DOC_NODES_MAX) return null;
+function node(raw: unknown, allowed: readonly string[], depth: number, budget: Budget): RichNode | null {
+  if (!isRecord(raw) || typeof raw.type !== 'string' || !allowed.includes(raw.type) || budget.nodes >= DOC_NODES_MAX) return null;
   budget.nodes += 1;
   const attrs = isRecord(raw.attrs) ? raw.attrs : {};
   if (raw.type === 'text') {
@@ -95,19 +106,20 @@ function node(raw: unknown, depth: number, budget: Budget): RichNode | null {
     const image = pageImage(attrs);
     return image ? { type: 'libraryImage', attrs: { sha256: image.sha256, width: image.width, height: image.height, alt: image.alt, thumb: image.thumb ? 1 : 0 } } : null;
   }
-  if (!BLOCKS.includes(raw.type)) return null;
+  // a block past the depth is left out whole (its words would otherwise be kept and never drawn)
+  if (depth > DOC_DEPTH_MAX) return null;
   const kept: Record<string, string | number> = {};
-  if (TEXT_ALIGNS.includes(attrs.textAlign as TextAlign)) kept.textAlign = attrs.textAlign as TextAlign;
+  if (TEXT_ALIGNS.includes(attrs.textAlign as TextAlign) && (raw.type === 'paragraph' || raw.type === 'heading')) kept.textAlign = attrs.textAlign as TextAlign;
   if (raw.type === 'heading') kept.level = attrs.level === 2 || attrs.level === 3 ? attrs.level : 4;
   if (raw.type === 'orderedList' && typeof attrs.start === 'number' && Number.isInteger(attrs.start) && attrs.start > 1 && attrs.start <= 9999) kept.start = attrs.start;
-  const content = list(raw.content, DOC_NODES_MAX).flatMap(child => node(child, depth + 1, budget) ?? []);
+  const content = list(raw.content, DOC_NODES_MAX).flatMap(child => node(child, HOLDS[raw.type as string] ?? [], depth + 1, budget) ?? []);
   return { type: raw.type, ...(Object.keys(kept).length ? { attrs: kept } : {}), ...(content.length ? { content } : {}) };
 }
 
 function doc(value: unknown): RichDoc {
   if (!isRecord(value) || value.type !== 'doc') return { type: 'doc', content: [] };
   const budget: Budget = { nodes: 0, chars: 0 };
-  return { type: 'doc', content: list(value.content, DOC_NODES_MAX).flatMap(child => node(child, 1, budget) ?? []) };
+  return { type: 'doc', content: list(value.content, DOC_NODES_MAX).flatMap(child => node(child, HOLDS.doc, 1, budget) ?? []) };
 }
 
 /** Whether a text has anything to show: a word, an image or a rule (a text of empty paragraphs has not) */
@@ -191,6 +203,7 @@ export const lastModOf = (iso: string) => (isInstant(iso) ? new Date(iso).toISOS
 /** The words of a text without its formatting: the pieces of one paragraph run together, and paragraphs are a space apart */
 function plainText(part: RichNode): string {
   if (typeof part.text === 'string') return part.text;
+  if (part.type === 'hardBreak') return ' ';
   const inside = (part.content ?? []).map(plainText);
   return part.type === 'paragraph' || part.type === 'heading' ? inside.join('') : inside.filter(Boolean).join(' ');
 }

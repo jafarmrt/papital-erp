@@ -278,9 +278,13 @@ const lastGoodBasePage = new Map<string, SitePage>();
  */
 export async function page(slug: string, { fallback = false } = {}): Promise<SitePage | null> {
   if (!isPageSlug(slug)) return null;
+  const path = `/pages/${slug}`;
   try {
-    const found = sitePage((await get<{ data: unknown }>(`/pages/${slug}`, PAGE_TTL_MS)).data);
-    if (fallback && found) lastGoodBasePage.set(slug, found);
+    const answer = await get<unknown>(path, PAGE_TTL_MS);
+    const found = sitePage(typeof answer === 'object' && answer !== null ? (answer as { data?: unknown }).data : null);
+    // a 200 that is not a page, or is another address's page, is a failed read: «no page» is only the ERP's own 404
+    if (!found || found.slug !== slug) throw new StorefrontApiError(502, path);
+    if (fallback) lastGoodBasePage.set(slug, found);
     return found;
   } catch (error) {
     if (!(error instanceof StorefrontApiError)) throw error;

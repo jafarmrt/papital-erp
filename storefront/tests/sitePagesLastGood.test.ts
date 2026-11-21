@@ -65,6 +65,15 @@ describe('a published base page while the ERP fails', () => {
     expect(during.html).toContain('<meta name="robots" content="noindex"/>');
     expect(during.html).not.toContain('متن این صفحه پیش‌نویس است');
 
+    // a 200 that is no page (a proxy's own page, an empty answer, a bare null) is a failed read too, not «nothing published»
+    for (const mode of ['html', 'empty', 'null']) {
+      await afterAMinute(mode, clock);
+      const still = await terms();
+      expect(still.status, mode).toBe(200);
+      expect(still.html, mode).toContain('قوانین تازهٔ فروشگاه از ERP');
+      expect(still.html, mode).not.toContain('متن این صفحه پیش‌نویس است');
+    }
+
     await afterAMinute('missing', clock);
     const off = await terms();
     expect(off.status).toBe(200);

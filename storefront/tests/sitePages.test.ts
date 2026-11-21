@@ -3,6 +3,7 @@
 // the five base pages could only show the text fixed in the site's code.
 import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createRequestHandler, type ServerBuild } from 'react-router';
 import { lastModOf, pageDescription, sitePage, sitePageList } from '../app/lib/pages';
@@ -79,12 +80,23 @@ const TERMS = { slug: 'terms', kind: 'base', title: 'قوانین خرید', noi
 // 10c review: shapes only a broken or hostile ERP would send; the page must still be drawn, never a 500
 const nested = (levels: number): unknown => (levels === 0 ? p('ته') : { type: 'blockquote', content: [nested(levels - 1)] });
 const BROKEN = {
-  slug: 'broken-shapes', kind: 'custom', title: 'شکل‌های خراب', noindex: true, updatedAt: '2026-11-18 10:00:00.000', seoTitle: '', seoDescription: '', shareImage: null,
+  slug: 'broken-shapes', kind: 'custom', title: 'شکل‌های خراب', noindex: false, updatedAt: '2026-11-18 10:00:00.000', seoTitle: '', seoDescription: '', shareImage: null,
   sections: [
     { kind: 'text', background: 'white', doc: { type: 'doc', content: [null, 7, 'x', nested(200), p('پس از تودرتو'), { type: 'paragraph', content: [{ type: 'text', text: 'بی‌قالب', marks: [null, 'x', { type: 'link', attrs: { href: '/a\u202eb' } }] }], onclick: 'alert(9)' }] } },
     { kind: 'text', background: 'white', doc: { type: 'doc', content: [{ type: 'iframe' }, { type: 'paragraph' }, p('\u200c')] } },
     { kind: 'hero', background: 'white', title: '\u200c\u200c', text: 'متن سربرگ\u0000 با نویسهٔ کنترلی\u202e', image: null, buttonLabel: '', buttonHref: '' },
-    { kind: 'products', background: 'white', title: 'کارت با فیلد اضافه', collection: '', products: ['tile-necklace-sample'], secret: 'leak-me-section' },
+    // the cards are sent as written here: fields the catalog never sends, a status and an address outside their rules, half an emoji
+    {
+      kind: 'products', background: 'white', title: 'کارت با فیلد اضافه', collection: `نیمه\ud83d`, secret: 'leak-me-section',
+      products: [
+        { slug: 'raw-card', sku: 'RAW-1', name: 'کارت خام', category: 'x', collections: ['y', 7], retailPrice: '1000000', stock: { status: 'in_stock', quantity: 2, reserved: 'leak-me-stock' }, cover: null, costPrice: 'leak-me-cost', itemId: 991, sortOrder: 5 },
+        { slug: 'bad-status', sku: 'RAW-2', name: 'وضعیت ناشناخته', category: '', collections: [], retailPrice: '1', stock: { status: 'constructor', quantity: null }, cover: null },
+        { slug: '../../account?x=1#y', sku: 'RAW-3', name: 'نشانی بیرون از محصولات', category: '', collections: [], retailPrice: '1', stock: { status: 'in_stock', quantity: null }, cover: null },
+      ],
+    },
+    // nodes where they do not belong: a text at the top, a row without a table, a rule inside a paragraph, a mark eight times
+    { kind: 'text', background: 'dark', doc: { type: 'doc', content: [{ type: 'text', text: 'متن بی پاراگراف' }, { type: 'tableRow', content: [{ type: 'tableCell', content: [p('خانهٔ بی جدول')] }] }, { type: 'paragraph', content: [{ type: 'horizontalRule' }] }] } },
+    { kind: 'text', background: 'white', doc: { type: 'doc', content: [p('هشت پیوند', Array.from({ length: 8 }, (_, i) => ({ type: 'link', attrs: { href: `/l${i}` } })))] } },
   ],
 };
 // a "base" page with an address the site has no place for, and a custom page that names a base address
@@ -223,7 +235,8 @@ describe('a page the shop made, at /pages/<its address>', () => {
     expect((await get('/pages/Our-Story')).status).toBe(404);
     // a base page has one address, its own
     expect((await get('/pages/about')).status).toBe(404);
-    expect((await get('/pages/returns')).status).toBe(404);
+    // an answer the site cannot take as a page (here a "base" page it has no address for) is a failed read, never a page
+    expect((await get('/pages/returns')).status).toBeGreaterThanOrEqual(500);
   });
 });
 
@@ -238,6 +251,11 @@ describe('a text on a deep ground', () => {
     expect(main).toMatch(/<span class="text-accent-ink in-data-\[tone=deep\]:text-accent-light">آبی<\/span>/);
     // the white card of a product row inside a deep section is light again (the focus ring follows it)
     expect(sectionOf(main, 'products')).toMatch(/data-tone="deep".*<div data-tone="light" class="rounded-surface bg-background/s);
+    // the classes are only names; the rules behind them are in the site's stylesheet (10c review: without these the suite stayed green)
+    const css = await readFile(path.join(import.meta.dirname, '../app/app.css'), 'utf8');
+    const light = /@utility text-accent-light \{\s*color: oklch\(([\d.]+) /.exec(css);
+    expect(Number(light?.[1])).toBeGreaterThanOrEqual(0.85);
+    expect(css).toMatch(/\[data-tone="deep"\] :focus-visible \{ outline-color: var\(--background\); \}\s*\[data-tone="light"\] :focus-visible \{ outline-color: var\(--ring\); \}/);
     // the shipping list is a white card: its words are the card's dark text
     expect(sectionOf(main, 'shippingMethods')).toMatch(/<ul class="[^"]*bg-card text-foreground"/);
   });
@@ -252,18 +270,27 @@ describe('an answer of the ERP in a broken shape', () => {
     expect(main).toContain('بی‌قالب');
     // nested 200 deep: drawn to the depth the site allows and no deeper
     expect((main.match(/<blockquote/g) ?? []).length).toBeLessThan(20);
-    // the text whose nodes are all unknown or empty is no band at all, and the title of only joiners is no heading
-    expect(main.match(/data-page-section="text"/g)).toHaveLength(1);
+    // the texts whose nodes are all unknown, empty or out of place are no band at all (three of five), and the title of only joiners is no heading
+    expect(main.match(/data-page-section="text"/g)).toHaveLength(2);
+    for (const undrawn of ['متن بی پاراگراف', 'خانهٔ بی جدول']) expect(html, undrawn).not.toContain(undrawn);
+    // a mark is taken once: one link, the first
+    expect(main).toMatch(/<a[^>]*href="\/l0"[^>]*>هشت پیوند<\/a>/);
+    expect(main).not.toContain('href="/l1"');
     expect(html.match(/<h1/g)).toHaveLength(1);
     expect(html).toMatch(/<h1[^>]*>شکل‌های خراب<\/h1>/);
     // control characters and the characters that turn a line over are gone, in the page and in its description
     expect(html).toContain('متن سربرگ با نویسهٔ کنترلی');
     expect(html).not.toMatch(/[\u0000\u202e]/);
     expect(main).not.toMatch(/<a[^>]*>بی‌قالب/);
-    // a time without a zone is no time (it would be read in the zone of wherever the site runs)
-    expect((await get('/sitemap.xml')).html).not.toContain('broken-shapes');
+    // a time without a zone is no time (it would be read in the zone of wherever the site runs): the page is listed, undated
+    expect((await get('/sitemap.xml')).html).toContain('<url><loc>https://shop.example/pages/broken-shapes</loc></url>');
     // nothing but the known fields reaches the page's data
-    for (const stray of ['leak-me', 'onclick', 'alert(9)', 'itemId', 'sortOrder']) expect(html, stray).not.toContain(stray);
+    for (const stray of ['leak-me', 'onclick', 'alert(9)', 'itemId', 'sortOrder', 'costPrice', 'reserved']) expect(html, stray).not.toContain(stray);
+    // the card rebuilt from its known fields is drawn; the two outside the rules are not; half an emoji does not break the collection's link
+    expect(sectionOf(main, 'products')).toContain('href="/p/raw-card"');
+    expect(sectionOf(main, 'products').match(/<article/g)).toHaveLength(1);
+    for (const out of ['وضعیت ناشناخته', 'نشانی بیرون از محصولات', 'account?x=1', 'native code']) expect(html, out).not.toContain(out);
+    expect(sectionOf(main, 'products')).toContain(`href="/collections/${encodeURIComponent('نیمه')}"`);
   });
 });
 
@@ -346,6 +373,8 @@ describe('the ERP\'s answer as the site takes it', () => {
     // the pieces of one paragraph run together: «توجه، این» and not «توجه ، این»
     const marked = sitePage({ ...ABOUT, seoDescription: '', sections: [{ kind: 'text', background: 'white', doc: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'توجه', marks: [{ type: 'bold' }] }, { type: 'text', text: '، این متن است.' }] }, p('پاراگراف دوم')] } }] });
     expect(pageDescription(marked!)).toBe('توجه، این متن است. پاراگراف دوم');
+    const broken = sitePage({ ...ABOUT, seoDescription: '', sections: [{ kind: 'text', background: 'white', doc: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'ساعت کار: شنبه تا چهارشنبه' }, { type: 'hardBreak' }, { type: 'text', text: 'پنجشنبه تعطیل' }] }] } }] });
+    expect(pageDescription(broken!)).toBe('ساعت کار: شنبه تا چهارشنبه پنجشنبه تعطیل');
     expect(lastModOf('yesterday')).toBe('');
     expect(lastModOf('')).toBe('');
   });

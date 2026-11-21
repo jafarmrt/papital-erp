@@ -1,8 +1,8 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router';
-import { RICH_TEXT_DEPTH_MAX, TEXT_ALIGNS, TEXT_COLORS, pageLink, type RichDoc, type TextAlign, type TextColor } from '@erp/storefront/storefrontPageParts';
+import { TEXT_ALIGNS, TEXT_COLORS, pageLink, type RichDoc, type TextAlign, type TextColor } from '@erp/storefront/storefrontPageParts';
 import { mediaPath } from '../lib/brand';
-import { docIsBlank, pageImage } from '../lib/pages';
+import { DOC_DEPTH_MAX, docIsBlank, pageImage } from '../lib/pages';
 
 /**
  * v12 phase 10c: a text of the ERP's page builder (the editor's JSON) drawn as elements. No HTML comes from the ERP and
@@ -61,7 +61,7 @@ const inline = (nodes: Node[]): ReactNode[] => nodes.flatMap((node, i): ReactNod
 });
 
 function block(node: Node, key: number, depth: number): ReactNode {
-  if (depth > RICH_TEXT_DEPTH_MAX + 2) return null;
+  if (depth > DOC_DEPTH_MAX) return null;
   const inside = () => childrenOf(node).map((child, i) => block(child, i, depth + 1));
   switch (node.type) {
     case 'paragraph':
