@@ -1,7 +1,7 @@
 import fs from 'fs';
 import { orm } from '../../db/drizzle.js';
-import { and, eq, ne } from 'drizzle-orm';
-import { fileAttachments, mediaAssets, mediaSections } from '../../db/schema.js';
+import { and, eq, ne, sql } from 'drizzle-orm';
+import { fileAttachments, mediaAssets, mediaSections, storefrontMenuItems, storefrontMenus } from '../../db/schema.js';
 import { FACTORY_RESET_WIPE_ORDER, MEDIA_SYSTEM_SECTION_KIND } from './factoryResetTables.js';
 import { extensionOfType, mediaFilePath } from '../../lib/media/mediaPaths.js';
 import { logger } from '../../middleware/logger.js';
@@ -180,6 +180,10 @@ export class FactoryResetService {
         } else {
           const result = await tx.delete(table);
           deletedRows[name] = Number(result.rowCount ?? 0);
+          // v12 phase 9b: the four menu places are made only by migration 0028, so they stay, off again as on a fresh install
+          if (table === storefrontMenuItems) {
+            await tx.update(storefrontMenus).set({ isEnabled: 0, updatedBy: '', version: sql`${storefrontMenus.version} + 1` });
+          }
         }
       }
       const attachmentPaths = Array.from(new Set(removedAttachments.flatMap((row) => (row.lightStoragePath ? [row.storagePath, row.lightStoragePath] : [row.storagePath]))));

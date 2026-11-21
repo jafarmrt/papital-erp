@@ -1,3 +1,5 @@
+import { isSafeSitePath } from './storefrontSeoRules';
+
 /**
  * v12 phase 9b (docs/roadmap/V12_SITE_NEXT_START_PLAN.md §6, owner's decisions 3 and 15): the rules of the site's menu
  * builder, shared by the server and the screen «منوهای سایت». Four places on the site take a menu; each is saved whole,
@@ -105,6 +107,16 @@ export interface MenuItemDraft {
 
 const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
+/**
+ * 9b review: a control character (a NUL the database refuses, a bell), a direction override or an invisible mark has no
+ * place in a menu. The zero-width non-joiner (U+200C) and joiner stay: Persian words need them.
+ */
+// eslint-disable-next-line no-control-regex
+const UNSAFE_CHARS = /[\u0000-\u001f\u007f\u200b\u200e\u200f\u202a-\u202e\u2060-\u2069\ufeff]/;
+export const hasUnsafeChars = (value: string): boolean => UNSAFE_CHARS.test(value);
+/** whether a label has a letter to see (not only spaces and joiners) */
+const visible = (value: string) => value.replace(new RegExp(UNSAFE_CHARS.source, 'g'), '').replace(/[\s\u200c\u200d]/g, '') !== '';
+
 /** An item and its children with every field the kind does not use emptied (a form keeps the others while one edits) */
 export function normalizedMenuItem(location: MenuLocation, draft: MenuItemDraft): MenuItemValues {
   const kind = isMenuLinkKind(draft.kind) ? draft.kind : 'none';
@@ -122,13 +134,19 @@ export function normalizedMenuItem(location: MenuLocation, draft: MenuItemDraft)
   };
 }
 
-/** A path inside the site: one leading «/», no host, no space or backslash */
-export const isMenuPath = (value: string): boolean =>
-  value.length <= MENU_TARGET_MAX && /^\/(?!\/)[^\s\\]*$/.test(value);
+/**
+ * A path inside the site: the same rule as a redirect's target (`isSafeSitePath`: one leading «/», never «//» or a
+ * backslash, no dot segment, no space or control character)
+ */
+export const isMenuPath = (value: string): boolean => value.length <= MENU_TARGET_MAX && isSafeSitePath(value);
 
-/** An address outside the site: https only, with a host and without a user name or password */
+/**
+ * An address outside the site: written as `https://` in lower case (the database checks the same text; 9b review: the
+ * URL parser also took «HTTPS:», «https:x» and «https:\\x»), with a host and without a user name or password
+ */
 export function isMenuUrl(value: string): boolean {
-  if (value.length > MENU_URL_MAX || /\s/.test(value)) return false;
+  if (value.length > MENU_URL_MAX || /\s/.test(value) || hasUnsafeChars(value)) return false;
+  if (!/^https:\/\/[^/?#\\@]+([/?#][^\\]*)?$/.test(value)) return false;
   try {
     const url = new URL(value);
     return url.protocol === 'https:' && Boolean(url.hostname) && !url.username && !url.password;
@@ -144,7 +162,8 @@ const problem = (message: string, field: string, code: string): MenuProblem => (
 function itemProblem(location: MenuLocation, item: MenuItemValues, where: string, child: boolean): MenuProblem | null {
   const field = `${where}.label`;
   const labelMax = location === 'bottom' ? MENU_BOTTOM_LABEL_MAX : MENU_LABEL_MAX;
-  if (!item.label) return problem(`عنوان ${where} را بنویسید.`, field, 'STOREFRONT_MENU_LABEL_REQUIRED');
+  if (!visible(item.label)) return problem(`عنوان ${where} را بنویسید.`, field, 'STOREFRONT_MENU_LABEL_REQUIRED');
+  if (hasUnsafeChars(item.label) || hasUnsafeChars(item.target)) return problem(`«${item.label.replace(UNSAFE_CHARS, '')}» نویسه‌ای نادیدنی یا کنترلی دارد؛ آن را دوباره بنویسید.`, field, 'STOREFRONT_MENU_TEXT_INVALID');
   if (item.label.length > labelMax) return problem(`عنوان «${item.label}» بیش از ${labelMax} نویسه است.`, field, 'STOREFRONT_MENU_LABEL_TOO_LONG');
   const target = `${where}.target`;
   switch (item.kind) {

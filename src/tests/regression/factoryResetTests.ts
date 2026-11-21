@@ -139,6 +139,10 @@ async function everyTableCase(): Promise<TestCaseResult> {
     await pool.query(`INSERT INTO file_attachments (id, entity_type, entity_id, storage_path, light_storage_path, original_name, mime_type, size_bytes, sha256)
       VALUES (gen_random_uuid(), 'crm_lead', 1, 'crm_lead/obsr112.jpg', 'crm_lead/obsr112.light.webp', 'a.jpg', 'image/jpeg', 1, 'x')`);
 
+    // v12 phase 9b: a menu place on, with an item that names the item above
+    await pool.query(`UPDATE storefront_menus SET is_enabled = 1, updated_by = 'obsr112_admin' WHERE location = 'header'`);
+    await pool.query(`INSERT INTO storefront_menu_items (location, label, link_kind, target_item_id) VALUES ('header', 'محصول', 'product', $1)`, [itemId]);
+
     const report = await FactoryResetService.wipeAndReseed({ username: 'obsr112_admin', ip: '127.0.0.112' });
 
     const wrong: string[] = [];
@@ -149,6 +153,11 @@ async function everyTableCase(): Promise<TestCaseResult> {
     if (Number((await one(`SELECT count(*)::int AS n FROM media_sections WHERE kind = 'custom'`)).n) !== 0) wrong.push('a custom media section was left');
     if (Number((await one(`SELECT count(*)::int AS n FROM media_sections WHERE kind = 'products' AND is_deleted = 0`)).n) !== 1) wrong.push('the system media section was not kept');
     if (fs.existsSync(original) || fs.existsSync(thumb)) wrong.push('the media files stayed on disk');
+    if (Number((await one(`SELECT count(*)::int AS n FROM storefront_menu_items`)).n) !== 0) wrong.push('menu items were left');
+    const places = await pool.query(`SELECT location, is_enabled, updated_by FROM storefront_menus ORDER BY location`);
+    if (places.rows.length !== 4 || places.rows.some((r: { is_enabled: number; updated_by: string }) => r.is_enabled !== 0 || r.updated_by !== '')) {
+      wrong.push(`menu places after the reset: ${JSON.stringify(places.rows)}`);
+    }
     if (report.mediaFiles.removed !== 1) wrong.push(`media files removed: ${report.mediaFiles.removed}`);
     const leftAttachments = attachmentFiles.filter((file) => fs.existsSync(file)).map((file) => path.basename(file));
     if (leftAttachments.length > 0) wrong.push(`attachment files stayed on disk: ${leftAttachments.join(', ')}`);

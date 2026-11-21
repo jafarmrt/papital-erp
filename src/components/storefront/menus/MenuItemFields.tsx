@@ -52,6 +52,7 @@ function TargetField({ item, options, onChange, id }: {
       return (
         <select id={id} className={field} value={item.campaignId ?? ''} onChange={e => onChange({ campaignId: e.target.value ? Number(e.target.value) : null })}>
           <option value="">برگزینید</option>
+          {item.campaignId !== null && !list.some(c => c.id === item.campaignId) && <option value={item.campaignId}>صفحهٔ ویژه‌ای که حذف شده است</option>}
           {list.map(c => <option key={c.id} value={c.id}>{c.live ? c.title : `${c.title} (اکنون روی سایت نیست)`}</option>)}
         </select>
       );
@@ -67,9 +68,10 @@ function TargetField({ item, options, onChange, id }: {
       );
     }
     case 'path':
-      return <input id={id} dir="ltr" className={field} value={item.target} placeholder="/products?category=…" onChange={e => onChange({ target: e.target.value })} />;
+      return <input id={id} dir="ltr" className={field} value={item.target} placeholder="/products?category=…" autoCapitalize="off" autoCorrect="off" spellCheck={false} onChange={e => onChange({ target: e.target.value })} />;
     case 'url':
-      return <input id={id} dir="ltr" className={field} value={item.target} placeholder="https://" onChange={e => onChange({ target: e.target.value })} />;
+      // 9b review: a phone keyboard would start it with a capital «H», which is refused
+      return <input id={id} type="url" dir="ltr" className={field} value={item.target} placeholder="https://" autoCapitalize="off" autoCorrect="off" spellCheck={false} onChange={e => onChange({ target: e.target.value })} />;
     default:
       return <p className="py-1.5 text-xs text-slate-500">این گزینه فقط زیرگزینه‌هایش را باز می‌کند.</p>;
   }
