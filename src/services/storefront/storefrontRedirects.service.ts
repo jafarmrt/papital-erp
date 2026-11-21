@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import { and, asc, desc, eq, inArray, isNotNull, like, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNotNull, sql, type SQL } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, storefrontPages, storefrontProducts, storefrontRedirects } from '../../db/schema.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
@@ -7,6 +7,7 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { OptimisticLockError, nextVersion } from '../../lib/occHelper.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { foldedContains } from '../../lib/search/searchSql.js';
+import { containsLikePattern } from '../../lib/sqlLike.js';
 import {
   REDIRECTS_MAX, REDIRECT_NOTE_MAX, REDIRECT_TARGET_KIND_TITLES, legacyPathError, legacyPathKey, redirectTargetError,
   type RedirectSource, type RedirectTargetKind,
@@ -112,8 +113,14 @@ async function assertFromFree(tx: DbExecutor, fromPath: string, exceptId: number
     .where(and(eq(storefrontRedirects.fromPath, fromPath), eq(storefrontRedirects.isDeleted, 0), exceptId === null ? sql`true` : sql`${storefrontRedirects.id} <> ${exceptId}`))
     .limit(1);
   if (taken) throw new ConflictError(`برای نشانی «${fromPath}» پیش‌تر انتقالی ثبت شده است.`, { id: taken.id }, 'STOREFRONT_REDIRECT_FROM_TAKEN');
-  // v12 phase 10c (review): a page of «صفحه‌های سایت» that is on the site answers at its own address; a redirect away from
-  // it would never be followed there, yet it would carry off every earlier address that leads to the page
+}
+
+/**
+ * v12 phase 10c (review): a page of «صفحه‌های سایت» that is on the site answers at its own address; a redirect away from
+ * it would never be followed there, yet it would carry off every earlier address that leads to the page. Asked of a new
+ * row and of a row whose old address is changed, not of another edit of a row that is already there.
+ */
+async function assertNoPageAt(tx: DbExecutor, fromPath: string): Promise<void> {
   const slug = /^\/pages\/([a-z0-9-]+)$/.exec(fromPath)?.[1];
   if (slug) {
     const [page] = await tx.select({ id: storefrontPages.id }).from(storefrontPages)
@@ -139,6 +146,7 @@ export async function createRedirect(req: Request, input: StorefrontRedirectInpu
     await lockRedirects(tx);
     const values = await checkedInput(tx, input);
     await assertFromFree(tx, values.fromPath, null);
+    await assertNoPageAt(tx, values.fromPath);
     const [created] = await tx.insert(storefrontRedirects).values({
       ...values, isActive: values.isActive ? 1 : 0, source: 'manual', createdBy: userOf(req), updatedBy: userOf(req),
     }).returning({ id: storefrontRedirects.id });
@@ -169,6 +177,7 @@ export async function updateRedirect(req: Request, id: number, input: Storefront
     const current = await lockedRow(tx, id, input.version);
     const values = await checkedInput(tx, input);
     await assertFromFree(tx, values.fromPath, id);
+    if (values.fromPath !== current.fromPath) await assertNoPageAt(tx, values.fromPath);
     const after = { ...values, isActive: values.isActive ? 1 : 0 };
     if (JSON.stringify(auditView(current)) === JSON.stringify(auditView(after))) return;
     await tx.update(storefrontRedirects).set({
@@ -257,9 +266,10 @@ export async function redirectMovedPage(req: Request, tx: DbExecutor, move: { fr
   const actor = userOf(req);
   const at = systemNowUtcIso();
 
-  // a target is matched by its key, so one written with a last slash or a query (`/pages/a/`, `/pages/a?x=1`) follows too
+  // a target is matched by its key, so one written with a last slash, a query, in capitals or behind `/index.php`
+  // (`/pages/a/`, `/pages/a?x=1`, `/pages/A`) follows too: the rows that hold the address anywhere are read, then told apart
   const near = await tx.select().from(storefrontRedirects)
-    .where(and(eq(storefrontRedirects.isDeleted, 0), eq(storefrontRedirects.targetKind, 'path'), like(storefrontRedirects.target, `${move.from}%`))).for('update');
+    .where(and(eq(storefrontRedirects.isDeleted, 0), eq(storefrontRedirects.targetKind, 'path'), ilike(storefrontRedirects.target, containsLikePattern(move.from)))).for('update');
   const led = near.filter(row => row.target === move.from || (fromKey !== null && legacyPathKey(row.target) === fromKey));
   for (const row of led) {
     if (row.fromPath === toKey) {
@@ -313,8 +323,14 @@ export async function publicRedirects(): Promise<StorefrontPublicRedirect[]> {
     .leftJoin(storefrontProducts, eq(storefrontProducts.itemId, storefrontRedirects.targetItemId))
     .where(and(eq(storefrontRedirects.isDeleted, 0), eq(storefrontRedirects.isActive, 1)))
     .orderBy(asc(storefrontRedirects.id)).limit(REDIRECTS_MAX);
+  // v12 phase 10c (review): a row from the address of a page that is on the site never goes out (one written before the
+  // page came there and switched on later, or by the import): the site must not need its list of pages to ignore it
+  const pages = await orm.select({ slug: storefrontPages.slug }).from(storefrontPages)
+    .where(and(eq(storefrontPages.kind, 'custom'), eq(storefrontPages.isDeleted, 0), isNotNull(storefrontPages.published)));
+  const pageAddresses = new Set(pages.map(page => `/pages/${page.slug}`));
   const out: StorefrontPublicRedirect[] = [];
   for (const r of rows) {
+    if (pageAddresses.has(r.from)) continue;
     const kind = r.kind as RedirectTargetKind;
     if (kind === 'product') {
       // the same test as the catalog's: a live product item, published on the site

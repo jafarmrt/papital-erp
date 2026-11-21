@@ -223,6 +223,36 @@ export async function runStorefrontPageMoveV12Tests(shouldRun: (id: string, ...e
       }
     }
 
+    // 10c second review: a row on a published page's address that is already there (written straight into the table) can
+    // still have its note edited, is never sent to the site though it is switched on, and a target in capitals follows a move
+    const [stray] = await orm.insert(storefrontRedirects).values({ fromPath: `/pages/${a}`, targetKind: 'path', target: '/products', source: 'manual', note: '', isActive: 1 }).returning();
+    const noteEdit = await erp.put(`/api/storefront/redirects/${stray.id}`, { fromPath: `/pages/${a}`, targetKind: 'path', targetItemId: null, target: '/products', note: 'یادداشت', isActive: true, version: stray.version });
+    const sentStray = (((await site('/redirects')).body.data ?? []) as Array<{ from: string }>).some(r => r.from === `/pages/${a}`);
+    if (noteEdit.status !== 200 || sentStray) wrong.push(`a row already on a published page's address: edit ${noteEdit.status}, sent to the site ${sentStray}`);
+    await orm.delete(storefrontRedirects).where(eq(storefrontRedirects.id, stray.id));
+    const capitals = await erp.post('/api/storefront/redirects', { fromPath: `/old-caps-${tag}`, targetKind: 'path', targetItemId: null, target: `/pages/${f.toUpperCase()}`, note: '', isActive: true });
+    const g = `move-g-${tag}`;
+    const toG = await move(g, await versionNow());
+    const [capitalsNow] = await orm.select().from(storefrontRedirects).where(eq(storefrontRedirects.id, Number(capitals.body.data?.id)));
+    if (capitals.status !== 201 || toG.status !== 200 || capitalsNow?.target !== `/pages/${g}`) wrong.push(`a target written in capitals: ${capitals.status}/${toG.status} ${capitalsNow?.target}`);
+    await orm.delete(storefrontRedirects).where(eq(storefrontRedirects.id, Number(capitals.body.data?.id)));
+
+    // 10c second review: a draft save of one page and a move of another, both to one free address at the same moment: one
+    // takes it and the other is refused, and neither is left waiting on the other (they took two locks in opposite orders)
+    const racer = await erp.post('/api/storefront/pages', { title: `رقیب ${tag}`, slug: `move-racer-${tag}`, template: null });
+    const racerId = Number(racer.body.data?.id);
+    pageIds.push(racerId);
+    for (let round = 0; round < 6; round++) {
+      const free = `move-race-${round}-${tag}`;
+      const racerVersion = Number((await erp.get(`/api/storefront/pages/${racerId}`)).body.data.version);
+      const [bySave, byMove] = await Promise.all([
+        erp.put(`/api/storefront/pages/${racerId}`, { ...form(racerVersion, free), title: `رقیب ${tag}` }),
+        move(free, await versionNow()),
+      ]);
+      const codes = [bySave, byMove].map(r => `${r.status}${r.status === 200 ? '' : ` ${r.body.code}`}`).sort().join(' / ');
+      if (!/^200 \/ 409 (UNIQUE_VIOLATION|STOREFRONT_PAGE_SLUG_TAKEN)$/.test(codes)) wrong.push(`a draft save and a move racing for one address, round ${round}: ${codes}`);
+    }
+
     // 12) every redirect row this run's moves, saves and publishings changed has its own audit row: made, pointed anew, removed
     const touched = await orm.select().from(storefrontRedirects).where(gt(storefrontRedirects.id, lastRedirect ?? 0));
     const auditOf = async (rowId: number, action: string) => (await orm.select({ id: activityLogs.id }).from(activityLogs)
@@ -240,7 +270,7 @@ export async function runStorefrontPageMoveV12Tests(shouldRun: (id: string, ...e
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'a draft moved with no redirect; on the site seven wrong moves were refused with their codes (a stale version, a taken address, three wrong shapes, a base page, a draft save), the view key was 403, and nothing was written; the same address changed nothing; a→b answered at b only and sent a to b with the page\'s and the redirect\'s audit rows; b→c sent both earlier addresses straight to c; c→a removed the redirect away from a, with no circle; a move onto an address that had a redirect removed that redirect; the redirects list refused a row from a published page\'s address (new and edited); a switched-off row on the address the page left was pointed at the new address and switched on, the same row, and a target written with a last slash followed; and after the last move every earlier address led to the page in one hop; every redirect row changed had its own audit rows; an address changed while the page was off the site (by a draft save and by the route) took the redirects along and left none that led from the page\'s address to itself; a second page published at an address that still redirected removed that redirect; feed, amp and embed were refused as addresses',
+      details: 'a draft moved with no redirect; on the site seven wrong moves were refused with their codes (a stale version, a taken address, three wrong shapes, a base page, a draft save), the view key was 403, and nothing was written; the same address changed nothing; a→b answered at b only and sent a to b with the page\'s and the redirect\'s audit rows; b→c sent both earlier addresses straight to c; c→a removed the redirect away from a, with no circle; a move onto an address that had a redirect removed that redirect; the redirects list refused a row from a published page\'s address (new and edited); a switched-off row on the address the page left was pointed at the new address and switched on, the same row, and a target written with a last slash followed; and after the last move every earlier address led to the page in one hop; every redirect row changed had its own audit rows; an address changed while the page was off the site (by a draft save and by the route) took the redirects along and left none that led from the page\'s address to itself; a second page published at an address that still redirected removed that redirect; feed, amp and embed were refused as addresses; a row already on a published page\'s address could still be edited and was not sent to the site; a target in capitals followed a move; and in six races of a draft save against a move for one free address one won and the other was refused, with no deadlock',
     }));
   } catch (err) {
     results.push(makeTestCase({
