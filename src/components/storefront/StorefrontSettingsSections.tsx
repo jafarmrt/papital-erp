@@ -1,27 +1,30 @@
-import { useState } from 'react';
 import { Store } from 'lucide-react';
 import { useStorefrontSettingsQuery } from '../../hooks/queries/useStorefrontQueries';
 import { errorMessageOf } from '../../utils';
-import { StorefrontSettingsForm } from '../storefront/StorefrontSettingsForm';
-import { StorefrontApiKeyCard } from '../storefront/StorefrontApiKeyCard';
-import { StorefrontBrandCard } from '../storefront/StorefrontBrandCard';
-import { ShippingMethodsSection } from '../storefront/ShippingMethodsSection';
-import { StorefrontProductsSection } from '../storefront/StorefrontProductsSection';
-import { BuyerGroupsSection } from '../storefront/BuyerGroupsSection';
-import { DiscountCodesSection } from '../storefront/DiscountCodesSection';
-import { StorefrontSmsSection } from '../storefront/StorefrontSmsSection';
-import { StorefrontEmailSection } from '../storefront/StorefrontEmailSection';
-import { StorefrontSeoSection } from '../storefront/StorefrontSeoForm';
-import { StorefrontRedirectsSection } from '../storefront/StorefrontRedirectsSection';
-import { StorefrontCampaignsSection } from '../storefront/StorefrontCampaignsSection';
+import { StorefrontSettingsForm } from './StorefrontSettingsForm';
+import { StorefrontApiKeyCard } from './StorefrontApiKeyCard';
+import { StorefrontBrandCard } from './StorefrontBrandCard';
+import { ShippingMethodsSection } from './ShippingMethodsSection';
+import { StorefrontProductsSection } from './StorefrontProductsSection';
+import { BuyerGroupsSection } from './BuyerGroupsSection';
+import { DiscountCodesSection } from './DiscountCodesSection';
+import { StorefrontSmsSection } from './StorefrontSmsSection';
+import { StorefrontEmailSection } from './StorefrontEmailSection';
+import { StorefrontSeoSection } from './StorefrontSeoForm';
+import { StorefrontRedirectsSection } from './StorefrontRedirectsSection';
+import { StorefrontCampaignsSection } from './StorefrontCampaignsSection';
 
 /**
- * v11 phase 8.1 (docs/roadmap/V11_STOREFRONT_START_PLAN.md): the settings tab «فروشگاه سایت» of the new papitalgallery.com,
+ * v11 phase 8.1 (docs/roadmap/V11_STOREFRONT_START_PLAN.md): the sections of «فروشگاه سایت» of the new papitalgallery.com,
  * which runs as its own app on the site's domain and reads the ERP through the Storefront API. `storefront.view` sees,
- * `storefront.manage` changes.
+ * `storefront.manage` changes. v12 phase 9a (V12_SITE_NEXT_START_PLAN.md §6): once a settings tab, now the page
+ * «کالاها و تنظیمات سایت» (`/site-settings`) of the sidebar's «فروشگاه سایت», with the open section in its address.
  */
-type Section = 'products' | 'settings' | 'brand' | 'shipping' | 'groups' | 'discounts' | 'campaigns' | 'sms' | 'email' | 'seo' | 'redirects' | 'key';
-const SECTIONS: Array<{ id: Section; label: string }> = [
+export const STOREFRONT_SECTION_IDS = ['products', 'settings', 'brand', 'shipping', 'groups', 'discounts', 'campaigns', 'sms', 'email', 'seo', 'redirects', 'key'] as const;
+export type StorefrontSection = typeof STOREFRONT_SECTION_IDS[number];
+export const isStorefrontSection = (value: unknown): value is StorefrontSection => (STOREFRONT_SECTION_IDS as readonly unknown[]).includes(value);
+
+const SECTIONS: Array<{ id: StorefrontSection; label: string }> = [
   { id: 'products', label: 'کالاهای سایت' },
   { id: 'settings', label: 'پرداخت، قیمت و موجودی' },
   { id: 'brand', label: 'لوگو و آیکون' },
@@ -36,17 +39,19 @@ const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: 'key', label: 'کلید برنامه سایت' },
 ];
 
-export function StorefrontTab({ canManage }: { canManage: boolean }) {
-  const [section, setSection] = useState<Section>('products');
+export function StorefrontSettingsSections({ canManage, section, onSection }: {
+  canManage: boolean; section: StorefrontSection; onSection: (section: StorefrontSection) => void;
+}) {
   const settings = useStorefrontSettingsQuery();
+  const setSection = onSection;
 
   return (
     <div className="space-y-5">
       <header className="space-y-1">
-        <h2 className="flex items-center gap-2 text-lg font-black text-slate-800">
+        <h1 className="flex items-center gap-2 text-lg font-black text-slate-800">
           <Store className="w-5 h-5 text-violet-600" />
-          فروشگاه سایت
-        </h2>
+          کالاها و تنظیمات سایت
+        </h1>
         <p className="text-xs leading-6 text-slate-500">
           سایت تازه papitalgallery.com جدا از ERP بالا می‌آید و کالا، قیمت و موجودی را از همین‌جا می‌خواند.
           {!canManage && ' شما فقط می‌توانید ببینید.'}

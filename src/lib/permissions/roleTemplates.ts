@@ -142,11 +142,23 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
   {
     code: 'sales_agent',
     name: 'کارشناس فروش و ارتباط با مشتری',
-    description: 'مدیریت مشتریان، پرونده‌های فروش، پیش‌فاکتورها و مشاهده سفارش‌های فروشگاه اینترنتی',
+    description: 'مدیریت مشتریان، پرونده‌های فروش، پیش‌فاکتورها و مشاهده سفارش‌های ووکامرس (سایت قدیم)',
     permissions: [
       'crm.view', 'crm.manage', 'customers.view', 'customers.manage', 'customers.delete', 'documents.view', 'documents.create',
       'documents.edit', 'woocommerce.view', 'media.view', 'workflow.view', 'workflow.execute', 'daily_logs.view',
       'daily_logs.create',
+    ],
+  },
+  {
+    // v12 phase 9a (V12_SITE_NEXT_START_PLAN.md §6, decision 1): the sidebar's «فروشگاه سایت» only. No treasury, accounting
+    // or stock key, so the role sees and handles site orders but confirming a payment still needs the treasury and
+    // finalize keys (owner's decision 15, proposal 2); `media.view` picks the picture of a campaign page
+    code: 'site_manager',
+    name: 'مدیر سایت',
+    description: 'کالاها، تنظیمات، سفارش‌ها و خریداران سایت تازه؛ تأیید پرداخت مجوز خزانه را جدا می‌خواهد',
+    permissions: [
+      'storefront.view', 'storefront.manage', 'site_orders.view', 'site_orders.manage', 'site_buyers.view',
+      'site_buyers.manage', 'media.view',
     ],
   },
   {

@@ -118,7 +118,7 @@ async function validateSettingValue(tx: DbExecutor, key: string, value: string):
     const [wh] = await tx.select({ id: warehouses.id }).from(warehouses)
       .where(and(eq(warehouses.code, value.trim()), eq(warehouses.isActive, 1)));
     if (!wh) {
-      throw new ValidationError(`انبار فروشگاه اینترنتی «${value}» انبار فعالی نیست.`);
+      throw new ValidationError(`انبار فروش اینترنتی «${value}» انبار فعالی نیست.`);
     }
   }
   if (key === 'display_timezone') {

@@ -33,7 +33,9 @@ import {
   Calculator,
   Images,
   Hammer,
-  ClipboardCheck
+  ClipboardCheck,
+  Store,
+  SlidersHorizontal
 } from 'lucide-react';
 import { User } from '../../types';
 import { canOpenPage } from '../../lib/permissions/pageAccess';
@@ -96,8 +98,17 @@ export function getMenuGroups(
         { name: 'ارتباط با مشتری و فروش', path: '/crm', icon: Target, visible: open('/crm') },
         { name: 'طرفین حساب', path: '/customers', icon: UsersRound, visible: open('/customers') },
         { name: 'صدور فاکتور و پیش‌فاکتور', path: '/invoices/create', icon: FileOutput, visible: open('/invoices/create') },
+      ]
+    },
+    {
+      // v12 phase 9a (start plan §6, decision 1): the new site's own section; a colleague sees the links their keys open
+      id: 'site',
+      title: 'فروشگاه سایت',
+      groupIcon: Store,
+      items: [
         { name: 'سفارش‌های سایت', path: '/site-orders', icon: ShoppingBag, visible: open('/site-orders') },
         { name: 'خریداران سایت', path: '/site-buyers', icon: Handshake, visible: open('/site-buyers') },
+        { name: 'کالاها و تنظیمات سایت', path: '/site-settings', icon: SlidersHorizontal, visible: open('/site-settings') },
       ]
     },
     {

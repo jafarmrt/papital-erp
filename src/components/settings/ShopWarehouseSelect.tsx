@@ -18,7 +18,7 @@ export function ShopWarehouseSelect({ value, onChange, warehouses }: ShopWarehou
     <div className="bg-white/90 border border-blue-200 rounded-lg p-3 space-y-2">
       <label htmlFor="wc-shop-warehouse" className="block text-xs font-bold text-blue-950 flex items-center gap-1.5">
         <Warehouse size={14} className="text-emerald-600" />
-        انبار فروشگاه اینترنتی
+        انبار فروش اینترنتی
       </label>
       <select
         id="wc-shop-warehouse"
