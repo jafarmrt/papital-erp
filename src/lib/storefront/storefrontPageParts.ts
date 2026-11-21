@@ -38,7 +38,12 @@ export const PAGES_MAX = 200;
 
 export const SECTION_BACKGROUNDS = ['white', 'cream', 'brand', 'dark'] as const;
 export type SectionBackground = typeof SECTION_BACKGROUNDS[number];
-export const SECTION_BACKGROUND_TITLES: Readonly<Record<SectionBackground, string>> = { white: 'سفید', cream: 'کرم', brand: 'زرد برند', dark: 'تیره' };
+/**
+ * The titles say what the site draws (10c): its palette is «لاجورد» (white, a light sky tint, cobalt and navy; the owner's
+ * decision of 2026-11-03 keeps cream and gold out of it). The stored names `cream` and `brand` are those 10b first gave
+ * the two middle grounds; they are kept so a saved draft stays readable.
+ */
+export const SECTION_BACKGROUND_TITLES: Readonly<Record<SectionBackground, string>> = { white: 'سفید', cream: 'آبی روشن', brand: 'لاجوردی', dark: 'سرمه‌ای' };
 
 export const SECTION_KINDS = ['hero', 'text', 'textImage', 'iconCards', 'gallery', 'people', 'map', 'products', 'button', 'shippingMethods'] as const;
 export type SectionKind = typeof SECTION_KINDS[number];
@@ -67,7 +72,7 @@ export const PAGE_ICON_TITLES: Readonly<Record<PageIcon, string>> = {
 /** The colours a word of a text may take: names, never a colour code, so the site keeps its own palette */
 export const TEXT_COLORS = ['brand', 'accent', 'muted', 'danger'] as const;
 export type TextColor = typeof TEXT_COLORS[number];
-export const TEXT_COLOR_TITLES: Readonly<Record<TextColor, string>> = { brand: 'لاجوردی', accent: 'زرد', muted: 'خاکستری', danger: 'قرمز' };
+export const TEXT_COLOR_TITLES: Readonly<Record<TextColor, string>> = { brand: 'لاجوردی', accent: 'آبی کاشی', muted: 'خاکستری', danger: 'قرمز' };
 export const TEXT_ALIGNS = ['right', 'center', 'left', 'justify'] as const;
 export type TextAlign = typeof TEXT_ALIGNS[number];
 

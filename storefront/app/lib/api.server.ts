@@ -9,6 +9,8 @@ import { STOREFRONT_QUERY_TEXT_MAX, STOREFRONT_SLUG_MAX } from '@erp/storefront/
 import { CATALOG_PAGE_SIZE, type CatalogSort } from './catalog';
 import { NO_MENUS, safeMenus, type SiteMenus } from './menus';
 import { DEFAULT_SHOP, siteShop, type SiteShop } from './shopInfo';
+import type { StorefrontPageSummary } from '@erp/storefront/storefrontPagePublicContracts';
+import { isPageSlug, sitePage, sitePageList, type SitePage } from './pages';
 
 /**
  * The only door to the ERP: the five read routes of the Storefront API (phase 8.1), called from this server with the
@@ -34,7 +36,7 @@ const CACHE_MAX = 500;
  * crawler walking random addresses (each a remembered 404 there) never pushes out the feed or the settings (the security
  * review of 8.5b)
  */
-const PINNED_PATHS = new Set(['/facets', '/settings', '/brand', '/seo', '/redirects', '/feed', '/campaigns', '/menus', '/shop-info']);
+const PINNED_PATHS = new Set(['/facets', '/settings', '/brand', '/seo', '/redirects', '/feed', '/campaigns', '/menus', '/shop-info', '/pages']);
 const pinned = new Map<string, Entry>();
 const kept = (path: string) => (PINNED_PATHS.has(path) ? pinned : cache).get(path);
 /** Many visitors asking for the same address at once make one call */
@@ -66,7 +68,13 @@ async function fetchJson<T>(path: string, ttlMs: number, visitor = ''): Promise<
   }
   if (res.status === 404) remember(path, { at: Date.now(), value: null, status: 404 });
   if (!res.ok) throw new StorefrontApiError(res.status, path);
-  const value = await res.json() as T;
+  let value: T;
+  try {
+    value = await res.json() as T;
+  } catch {
+    // an answer that is not JSON (a proxy's error page with status 200) is a failed read like any other
+    throw new StorefrontApiError(502, path);
+  }
   if (ttlMs > 0) remember(path, { at: Date.now(), value });
   return value;
 }
@@ -239,6 +247,56 @@ export async function campaign(slug: string): Promise<StorefrontCampaignPage | n
   }
 }
 
+/**
+ * A page's answer is kept a minute, like the settings: after «انتشار» or «برداشتن از سایت» in the ERP, the site follows
+ * within a minute (a page not there is remembered as long, NOT_FOUND_TTL_MS, so a newly published one appears as late).
+ */
+const PAGE_TTL_MS = 60_000;
+
+/**
+ * v12 phase 10c: the pages of «صفحه‌های سایت» on the site now, for the sitemap. Any failure (an ERP not yet updated
+ * answers 404) is no pages, never a down shop: the five base pages then keep the text the site always had.
+ */
+export async function pages(): Promise<StorefrontPageSummary[]> {
+  try {
+    return sitePageList((await get<{ data: unknown }>('/pages', PAGE_TTL_MS)).data);
+  } catch (error) {
+    if (error instanceof StorefrontApiError) return [];
+    throw error;
+  }
+}
+
+/** The last copy read of each base page (five at most), to show while the ERP cannot be read */
+const lastGoodBasePage = new Map<string, SitePage>();
+
+/**
+ * One published page; null when there is none by that address. A page the shop made is an error while the ERP cannot
+ * be read (a read error is not «no such page»). `fallback` is for a base page, which must never be down: when the ERP
+ * says the page is not published (404) the caller shows the site's fixed text; when the ERP cannot be read at all, the
+ * copy read last is shown (10c review: an error must not put the fixed text back in place of a published page), and
+ * only a site that has never read the page falls back to the fixed text.
+ */
+export async function page(slug: string, { fallback = false } = {}): Promise<SitePage | null> {
+  if (!isPageSlug(slug)) return null;
+  const path = `/pages/${slug}`;
+  try {
+    const answer = await get<unknown>(path, PAGE_TTL_MS);
+    const found = sitePage(typeof answer === 'object' && answer !== null ? (answer as { data?: unknown }).data : null);
+    // a 200 that is not a page, or is another address's page, is a failed read: «no page» is only the ERP's own 404
+    if (!found || found.slug !== slug) throw new StorefrontApiError(502, path);
+    if (fallback) lastGoodBasePage.set(slug, found);
+    return found;
+  } catch (error) {
+    if (!(error instanceof StorefrontApiError)) throw error;
+    if (error.status === 404) {
+      lastGoodBasePage.delete(slug);
+      return null;
+    }
+    if (fallback) return lastGoodBasePage.get(slug) ?? null;
+    throw error;
+  }
+}
+
 const REDIRECTS_TTL_MS = 300_000;
 let redirectIndex: { list: StorefrontPublicRedirect[]; map: Map<string, StorefrontPublicRedirect> } | null = null;
 
@@ -262,7 +320,7 @@ const MEDIA_FILE = /^[0-9a-f]{64}(-thumb)?\.webp$/;
 export const isMediaFile = (file: string) => MEDIA_FILE.test(file);
 
 /**
- * Product images, kept in this server's memory once read: a name is the image's content hash, so a kept file never goes
+ * Product images, and (v12 phase 10c) the images of published pages, kept in this server's memory once read: a name is the image's content hash, so a kept file never goes
  * stale. Every visitor reaches the ERP from this one server, so without this a busy listing page (about 24 images) would
  * spend the ERP's per-address budget quickly. The cache is bounded by bytes; the oldest image leaves first.
  */
@@ -303,7 +361,12 @@ async function fetchMedia(file: string): Promise<Uint8Array<ArrayBuffer> | null>
   return bytes;
 }
 
-/** A product image on the site, read through this server so the key never reaches the browser; null = no such image */
+/**
+ * An image on the site (a product's, a campaign page's or a published page's), read through this server so the key never
+ * reaches the browser; null = no such image. Known limit: an image read once stays in this memory, and in a browser
+ * that has it, after its product or page leaves the site, for whoever still has its exact address (a 64-character key
+ * no page names any more); a restart of this server empties the memory.
+ */
 export async function mediaFile(file: string): Promise<Uint8Array<ArrayBuffer> | null> {
   if (!isMediaFile(file)) return null;
   const kept = mediaCache.get(file);
