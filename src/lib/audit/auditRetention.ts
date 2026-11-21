@@ -124,7 +124,9 @@ export const CRITICAL_AUDIT_ENTITIES = [
   // v11 phase 8.2b: a site buyer account, its approval, suspension and set-password links are never purged from the log
   'حساب خریدار سایت',
   // v12 phase 8c: a site buyer's address book (kept, made the default, removed) is never purged from the log
-  'نشانی خریدار سایت'
+  'نشانی خریدار سایت',
+  // v12 phase 9b: a save of one of the site's menus (before and after) is never purged from the log
+  'منوی سایت'
 ] as const;
 
 /**

@@ -18,7 +18,7 @@ import {
   integrationDeliveryJobs, eventActionRuleRetirements, webhookEventPatternRepairs, itemPriceTitleCleanup,
   dailyLogVisibilityRepairs, statutoryRemittanceLines, settlementAllocations, payrollStatutoryRates, payrollEidiRates, itemCodeHistory,
   mediaAssets, mediaSections, storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontRedirects, storefrontSmsCodes, storefrontEmailCodes, storefrontSmsMessages,
-  storefrontBuyerGroups, storefrontBuyerAccounts, storefrontBuyerAddresses, storefrontBuyerSessions, storefrontPasswordTokens, storefrontDiscountCodes, storefrontDiscountRedemptions, storefrontCampaigns, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
+  storefrontBuyerGroups, storefrontBuyerAccounts, storefrontBuyerAddresses, storefrontBuyerSessions, storefrontPasswordTokens, storefrontDiscountCodes, storefrontDiscountRedemptions, storefrontCampaigns, storefrontMenuItems, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
 } from '../../db/schema.js';
 
 /**
@@ -161,6 +161,8 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   { name: 'storefront_products', table: storefrontProducts },
   // v11 phase 8.5: the old-address redirects point to items too
   { name: 'storefront_redirects', table: storefrontRedirects },
+  // v12 phase 9b: a menu item points to an item or a campaign page, so the items go before both
+  { name: 'storefront_menu_items', table: storefrontMenuItems },
   // v11 phase 8.5b: the campaign pages point to media images (their hero), so they go before media_assets
   { name: 'storefront_campaigns', table: storefrontCampaigns },
   { name: 'storefront_shipping_rates', table: storefrontShippingRates },
@@ -190,6 +192,9 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
 export const FACTORY_RESET_KEPT_TABLES: Readonly<Record<string, string>> = {
   roles: 'the roles are kept (TD-245); a fresh install has only the system admin role',
   migrations_log: 'the record of applied migrations belongs to the database schema, not to its business data',
+  // v12 phase 9b: only migration 0028 makes the four places; with their items wiped, a place that was on shows the
+  // site's fixed menu (the site falls back when a place has no item to show)
+  storefront_menus: 'the four places of the site\'s menu (header, drawer, footer, bottom bar), made by migration 0028 only; their items are wiped',
 };
 
 /** the system media section «محصولات» stays; only the sections users made are wiped */

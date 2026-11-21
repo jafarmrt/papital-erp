@@ -101,7 +101,7 @@ const page = (at = '/site-menus') => render(
   </QueryClientProvider>,
 );
 
-describe('the screen «منوهای سایت»', () => {
+describe('the site menus screen', () => {
   it('opens the place named in the address, read-only without site_content.manage', async () => {
     menus.current = emptyMenus();
     permissions.current = ['site_content.view'];

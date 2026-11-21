@@ -112,8 +112,8 @@ export async function runStorefrontMenusV12Tests(shouldRun: (id: string, ...extr
     if (stale.status !== 409) wrong.push(`a stale save: ${stale.status}`);
 
     // 4) a kept item keeps its row, a removed one is soft-deleted, and each save writes one audit row
-    const kept = (view.items as Body[]).filter(i => i.label !== 'خالی').map(i => ({ ...i, children: (i.children as Body[]).map(({ children: _c, live: _l, targetTitle: _t, ...c }) => c) }))
-      .map(({ live: _l, targetTitle: _t, ...i }) => i);
+    const asSent = ({ children: _c, live: _l, targetTitle: _t, ...rest }: Body): Body => rest;
+    const kept = (view.items as Body[]).filter(i => i.label !== 'خالی').map(i => ({ ...asSent(i), children: (i.children as Body[]).map(asSent) }));
     const again = await erp.put('/api/storefront/menus/header', { enabled: true, version: view.version, items: kept });
     const rows = await orm.select().from(storefrontMenuItems).where(and(eq(storefrontMenuItems.location, 'header'), gt(storefrontMenuItems.id, lastItem ?? 0)));
     const removedRow = rows.find(r => r.label === 'خالی');
