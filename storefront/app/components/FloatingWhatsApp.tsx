@@ -2,8 +2,14 @@ import { useLocation } from 'react-router';
 import { MessageCircle } from 'lucide-react';
 import { whatsappLink } from '../lib/whatsapp';
 
-/** The pages of paying: the button never sits over a cart, a checkout or an order (start plan §7.2, 10a) */
-const hiddenOn = (pathname: string) => pathname === '/cart' || pathname === '/checkout' || pathname.startsWith('/orders');
+/**
+ * The pages of paying: the button never sits over a cart, a checkout or an order (start plan §7.2, 10a). The router
+ * matches an address in any letter case and with a closing «/», so this does too (10a review).
+ */
+export function floatingButtonHiddenOn(pathname: string): boolean {
+  const path = pathname.toLowerCase().replace(/\/+$/, '');
+  return path === '/cart' || path === '/checkout' || path === '/orders' || path.startsWith('/orders/');
+}
 
 /**
  * v12 phase 10a: the floating WhatsApp button, a plain link (it works without JavaScript) with the number of «سفارش در
@@ -12,7 +18,7 @@ const hiddenOn = (pathname: string) => pathname === '/cart' || pathname === '/ch
  */
 export function FloatingWhatsApp({ number }: { number: string }) {
   const { pathname } = useLocation();
-  if (!number || hiddenOn(pathname)) return null;
+  if (!number || floatingButtonHiddenOn(pathname)) return null;
   return (
     <a
       href={whatsappLink(number)}

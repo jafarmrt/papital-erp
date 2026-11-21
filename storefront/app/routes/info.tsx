@@ -111,7 +111,7 @@ export default function InfoPage({ loaderData }: Route.ComponentProps) {
                 {shop.social.map(social => (
                   <li key={social.name}>
                     <a href={social.href} rel="noopener" className={contactLink}>
-                      {social.title}{social.name === 'instagram' && shop.instagramHandle ? <span dir="ltr" className="ms-1">@{shop.instagramHandle}</span> : null}
+                      {social.name === 'instagram' && shop.instagramHandle ? <>{`${social.title} `}<span dir="ltr" className="ms-1">@{shop.instagramHandle}</span></> : social.title}
                     </a>
                   </li>
                 ))}

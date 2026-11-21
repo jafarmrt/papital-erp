@@ -62,7 +62,7 @@ function StorefrontShopInfoForm({ view, canManage }: { view: StorefrontShopInfoV
         <section aria-label="نام و شعار برند" className={card}>
           <h3 className={heading}>نام و شعار برند</h3>
           <p className={hint}>
-            نام برند در سرصفحه، پاورقی، عنوان صفحه‌ها و نتیجهٔ موتورهای جست‌وجو می‌آید. هر فیلدی که خالی بماند، همان نوشتهٔ امروز سایت را نگه می‌دارد.
+            نام برند در سرصفحه، پاورقی و عنوان همهٔ صفحه‌ها می‌آید. هر فیلدی که خالی بماند، همان نوشتهٔ امروز سایت را نگه می‌دارد. متن خود صفحه‌ها (صفحهٔ اصلی، «درباره ما» و توضیح صفحه‌ها برای موتور جست‌وجو) جدا و در بخش‌های بعدی ویرایش‌پذیر می‌شود.
           </p>
           <div className="grid gap-3 md:grid-cols-2">
             {input('brandName', 'نام کوتاه', { placeholder: SHOP_INFO_DEFAULTS.brandName })}

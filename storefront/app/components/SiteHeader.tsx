@@ -94,7 +94,7 @@ export function SiteHeader({ brand, categories, logoUrl, ordering, cartCount, si
         <Link to="/" className="flex items-center gap-3" aria-label={`${brand.fullName}، صفحهٔ اصلی`}>
           {logoUrl
             ? <img src={logoUrl} alt={brand.fullName} className="h-9 w-auto max-w-28 object-contain sm:h-10 sm:max-w-40 lg:h-12 lg:max-w-52" />
-            : <span className="text-xl font-extrabold sm:text-2xl lg:text-3xl">{brand.name}</span>}
+            : <span className="max-w-36 truncate text-xl font-extrabold sm:max-w-none sm:text-2xl lg:text-3xl">{brand.name}</span>}
           <span className="hidden text-sm opacity-70 sm:inline">{brand.tagline}</span>
         </Link>
 

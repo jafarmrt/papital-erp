@@ -28,7 +28,10 @@ export function contentSecurityPolicy(analytics: AnalyticsConfig | null, sealIma
     img.push(origin);
   }
   const seal = sealImageUrl ? enamadUrl(sealImageUrl) : '';
-  if (seal) img.push(new URL(seal).origin);
+  // 10a review: an origin is written into the header only as https and a plain host, so nothing of it can end a
+  // directive («;»), end the policy («,») or stand for other hosts («*»), whatever passed the checks before this one
+  const origin = seal ? new URL(seal).origin : '';
+  if (/^https:\/\/[a-z0-9.-]+$/.test(origin)) img.push(origin);
   return [
     "default-src 'self'",
     `img-src ${img.join(' ')}`,

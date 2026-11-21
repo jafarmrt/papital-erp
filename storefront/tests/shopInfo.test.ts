@@ -6,6 +6,7 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createRequestHandler, type ServerBuild } from 'react-router';
 import { contentSecurityPolicy } from '../app/lib/csp';
+import { floatingButtonHiddenOn } from '../app/components/FloatingWhatsApp';
 import { DEFAULT_SHOP, siteShop } from '../app/lib/shopInfo';
 
 const PORT = 3920;
@@ -132,20 +133,44 @@ describe('the shop details on the pages', () => {
       expect(html, pathname).toMatch(/<a href="https:\/\/wa\.me\/989120000000" rel="noopener" data-floating-whatsapp="true" aria-label="گفت‌وگو در واتس‌اپ"/);
       expect(html, pathname).toContain('bottom-[calc(4.25rem+env(safe-area-inset-bottom))]');
     }
-    for (const pathname of ['/cart', '/checkout', '/orders/track']) {
+    // the router opens an address in any letter case: «/Cart» is the cart too (10a review; red before)
+    for (const pathname of ['/cart', '/Cart', '/orders/track', '/Orders/track']) {
       const res = await handle(new Request(`http://localhost${pathname}`));
-      // an empty cart sends the checkout back to the cart: the page a buyer then sees has no button either
-      if (res.status === 200) expect(await res.text(), pathname).not.toContain('data-floating-whatsapp');
-      else expect(res.status, pathname).toBe(302);
+      expect(res.status, pathname).toBe(200);
+      expect(await res.text(), pathname).not.toContain('data-floating-whatsapp');
+    }
+    // the checkout and an order's own page need a cart and an order; the rule they share is checked by itself
+    for (const pathname of ['/cart', '/cart/', '/CART', '/checkout', '/Checkout/', '/orders', '/orders/track', '/orders/SO-1405-12', '/Orders/SO-1']) {
+      expect(floatingButtonHiddenOn(pathname), pathname).toBe(true);
+    }
+    for (const pathname of ['/', '/products', '/p/cart', '/carts', '/orders-help', '/contact', '/account']) {
+      expect(floatingButtonHiddenOn(pathname), pathname).toBe(false);
     }
   });
 
-  it('names the brand in the product feed and on the installed app', async () => {
+  it('names the brand in the product feed', async () => {
     const feed = await get('/feeds/google.xml');
     expect(feed.status).toBe(200);
     expect(feed.html).toContain('<title>گالری نگارین</title>');
     expect(feed.html).toContain('<g:brand>گالری نگارین</g:brand>');
     expect(feed.html).not.toContain('پاپیتال');
+  });
+
+  it('names the brand on the installed app: the manifest, the offline page of the worker and the install button', async () => {
+    process.env.STOREFRONT_PWA = '1';
+    try {
+      const manifest = await handle(new Request('http://localhost/manifest.webmanifest'));
+      expect(manifest.status).toBe(200);
+      expect(await manifest.json()).toMatchObject({ name: 'گالری نگارین', short_name: 'نگارین', description: 'زیور دست‌ساز نمونه' });
+      const worker = await handle(new Request('http://localhost/sw.js'));
+      expect(worker.status).toBe(200);
+      const script = await worker.text();
+      expect(script).toContain('اتصال برقرار نیست | گالری نگارین');
+      expect(script).not.toContain('پاپیتال');
+      expect((await get('/')).html).toContain('<meta name="apple-mobile-web-app-title" content="نگارین"/>');
+    } finally {
+      delete process.env.STOREFRONT_PWA;
+    }
   });
 });
 
@@ -179,6 +204,10 @@ describe('what the site takes of the shop details', () => {
     // a tag is only text to the page (React writes it escaped); it is one line within its length, so it is kept as text
     expect(shop.brand.tagline).toBe('<script>alert(1)</script>');
     expect(shop.contact).toEqual({ address: 'الف', postalCode: '', phone: '', mobile: '09120000000', email: '', hours: 'ب' });
+    // an email is taken only as text, and only one a mail link can carry whole (10a review; both were kept before)
+    expect(siteShop({ contact: { email: ['a@shop.example'] } }).contact.email).toBe('');
+    expect(siteShop({ contact: { email: 'a?subject=x&body=y@shop.example' } }).contact.email).toBe('');
+    expect(siteShop({ contact: { email: 'info@shop.example' } }).contact.email).toBe('info@shop.example');
     expect(shop.social.map(s => s.href)).toEqual(['https://www.instagram.com/papital.gallery/', 'https://linkedin.com/company/x']);
     expect(shop.shipping.lines).toEqual(['خط یک', 'خط 0', 'خط 1', 'خط 2']);
     expect(shop.enamad).toBeNull();
@@ -187,5 +216,13 @@ describe('what the site takes of the shop details', () => {
     expect(contentSecurityPolicy(null, 'https://evil.example/logo.png')).toContain("img-src 'self' data:;");
     expect(contentSecurityPolicy(null, 'https://enamad.ir.evil.example/logo.png')).toContain("img-src 'self' data:;");
     expect(contentSecurityPolicy(null, 'https://trustseal.enamad.ir/logo.aspx?id=1')).toContain("img-src 'self' data: https://trustseal.enamad.ir;");
+    // 10a review (red before): a host with «;», «,» or «*» passed as «on enamad.ir» and rewrote the header: another
+    // host or every host in img-src, a `sandbox` or an empty `script-src` on every page, a second policy after «,»
+    const plain = contentSecurityPolicy(null);
+    for (const hostile of ['https://evil.example;x.enamad.ir/logo.png', 'https://*;x.enamad.ir/x.png', 'https://a;sandbox;x.enamad.ir/x.png',
+      'https://a;script-src;x.enamad.ir/', 'https://a,b.enamad.ir/x.png', 'https://*.enamad.ir/x.png', 'https://a%3Bb.enamad.ir/x']) {
+      expect(contentSecurityPolicy(null, hostile), hostile).toBe(plain);
+      expect(siteShop({ enamad: { linkUrl: 'https://trustseal.enamad.ir/?id=1', imageUrl: hostile } }).enamad, hostile).toBeNull();
+    }
   });
 });

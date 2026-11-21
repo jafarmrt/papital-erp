@@ -89,17 +89,21 @@ export async function runStorefrontShopInfoV12Tests(shouldRun: (id: string, ...e
       ...empty, brandName: '  نگارین ', brandFullName: `گالری نگارین ${tag}`, brandTagline: 'زیور دست‌ساز نمونه', footerNote: 'ساخت کارگاه نمونه.',
       address: 'تهران،   خیابان نمونه، پلاک ۱', postalCode: '۱۲۳۴۵-۶۷۸۹۰', phone: '۰۲۱ ۱۲۳۴ ۵۶۷۸', mobile: '0912-000-0000', email: ' Info@Shop.Example ',
       hours: 'شنبه تا چهارشنبه، ۹ تا ۱۷', instagram: 'https://www.instagram.com/negarin.sample/', telegram: 'https://t.me/negarin_sample',
-      copyright: 'حق نشر برای کارگاه نمونه است.', shippingTitle: 'ارسال و خرید', shippingText: ' پرداخت هنگام ثبت سفارش \n\nبسته‌بندی هدیه رایگان\n',
+      copyright: 'حق نشر برای کارگاه نمونه است.', shippingTitle: 'ارسال و خرید', shippingText: ' پرداخت هنگام ثبت سفارش \r\n\r\nبسته‌بندی هدیه رایگان\n',
       alternateSiteLabel: 'سایت انگلیسی ما', enamadLinkUrl: 'https://trustseal.enamad.ir/?id=1&Code=abc',
       enamadImageUrl: 'https://trustseal.enamad.ir/logo.aspx?id=1&Code=abc', whatsappFloat: true, version: 0,
     };
     const refusals: Array<[string, Body, string]> = [
       ['a seal on another host', { enamadImageUrl: 'https://evil.example/logo.png' }, 'enamadImageUrl'],
+      // 10a review: «;» in the host would end the img-src directive of the site's policy header after another host
+      ['a seal whose host holds a semicolon', { enamadImageUrl: 'https://evil.example;x.enamad.ir/logo.png' }, 'enamadImageUrl'],
+      ['a seal on every host of enamad.ir', { enamadImageUrl: 'https://*.enamad.ir/logo.png' }, 'enamadImageUrl'],
       ['a seal with one address', { enamadImageUrl: '' }, 'enamadImageUrl'],
       ['a social page that is not https', { telegram: 'javascript:alert(1)' }, 'telegram'],
       ['a postal code of five digits', { postalCode: '12345' }, 'postalCode'],
       ['a phone with letters', { phone: '021-abc' }, 'phone'],
       ['a wrong email', { email: 'not-an-email' }, 'email'],
+      ['an email that carries a subject', { email: 'a?subject=x@shop.example' }, 'email'],
       ['a name of two lines', { brandName: 'نام\nدو خط' }, 'brandName'],
       ['seven lines of the footer column', { shippingText: Array.from({ length: 7 }, (_, n) => `خط ${n}`).join('\n') }, 'shippingText'],
     ];
@@ -181,7 +185,7 @@ export async function runStorefrontShopInfoV12Tests(shouldRun: (id: string, ...e
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'the shop\'s details started empty for the ERP and the site; eight wrong fields were each refused (422) with the field\'s name and wrote nothing; a save kept the values trimmed and in Latin digits under version 1 with one audit row, the same form again was 409 and an unchanged save wrote no row; the site got exactly the reviewed fields, with the floating button\'s number only while its own switch was on and never through the settings answer; no key was 401, the site off 404; a view-only holder could not write and a holder of site_content.manage alone could not read',
+      details: 'the shop\'s details started empty for the ERP and the site; eleven wrong fields were each refused (422) with the field\'s name and wrote nothing; a save kept the values trimmed and in Latin digits under version 1 with one audit row, the same form again was 409 and an unchanged save wrote no row; the site got exactly the reviewed fields, with the floating button\'s number only while its own switch was on and never through the settings answer; no key was 401, the site off 404; a view-only holder could not write and a holder of site_content.manage alone could not read',
     }));
   } catch (err) {
     results.push(makeTestCase({

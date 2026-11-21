@@ -184,19 +184,23 @@ export async function menus(): Promise<SiteMenus> {
 }
 
 let shopInfoFailedAt = 0;
+let lastGoodShop: SiteShop | null = null;
 
 /**
  * v12 phase 10a: «اطلاعات فروشگاه» (the brand's name, the contact details, the footer's texts, the e-namad seal), read by
  * every page and kept a minute like the settings. Any failure (an ERP not yet updated answers 404) means the words the
- * site always had, never a down shop, and is remembered a little while like the menus.
+ * site always had, never a down shop, and is remembered a little while like the menus. Once an answer has been read, a
+ * later failure keeps that answer (10a review): one slow moment of the ERP must not turn the brand's name, the feed and
+ * the installed app back to the old words for half a minute.
  */
 export async function shopInfo(): Promise<SiteShop> {
-  if (Date.now() - shopInfoFailedAt < SEO_FAILURE_TTL_MS) return DEFAULT_SHOP;
+  if (Date.now() - shopInfoFailedAt < SEO_FAILURE_TTL_MS) return lastGoodShop ?? DEFAULT_SHOP;
   try {
-    return siteShop((await get<{ data: unknown }>('/shop-info', SETTINGS_TTL_MS)).data);
+    lastGoodShop = siteShop((await get<{ data: unknown }>('/shop-info', SETTINGS_TTL_MS)).data);
+    return lastGoodShop;
   } catch {
     shopInfoFailedAt = Date.now();
-    return DEFAULT_SHOP;
+    return lastGoodShop ?? DEFAULT_SHOP;
   }
 }
 

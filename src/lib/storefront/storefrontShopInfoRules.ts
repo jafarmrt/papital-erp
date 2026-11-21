@@ -99,17 +99,27 @@ export interface ShopInfoValues {
 
 export type ShopInfoField = keyof ShopInfoValues;
 
+// Control characters, the line and paragraph separators and the direction overrides (which could turn a name around in a
+// browser tab); the zero-width non-joiner of Persian words is not one of them
 // eslint-disable-next-line no-control-regex
-const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
+const CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/;
 // eslint-disable-next-line no-control-regex
-const CONTROL_BUT_NEWLINE = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/;
+const CONTROL_BUT_NEWLINE = /[\u0000-\u0009\u000b\u000c\u000e-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/;
 
 /** One line of text as it is kept: trimmed, with runs of spaces as one */
 const oneLine = (value: string): string => value.replace(/[ \t ]+/g, ' ').trim();
 
 /**
- * An address outside the site that a page may link to or load a picture from: https, a host with a dot, no user, no
- * port and no fragment, at most `SHOP_LINK_MAX` characters. '' stays ''; anything else is null.
+ * A host name of letters, digits and hyphens in dot-separated labels, and nothing else. `new URL` also takes «;», «,»,
+ * «*», quotes and «=» in a host; the site writes the seal's host into its security policy header, where «;» ends a
+ * directive, «,» ends the policy and «*» is a wildcard, so none of them is ever a host here (10a review).
+ */
+const PLAIN_HOST = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+export const isPlainHost = (hostname: string): boolean => hostname.length <= 253 && PLAIN_HOST.test(hostname);
+
+/**
+ * An address outside the site that a page may link to or load a picture from: https, a plain host with a dot, no user,
+ * no port and no fragment, at most `SHOP_LINK_MAX` characters. '' stays ''; anything else is null.
  */
 export function httpsLink(value: string): string | null {
   const text = value.trim();
@@ -122,7 +132,7 @@ export function httpsLink(value: string): string | null {
     return null;
   }
   if (url.protocol !== 'https:' || url.username || url.password || url.port || url.hash) return null;
-  if (!url.hostname.includes('.')) return null;
+  if (!isPlainHost(url.hostname)) return null;
   return url.href.length > SHOP_LINK_MAX ? null : url.href;
 }
 
@@ -136,6 +146,17 @@ export function enamadUrl(value: string): string | null {
   const link = httpsLink(value);
   if (!link) return link;
   return ENAMAD_HOST.test(new URL(link).hostname) ? link : null;
+}
+
+/**
+ * The shop's email as a page may link to it (`mailto:`): an address whose part before «@» is only letters, digits, «.»,
+ * «_», «+» and «-», so it can carry no «?subject=…» or other field of a mail link. '' stays ''; null otherwise.
+ */
+export function shopEmail(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  if (!value.trim()) return '';
+  const email = normalizeEmail(value);
+  return email && /^[A-Za-z0-9._+-]+@/.test(email) ? email : null;
 }
 
 /** A phone number as it is kept: Latin digits with an optional leading «+»; '' stays ''; null when it is not a number */
@@ -163,13 +184,13 @@ const fa = (n: number) => n.toLocaleString('fa-IR');
 export function shopInfoError(raw: ShopInfoValues): { field: ShopInfoField; message: string } | null {
   for (const field of TEXT_FIELDS) {
     const text = oneLine(raw[field]);
-    if (CONTROL.test(raw[field].trim())) return { field, message: `«${SHOP_TEXT_TITLES[field]}» یک خط متن ساده است.` };
+    if (CONTROL.test(text)) return { field, message: `«${SHOP_TEXT_TITLES[field]}» یک خط متن ساده است.` };
     if (text.length > SHOP_TEXT_MAX[field]) return { field, message: `«${SHOP_TEXT_TITLES[field]}» حداکثر ${fa(SHOP_TEXT_MAX[field])} نویسه است.` };
   }
   if (shopPostalCode(raw.postalCode) === null) return { field: 'postalCode', message: `کد پستی ${fa(SHOP_POSTAL_CODE_LENGTH)} رقم است.` };
   if (shopPhone(raw.phone) === null) return { field: 'phone', message: 'تلفن ثابت فقط رقم است، با کد شهر، مانند ۰۲۱۱۲۳۴۵۶۷۸.' };
   if (shopPhone(raw.mobile) === null) return { field: 'mobile', message: 'شمارهٔ همراه فقط رقم است، مانند ۰۹۱۲۱۲۳۴۵۶۷.' };
-  if (raw.email.trim() && !normalizeEmail(raw.email)) return { field: 'email', message: 'ایمیل درست نیست، مانند info@example.com.' };
+  if (shopEmail(raw.email) === null) return { field: 'email', message: 'ایمیل درست نیست، مانند info@example.com.' };
   for (const social of SHOP_SOCIALS) {
     if (httpsLink(raw[social]) === null) {
       return { field: social, message: `نشانی ${SHOP_SOCIAL_TITLES[social]} باید با https:// آغاز شود و حداکثر ${fa(SHOP_LINK_MAX)} نویسه باشد.` };
@@ -204,7 +225,7 @@ export function normalizedShopInfo(values: ShopInfoValues): ShopInfoValues {
     postalCode: shopPostalCode(values.postalCode) ?? '',
     phone: shopPhone(values.phone) ?? '',
     mobile: shopPhone(values.mobile) ?? '',
-    email: normalizeEmail(values.email),
+    email: shopEmail(values.email) ?? '',
     hours: oneLine(values.hours),
     instagram: httpsLink(values.instagram) ?? '',
     telegram: httpsLink(values.telegram) ?? '',

@@ -1,7 +1,6 @@
-import { normalizeEmail } from '@erp/storefront/storefrontEmailRules';
 import {
   SHOP_INFO_DEFAULTS, SHOP_SHIPPING_LINES_MAX, SHOP_SHIPPING_LINE_MAX, SHOP_SOCIALS, SHOP_SOCIAL_TITLES, SHOP_TEXT_MAX, defaultCopyright, enamadUrl, httpsLink,
-  safeShopText, shopPhone, shopPostalCode, type ShopSocial,
+  safeShopText, shopEmail, shopPhone, shopPostalCode, type ShopSocial,
 } from '@erp/storefront/storefrontShopInfoRules';
 
 /**
@@ -67,7 +66,7 @@ export function siteShop(raw: unknown): SiteShop {
       postalCode: typeof contact.postalCode === 'string' ? shopPostalCode(contact.postalCode) ?? '' : '',
       phone: typeof contact.phone === 'string' ? shopPhone(contact.phone) ?? '' : '',
       mobile: typeof contact.mobile === 'string' ? shopPhone(contact.mobile) ?? '' : '',
-      email: normalizeEmail(contact.email),
+      email: shopEmail(contact.email) ?? '',
       hours: text(contact.hours, SHOP_TEXT_MAX.hours),
     },
     social: pages,

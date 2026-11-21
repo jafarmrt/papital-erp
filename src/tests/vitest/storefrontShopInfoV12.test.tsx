@@ -17,8 +17,8 @@ vi.mock('react-hot-toast', () => {
 });
 
 const {
-  SHOP_INFO_DEFAULTS, SHOP_LINK_MAX, defaultCopyright, enamadUrl, httpsLink, normalizedShopInfo, safeShopText, shippingLines, shopInfoError, shopPhone,
-  shopPostalCode,
+  SHOP_INFO_DEFAULTS, SHOP_LINK_MAX, defaultCopyright, enamadUrl, httpsLink, isPlainHost, normalizedShopInfo, safeShopText, shippingLines, shopEmail,
+  shopInfoError, shopPhone, shopPostalCode,
 } = await import('../../lib/storefront/storefrontShopInfoRules');
 const { STOREFRONT_SHOP_INFO_SETTING_KEYS } = await import('../../lib/storefront/storefrontShopInfoContracts');
 const { StorefrontShopInfoSection } = await import('../../components/storefront/StorefrontShopInfoForm');
@@ -71,6 +71,39 @@ describe('the rules of the shop details', () => {
     }
   });
 
+  it('takes a host only of letters, digits and hyphens, so nothing of it can end or widen the site\'s policy header (10a review)', () => {
+    // red before the review's fix: each of these passed as «on enamad.ir» and its origin went into img-src as written,
+    // where «;» ends the directive, «,» ends the policy and «*» is every host
+    const hostile = [
+      'https://evil.example;x.enamad.ir/logo.png', 'https://*;x.enamad.ir/x.png', 'https://a;sandbox;x.enamad.ir/x.png', 'https://a;script-src;x.enamad.ir/',
+      'https://a,b.enamad.ir/x.png', 'https://*.enamad.ir/x.png', 'https://a%3Bb.enamad.ir/x', "https://a'b.enamad.ir/x", 'https://a=b.enamad.ir/x',
+      'https://enamad.ir./x', 'https://-a.enamad.ir/x',
+    ];
+    for (const bad of hostile) {
+      expect(enamadUrl(bad), bad).toBeNull();
+      expect(httpsLink(bad), bad).toBeNull();
+    }
+    expect(httpsLink('https://t.me;x.example/y')).toBeNull();
+    expect(isPlainHost('trustseal.enamad.ir')).toBe(true);
+    expect(isPlainHost('xn--mgbh0fb.example')).toBe(true);
+    expect(isPlainHost('localhost')).toBe(false);
+    expect(isPlainHost(`${'a'.repeat(64)}.example`)).toBe(false);
+    // a host in capitals is the same host, kept in lower case
+    expect(enamadUrl('https://TrustSeal.Enamad.IR/logo.aspx?id=1')).toBe('https://trustseal.enamad.ir/logo.aspx?id=1');
+    expect(shopInfoError({ ...EMPTY, enamadLinkUrl: 'https://trustseal.enamad.ir/?id=1', enamadImageUrl: 'https://evil.example;x.enamad.ir/logo.png' }))
+      .toMatchObject({ field: 'enamadImageUrl' });
+  });
+
+  it('takes the shop\'s email only as an address a mail link can carry whole (10a review)', () => {
+    expect(shopEmail('')).toBe('');
+    expect(shopEmail(' Info@Shop.Example ')).toBe('Info@shop.example');
+    expect(shopEmail('first.last+shop_1-x@shop.example')).toBe('first.last+shop_1-x@shop.example');
+    // red before: an address whose first part held «?subject=…» became a mail link with a written subject and body
+    for (const bad of ['a?subject=x&body=y@shop.example', 'a%0Ab@shop.example', 'a#b@shop.example', 'not-an-email']) expect(shopEmail(bad), bad).toBeNull();
+    expect(shopEmail(['a@shop.example'])).toBeNull();
+    expect(shopInfoError({ ...EMPTY, email: 'a?subject=x@shop.example' })).toMatchObject({ field: 'email' });
+  });
+
   it('reads a phone and a postal code typed with Persian digits, spaces and dashes, and keeps Latin digits', () => {
     expect(shopPhone('۰۲۱-۱۲۳۴ ۵۶۷۸')).toBe('02112345678');
     expect(shopPhone('+98 (912) 000 0000')).toBe('+989120000000');
@@ -92,6 +125,11 @@ describe('the rules of the shop details', () => {
     expect(shopInfoError({ ...EMPTY, shippingText: Array.from({ length: 7 }, (_, n) => `خط ${n}`).join('\n') })).toMatchObject({ field: 'shippingText' });
     expect(shopInfoError({ ...EMPTY, shippingText: 'x'.repeat(121) })).toMatchObject({ field: 'shippingText' });
     expect(shopInfoError({ ...EMPTY, shippingText: 'خط\u0007' })).toMatchObject({ field: 'shippingText' });
+    // a direction override could turn a name around in a browser tab; the non-joiner of Persian words is fine
+    expect(shopInfoError({ ...EMPTY, brandFullName: 'گالری\u202Eنمونه' })).toMatchObject({ field: 'brandFullName' });
+    expect(shopInfoError({ ...EMPTY, brandTagline: 'زیور دست\u200cساز' })).toBeNull();
+    // lines pasted from Windows end in CR LF, and a tab is only a space (10a review: both were refused)
+    expect(shopInfoError({ ...EMPTY, shippingText: 'خط یک\r\nخط دو', address: 'تهران،\tخیابان نمونه' })).toBeNull();
     expect(shopInfoError({ ...EMPTY, enamadLinkUrl: 'https://evil.example/x' })).toMatchObject({ field: 'enamadLinkUrl' });
     expect(shopInfoError({ ...EMPTY, enamadImageUrl: 'https://evil.example/x.png' })).toMatchObject({ field: 'enamadImageUrl' });
     // the seal needs both addresses, or neither

@@ -72,7 +72,7 @@ export function SiteFooter({ data }: { data: RootData | undefined }) {
             ? <img src={data.logoUrl} alt={shop.brand.fullName} loading="lazy" className="h-12 w-auto max-w-48 object-contain" />
             : <p className="text-2xl font-extrabold">{shop.brand.name}</p>}
           <p className="mt-2 opacity-75">{`${shop.brand.tagline}. ${shop.footerNote}`}</p>
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex flex-wrap gap-2">
             {shop.social.map((page) => {
               const Icon = SOCIAL_ICONS[page.name];
               return (
