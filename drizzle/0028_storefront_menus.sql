@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS storefront_menu_items (
   CONSTRAINT chk_storefront_menu_items_is_deleted_flag CHECK (is_deleted IN (0, 1))
 );
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS idx_storefront_menu_items_location ON storefront_menu_items (location, parent_id, position) WHERE is_deleted = 0;
+CREATE INDEX IF NOT EXISTS idx_storefront_menu_items_location ON storefront_menu_items (location, parent_id, position);
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_storefront_menu_items_parent_id ON storefront_menu_items (parent_id) WHERE parent_id IS NOT NULL;
 --> statement-breakpoint

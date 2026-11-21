@@ -36,7 +36,7 @@ export const storefrontMenuItems = pgTable('storefront_menu_items', {
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (table) => ({
-  idx_storefront_menu_items_location: index('idx_storefront_menu_items_location').on(table.location, table.parentId, table.position).where(sql`${table.isDeleted} = 0`),
+  idx_storefront_menu_items_location: index('idx_storefront_menu_items_location').on(table.location, table.parentId, table.position),
   idx_storefront_menu_items_parent_id: index('idx_storefront_menu_items_parent_id').on(table.parentId).where(sql`${table.parentId} IS NOT NULL`),
   idx_storefront_menu_items_target_item_id: index('idx_storefront_menu_items_target_item_id').on(table.targetItemId).where(sql`${table.targetItemId} IS NOT NULL`),
   idx_storefront_menu_items_target_campaign_id: index('idx_storefront_menu_items_target_campaign_id').on(table.targetCampaignId).where(sql`${table.targetCampaignId} IS NOT NULL`),
