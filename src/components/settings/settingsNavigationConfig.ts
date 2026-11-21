@@ -11,7 +11,6 @@ import {
   ShoppingBag, 
   Activity,
   MessageCircle,
-  Store,
   LucideIcon
 } from 'lucide-react';
 import { canOpenSettingsTab } from '../../lib/permissions/pageAccess';
@@ -144,21 +143,13 @@ export const SETTINGS_GROUPS: SettingCategoryGroup[] = [
   {
     id: 'integration',
     title: 'اتصالات و وب‌سرویس',
-    description: 'فروشگاه سایت، همگام‌سازی با فروشگاه ووکامرس، وب‌هوک‌ها و سفارش‌های اینترنتی',
+    description: 'همگام‌سازی با ووکامرس (سایت قدیم)، وب‌هوک‌ها و ربات‌های پیام‌رسان',
     icon: Globe,
     colorClass: 'text-cyan-600 bg-cyan-50 border-cyan-200',
     tabs: [
       {
-        // v11 phase 8.1: the new papitalgallery.com, its own app that reads the ERP through the Storefront API
-        id: 'storefront',
-        label: 'فروشگاه سایت',
-        shortDesc: 'کالاهای سایت تازه، کارت و شبا، روش‌ها و نرخ‌های ارسال، موجودی و کلید برنامه سایت',
-        icon: Store,
-        keywords: ['فروشگاه', 'سایت', 'پاپیتال', 'انتشار', 'ارسال', 'پست', 'اسنپ', 'پیک', 'کارت به کارت', 'شبا', 'storefront']
-      },
-      {
         id: 'woocommerce',
-        label: 'اتصال به ووکامرس',
+        label: 'ووکامرس (سایت قدیم)',
         shortDesc: 'کلیدهای API، هوک‌ها، همگام‌سازی لحظه‌ای موجودی و سفارش‌ها',
         icon: Globe,
         keywords: ['ووکامرس', 'فروشگاه', 'سایت', 'woocommerce', 'همگام‌سازی', 'وب‌هوک', 'سفارش برخط', 'سفارش آنلاین', 'اینترنت']

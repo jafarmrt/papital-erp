@@ -117,7 +117,9 @@ export function ShippingMethodEditor({ method, onClose }: { method: ShippingMeth
                         value={rate.maxWeightGrams ?? ''} onValueChange={v => setRate(index, { maxWeightGrams: v === '' ? null : Number(v) })} />
                     </td>
                     <td className="p-1">
-                      <DecimalInput aria-label={`نرخ ردیف ${formatPersianNumber(index + 1)}`} className={field} min={0} step={1} value={rate.rate} onValueChange={v => setRate(index, { rate: v })} />
+                      <DecimalInput aria-label={`نرخ ردیف ${formatPersianNumber(index + 1)}`} aria-describedby={`${id}-rate-${index}-toman`} className={field} min={0} step={1} value={rate.rate} onValueChange={v => setRate(index, { rate: v })} />
+                      {/* v12 phase 9a (site review 3.2f): the last amount of the site's forms without its toman equivalent */}
+                      <RialEquivalent id={`${id}-rate-${index}-toman`} value={rate.rate} />
                     </td>
                     <td className="p-1">
                       <button type="button" aria-label={`حذف ردیف ${formatPersianNumber(index + 1)}`} onClick={() => set('rates', form.rates.filter((_, i) => i !== index))} className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50">

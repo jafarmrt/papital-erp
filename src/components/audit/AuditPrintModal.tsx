@@ -5,6 +5,7 @@ import { parseUserAgent } from '../../utils/userAgentParser';
 import type { ActivityLogItem } from '../../hooks/queries/useActivityLogQueries';
 import { auditActionLabel } from '../../lib/audit/auditActionLabels';
 import { DialogLayer } from '../common/DialogLayer';
+import { auditEntityTitle } from '../../lib/audit/auditEntityTitles';
 
 interface AuditPrintModalProps {
   logs: ActivityLogItem[];
@@ -123,7 +124,7 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, total, o
               </div>
               <div>
                 <span className="text-slate-400 block mb-0.5">بخش:</span>
-                <span className="font-bold text-slate-900">{filterSummary.entityFilter || 'همه بخش‌ها'}</span>
+                <span className="font-bold text-slate-900">{filterSummary.entityFilter ? auditEntityTitle(filterSummary.entityFilter) : 'همه بخش‌ها'}</span>
               </div>
               <div>
                 <span className="text-slate-400 block mb-0.5">متن جست‌وجو:</span>
@@ -184,7 +185,7 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, total, o
                         </span>
                       </td>
                       <td className="py-2 px-3 border-l border-slate-200 font-medium text-slate-800">
-                        {log.entity} {log.entityId ? `(#${formatPersianCode(log.entityId)})` : ''}
+                        {auditEntityTitle(log.entity)} {log.entityId ? `(#${formatPersianCode(log.entityId)})` : ''}
                       </td>
                       <td className="py-2 px-3 border-l border-slate-200 text-slate-800 leading-normal">
                         {log.description}

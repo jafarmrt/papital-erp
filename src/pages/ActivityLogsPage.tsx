@@ -24,6 +24,7 @@ import { parseUserAgent } from '../utils/userAgentParser';
 import { permissionDefinition } from '../lib/permissions/permissionCatalog';
 import { auditActionLabel, auditActionOptions } from '../lib/audit/auditActionLabels';
 import { DialogLayer } from '../components/common/DialogLayer';
+import { auditEntityTitle } from '../lib/audit/auditEntityTitles';
 
 /** v9.0.214 (TD-537): خطای خواندن سجل، با پیام فارسی ۴۰۳ به‌جای «هیچ رکوردی یافت نشد» */
 function logsLoadErrorMessage(error: unknown): string {
@@ -323,7 +324,7 @@ export default function ActivityLogsPage() {
             >
               <option value="">همه بخش‌ها / موجودیت‌ها</option>
               {filterOptions.entities.map((e: any) => (
-                <option key={e} value={e}>{e}</option>
+                <option key={e} value={e}>{auditEntityTitle(e)}</option>
               ))}
             </select>
 
@@ -430,7 +431,7 @@ export default function ActivityLogsPage() {
                     </td>
                     <td className="py-3.5 px-4 font-medium text-slate-800 whitespace-nowrap">
                       <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-semibold text-2xs">
-                        {log.entity}
+                        {auditEntityTitle(log.entity)}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-slate-800 leading-relaxed max-w-md">
@@ -525,7 +526,7 @@ export default function ActivityLogsPage() {
                 </div>
                 <div>
                   <span className="text-slate-400 block mb-0.5">بخش / موجودیت:</span>
-                  <span className="font-bold text-slate-800">{selectedLog.entity} {selectedLog.entityId ? `(#${formatPersianCode(selectedLog.entityId)})` : ''}</span>
+                  <span className="font-bold text-slate-800">{auditEntityTitle(selectedLog.entity)} {selectedLog.entityId ? `(#${formatPersianCode(selectedLog.entityId)})` : ''}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block mb-0.5">نشانی IP:</span>

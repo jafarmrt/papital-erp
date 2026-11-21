@@ -49,7 +49,7 @@ const httpAgent = new http.Agent();
 export async function requireWcConnection(executor?: DbExecutor): Promise<WcConnection> {
   const { url, consumerKey, consumerSecret } = await readWcConnectionSettings(executor);
   if (!url || !consumerKey || !consumerSecret) {
-    throw new ValidationError('تنظیمات اتصال به ووکامرس کامل نیست. نشانی سایت و دو کلید را در «تنظیمات ← ووکامرس» وارد کنید.', undefined, WC_SETTINGS_INCOMPLETE);
+    throw new ValidationError('تنظیمات اتصال به ووکامرس کامل نیست. نشانی سایت و دو کلید را در «تنظیمات ← ووکامرس (سایت قدیم)» وارد کنید.', undefined, WC_SETTINGS_INCOMPLETE);
   }
   return { url, consumerKey, consumerSecret };
 }

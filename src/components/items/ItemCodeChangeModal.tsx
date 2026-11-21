@@ -17,7 +17,7 @@ interface ItemCodeChangeModalProps {
   onChanged: () => void;
 }
 
-const SITE_CODE_NOTE = 'اگر «تغییر خودکار کد در سایت» در تنظیمات ووکامرس روشن است، کد همین کالا در سایت در دقیقه بعد خودکار تغییر می‌کند؛ وگرنه آن را در سایت دستی تغییر دهید.';
+const SITE_CODE_NOTE = 'اگر «تغییر خودکار کد در سایت» در تنظیمات ووکامرس روشن است، کد همین کالا در ووکامرس (سایت قدیم) در دقیقه بعد خودکار تغییر می‌کند؛ وگرنه آن را در ووکامرس دستی تغییر دهید.';
 
 /**
  * v10.1.9 (D-15, TD-1264): «تغییر کد» of the item list, shown with `products.change_code`. The code is the online shop's
@@ -91,7 +91,7 @@ export function ItemCodeChangeModal({ item, onClose, onChanged }: ItemCodeChange
             />
           </label>
           <p className="text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-2.5 leading-6">
-            کد کالا همان کد کالا در فروشگاه اینترنتی است. {SITE_CODE_NOTE} سفارشی که با کد قدیم برسد، کالا را پیدا می‌کند.
+            کد کالا همان کد کالا در ووکامرس (سایت قدیم) است. {SITE_CODE_NOTE} سفارشی که با کد قدیم برسد، کالا را پیدا می‌کند.
           </p>
           {error && <p className="text-rose-700 font-bold" role="alert">{error}</p>}
           {history.length > 0 && (

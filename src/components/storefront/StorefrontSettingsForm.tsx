@@ -166,7 +166,7 @@ export function StorefrontSettingsForm({ view, canManage }: { view: StorefrontSe
             <div>
               <label htmlFor={`${id}-warehouse`} className={label}>انبار فروشگاه سایت</label>
               <select id={`${id}-warehouse`} className={field} value={form.warehouseCode} onChange={e => set('warehouseCode', e.target.value)}>
-                <option value="">همان انبار فروشگاه ووکامرس</option>
+                <option value="">همان «انبار فروش اینترنتی» تنظیمات ووکامرس</option>
                 {view.warehouses.map(w => <option key={w.code} value={w.code}>{w.name}</option>)}
               </select>
               <p className={hint}>سایت موجودی قابل فروش همین انبار را می‌فروشد{effective ? `؛ اکنون «${effective.name}»` : ''}.</p>

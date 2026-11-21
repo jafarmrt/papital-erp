@@ -213,7 +213,7 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     ]
   },
   {
-    category: 'یکپارچه‌سازی فروشگاه آنلاین ووکامرس',
+    category: 'ووکامرس (سایت قدیم)',
     permissions: [
       { key: 'woocommerce.view', title: 'مشاهده وضعیت اتصال و سفارشات ووکامرس', description: 'مشاهده همگام‌سازی محصولات، کد کالاها و سوابق سفارش‌های واردشده' },
       { key: 'woocommerce.manage', title: 'تنظیمات اتصال و همگام‌سازی دستی', description: 'تنظیم کلیدهای اتصال ووکامرس، وب‌هوک‌ها و اجرای همگام‌سازی خودکار', requires: ['woocommerce.view'] },

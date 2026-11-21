@@ -64,7 +64,7 @@ export async function warnIfBudgetNearlySpent(tx: DbExecutor, hourlyCap: number,
       await createNotifications(sp, recipients.map(userId => ({
         userId, category: 'site_sms' as const, type: 'system', senderName: STOREFRONT_BOT_USER, title,
         message: `دست‌کم ${smsBudgetWarnAt(hourlyCap).toLocaleString('fa-IR')} پیامک از سقف ${hourlyCap.toLocaleString('fa-IR')} در این ساعت رفته است. ${BUDGET_HINTS[pool]}`,
-        link: '/settings',
+        link: '/site-settings?section=sms',
       })));
     });
   } catch (err) {
@@ -93,7 +93,7 @@ export async function warnIfSmsLoginPaused(): Promise<void> {
         message: emailOn
           ? 'چند پیامک ورود پیاپی فرستاده نشد؛ سایت تا رفع آن ورود و خرید را با ایمیل پیش می‌برد. سرویس پیامک را بررسی کنید.'
           : 'چند پیامک ورود پیاپی فرستاده نشد و ایمیل سایت روشن نیست، پس خریداران اکنون کد نمی‌گیرند. سرویس پیامک را بررسی کنید.',
-        link: '/settings',
+        link: '/site-settings?section=sms',
       })));
     });
   } catch (err) {

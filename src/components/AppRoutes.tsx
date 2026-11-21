@@ -50,6 +50,7 @@ const TransactionsPage = lazyWithRetry(() => import('../pages/TransactionsPage')
 const ReservedItemsReportPage = lazyWithRetry(() => import('../pages/ReservedItemsReportPage'));
 const StorefrontOrdersPage = lazyWithRetry(() => import('../pages/StorefrontOrdersPage'));
 const StorefrontBuyersPage = lazyWithRetry(() => import('../pages/StorefrontBuyersPage'));
+const StorefrontSettingsPage = lazyWithRetry(() => import('../pages/StorefrontSettingsPage'));
 const ManagementReportsPage = lazyWithRetry(() => import('../pages/ManagementReportsPage'));
 const ProjectsPage = lazyWithRetry(() => import('../pages/ProjectsPage'));
 const ProjectDetailPage = lazyWithRetry(() => import('../pages/ProjectDetailPage'));
@@ -78,7 +79,9 @@ export interface AppRoutesProps {
 
 export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoutesProps) {
   // OBS-R2-92: an error caught on one page is cleared when the user moves to another page
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
+  // v12 phase 9a: the former settings tab «فروشگاه سایت» is the page /site-settings; its old address goes there for anyone
+  if (pathname === '/settings' && new URLSearchParams(search).get('tab') === 'storefront') return <Navigate to="/site-settings" replace />;
   return (
     <Suspense fallback={<PageLoader />}>
       {/* V10-1.3: ساعت توافقی واحد — همه فرمتورها از display_timezone تنظیمات تغذیه می‌شوند */}
@@ -197,16 +200,10 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
             <ProcurementPage />
           </ProtectedRoute>
         } />
-        <Route path="/site-orders" element={
-          <ProtectedRoute page="/site-orders" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
-            <StorefrontOrdersPage />
-          </ProtectedRoute>
-        } />
-        <Route path="/site-buyers" element={
-          <ProtectedRoute page="/site-buyers" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
-            <StorefrontBuyersPage />
-          </ProtectedRoute>
-        } />
+        {/* v12 phase 9a: the sidebar's «فروشگاه سایت», one line each */}
+        <Route path="/site-orders" element={<ProtectedRoute page="/site-orders" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}><StorefrontOrdersPage /></ProtectedRoute>} />
+        <Route path="/site-buyers" element={<ProtectedRoute page="/site-buyers" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}><StorefrontBuyersPage /></ProtectedRoute>} />
+        <Route path="/site-settings" element={<ProtectedRoute page="/site-settings" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}><StorefrontSettingsPage /></ProtectedRoute>} />
         <Route path="/reserved-items" element={
           <ProtectedRoute page="/reserved-items" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <ReservedItemsReportPage />

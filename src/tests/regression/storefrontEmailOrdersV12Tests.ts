@@ -289,6 +289,11 @@ export async function runStorefrontEmailOrdersV12Tests(shouldRun: (id: string, .
     const firstBells = await bellsNow();
     await warnIfSmsLoginPaused();
     if (firstBells === 0 || await bellsNow() !== firstBells) wrong.push(`bells for the paused SMS sign-in: ${firstBells}, then ${await bellsNow()}`);
+    // v12 phase 9a: the bell opens the SMS section of «کالاها و تنظیمات سایت», which a holder of storefront.manage may open
+    // without any settings key (the settings page no longer has the site's tab)
+    const bellLinks = await orm.selectDistinct({ link: notifications.link }).from(notifications)
+      .where(and(eq(notifications.title, 'پیامک‌های ورود سایت فرستاده نمی‌شوند'), gt(notifications.createdAt, sql`now() - interval '5 minutes'`)));
+    if (bellLinks.map(b => b.link).join() !== '/site-settings?section=sms') wrong.push(`the paused SMS bell links to ${JSON.stringify(bellLinks)}`);
     const failingView = (await erp.get('/api/storefront/sms/settings')).body.data;
     if (failingFlags !== 'false/true' || failingView?.autoPaused !== true) wrong.push(`failing texts: flags ${failingFlags}, autoPaused ${failingView?.autoPaused}`);
     await ageFailures();

@@ -14,14 +14,14 @@ describe('online shop warehouse select (TD-293)', () => {
 
   it('offers the default warehouse and the active warehouses only', () => {
     render(<ShopWarehouseSelect value="" onChange={() => undefined} warehouses={warehouses} />);
-    const options = Array.from(screen.getByLabelText('انبار فروشگاه اینترنتی').querySelectorAll('option')).map(o => o.textContent);
+    const options = Array.from(screen.getByLabelText('انبار فروش اینترنتی').querySelectorAll('option')).map(o => o.textContent);
     expect(options).toEqual(['انبار پیش‌فرض سامانه', 'انبار مرکزی (WH۱)', 'انبار فروشگاه (SHOP)']);
   });
 
   it('reports the chosen warehouse code', () => {
     const onChange = vi.fn();
     render(<ShopWarehouseSelect value="" onChange={onChange} warehouses={warehouses} />);
-    fireEvent.change(screen.getByLabelText('انبار فروشگاه اینترنتی'), { target: { value: 'SHOP' } });
+    fireEvent.change(screen.getByLabelText('انبار فروش اینترنتی'), { target: { value: 'SHOP' } });
     expect(onChange).toHaveBeenCalledWith('SHOP');
   });
 });
