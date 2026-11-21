@@ -69,7 +69,7 @@ const withProviders = (node: ReactNode, at: string) => (
   </QueryClientProvider>
 );
 
-describe('the ERP section «فروشگاه سایت» (v12 phase 9a)', () => {
+describe('the ERP site shop section (v12 phase 9a)', () => {
   it('groups the site orders, buyers and settings in one sidebar group, each by its own key', () => {
     const groups = getMenuGroups(user(), { permissions: [], isAdmin: true });
     const site = groups.find(g => g.id === 'site');
@@ -115,7 +115,7 @@ describe('the ERP section «فروشگاه سایت» (v12 phase 9a)', () => {
   });
 });
 
-describe('the role template «مدیر سایت» (decision 15, proposal 2)', () => {
+describe('the site manager role template (decision 15, proposal 2)', () => {
   const template = ROLE_TEMPLATES.find(t => t.code === 'site_manager');
 
   it('holds every site key and media.view, closed under requires', () => {
@@ -132,7 +132,7 @@ describe('the role template «مدیر سایت» (decision 15, proposal 2)', ()
   });
 });
 
-describe('the WooCommerce shop is «ووکامرس (سایت قدیم)» (site review 3.2b)', () => {
+describe('the WooCommerce shop is named the old site (site review 3.2b)', () => {
   it('names the permission group and the settings tab so', () => {
     expect(PERMISSION_CATALOG.some(g => g.category === 'ووکامرس (سایت قدیم)')).toBe(true);
     expect(SETTINGS_GROUPS.flatMap(g => g.tabs).find(t => t.id === 'woocommerce')?.label).toBe('ووکامرس (سایت قدیم)');
@@ -142,7 +142,7 @@ describe('the WooCommerce shop is «ووکامرس (سایت قدیم)» (site r
     expect(auditEntityTitle('فروشگاه اینترنتی')).toBe('ووکامرس (سایت قدیم)');
     expect(auditEntityTitle('انبار')).toBe('انبار');
     expect(auditEntityTitle(null)).toBe('');
-    expect(PURGEABLE_AUDIT_ENTITY_LABELS['فروشگاه اینترنتی']).toBe('همگام‌سازی با ووکامرس (سایت قدیم)');
+    expect(PURGEABLE_AUDIT_ENTITY_LABELS['فروشگاه اینترنتی']).toBe('همگام‌سازی با ووکامرس سایت قدیم');
   });
 });
 
