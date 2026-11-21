@@ -157,8 +157,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     name: 'مدیر سایت',
     description: 'کالاها، تنظیمات، سفارش‌ها و خریداران سایت تازه؛ تأیید پرداخت مجوز خزانه را جدا می‌خواهد',
     permissions: [
-      'storefront.view', 'storefront.manage', 'site_orders.view', 'site_orders.manage', 'site_buyers.view',
-      'site_buyers.manage', 'media.view',
+      'storefront.view', 'storefront.manage', 'site_content.view', 'site_content.manage', 'site_orders.view',
+      'site_orders.manage', 'site_buyers.view', 'site_buyers.manage', 'media.view',
     ],
   },
   {

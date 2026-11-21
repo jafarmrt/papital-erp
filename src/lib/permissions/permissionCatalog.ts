@@ -224,6 +224,10 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     permissions: [
       { key: 'storefront.view', title: 'مشاهده تنظیمات فروشگاه سایت', description: 'دیدن کالاهای منتشرشده روی سایت، روش‌ها و نرخ‌های ارسال، کارت و شبای دریافت پول و لیست‌های قیمت سایت' },
       { key: 'storefront.manage', title: 'مدیریت فروشگاه سایت', description: 'انتشار و برداشتن کالا از سایت، نشانی و متن جست‌وجوی کالا، روش‌ها و نرخ‌های ارسال، کارت و شبا، سقف ارسال رایگان و ساخت کلید برنامه سایت', requires: ['storefront.view'] },
+      // v12 phase 9b (V12_SITE_NEXT_START_PLAN.md §6): menus now, news, pages and banners from phase 10; apart from
+      // storefront.manage, so an editor of content never reaches the card, the prices or the site's key
+      { key: 'site_content.view', title: 'مشاهده منوها و محتوای سایت', description: 'دیدن منوی بالا، منوی همبرگری، پاورقی و نوار پایین گوشی سایت و آنچه هر پیوند به آن می‌رود' },
+      { key: 'site_content.manage', title: 'ویرایش منوها و محتوای سایت', description: 'ساخت و ویرایش منوهای سایت و روشن و خاموش کردن هر منو روی سایت', requires: ['site_content.view'] },
     ]
   },
   {

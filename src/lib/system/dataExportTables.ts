@@ -115,6 +115,9 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   { table: 'storefront_redirects', group: 'settings' },
   // v11 phase 8.5b: «صفحه‌های ویژه», the site's campaign pages
   { table: 'storefront_campaigns', group: 'settings' },
+  // v12 phase 9b: the site's menus, a switch per place and its items
+  { table: 'storefront_menus', group: 'settings' },
+  { table: 'storefront_menu_items', group: 'settings' },
 ];
 
 /** Exported only on request, for a business-day range */

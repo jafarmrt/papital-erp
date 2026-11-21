@@ -35,7 +35,8 @@ import {
   Hammer,
   ClipboardCheck,
   Store,
-  SlidersHorizontal
+  SlidersHorizontal,
+  PanelTop
 } from 'lucide-react';
 import { User } from '../../types';
 import { canOpenPage } from '../../lib/permissions/pageAccess';
@@ -109,6 +110,7 @@ export function getMenuGroups(
         { name: 'سفارش‌های سایت', path: '/site-orders', icon: ShoppingBag, visible: open('/site-orders') },
         { name: 'خریداران سایت', path: '/site-buyers', icon: Handshake, visible: open('/site-buyers') },
         { name: 'کالاها و تنظیمات سایت', path: '/site-settings', icon: SlidersHorizontal, visible: open('/site-settings') },
+        { name: 'فهرست‌های سایت', path: '/site-menus', icon: PanelTop, visible: open('/site-menus') },
       ]
     },
     {
