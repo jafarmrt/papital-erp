@@ -17,12 +17,13 @@ const keyOf = () => `item-${++nextKey}`;
 function draftOf(item: MenuItemValues | MenuItemRow): DraftItem {
   return {
     key: keyOf(), id: item.id || null, label: item.label, kind: item.kind, target: item.target, itemId: item.itemId,
-    campaignId: item.campaignId, icon: item.icon, isActive: item.isActive, children: item.children.map(draftOf),
+    campaignId: item.campaignId, pageId: item.pageId, targetTitle: 'targetTitle' in item ? item.targetTitle : '', icon: item.icon, isActive: item.isActive,
+    children: item.children.map(draftOf),
   };
 }
 
 const blank = (): DraftItem => ({
-  key: keyOf(), id: null, label: '', kind: 'page', target: '', itemId: null, campaignId: null, icon: '', isActive: true, children: [],
+  key: keyOf(), id: null, label: '', kind: 'page', target: '', itemId: null, campaignId: null, pageId: null, icon: '', isActive: true, children: [],
 });
 
 function moved<T>(list: T[], index: number, step: -1 | 1): T[] {

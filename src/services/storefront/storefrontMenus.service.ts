@@ -13,6 +13,7 @@ import {
 import type { MenuItemRow, MenuLinkOptions, MenuSaveInput, MenuView, MenusView } from '../../lib/storefront/storefrontMenuContracts.js';
 import { catalogItems } from './storefrontCatalog.service.js';
 import { campaignOpenNow } from './storefrontCampaigns.service.js';
+import { pageLinkTargets, type PageLinkTarget } from './storefrontPages.service.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
 
 /**
@@ -34,11 +35,12 @@ interface SiteNow {
   collections: Set<string>;
   products: Map<number, string>;
   campaigns: Map<number, { title: string; live: boolean }>;
+  pages: Map<number, PageLinkTarget>;
   /** the site takes orders, so it shows the cart and order tracking (9b review) */
   ordering: boolean;
 }
 
-async function siteNow(executor: DbExecutor, campaignIds: readonly number[]): Promise<SiteNow> {
+async function siteNow(executor: DbExecutor, campaignIds: readonly number[], pageIds: readonly number[]): Promise<SiteNow> {
   const settings = await storefrontSettingValues(executor);
   const onSale = await catalogItems(executor, settings);
   const campaigns = new Map<number, { title: string; live: boolean }>();
@@ -54,6 +56,7 @@ async function siteNow(executor: DbExecutor, campaignIds: readonly number[]): Pr
     collections: new Set(onSale.flatMap(i => i.collections)),
     products: new Map(onSale.map(i => [i.itemId, i.name])),
     campaigns,
+    pages: await pageLinkTargets(executor, pageIds),
     ordering: settings.enabled && settings.ordersEnabled,
   };
 }
@@ -61,7 +64,7 @@ async function siteNow(executor: DbExecutor, campaignIds: readonly number[]): Pr
 function valuesOf(row: ItemRecord, children: MenuItemValues[]): MenuItemValues {
   return {
     id: row.id, label: row.label, kind: isMenuLinkKind(row.linkKind) ? row.linkKind : 'none', target: row.target,
-    itemId: row.targetItemId, campaignId: row.targetCampaignId, icon: isMenuIcon(row.icon) ? row.icon : '',
+    itemId: row.targetItemId, campaignId: row.targetCampaignId, pageId: row.targetPageId, icon: isMenuIcon(row.icon) ? row.icon : '',
     isActive: row.isActive === 1, children,
   };
 }
@@ -98,6 +101,12 @@ function rowOf(item: MenuItemValues, now: SiteNow): MenuItemRow {
       live &&= Boolean(campaign?.live);
       break;
     }
+    case 'content': {
+      const page = item.pageId !== null ? now.pages.get(item.pageId) : undefined;
+      targetTitle = page?.title ?? '';
+      live &&= Boolean(page?.live);
+      break;
+    }
     default: break;
   }
   const children = item.children.map(child => rowOf(child, now));
@@ -111,7 +120,10 @@ async function menuViews(executor: DbExecutor, only?: MenuLocation): Promise<Men
   const rows = await executor.select().from(storefrontMenuItems)
     .where(only ? and(eq(storefrontMenuItems.isDeleted, 0), eq(storefrontMenuItems.location, only)) : eq(storefrontMenuItems.isDeleted, 0))
     .orderBy(asc(storefrontMenuItems.position), asc(storefrontMenuItems.id));
-  const now = await siteNow(executor, [...new Set(rows.map(r => r.targetCampaignId).filter((id): id is number => id !== null))]);
+  const now = await siteNow(
+    executor, [...new Set(rows.map(r => r.targetCampaignId).filter((id): id is number => id !== null))],
+    [...new Set(rows.map(r => r.targetPageId).filter((id): id is number => id !== null))],
+  );
   return MENU_LOCATIONS.filter(location => !only || location === only).flatMap((location): MenuView[] => {
     const menu = menus.find(m => m.location === location);
     if (!menu) return [];
@@ -138,6 +150,7 @@ export async function menuLinkOptions(executor: DbExecutor): Promise<MenuLinkOpt
     categories: [...new Set(onSale.map(i => i.category).filter(Boolean))].sort(fa),
     collections: [...new Set(onSale.flatMap(i => i.collections).filter(Boolean))].sort(fa),
     campaigns: campaigns.map(c => ({ id: c.id, title: c.title, live: open.has(c.id) })),
+    pages: [...await pageLinkTargets(executor)].map(([id, page]) => ({ id, title: page.title, live: page.live })),
     products: onSale.map(i => ({ itemId: i.itemId, name: i.name, sku: i.sku })).sort((a, b) => fa(a.name, b.name)),
   };
 }
@@ -145,7 +158,7 @@ export async function menuLinkOptions(executor: DbExecutor): Promise<MenuLinkOpt
 /** The menu as a short list for the audit row: «عنوان ← مقصد», children indented */
 function auditLines(list: readonly MenuItemValues[], indent = ''): string[] {
   return list.flatMap(item => {
-    const target = item.kind === 'product' ? `کالا ${item.itemId}` : item.kind === 'campaign' ? `صفحهٔ ویژه ${item.campaignId}` : item.target;
+    const target = item.kind === 'product' ? `کالا ${item.itemId}` : item.kind === 'campaign' ? `صفحهٔ ویژه ${item.campaignId}` : item.kind === 'content' ? `صفحهٔ متنی ${item.pageId}` : item.target;
     const line = `${indent}${item.label} ← ${item.kind}${target ? `: ${target}` : ''}${item.icon ? ` [${item.icon}]` : ''}${item.isActive ? '' : ' (خاموش)'}`;
     return [line, ...auditLines(item.children, `${indent}  `)];
   });
@@ -160,7 +173,7 @@ async function lockedMenu(tx: DbExecutor, location: MenuLocation, expectedVersio
   return menu;
 }
 
-/** The products and campaign pages the menu names exist (a removed one is refused; one not on the site now is kept) */
+/** The products, campaign pages and pages the menu names exist (a removed one is refused; one not on the site now is kept) */
 async function checkReferences(tx: DbExecutor, list: readonly MenuItemValues[]): Promise<void> {
   const all = list.flatMap(i => [i, ...i.children]);
   const itemIds = [...new Set(all.map(i => i.itemId).filter((id): id is number => id !== null))];
@@ -177,11 +190,17 @@ async function checkReferences(tx: DbExecutor, list: readonly MenuItemValues[]):
     const missing = all.find(i => i.campaignId !== null && !found.has(i.campaignId));
     if (missing) throw invalid(`صفحهٔ ویژهٔ «${missing.label}» حذف شده است.`, 'items', 'STOREFRONT_MENU_CAMPAIGN_UNKNOWN');
   }
+  const pageIds = [...new Set(all.map(i => i.pageId).filter((id): id is number => id !== null))];
+  if (pageIds.length) {
+    const found = await pageLinkTargets(tx, pageIds);
+    const missing = all.find(i => i.pageId !== null && !found.has(i.pageId));
+    if (missing) throw invalid(`صفحه‌ای که گزینهٔ «${missing.label}» به آن پیوند دارد در فهرست «صفحهٔ متنی» نیست (حذف شده یا از صفحه‌های پایه است)؛ صفحهٔ دیگری برگزینید یا این گزینه را بردارید.`, 'items', 'STOREFRONT_MENU_PAGE_UNKNOWN');
+  }
 }
 
 const columnsOf = (location: MenuLocation, item: MenuItemValues, parentId: number | null, position: number) => ({
   location, parentId, position, label: item.label, linkKind: item.kind, target: item.target, targetItemId: item.itemId,
-  targetCampaignId: item.campaignId, icon: item.icon, isActive: item.isActive ? 1 : 0,
+  targetCampaignId: item.campaignId, targetPageId: item.pageId, icon: item.icon, isActive: item.isActive ? 1 : 0,
 });
 
 /** `PUT /api/storefront/menus/:location`: the whole place, under its version */

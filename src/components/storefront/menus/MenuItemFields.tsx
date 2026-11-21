@@ -15,6 +15,9 @@ export interface DraftItem {
   target: string;
   itemId: number | null;
   campaignId: number | null;
+  pageId: number | null;
+  /** the name of the saved link's target as the server sent it (a product, a campaign page, a page); '' for a new item */
+  targetTitle?: string;
   icon: MenuIcon | '';
   isActive: boolean;
   children: DraftItem[];
@@ -23,6 +26,15 @@ export interface DraftItem {
 const field = 'w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm disabled:bg-slate-50';
 const label = 'mb-1 block text-xs font-bold text-slate-600';
 const iconButton = 'rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 disabled:opacity-30';
+
+/**
+ * The words for a saved target that the list of choices does not have. The name the server sent with the saved row wins
+ * (the list is kept half a minute, so a page a colleague just made may not be in it yet); with no name, it is «حذف شده»
+ * once the list has been read, and until then (or when the list could not be read) only that its name is not known.
+ */
+const goneLabel = (item: DraftItem, options: MenuLinkOptions | undefined, removed: string): string => (
+  item.targetTitle || (options ? removed : 'نامش خوانده نشده است')
+);
 
 function TargetField({ item, options, onChange, id }: {
   item: DraftItem; options: MenuLinkOptions | undefined; onChange: (patch: Partial<DraftItem>) => void; id: string;
@@ -52,8 +64,18 @@ function TargetField({ item, options, onChange, id }: {
       return (
         <select id={id} className={field} value={item.campaignId ?? ''} onChange={e => onChange({ campaignId: e.target.value ? Number(e.target.value) : null })}>
           <option value="">برگزینید</option>
-          {item.campaignId !== null && !list.some(c => c.id === item.campaignId) && <option value={item.campaignId}>صفحهٔ ویژه‌ای که حذف شده است</option>}
+          {item.campaignId !== null && !list.some(c => c.id === item.campaignId) && <option value={item.campaignId}>{goneLabel(item, options, 'صفحهٔ ویژه‌ای که حذف شده است')}</option>}
           {list.map(c => <option key={c.id} value={c.id}>{c.live ? c.title : `${c.title} (اکنون روی سایت نیست)`}</option>)}
+        </select>
+      );
+    }
+    case 'content': {
+      const list = Array.isArray(options?.pages) ? options.pages : [];
+      return (
+        <select id={id} className={field} value={item.pageId ?? ''} onChange={e => onChange({ pageId: e.target.value ? Number(e.target.value) : null })}>
+          <option value="">برگزینید</option>
+          {item.pageId !== null && !list.some(p => p.id === item.pageId) && <option value={item.pageId}>{goneLabel(item, options, 'صفحه‌ای که حذف شده است')}</option>}
+          {list.map(p => <option key={p.id} value={p.id}>{p.live ? p.title : `${p.title} (اکنون روی سایت نیست)`}</option>)}
         </select>
       );
     }
@@ -94,7 +116,7 @@ export function MenuItemFields({ item, location, child, options, notOnSite, firs
         <div>
           <label htmlFor={`${id}-kind`} className={label}>پیوند به</label>
           <select id={`${id}-kind`} className={field} value={item.kind}
-            onChange={e => onChange({ kind: e.target.value as MenuLinkKind, target: '', itemId: null, campaignId: null })}>
+            onChange={e => onChange({ kind: e.target.value as MenuLinkKind, target: '', itemId: null, campaignId: null, pageId: null, targetTitle: '' })}>
             {kinds.map(k => <option key={k} value={k}>{MENU_LINK_KIND_TITLES[k]}</option>)}
           </select>
         </div>

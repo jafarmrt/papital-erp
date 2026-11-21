@@ -37,6 +37,8 @@ export interface PageDetail extends PageListRow {
   /** the draft the builder edits */
   draft: PageValues;
   assets: PageAssetInfo[];
+  /** v12 phase 10c: the places of «فهرست‌های سایت» (`header`, `drawer`, `footer`, `bottom`) that link to this page */
+  menuPlaces: string[];
 }
 
 export interface PageSaveInput extends PageValues {

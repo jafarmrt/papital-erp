@@ -161,7 +161,7 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   { name: 'storefront_products', table: storefrontProducts },
   // v11 phase 8.5: the old-address redirects point to items too
   { name: 'storefront_redirects', table: storefrontRedirects },
-  // v12 phase 9b: a menu item points to an item or a campaign page, so the items go before both
+  // v12 phase 9b: a menu item points to an item or a campaign page, and (10c) to a page of the page builder, so the items go before all three
   { name: 'storefront_menu_items', table: storefrontMenuItems },
   // v11 phase 8.5b: the campaign pages point to media images (their hero), so they go before media_assets
   { name: 'storefront_campaigns', table: storefrontCampaigns },
