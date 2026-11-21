@@ -11237,6 +11237,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runStorefrontEmailAccountsV12Tests(shouldRun));
   const { runStorefrontEmailOrdersV12Tests } = await import('../regression/storefrontEmailOrdersV12Tests.js');
   results.push(...await runStorefrontEmailOrdersV12Tests(shouldRun));
+  // v12 phase 9b: the site's menu builder
+  const { runStorefrontMenusV12Tests } = await import('../regression/storefrontMenusV12Tests.js');
+  results.push(...await runStorefrontMenusV12Tests(shouldRun));
 
   return results;
 }

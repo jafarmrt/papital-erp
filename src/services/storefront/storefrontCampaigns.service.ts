@@ -243,8 +243,9 @@ export async function campaignHeroOptions(query: { q: string; page: number; limi
   };
 }
 
-/** A page the site shows now: on, not removed, inside its window (the database's clock, as an order's discount check) */
-const openNow = () => and(
+/** A page the site shows now: on, not removed, inside its window (the database's clock, as an order's discount check);
+ * v12 phase 9b: the menu builder reads it too */
+export const campaignOpenNow = () => and(
   eq(storefrontCampaigns.isDeleted, 0), eq(storefrontCampaigns.isActive, 1),
   or(isNull(storefrontCampaigns.startsAt), lte(storefrontCampaigns.startsAt, sql`now()`)),
   or(isNull(storefrontCampaigns.endsAt), gt(storefrontCampaigns.endsAt, sql`now()`)),
@@ -273,7 +274,7 @@ function summaryOf(row: CampaignRecord, heroes: Map<number, StorefrontImage>): S
 
 /** `GET /api/storefront/v1/campaigns`: the pages on the site now, newest first */
 export async function publicCampaigns(): Promise<StorefrontCampaignSummary[]> {
-  const rows = await orm.select().from(storefrontCampaigns).where(openNow()).orderBy(desc(storefrontCampaigns.id)).limit(CAMPAIGNS_MAX);
+  const rows = await orm.select().from(storefrontCampaigns).where(campaignOpenNow()).orderBy(desc(storefrontCampaigns.id)).limit(CAMPAIGNS_MAX);
   const heroes = await heroImages(rows);
   return rows.map(row => summaryOf(row, heroes));
 }
@@ -301,7 +302,7 @@ async function shownCode(code: string): Promise<string> {
 
 /** `GET /api/storefront/v1/campaigns/:slug`: a page on the site now, or the same 404 for any other */
 export async function publicCampaign(slug: string): Promise<StorefrontCampaignPage> {
-  const [row] = await orm.select().from(storefrontCampaigns).where(and(openNow(), eq(storefrontCampaigns.slug, slug))).limit(1);
+  const [row] = await orm.select().from(storefrontCampaigns).where(and(campaignOpenNow(), eq(storefrontCampaigns.slug, slug))).limit(1);
   if (!row) throw new NotFoundError('صفحه پیدا نشد.', undefined, 'STOREFRONT_CAMPAIGN_NOT_FOUND');
   const products = await campaignCards(row.source === 'products' ? { itemIds: row.itemIds ?? [] } : { collection: row.collection }, CAMPAIGN_PRODUCTS_MAX);
   return { ...summaryOf(row, await heroImages([row])), body: row.body, discountCode: await shownCode(row.discountCode), products };
@@ -317,7 +318,7 @@ export async function campaignHeroFile(file: string): Promise<string> {
   const [sha256, thumb] = [match[1], Boolean(match[2])];
   const rows = await orm.select({ lightBytes: mediaAssets.lightBytes, thumbBytes: mediaAssets.thumbBytes }).from(mediaAssets)
     .innerJoin(storefrontCampaigns, eq(storefrontCampaigns.heroAssetId, mediaAssets.id))
-    .where(and(eq(mediaAssets.sha256, sha256), eq(mediaAssets.isDeleted, 0), eq(mediaAssets.kind, 'image'), openNow()));
+    .where(and(eq(mediaAssets.sha256, sha256), eq(mediaAssets.isDeleted, 0), eq(mediaAssets.kind, 'image'), campaignOpenNow()));
   if (!rows.some(r => (thumb ? r.thumbBytes : r.lightBytes) !== null)) throw notFound;
   return mediaFilePath(sha256, thumb ? 'thumb' : 'light', 'webp');
 }

@@ -123,6 +123,8 @@ export const PAGE_ACCESS = {
   '/site-buyers': { gate: anyOf('site_buyers.view'), api: ['GET /api/storefront/buyers', 'GET /api/storefront/buyers/:id'] },
   // v12 phase 9a (start plan §6): the sections of the former settings tab «فروشگاه سایت»; writes need storefront.manage
   '/site-settings': { gate: anyOf('storefront.view'), api: ['GET /api/storefront/products', 'GET /api/storefront/settings', 'GET /api/storefront/shipping-methods', 'GET /api/storefront/buyer-groups'] },
+  // v12 phase 9b: the menu builder; saving needs site_content.manage
+  '/site-menus': { gate: anyOf('site_content.view'), api: ['GET /api/storefront/menus', 'GET /api/storefront/menus/link-options'] },
   '/reserved-items': { gate: anyOf('products.view', 'reports.view', 'warehouse.view', 'documents.view'), api: ['GET /api/inventory/reserved-items'] },
   '/transactions': { gate: anyOf('warehouse.view', 'accounting.view'), api: ['GET /api/transactions'] },
   '/accounting': { gate: { anyOf: ACCOUNTING_KEYS }, api: [] },

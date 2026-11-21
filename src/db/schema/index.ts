@@ -23,3 +23,4 @@ export * from './storefront';
 export * from './storefrontSeo';
 export * from './storefrontSms';
 export * from './storefrontCampaigns';
+export * from './storefrontMenus';
