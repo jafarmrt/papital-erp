@@ -108,11 +108,11 @@ export interface MenuItemDraft {
 const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
 /**
- * 9b review: a control character (a NUL the database refuses, a bell), a direction override or an invisible mark has no
+ * 9b review: a control character (C0 or C1: a NUL the database refuses, a bell, NEL), a direction override or an invisible mark has no
  * place in a menu. The zero-width non-joiner (U+200C) and joiner stay: Persian words need them.
  */
 // eslint-disable-next-line no-control-regex
-const UNSAFE_CHARS = /[\u0000-\u001f\u007f\u200b\u200e\u200f\u202a-\u202e\u2060-\u2069\ufeff]/;
+const UNSAFE_CHARS = /[\u0000-\u001f\u007f-\u009f\u200b\u200e\u200f\u202a-\u202e\u2060-\u2069\ufeff]/;
 export const hasUnsafeChars = (value: string): boolean => UNSAFE_CHARS.test(value);
 /** whether a label has a letter to see (not only spaces and joiners) */
 const visible = (value: string) => value.replace(new RegExp(UNSAFE_CHARS.source, 'g'), '').replace(/[\s\u200c\u200d]/g, '') !== '';
@@ -163,7 +163,7 @@ function itemProblem(location: MenuLocation, item: MenuItemValues, where: string
   const field = `${where}.label`;
   const labelMax = location === 'bottom' ? MENU_BOTTOM_LABEL_MAX : MENU_LABEL_MAX;
   if (!visible(item.label)) return problem(`عنوان ${where} را بنویسید.`, field, 'STOREFRONT_MENU_LABEL_REQUIRED');
-  if (hasUnsafeChars(item.label) || hasUnsafeChars(item.target)) return problem(`«${item.label.replace(UNSAFE_CHARS, '')}» نویسه‌ای نادیدنی یا کنترلی دارد؛ آن را دوباره بنویسید.`, field, 'STOREFRONT_MENU_TEXT_INVALID');
+  if (hasUnsafeChars(item.label) || hasUnsafeChars(item.target)) return problem(`«${item.label.replace(new RegExp(UNSAFE_CHARS.source, 'g'), '')}» نویسه‌ای نادیدنی یا کنترلی دارد؛ آن را دوباره بنویسید.`, field, 'STOREFRONT_MENU_TEXT_INVALID');
   if (item.label.length > labelMax) return problem(`عنوان «${item.label}» بیش از ${labelMax} نویسه است.`, field, 'STOREFRONT_MENU_LABEL_TOO_LONG');
   const target = `${where}.target`;
   switch (item.kind) {

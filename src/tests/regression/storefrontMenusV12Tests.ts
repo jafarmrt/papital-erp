@@ -151,6 +151,7 @@ export async function runStorefrontMenusV12Tests(shouldRun: (id: string, ...extr
       ['a NUL in a path', 'header', [{ ...leaf('بد', 'path', { target: '/a\u0000b' }), children: [] }], false, nowVersion, 'STOREFRONT_MENU_TEXT_INVALID'],
       ['a backslash path', 'header', [{ ...leaf('بد', 'path', { target: '/\\evil.example' }), children: [] }], false, nowVersion, 'STOREFRONT_MENU_PATH_INVALID'],
       ['an invisible label', 'header', [{ ...leaf('\u200b\u200c', 'page', { target: 'home' }), children: [] }], false, nowVersion, 'STOREFRONT_MENU_LABEL_REQUIRED'],
+      ['a NEL (C1) in a label', 'header', [{ ...leaf('الف\u0085ب', 'page', { target: 'home' }), children: [] }], false, nowVersion, 'STOREFRONT_MENU_TEXT_INVALID'],
       ['a direction override', 'header', [{ ...leaf('الف\u202eب', 'page', { target: 'home' }), children: [] }], false, nowVersion, 'STOREFRONT_MENU_TEXT_INVALID'],
       ['a material, not a product', 'header', [{ ...leaf('ماده', 'product', { itemId: material.id }), children: [] }], false, nowVersion, 'STOREFRONT_MENU_PRODUCT_UNKNOWN'],
       ['a button without an icon', 'bottom', ['home', 'search', 'cart'].map(t => ({ ...leaf('دکمه', 'page', { target: t }), children: [] })), false, bottomVersion, 'STOREFRONT_MENU_ICON_REQUIRED'],
