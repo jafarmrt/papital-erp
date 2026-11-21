@@ -43,7 +43,7 @@ export interface StorefrontPageSummary {
   kind: PageKind;
   title: string;
   noindex: boolean;
-  /** when the copy on the site was published (ISO), the page's last change for a search engine */
+  /** when the copy on the site was published, an ISO time in UTC (`2026-11-21T18:13:41.727Z`): the page's last change for a search engine */
   updatedAt: string;
 }
 

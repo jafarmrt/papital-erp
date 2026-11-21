@@ -9,6 +9,9 @@ import { money } from '../../lib/money.js';
 import { invalidateSettingsCache } from '../../lib/memoryCache.js';
 import { readPricingStrategies } from '../../lib/items/pricingStrategies.js';
 import { mediaFilePath } from '../../lib/media/mediaPaths.js';
+import { forgetOnSale } from '../../services/storefront/storefrontOnSaleCache.js';
+
+const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 /**
  * v12 phase 10c (docs/roadmap/V12_SITE_NEXT_START_PLAN.md §7.2, `AGENTS.md` §1.9c): what the site reads of «صفحه‌های
@@ -136,7 +139,7 @@ export async function runStorefrontSitePagesV12Tests(shouldRun: (id: string, ...
     if (read.status !== 200 || keys(page) !== 'kind,noindex,sections,seoDescription,seoTitle,shareImage,slug,title,updatedAt') wrong.push(`the page's fields: ${read.status} ${keys(page)}`);
     const got = page.sections ?? [];
     const imageKeys = 'alt,height,sha256,thumb,width';
-    if (page.slug !== slug || page.kind !== 'custom' || page.noindex !== true || page.seoTitle !== 'عنوان جست‌وجو' || Number.isNaN(Date.parse(String(page.updatedAt)))
+    if (page.slug !== slug || page.kind !== 'custom' || page.noindex !== true || page.seoTitle !== 'عنوان جست‌وجو' || !ISO_UTC.test(String(page.updatedAt)) || Math.abs(Date.parse(String(page.updatedAt)) - Date.now()) > 120_000
       || keys(page.shareImage) !== imageKeys || (page.shareImage as Body).sha256 !== onPage.sha256) {
       wrong.push(`the page's values: ${JSON.stringify({ ...page, sections: undefined })}`);
     }
@@ -163,7 +166,7 @@ export async function runStorefrontSitePagesV12Tests(shouldRun: (id: string, ...
       if (text.includes(leak)) wrong.push(`the answer carries «${leak}»`);
     }
     const listed = ((await site('/pages')).body.data ?? []).find((row: Body) => row.slug === slug) as Body | undefined;
-    if (!listed || keys(listed) !== 'kind,noindex,slug,title,updatedAt' || listed.noindex !== true) wrong.push(`the list's line: ${JSON.stringify(listed)}`);
+    if (!listed || keys(listed) !== 'kind,noindex,slug,title,updatedAt' || listed.noindex !== true || listed.updatedAt !== page.updatedAt) wrong.push(`the list's line: ${JSON.stringify(listed)}`);
 
     // 3) the images a published page names are served; the small version only where there is one; any other file is 404
     const light = await site(`/media/${onPage.sha256}.webp`);
@@ -183,15 +186,29 @@ export async function runStorefrontSitePagesV12Tests(shouldRun: (id: string, ...
     // an image that left the library is no longer named or served; the row of the item taken off the site is empty
     await orm.update(mediaAssets).set({ isDeleted: 1 }).where(eq(mediaAssets.id, inText.id));
     const unpub = await erp.put(`/api/storefront/products/${ring.id}`, { published: false, slug: ringSlug, seoTitle: '', seoDescription: '', sortOrder: 1, version: Number(pub.body.data?.version ?? 1) });
+    // the catalog's list of items on the site is kept a few seconds; it is forgotten here so the row is read anew
+    forgetOnSale();
     const afterLoss = (await site(`/pages/${slug}`)).body.data as { sections: Array<Record<string, unknown>> };
     const goneImage = await site(`/media/${inText.sha256}.webp`);
     const lossDoc = afterLoss.sections[1].doc as { content: unknown[] };
     if (goneImage.status !== 404 || lossDoc.content.length !== 1 || (afterLoss.sections[2].images as unknown[]).length !== 1) wrong.push(`an image that left the library: ${goneImage.status} ${JSON.stringify(afterLoss.sections.slice(1, 3))}`);
-    // the catalog is kept a few seconds, so the row empties at the latest then; the page itself must still answer
-    if (unpub.status !== 200 || !Array.isArray(afterLoss.sections[3].products)) wrong.push(`the product row after the item left: ${unpub.status} ${JSON.stringify(afterLoss.sections[3])}`);
+    if (unpub.status !== 200 || !Array.isArray(afterLoss.sections[3].products) || (afterLoss.sections[3].products as unknown[]).length !== 0 || (afterLoss.sections[4].products as unknown[]).length !== 0) wrong.push(`the product row after the item left: ${unpub.status} ${JSON.stringify(afterLoss.sections[3])}`);
+
+    // a published copy changed by hand in the database: a link of another scheme and an unknown node do not go out
+    const [rowNow] = await orm.select().from(storefrontPages).where(eq(storefrontPages.id, pageId));
+    const tampered = JSON.parse(JSON.stringify(rowNow.published)) as { sections: Array<Record<string, unknown>> };
+    tampered.sections[0].buttonHref = 'javascript:alert(1)';
+    tampered.sections[1].doc = { type: 'doc', content: [{ type: 'script', content: [{ type: 'text', text: 'alert(1)' }] }] };
+    await orm.update(storefrontPages).set({ published: tampered as unknown as typeof rowNow.published }).where(eq(storefrontPages.id, pageId));
+    const afterTamper = (await site(`/pages/${slug}`)).body.data as { sections: Array<Record<string, unknown>> };
+    if (afterTamper.sections[0].buttonHref !== '' || JSON.stringify(afterTamper.sections[1].doc) !== '{"type":"doc","content":[]}' || JSON.stringify(afterTamper).includes('alert')) {
+      wrong.push(`a copy changed by hand: ${JSON.stringify(afterTamper.sections.slice(0, 2))}`);
+    }
+    await orm.update(storefrontPages).set({ published: rowNow.published }).where(eq(storefrontPages.id, pageId));
 
     // 4) a base page: 404 until published, then at its own address with kind «base»
-    if (aboutBefore && aboutBefore.published === null) {
+    if (!aboutBefore || aboutBefore.published !== null) throw new Error('the base page «about» must be there, unpublished, when this test starts');
+    {
       const aboutDraft = await site('/pages/about');
       const aboutSaved = await erp.put(`/api/storefront/pages/${aboutBefore.id}`, {
         title: aboutBefore.title, slug: 'about', seoTitle: '', seoDescription: '', noindex: false, shareImageAssetId: null,
@@ -208,7 +225,12 @@ export async function runStorefrontSitePagesV12Tests(shouldRun: (id: string, ...
     const noKey = await request(app).get(`/api/storefront/v1/pages/${slug}`);
     const wrongKey = await request(app).get('/api/storefront/v1/pages').set('Authorization', 'Bearer sf_wrong_key_0000000000000000');
     const longSlug = await site(`/pages/${'a'.repeat(61)}`);
-    if (noKey.status !== 401 || wrongKey.status !== 401 || longSlug.status !== 400) wrong.push(`the door: ${noKey.status}/${wrongKey.status}/${longSlug.status}`);
+    // an address that is not lowercase Latin never reaches the database (a NUL there was a 500)
+    const nulSlug = await site('/pages/%00');
+    const capitalSlug = await site('/pages/Our-Story');
+    if (noKey.status !== 401 || wrongKey.status !== 401 || longSlug.status !== 400 || nulSlug.status !== 400 || capitalSlug.status !== 400) {
+      wrong.push(`the door: ${noKey.status}/${wrongKey.status}/${longSlug.status}/${nulSlug.status}/${capitalSlug.status}`);
+    }
 
     // 6) off the site: the page and its images are the same 404 again; a removed page too
     const off = await erp.post(`/api/storefront/pages/${pageId}/unpublish`, { version: 4 });
@@ -235,7 +257,7 @@ export async function runStorefrontSitePagesV12Tests(shouldRun: (id: string, ...
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'a draft and an unknown address were the same 404 and a draft\'s image was not served; the published page answered exactly its reviewed fields with images by file key, a text image by file key, product rows as the card of the one item on the site, and no id, version or editor; its images were served (the small version only where there is one); a later draft changed nothing on the site and its image stayed 404; an image that left the library left the answer and the image route; a base page answered only once published; the routes refused a missing or wrong key and an over-long address; a page taken off the site or removed, and the site switched off, were 404 with their images',
+      details: 'a draft and an unknown address were the same 404 and a draft\'s image was not served; the published page answered exactly its reviewed fields with images by file key, a text image by file key, product rows as the card of the one item on the site, and no id, version or editor; its images were served (the small version only where there is one); a later draft changed nothing on the site and its image stayed 404; an image that left the library left the answer and the image route, and the rows of an item taken off the site were empty; a published copy changed by hand sent neither its script node nor its javascript link; the time of publishing was an ISO time in UTC; a base page answered only once published; the routes refused a missing or wrong key and an over-long address; a page taken off the site or removed, and the site switched off, were 404 with their images',
     }));
   } catch (err) {
     results.push(makeTestCase({
@@ -243,7 +265,11 @@ export async function runStorefrontSitePagesV12Tests(shouldRun: (id: string, ...
       error: err instanceof Error ? err.message : String(err),
     }));
   } finally {
-    for (const file of files) await fs.rm(file, { force: true }).catch(() => undefined);
+    for (const file of files) {
+      await fs.rm(file, { force: true }).catch(() => undefined);
+      // the folder made for the file, when nothing else is in it
+      await fs.rmdir(path.dirname(file)).catch(() => undefined);
+    }
     if (aboutBefore) {
       await orm.delete(storefrontContentAssets).where(and(eq(storefrontContentAssets.contentKind, 'page'), eq(storefrontContentAssets.contentId, aboutBefore.id))).catch(() => undefined);
       await orm.update(storefrontPages).set(aboutBefore).where(eq(storefrontPages.id, aboutBefore.id)).catch(() => undefined);

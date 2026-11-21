@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router';
 import { RICH_TEXT_DEPTH_MAX, TEXT_ALIGNS, TEXT_COLORS, pageLink, type RichDoc, type TextAlign, type TextColor } from '@erp/storefront/storefrontPageParts';
 import { mediaPath } from '../lib/brand';
-import { pageImage } from '../lib/pages';
+import { docIsBlank, pageImage } from '../lib/pages';
 
 /**
  * v12 phase 10c: a text of the ERP's page builder (the editor's JSON) drawn as elements. No HTML comes from the ERP and
@@ -12,15 +12,20 @@ import { pageImage } from '../lib/pages';
  */
 type Node = { type?: unknown; attrs?: unknown; content?: unknown; text?: unknown; marks?: unknown };
 
+/**
+ * The colours of a word. On the two deep grounds («لاجوردی», «سرمه‌ای») the cobalt and the tile blue would not be read,
+ * so both become one light sky blue there, grey becomes the ground's own light text dimmed, and red (which no deep
+ * ground carries legibly) is the ground's own text.
+ */
 const COLOR_CLASSES: Readonly<Record<TextColor, string>> = {
-  brand: 'text-brand in-data-[tone=deep]:text-tile', accent: 'text-accent-ink in-data-[tone=deep]:text-tile', muted: 'text-muted-foreground in-data-[tone=deep]:opacity-75',
-  danger: 'text-destructive in-data-[tone=deep]:text-inherit',
+  brand: 'text-brand in-data-[tone=deep]:text-accent-light', accent: 'text-accent-ink in-data-[tone=deep]:text-accent-light',
+  muted: 'text-muted-foreground in-data-[tone=deep]:text-inherit in-data-[tone=deep]:opacity-75', danger: 'text-destructive in-data-[tone=deep]:text-inherit',
 };
 const LINK_CLASS = 'font-medium text-brand underline underline-offset-4 hover:no-underline in-data-[tone=deep]:text-inherit';
 
 const attrsOf = (node: Node): Record<string, unknown> => (typeof node.attrs === 'object' && node.attrs !== null ? node.attrs as Record<string, unknown> : {});
 const childrenOf = (node: Node): Node[] => (Array.isArray(node.content) ? node.content.filter((n): n is Node => typeof n === 'object' && n !== null) : []);
-/** the page is right-to-left, so «راست» is the start: only a chosen side that differs is written */
+/** the side the ERP's editor chose for a line, written only when it chose one (a line without one follows the page) */
 const alignOf = (node: Node): CSSProperties | undefined => {
   const align = attrsOf(node).textAlign;
   return TEXT_ALIGNS.includes(align as TextAlign) ? { textAlign: align as TextAlign } : undefined;
@@ -100,7 +105,7 @@ function block(node: Node, key: number, depth: number): ReactNode {
     case 'tableRow':
       return <tr key={key} className="border-b border-current/15 last:border-b-0">{inside()}</tr>;
     case 'tableHeader':
-      return <th key={key} scope="col" className="space-y-2 px-3 py-2 text-start align-top font-bold">{inside()}</th>;
+      return <th key={key} className="space-y-2 px-3 py-2 text-start align-top font-bold">{inside()}</th>;
     case 'tableCell':
       return <td key={key} className="space-y-2 px-3 py-2 align-top">{inside()}</td>;
     default:
@@ -108,9 +113,7 @@ function block(node: Node, key: number, depth: number): ReactNode {
   }
 }
 
-export const richTextIsEmpty = (doc: RichDoc): boolean => !Array.isArray(doc.content) || doc.content.length === 0;
-
 export function RichText({ doc, className = '' }: { doc: RichDoc; className?: string }) {
-  if (richTextIsEmpty(doc)) return null;
-  return <div className={`space-y-4 leading-8 break-words ${className}`}>{(doc.content as Node[]).map((node, i) => block(node, i, 1))}</div>;
+  if (docIsBlank(doc)) return null;
+  return <div className={`space-y-4 leading-8 break-words ${className}`}>{childrenOf(doc).map((node, i) => block(node, i, 1))}</div>;
 }

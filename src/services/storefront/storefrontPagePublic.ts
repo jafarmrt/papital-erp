@@ -3,8 +3,9 @@ import { orm } from '../../db/drizzle.js';
 import { mediaAssets, storefrontContentAssets, storefrontPages } from '../../db/schema.js';
 import { NotFoundError } from '../../errors/customErrors.js';
 import { mediaFilePath } from '../../lib/media/mediaPaths.js';
+import { serverTimestampToUtcIso } from '../../lib/serverTimestamp.js';
 import {
-  PAGES_MAX, PRODUCT_ROW_MAX, isPageKind, pageAssetIds, safeRichDoc, type PageSection, type RichDoc, type RichNode,
+  PAGES_MAX, PRODUCT_ROW_MAX, isPageKind, pageAssetIds, pageLink, safeRichDoc, type PageSection, type RichDoc, type RichNode,
 } from '../../lib/storefront/storefrontPageRules.js';
 import type {
   StorefrontPageImage, StorefrontPageSection, StorefrontPageSummary, StorefrontPublicPage,
@@ -23,9 +24,16 @@ type Images = ReadonlyMap<number, Omit<StorefrontPageImage, 'alt'>>;
 const onSite = () => and(eq(storefrontPages.isDeleted, 0), isNotNull(storefrontPages.published), isNotNull(storefrontPages.publishedAt));
 const notFound = () => new NotFoundError('صفحه پیدا نشد.', undefined, 'STOREFRONT_PAGE_NOT_FOUND');
 
+/** A stored time as `2026-11-21T18:13:41.727Z` ('' when it cannot be read) */
+function isoOf(stored: string): string {
+  const at = new Date(serverTimestampToUtcIso(stored) ?? '');
+  return Number.isNaN(at.getTime()) ? '' : at.toISOString();
+}
+
 const summaryOf = (row: PageRecord): StorefrontPageSummary => ({
   slug: row.slug, kind: isPageKind(row.kind) ? row.kind : 'custom', title: row.published?.title ?? row.title,
-  noindex: row.published?.noindex === true, updatedAt: row.publishedAt ?? row.updatedAt,
+  // a real ISO time with its zone (the column is read as UTC text without one): the site works out a day from it
+  noindex: row.published?.noindex === true, updatedAt: isoOf(row.publishedAt ?? row.updatedAt),
 });
 
 /** `GET /api/storefront/v1/pages`: the pages on the site now, in the order of their addresses */
@@ -64,20 +72,23 @@ function publicDoc(doc: RichDoc, images: Images): RichDoc {
   return { type: 'doc', content: nodes(safe.content) };
 }
 
+/** A link as it goes out: checked again like a text, so a row changed by hand cannot send another kind of address */
+const linkOf = (value: unknown): string => pageLink(value) ?? '';
+
 async function publicSection(section: PageSection, images: Images): Promise<StorefrontPageSection> {
   const { background } = section;
   switch (section.kind) {
     case 'hero':
       return {
         kind: 'hero', background, title: section.title, text: section.text, image: imageOf(images, section.imageAssetId, ''),
-        buttonLabel: section.buttonLabel, buttonHref: section.buttonHref,
+        buttonLabel: section.buttonLabel, buttonHref: linkOf(section.buttonHref),
       };
     case 'text':
       return { kind: 'text', background, doc: publicDoc(section.doc, images) };
     case 'textImage':
       return {
         kind: 'textImage', background, title: section.title, doc: publicDoc(section.doc, images),
-        image: imageOf(images, section.imageAssetId, section.imageAlt), imageSide: section.imageSide, buttonLabel: section.buttonLabel, buttonHref: section.buttonHref,
+        image: imageOf(images, section.imageAssetId, section.imageAlt), imageSide: section.imageSide, buttonLabel: section.buttonLabel, buttonHref: linkOf(section.buttonHref),
       };
     case 'iconCards':
       return { kind: 'iconCards', background, title: section.title, cards: section.cards.map(card => ({ icon: card.icon, title: card.title, text: card.text })) };
@@ -86,12 +97,13 @@ async function publicSection(section: PageSection, images: Images): Promise<Stor
     case 'people':
       return {
         kind: 'people', background, title: section.title,
-        people: section.people.map(person => ({ image: imageOf(images, person.imageAssetId, person.name), name: person.name, role: person.role, contact: person.contact })),
+        // the name is written beside the photo, so the photo itself says nothing more to a screen reader
+        people: section.people.map(person => ({ image: imageOf(images, person.imageAssetId, ''), name: person.name, role: person.role, contact: person.contact })),
       };
     case 'map':
       return {
         kind: 'map', background, title: section.title, image: imageOf(images, section.imageAssetId, section.title || 'نقشهٔ نشانی'), address: section.address,
-        neshanUrl: section.neshanUrl, baladUrl: section.baladUrl, googleUrl: section.googleUrl,
+        neshanUrl: linkOf(section.neshanUrl), baladUrl: linkOf(section.baladUrl), googleUrl: linkOf(section.googleUrl),
       };
     case 'products':
       return {
@@ -99,7 +111,7 @@ async function publicSection(section: PageSection, images: Images): Promise<Stor
         products: await campaignCards(section.source === 'collection' ? { collection: section.collection } : { itemIds: section.itemIds }, PRODUCT_ROW_MAX),
       };
     case 'button':
-      return { kind: 'button', background, label: section.label, href: section.href };
+      return { kind: 'button', background, label: section.label, href: linkOf(section.href) };
     case 'shippingMethods':
       return { kind: 'shippingMethods', background, title: section.title };
   }

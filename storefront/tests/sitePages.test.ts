@@ -52,7 +52,7 @@ const STORY = {
     { kind: 'textImage', background: 'cream', title: 'ساخت دست', doc: { type: 'doc', content: [p('متن کنار عکس')] }, image: image(B, 'دست و قلم'), imageSide: 'left', buttonLabel: 'تماس', buttonHref: 'https://example.org/contact' },
     { kind: 'iconCards', background: 'white', title: 'چرا ما', cards: [{ icon: 'leaf', title: 'طبیعی', text: 'رنگ‌های پایدار' }, { icon: 'truck', title: 'ارسال', text: 'به همه‌جا' }, { icon: 'skull', title: 'ناشناخته', text: '' }] },
     { kind: 'gallery', background: 'white', title: 'گالری', images: [image(A, 'یک'), image(C, 'دو', false), { sha256: 'nope', alt: 'بد' }] },
-    { kind: 'people', background: 'dark', title: 'همکاران', people: [{ image: image(C, 'سارا'), name: 'سارا', role: 'طراح', contact: 'sara@shop.example' }, { image: null, name: '', role: 'بی نام', contact: '' }] },
+    { kind: 'people', background: 'dark', title: 'همکاران', people: [{ image: image(C, ''), name: 'سارا', role: 'طراح', contact: 'sara@shop.example' }, { image: null, name: '', role: 'بی نام', contact: '' }] },
     { kind: 'map', background: 'white', title: 'نشانی ما', image: null, address: 'تهران، خیابان نمونه', neshanUrl: 'https://nshn.ir/abc', baladUrl: 'javascript:alert(2)', googleUrl: 'https://maps.app.goo.gl/xyz' },
     { kind: 'products', background: 'white', title: 'برگزیده‌ها', collection: 'شاه‌عباسی', products: ['tile-necklace-sample', 'no-such-product'] },
     { kind: 'products', background: 'white', title: 'ردیف خالی', collection: '', products: ['no-such-product'] },
@@ -67,13 +67,32 @@ const ABOUT = {
   shareImage: image(C, 'کارت'), sections: [{ kind: 'text', background: 'white', doc: { type: 'doc', content: [p('متن تازهٔ درباره ما از ERP')] } }],
 };
 const HIDDEN = { slug: 'staff-notes', kind: 'custom', title: 'یادداشت همکاران', noindex: true, updatedAt: '2026-11-18T10:00:00.000Z', seoTitle: '', seoDescription: '', shareImage: null, sections: [{ kind: 'hero', background: 'white', title: 'یادداشت', text: '', image: null, buttonLabel: '', buttonHref: '' }] };
+const DEEP = {
+  slug: 'deep-text', kind: 'custom', title: 'متن روی زمینهٔ تیره', noindex: true, updatedAt: '2026-11-18T10:00:00.000Z', seoTitle: '', seoDescription: '', shareImage: null,
+  sections: [
+    { kind: 'text', background: 'brand', doc: { type: 'doc', content: [{ type: 'paragraph', content: ['muted', 'brand', 'accent'].map((color, i) => ({ type: 'text', text: ['خاکستری', 'لاجوردی', 'آبی'][i], marks: [{ type: 'textColor', attrs: { color } }] })) }] } },
+    { kind: 'products', background: 'dark', title: 'برگزیده‌ها', collection: '', products: ['tile-necklace-sample'] },
+    { kind: 'shippingMethods', background: 'dark', title: 'ارسال' },
+  ],
+};
 const TERMS = { slug: 'terms', kind: 'base', title: 'قوانین خرید', noindex: true, updatedAt: '2026-11-18T10:00:00.000Z', seoTitle: '', seoDescription: '', shareImage: null, sections: [{ kind: 'text', background: 'white', doc: { type: 'doc', content: [p('قوانین تازه')] } }] };
+// 10c review: shapes only a broken or hostile ERP would send; the page must still be drawn, never a 500
+const nested = (levels: number): unknown => (levels === 0 ? p('ته') : { type: 'blockquote', content: [nested(levels - 1)] });
+const BROKEN = {
+  slug: 'broken-shapes', kind: 'custom', title: 'شکل‌های خراب', noindex: true, updatedAt: '2026-11-18 10:00:00.000', seoTitle: '', seoDescription: '', shareImage: null,
+  sections: [
+    { kind: 'text', background: 'white', doc: { type: 'doc', content: [null, 7, 'x', nested(200), p('پس از تودرتو'), { type: 'paragraph', content: [{ type: 'text', text: 'بی‌قالب', marks: [null, 'x', { type: 'link', attrs: { href: '/a\u202eb' } }] }], onclick: 'alert(9)' }] } },
+    { kind: 'text', background: 'white', doc: { type: 'doc', content: [{ type: 'iframe' }, { type: 'paragraph' }, p('\u200c')] } },
+    { kind: 'hero', background: 'white', title: '\u200c\u200c', text: 'متن سربرگ\u0000 با نویسهٔ کنترلی\u202e', image: null, buttonLabel: '', buttonHref: '' },
+    { kind: 'products', background: 'white', title: 'کارت با فیلد اضافه', collection: '', products: ['tile-necklace-sample'], secret: 'leak-me-section' },
+  ],
+};
 // a "base" page with an address the site has no place for, and a custom page that names a base address
 const STRAY = { ...HIDDEN, slug: 'returns', kind: 'base', title: 'صفحهٔ پایهٔ ناشناخته', noindex: false };
 
 beforeAll(async () => {
   mock = spawn(process.execPath, [path.join(import.meta.dirname, '../mock/mockApi.mjs')], {
-    env: { ...process.env, MOCK_PORT: String(PORT), MOCK_API_KEY: KEY, MOCK_ORDERING: '1', MOCK_PAGES: JSON.stringify([STORY, ABOUT, HIDDEN, TERMS, STRAY]) },
+    env: { ...process.env, MOCK_PORT: String(PORT), MOCK_API_KEY: KEY, MOCK_ORDERING: '1', MOCK_PAGES: JSON.stringify([STORY, ABOUT, HIDDEN, TERMS, STRAY, DEEP, BROKEN]) },
     stdio: 'pipe',
   });
   await new Promise<void>((resolve, reject) => {
@@ -148,6 +167,7 @@ describe('a page the shop made, at /pages/<its address>', () => {
     // products: the card of the item on the site, and the way to the rest of the collection
     expect(sectionOf(main, 'products')).toContain('href="/p/tile-necklace-sample"');
     expect(sectionOf(main, 'products')).toContain(`href="/collections/${encodeURIComponent('شاه‌عباسی')}"`);
+    expect(sectionOf(main, 'products')).toContain('همهٔ محصولات کالکشن شاه‌عباسی');
     expect(main).not.toContain('ردیف خالی');
     expect(sectionOf(main, 'button')).toMatch(/<a[^>]*href="\/wholesale"[^>]*>سفارش عمده<\/a>/);
     expect(main).not.toContain('دکمهٔ بد');
@@ -170,7 +190,7 @@ describe('a page the shop made, at /pages/<its address>', () => {
     expect(text).toContain('<blockquote');
     expect(text).toContain('<hr');
     expect(text).toMatch(new RegExp(`<img src="/media/${B}\\.webp" alt="میز کار" width="800" height="600"`));
-    expect(text).toMatch(/<th scope="col"[^>]*><p>.*اندازه/);
+    expect(text).toMatch(/<th class="[^"]*"><p>.*اندازه/);
     expect(text).toContain('<br/>');
     expect(text).toContain('پس از خط تازه');
     // none of the hostile parts reached the page, as an element or as an attribute
@@ -178,13 +198,16 @@ describe('a page the shop made, at /pages/<its address>', () => {
     for (const bad of ['javascript:', 'evil.example', '<iframe', 'etc/passwd', 'نام بد', 'background:url', 'alert(3)', '<script>alert']) expect(main, bad).not.toContain(bad);
   });
 
-  it('keeps every part inside a narrow phone: an image shrinks, a long word breaks, a table scrolls in its own box', async () => {
+  // by class only: a real browser is not part of this suite (the layout was measured by hand in Chrome at 360 px, PR #490)
+  it('gives every part the classes that keep it inside a narrow phone: an image shrinks, a long word breaks, a table scrolls in its own box', async () => {
     const main = mainOf((await get('/pages/our-story')).html);
     const images = main.match(/<img[^>]*>/g) ?? [];
     expect(images.length).toBeGreaterThan(5);
     for (const img of images) expect(img, img).toMatch(/class="[^"]*(max-w-full|w-full)/);
     expect(main).toMatch(/<div class="max-w-full overflow-x-auto[^"]*"[^>]*><table/);
     for (const kind of ['text', 'textImage']) expect(sectionOf(main, kind), kind).toContain('break-words');
+    // a button's long label breaks too (10c review: 40 unbroken letters pushed the page 24 px wide)
+    for (const kind of ['hero', 'button']) expect(sectionOf(main, kind), kind).toMatch(/<a[^>]*class="[^"]*max-w-full[^"]*wrap-anywhere/);
     // grids start as one column (two for the gallery) and widen only from a breakpoint up
     expect(sectionOf(main, 'iconCards')).toMatch(/class="grid gap-4 sm:grid-cols-2/);
     expect(sectionOf(main, 'gallery')).toContain('grid grid-cols-2 gap-3 sm:grid-cols-3');
@@ -201,6 +224,46 @@ describe('a page the shop made, at /pages/<its address>', () => {
     // a base page has one address, its own
     expect((await get('/pages/about')).status).toBe(404);
     expect((await get('/pages/returns')).status).toBe(404);
+  });
+});
+
+describe('a text on a deep ground', () => {
+  it('gives each colour a class that is read there: grey takes the ground\'s light text, the two blues a light one', async () => {
+    const { html } = await get('/pages/deep-text');
+    const main = mainOf(html);
+    expect(sectionOf(main, 'text')).toContain('data-tone="deep"');
+    // 10c review: grey was the dark grey of a white page, dimmed, on cobalt (1.01 to 1)
+    expect(main).toMatch(/<span class="text-muted-foreground in-data-\[tone=deep\]:text-inherit in-data-\[tone=deep\]:opacity-75">خاکستری<\/span>/);
+    expect(main).toMatch(/<span class="text-brand in-data-\[tone=deep\]:text-accent-light">لاجوردی<\/span>/);
+    expect(main).toMatch(/<span class="text-accent-ink in-data-\[tone=deep\]:text-accent-light">آبی<\/span>/);
+    // the white card of a product row inside a deep section is light again (the focus ring follows it)
+    expect(sectionOf(main, 'products')).toMatch(/data-tone="deep".*<div data-tone="light" class="rounded-surface bg-background/s);
+    // the shipping list is a white card: its words are the card's dark text
+    expect(sectionOf(main, 'shippingMethods')).toMatch(/<ul class="[^"]*bg-card text-foreground"/);
+  });
+});
+
+describe('an answer of the ERP in a broken shape', () => {
+  it('still draws the page: what cannot be read is left out, a text is cut at a depth, and nothing unknown rides along to the browser', async () => {
+    const { status, html } = await get('/pages/broken-shapes');
+    expect(status).toBe(200);
+    const main = mainOf(html);
+    expect(main).toContain('پس از تودرتو');
+    expect(main).toContain('بی‌قالب');
+    // nested 200 deep: drawn to the depth the site allows and no deeper
+    expect((main.match(/<blockquote/g) ?? []).length).toBeLessThan(20);
+    // the text whose nodes are all unknown or empty is no band at all, and the title of only joiners is no heading
+    expect(main.match(/data-page-section="text"/g)).toHaveLength(1);
+    expect(html.match(/<h1/g)).toHaveLength(1);
+    expect(html).toMatch(/<h1[^>]*>شکل‌های خراب<\/h1>/);
+    // control characters and the characters that turn a line over are gone, in the page and in its description
+    expect(html).toContain('متن سربرگ با نویسهٔ کنترلی');
+    expect(html).not.toMatch(/[\u0000\u202e]/);
+    expect(main).not.toMatch(/<a[^>]*>بی‌قالب/);
+    // a time without a zone is no time (it would be read in the zone of wherever the site runs)
+    expect((await get('/sitemap.xml')).html).not.toContain('broken-shapes');
+    // nothing but the known fields reaches the page's data
+    for (const stray of ['leak-me', 'onclick', 'alert(9)', 'itemId', 'sortOrder']) expect(html, stray).not.toContain(stray);
   });
 });
 
@@ -249,6 +312,24 @@ describe('the ERP\'s answer as the site takes it', () => {
     expect(sitePage({ ...STORY, sections: 'none' })?.sections).toEqual([]);
     expect(sitePageList([STORY, { slug: 'x y' }, 5, ABOUT]).map(s => s.slug)).toEqual(['our-story', 'about']);
     expect(sitePageList({ data: [] })).toEqual([]);
+    // a text is rebuilt from the known fields: an unknown attribute, mark or key is not kept, and 300,000 nodes are cut to a size
+    const rebuilt = sitePage({ ...STORY, sections: [{ kind: 'text', background: 'white', doc: { type: 'doc', extra: 1, content: [
+      { type: 'paragraph', attrs: { textAlign: 'center', style: 'color:red', onclick: 'x' }, onerror: 'y', content: [{ type: 'text', text: 'متن', marks: [{ type: 'code' }, { type: 'bold', attrs: { x: 1 } }], secret: 1 }] },
+      { type: 'libraryImage', attrs: { sha256: A, width: 10, height: 10, alt: 'a', thumb: 1, onerror: 'alert(1)' } },
+    ] } }] });
+    expect(rebuilt?.sections[0]).toEqual({ kind: 'text', background: 'white', doc: { type: 'doc', content: [
+      { type: 'paragraph', attrs: { textAlign: 'center' }, content: [{ type: 'text', text: 'متن', marks: [{ type: 'bold' }] }] },
+      { type: 'libraryImage', attrs: { sha256: A, width: 10, height: 10, alt: 'a', thumb: 1 } },
+    ] } });
+    // 100,000 deep (built in a loop; no ERP could even write it as JSON): cut at the site's depth, with no overflow of the stack
+    let deep: unknown = p('ته');
+    for (let i = 0; i < 100_000; i++) deep = { type: 'blockquote', content: [deep] };
+    const cut = sitePage({ ...ABOUT, seoDescription: '', sections: [{ kind: 'text', background: 'white', doc: { type: 'doc', content: [deep] } }] });
+    expect(JSON.stringify(cut).match(/blockquote/g)?.length).toBeLessThan(20);
+    expect(pageDescription(cut!)).toBe('درباره ما');
+    const huge = sitePage({ ...STORY, sections: [{ kind: 'text', background: 'white', doc: { type: 'doc', content: Array.from({ length: 300_000 }, () => p('x')) } }] });
+    const kept = huge?.sections[0];
+    expect(kept?.kind === 'text' && kept.doc.content.length).toBeLessThanOrEqual(2000);
   });
 
   it('writes a description from the page\'s own words and a day from its time', () => {
@@ -257,6 +338,14 @@ describe('the ERP\'s answer as the site takes it', () => {
     expect(pageDescription(long!).endsWith('…')).toBe(true);
     expect(pageDescription(sitePage({ ...ABOUT, seoDescription: '', sections: [] })!)).toBe('درباره ما');
     expect(lastModOf('2026-11-20T23:30:00.000+03:30')).toBe('2026-11-20');
+    expect(lastModOf('2026-11-20T23:30:00.000Z')).toBe('2026-11-20');
+    // 10c review: a time without its zone gave another day on a server in Tehran than on one in UTC
+    expect(lastModOf('2026-11-22 01:00:00.000')).toBe('');
+    expect(lastModOf('2026-11-22T01:00:00.000')).toBe('');
+    expect(sitePage({ ...ABOUT, updatedAt: '2026-11-22 01:00:00.000' })?.updatedAt).toBe('');
+    // the pieces of one paragraph run together: «توجه، این» and not «توجه ، این»
+    const marked = sitePage({ ...ABOUT, seoDescription: '', sections: [{ kind: 'text', background: 'white', doc: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'توجه', marks: [{ type: 'bold' }] }, { type: 'text', text: '، این متن است.' }] }, p('پاراگراف دوم')] } }] });
+    expect(pageDescription(marked!)).toBe('توجه، این متن است. پاراگراف دوم');
     expect(lastModOf('yesterday')).toBe('');
     expect(lastModOf('')).toBe('');
   });

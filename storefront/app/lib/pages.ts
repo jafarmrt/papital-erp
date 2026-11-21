@@ -3,7 +3,8 @@ import type {
   StorefrontPageImage, StorefrontPageSection, StorefrontPageSummary, StorefrontPublicPage,
 } from '@erp/storefront/storefrontPagePublicContracts';
 import {
-  BASE_PAGES, PAGE_ICONS, PAGE_SLUG_MAX, SECTION_BACKGROUNDS, pageLink, type PageIcon, type RichDoc, type SectionBackground,
+  BASE_PAGES, PAGE_ICONS, PAGE_SLUG_MAX, RICH_TEXT_CHARS_MAX, RICH_TEXT_DEPTH_MAX, RICH_TEXT_NODES_MAX, SECTION_BACKGROUNDS, TEXT_ALIGNS, TEXT_COLORS, pageLink,
+  type PageIcon, type RichDoc, type RichMark, type RichNode, type SectionBackground, type TextAlign, type TextColor,
 } from '@erp/storefront/storefrontPageParts';
 
 /**
@@ -23,27 +24,96 @@ export const isBasePageSlug = (slug: string) => BASE_PAGES.some(page => page.slu
 export const pagePath = (page: { kind: string; slug: string }) => (page.kind === 'base' ? `/${page.slug}` : `/pages/${page.slug}`);
 
 const FILE_KEY = /^[0-9a-f]{64}$/;
+// control characters (a tab and a line break stay) and the characters that turn the direction of a line over
+// eslint-disable-next-line no-control-regex
+const UNSEEN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g;
+const TURNS_LINE = /[\u202a-\u202e\u2066-\u2069]/;
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
-const str = (value: unknown, max: number) => (typeof value === 'string' ? value.slice(0, max) : '');
+const str = (value: unknown, max: number) => (typeof value === 'string' ? value.replace(UNSEEN, '').slice(0, max) : '');
 const side = (value: unknown) => (typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 20_000 ? value : null);
-const href = (value: unknown) => pageLink(value) ?? '';
+const href = (value: unknown) => (typeof value === 'string' && TURNS_LINE.test(value) ? '' : pageLink(value) ?? '');
 const list = (value: unknown, max: number): unknown[] => (Array.isArray(value) ? value.slice(0, max) : []);
+/** Nothing a visitor would see: empty, spaces, or only the joiners and marks that draw nothing */
+export const isBlank = (value: string) => value.replace(/[\s\u200b-\u200f\u2060\ufeff]/g, '') === '';
 
 export function pageImage(value: unknown): SitePageImage | null {
   if (!isRecord(value) || typeof value.sha256 !== 'string' || !FILE_KEY.test(value.sha256)) return null;
   return { sha256: value.sha256, width: side(value.width), height: side(value.height), alt: str(value.alt, 300), thumb: value.thumb === true || value.thumb === 1 };
 }
 
-/** A product card as the ERP's catalog sends it; a card without an address or a name is left out */
+const STOCK = ['in_stock', 'low', 'out'] as const;
+
+/** A product card rebuilt from the fields the site draws, so a field the ERP never meant for it cannot ride along */
 function card(value: unknown): StorefrontProductCard | null {
   if (!isRecord(value) || typeof value.slug !== 'string' || !value.slug || typeof value.name !== 'string' || typeof value.retailPrice !== 'string') return null;
-  if (!isRecord(value.stock) || typeof value.stock.status !== 'string') return null;
+  const stock = isRecord(value.stock) ? value.stock : {};
+  if (!STOCK.includes(stock.status as typeof STOCK[number])) return null;
   const cover = pageImage(value.cover);
-  return { ...(value as unknown as StorefrontProductCard), cover: cover ? { ...cover, isCover: true } : null };
+  return {
+    slug: str(value.slug, 200), sku: str(value.sku, 100), name: str(value.name, 300), category: str(value.category, 200),
+    collections: list(value.collections, 30).flatMap(name => (typeof name === 'string' ? [str(name, 200)] : [])), retailPrice: str(value.retailPrice, 40),
+    stock: { status: stock.status as typeof STOCK[number], quantity: typeof stock.quantity === 'number' && Number.isInteger(stock.quantity) && stock.quantity >= 0 ? stock.quantity : null },
+    cover: cover ? { sha256: cover.sha256, width: cover.width, height: cover.height, alt: cover.alt, isCover: true } : null,
+  };
 }
 
-/** The editor's JSON is drawn node by node by `RichText`, which knows each node it draws; here only its outer shape is checked */
-const doc = (value: unknown): RichDoc => (isRecord(value) && value.type === 'doc' && Array.isArray(value.content) ? value as unknown as RichDoc : { type: 'doc', content: [] });
+/**
+ * A text of the editor, rebuilt node by node from what the site draws: a node, mark or attribute it does not know is
+ * left out, a link is checked again, and the whole is held to a size (twice the ERP's own limits, so a text the ERP
+ * accepted always fits) and a depth. What is past the size is cut off; a page is never refused for it.
+ */
+const DOC_NODES_MAX = RICH_TEXT_NODES_MAX * 2;
+const DOC_CHARS_MAX = RICH_TEXT_CHARS_MAX * 2;
+const DOC_DEPTH_MAX = RICH_TEXT_DEPTH_MAX + 4;
+const BLOCKS = ['paragraph', 'heading', 'bulletList', 'orderedList', 'listItem', 'blockquote', 'table', 'tableRow', 'tableCell', 'tableHeader'];
+interface Budget { nodes: number; chars: number }
+
+function marks(value: unknown): RichMark[] {
+  return list(value, 8).flatMap((raw): RichMark[] => {
+    if (!isRecord(raw)) return [];
+    const attrs = isRecord(raw.attrs) ? raw.attrs : {};
+    if (raw.type === 'bold' || raw.type === 'italic' || raw.type === 'underline') return [{ type: raw.type }];
+    if (raw.type === 'textColor' && TEXT_COLORS.includes(attrs.color as TextColor)) return [{ type: 'textColor', attrs: { color: attrs.color as TextColor } }];
+    if (raw.type === 'link' && href(attrs.href)) return [{ type: 'link', attrs: { href: href(attrs.href) } }];
+    return [];
+  });
+}
+
+function node(raw: unknown, depth: number, budget: Budget): RichNode | null {
+  if (!isRecord(raw) || typeof raw.type !== 'string' || depth > DOC_DEPTH_MAX || budget.nodes >= DOC_NODES_MAX) return null;
+  budget.nodes += 1;
+  const attrs = isRecord(raw.attrs) ? raw.attrs : {};
+  if (raw.type === 'text') {
+    const text = str(raw.text, Math.max(0, DOC_CHARS_MAX - budget.chars));
+    if (!text) return null;
+    budget.chars += text.length;
+    const kept = marks(raw.marks);
+    return kept.length ? { type: 'text', text, marks: kept } : { type: 'text', text };
+  }
+  if (raw.type === 'hardBreak' || raw.type === 'horizontalRule') return { type: raw.type };
+  if (raw.type === 'libraryImage') {
+    const image = pageImage(attrs);
+    return image ? { type: 'libraryImage', attrs: { sha256: image.sha256, width: image.width, height: image.height, alt: image.alt, thumb: image.thumb ? 1 : 0 } } : null;
+  }
+  if (!BLOCKS.includes(raw.type)) return null;
+  const kept: Record<string, string | number> = {};
+  if (TEXT_ALIGNS.includes(attrs.textAlign as TextAlign)) kept.textAlign = attrs.textAlign as TextAlign;
+  if (raw.type === 'heading') kept.level = attrs.level === 2 || attrs.level === 3 ? attrs.level : 4;
+  if (raw.type === 'orderedList' && typeof attrs.start === 'number' && Number.isInteger(attrs.start) && attrs.start > 1 && attrs.start <= 9999) kept.start = attrs.start;
+  const content = list(raw.content, DOC_NODES_MAX).flatMap(child => node(child, depth + 1, budget) ?? []);
+  return { type: raw.type, ...(Object.keys(kept).length ? { attrs: kept } : {}), ...(content.length ? { content } : {}) };
+}
+
+function doc(value: unknown): RichDoc {
+  if (!isRecord(value) || value.type !== 'doc') return { type: 'doc', content: [] };
+  const budget: Budget = { nodes: 0, chars: 0 };
+  return { type: 'doc', content: list(value.content, DOC_NODES_MAX).flatMap(child => node(child, 1, budget) ?? []) };
+}
+
+/** Whether a text has anything to show: a word, an image or a rule (a text of empty paragraphs has not) */
+export const docIsBlank = (text: RichDoc): boolean => !text.content.some(function shows(part: RichNode): boolean {
+  return part.type === 'libraryImage' || part.type === 'horizontalRule' || (typeof part.text === 'string' && !isBlank(part.text)) || Boolean(part.content?.some(shows));
+});
 
 function section(value: unknown): SitePageSection | null {
   if (!isRecord(value)) return null;
@@ -88,13 +158,20 @@ function section(value: unknown): SitePageSection | null {
   }
 }
 
+/**
+ * A time that names its zone (`…Z` or `…+03:30`). One without a zone would be read in this server's own zone, and the
+ * day worked out from it would then depend on where the site runs, so it is no time at all here.
+ */
+const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|[+-]\d{2}:\d{2})$/;
+const isInstant = (text: string) => INSTANT.test(text) && !Number.isNaN(Date.parse(text));
+
 const summary = (value: unknown): StorefrontPageSummary | null => {
-  if (!isRecord(value) || typeof value.slug !== 'string' || !isPageSlug(value.slug) || typeof value.title !== 'string' || !value.title.trim()) return null;
+  if (!isRecord(value) || typeof value.slug !== 'string' || !isPageSlug(value.slug) || isBlank(str(value.title, 200))) return null;
   const kind = value.kind === 'base' ? 'base' : 'custom';
   // a base page is one of the five the site has an address for; any other "base" page has nowhere to be shown
   if (kind === 'base' && !isBasePageSlug(value.slug)) return null;
-  const at = typeof value.updatedAt === 'string' && !Number.isNaN(Date.parse(value.updatedAt)) ? value.updatedAt : '';
-  return { slug: value.slug, kind, title: value.title.trim().slice(0, 200), noindex: value.noindex === true, updatedAt: at };
+  const at = typeof value.updatedAt === 'string' && isInstant(value.updatedAt) ? value.updatedAt : '';
+  return { slug: value.slug, kind, title: str(value.title, 200).trim(), noindex: value.noindex === true, updatedAt: at };
 };
 
 export function sitePage(value: unknown): SitePage | null {
@@ -108,27 +185,25 @@ export function sitePage(value: unknown): SitePage | null {
 
 export const sitePageList = (value: unknown): StorefrontPageSummary[] => list(value, 400).flatMap(raw => summary(raw) ?? []);
 
-/** `YYYY-MM-DD` of an ISO time, for the sitemap's `lastmod` ('' when there is none) */
-export const lastModOf = (iso: string) => (/^\d{4}-\d{2}-\d{2}/.test(iso) && !Number.isNaN(Date.parse(iso)) ? new Date(iso).toISOString().slice(0, 10) : '');
+/** The day (in UTC) of a time that names its zone, for the sitemap's `lastmod`; '' for anything else */
+export const lastModOf = (iso: string) => (isInstant(iso) ? new Date(iso).toISOString().slice(0, 10) : '');
 
-/** The words of a text, without its formatting (for a page's description when none was written) */
-function plainText(node: unknown, budget = { left: 400 }): string {
-  if (!isRecord(node) || budget.left <= 0) return '';
-  if (typeof node.text === 'string') {
-    budget.left -= node.text.length;
-    return node.text;
-  }
-  return list(node.content, 2000).map(child => plainText(child, budget)).filter(Boolean).join(' ');
+/** The words of a text without its formatting: the pieces of one paragraph run together, and paragraphs are a space apart */
+function plainText(part: RichNode): string {
+  if (typeof part.text === 'string') return part.text;
+  const inside = (part.content ?? []).map(plainText);
+  return part.type === 'paragraph' || part.type === 'heading' ? inside.join('') : inside.filter(Boolean).join(' ');
 }
 
 const DESCRIPTION_MAX = 200;
 
 /** The description of a page for a search engine: the one written in the ERP, else the first words of the page itself */
 export function pageDescription(page: SitePage): string {
-  if (page.seoDescription.trim()) return page.seoDescription.trim();
+  if (!isBlank(page.seoDescription)) return page.seoDescription.trim();
   for (const part of page.sections) {
-    const words = (part.kind === 'hero' ? part.text : part.kind === 'text' || part.kind === 'textImage' ? plainText(part.doc) : '').replace(/\s+/g, ' ').trim();
-    if (words) return words.length > DESCRIPTION_MAX ? `${words.slice(0, DESCRIPTION_MAX - 1).trimEnd()}…` : words;
+    const words = (part.kind === 'hero' ? part.text : part.kind === 'text' || part.kind === 'textImage' ? part.doc.content.map(plainText).filter(Boolean).join(' ') : '')
+      .replace(/\s+/g, ' ').trim();
+    if (!isBlank(words)) return words.length > DESCRIPTION_MAX ? `${words.slice(0, DESCRIPTION_MAX - 1).trimEnd()}…` : words;
   }
   return page.title;
 }

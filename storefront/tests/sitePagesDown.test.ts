@@ -1,5 +1,6 @@
-// v12 phase 10c: when the ERP cannot answer for its pages (500; an ERP not yet updated answers 404 the same way), the
-// five base pages keep the text the site always had and the sitemap is still written. Run `npm run build` first.
+// v12 phase 10c: when the ERP cannot answer for its pages (500), a base page the site has never read keeps the text the
+// site always had, the sitemap is still written, and a page the shop made is an error, not «not found». `sitePagesMissing`
+// covers an ERP not yet updated (404) and `sitePagesLastGood` a published base page whose ERP then fails. Run `npm run build` first.
 import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';

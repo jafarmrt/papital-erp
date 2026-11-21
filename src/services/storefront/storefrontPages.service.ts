@@ -338,7 +338,10 @@ export async function deletePage(req: Request, id: number, version: number): Pro
   });
 }
 
-/** The images of published contents, for the site's image route of 10c: a live image with a light version that a live row names */
+/**
+ * The images of published contents: a live image with a light version that a live row names. The site's image route
+ * (10c, `contentImageFile`) asks the same of one file at a time, joined to the page being on the site.
+ */
 export async function publishedContentAssetIds(executor: DbExecutor): Promise<number[]> {
   const rows = await executor.select({ assetId: storefrontContentAssets.assetId }).from(storefrontContentAssets)
     .innerJoin(mediaAssets, eq(mediaAssets.id, storefrontContentAssets.assetId))

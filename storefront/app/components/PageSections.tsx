@@ -4,9 +4,9 @@ import { Clock, Gift, Handshake, Heart, Leaf, Mail, MapPin, Phone, ShieldCheck, 
 import type { PageIcon, SectionBackground } from '@erp/storefront/storefrontPageParts';
 import { collectionPath, mediaPath } from '../lib/brand';
 import { formatPrice } from '../lib/format';
-import type { SitePageImage, SitePageSection } from '../lib/pages';
+import { docIsBlank, isBlank, type SitePageImage, type SitePageSection } from '../lib/pages';
 import { ProductGrid } from './ProductCard';
-import { RichText, richTextIsEmpty } from './RichText';
+import { RichText } from './RichText';
 
 /**
  * v12 phase 10c: the sections of a page of the ERP's «صفحه‌های سایت», each kind drawn by the site itself. A section is
@@ -57,8 +57,8 @@ function PageImg({ image, sizes, eager = false, className = '' }: { image: SiteP
 
 /** A button of a page: a path of the site stays in the app; an outside address opens without telling it where the visitor came from */
 function PageButton({ label, href, deep }: { label: string; href: string; deep: boolean }) {
-  if (!label.trim() || !href) return null;
-  const className = `inline-flex min-h-11 max-w-full items-center justify-center rounded-control px-6 py-2 text-center font-bold transition-colors duration-(--motion) ${
+  if (isBlank(label) || !href) return null;
+  const className = `inline-flex min-h-11 max-w-full items-center wrap-anywhere justify-center rounded-control px-6 py-2 text-center font-bold transition-colors duration-(--motion) ${
     deep ? 'bg-background text-foreground hover:bg-brand-soft' : 'bg-primary text-primary-foreground hover:bg-brand'}`;
   return href.startsWith('/')
     ? <Link to={href} className={className}>{label}</Link>
@@ -66,18 +66,19 @@ function PageButton({ label, href, deep }: { label: string; href: string; deep: 
 }
 
 const Title = ({ children, lead = false }: { children: string; lead?: boolean }) => {
-  if (!children.trim()) return null;
+  if (isBlank(children)) return null;
   return lead
     ? <h1 className="text-3xl font-extrabold leading-tight text-balance break-words lg:text-5xl">{children}</h1>
     : <h2 className="text-2xl font-extrabold text-balance break-words lg:text-3xl">{children}</h2>;
 };
 
-export function ShippingMethodsList({ shipping }: { shipping: ShippingView }) {
+/** `listClassName`: the list is a white card, so on a deep ground it is given the dark text of a card */
+export function ShippingMethodsList({ shipping, listClassName = '' }: { shipping: ShippingView; listClassName?: string }) {
   const free = shipping.methods.filter(m => m.free);
   return (
     <>
       {shipping.methods.length ? (
-        <ul className="divide-y divide-border rounded-surface border border-border bg-card text-foreground">
+        <ul className={`divide-y divide-border rounded-surface border border-border bg-card${listClassName ? ` ${listClassName}` : ''}`}>
           {shipping.methods.map(m => (
             <li key={m.title} className="space-y-1 px-4 py-4">
               <p className="font-bold text-foreground">{m.title}</p>
@@ -99,12 +100,12 @@ function body(section: SitePageSection, lead: boolean, shipping: ShippingView | 
   const deep = isDeep(section.background);
   switch (section.kind) {
     case 'hero': {
-      if (!section.title.trim() && !section.text.trim() && !section.image) return null;
+      if (isBlank(section.title) && isBlank(section.text) && !section.image) return null;
       return (
         <div className={section.image ? 'grid items-center gap-8 lg:grid-cols-2 lg:gap-12' : 'max-w-3xl'}>
           <div className="min-w-0 space-y-4">
             <Title lead={lead}>{section.title}</Title>
-            {section.text.trim() ? <p className="text-lg leading-9 break-words whitespace-pre-line opacity-90">{section.text}</p> : null}
+            {!isBlank(section.text) ? <p className="text-lg leading-9 break-words whitespace-pre-line opacity-90">{section.text}</p> : null}
             <PageButton label={section.buttonLabel} href={section.buttonHref} deep={deep} />
           </div>
           {section.image ? <PageImg image={section.image} eager={lead} sizes="(min-width: 1024px) 480px, 100vw" className="w-full rounded-surface object-cover" /> : null}
@@ -112,9 +113,9 @@ function body(section: SitePageSection, lead: boolean, shipping: ShippingView | 
       );
     }
     case 'text':
-      return richTextIsEmpty(section.doc) ? null : <RichText doc={section.doc} className="max-w-3xl" />;
+      return docIsBlank(section.doc) ? null : <RichText doc={section.doc} className="max-w-3xl" />;
     case 'textImage': {
-      if (!section.title.trim() && richTextIsEmpty(section.doc) && !section.image) return null;
+      if (isBlank(section.title) && docIsBlank(section.doc) && !section.image) return null;
       return (
         <div className={section.image ? 'grid items-center gap-8 lg:grid-cols-2 lg:gap-12' : 'max-w-3xl'}>
           {/* the page is right-to-left: the first column is the right one */}
@@ -138,8 +139,8 @@ function body(section: SitePageSection, lead: boolean, shipping: ShippingView | 
               return (
                 <li key={i} className={`min-w-0 space-y-2 rounded-surface border p-5 ${deep ? 'border-current/20' : 'border-border bg-card'}`}>
                   <Icon className={`size-8 ${deep ? '' : 'text-brand'}`} strokeWidth={1.5} aria-hidden />
-                  {card.title.trim() ? <h3 className="font-bold break-words">{card.title}</h3> : null}
-                  {card.text.trim() ? <p className="text-sm leading-7 break-words opacity-85">{card.text}</p> : null}
+                  {!isBlank(card.title) ? <h3 className="font-bold break-words">{card.title}</h3> : null}
+                  {!isBlank(card.text) ? <p className="text-sm leading-7 break-words opacity-85">{card.text}</p> : null}
                 </li>
               );
             })}
@@ -153,8 +154,8 @@ function body(section: SitePageSection, lead: boolean, shipping: ShippingView | 
         <div className="space-y-6">
           <Title lead={lead}>{section.title}</Title>
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:gap-4">
-            {section.images.map(image => (
-              <li key={image.sha256} className="min-w-0">
+            {section.images.map((image, i) => (
+              <li key={i} className="min-w-0">
                 <PageImg image={image} sizes="(min-width: 1024px) 320px, (min-width: 640px) 32vw, 48vw" className="aspect-square w-full rounded-surface bg-card object-cover" />
               </li>
             ))}
@@ -163,7 +164,7 @@ function body(section: SitePageSection, lead: boolean, shipping: ShippingView | 
       );
     }
     case 'people': {
-      const people = section.people.filter(person => person.name.trim());
+      const people = section.people.filter(person => !isBlank(person.name));
       if (people.length === 0) return null;
       return (
         <div className="space-y-6">
@@ -173,8 +174,8 @@ function body(section: SitePageSection, lead: boolean, shipping: ShippingView | 
               <li key={i} className={`min-w-0 space-y-2 rounded-surface border p-5 text-center ${deep ? 'border-current/20' : 'border-border bg-card'}`}>
                 {person.image ? <PageImg image={person.image} sizes="96px" className="mx-auto size-24 rounded-full bg-card object-cover" /> : null}
                 <h3 className="font-bold break-words">{person.name}</h3>
-                {person.role.trim() ? <p className="text-sm break-words opacity-85">{person.role}</p> : null}
-                {person.contact.trim() ? <p className="text-sm break-all opacity-85"><bdi>{person.contact}</bdi></p> : null}
+                {!isBlank(person.role) ? <p className="text-sm break-words opacity-85">{person.role}</p> : null}
+                {!isBlank(person.contact) ? <p className="text-sm break-all opacity-85"><bdi>{person.contact}</bdi></p> : null}
               </li>
             ))}
           </ul>
@@ -185,14 +186,14 @@ function body(section: SitePageSection, lead: boolean, shipping: ShippingView | 
       const links = [
         { href: section.neshanUrl, label: 'مسیریابی با نشان' }, { href: section.baladUrl, label: 'مسیریابی با بلد' }, { href: section.googleUrl, label: 'مسیریابی با نقشهٔ گوگل' },
       ].filter(link => link.href && !link.href.startsWith('/'));
-      if (!section.image && !section.address.trim() && links.length === 0) return null;
+      if (!section.image && isBlank(section.address) && links.length === 0) return null;
       return (
         <div className="space-y-6">
           <Title lead={lead}>{section.title}</Title>
           <div className={section.image ? 'grid items-center gap-8 lg:grid-cols-2' : 'max-w-3xl'}>
             {section.image ? <PageImg image={section.image} sizes="(min-width: 1024px) 480px, 100vw" className="w-full rounded-surface object-cover" /> : null}
             <div className="min-w-0 space-y-4">
-              {section.address.trim() ? <p className="leading-8 break-words whitespace-pre-line">{section.address}</p> : null}
+              {!isBlank(section.address) ? <p className="leading-8 break-words whitespace-pre-line">{section.address}</p> : null}
               {links.length ? (
                 <ul className="flex flex-wrap gap-3">
                   {links.map(link => (
@@ -215,28 +216,28 @@ function body(section: SitePageSection, lead: boolean, shipping: ShippingView | 
         <div className="space-y-6">
           <Title lead={lead}>{section.title}</Title>
           {/* a product card is always on white, as the photos are */}
-          <div className={deep ? 'rounded-surface bg-background p-4 text-foreground lg:p-6' : ''}><ProductGrid products={section.products} /></div>
+          <div data-tone="light" className={deep ? 'rounded-surface bg-background p-4 text-foreground lg:p-6' : ''}><ProductGrid products={section.products} /></div>
           {section.collection ? (
-            <p><Link to={collectionPath(section.collection)} className={`inline-flex min-h-11 items-center font-medium underline-offset-4 hover:underline ${deep ? '' : 'text-brand'}`}>همهٔ محصولات این کالکشن</Link></p>
+            <p><Link to={collectionPath(section.collection)} className={`inline-flex min-h-11 items-center font-medium underline-offset-4 hover:underline ${deep ? '' : 'text-brand'}`}>{`همهٔ محصولات کالکشن ${section.collection}`}</Link></p>
           ) : null}
         </div>
       );
     }
     case 'button':
-      return section.label.trim() && section.href ? <div className="text-center"><PageButton label={section.label} href={section.href} deep={deep} /></div> : null;
+      return !isBlank(section.label) && section.href ? <div className="text-center"><PageButton label={section.label} href={section.href} deep={deep} /></div> : null;
     case 'shippingMethods':
       if (!shipping) return null;
       return (
         <div className="max-w-3xl space-y-4">
-          <Title lead={lead}>{section.title.trim() || 'روش‌های ارسال'}</Title>
-          <ShippingMethodsList shipping={shipping} />
+          <Title lead={lead}>{isBlank(section.title) ? 'روش‌های ارسال' : section.title}</Title>
+          <ShippingMethodsList shipping={shipping} listClassName={deep ? 'text-foreground' : ''} />
         </div>
       );
   }
 }
 
 const writesTitle = (section: SitePageSection): boolean => (
-  section.kind === 'shippingMethods' || ('title' in section && Boolean(section.title.trim()))
+  section.kind === 'shippingMethods' || ('title' in section && !isBlank(section.title))
 );
 
 /**

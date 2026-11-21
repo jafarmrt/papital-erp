@@ -50,7 +50,7 @@ const campaignSummary = ({ slug, title, summary, hero, homeBanner, endsOn }) => 
 // v12 phase 10a: «اطلاعات فروشگاه»; every field empty (the site keeps its own words) unless MOCK_SHOP_INFO gives the answer
 // as JSON (MOCK_SHOP_INFO=fail answers 500 and MOCK_SHOP_INFO=missing 404, as an ERP not yet updated does)
 const shopInfoMode = process.env.MOCK_SHOP_INFO ?? '';
-const pagesMode = process.env.MOCK_PAGES ?? '';
+let pagesMode = process.env.MOCK_PAGES ?? '';
 const pageList = pagesMode && pagesMode !== 'fail' && pagesMode !== 'missing' ? JSON.parse(pagesMode) : [];
 const shopInfo = shopInfoMode && shopInfoMode !== 'fail' && shopInfoMode !== 'missing' ? JSON.parse(shopInfoMode) : {
   brand: { name: '', fullName: '', tagline: '' }, footerNote: '',
@@ -364,6 +364,11 @@ createServer(async (req, res) => {
   if (url.pathname === '/__mock/email-login') {
     settings.emailLogin = url.searchParams.get('on') === '1';
     return send(res, 200, { emailLogin: settings.emailLogin });
+  }
+  // v12 phase 10c: the tests make the page routes fail (`fail`), vanish (`missing`) or answer again (`ok`) while the mock runs
+  if (url.pathname === '/__mock/pages') {
+    pagesMode = url.searchParams.get('mode') ?? 'ok';
+    return send(res, 200, { pages: pagesMode });
   }
   if (url.pathname === '/__mock/sms-login') {
     settings.smsLogin = url.searchParams.get('on') === '1';
