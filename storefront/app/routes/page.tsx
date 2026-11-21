@@ -1,5 +1,6 @@
 import type { Route } from './+types/page';
 import { page } from '../lib/api.server';
+import { legacyRedirect } from '../lib/legacyRedirect.server';
 import { siteEnv } from '../lib/site.server';
 import { sitePageMeta } from '../lib/meta';
 import { shippingViewFor } from '../lib/pageView.server';
@@ -10,9 +11,14 @@ import { SitePageView } from '../components/SitePageView';
  * it is published; before and after, its address is a 404 like any other. The five base pages keep their own addresses
  * (`/about` …), so `/pages/about` is not a second address for one of them.
  */
-export async function loader({ params }: Route.LoaderArgs) {
+export async function loader({ params, request }: Route.LoaderArgs) {
   const found = await page(params.slug);
-  if (!found || found.kind !== 'custom') throw new Response('پیدا نشد', { status: 404 });
+  if (!found || found.kind !== 'custom') {
+    // the address of a page that moved is kept in the ERP's «نشانی‌های سایت قبلی» and goes to the page's address of now (301)
+    const moved = await legacyRedirect(request);
+    if (moved) throw moved;
+    throw new Response('پیدا نشد', { status: 404 });
+  }
   return { page: found, shipping: await shippingViewFor(found.sections), siteUrl: siteEnv().siteUrl };
 }
 

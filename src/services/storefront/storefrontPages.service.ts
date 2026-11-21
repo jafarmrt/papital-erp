@@ -94,6 +94,9 @@ export async function pageDetail(executor: DbExecutor, id: number): Promise<Page
   return detailOf(executor, await liveRow(executor, id));
 }
 
+/** The live page under its row lock and its version; `storefrontPageMove.service.ts` moves a page's address through it */
+export const lockedPageRow = (tx: DbExecutor, id: number, expectedVersion: number): Promise<PageRecord> => lockedRow(tx, id, expectedVersion);
+
 async function lockedRow(tx: DbExecutor, id: number, expectedVersion: number): Promise<PageRecord> {
   const [row] = await tx.select().from(storefrontPages).where(and(eq(storefrontPages.id, id), eq(storefrontPages.isDeleted, 0))).for('update');
   if (!row) throw new NotFoundError('این صفحه پیدا نشد.', undefined, 'STOREFRONT_PAGE_NOT_FOUND');
@@ -219,7 +222,7 @@ export async function saveDraft(req: Request, id: number, input: PageSaveInput):
     const before = draftOf(row);
     if (page.slug !== row.slug) {
       if (row.published !== null) {
-        throw invalid('نشانی صفحه‌ای که روی سایت است عوض نمی‌شود؛ نخست آن را از روی سایت بردارید.', 'slug', 'STOREFRONT_PAGE_SLUG_ON_SITE');
+        throw invalid('نشانی صفحه‌ای که روی سایت است با ذخیرهٔ پیش‌نویس عوض نمی‌شود؛ از «تغییر نشانی» استفاده کنید تا نشانی کنونی به نشانی تازه منتقل شود.', 'slug', 'STOREFRONT_PAGE_SLUG_ON_SITE');
       }
       const [taken] = await tx.select({ id: storefrontPages.id }).from(storefrontPages)
         .where(and(eq(storefrontPages.slug, page.slug), eq(storefrontPages.isDeleted, 0)));

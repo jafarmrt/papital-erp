@@ -1,0 +1,188 @@
+import request from 'supertest';
+import { and, desc, eq, gt, inArray, like, max } from 'drizzle-orm';
+import { TestCaseResult, makeTestCase } from '../types.js';
+import { orm } from '../../db/drizzle.js';
+import { activityLogs, appSettings, storefrontPages, storefrontRedirects } from '../../db/schema.js';
+import { invalidateSettingsCache } from '../../lib/memoryCache.js';
+import { readPricingStrategies } from '../../lib/items/pricingStrategies.js';
+
+/**
+ * v12 phase 10c (docs/roadmap/V12_SITE_NEXT_START_PLAN.md §7.2): «تغییر نشانی» of a page, on real Express routes and
+ * PostgreSQL. A page on the site takes its new address under its version, and in the same transaction its old address
+ * goes to the new one in «نشانی‌های سایت قبلی»: every earlier address leads to the page's address of now in one hop,
+ * a move back leaves no circle, a redirect the owner had on the old address is pointed anew, and each row changed has
+ * its audit row. A page off the site moves with no redirect. A stale version, a taken or wrong address, a base page and
+ * a holder of the view key are refused, and a draft save still never moves a page that is on the site.
+ */
+interface Session { cookie: string; csrfToken: string }
+type Body = Record<string, unknown>;
+
+export async function runStorefrontPageMoveV12Tests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
+  const results: TestCaseResult[] = [];
+  const id = 'reg_storefront_page_move_v12_p10c';
+  if (!shouldRun(id, 'v12', 'phase10', 'storefront', 'pages', 'redirects', 'occ', 'security')) return results;
+
+  const name = 'v12 phase 10c: a published page moves to a new address under its version and every earlier address is redirected to it in one hop, with audit rows, refusals and no circle';
+  const tStart = Date.now();
+  const pageIds: number[] = [];
+  const savedSettings = await orm.select().from(appSettings).where(like(appSettings.key, 'sf\\_%'));
+  const savedStrategies = await orm.select().from(appSettings).where(eq(appSettings.key, 'pricing_strategies'));
+  const [{ lastRedirect }] = await orm.select({ lastRedirect: max(storefrontRedirects.id) }).from(storefrontRedirects);
+  try {
+    const { getTestApp, getAdminSession, loginTestUserWithSession } = await import('../fixtures/httpTestHelper.js');
+    const { createTestRole, createTestUser } = await import('../fixtures/factories.js');
+    const app = await getTestApp();
+    const admin: Session = await getAdminSession();
+    const as = (s: Session) => ({
+      get: (url: string) => request(app).get(url).set('Cookie', s.cookie).set('x-csrf-token', s.csrfToken),
+      put: (url: string, body: Body) => request(app).put(url).set('Cookie', s.cookie).set('x-csrf-token', s.csrfToken).send(body),
+      post: (url: string, body: Body = {}) => request(app).post(url).set('Cookie', s.cookie).set('x-csrf-token', s.csrfToken).send(body),
+    });
+    const erp = as(admin);
+    const tag = String(Date.now()).slice(-7);
+    const wrong: string[] = [];
+
+    const retailList = `تکی تغییر نشانی ${tag}`;
+    const current = readPricingStrategies(savedStrategies[0]?.value);
+    const strategies = 'titles' in current ? current.titles : [];
+    await orm.insert(appSettings).values({ key: 'pricing_strategies', value: JSON.stringify([...strategies, retailList]) })
+      .onConflictDoUpdate({ target: appSettings.key, set: { value: JSON.stringify([...strategies, retailList]) } });
+    invalidateSettingsCache();
+    const base = (await erp.get('/api/storefront/settings')).body.data;
+    const on = await erp.put('/api/storefront/settings', {
+      cardNumber: '', cardHolder: '', bankName: '', iban: '', freeShippingThreshold: '', reservationHours: 24, retailPriceList: retailList,
+      wholesalePriceList: '', lowStockThreshold: 3, stockDisplay: 'status', warehouseCode: '', whatsappNumber: '', whatsappEnabled: false,
+      enabled: true, ordersEnabled: false, treasuryAccountId: 0, openOrdersPerPhone: 3, version: base.version,
+    });
+    if (on.status !== 200) throw new Error(`turning the site on: ${on.status} ${JSON.stringify(on.body)}`);
+    const apiKey = String((await erp.post('/api/storefront/api-key')).body.data?.apiKey ?? '');
+    const site = (url: string) => request(app).get(`/api/storefront/v1${url}`).set('Authorization', `Bearer ${apiKey}`);
+    /** the redirects the site gets for this run's addresses, as «from→target» */
+    const siteRedirects = async () => (((await site('/redirects')).body.data ?? []) as Array<{ from: string; kind: string; target: string }>)
+      .filter(r => r.from.includes(tag)).map(r => `${r.from}→${r.kind}:${r.target}`).sort().join(' | ');
+    const liveRows = async () => (await orm.select().from(storefrontRedirects).where(and(gt(storefrontRedirects.id, lastRedirect ?? 0), eq(storefrontRedirects.isDeleted, 0))))
+      .filter(r => r.fromPath.includes(tag));
+
+    const [a, b, c] = [`move-a-${tag}`, `move-b-${tag}`, `move-c-${tag}`];
+    const title = `صفحهٔ جابه‌جا ${tag}`;
+    const created = await erp.post('/api/storefront/pages', { title, slug: a, template: null });
+    if (created.status !== 201) throw new Error(`a new page: ${created.status} ${JSON.stringify(created.body)}`);
+    const pageId = Number(created.body.data.id);
+    pageIds.push(pageId);
+    const form = (version: number, slug: string) => ({
+      title, slug, seoTitle: '', seoDescription: '', noindex: false, shareImageAssetId: null, sections: [{ kind: 'button', background: 'white', label: 'محصولات', href: '/products' }], version,
+    });
+    const versionNow = async () => Number((await erp.get(`/api/storefront/pages/${pageId}`)).body.data.version);
+    const move = (slug: unknown, version: number, by = erp) => by.post(`/api/storefront/pages/${pageId}/move`, { slug, version } as Body);
+
+    // 1) off the site (a draft): the page takes the new address and nothing is written to the redirects
+    const draft = await erp.put(`/api/storefront/pages/${pageId}`, form(1, a));
+    const offMove = await move(b, 2);
+    if (draft.status !== 200 || offMove.status !== 200 || offMove.body.data.slug !== b || offMove.body.data.version !== 3 || (await liveRows()).length !== 0) {
+      wrong.push(`moving a draft: ${draft.status}/${offMove.status} ${offMove.body.data?.slug} v${offMove.body.data?.version}, ${(await liveRows()).length} redirects`);
+    }
+    const backToA = await move(a, 3);
+    if (backToA.status !== 200) throw new Error(`moving the draft back: ${backToA.status} ${JSON.stringify(backToA.body)}`);
+
+    // 2) on the site: refused first, each with its code, and nothing changes
+    const published = await erp.post(`/api/storefront/pages/${pageId}/publish`, { version: 4 });
+    if (published.status !== 200) throw new Error(`publishing: ${published.status} ${JSON.stringify(published.body)}`);
+    const other = await erp.post('/api/storefront/pages', { title: `دیگری ${tag}`, slug: `move-taken-${tag}`, template: null });
+    pageIds.push(Number(other.body.data?.id));
+    const [about] = await orm.select().from(storefrontPages).where(eq(storefrontPages.slug, 'about'));
+    const viewer = as(await loginTestUserWithSession(app, (await createTestUser({ role: (await createTestRole({ permissions: ['site_content.view'] })).code })).username));
+    const refusals: Array<[string, { status: number; body: Body }, number, string]> = [
+      ['a stale version', await move(b, 4), 409, 'OCC_CONFLICT'],
+      ['an address another page has', await move(`move-taken-${tag}`, 5), 409, 'STOREFRONT_PAGE_SLUG_TAKEN'],
+      ['an address in capitals', await move('Our Story', 5), 422, 'STOREFRONT_PAGE_SLUG_INVALID'],
+      ['an address with a slash', await move(`a/${b}`, 5), 422, 'STOREFRONT_PAGE_SLUG_INVALID'],
+      ['an empty address', await move('  ', 5), 422, 'STOREFRONT_PAGE_SLUG_INVALID'],
+      ['a base page', await erp.post(`/api/storefront/pages/${about.id}/move`, { slug: `about-${tag}`, version: about.version }), 422, 'STOREFRONT_PAGE_BASE_KEPT'],
+      ['a draft save of a page on the site', await erp.put(`/api/storefront/pages/${pageId}`, form(5, b)), 422, 'STOREFRONT_PAGE_SLUG_ON_SITE'],
+    ];
+    for (const [what, res, status, code] of refusals) {
+      if (res.status !== status || res.body.code !== code) wrong.push(`${what}: ${res.status} ${res.body.code}`);
+    }
+    const viewerMove = await move(b, 5, viewer);
+    const notText = await move(7, 5);
+    if (viewerMove.status !== 403 || notText.status !== 400) wrong.push(`the view key and a number for an address: ${viewerMove.status}/${notText.status}`);
+    const untouched = (await orm.select().from(storefrontPages).where(eq(storefrontPages.id, pageId)))[0];
+    if (untouched.slug !== a || untouched.version !== 5 || (await liveRows()).length !== 0) wrong.push(`a refused move wrote something: ${untouched.slug} v${untouched.version}`);
+    // the same address again changes nothing
+    const same = await move(a, 5);
+    if (same.status !== 200 || (await versionNow()) !== 5) wrong.push(`the same address: ${same.status} v${await versionNow()}`);
+
+    // 3) a → b: the page answers at b and not at a; the old address goes to the new one; the audit rows are there
+    const first = await move(` ${b} `, 5);
+    if (first.status !== 200 || first.body.data.slug !== b || first.body.data.version !== 6 || first.body.data.status !== 'published') {
+      throw new Error(`the first move: ${first.status} ${JSON.stringify(first.body).slice(0, 300)}`);
+    }
+    const [atNew, atOld, after1] = [await site(`/pages/${b}`), await site(`/pages/${a}`), await siteRedirects()];
+    if (atNew.status !== 200 || atOld.status !== 404 || after1 !== `/pages/${a}→path:/pages/${b}`) wrong.push(`after a→b: ${atNew.status}/${atOld.status} «${after1}»`);
+    const [row1] = await liveRows();
+    if (!row1 || row1.source !== 'manual' || row1.isActive !== 1 || row1.targetItemId !== null || !row1.note.includes(title)) wrong.push(`the redirect row: ${JSON.stringify(row1)}`);
+    const [pageAudit] = await orm.select().from(activityLogs).where(and(eq(activityLogs.entityId, `page-${pageId}`), eq(activityLogs.action, 'UPDATE'))).orderBy(desc(activityLogs.id)).limit(1);
+    const [redirectAudit] = await orm.select().from(activityLogs).where(and(eq(activityLogs.entityId, `redirect-${row1?.id}`), eq(activityLogs.action, 'CREATE'))).limit(1);
+    const pageDetails = (pageAudit?.details ?? {}) as { before?: Body; after?: Body; oldAddressRedirected?: boolean };
+    if (pageDetails.before?.slug !== a || pageDetails.after?.slug !== b || pageDetails.oldAddressRedirected !== true || !redirectAudit) {
+      wrong.push(`the audit rows: ${String(JSON.stringify(pageAudit?.details)).slice(0, 200)} / ${redirectAudit ? 'redirect row' : 'no redirect row'}`);
+    }
+
+    // 4) b → c: both earlier addresses lead straight to c (no chain through b)
+    const second = await move(c, 6);
+    const after2 = await siteRedirects();
+    if (second.status !== 200 || after2 !== `/pages/${a}→path:/pages/${c} | /pages/${b}→path:/pages/${c}`) wrong.push(`after b→c: ${second.status} «${after2}»`);
+
+    // 5) c → a (back to an earlier address): the redirect away from a is removed, so no address points in a circle
+    const third = await move(a, 7);
+    const after3 = await siteRedirects();
+    if (third.status !== 200 || after3 !== `/pages/${b}→path:/pages/${a} | /pages/${c}→path:/pages/${a}`) wrong.push(`after c→a: ${third.status} «${after3}»`);
+    const removed = (await orm.select().from(storefrontRedirects).where(and(gt(storefrontRedirects.id, lastRedirect ?? 0), eq(storefrontRedirects.isDeleted, 1)))).filter(r => r.fromPath === `/pages/${a}`);
+    if (removed.length !== 1) wrong.push(`the redirect away from the address the page came back to: ${removed.length} removed rows`);
+    if ((await site(`/pages/${a}`)).status !== 200) wrong.push('the page does not answer at the address it came back to');
+
+    // 6) moving onto an address that has a redirect of the owner's: that redirect is removed (a page lives there now)
+    const d = `move-d-${tag}`;
+    const ownOnTarget = await erp.post('/api/storefront/redirects', { fromPath: `/pages/${d}`, targetKind: 'path', targetItemId: null, target: '/products', note: 'دستی', isActive: true });
+    const toD = await move(d, 8);
+    const afterD = await siteRedirects();
+    if (ownOnTarget.status !== 201 || toD.status !== 200 || afterD.includes(`/pages/${d}→`)) wrong.push(`moving onto an address that had a redirect: ${ownOnTarget.status}/${toD.status} «${afterD}»`);
+
+    // 7) a redirect the owner keeps on the page's own address (switched off, to elsewhere): when the page leaves, that same row
+    // is pointed at the page's new address and switched on, not doubled
+    const ownOnSource = await erp.post('/api/storefront/redirects', { fromPath: `/pages/${d}`, targetKind: 'path', targetItemId: null, target: '/products', note: 'دستی', isActive: false });
+    const leftD = await move(b, 9);
+    const afterLeft = await siteRedirects();
+    const rowsOfD = (await liveRows()).filter(r => r.fromPath === `/pages/${d}`);
+    if (ownOnSource.status !== 201 || leftD.status !== 200 || rowsOfD.length !== 1 || rowsOfD[0].id !== Number(ownOnSource.body.data?.id) || rowsOfD[0].isActive !== 1 || rowsOfD[0].target !== `/pages/${b}`) {
+      wrong.push(`the owner's redirect on the address the page left: ${ownOnSource.status}/${leftD.status} ${JSON.stringify(rowsOfD.map(r => [r.id, r.isActive, r.target]))}`);
+    }
+    // every address the page ever had leads to where it is now, each in one hop, and none leads away from it
+    const hops = afterLeft.split(' | ');
+    if (hops.length !== 3 || hops.some(r => !r.endsWith(`→path:/pages/${b}`)) || afterLeft.includes(`/pages/${b}→`)) wrong.push(`one hop from every earlier address: «${afterLeft}»`);
+
+    if (wrong.length > 0) throw new Error(wrong.join('; '));
+    results.push(makeTestCase({
+      id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
+      details: 'a draft moved with no redirect; on the site seven wrong moves were refused with their codes (a stale version, a taken address, three wrong shapes, a base page, a draft save), the view key was 403, and nothing was written; the same address changed nothing; a→b answered at b only and sent a to b with the page\'s and the redirect\'s audit rows; b→c sent both earlier addresses straight to c; c→a removed the redirect away from a, with no circle; a move onto an address that had a redirect removed that redirect; a switched-off redirect of the owner\'s on the address the page left was pointed at the new address and switched on, the same row; and after the last move every earlier address led to the page in one hop',
+    }));
+  } catch (err) {
+    results.push(makeTestCase({
+      id, name, layer: 'regression', executionType: 'real_database', passed: false, durationMs: Date.now() - tStart,
+      error: err instanceof Error ? err.message : String(err),
+    }));
+  } finally {
+    await orm.delete(storefrontRedirects).where(gt(storefrontRedirects.id, lastRedirect ?? 0)).catch(() => undefined);
+    const ids = pageIds.filter(Number.isFinite);
+    if (ids.length > 0) await orm.delete(storefrontPages).where(inArray(storefrontPages.id, ids)).catch(() => undefined);
+    await orm.delete(appSettings).where(like(appSettings.key, 'sf\\_%')).catch(() => undefined);
+    if (savedSettings.length > 0) await orm.insert(appSettings).values(savedSettings).catch(() => undefined);
+    if (savedStrategies.length > 0) {
+      await orm.update(appSettings).set({ value: savedStrategies[0].value }).where(eq(appSettings.key, 'pricing_strategies')).catch(() => undefined);
+    } else {
+      await orm.delete(appSettings).where(eq(appSettings.key, 'pricing_strategies')).catch(() => undefined);
+    }
+    invalidateSettingsCache();
+  }
+  return results;
+}

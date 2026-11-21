@@ -205,6 +205,64 @@ export async function deleteRedirect(req: Request, id: number, version: number):
 }
 
 /**
+ * v12 phase 10c: a published page moved from one address of the site to another (`storefrontPageMove.service.ts`), in
+ * the mover's own transaction. Three things keep every old link working with one hop and no circle:
+ * a redirect away from the new address is removed (a page lives there now, and such a row is what an earlier move in
+ * the other direction left); redirects that led to the old address lead to the new one; and the old address itself
+ * goes to the new one (a row made here, or the row it already had, pointed anew and switched on). Each row changed
+ * writes its own audit row.
+ */
+export async function redirectMovedPage(req: Request, tx: DbExecutor, move: { from: string; to: string; title: string }): Promise<void> {
+  const fromKey = legacyPathKey(move.from);
+  const toKey = legacyPathKey(move.to);
+  if (!fromKey || !toKey || fromKey === toKey) return;
+  await lockRedirects(tx);
+  const actor = userOf(req);
+  const at = systemNowUtcIso();
+  const note = `تغییر نشانی صفحهٔ «${move.title}»`.slice(0, REDIRECT_NOTE_MAX);
+  const live = await tx.select().from(storefrontRedirects)
+    .where(and(eq(storefrontRedirects.isDeleted, 0), inArray(storefrontRedirects.fromPath, [fromKey, toKey]))).for('update');
+
+  const away = live.find(r => r.fromPath === toKey);
+  if (away) {
+    await tx.update(storefrontRedirects).set({ isDeleted: 1, updatedBy: actor, updatedAt: at, version: nextVersion(away.version) }).where(eq(storefrontRedirects.id, away.id));
+    await logActivity({
+      req, tx, action: 'DELETE', entity: 'فروشگاه سایت', entityId: `redirect-${away.id}`,
+      description: `انتقال نشانی قدیمی «${away.fromPath}» حذف شد، چون صفحه‌ای به همین نشانی آمد`, details: { before: auditView(away) },
+    });
+  }
+
+  const led = await tx.select().from(storefrontRedirects)
+    .where(and(eq(storefrontRedirects.isDeleted, 0), eq(storefrontRedirects.targetKind, 'path'), eq(storefrontRedirects.target, move.from))).for('update');
+  for (const row of led) {
+    if (row.id === away?.id || row.fromPath === toKey) continue;
+    await tx.update(storefrontRedirects).set({ target: move.to, updatedBy: actor, updatedAt: at, version: nextVersion(row.version) }).where(eq(storefrontRedirects.id, row.id));
+    await logActivity({
+      req, tx, action: 'UPDATE', entity: 'فروشگاه سایت', entityId: `redirect-${row.id}`,
+      description: `مقصد انتقال نشانی قدیمی «${row.fromPath}» به نشانی تازهٔ صفحه عوض شد`,
+      details: { before: auditView(row), after: auditView({ ...row, target: move.to }) },
+    });
+  }
+
+  const own = live.find(r => r.fromPath === fromKey);
+  const values = { targetKind: 'path' as const, targetItemId: null, target: move.to, note, isActive: 1 };
+  if (own) {
+    await tx.update(storefrontRedirects).set({ ...values, updatedBy: actor, updatedAt: at, version: nextVersion(own.version) }).where(eq(storefrontRedirects.id, own.id));
+    await logActivity({
+      req, tx, action: 'UPDATE', entity: 'فروشگاه سایت', entityId: `redirect-${own.id}`,
+      description: `انتقال نشانی قدیمی «${fromKey}» به نشانی تازهٔ صفحه داده شد`, details: { before: auditView(own), after: auditView({ ...own, ...values }) },
+    });
+    return;
+  }
+  const [created] = await tx.insert(storefrontRedirects).values({ fromPath: fromKey, ...values, source: 'manual', createdBy: actor, updatedBy: actor })
+    .returning({ id: storefrontRedirects.id });
+  await logActivity({
+    req, tx, action: 'CREATE', entity: 'فروشگاه سایت', entityId: `redirect-${created.id}`,
+    description: `انتقال نشانی «${fromKey}» به نشانی تازهٔ صفحه ثبت شد`, details: { after: auditView({ fromPath: fromKey, ...values }) },
+  });
+}
+
+/**
  * `GET /api/storefront/v1/redirects`: every live, switched-on redirect whose target is on the site: a product only while it
  * is published (by its current slug), the other kinds as saved. A product that left the site drops out, so its old
  * address falls back to the site's own guess (a search) instead of a page that 404s.

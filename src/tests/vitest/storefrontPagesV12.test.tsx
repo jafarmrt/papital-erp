@@ -65,6 +65,11 @@ function open(address: string, first = detailOf()) {
       detail = { ...detail, version: detail.version + 1, draft: (({ version: _v, ...draft }) => draft)(JSON.parse(init.body ?? '{}')) };
       return { data: detail };
     }
+    if (init?.method === 'POST' && url.endsWith('/move')) {
+      const slug = String(JSON.parse(init.body ?? '{}').slug);
+      detail = { ...detail, slug, version: detail.version + 1, draft: { ...detail.draft, slug } };
+      return { data: detail };
+    }
     if (init?.method === 'POST') {
       detail = { ...detail, version: detail.version + 1, status: 'published' };
       return { data: detail };
@@ -232,6 +237,50 @@ describe('the site pages screen', () => {
     open('/site-pages?page=9', detailOf({ status: 'published' }));
     fireEvent.click(await screen.findByRole('button', { name: 'حذف صفحه' }));
     expect(screen.getByRole('group', { name: 'تأیید این کار' }).textContent).not.toContain('پیوند دارد');
+  });
+
+  it('changes the address of a page on the site only through its own step, under the version, with nothing unsaved (v12 phase 10c)', async () => {
+    permissions.current = ['site_content.view', 'site_content.manage'];
+    open('/site-pages?page=9', detailOf({ status: 'published' }));
+    // on the site, the address field itself is closed; the step is a button under it
+    expect((await screen.findByLabelText('نشانی لاتین') as HTMLInputElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'تغییر نشانی' }));
+    const step = within(screen.getByRole('group', { name: 'تغییر نشانی صفحه' }));
+    expect(screen.getByRole('group', { name: 'تغییر نشانی صفحه' }).textContent).toContain('/pages/our-story');
+    const input = step.getByLabelText('نشانی لاتین تازه') as HTMLInputElement;
+    expect(input.value).toBe('our-story');
+    // the same address is nothing to send
+    expect((step.getByRole('button', { name: 'نشانی عوض شود' }) as HTMLButtonElement).disabled).toBe(true);
+    // with an unsaved edit the step waits and says why
+    fireEvent.change(screen.getByLabelText('عنوان صفحه'), { target: { value: 'داستان تازه' } });
+    fireEvent.change(input, { target: { value: 'our-new-story' } });
+    expect((step.getByRole('button', { name: 'نشانی عوض شود' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('group', { name: 'تغییر نشانی صفحه' }).textContent).toContain('نخست پیش‌نویس را ذخیره کنید');
+    fireEvent.change(screen.getByLabelText('عنوان صفحه'), { target: { value: 'داستان ما' } });
+    fireEvent.click(step.getByRole('button', { name: 'نشانی عوض شود' }));
+    await waitFor(() => expect(calls('POST')).toHaveLength(1));
+    expect(calls('POST')[0][0]).toBe('/storefront/pages/9/move');
+    expect(JSON.parse(String(calls('POST')[0][1]?.body))).toEqual({ slug: 'our-new-story', version: 4 });
+    // the screen takes the answer: the new address, and the step closes
+    await waitFor(() => expect((screen.getByLabelText('نشانی لاتین') as HTMLInputElement).value).toBe('our-new-story'));
+    expect(screen.queryByRole('group', { name: 'تغییر نشانی صفحه' })).toBeNull();
+    cleanup();
+    fetchJson.mockReset();
+    // a page off the site changes its address in the field itself; a base page never; the view key sees no step
+    open('/site-pages?page=9', detailOf({ status: 'draft' }));
+    expect((await screen.findByLabelText('نشانی لاتین') as HTMLInputElement).disabled).toBe(false);
+    expect(screen.queryByRole('button', { name: 'تغییر نشانی' })).toBeNull();
+    cleanup();
+    fetchJson.mockReset();
+    open('/site-pages?page=1', { ...detailOf({ status: 'published' }), id: 1, kind: 'base', slug: 'about', title: 'درباره ما', draft: { ...detailOf().draft, slug: 'about', title: 'درباره ما' } });
+    await screen.findByRole('button', { name: 'ذخیرهٔ پیش‌نویس' });
+    expect(screen.queryByRole('button', { name: 'تغییر نشانی' })).toBeNull();
+    cleanup();
+    fetchJson.mockReset();
+    permissions.current = ['site_content.view'];
+    open('/site-pages?page=9', detailOf({ status: 'published' }));
+    await screen.findByLabelText('عنوان صفحه');
+    expect(screen.queryByRole('button', { name: 'تغییر نشانی' })).toBeNull();
   });
 
   it('shows a page without any way to change it to a holder of the view key', async () => {

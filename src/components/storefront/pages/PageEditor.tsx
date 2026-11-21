@@ -10,6 +10,7 @@ import {
   type SectionBackground, type SectionKind,
 } from '../../../lib/storefront/storefrontPageRules';
 import { MENU_LOCATION_TITLES, isMenuLocation } from '../../../lib/storefront/storefrontMenuRules';
+import { PageAddressMove } from './PageAddressMove';
 import { formatPersianNumber } from '../../../utils/persianNumber';
 import { errorMessageOf } from '../../../utils';
 import { LibraryImageField } from './LibraryImageField';
@@ -190,6 +191,12 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
             <div>
               <label htmlFor={`${id}-slug`} className={label}>نشانی لاتین</label>
               <input id={`${id}-slug`} dir="ltr" className={field} maxLength={PAGE_SLUG_MAX} value={draft.slug} disabled={detail.kind === 'base' || onSite} onChange={e => set('slug', e.target.value)} />
+              {canManage && detail.kind === 'custom' && onSite && (
+                <PageAddressMove
+                  pageId={detail.id} slug={base.draft.slug} version={base.version} onMoved={() => setOwn(true)} onFailed={() => setOwn(false)}
+                  blocked={dirty ? 'نخست پیش‌نویس را ذخیره کنید یا تغییرها را برگردانید.' : outdated ? 'نسخهٔ تازهٔ این صفحه هنوز خوانده نشده است.' : ''}
+                />
+              )}
               <p className={hint}>
                 {detail.kind === 'base' ? 'نشانی صفحه‌های پایهٔ سایت عوض نمی‌شود.'
                   : onSite ? 'نشانی صفحه‌ای که روی سایت است عوض نمی‌شود؛ برای عوض کردنش، نخست صفحه را از روی سایت بردارید.'
