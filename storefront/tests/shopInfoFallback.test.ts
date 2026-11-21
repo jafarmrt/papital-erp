@@ -30,7 +30,7 @@ afterAll(() => {
   mock?.kill();
 });
 
-describe('«اطلاعات فروشگاه» when the ERP has no answer', () => {
+describe('the shop details when the ERP has no answer', () => {
   it('serves the page with the brand, the footer and the policy as they were before 10a', async () => {
     const res = await handle(new Request('http://localhost/'));
     expect(res.status).toBe(200);
@@ -53,7 +53,7 @@ describe('«اطلاعات فروشگاه» when the ERP has no answer', () => {
     expect(res.headers.get('content-security-policy')).toContain("img-src 'self' data:;");
   });
 
-  it('says in the buyer\'s words that the shop is away for a moment, never «انبار» (site review §4)', async () => {
+  it('says in the buyer\'s words that the shop is away for a moment, never naming the warehouse (site review §4)', async () => {
     // the ERP goes away: a list the site has not read yet cannot be shown
     mock.kill();
     await new Promise<void>(resolve => mock.once('exit', () => resolve()));

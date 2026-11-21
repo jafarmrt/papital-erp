@@ -54,7 +54,7 @@ const get = async (pathname: string) => {
 };
 const footerOf = (html: string) => html.slice(html.indexOf('<footer'), html.indexOf('</footer>'));
 
-describe('«اطلاعات فروشگاه» on the pages', () => {
+describe('the shop details on the pages', () => {
   it('names the brand as the ERP has it: the header, the page titles, the social card and the structured data', async () => {
     const home = await get('/');
     expect(home.status).toBe(200);
@@ -79,7 +79,7 @@ describe('«اطلاعات فروشگاه» on the pages', () => {
     expect(html).toContain('"email":"info@shop.example"');
   });
 
-  it('writes the footer from it: the sentence under the logo, the social pages, the contact details, the owner\'s lines of «ارسال و پرداخت» under the live ones, the other-language site and the last line', async () => {
+  it('writes the footer from it: the sentence under the logo, the social pages, the contact details, the owner\'s lines of the shipping column under the live ones, the other-language site and the last line', async () => {
     const footer = footerOf((await get('/')).html);
     expect(footer).toContain('زیور دست‌ساز نمونه. ساخت کارگاه نمونه.');
     expect(footer).toContain('href="https://www.instagram.com/negarin.sample/"');
@@ -114,7 +114,7 @@ describe('«اطلاعات فروشگاه» on the pages', () => {
     expect(home.csp).toContain("connect-src 'self';");
   });
 
-  it('lists the address and contact details on «تماس با ما», with every social page', async () => {
+  it('lists the address and contact details on the contact page, with every social page', async () => {
     const { status, html } = await get('/contact');
     expect(status).toBe(200);
     const main = html.slice(html.indexOf('<main'), html.indexOf('</main>'));
@@ -149,7 +149,7 @@ describe('«اطلاعات فروشگاه» on the pages', () => {
   });
 });
 
-describe('what the site takes of «اطلاعات فروشگاه»', () => {
+describe('what the site takes of the shop details', () => {
   it('keeps its own words for a field left empty, and for an answer of another shape', () => {
     expect(siteShop({})).toEqual(DEFAULT_SHOP);
     expect(siteShop('nonsense')).toEqual(DEFAULT_SHOP);

@@ -37,7 +37,7 @@ afterEach(() => {
   fetchJson.mockReset();
 });
 
-describe('the rules of «اطلاعات فروشگاه»', () => {
+describe('the rules of the shop details', () => {
   it('takes an empty form: every field is optional and the site then keeps its own words', () => {
     expect(shopInfoError(EMPTY)).toBeNull();
     expect(normalizedShopInfo(EMPTY)).toEqual(EMPTY);
@@ -121,13 +121,13 @@ describe('the rules of «اطلاعات فروشگاه»', () => {
   });
 });
 
-describe('the «اطلاعات فروشگاه» section', () => {
+describe('the shop details section', () => {
   const wrap = (ui: ReactNode) => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
   };
 
-  it('is a section of «کالاها و تنظیمات سایت», opened by its address', () => {
+  it('is a section of the site settings page, opened by its address', () => {
     expect(STOREFRONT_SECTION_IDS).toContain('info');
     expect(isStorefrontSection('info')).toBe(true);
   });
