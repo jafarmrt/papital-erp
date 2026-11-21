@@ -204,38 +204,56 @@ export async function deleteRedirect(req: Request, id: number, version: number):
   });
 }
 
+/** The key of a page's address in this table, or null for an address whose key is not itself (it could not be told from another) */
+const pageKey = (path: string): string | null => (legacyPathKey(path) === path ? path : null);
+
+async function removeRedirect(req: Request, tx: DbExecutor, row: RawRow, why: string): Promise<void> {
+  await tx.update(storefrontRedirects).set({ isDeleted: 1, updatedBy: userOf(req), updatedAt: systemNowUtcIso(), version: nextVersion(row.version) })
+    .where(eq(storefrontRedirects.id, row.id));
+  await logActivity({
+    req, tx, action: 'DELETE', entity: 'فروشگاه سایت', entityId: `redirect-${row.id}`,
+    description: `انتقال نشانی قدیمی «${row.fromPath}» حذف شد، ${why}`, details: { before: auditView(row) },
+  });
+}
+
 /**
- * v12 phase 10c: a published page moved from one address of the site to another (`storefrontPageMove.service.ts`), in
- * the mover's own transaction. Three things keep every old link working with one hop and no circle:
- * a redirect away from the new address is removed (a page lives there now, and such a row is what an earlier move in
- * the other direction left); redirects that led to the old address lead to the new one; and the old address itself
- * goes to the new one (a row made here, or the row it already had, pointed anew and switched on). Each row changed
- * writes its own audit row.
+ * v12 phase 10c: a page of «صفحه‌های سایت» is published at `path`, so no redirect may lead away from that address any
+ * more (the site would follow it whenever the page could not be read, and other redirects would be led on through it).
+ * In the publisher's own transaction.
  */
-export async function redirectMovedPage(req: Request, tx: DbExecutor, move: { from: string; to: string; title: string }): Promise<void> {
-  const fromKey = legacyPathKey(move.from);
-  const toKey = legacyPathKey(move.to);
-  if (!fromKey || !toKey || fromKey === toKey) return;
+export async function clearRedirectFrom(req: Request, tx: DbExecutor, path: string): Promise<void> {
+  const key = pageKey(path);
+  if (!key) return;
+  await lockRedirects(tx);
+  const rows = await tx.select().from(storefrontRedirects).where(and(eq(storefrontRedirects.isDeleted, 0), eq(storefrontRedirects.fromPath, key))).for('update');
+  for (const row of rows) await removeRedirect(req, tx, row, 'چون صفحه‌ای به همین نشانی روی سایت آمد');
+}
+
+/**
+ * v12 phase 10c: a page's address changed from `from` to `to`, in the changer's own transaction
+ * (`storefrontPageMove.service.ts`, and a draft save of a page that is off the site). Whatever the page's state:
+ * redirects that led to the old address lead to the new one, so an earlier address never ends at an address the page
+ * has left (one that would then lead from the new address to itself is removed instead). And when the page is on the
+ * site: a redirect away from the new address is removed (a page lives there now; an earlier move in the other
+ * direction leaves such a row), and the old address itself goes to the new one: a row made here, or the row the owner
+ * already kept on it, pointed anew and switched on. Each row changed writes its own audit row.
+ * Answers whether the old address now leads to the new one.
+ */
+export async function redirectMovedPage(req: Request, tx: DbExecutor, move: { from: string; to: string; title: string; onSite: boolean }): Promise<boolean> {
+  const fromKey = pageKey(move.from);
+  const toKey = pageKey(move.to);
+  if (!toKey || fromKey === toKey) return false;
   await lockRedirects(tx);
   const actor = userOf(req);
   const at = systemNowUtcIso();
-  const note = `تغییر نشانی صفحهٔ «${move.title}»`.slice(0, REDIRECT_NOTE_MAX);
-  const live = await tx.select().from(storefrontRedirects)
-    .where(and(eq(storefrontRedirects.isDeleted, 0), inArray(storefrontRedirects.fromPath, [fromKey, toKey]))).for('update');
-
-  const away = live.find(r => r.fromPath === toKey);
-  if (away) {
-    await tx.update(storefrontRedirects).set({ isDeleted: 1, updatedBy: actor, updatedAt: at, version: nextVersion(away.version) }).where(eq(storefrontRedirects.id, away.id));
-    await logActivity({
-      req, tx, action: 'DELETE', entity: 'فروشگاه سایت', entityId: `redirect-${away.id}`,
-      description: `انتقال نشانی قدیمی «${away.fromPath}» حذف شد، چون صفحه‌ای به همین نشانی آمد`, details: { before: auditView(away) },
-    });
-  }
 
   const led = await tx.select().from(storefrontRedirects)
     .where(and(eq(storefrontRedirects.isDeleted, 0), eq(storefrontRedirects.targetKind, 'path'), eq(storefrontRedirects.target, move.from))).for('update');
   for (const row of led) {
-    if (row.id === away?.id || row.fromPath === toKey) continue;
+    if (row.fromPath === toKey) {
+      await removeRedirect(req, tx, row, 'چون صفحه به همین نشانی برگشت');
+      continue;
+    }
     await tx.update(storefrontRedirects).set({ target: move.to, updatedBy: actor, updatedAt: at, version: nextVersion(row.version) }).where(eq(storefrontRedirects.id, row.id));
     await logActivity({
       req, tx, action: 'UPDATE', entity: 'فروشگاه سایت', entityId: `redirect-${row.id}`,
@@ -243,7 +261,13 @@ export async function redirectMovedPage(req: Request, tx: DbExecutor, move: { fr
       details: { before: auditView(row), after: auditView({ ...row, target: move.to }) },
     });
   }
+  if (!move.onSite || !fromKey) return false;
 
+  const live = await tx.select().from(storefrontRedirects)
+    .where(and(eq(storefrontRedirects.isDeleted, 0), inArray(storefrontRedirects.fromPath, [fromKey, toKey]))).for('update');
+  for (const away of live.filter(r => r.fromPath === toKey)) await removeRedirect(req, tx, away, 'چون صفحه‌ای به همین نشانی آمد');
+
+  const note = `تغییر نشانی صفحهٔ «${move.title}»`.slice(0, REDIRECT_NOTE_MAX);
   const own = live.find(r => r.fromPath === fromKey);
   const values = { targetKind: 'path' as const, targetItemId: null, target: move.to, note, isActive: 1 };
   if (own) {
@@ -252,7 +276,7 @@ export async function redirectMovedPage(req: Request, tx: DbExecutor, move: { fr
       req, tx, action: 'UPDATE', entity: 'فروشگاه سایت', entityId: `redirect-${own.id}`,
       description: `انتقال نشانی قدیمی «${fromKey}» به نشانی تازهٔ صفحه داده شد`, details: { before: auditView(own), after: auditView({ ...own, ...values }) },
     });
-    return;
+    return true;
   }
   const [created] = await tx.insert(storefrontRedirects).values({ fromPath: fromKey, ...values, source: 'manual', createdBy: actor, updatedBy: actor })
     .returning({ id: storefrontRedirects.id });
@@ -260,6 +284,7 @@ export async function redirectMovedPage(req: Request, tx: DbExecutor, move: { fr
     req, tx, action: 'CREATE', entity: 'فروشگاه سایت', entityId: `redirect-${created.id}`,
     description: `انتقال نشانی «${fromKey}» به نشانی تازهٔ صفحه ثبت شد`, details: { after: auditView({ fromPath: fromKey, ...values }) },
   });
+  return true;
 }
 
 /**

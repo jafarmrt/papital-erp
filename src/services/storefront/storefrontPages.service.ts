@@ -1,7 +1,7 @@
 import type { Request } from 'express';
-import { and, asc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { items, mediaAssets, storefrontContentAssets, storefrontMenuItems, storefrontPages, type PublishedPage } from '../../db/schema.js';
+import { items, mediaAssets, storefrontContentAssets, storefrontPages, type PublishedPage } from '../../db/schema.js';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
@@ -12,7 +12,8 @@ import {
   type PageSection, type PageValues, type RichDoc, type RichNode,
 } from '../../lib/storefront/storefrontPageRules.js';
 import type { PageAssetInfo, PageCreateInput, PageDetail, PageListRow, PageSaveInput, PageStatus } from '../../lib/storefront/storefrontPageContracts.js';
-import { MENU_LOCATIONS } from '../../lib/storefront/storefrontMenuRules.js';
+import { menuPlacesOf } from './storefrontPageLinks.js';
+import { clearRedirectFrom, redirectMovedPage } from './storefrontRedirects.service.js';
 
 /**
  * v12 phase 10b (package 18, V12_SITE_NEXT_START_PLAN.md §7.2): «صفحه‌های سایت» on the ERP side. Reading needs
@@ -227,6 +228,8 @@ export async function saveDraft(req: Request, id: number, input: PageSaveInput):
       const [taken] = await tx.select({ id: storefrontPages.id }).from(storefrontPages)
         .where(and(eq(storefrontPages.slug, page.slug), eq(storefrontPages.isDeleted, 0)));
       if (taken) throw new ConflictError('صفحهٔ دیگری همین نشانی را دارد.', { field: 'slug' }, 'STOREFRONT_PAGE_SLUG_TAKEN');
+      // redirects that led to the page's old address follow it, though it is off the site now (10c review)
+      await redirectMovedPage(req, tx, { from: `/pages/${row.slug}`, to: `/pages/${page.slug}`, title: page.title, onSite: false });
     }
     // the images the page already has: its draft's, and those of its copy on the site (which «برگرداندن» brings back)
     const had = [...pageAssetIds(before), ...(row.published ? pageAssetIds(row.published) : [])];
@@ -270,6 +273,7 @@ export async function publishPage(req: Request, id: number, version: number): Pr
     await checkReferences(tx, page, []);
     const copy = publishedCopyOf(page);
     if (sameCopy(copy, row.published)) return;
+    if (row.published === null && row.kind === 'custom') await clearRedirectFrom(req, tx, `/pages/${row.slug}`);
     const actor = actorOf(req);
     const at = systemNowUtcIso();
     await tx.update(storefrontPages).set({
@@ -340,45 +344,6 @@ export async function deletePage(req: Request, id: number, version: number): Pro
       description: `صفحهٔ «${row.title}» حذف شد`, details: { before: auditOf(draftOf(row)), wasOnSite: row.published !== null, linkedFromMenus: await menuPlacesOf(tx, id) },
     });
   });
-}
-
-export interface PageLinkTarget {
-  /** the page's title as «صفحه‌های سایت» lists it */
-  title: string;
-  /** the page's address on the site */
-  href: string;
-  /** whether the address answers now: only while the page is published */
-  live: boolean;
-}
-
-/**
- * v12 phase 10c (migration 0030): the pages a menu link («صفحهٔ متنی») may name, by row id; `ids` narrows the read to
- * the pages a menu names. Only a live page the shop made is here: a removed page is not, and the five base pages are
- * not either (their addresses never change, and the menu builder already offers them as «صفحه‌ای از سایت»). The page's
- * copy itself is not read, only whether there is one (10c review: reading each `published` cost half a second with 200 pages).
- */
-export async function pageLinkTargets(executor: DbExecutor, ids?: readonly number[]): Promise<Map<number, PageLinkTarget>> {
-  const out = new Map<number, PageLinkTarget>();
-  if (ids && ids.length === 0) return out;
-  const rows = await executor.select({
-    id: storefrontPages.id, slug: storefrontPages.slug, title: storefrontPages.title, onSite: sql<boolean>`${storefrontPages.published} IS NOT NULL`,
-  }).from(storefrontPages)
-    .where(and(eq(storefrontPages.isDeleted, 0), eq(storefrontPages.kind, 'custom'), ids ? inArray(storefrontPages.id, [...new Set(ids)]) : undefined))
-    .orderBy(asc(storefrontPages.id)).limit(PAGES_MAX);
-  for (const row of rows) out.set(row.id, { title: row.title, href: `/pages/${row.slug}`, live: row.onSite === true });
-  return out;
-}
-
-/**
- * The menu places («فهرست‌های سایت») with a live item that links to a page, so removing the page or taking it off the
- * site can say what it touches. An item switched off, or in a place that is off, counts too: it is still a link to mend.
- */
-async function menuPlacesOf(executor: DbExecutor, pageId: number): Promise<string[]> {
-  const rows = await executor.select({ location: storefrontMenuItems.location }).from(storefrontMenuItems)
-    .where(and(eq(storefrontMenuItems.targetPageId, pageId), eq(storefrontMenuItems.isDeleted, 0)));
-  // in the order the menu builder shows its places
-  const found = new Set(rows.map(r => r.location));
-  return MENU_LOCATIONS.filter(location => found.has(location));
 }
 
 /**

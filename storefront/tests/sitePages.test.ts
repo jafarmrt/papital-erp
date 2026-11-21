@@ -249,6 +249,8 @@ describe('a page that moved', () => {
       const res = await handle(new Request(`http://localhost${old}?utm_source=instagram&x=1`));
       expect(res.status, old).toBe(301);
       expect(res.headers.get('location'), old).toBe('/pages/our-story?utm_source=instagram');
+      // asked again each time: a page can move back, and a browser that kept this answer would then go round in a circle
+      expect(res.headers.get('cache-control'), old).toBe('no-cache');
     }
     expect((await get('/pages/never-a-page')).status).toBe(404);
     // the page itself is never redirected

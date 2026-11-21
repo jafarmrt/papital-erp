@@ -16,7 +16,12 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   if (!found || found.kind !== 'custom') {
     // the address of a page that moved is kept in the ERP's «نشانی‌های سایت قبلی» and goes to the page's address of now (301)
     const moved = await legacyRedirect(request);
-    if (moved) throw moved;
+    if (moved) {
+      // a page can move back to an address it left: a browser that kept this answer for an hour would then go round in a
+      // circle between the two (10c review), so it is asked again each time; it is still a 301 for a search engine
+      moved.headers.set('Cache-Control', 'no-cache');
+      throw moved;
+    }
     throw new Response('پیدا نشد', { status: 404 });
   }
   return { page: found, shipping: await shippingViewFor(found.sections), siteUrl: siteEnv().siteUrl };

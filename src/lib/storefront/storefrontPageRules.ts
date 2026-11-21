@@ -3,7 +3,7 @@ import {
   BUTTON_LABEL_MAX, CARD_TEXT_MAX, CARD_TITLE_MAX, COLLECTION_NAME_MAX, GALLERY_MAX, GALLERY_MIN, ICON_CARDS_MAX, ICON_CARDS_MIN, IMAGE_ALT_MAX,
   MAP_ADDRESS_MAX, PAGE_ICONS, PAGE_SECTIONS_MAX, PAGE_SEO_DESCRIPTION_MAX, PAGE_SEO_TITLE_MAX, PAGE_SLUG_MAX, PAGE_TITLE_MAX, PEOPLE_MAX, PERSON_CONTACT_MAX,
   PERSON_NAME_MAX, PERSON_ROLE_MAX, PRODUCT_ROW_MAX, Refused, SECTION_BACKGROUNDS, SECTION_KINDS, SECTION_KIND_TITLES, SECTION_TEXT_MAX, SECTION_TITLE_MAX,
-  SHIPPING_SECTION_PAGE, assetId, fa, isId, isRecord, link, list, oneOf, onlyKeys, refuse, text, type BasePageSlug, type GalleryImage, type IconCard,
+  RESERVED_PAGE_SLUG_MESSAGE, SHIPPING_SECTION_PAGE, assetId, fa, isId, isRecord, isReservedPageSlug, link, list, oneOf, onlyKeys, refuse, text, type BasePageSlug, type GalleryImage, type IconCard,
   type PageProblem, type PageSection, type PageValues, type Person,
 } from './storefrontPageParts.js';
 import { docAssetIds, docIsEmpty, richDoc } from './storefrontPageRichText.js';
@@ -187,6 +187,7 @@ export function checkedPage(raw: unknown, options: { forPublish: boolean; baseSl
         'STOREFRONT_PAGE_SLUG_INVALID', 'slug',
       );
     }
+    if (options.baseSlug === null && isReservedPageSlug(slug)) return refuse(RESERVED_PAGE_SLUG_MESSAGE, 'STOREFRONT_PAGE_SLUG_INVALID', 'slug');
     const field = (name: 'seoTitle' | 'seoDescription', max: number, label: string) => {
       try { return text(raw[name] ?? '', max, label); } catch (e) { return refuse((e as Error).message, 'STOREFRONT_PAGE_FIELD_INVALID', name); }
     };

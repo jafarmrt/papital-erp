@@ -30,6 +30,13 @@ export const BASE_PAGES = [
 export type BasePageSlug = typeof BASE_PAGES[number]['slug'];
 
 export const PAGE_SLUG_MAX = 60;
+/**
+ * Three addresses a page may not take: the key of an old address (`legacyPathKey`) drops a last «feed», «amp» or «embed»
+ * (WordPress's own endings), so `/pages/feed` could not be told from `/pages` in «نشانی‌های سایت قبلی» (10c review).
+ */
+export const RESERVED_PAGE_SLUGS: readonly string[] = ['feed', 'amp', 'embed'];
+export const isReservedPageSlug = (slug: string): boolean => RESERVED_PAGE_SLUGS.includes(slug);
+export const RESERVED_PAGE_SLUG_MESSAGE = 'نشانی صفحه نمی‌تواند feed، amp یا embed باشد؛ نشانی دیگری بنویسید.';
 export const PAGE_TITLE_MAX = 120;
 export const PAGE_SEO_TITLE_MAX = 200;
 export const PAGE_SEO_DESCRIPTION_MAX = 400;
