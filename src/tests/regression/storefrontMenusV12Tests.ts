@@ -154,6 +154,7 @@ export async function runStorefrontMenusV12Tests(shouldRun: (id: string, ...extr
       ['a NEL (C1) in a label', 'header', [{ ...leaf('الف\u0085ب', 'page', { target: 'home' }), children: [] }], false, nowVersion, 'STOREFRONT_MENU_TEXT_INVALID'],
       ['a direction override', 'header', [{ ...leaf('الف\u202eب', 'page', { target: 'home' }), children: [] }], false, nowVersion, 'STOREFRONT_MENU_TEXT_INVALID'],
       ['a material, not a product', 'header', [{ ...leaf('ماده', 'product', { itemId: material.id }), children: [] }], false, nowVersion, 'STOREFRONT_MENU_PRODUCT_UNKNOWN'],
+      ['an outside address in the bottom bar', 'bottom', ['home', 'search'].map(t => ({ ...leaf('دکمه', 'page', { target: t, icon: 'home' }), children: [] })).concat([{ ...leaf('بیرون', 'url', { target: 'https://blog.example/', icon: 'book' }), children: [] }]), false, bottomVersion, 'STOREFRONT_MENU_BOTTOM_OUTSIDE'],
       ['a button without an icon', 'bottom', ['home', 'search', 'cart'].map(t => ({ ...leaf('دکمه', 'page', { target: t }), children: [] })), false, bottomVersion, 'STOREFRONT_MENU_ICON_REQUIRED'],
     ];
     for (const [label, location, list, enabled, version, code] of refusals) {

@@ -181,6 +181,17 @@ export async function runStorefrontMenusPublicV12Tests(shouldRun: (id: string, .
     if (footer.status !== 200 || footerLinks !== expectedFooter) wrong.push(`footer: ${footer.status} ${footerLinks}`);
     if (drawer.status !== 200 || (both.drawer ?? []).map((i: Body) => i.label).join() !== 'دربارهٔ ما') wrong.push(`drawer: ${drawer.status} ${JSON.stringify(both.drawer)}`);
 
+    // 6b) an outside address stored in the bottom bar (the editor refuses it; a row written another way) is no button, so
+    // two site buttons with it are fewer than three
+    const bottomNow = (await erp.get('/api/storefront/menus')).body.data.menus.find((m: Body) => m.location === 'bottom');
+    const twoAndOut = await erp.put('/api/storefront/menus/bottom', { enabled: true, version: bottomNow.version, items: [
+      leaf('خانه', 'page', { target: 'home', icon: 'home' }), leaf('جست‌وجو', 'page', { target: 'search', icon: 'search' }),
+      leaf('سوم', 'page', { target: 'about', icon: 'book' }),
+    ] });
+    const third2 = (twoAndOut.body.data?.items as Body[] | undefined)?.find(i => i.label === 'سوم');
+    await orm.update(storefrontMenuItems).set({ linkKind: 'url', target: 'https://blog.papital-test.example/' }).where(eq(storefrontMenuItems.id, Number(third2?.id ?? 0)));
+    if (twoAndOut.status !== 200 || (await site()).body.data?.bottom !== null) wrong.push(`an outside address in the bottom bar: ${twoAndOut.status} ${JSON.stringify((await site()).body.data?.bottom)}`);
+
     // 7) the site switched off: the menus answer 404 like every route of the site
     await orm.update(appSettings).set({ value: '0' }).where(eq(appSettings.key, 'sf_enabled'));
     invalidateSettingsCache();
