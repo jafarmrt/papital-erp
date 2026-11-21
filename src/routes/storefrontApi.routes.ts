@@ -25,6 +25,7 @@ import { ACCESS_KEY_MAX } from '../services/storefront/storefrontOrderKeys.js';
 import { publicSeo } from '../services/storefront/storefrontSeo.service.js';
 import { catalogFeed } from '../services/storefront/storefrontFeed.service.js';
 import { campaignHeroFile, publicCampaign, publicCampaigns } from '../services/storefront/storefrontCampaigns.service.js';
+import { publicMenus } from '../services/storefront/storefrontMenuPublic.js';
 import { CAMPAIGN_SLUG_MAX } from '../lib/storefront/storefrontCampaignRules.js';
 import { publicRedirects } from '../services/storefront/storefrontRedirects.service.js';
 import { requestOtp, verifyOtp } from '../services/storefront/storefrontSmsOtp.service.js';
@@ -180,6 +181,11 @@ router.get('/products/:slug', validate(slugSchema), asyncHandler(async (req: Req
 // v11 phase 8.5b: every item on the site with the fields of a product feed (the site writes Google's format)
 router.get('/feed', asyncHandler(async (_req: Request, res: Response) => {
   res.json({ data: await catalogFeed() });
+}));
+
+// v12 phase 9c: the menus the site shows (each place while it is on, only the links the site has now)
+router.get('/menus', asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ data: await publicMenus() });
 }));
 
 // v11 phase 8.5b: «صفحه‌های ویژه», the campaign pages on the site now (on, inside their window), and one of them

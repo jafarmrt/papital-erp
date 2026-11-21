@@ -83,7 +83,7 @@ export function MenuItemFields({ item, location, child, options, notOnSite, firs
   first: boolean; last: boolean; onChange: (patch: Partial<DraftItem>) => void; onMove: (step: -1 | 1) => void;
   onRemove: () => void; onAddChild?: () => void; id: string;
 }) {
-  const kinds = MENU_LINK_KINDS.filter(k => k !== 'none' || (!child && location !== 'bottom'));
+  const kinds = MENU_LINK_KINDS.filter(k => (k !== 'none' || (!child && location !== 'bottom')) && !(k === 'url' && location === 'bottom'));
   return (
     <div className={`space-y-2 rounded-xl border p-3 ${child ? 'border-slate-200 bg-slate-50' : 'border-slate-300 bg-white'}`}>
       <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1.4fr]">

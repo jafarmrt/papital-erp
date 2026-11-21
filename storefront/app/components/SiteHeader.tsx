@@ -1,8 +1,9 @@
 import { Form, Link, useLocation } from 'react-router';
-import { Menu, Search, ShoppingBag, UserRound, X } from 'lucide-react';
+import { ChevronDown, Menu, Search, ShoppingBag, UserRound, X } from 'lucide-react';
 import type { StorefrontFacet } from '@erp/storefront/storefrontContracts';
 import { BRAND, categoryPath } from '../lib/brand';
 import { faNumber } from '../lib/format';
+import { outsideLink, type SiteMenuItem } from '../lib/menus';
 
 /**
  * The header works without JavaScript: the phone menu is a <details>, the search a GET form to /products. The account
@@ -11,9 +12,19 @@ import { faNumber } from '../lib/format';
  * v12 phase 7 (site review 1.1, 1.2): on a phone (below `sm`) the search is an icon that opens a full-width search row, so
  * menu, logo, search and cart fit a 360 px screen; the menu and the search row are keyed to the address, so they close on
  * every page change (a <details> kept its open state across client navigation and covered the new page).
+ * v12 phase 9c: «منوی بالا» and «منوی همبرگری» of the ERP's «فهرست‌های سایت» replace the category links when they are on;
+ * an item with children opens them in a <details> (no JavaScript), closed again on every page change. The account and
+ * order-tracking lines stay at the end of the phone menu.
  */
-export function SiteHeader({ categories, logoUrl, ordering, cartCount, signedIn }: {
+function MenuLink({ item, className, current }: { item: SiteMenuItem; className: string; current?: boolean }) {
+  return item.external
+    ? <a href={item.href} className={className} {...outsideLink(item)}>{item.label}</a>
+    : <Link to={item.href} className={className} aria-current={current ? 'page' : undefined}>{item.label}</Link>;
+}
+
+export function SiteHeader({ categories, logoUrl, ordering, cartCount, signedIn, headerMenu = null, drawerMenu = null }: {
   categories: StorefrontFacet[]; logoUrl: string; ordering: boolean; cartCount: number; signedIn: boolean;
+  headerMenu?: SiteMenuItem[] | null; drawerMenu?: SiteMenuItem[] | null;
 }) {
   const accountTo = signedIn ? '/account' : '/account/sign-in';
   const accountLabel = signedIn ? 'حساب من' : 'ورود به حساب';
@@ -23,6 +34,11 @@ export function SiteHeader({ categories, logoUrl, ordering, cartCount, signedIn 
   const category = location.pathname === '/products' ? new URLSearchParams(location.search).get('category') : null;
   const activeTo = location.pathname !== '/products' ? '' : category ? categoryPath(category) : '/products';
   const navKey = `${location.pathname}${location.search}`;
+  const isHere = (item: SiteMenuItem) => !item.external && item.href !== '' && item.href === navKey;
+  const drawerLine = 'flex min-h-12 items-center text-lg font-medium';
+  // 9c review: an off «منوی همبرگری» keeps the fixed phone menu, as every place the ERP sends as null
+  const drawerItems = drawerMenu;
+  const desktopLink = (here: boolean) => `flex min-h-11 items-center rounded-control px-3 font-medium transition-colors duration-(--motion) hover:bg-chrome-foreground/10 ${here ? 'underline decoration-tile decoration-2 underline-offset-8' : ''}`;
   const searchForm = (wide: boolean) => (
     <Form method="get" action="/products" role="search" className={wide ? 'w-full' : 'ms-auto hidden sm:block lg:ms-2'}>
       <label className="relative flex items-center">
@@ -47,10 +63,25 @@ export function SiteHeader({ categories, logoUrl, ordering, cartCount, signedIn 
             <Menu className="size-6 group-open:hidden" strokeWidth={1.75} aria-hidden />
             <X className="hidden size-6 group-open:block" strokeWidth={1.75} aria-hidden />
           </summary>
-          <nav className="fixed inset-x-0 top-16 border-b border-border bg-chrome px-4 pb-6 pt-2 shadow-lg" aria-label="دسته‌ها">
+          <nav className="fixed inset-x-0 top-16 max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain border-b border-border bg-chrome px-4 pb-6 pt-2 shadow-lg" aria-label="دسته‌ها">
             <ul className="divide-y divide-border">
-              {nav.map(item => (
-                <li key={item.to}><Link to={item.to} className="flex min-h-12 items-center text-lg font-medium">{item.label}</Link></li>
+              {drawerItems ? drawerItems.map((item, i) => (
+                <li key={`${i}-${item.label}`}>
+                  {item.children.length === 0 ? <MenuLink item={item} className={drawerLine} /> : (
+                    <details name="drawer-submenu" className="group/sub">
+                      <summary className={`${drawerLine} cursor-pointer list-none justify-between [&::-webkit-details-marker]:hidden`}>
+                        {item.label}
+                        <ChevronDown className="size-5 transition-transform group-open/sub:rotate-180" strokeWidth={1.75} aria-hidden />
+                      </summary>
+                      <ul className="pb-2 ps-4">
+                        {item.href ? <li><MenuLink item={item} className="flex min-h-11 items-center" /></li> : null}
+                        {item.children.map((child, j) => <li key={`${j}-${child.label}`}><MenuLink item={child} className="flex min-h-11 items-center" /></li>)}
+                      </ul>
+                    </details>
+                  )}
+                </li>
+              )) : nav.map(item => (
+                <li key={item.to}><Link to={item.to} className={drawerLine}>{item.label}</Link></li>
               ))}
               <li><Link to={accountTo} className="flex min-h-12 items-center gap-2 text-lg font-medium"><UserRound className="size-5" strokeWidth={1.75} aria-hidden />{accountLabel}</Link></li>
               {ordering ? <li><Link to="/orders/track" className="flex min-h-12 items-center text-lg font-medium">پیگیری سفارش</Link></li> : null}
@@ -67,7 +98,22 @@ export function SiteHeader({ categories, logoUrl, ordering, cartCount, signedIn 
 
         <nav className="ms-auto hidden lg:block" aria-label="دسته‌ها">
           <ul className="flex items-center gap-1">
-            {nav.map(item => (
+            {headerMenu ? headerMenu.map((item, i) => (
+              <li key={`${i}-${item.label}`} className="relative">
+                {item.children.length === 0 ? <MenuLink item={item} className={desktopLink(isHere(item))} current={isHere(item)} /> : (
+                  <details key={`sub-${navKey}`} name="header-submenu" className="group/sub">
+                    <summary className={`${desktopLink(item.children.some(isHere))} cursor-pointer list-none gap-1 [&::-webkit-details-marker]:hidden`}>
+                      {item.label}
+                      <ChevronDown className="size-4 transition-transform group-open/sub:rotate-180" strokeWidth={1.75} aria-hidden />
+                    </summary>
+                    <ul className="absolute end-0 top-full z-40 mt-1 min-w-52 rounded-control border border-border bg-chrome p-1 shadow-lg">
+                      {item.href ? <li><MenuLink item={item} className={desktopLink(isHere(item))} current={isHere(item)} /></li> : null}
+                      {item.children.map((child, j) => <li key={`${j}-${child.label}`}><MenuLink item={child} className={desktopLink(isHere(child))} current={isHere(child)} /></li>)}
+                    </ul>
+                  </details>
+                )}
+              </li>
+            )) : nav.map(item => (
               <li key={item.to}>
                 <Link
                   to={item.to}

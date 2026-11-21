@@ -40,3 +40,22 @@ export interface MenuLinkOptions {
   campaigns: Array<{ id: number; title: string; live: boolean }>;
   products: Array<{ itemId: number; name: string; sku: string }>;
 }
+
+/**
+ * v12 phase 9c (`GET /api/storefront/v1/menus`, its own security review, `AGENTS.md` §1.9c): an item as the site gets it.
+ * Only what a visitor sees: the label, the address the ERP built, whether it leaves the site, the bottom bar's icon and
+ * which item is the cart or the account (the site hides the cart while it takes no order, and names the account button
+ * by the visitor's sign-in). No row id, no editor, no off or broken item.
+ */
+export interface StorefrontPublicMenuItem {
+  label: string;
+  /** a path of the site, an https address, or '' for a heading that only opens its children */
+  href: string;
+  external: boolean;
+  icon: string;
+  role: 'cart' | 'account' | '';
+  children: StorefrontPublicMenuItem[];
+}
+
+/** Each place on, with what it shows; null = off or nothing to show, and the site keeps its fixed menu */
+export type StorefrontPublicMenus = Record<'header' | 'drawer' | 'footer' | 'bottom', StorefrontPublicMenuItem[] | null>;

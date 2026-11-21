@@ -47,6 +47,10 @@ const seo = process.env.MOCK_SEO ? JSON.parse(process.env.MOCK_SEO) : await read
 // MOCK_CAMPAIGNS=0 for none)
 const campaignList = process.env.MOCK_CAMPAIGNS === '0' ? [] : await readFile(path.join(dir, 'campaigns.json'), 'utf8').then(JSON.parse).catch(() => []);
 const campaignSummary = ({ slug, title, summary, hero, homeBanner, endsOn }) => ({ slug, title, summary, hero, homeBanner, endsOn });
+// v12 phase 9c: the menus of «فهرست‌های سایت»; every place off (null) unless MOCK_MENUS names them as JSON
+// (MOCK_MENUS=fail answers 500, to test the site's fallback)
+const menusFail = process.env.MOCK_MENUS === 'fail';
+const menuPlaces = { header: null, drawer: null, footer: null, bottom: null, ...(process.env.MOCK_MENUS && !menusFail ? JSON.parse(process.env.MOCK_MENUS) : {}) };
 
 const fold = s => String(s).toLowerCase().replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/[‌\s]+/g, ' ');
 const card = ({ slug, sku, name, category, collections, retailPrice, stock, cover }) => ({ slug, sku, name, category, collections, retailPrice, stock, cover });
@@ -420,6 +424,7 @@ createServer(async (req, res) => {
   }
   if (route === '/settings') return send(res, 200, { data: settings });
   if (route === '/brand') return send(res, 200, { data: brand });
+  if (route === '/menus') return menusFail ? send(res, 500, { error: 'down' }) : send(res, 200, { data: menuPlaces });
   if (route === '/seo') return send(res, 200, { data: seo });
   if (route === '/redirects') return send(res, 200, { data: redirectList });
   // phase 8.5b: the product feed, the same fields as the ERP's (storefrontFeed.service.ts)

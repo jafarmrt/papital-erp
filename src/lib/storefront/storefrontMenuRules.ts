@@ -20,7 +20,7 @@ export const MENU_LOCATION_HINTS: Readonly<Record<MenuLocation, string>> = {
   header: 'سرصفحهٔ سایت در پهنای کامپیوتر؛ گزینهٔ دارای زیرگزینه با کلیک باز می‌شود.',
   drawer: 'فهرست کشویی گوشی؛ «حساب من» و «پیگیری سفارش» همیشه در پایانش می‌مانند.',
   footer: 'ستون‌های پیوند پایین صفحه؛ هر گزینهٔ سطح اول عنوان یک ستون است. ستون نشان و ستون «ارسال و پرداخت» ثابت‌اند.',
-  bottom: 'نوار پایین صفحه در گوشی، ۳ تا ۵ دکمه با آیکون. سبد فقط وقتی سایت سفارش می‌گیرد دیده می‌شود و عنوان دکمهٔ حساب خودکار است.',
+  bottom: 'نوار پایین صفحه در گوشی، ۳ تا ۵ دکمه با آیکون، فقط به صفحه‌های همین سایت. سبد فقط وقتی سایت سفارش می‌گیرد دیده می‌شود و عنوان دکمهٔ حساب خودکار است.',
 };
 
 /** Where an item leads. `none` is a heading that only opens its children */
@@ -194,6 +194,8 @@ function itemProblem(location: MenuLocation, item: MenuItemValues, where: string
   if (item.kind !== 'none' && location === 'footer' && !child) {
     return problem(`گزینهٔ سطح اول پاورقی عنوان ستون است؛ «${item.label}» را «بی پیوند» کنید و پیوندها را زیرش بگذارید.`, target, 'STOREFRONT_MENU_FOOTER_HEADING');
   }
+  // 9c review: the site makes no button of an outside address, so the bar would fall back to its fixed buttons
+  if (location === 'bottom' && item.kind === 'url') return problem(`دکمهٔ «${item.label}» نوار پایین به بیرون از سایت می‌رود؛ نوار پایین فقط صفحه‌های همین سایت را می‌گیرد.`, target, 'STOREFRONT_MENU_BOTTOM_OUTSIDE');
   if (location === 'bottom' && !item.icon) return problem(`آیکون دکمهٔ «${item.label}» را برگزینید.`, `${where}.icon`, 'STOREFRONT_MENU_ICON_REQUIRED');
   if (child && item.children.length) return problem('منو فقط یک سطح زیرگزینه دارد.', where, 'STOREFRONT_MENU_TOO_DEEP');
   if (item.children.length > MENU_CHILDREN_MAX) return problem(`«${item.label}» بیش از ${MENU_CHILDREN_MAX} زیرگزینه دارد.`, where, 'STOREFRONT_MENU_TOO_MANY_CHILDREN');

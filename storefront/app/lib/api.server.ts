@@ -7,6 +7,7 @@ import { CAMPAIGN_SLUG_MAX } from '@erp/storefront/storefrontCampaignRules';
 import { siteEnv } from './site.server';
 import { STOREFRONT_QUERY_TEXT_MAX, STOREFRONT_SLUG_MAX } from '@erp/storefront/storefrontRules';
 import { CATALOG_PAGE_SIZE, type CatalogSort } from './catalog';
+import { NO_MENUS, safeMenus, type SiteMenus } from './menus';
 
 /**
  * The only door to the ERP: the five read routes of the Storefront API (phase 8.1), called from this server with the
@@ -32,7 +33,7 @@ const CACHE_MAX = 500;
  * crawler walking random addresses (each a remembered 404 there) never pushes out the feed or the settings (the security
  * review of 8.5b)
  */
-const PINNED_PATHS = new Set(['/facets', '/settings', '/brand', '/seo', '/redirects', '/feed', '/campaigns']);
+const PINNED_PATHS = new Set(['/facets', '/settings', '/brand', '/seo', '/redirects', '/feed', '/campaigns', '/menus']);
 const pinned = new Map<string, Entry>();
 const kept = (path: string) => (PINNED_PATHS.has(path) ? pinned : cache).get(path);
 /** Many visitors asking for the same address at once make one call */
@@ -162,6 +163,23 @@ export async function seo(): Promise<StorefrontPublicSeo> {
   }
   seoFailedAt = Date.now();
   return NO_SEO;
+}
+
+const MENUS_TTL_MS = 60_000;
+let menusFailedAt = 0;
+
+/**
+ * v12 phase 9c: the menus of «فهرست‌های سایت», read by every page and kept a minute like the settings. Any failure means
+ * the fixed menus, never a down shop, and is remembered a little while like the SEO settings.
+ */
+export async function menus(): Promise<SiteMenus> {
+  if (Date.now() - menusFailedAt < SEO_FAILURE_TTL_MS) return NO_MENUS;
+  try {
+    return safeMenus((await get<{ data: unknown }>('/menus', MENUS_TTL_MS)).data);
+  } catch {
+    menusFailedAt = Date.now();
+    return NO_MENUS;
+  }
 }
 
 const FEED_TTL_MS = 600_000;
