@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { eq, gt, inArray, like, max } from 'drizzle-orm';
+import { eq, gt, inArray, like, max, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { appSettings, itemPrices, items, storefrontCampaigns, storefrontMenuItems, storefrontMenus, storefrontProducts } from '../../db/schema.js';
@@ -73,11 +73,14 @@ export async function runStorefrontMenusPublicV12Tests(shouldRun: (id: string, .
     const slug = `site-ring-${tag}`;
     const pub = await erp.put(`/api/storefront/products/${ring.id}`, { published: true, slug, seoTitle: '', seoDescription: '', sortOrder: 1, version: 0 });
     if (pub.status !== 200) throw new Error(`publish: ${pub.status} ${JSON.stringify(pub.body)}`);
-    const [live, off] = await orm.insert(storefrontCampaigns).values([
+    const [live, off, later, past] = await orm.insert(storefrontCampaigns).values([
       { slug: `site-live-${tag}`, title: `صفحهٔ روشن ${tag}`, source: 'collection', collection: `کالکشن ${tag}`, isActive: 1 },
       { slug: `site-off-${tag}`, title: `صفحهٔ خاموش ${tag}`, source: 'collection', collection: `کالکشن ${tag}`, isActive: 0 },
+      // 9c review: on, but outside its days
+      { slug: `site-later-${tag}`, title: `صفحهٔ آینده ${tag}`, source: 'collection', collection: `کالکشن ${tag}`, isActive: 1, startsAt: sql`now() + interval '2 days'` },
+      { slug: `site-past-${tag}`, title: `صفحهٔ گذشته ${tag}`, source: 'collection', collection: `کالکشن ${tag}`, isActive: 1, startsAt: sql`now() - interval '3 days'`, endsAt: sql`now() - interval '1 day'` },
     ]).returning({ id: storefrontCampaigns.id });
-    campaignIds.push(live.id, off.id);
+    campaignIds.push(live.id, off.id, later.id, past.id);
 
     // 1) every place off: four nulls, and nothing else in the answer
     const first = await site();
@@ -123,7 +126,8 @@ export async function runStorefrontMenusPublicV12Tests(shouldRun: (id: string, .
     const afterRename = ((await site()).body.data?.header as Body[]).flatMap(i => [i, ...(i.children as Body[])]).find(i => i.label === 'انگشتر')?.href;
     if (renamed.status !== 200 || afterRename !== `/p/${slug}-new`) wrong.push(`after a new slug: ${renamed.status} ${afterRename}`);
 
-    // 4) a bottom bar left with fewer than three buttons is null; a turned-off place is null again
+    // 4) a bottom bar left with fewer than three buttons (home only: the cart waits for orders, the product is off the site)
+    // is null; a turned-off place is null again
     const bottom = await erp.put('/api/storefront/menus/bottom', { enabled: true, version: versionOf('bottom'), items: [
       leaf('خانه', 'page', { target: 'home', icon: 'home' }), leaf('سبد', 'page', { target: 'cart', icon: 'bag' }),
       leaf('پنهان', 'product', { itemId: hidden.id, icon: 'gift' }),
@@ -153,6 +157,35 @@ export async function runStorefrontMenusPublicV12Tests(shouldRun: (id: string, .
     const bar = (await site()).body.data?.bottom as Body[] | null;
     if (third.status !== 200 || (bar ?? []).map(b => `${b.role}/${b.icon}`).join() !== '/home,cart/bag,account/user') wrong.push(`bottom roles: ${JSON.stringify(bar)}`);
     if ((await request(app).get('/api/storefront/v1/menus')).status !== 401) wrong.push('the menus answer without the site key');
+
+    // 6) the footer and the drawer: a campaign outside its days, a collection without items on the site, a path, an
+    // item that is off with its children on (none go out but the path and the live collection)
+    const views2 = (await erp.get('/api/storefront/menus')).body.data.menus as Body[];
+    const versionNow = (location: string) => Number(views2.find(m => m.location === location)?.version);
+    const collection = `کالکشن سایت ${tag}`;
+    await orm.update(items).set({ collections: [collection] }).where(eq(items.id, ring.id));
+    const footer = await erp.put('/api/storefront/menus/footer', { enabled: true, version: versionNow('footer'), items: [
+      { ...leaf('ستون', 'none'), children: [
+        child('آینده', 'campaign', { campaignId: later.id }), child('گذشته', 'campaign', { campaignId: past.id }),
+        child('خالی', 'collection', { target: `کالکشن خالی ${tag}` }), child('پر', 'collection', { target: collection }),
+        child('مسیر', 'path', { target: '/products?sort=newest' }),
+      ] },
+    ] });
+    const drawer = await erp.put('/api/storefront/menus/drawer', { enabled: true, version: versionNow('drawer'), items: [
+      leaf('دربارهٔ ما', 'page', { target: 'about' }),
+      { ...leaf('خاموش با فرزند روشن', 'none', { isActive: false }), children: [child('روشن', 'page', { target: 'contact' })] },
+    ] });
+    const both = (await site()).body.data ?? {};
+    const footerLinks = ((both.footer ?? [])[0]?.children ?? []).map((c: Body) => `${c.label}=${c.href}`).join('|');
+    const expectedFooter = `پر=/collections/${encodeURIComponent(collection)}|مسیر=/products?sort=newest`;
+    if (footer.status !== 200 || footerLinks !== expectedFooter) wrong.push(`footer: ${footer.status} ${footerLinks}`);
+    if (drawer.status !== 200 || (both.drawer ?? []).map((i: Body) => i.label).join() !== 'دربارهٔ ما') wrong.push(`drawer: ${drawer.status} ${JSON.stringify(both.drawer)}`);
+
+    // 7) the site switched off: the menus answer 404 like every route of the site
+    await orm.update(appSettings).set({ value: '0' }).where(eq(appSettings.key, 'sf_enabled'));
+    invalidateSettingsCache();
+    const offSite = await site();
+    if (offSite.status !== 404) wrong.push(`the menus while the site is off: ${offSite.status}`);
 
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: wrong.length === 0, durationMs: Date.now() - tStart,

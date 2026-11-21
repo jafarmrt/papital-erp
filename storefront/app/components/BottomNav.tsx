@@ -14,7 +14,8 @@ import { MENU_ICON_COMPONENTS, type SiteMenuItem } from '../lib/menus';
  */
 type Button = { to: string; label: string; icon: LucideIcon; active: boolean; badge?: number };
 
-function builtButtons(menu: SiteMenuItem[], ordering: boolean, cartCount: number, signedIn: boolean, here: string): Button[] | null {
+/** `here`: the page's path; `address`: the path with its query, so a category button is active on its own list only */
+function builtButtons(menu: SiteMenuItem[], ordering: boolean, cartCount: number, signedIn: boolean, here: string, address: string): Button[] | null {
   const buttons = menu.flatMap((item): Button[] => {
     if (item.external || !item.href) return [];
     const icon = MENU_ICON_COMPONENTS[item.icon] ?? House;
@@ -22,8 +23,7 @@ function builtButtons(menu: SiteMenuItem[], ordering: boolean, cartCount: number
     if (item.role === 'account') {
       return [{ to: signedIn ? '/account' : '/account/sign-in', label: signedIn ? 'حساب من' : 'ورود', icon, active: here.startsWith('/account') }];
     }
-    const path = item.href.split(/[?#]/)[0];
-    return [{ to: item.href, label: item.label, icon, active: path === here }];
+    return [{ to: item.href, label: item.label, icon, active: item.href === address }];
   });
   return buttons.length >= 3 ? buttons.slice(0, 5) : null;
 }
@@ -31,7 +31,7 @@ function builtButtons(menu: SiteMenuItem[], ordering: boolean, cartCount: number
 const COLUMNS: Readonly<Record<number, string>> = { 3: 'grid-cols-3', 4: 'grid-cols-4', 5: 'grid-cols-5' };
 
 export function BottomNav({ ordering, cartCount, signedIn, menu = null }: { ordering: boolean; cartCount: number; signedIn: boolean; menu?: SiteMenuItem[] | null }) {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const fixed: Button[] = [
     { to: '/', label: 'خانه', icon: House, active: pathname === '/' },
     { to: '/categories', label: 'دسته‌ها', icon: LayoutGrid, active: pathname === '/categories' },
@@ -39,7 +39,7 @@ export function BottomNav({ ordering, cartCount, signedIn, menu = null }: { orde
     ...(ordering ? [{ to: '/cart', label: 'سبد', icon: ShoppingBag, active: pathname === '/cart' || pathname === '/checkout', badge: cartCount }] : []),
     { to: signedIn ? '/account' : '/account/sign-in', label: signedIn ? 'حساب من' : 'ورود', icon: UserRound, active: pathname.startsWith('/account') },
   ];
-  const items = (menu ? builtButtons(menu, ordering, cartCount, signedIn, pathname) : null) ?? fixed;
+  const items = (menu ? builtButtons(menu, ordering, cartCount, signedIn, pathname, `${pathname}${search}`) : null) ?? fixed;
   return (
     <nav aria-label="پیمایش اصلی" data-bottom-nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-chrome pb-[env(safe-area-inset-bottom)] text-chrome-foreground md:hidden">
       <ul className={`grid ${COLUMNS[items.length] ?? 'grid-cols-5'}`}>
@@ -55,7 +55,7 @@ export function BottomNav({ ordering, cartCount, signedIn, menu = null }: { orde
                 <Icon className="size-6" strokeWidth={active ? 2.25 : 1.75} aria-hidden />
                 {badge ? <span aria-hidden className="absolute -top-1.5 -end-2 flex min-w-5 items-center justify-center rounded-full bg-brand px-1 text-xs font-bold text-brand-foreground">{faNumber(badge)}</span> : null}
               </span>
-              <span>{label}</span>
+              <span className="max-w-full truncate px-0.5">{label}</span>
             </Link>
           </li>
         ))}

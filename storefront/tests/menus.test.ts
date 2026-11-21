@@ -18,6 +18,8 @@ const MENUS = {
     // never trusted: an address that is not a path or an https one is dropped
     link('بد', 'javascript:alert(1)'),
     link('بیرون بی https', 'http://evil.example/', { external: true }),
+    // never trusted either: more than twelve children, and a path with a control character
+    { ...link('بسیار', ''), children: [...Array.from({ length: 14 }, (_, n) => link(`مورد ${n}`, `/p/many-${n}`)), link('کنترلی', '/a\u0001b')] },
   ],
   drawer: null,
   footer: [
@@ -74,10 +76,15 @@ describe('menus built in the ERP', () => {
     expect(page).not.toContain('evil.example');
   });
 
-  it('uses the header menu in the phone menu while the drawer has none, and keeps the account line at its end', async () => {
-    const drawer = section(await html('/'), /data-header-panel="menu"/, '</details>\n');
-    expect(drawer).toContain('همه چیز');
+  it('keeps the fixed phone menu while the drawer place is off, even with the header menu on', async () => {
+    const page = await html('/');
+    // the phone menu's own <nav>, which ends before the logo link
+    const drawer = section(page, /data-header-panel="menu"/, 'aria-label="گالری پاپیتال، صفحهٔ اصلی"');
+    expect(drawer).toContain('همهٔ محصولات');
+    expect(drawer).not.toContain('کالکشن‌های فصل');
     expect(drawer).toContain('ورود به حساب');
+    // it scrolls on a small phone instead of hiding its last lines
+    expect(drawer).toContain('overflow-y-auto');
   });
 
   it('replaces the footer link columns and keeps the brand and shipping columns', async () => {
@@ -96,5 +103,12 @@ describe('menus built in the ERP', () => {
     expect(bar).toContain('href="/account/sign-in"');
     expect(bar).toContain('ورود');
     expect(bar).toContain('grid-cols-3');
+  });
+
+  it('cuts a submenu at twelve links and drops a path with a control character', async () => {
+    const header = section(await html('/'), /<header/, '</header>');
+    expect(header.match(/href="\/p\/many-\d+"/g)?.length).toBe(12);
+    expect(header).not.toContain('href="/p/many-12"');
+    expect(header).not.toContain('کنترلی');
   });
 });

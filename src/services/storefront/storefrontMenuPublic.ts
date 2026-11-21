@@ -70,7 +70,8 @@ export async function publicMenus(): Promise<StorefrontPublicMenus> {
 
   for (const location of on) {
     const here = rows.filter(r => r.location === location);
-    const items = here.filter(r => r.parentId === null).flatMap((top) => {
+    // the bottom bar's buttons stay on the site: an outside address is not a button there (9c review: it counted toward three)
+    const items = here.filter(r => r.parentId === null && !(location === 'bottom' && r.linkKind === 'url')).flatMap((top) => {
       const children = here.filter(r => r.parentId === top.id).flatMap(child => itemOf(child, []) ?? []);
       return itemOf(top, children) ?? [];
     });

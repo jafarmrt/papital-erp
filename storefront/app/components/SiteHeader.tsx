@@ -36,7 +36,8 @@ export function SiteHeader({ categories, logoUrl, ordering, cartCount, signedIn,
   const navKey = `${location.pathname}${location.search}`;
   const isHere = (item: SiteMenuItem) => !item.external && item.href !== '' && item.href === navKey;
   const drawerLine = 'flex min-h-12 items-center text-lg font-medium';
-  const drawerItems = drawerMenu ?? headerMenu;
+  // 9c review: an off «منوی همبرگری» keeps the fixed phone menu, as every place the ERP sends as null
+  const drawerItems = drawerMenu;
   const desktopLink = (here: boolean) => `flex min-h-11 items-center rounded-control px-3 font-medium transition-colors duration-(--motion) hover:bg-chrome-foreground/10 ${here ? 'underline decoration-tile decoration-2 underline-offset-8' : ''}`;
   const searchForm = (wide: boolean) => (
     <Form method="get" action="/products" role="search" className={wide ? 'w-full' : 'ms-auto hidden sm:block lg:ms-2'}>
@@ -62,12 +63,12 @@ export function SiteHeader({ categories, logoUrl, ordering, cartCount, signedIn,
             <Menu className="size-6 group-open:hidden" strokeWidth={1.75} aria-hidden />
             <X className="hidden size-6 group-open:block" strokeWidth={1.75} aria-hidden />
           </summary>
-          <nav className="fixed inset-x-0 top-16 border-b border-border bg-chrome px-4 pb-6 pt-2 shadow-lg" aria-label="دسته‌ها">
+          <nav className="fixed inset-x-0 top-16 max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain border-b border-border bg-chrome px-4 pb-6 pt-2 shadow-lg" aria-label="دسته‌ها">
             <ul className="divide-y divide-border">
               {drawerItems ? drawerItems.map((item, i) => (
                 <li key={`${i}-${item.label}`}>
                   {item.children.length === 0 ? <MenuLink item={item} className={drawerLine} /> : (
-                    <details className="group/sub">
+                    <details name="drawer-submenu" className="group/sub">
                       <summary className={`${drawerLine} cursor-pointer list-none justify-between [&::-webkit-details-marker]:hidden`}>
                         {item.label}
                         <ChevronDown className="size-5 transition-transform group-open/sub:rotate-180" strokeWidth={1.75} aria-hidden />
@@ -100,7 +101,7 @@ export function SiteHeader({ categories, logoUrl, ordering, cartCount, signedIn,
             {headerMenu ? headerMenu.map((item, i) => (
               <li key={`${i}-${item.label}`} className="relative">
                 {item.children.length === 0 ? <MenuLink item={item} className={desktopLink(isHere(item))} current={isHere(item)} /> : (
-                  <details key={`sub-${navKey}`} className="group/sub">
+                  <details key={`sub-${navKey}`} name="header-submenu" className="group/sub">
                     <summary className={`${desktopLink(item.children.some(isHere))} cursor-pointer list-none gap-1 [&::-webkit-details-marker]:hidden`}>
                       {item.label}
                       <ChevronDown className="size-4 transition-transform group-open/sub:rotate-180" strokeWidth={1.75} aria-hidden />

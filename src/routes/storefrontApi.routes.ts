@@ -183,12 +183,12 @@ router.get('/feed', asyncHandler(async (_req: Request, res: Response) => {
   res.json({ data: await catalogFeed() });
 }));
 
-// v11 phase 8.5b: «صفحه‌های ویژه», the campaign pages on the site now (on, inside their window), and one of them
 // v12 phase 9c: the menus the site shows (each place while it is on, only the links the site has now)
 router.get('/menus', asyncHandler(async (_req: Request, res: Response) => {
   res.json({ data: await publicMenus() });
 }));
 
+// v11 phase 8.5b: «صفحه‌های ویژه», the campaign pages on the site now (on, inside their window), and one of them
 router.get('/campaigns', asyncHandler(async (_req: Request, res: Response) => {
   res.json({ data: await publicCampaigns() });
 }));

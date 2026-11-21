@@ -15,7 +15,8 @@ export const MENU_ICON_COMPONENTS: Readonly<Record<string, LucideIcon>> = {
   tag: Tag, sparkles: Sparkles, book: BookOpen, phone: Phone, message: MessageCircle, store: Store, percent: Percent,
 };
 
-const isSitePath = (href: string) => /^\/(?!\/)[^\s\\]*$/.test(href);
+// eslint-disable-next-line no-control-regex
+const isSitePath = (href: string) => /^\/(?!\/)[^\s\\\u0000-\u001f\u007f-\u009f]*$/.test(href);
 const isHttps = (href: string) => {
   try {
     const url = new URL(href);
@@ -31,7 +32,7 @@ function safeItem(raw: unknown, depth: number): SiteMenuItem | null {
   const href = typeof v.href === 'string' ? v.href : '';
   const external = v.external === true;
   if (href !== '' && !(external ? isHttps(href) : isSitePath(href))) return null;
-  const children = depth === 0 && Array.isArray(v.children) ? v.children.flatMap(c => safeItem(c, 1) ?? []) : [];
+  const children = depth === 0 && Array.isArray(v.children) ? v.children.slice(0, 12).flatMap(c => safeItem(c, 1) ?? []) : [];
   if (href === '' && children.length === 0) return null;
   return {
     label: v.label.trim(), href, external, icon: typeof v.icon === 'string' && Object.hasOwn(MENU_ICON_COMPONENTS, v.icon) ? v.icon : '',
