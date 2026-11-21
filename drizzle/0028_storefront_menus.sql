@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS storefront_menu_items (
   updated_by text NOT NULL DEFAULT '',
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT chk_storefront_menu_items_label CHECK (length(label) BETWEEN 1 AND 40 AND label !~ '[[:cntrl:]]'),
+  CONSTRAINT chk_storefront_menu_items_label CHECK (length(label) >= 1 AND length(label) <= 40 AND label !~ '[[:cntrl:]]'),
   CONSTRAINT chk_storefront_menu_items_position CHECK (position >= 0),
   CONSTRAINT chk_storefront_menu_items_parent CHECK (parent_id IS NULL OR parent_id <> id),
   CONSTRAINT chk_storefront_menu_items_link_kind CHECK (link_kind IN ('none', 'page', 'category', 'collection', 'campaign', 'product', 'path', 'url')),
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS storefront_menu_items (
     (link_kind = 'none' AND target = '' AND target_item_id IS NULL AND target_campaign_id IS NULL)
     OR (link_kind = 'product' AND target = '' AND target_item_id IS NOT NULL AND target_campaign_id IS NULL)
     OR (link_kind = 'campaign' AND target = '' AND target_item_id IS NULL AND target_campaign_id IS NOT NULL)
-    OR (link_kind IN ('page', 'category', 'collection') AND length(target) BETWEEN 1 AND 300 AND target !~ '[[:cntrl:]]' AND target_item_id IS NULL AND target_campaign_id IS NULL)
+    OR (link_kind IN ('page', 'category', 'collection') AND length(target) >= 1 AND length(target) <= 300 AND target !~ '[[:cntrl:]]' AND target_item_id IS NULL AND target_campaign_id IS NULL)
     OR (link_kind = 'path' AND target LIKE '/%' AND target NOT LIKE '%//%' AND target !~ '[[:space:][:cntrl:]\\]' AND length(target) <= 300 AND target_item_id IS NULL AND target_campaign_id IS NULL)
     OR (link_kind = 'url' AND target ~ '^https://[^/?#@[:space:][:cntrl:]\\]+([/?#][^[:space:][:cntrl:]\\]*)?$' AND length(target) <= 500 AND target_item_id IS NULL AND target_campaign_id IS NULL)
   ),
