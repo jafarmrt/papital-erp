@@ -1,7 +1,7 @@
 import type { Request } from 'express';
-import { and, asc, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, like, sql, type SQL } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { items, storefrontProducts, storefrontRedirects } from '../../db/schema.js';
+import { items, storefrontPages, storefrontProducts, storefrontRedirects } from '../../db/schema.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { OptimisticLockError, nextVersion } from '../../lib/occHelper.js';
@@ -112,6 +112,16 @@ async function assertFromFree(tx: DbExecutor, fromPath: string, exceptId: number
     .where(and(eq(storefrontRedirects.fromPath, fromPath), eq(storefrontRedirects.isDeleted, 0), exceptId === null ? sql`true` : sql`${storefrontRedirects.id} <> ${exceptId}`))
     .limit(1);
   if (taken) throw new ConflictError(`برای نشانی «${fromPath}» پیش‌تر انتقالی ثبت شده است.`, { id: taken.id }, 'STOREFRONT_REDIRECT_FROM_TAKEN');
+  // v12 phase 10c (review): a page of «صفحه‌های سایت» that is on the site answers at its own address; a redirect away from
+  // it would never be followed there, yet it would carry off every earlier address that leads to the page
+  const slug = /^\/pages\/([a-z0-9-]+)$/.exec(fromPath)?.[1];
+  if (slug) {
+    const [page] = await tx.select({ id: storefrontPages.id }).from(storefrontPages)
+      .where(and(eq(storefrontPages.slug, slug), eq(storefrontPages.kind, 'custom'), eq(storefrontPages.isDeleted, 0), isNotNull(storefrontPages.published))).limit(1);
+    if (page) {
+      throw new ConflictError('در این نشانی صفحه‌ای روی سایت است؛ برای عوض کردن نشانی آن، از «تغییر نشانی» در «صفحه‌های سایت» استفاده کنید.', { field: 'fromPath' }, 'STOREFRONT_REDIRECT_FROM_IS_PAGE');
+    }
+  }
 }
 
 const auditView = (r: Pick<RawRow, 'fromPath' | 'targetKind' | 'targetItemId' | 'target' | 'note' | 'isActive'>) => ({
@@ -247,8 +257,10 @@ export async function redirectMovedPage(req: Request, tx: DbExecutor, move: { fr
   const actor = userOf(req);
   const at = systemNowUtcIso();
 
-  const led = await tx.select().from(storefrontRedirects)
-    .where(and(eq(storefrontRedirects.isDeleted, 0), eq(storefrontRedirects.targetKind, 'path'), eq(storefrontRedirects.target, move.from))).for('update');
+  // a target is matched by its key, so one written with a last slash or a query (`/pages/a/`, `/pages/a?x=1`) follows too
+  const near = await tx.select().from(storefrontRedirects)
+    .where(and(eq(storefrontRedirects.isDeleted, 0), eq(storefrontRedirects.targetKind, 'path'), like(storefrontRedirects.target, `${move.from}%`))).for('update');
+  const led = near.filter(row => row.target === move.from || (fromKey !== null && legacyPathKey(row.target) === fromKey));
   for (const row of led) {
     if (row.fromPath === toKey) {
       await removeRedirect(req, tx, row, 'چون صفحه به همین نشانی برگشت');

@@ -26,6 +26,7 @@ export function PageAddressMove({ move, slug, version, blocked, onMoved, onFaile
   const input = useRef<HTMLInputElement>(null);
   const opener = useRef<HTMLButtonElement>(null);
   const focusIn = useRef<'page' | 'step'>('page');
+  const wasPending = useRef(false);
   // the step takes the focus when it opens and gives it back to its button when it closes; after a move that waits
   // until the editor is open again (a button inside a closed editor cannot take the focus)
   useEffect(() => {
@@ -36,6 +37,9 @@ export function PageAddressMove({ move, slug, version, blocked, onMoved, onFaile
       opener.current?.focus();
       focusIn.current = 'page';
     }
+    // a move that failed leaves the step open: the focus goes back to its field once the editor is open again
+    if (open && wasPending.current && !move.isPending) input.current?.focus();
+    wasPending.current = move.isPending;
   }, [open, move.isPending]);
 
   const next = wanted.trim();

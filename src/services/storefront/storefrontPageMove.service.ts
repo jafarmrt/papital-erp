@@ -40,10 +40,11 @@ export async function movePage(req: Request, id: number, slug: string, version: 
       .where(and(eq(storefrontPages.slug, wanted), eq(storefrontPages.isDeleted, 0)));
     if (taken) throw new ConflictError('صفحهٔ دیگری همین نشانی را دارد.', { field: 'slug' }, 'STOREFRONT_PAGE_SLUG_TAKEN');
     const actor = String((req.user as { username?: string } | undefined)?.username ?? '');
+    const onSite = row.published !== null;
+    // the redirects first, then the address: the order a draft save takes the two in, so the two never wait on each other
+    const redirected = await redirectMovedPage(req, tx, { from: pagePath(row.slug), to: pagePath(wanted), title: row.published?.title ?? row.title, onSite });
     await tx.update(storefrontPages).set({ slug: wanted, version: nextVersion(row.version), updatedBy: actor, updatedAt: systemNowUtcIso() })
       .where(eq(storefrontPages.id, id));
-    const onSite = row.published !== null;
-    const redirected = await redirectMovedPage(req, tx, { from: pagePath(row.slug), to: pagePath(wanted), title: row.published?.title ?? row.title, onSite });
     await logActivity({
       req, tx, action: 'UPDATE', entity: 'صفحهٔ سایت', entityId: `page-${id}`,
       description: `نشانی صفحهٔ «${row.title}» از ${pagePath(row.slug)} به ${pagePath(wanted)} عوض شد`,

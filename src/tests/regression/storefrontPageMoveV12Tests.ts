@@ -148,30 +148,32 @@ export async function runStorefrontPageMoveV12Tests(shouldRun: (id: string, ...e
     const afterD = await siteRedirects();
     if (ownOnTarget.status !== 201 || toD.status !== 200 || afterD.includes(`/pages/${d}→`)) wrong.push(`moving onto an address that had a redirect: ${ownOnTarget.status}/${toD.status} «${afterD}»`);
 
-    // 7) a redirect the owner keeps on the page's own address (switched off, to elsewhere): when the page leaves, that same row
-    // is pointed at the page's new address and switched on, not doubled
-    const ownOnSource = await erp.post('/api/storefront/redirects', { fromPath: `/pages/${d}`, targetKind: 'path', targetItemId: null, target: '/products', note: 'دستی', isActive: false });
-    const leftD = await move(b, 9);
-    const afterLeft = await siteRedirects();
-    const rowsOfD = (await liveRows()).filter(r => r.fromPath === `/pages/${d}`);
-    if (ownOnSource.status !== 201 || leftD.status !== 200 || rowsOfD.length !== 1 || rowsOfD[0].id !== Number(ownOnSource.body.data?.id) || rowsOfD[0].isActive !== 1 || rowsOfD[0].target !== `/pages/${b}`) {
-      wrong.push(`the owner's redirect on the address the page left: ${ownOnSource.status}/${leftD.status} ${JSON.stringify(rowsOfD.map(r => [r.id, r.isActive, r.target]))}`);
+    // 7) the redirects list refuses a row from the address of a page that is on the site (it would carry off the page's
+    // earlier addresses), by a new row and by an edit; a draft's address is free
+    const onPage = await erp.post('/api/storefront/redirects', { fromPath: `/pages/${d}`, targetKind: 'path', targetItemId: null, target: '/products', note: '', isActive: true });
+    const elsewhere = await erp.post('/api/storefront/redirects', { fromPath: `/pages/move-free-${tag}`, targetKind: 'path', targetItemId: null, target: '/products', note: '', isActive: false });
+    const editedOnto = await erp.put(`/api/storefront/redirects/${Number(elsewhere.body.data?.id)}`, { fromPath: `/pages/${d}`, targetKind: 'path', targetItemId: null, target: '/products', note: '', isActive: false, version: Number(elsewhere.body.data?.version) });
+    if (onPage.status !== 409 || onPage.body.code !== 'STOREFRONT_REDIRECT_FROM_IS_PAGE' || elsewhere.status !== 201 || editedOnto.status !== 409 || editedOnto.body.code !== 'STOREFRONT_REDIRECT_FROM_IS_PAGE') {
+      wrong.push(`a redirect from a published page's address: ${onPage.status} ${onPage.body.code} / ${elsewhere.status} / ${editedOnto.status} ${editedOnto.body.code}`);
     }
+    await orm.delete(storefrontRedirects).where(eq(storefrontRedirects.id, Number(elsewhere.body.data?.id)));
+    // such a row written straight into the table (switched off, to elsewhere), and an owner's row that names the page's
+    // address with a last slash: when the page leaves, the first is pointed at the new address and switched on, the same
+    // row and not a second one, and the other follows the page
+    const [ownOnSource] = await orm.insert(storefrontRedirects).values({ fromPath: `/pages/${d}`, targetKind: 'path', target: '/products', source: 'manual', note: 'دستی', isActive: 0 }).returning({ id: storefrontRedirects.id });
+    const slashed = await erp.post('/api/storefront/redirects', { fromPath: `/old-${tag}`, targetKind: 'path', targetItemId: null, target: `/pages/${d}/`, note: '', isActive: true });
+    const leftD = await move(b, 9);
+    const rowsOfD = (await liveRows()).filter(r => r.fromPath === `/pages/${d}`);
+    if (leftD.status !== 200 || rowsOfD.length !== 1 || rowsOfD[0].id !== ownOnSource.id || rowsOfD[0].isActive !== 1 || rowsOfD[0].target !== `/pages/${b}`) {
+      wrong.push(`a row on the address the page left: ${leftD.status} ${JSON.stringify(rowsOfD.map(r => [r.id, r.isActive, r.target]))}`);
+    }
+    const [slashedNow] = await orm.select().from(storefrontRedirects).where(eq(storefrontRedirects.id, Number(slashed.body.data?.id)));
+    if (slashed.status !== 201 || slashedNow?.target !== `/pages/${b}`) wrong.push(`a target written with a last slash: ${slashed.status} ${slashedNow?.target}`);
+    await orm.delete(storefrontRedirects).where(eq(storefrontRedirects.id, Number(slashed.body.data?.id)));
+    const afterLeft = await siteRedirects();
     // every address the page ever had leads to where it is now, each in one hop, and none leads away from it
     const hops = afterLeft.split(' | ');
     if (hops.length !== 3 || hops.some(r => !r.endsWith(`→path:/pages/${b}`)) || afterLeft.includes(`/pages/${b}→`)) wrong.push(`one hop from every earlier address: «${afterLeft}»`);
-
-    // 8) every redirect row this page's moves changed has its own audit row: made, pointed anew, removed
-    const touched = await orm.select().from(storefrontRedirects).where(gt(storefrontRedirects.id, lastRedirect ?? 0));
-    const auditOf = async (rowId: number, action: string) => (await orm.select({ id: activityLogs.id }).from(activityLogs)
-      .where(and(eq(activityLogs.entityId, `redirect-${rowId}`), eq(activityLogs.action, action)))).length;
-    for (const row of touched.filter(r => r.fromPath.includes(tag))) {
-      const [made, changed, gone] = [await auditOf(row.id, 'CREATE'), await auditOf(row.id, 'UPDATE'), await auditOf(row.id, 'DELETE')];
-      // a row is made once; one whose version rose was changed; one that is removed has the row of its removal
-      if (made !== 1 || (row.isDeleted === 1 ? gone !== 1 : gone !== 0) || changed + gone !== row.version - 1) {
-        wrong.push(`audit rows of the redirect ${row.fromPath}→${row.target} (v${row.version}, removed ${row.isDeleted}): ${made} made, ${changed} changed, ${gone} removed`);
-      }
-    }
 
     // 9) 10c review: the address changes while the page is off the site (by a draft save, and by the move route): redirects
     // that led to the address it leaves follow it, so after it is published again no earlier address ends at a 404
@@ -180,6 +182,11 @@ export async function runStorefrontPageMoveV12Tests(shouldRun: (id: string, ...e
     const offSave = await erp.put(`/api/storefront/pages/${pageId}`, form(await versionNow(), e));
     const midway = await siteRedirects();
     const offRoute = await move(a, await versionNow());
+    const [offRouteAudit] = await orm.select().from(activityLogs).where(and(eq(activityLogs.entityId, `page-${pageId}`), eq(activityLogs.action, 'UPDATE'))).orderBy(desc(activityLogs.id)).limit(1);
+    if ((offRouteAudit?.details as { oldAddressRedirected?: boolean } | undefined)?.oldAddressRedirected !== false) wrong.push(`the audit row of a move off the site says a redirect was written: ${String(JSON.stringify(offRouteAudit?.details)).slice(0, 200)}`);
+    // before it is published again: the row from a, which would lead from the page's address to itself, is already gone
+    const beforeAgain = (await liveRows()).map(r => r.fromPath);
+    if (beforeAgain.includes(`/pages/${a}`)) wrong.push(`a row from the page's own address was kept until publishing: ${beforeAgain.join(', ')}`);
     const again = await erp.post(`/api/storefront/pages/${pageId}/publish`, { version: await versionNow() });
     const afterOff = await siteRedirects();
     if (off.status !== 200 || offSave.status !== 200 || offRoute.status !== 200 || again.status !== 200) wrong.push(`moving off the site: ${off.status}/${offSave.status}/${offRoute.status}/${again.status}`);
@@ -216,10 +223,24 @@ export async function runStorefrontPageMoveV12Tests(shouldRun: (id: string, ...e
       }
     }
 
+    // 12) every redirect row this run's moves, saves and publishings changed has its own audit row: made, pointed anew, removed
+    const touched = await orm.select().from(storefrontRedirects).where(gt(storefrontRedirects.id, lastRedirect ?? 0));
+    const auditOf = async (rowId: number, action: string) => (await orm.select({ id: activityLogs.id }).from(activityLogs)
+      .where(and(eq(activityLogs.entityId, `redirect-${rowId}`), eq(activityLogs.action, action)))).length;
+    for (const row of touched.filter(r => r.fromPath.includes(tag))) {
+      const [made, changed, gone] = [await auditOf(row.id, 'CREATE'), await auditOf(row.id, 'UPDATE'), await auditOf(row.id, 'DELETE')];
+      // a row is made once; one whose version rose was changed; one that is removed has the row of its removal
+      // (the one row this test wrote straight into the table has no row of its making)
+      if (made !== (row.id === ownOnSource.id ? 0 : 1) || (row.isDeleted === 1 ? gone !== 1 : gone !== 0) || changed + gone !== row.version - 1) {
+        wrong.push(`audit rows of the redirect ${row.fromPath}→${row.target} (v${row.version}, removed ${row.isDeleted}): ${made} made, ${changed} changed, ${gone} removed`);
+      }
+    }
+
+
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'a draft moved with no redirect; on the site seven wrong moves were refused with their codes (a stale version, a taken address, three wrong shapes, a base page, a draft save), the view key was 403, and nothing was written; the same address changed nothing; a→b answered at b only and sent a to b with the page\'s and the redirect\'s audit rows; b→c sent both earlier addresses straight to c; c→a removed the redirect away from a, with no circle; a move onto an address that had a redirect removed that redirect; a switched-off redirect of the owner\'s on the address the page left was pointed at the new address and switched on, the same row; and after the last move every earlier address led to the page in one hop; every redirect row changed had its own audit rows; an address changed while the page was off the site (by a draft save and by the route) took the redirects along and left none that led from the page\'s address to itself; a second page published at an address that still redirected removed that redirect; feed, amp and embed were refused as addresses',
+      details: 'a draft moved with no redirect; on the site seven wrong moves were refused with their codes (a stale version, a taken address, three wrong shapes, a base page, a draft save), the view key was 403, and nothing was written; the same address changed nothing; a→b answered at b only and sent a to b with the page\'s and the redirect\'s audit rows; b→c sent both earlier addresses straight to c; c→a removed the redirect away from a, with no circle; a move onto an address that had a redirect removed that redirect; the redirects list refused a row from a published page\'s address (new and edited); a switched-off row on the address the page left was pointed at the new address and switched on, the same row, and a target written with a last slash followed; and after the last move every earlier address led to the page in one hop; every redirect row changed had its own audit rows; an address changed while the page was off the site (by a draft save and by the route) took the redirects along and left none that led from the page\'s address to itself; a second page published at an address that still redirected removed that redirect; feed, amp and embed were refused as addresses',
     }));
   } catch (err) {
     results.push(makeTestCase({

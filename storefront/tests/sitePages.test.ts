@@ -106,7 +106,11 @@ beforeAll(async () => {
   mock = spawn(process.execPath, [path.join(import.meta.dirname, '../mock/mockApi.mjs')], {
     env: { ...process.env, MOCK_PORT: String(PORT), MOCK_API_KEY: KEY, MOCK_ORDERING: '1', MOCK_PAGES: JSON.stringify([STORY, ABOUT, HIDDEN, TERMS, STRAY, DEEP, BROKEN]),
       // «تغییر نشانی» in the ERP: the page's earlier address, and one before that which the ERP already points at the newest
-      MOCK_REDIRECTS: JSON.stringify([{ from: '/pages/old-story', kind: 'path', target: '/pages/our-story' }, { from: '/pages/first-story', kind: 'path', target: '/pages/our-story' }]),
+      // the third row leads away from the page's own address: it must not carry off the two that lead to the page (10c review)
+      MOCK_REDIRECTS: JSON.stringify([
+        { from: '/pages/old-story', kind: 'path', target: '/pages/our-story' }, { from: '/pages/first-story', kind: 'path', target: '/pages/our-story' },
+        { from: '/pages/our-story', kind: 'path', target: '/products' },
+      ]),
     },
     stdio: 'pipe',
   });
@@ -235,7 +239,14 @@ describe('a page the shop made, at /pages/<its address>', () => {
     expect(hidden.status).toBe(200);
     expect(hidden.html).toContain('<meta name="robots" content="noindex"/>');
     expect((await get('/pages/no-such-page')).status).toBe(404);
-    expect((await get('/pages/Our-Story')).status).toBe(404);
+    // the address of a page that is on the site, written in capitals or with WordPress's «/feed» after it, goes to the page
+    // itself (and never along the row that leads away from the page's address)
+    for (const other of ['/pages/Our-Story', '/pages/our-story/feed']) {
+      const res = await handle(new Request(`http://localhost${other}`));
+      expect(res.status, other).toBe(301);
+      expect(res.headers.get('location'), other).toBe('/pages/our-story');
+    }
+    expect((await get('/pages/No-Such-Page')).status).toBe(404);
     // a base page has one address, its own
     expect((await get('/pages/about')).status).toBe(404);
     // an answer the site cannot take as a page (here a "base" page it has no address for) is a failed read, never a page
