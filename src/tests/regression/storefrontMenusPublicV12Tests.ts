@@ -88,6 +88,7 @@ export async function runStorefrontMenusPublicV12Tests(shouldRun: (id: string, .
     const views = (await erp.get('/api/storefront/menus')).body.data.menus as Body[];
     const versionOf = (location: string) => Number(views.find(m => m.location === location)?.version);
     const saved = await erp.put('/api/storefront/menus/header', { enabled: true, version: versionOf('header'), items: [
+      leaf('دربارهٔ ما', 'page', { target: 'about' }),
       leaf('ردیابی', 'page', { target: 'track' }),
       leaf('انگشترها', 'category', { target: category }),
       leaf('پنهان', 'category', { target: `دسته پنهان ${tag}` }),
@@ -102,13 +103,14 @@ export async function runStorefrontMenusPublicV12Tests(shouldRun: (id: string, .
     if (saved.status !== 200) throw new Error(`header save: ${saved.status} ${JSON.stringify(saved.body)}`);
     const header = (await site()).body.data?.header as Body[] | null;
     const labels = (header ?? []).map(i => `${i.label}:${(i.children as Body[]).map(c => c.label).join('+')}`).join('|');
-    if (labels !== 'ردیابی:|انگشترها:|ویژه:انگشتر+روشن+وبلاگ') wrong.push(`header items: ${labels}`);
+    // order tracking stays off while the site takes no order
+    if (labels !== 'دربارهٔ ما:|انگشترها:|ویژه:انگشتر+روشن+وبلاگ') wrong.push(`header items: ${labels}`);
     const all = (header ?? []).flatMap(i => [i, ...(i.children as Body[])]);
     for (const item of all) {
       if (Object.keys(item).sort().join() !== 'children,external,href,icon,label,role') wrong.push(`item fields: ${Object.keys(item).sort().join()}`);
     }
     const hrefOf = (label: string) => all.find(i => i.label === label)?.href;
-    if (hrefOf('ردیابی') !== '/orders/track' || hrefOf('انگشترها') !== `/products?category=${encodeURIComponent(category)}`
+    if (hrefOf('دربارهٔ ما') !== '/about' || hrefOf('انگشترها') !== `/products?category=${encodeURIComponent(category)}`
       || hrefOf('انگشتر') !== `/p/${slug}` || hrefOf('روشن') !== `/campaigns/site-live-${tag}` || hrefOf('ویژه') !== '') {
       wrong.push(`hrefs: ${JSON.stringify(all.map(i => [i.label, i.href]))}`);
     }
@@ -132,8 +134,19 @@ export async function runStorefrontMenusPublicV12Tests(shouldRun: (id: string, .
     await erp.put('/api/storefront/menus/header', { enabled: false, version: headerNow.version, items: [leaf('ردیابی', 'page', { target: 'track' })] });
     if ((await site()).body.data?.header !== null) wrong.push('a place turned off still goes out');
 
+    // 4b) the site takes no order here: the cart and order tracking stay off the site
+    const cartOff = await erp.put('/api/storefront/menus/bottom', { enabled: true, version: bottom.body.data.version, items: [
+      leaf('خانه', 'page', { target: 'home', icon: 'home' }), leaf('سبد', 'page', { target: 'cart', icon: 'bag' }),
+      leaf('پیگیری', 'page', { target: 'track', icon: 'truck' }), leaf('من', 'page', { target: 'account', icon: 'user' }),
+    ] });
+    if (cartOff.status !== 200 || (await site()).body.data?.bottom !== null) wrong.push(`cart and tracking without orders: ${cartOff.status} ${JSON.stringify((await site()).body.data?.bottom)}`);
+    // orders on (the stored switch; the settings form would also ask for a card and a treasury account)
+    await orm.insert(appSettings).values({ key: 'sf_orders_enabled', value: '1' })
+      .onConflictDoUpdate({ target: appSettings.key, set: { value: '1' } });
+    invalidateSettingsCache();
+
     // 5) the cart and the account are marked for the site, with their icons
-    const third = await erp.put('/api/storefront/menus/bottom', { enabled: true, version: bottom.body.data.version, items: [
+    const third = await erp.put('/api/storefront/menus/bottom', { enabled: true, version: cartOff.body.data.version, items: [
       leaf('خانه', 'page', { target: 'home', icon: 'home' }), leaf('سبد', 'page', { target: 'cart', icon: 'bag' }),
       leaf('من', 'page', { target: 'account', icon: 'user' }),
     ] });
