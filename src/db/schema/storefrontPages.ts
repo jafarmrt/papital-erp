@@ -12,6 +12,18 @@ import type { PageSection, PageValues } from '../../lib/storefront/storefrontPag
  */
 export type PublishedPage = Omit<PageValues, 'slug'>;
 
+/**
+ * The five base pages as migration 0029 makes them. The factory reset makes them again from this list (it may read the
+ * schema, not the storefront's rules); `storefrontPageRulesV12.test.ts` keeps it equal to `BASE_PAGES` and the migration.
+ */
+export const STOREFRONT_BASE_PAGE_ROWS: ReadonlyArray<{ kind: 'base'; slug: string; title: string }> = [
+  { kind: 'base', slug: 'about', title: 'درباره ما' },
+  { kind: 'base', slug: 'contact', title: 'تماس با ما' },
+  { kind: 'base', slug: 'shipping', title: 'ارسال و پرداخت' },
+  { kind: 'base', slug: 'terms', title: 'قوانین خرید' },
+  { kind: 'base', slug: 'privacy', title: 'حریم خصوصی' },
+];
+
 export const storefrontPages = pgTable('storefront_pages', {
   id: serial('id').primaryKey(),
   kind: text('kind').notNull().default('custom'),
@@ -46,5 +58,5 @@ export const storefrontContentAssets = pgTable('storefront_content_assets', {
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (table) => ({
   uq_storefront_content_assets: unique('uq_storefront_content_assets').on(table.contentKind, table.contentId, table.assetId),
-  idx_storefront_content_assets_asset_id: index('idx_storefront_content_assets_asset_id').on(table.assetId).where(sql`${table.isDeleted} = 0`),
+  idx_storefront_content_assets_asset_id: index('idx_storefront_content_assets_asset_id').on(table.assetId),
 }));

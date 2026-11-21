@@ -118,6 +118,9 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   // v12 phase 9b: the site's menus, a switch per place and its items
   { table: 'storefront_menus', group: 'settings' },
   { table: 'storefront_menu_items', group: 'settings' },
+  // v12 phase 10b: the site's pages (draft and published copy) and the library images published content names
+  { table: 'storefront_pages', group: 'settings' },
+  { table: 'storefront_content_assets', group: 'settings' },
 ];
 
 /** Exported only on request, for a business-day range */

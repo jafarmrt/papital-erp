@@ -143,6 +143,15 @@ async function everyTableCase(): Promise<TestCaseResult> {
     await pool.query(`UPDATE storefront_menus SET is_enabled = 1, updated_by = 'obsr112_admin' WHERE location = 'header'`);
     await pool.query(`INSERT INTO storefront_menu_items (location, label, link_kind, target_item_id) VALUES ('header', 'محصول', 'product', $1)`, [itemId]);
 
+    // v12 phase 10b: a base page on the site with a sharing image of the library, the row that names its image, and a custom page
+    const [pageImage] = (await pool.query(`SELECT id FROM media_assets ORDER BY id LIMIT 1`)).rows as Array<{ id: number }>;
+    if (!pageImage) throw new Error('the test needs a media asset for the page');
+    await pool.query(`UPDATE storefront_pages SET title = 'درباره‌ی آزمون', share_image_asset_id = $1, sections = '[{"kind":"button","background":"white","label":"x","href":"/x"}]'::jsonb,
+      published = '{"title":"درباره‌ی آزمون","sections":[]}'::jsonb, published_at = now(), published_by = 'obsr112_admin', updated_by = 'obsr112_admin' WHERE slug = 'about'`, [pageImage.id]);
+    const aboutId = Number((await one(`SELECT id FROM storefront_pages WHERE slug = 'about'`)).id);
+    await pool.query(`INSERT INTO storefront_content_assets (content_kind, content_id, asset_id) VALUES ('page', $1, $2)`, [aboutId, pageImage.id]);
+    await pool.query(`INSERT INTO storefront_pages (kind, slug, title) VALUES ('custom', 'obsr112-page', 'صفحهٔ آزمون')`);
+
     const report = await FactoryResetService.wipeAndReseed({ username: 'obsr112_admin', ip: '127.0.0.112' });
 
     const wrong: string[] = [];
@@ -158,6 +167,16 @@ async function everyTableCase(): Promise<TestCaseResult> {
     if (places.rows.length !== 4 || places.rows.some((r: { is_enabled: number; updated_by: string }) => r.is_enabled !== 0 || r.updated_by !== '')) {
       wrong.push(`menu places after the reset: ${JSON.stringify(places.rows)}`);
     }
+    // v12 phase 10b: only the five base pages are left, as migration 0029 made them, and no image row
+    const pagesLeft = await pool.query(`SELECT kind, slug, title, (published IS NULL) AS off_site, share_image_asset_id, sections::text AS sections, updated_by FROM storefront_pages ORDER BY id`);
+    const expectedPages = 'about:درباره ما,contact:تماس با ما,shipping:ارسال و پرداخت,terms:قوانین خرید,privacy:حریم خصوصی';
+    type PageLeft = { kind: string; slug: string; title: string; off_site: boolean; share_image_asset_id: number | null; sections: string; updated_by: string };
+    const left = pagesLeft.rows as PageLeft[];
+    if (left.map(r => `${r.slug}:${r.title}`).join(',') !== expectedPages
+      || left.some(r => r.kind !== 'base' || !r.off_site || r.share_image_asset_id !== null || r.sections !== '[]' || r.updated_by !== '')) {
+      wrong.push(`pages after the reset: ${JSON.stringify(left)}`);
+    }
+    if (Number((await one(`SELECT count(*)::int AS n FROM storefront_content_assets`)).n) !== 0) wrong.push('rows of published images were left');
     if (report.mediaFiles.removed !== 1) wrong.push(`media files removed: ${report.mediaFiles.removed}`);
     const leftAttachments = attachmentFiles.filter((file) => fs.existsSync(file)).map((file) => path.basename(file));
     if (leftAttachments.length > 0) wrong.push(`attachment files stayed on disk: ${leftAttachments.join(', ')}`);

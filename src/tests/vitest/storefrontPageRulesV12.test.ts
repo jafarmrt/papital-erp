@@ -3,7 +3,10 @@
  * v12 phase 10b (docs/roadmap/V12_SITE_NEXT_START_PLAN.md §7.2): the rules of the site's pages: what a section and the
  * editor's text may hold, what is refused by name, what a draft may leave unfinished and what a published page may not.
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { STOREFRONT_BASE_PAGE_ROWS } from '../../db/schema/storefrontPages';
 import {
   BASE_PAGES, PAGE_SECTIONS_MAX, PAGE_TEMPLATES, RICH_TEXT_CHARS_MAX, SECTION_KINDS, checkedPage, emptySection, pageAssetIds, pageItemIds, pageLink,
   safeRichDoc, type PageSection,
@@ -111,6 +114,10 @@ describe('a page', () => {
     expect(refusal(page([], { slug: 'about' }), { forPublish: false, baseSlug: 'about' })).toBeNull();
     expect(refusal(page([], { slug: 'about-us' }), { forPublish: false, baseSlug: 'about' })).toMatchObject({ field: 'slug' });
     expect(BASE_PAGES.map(b => b.slug)).toEqual(['about', 'contact', 'shipping', 'terms', 'privacy']);
+    // the migration, the rules and the list the factory reset makes the pages again from are the same five
+    expect(STOREFRONT_BASE_PAGE_ROWS.map(({ slug, title }) => ({ slug, title }))).toEqual(BASE_PAGES.map(({ slug, title }) => ({ slug, title })));
+    const migration = fs.readFileSync(path.resolve(process.cwd(), 'drizzle/0029_storefront_pages.sql'), 'utf8');
+    for (const base of BASE_PAGES) expect(migration, base.slug).toContain(`('base', '${base.slug}', '${base.title}')`);
   });
 
   it('keeps the live shipping section for the shipping page alone, once', () => {

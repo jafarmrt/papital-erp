@@ -72,4 +72,4 @@ CREATE TABLE IF NOT EXISTS storefront_content_assets (
   CONSTRAINT uq_storefront_content_assets UNIQUE (content_kind, content_id, asset_id)
 );
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS idx_storefront_content_assets_asset_id ON storefront_content_assets (asset_id) WHERE is_deleted = 0;
+CREATE INDEX IF NOT EXISTS idx_storefront_content_assets_asset_id ON storefront_content_assets (asset_id);
