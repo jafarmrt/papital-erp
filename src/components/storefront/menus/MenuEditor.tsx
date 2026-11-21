@@ -38,8 +38,21 @@ export function MenuEditor({ view, options, canManage }: { view: MenuView; optio
   const id = useId();
   const save = useSaveMenuMutation();
   const saving = useRef(false);
-  const [enabled, setEnabled] = useState(view.enabled);
-  const [items, setItems] = useState<DraftItem[]>(() => view.items.map(draftOf));
+  const [enabled, setEnabledState] = useState(view.enabled);
+  const [items, setItemsState] = useState<DraftItem[]>(() => view.items.map(draftOf));
+  // 9b review: the draft survives a refetch. `base` is the saved menu this draft started from (its version goes with the
+  // save); a newer saved menu replaces an untouched draft, and an edited one keeps it with a notice and a choice.
+  const [base, setBase] = useState(view);
+  const [dirty, setDirty] = useState(false);
+  if (view !== base && view.version !== base.version && !dirty) {
+    setBase(view);
+    setEnabledState(view.enabled);
+    setItemsState(view.items.map(draftOf));
+  }
+  const newerSaved = view.version !== base.version && dirty;
+  const setEnabled = (value: boolean) => { setDirty(true); setEnabledState(value); };
+  const setItems = (change: (list: DraftItem[]) => DraftItem[]) => { setDirty(true); setItemsState(change); };
+  const takeSaved = () => { setDirty(false); setBase(view); setEnabledState(view.enabled); setItemsState(view.items.map(draftOf)); };
   const location = view.location;
   const liveById = new Map(view.items.flatMap(i => [i, ...i.children]).map(i => [i.id, i.live]));
 
@@ -57,14 +70,20 @@ export function MenuEditor({ view, options, canManage }: { view: MenuView; optio
       return;
     }
     saving.current = true;
-    save.mutate({ location, input: { enabled, version: view.version, items: values().map(({ children, ...it }) => ({ ...it, children: children.map(({ children: _none, ...c }) => c) })) } }, {
-      onSuccess: () => toast.success(`${MENU_LOCATION_TITLES[location]} ذخیره شد.`),
+    save.mutate({ location, input: { enabled, version: base.version, items: values().map(({ children, ...it }) => ({ ...it, children: children.map(({ children: _none, ...c }) => c) })) } }, {
+      onSuccess: (saved) => {
+        setDirty(false);
+        setBase(saved);
+        setEnabledState(saved.enabled);
+        setItemsState(saved.items.map(draftOf));
+        toast.success(`${MENU_LOCATION_TITLES[location]} ذخیره شد.`);
+      },
       onError: (error) => toast.error(errorMessageOf(error)),
       onSettled: () => { saving.current = false; },
     });
   };
 
-  const startFromSite = () => setItems(currentSiteMenu(location, {
+  const startFromSite = () => setItems(() => currentSiteMenu(location, {
     categories: Array.isArray(options?.categories) ? options.categories : [],
     collections: Array.isArray(options?.collections) ? options.collections : [],
   }).map(draftOf));
@@ -72,6 +91,15 @@ export function MenuEditor({ view, options, canManage }: { view: MenuView; optio
   return (
     <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); submit(); }}>
       <p className="text-xs leading-6 text-slate-600">{MENU_LOCATION_HINTS[location]}</p>
+      {newerSaved && (
+        <div role="alert" className="space-y-2 rounded-2xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+          <p>این منو پس از باز شدن این صفحه در جای دیگری ذخیره شد. تغییرهای شما هنوز اینجاست و ذخیره نشده است.</p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={takeSaved} className="rounded-lg border border-amber-400 bg-white px-3 py-1 font-bold">کنار گذاشتن تغییرهای من</button>
+            <button type="button" onClick={() => setBase(view)} className="rounded-lg bg-amber-700 px-3 py-1 font-bold text-white">نگه داشتن تغییرهای من برای ذخیره به جای آن</button>
+          </div>
+        </div>
+      )}
       <fieldset disabled={!canManage || save.isPending} className="space-y-4">
         <div className={`rounded-2xl border p-4 ${enabled ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-200 bg-white'}`}>
           <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-800">

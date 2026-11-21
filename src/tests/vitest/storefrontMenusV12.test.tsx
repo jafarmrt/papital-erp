@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { MenusView } from '../../lib/storefront/storefrontMenuContracts';
@@ -23,6 +23,10 @@ vi.mock('../../api', () => ({
     calls.list.push({ url, init });
     if (url === '/storefront/menus') return Promise.resolve({ data: menus.current });
     if (url === '/storefront/menus/link-options') return Promise.resolve({ data: { categories: ['انگشتر', 'دستبند'], collections: ['یلدا'], campaigns: [], products: [] } });
+    if (init?.method === 'PUT') {
+      const body = JSON.parse(String(init.body));
+      return Promise.resolve({ data: { location: url.split('/').pop(), enabled: body.enabled, version: body.version + 1, updatedBy: 'u', updatedAt: '', items: [] } });
+    }
     return Promise.resolve({ data: null });
   },
 }));
@@ -108,7 +112,7 @@ describe('the site menus screen', () => {
     page('/site-menus?place=bottom');
     expect(await screen.findByText(/نوار پایین صفحه در گوشی/)).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'نوار پایین گوشی' }).getAttribute('aria-selected')).toBe('true');
-    expect(screen.getByRole('checkbox', { name: 'این منو روی سایت بیاید' }).matches(':disabled')).toBe(true);
+    expect(within(screen.getByRole('tabpanel')).getByRole('checkbox', { name: 'این منو روی سایت بیاید' }).matches(':disabled')).toBe(true);
     expect(screen.getByText(/شما فقط می‌توانید ببینید/)).toBeTruthy();
   });
 
@@ -118,17 +122,18 @@ describe('the site menus screen', () => {
     page('/site-menus?place=header');
     await screen.findByText(/سرصفحهٔ سایت در پهنای کامپیوتر/);
     await waitFor(() => expect(calls.list.some(c => c.url === '/storefront/menus/link-options')).toBe(true));
-    fireEvent.click(screen.getByRole('button', { name: /شروع از منوی کنونی سایت/ }));
-    expect((screen.getAllByLabelText('عنوان') as HTMLInputElement[]).map(i => i.value)).toEqual(['همهٔ محصولات', 'انگشتر', 'دستبند']);
+    const panel = within(screen.getByRole('tabpanel'));
+    fireEvent.click(panel.getByRole('button', { name: /شروع از منوی کنونی سایت/ }));
+    expect((panel.getAllByLabelText('عنوان') as HTMLInputElement[]).map(i => i.value)).toEqual(['همهٔ محصولات', 'انگشتر', 'دستبند']);
 
-    fireEvent.change(screen.getAllByLabelText('عنوان')[0], { target: { value: '' } });
-    fireEvent.click(screen.getByRole('button', { name: /^ذخیره/ }));
+    fireEvent.change(panel.getAllByLabelText('عنوان')[0], { target: { value: '' } });
+    fireEvent.click(panel.getByRole('button', { name: /^ذخیره/ }));
     expect(vi.mocked(toast.error)).toHaveBeenCalled();
     expect(calls.list.some(c => c.init?.method === 'PUT')).toBe(false);
 
-    fireEvent.change(screen.getAllByLabelText('عنوان')[0], { target: { value: 'همه' } });
-    fireEvent.click(screen.getByRole('checkbox', { name: 'این منو روی سایت بیاید' }));
-    fireEvent.click(screen.getByRole('button', { name: /^ذخیره/ }));
+    fireEvent.change(panel.getAllByLabelText('عنوان')[0], { target: { value: 'همه' } });
+    fireEvent.click(panel.getByRole('checkbox', { name: 'این منو روی سایت بیاید' }));
+    fireEvent.click(panel.getByRole('button', { name: /^ذخیره/ }));
     await waitFor(() => expect(calls.list.some(c => c.init?.method === 'PUT')).toBe(true));
     const sent = calls.list.find(c => c.init?.method === 'PUT');
     expect(sent?.url).toBe('/storefront/menus/header');
@@ -149,5 +154,36 @@ describe('the site menus screen', () => {
     permissions.current = ['site_content.view', 'site_content.manage'];
     page();
     expect(await screen.findByText('این پیوند اکنون روی سایت نیست و نشان داده نمی‌شود.')).toBeTruthy();
+  });
+
+  it('sends a footer column\'s links without a children key, as the server\'s strict schema takes them, and keeps a draft across tabs', async () => {
+    menus.current = emptyMenus();
+    permissions.current = ['site_content.view', 'site_content.manage'];
+    page('/site-menus?place=footer');
+    await waitFor(() => expect(calls.list.some(c => c.url === '/storefront/menus/link-options')).toBe(true));
+    const panel = within(await screen.findByRole('tabpanel'));
+    fireEvent.click(panel.getByRole('button', { name: /شروع از منوی کنونی سایت/ }));
+    fireEvent.click(screen.getByRole('tab', { name: 'منوی بالا' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'پاورقی' }));
+    const again = within(screen.getByRole('tabpanel'));
+    expect((again.getAllByLabelText('عنوان') as HTMLInputElement[])[0].value).toBe('خرید');
+    fireEvent.click(again.getByRole('button', { name: /^ذخیره/ }));
+    await waitFor(() => expect(calls.list.some(c => c.init?.method === 'PUT')).toBe(true));
+    const body = JSON.parse(String(calls.list.find(c => c.init?.method === 'PUT')?.init?.body));
+    expect(body.items[0].children.length).toBeGreaterThan(0);
+    for (const column of body.items) for (const child of column.children) expect(child).not.toHaveProperty('children');
+  });
+
+  it('clears the target when the link kind changes', async () => {
+    menus.current = emptyMenus();
+    permissions.current = ['site_content.view', 'site_content.manage'];
+    page('/site-menus?place=header');
+    await waitFor(() => expect(calls.list.some(c => c.url === '/storefront/menus/link-options')).toBe(true));
+    const panel = within(await screen.findByRole('tabpanel'));
+    fireEvent.click(panel.getByRole('button', { name: /افزودن گزینه/ }));
+    fireEvent.change(panel.getByLabelText('پیوند به'), { target: { value: 'path' } });
+    fireEvent.change(panel.getByLabelText('مقصد'), { target: { value: '/about' } });
+    fireEvent.change(panel.getByLabelText('پیوند به'), { target: { value: 'url' } });
+    expect((panel.getByLabelText('مقصد') as HTMLInputElement).value).toBe('');
   });
 });

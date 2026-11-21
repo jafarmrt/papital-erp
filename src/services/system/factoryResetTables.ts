@@ -192,9 +192,8 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
 export const FACTORY_RESET_KEPT_TABLES: Readonly<Record<string, string>> = {
   roles: 'the roles are kept (TD-245); a fresh install has only the system admin role',
   migrations_log: 'the record of applied migrations belongs to the database schema, not to its business data',
-  // v12 phase 9b: only migration 0028 makes the four places; with their items wiped, a place that was on shows the
-  // site's fixed menu (the site falls back when a place has no item to show)
-  storefront_menus: 'the four places of the site\'s menu (header, drawer, footer, bottom bar), made by migration 0028 only; their items are wiped',
+  // v12 phase 9b: only migration 0028 makes the four places; the reset wipes their items and turns each place off
+  storefront_menus: 'the four places of the site\'s menu (header, drawer, footer, bottom bar), made by migration 0028 only; the reset wipes their items and turns each place off',
 };
 
 /** the system media section «محصولات» stays; only the sections users made are wiped */

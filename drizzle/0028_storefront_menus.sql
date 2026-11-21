@@ -6,7 +6,8 @@
 -- while a place is off the site keeps its fixed menu, so this migration changes nothing on the site.
 -- storefront_menu_items: the items of a place, one submenu level (parent_id names an item of the first level). An item
 -- leads to a fixed page of the site (target = its key), a category or a collection (target = its name), a path of the
--- site (target starts with one «/»), an https address, a product (target_item_id) or a campaign page
+-- site (target starts with one «/», no «//», space, control character or backslash), an https address without a user
+-- name, a product (target_item_id) or a campaign page
 -- (target_campaign_id); 'none' is a heading that only opens its children. Removing an item is a soft delete.
 -- New tables only; no existing row is changed. Runs inside the Drizzle migrator transaction.
 
@@ -40,7 +41,7 @@ CREATE TABLE IF NOT EXISTS storefront_menu_items (
   updated_by text NOT NULL DEFAULT '',
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT chk_storefront_menu_items_label CHECK (length(label) BETWEEN 1 AND 40),
+  CONSTRAINT chk_storefront_menu_items_label CHECK (length(label) BETWEEN 1 AND 40 AND label !~ '[[:cntrl:]]'),
   CONSTRAINT chk_storefront_menu_items_position CHECK (position >= 0),
   CONSTRAINT chk_storefront_menu_items_parent CHECK (parent_id IS NULL OR parent_id <> id),
   CONSTRAINT chk_storefront_menu_items_link_kind CHECK (link_kind IN ('none', 'page', 'category', 'collection', 'campaign', 'product', 'path', 'url')),
@@ -48,9 +49,9 @@ CREATE TABLE IF NOT EXISTS storefront_menu_items (
     (link_kind = 'none' AND target = '' AND target_item_id IS NULL AND target_campaign_id IS NULL)
     OR (link_kind = 'product' AND target = '' AND target_item_id IS NOT NULL AND target_campaign_id IS NULL)
     OR (link_kind = 'campaign' AND target = '' AND target_item_id IS NULL AND target_campaign_id IS NOT NULL)
-    OR (link_kind IN ('page', 'category', 'collection') AND length(target) BETWEEN 1 AND 300 AND target_item_id IS NULL AND target_campaign_id IS NULL)
-    OR (link_kind = 'path' AND target LIKE '/%' AND target NOT LIKE '//%' AND length(target) <= 300 AND target_item_id IS NULL AND target_campaign_id IS NULL)
-    OR (link_kind = 'url' AND target LIKE 'https://%' AND length(target) <= 500 AND target_item_id IS NULL AND target_campaign_id IS NULL)
+    OR (link_kind IN ('page', 'category', 'collection') AND length(target) BETWEEN 1 AND 300 AND target !~ '[[:cntrl:]]' AND target_item_id IS NULL AND target_campaign_id IS NULL)
+    OR (link_kind = 'path' AND target LIKE '/%' AND target NOT LIKE '%//%' AND target !~ '[[:space:][:cntrl:]\\]' AND length(target) <= 300 AND target_item_id IS NULL AND target_campaign_id IS NULL)
+    OR (link_kind = 'url' AND target ~ '^https://[^/?#@[:space:][:cntrl:]\\]+([/?#][^[:space:][:cntrl:]\\]*)?$' AND length(target) <= 500 AND target_item_id IS NULL AND target_campaign_id IS NULL)
   ),
   CONSTRAINT chk_storefront_menu_items_icon CHECK (icon = '' OR (location = 'bottom' AND icon ~ '^[a-z]{1,20}$')),
   CONSTRAINT chk_storefront_menu_items_is_active_flag CHECK (is_active IN (0, 1)),

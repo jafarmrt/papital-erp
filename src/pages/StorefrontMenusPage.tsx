@@ -40,7 +40,8 @@ export default function StorefrontMenusPage() {
   const place: MenuLocation = isMenuLocation(asked) ? asked : 'header';
   const menus = useMenusQuery();
   const options = useMenuLinkOptionsQuery();
-  const view = (Array.isArray(menus.data?.menus) ? menus.data.menus : []).find(m => m.location === place);
+  const views = Array.isArray(menus.data?.menus) ? menus.data.menus : [];
+  const view = views.find(m => m.location === place);
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 px-3 py-4 sm:px-6">
@@ -65,12 +66,13 @@ export default function StorefrontMenusPage() {
       {menus.isLoading && <p className="text-xs text-slate-500">در حال خواندن…</p>}
       {menus.isError && <p className="text-xs text-rose-700">{errorMessageOf(menus.error)}</p>}
       {options.isError && <p className="text-xs text-amber-800">{`فهرست دسته‌ها و محصولات خوانده نشد: ${errorMessageOf(options.error)}`}</p>}
-      {view && (
-        <>
-          <MenuEditor key={`${view.location}-${view.version}`} view={view} options={options.data} canManage={canManage} />
-          <MenuPreview view={view} />
-        </>
-      )}
+      {/* every place's editor stays mounted, so a draft survives switching tabs (9b review) */}
+      {views.map(v => (
+        <div key={v.location} role="tabpanel" aria-label={MENU_LOCATION_TITLES[v.location]} hidden={v.location !== place}>
+          <MenuEditor view={v} options={options.data} canManage={canManage} />
+        </div>
+      ))}
+      {view && <MenuPreview view={view} />}
     </div>
   );
 }

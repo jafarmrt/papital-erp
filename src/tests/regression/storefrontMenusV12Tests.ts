@@ -71,7 +71,8 @@ export async function runStorefrontMenusV12Tests(shouldRun: (id: string, ...extr
     const collection = `کالکشن منو ${tag}`;
     const [onSite, offSite] = [await createTestItem({ name: `انگشتر منو ${tag}`, code: `SF-M1-${tag}`, category, collections: [collection] }),
       await createTestItem({ name: `دستبند منو ${tag}`, code: `SF-M2-${tag}`, category: `دسته خالی ${tag}` })];
-    itemIds.push(onSite.id, offSite.id);
+    const material = await createTestItem({ name: `ماده منو ${tag}`, code: `SF-M3-${tag}`, type: 'material' });
+    itemIds.push(onSite.id, offSite.id, material.id);
     for (const item of [onSite, offSite]) await orm.insert(itemPrices).values({ itemId: item.id, title: retailList, price: money('2500000'), currency: 'IRR' });
     const pub = await erp.put(`/api/storefront/products/${onSite.id}`, { published: true, slug: `menu-ring-${tag}`, seoTitle: '', seoDescription: '', sortOrder: 1, version: 0 });
     if (pub.status !== 200) throw new Error(`publish: ${pub.status} ${JSON.stringify(pub.body)}`);
@@ -143,6 +144,15 @@ export async function runStorefrontMenusV12Tests(shouldRun: (id: string, ...extr
       ['a footer column with a link', 'footer', [{ ...leaf('ستون', 'page', { target: 'home' }), children: [] }], false, footerVersion, 'STOREFRONT_MENU_FOOTER_HEADING'],
       ['two carts', 'bottom', ['cart', 'cart', 'home'].map(t => ({ ...leaf('دکمه', 'page', { target: t, icon: 'bag' }), children: [] })), false, bottomVersion, 'STOREFRONT_MENU_BOTTOM_TWICE'],
       ['two buttons on', 'bottom', ['home', 'cart'].map(t => ({ ...leaf('دکمه', 'page', { target: t, icon: 'bag' }), children: [] })), true, bottomVersion, 'STOREFRONT_MENU_BOTTOM_FEW'],
+      // 9b review: the text the database would refuse (a 500 or a message without a field) is refused first, by its rule
+      ['an upper-case HTTPS', 'header', [{ ...leaf('بد', 'url', { target: 'HTTPS://papitalgallery.com/x' }), children: [] }], false, nowVersion, 'STOREFRONT_MENU_URL_INVALID'],
+      ['https without slashes', 'header', [{ ...leaf('بد', 'url', { target: 'https:papitalgallery.com' }), children: [] }], false, nowVersion, 'STOREFRONT_MENU_URL_INVALID'],
+      ['a NUL in a label', 'header', [{ ...leaf('ب\u0000د', 'page', { target: 'home' }), children: [] }], false, nowVersion, 'STOREFRONT_MENU_TEXT_INVALID'],
+      ['a NUL in a path', 'header', [{ ...leaf('بد', 'path', { target: '/a\u0000b' }), children: [] }], false, nowVersion, 'STOREFRONT_MENU_TEXT_INVALID'],
+      ['a backslash path', 'header', [{ ...leaf('بد', 'path', { target: '/\\evil.example' }), children: [] }], false, nowVersion, 'STOREFRONT_MENU_PATH_INVALID'],
+      ['an invisible label', 'header', [{ ...leaf('\u200b\u200c', 'page', { target: 'home' }), children: [] }], false, nowVersion, 'STOREFRONT_MENU_LABEL_REQUIRED'],
+      ['a direction override', 'header', [{ ...leaf('الف\u202eب', 'page', { target: 'home' }), children: [] }], false, nowVersion, 'STOREFRONT_MENU_TEXT_INVALID'],
+      ['a material, not a product', 'header', [{ ...leaf('ماده', 'product', { itemId: material.id }), children: [] }], false, nowVersion, 'STOREFRONT_MENU_PRODUCT_UNKNOWN'],
       ['a button without an icon', 'bottom', ['home', 'search', 'cart'].map(t => ({ ...leaf('دکمه', 'page', { target: t }), children: [] })), false, bottomVersion, 'STOREFRONT_MENU_ICON_REQUIRED'],
     ];
     for (const [label, location, list, enabled, version, code] of refusals) {
@@ -153,6 +163,47 @@ export async function runStorefrontMenusV12Tests(shouldRun: (id: string, ...extr
       { ...leaf('بالا', 'none'), children: [{ ...leaf('میانه', 'page', { target: 'home' }), children: [leaf('ته', 'page', { target: 'home' })] }] },
     ] });
     if (deep.status < 400 || deep.status >= 500) wrong.push(`a second level: ${deep.status}`);
+
+    // 5b) a row of another place, the same row twice, and two saves at once (the place's row is locked: one 200, one 409)
+    const headerNow = (await erp.get('/api/storefront/menus')).body.data.menus.find((m: Body) => m.location === 'header');
+    const headerRowId = Number(headerNow.items[0].id);
+    const drawerNow = (await erp.get('/api/storefront/menus')).body.data.menus.find((m: Body) => m.location === 'drawer');
+    const foreign = await erp.put('/api/storefront/menus/drawer', { enabled: false, version: drawerNow.version, items: [{ ...leaf('دزدی', 'page', { target: 'home', id: headerRowId }), children: [] }] });
+    if (foreign.status !== 422 || foreign.body.code !== 'STOREFRONT_MENU_ITEM_UNKNOWN') wrong.push(`a row of another place: ${foreign.status} ${foreign.body.code}`);
+    const twice = await erp.put('/api/storefront/menus/header', { enabled: true, version: headerNow.version, items: [
+      { ...leaf('یک', 'page', { target: 'home', id: headerRowId }), children: [] }, { ...leaf('دو', 'page', { target: 'home', id: headerRowId }), children: [] },
+    ] });
+    if (twice.status !== 422 || twice.body.code !== 'STOREFRONT_MENU_ITEM_TWICE') wrong.push(`the same row twice: ${twice.status} ${twice.body.code}`);
+    const racing = await Promise.all([1, 2].map(n => erp.put('/api/storefront/menus/drawer', {
+      enabled: false, version: drawerNow.version, items: [{ ...leaf(`هم‌زمان ${n}`, 'page', { target: 'home' }), children: [] }],
+    })));
+    if (racing.map(r => r.status).sort().join() !== '200,409') wrong.push(`two saves at once: ${racing.map(r => r.status).join()}`);
+
+    // 5c) a kept child moves to the first level and changes its kind (its product is cleared); a disabled item and a
+    // heading whose only child the site does not show are not live
+    const moved = (headerNow.items as Body[]).find(i => i.label === 'بیشتر');
+    const productChild = (moved?.children as Body[] | undefined)?.find(c => c.kind === 'product');
+    const reshaped = await erp.put('/api/storefront/menus/header', { enabled: true, version: headerNow.version, items: [
+      { ...leaf('سابقاً محصول', 'page', { target: 'about', id: productChild?.id }), children: [] },
+      { ...leaf('خاموش‌شده', 'page', { target: 'home', isActive: false }), children: [] },
+      { ...leaf('سرستون مرده', 'none'), children: [{ ...leaf('دستبند', 'product', { itemId: offSite.id }) }].map(({ children: _c, ...c }) => c) },
+    ] });
+    const [movedRow] = await orm.select().from(storefrontMenuItems).where(eq(storefrontMenuItems.id, Number(productChild?.id ?? 0)));
+    const reshapedItems = (reshaped.body.data?.items ?? []) as Body[];
+    if (reshaped.status !== 200 || movedRow?.parentId !== null || movedRow?.linkKind !== 'page' || movedRow?.targetItemId !== null) {
+      wrong.push(`a moved and reshaped row: ${reshaped.status} ${JSON.stringify(movedRow)}`);
+    }
+    if (reshapedItems.find(i => i.label === 'خاموش‌شده')?.live !== false || reshapedItems.find(i => i.label === 'سرستون مرده')?.live !== false) {
+      wrong.push(`live of a disabled item and a dead heading: ${JSON.stringify(reshapedItems.map(i => [i.label, i.live]))}`);
+    }
+    // the site takes no order here, so its cart and tracking pages are not live; an unpublished product is not named
+    const cartView = await erp.put('/api/storefront/menus/footer', { enabled: false, version: footerVersion, items: [
+      { ...leaf('ستون', 'none'), children: [{ ...leaf('سبد', 'page', { target: 'cart' }) }, { ...leaf('دستبند', 'product', { itemId: offSite.id }) }].map(({ children: _c, ...c }) => c) },
+    ] });
+    const footerChildren = (cartView.body.data?.items?.[0]?.children ?? []) as Body[];
+    if (cartView.status !== 200 || footerChildren[0]?.live !== false || footerChildren[1]?.targetTitle !== '') {
+      wrong.push(`cart and an unpublished product in the footer: ${cartView.status} ${JSON.stringify(footerChildren)}`);
+    }
 
     // 6) the database refuses the same shapes on its own
     const refusedRow = async (values: Partial<typeof storefrontMenuItems.$inferInsert>) => {
@@ -170,6 +221,9 @@ export async function runStorefrontMenusV12Tests(shouldRun: (id: string, ...extr
       ['an unknown kind', { linkKind: 'script' }], ['an http address', { linkKind: 'url', target: 'http://x.example' }],
       ['a // path', { linkKind: 'path', target: '//x.example' }], ['an icon in the header', { icon: 'home' }],
       ['a product without its item', { linkKind: 'product', target: '' }], ['a flag of 2', { isActive: 2 }], ['an empty label', { label: '' }],
+      ['an upper-case HTTPS', { linkKind: 'url', target: 'HTTPS://x.example' }], ['a user name in an address', { linkKind: 'url', target: 'https://u@x.example' }],
+      ['a backslash path', { linkKind: 'path', target: '/\\x.example' }], ['a // inside a path', { linkKind: 'path', target: '/a//b' }],
+      ['a bell in a label', { label: 'a\u0007' }],
     ];
     for (const [label, values] of shapes) if (!(await refusedRow(values))) wrong.push(`the database kept ${label}`);
 

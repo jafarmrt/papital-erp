@@ -34,10 +34,13 @@ interface SiteNow {
   collections: Set<string>;
   products: Map<number, string>;
   campaigns: Map<number, { title: string; live: boolean }>;
+  /** the site takes orders, so it shows the cart and order tracking (9b review) */
+  ordering: boolean;
 }
 
 async function siteNow(executor: DbExecutor, campaignIds: readonly number[]): Promise<SiteNow> {
-  const onSale = await catalogItems(executor, await storefrontSettingValues(executor));
+  const settings = await storefrontSettingValues(executor);
+  const onSale = await catalogItems(executor, settings);
   const campaigns = new Map<number, { title: string; live: boolean }>();
   if (campaignIds.length) {
     const rows = await executor.select({ id: storefrontCampaigns.id, title: storefrontCampaigns.title }).from(storefrontCampaigns)
@@ -51,6 +54,7 @@ async function siteNow(executor: DbExecutor, campaignIds: readonly number[]): Pr
     collections: new Set(onSale.flatMap(i => i.collections)),
     products: new Map(onSale.map(i => [i.itemId, i.name])),
     campaigns,
+    ordering: settings.enabled && settings.ordersEnabled,
   };
 }
 
@@ -70,21 +74,22 @@ function treeOf(rows: readonly ItemRecord[]): MenuItemValues[] {
   return ordered(byParent.get(null)).map(top => valuesOf(top, ordered(byParent.get(top.id)).map(child => valuesOf(child, []))));
 }
 
-async function productNames(executor: DbExecutor, ids: readonly number[]): Promise<Map<number, string>> {
-  if (!ids.length) return new Map();
-  const rows = await executor.select({ id: items.id, name: items.name }).from(items).where(inArray(items.id, [...ids]));
-  return new Map(rows.map(r => [r.id, r.name]));
-}
+/** pages the site shows only while it takes orders */
+const ORDERING_PAGES: readonly string[] = ['cart', 'track'];
 
-function rowOf(item: MenuItemValues, now: SiteNow, names: Map<number, string>): MenuItemRow {
+function rowOf(item: MenuItemValues, now: SiteNow): MenuItemRow {
   let live = item.isActive;
   let targetTitle = '';
   switch (item.kind) {
-    case 'page': targetTitle = isMenuSitePage(item.target) ? MENU_SITE_PAGES[item.target].title : ''; break;
+    case 'page':
+      targetTitle = isMenuSitePage(item.target) ? MENU_SITE_PAGES[item.target].title : '';
+      live &&= now.ordering || !ORDERING_PAGES.includes(item.target);
+      break;
     case 'category': live &&= now.categories.has(item.target); break;
     case 'collection': live &&= now.collections.has(item.target); break;
     case 'product':
-      targetTitle = item.itemId !== null ? (now.products.get(item.itemId) ?? names.get(item.itemId) ?? '') : '';
+      // 9b review: only a product on the site is named (an item's ERP name is not this screen's to read)
+      targetTitle = item.itemId !== null ? (now.products.get(item.itemId) ?? '') : '';
       live &&= item.itemId !== null && now.products.has(item.itemId);
       break;
     case 'campaign': {
@@ -95,7 +100,7 @@ function rowOf(item: MenuItemValues, now: SiteNow, names: Map<number, string>): 
     }
     default: break;
   }
-  const children = item.children.map(child => rowOf(child, now, names));
+  const children = item.children.map(child => rowOf(child, now));
   // a heading shows only with a child the site shows
   if (item.kind === 'none') live &&= children.some(c => c.live);
   return { ...item, id: item.id ?? 0, targetTitle, live, children };
@@ -107,13 +112,12 @@ async function menuViews(executor: DbExecutor, only?: MenuLocation): Promise<Men
     .where(only ? and(eq(storefrontMenuItems.isDeleted, 0), eq(storefrontMenuItems.location, only)) : eq(storefrontMenuItems.isDeleted, 0))
     .orderBy(asc(storefrontMenuItems.position), asc(storefrontMenuItems.id));
   const now = await siteNow(executor, [...new Set(rows.map(r => r.targetCampaignId).filter((id): id is number => id !== null))]);
-  const names = await productNames(executor, [...new Set(rows.map(r => r.targetItemId).filter((id): id is number => id !== null))]);
   return MENU_LOCATIONS.filter(location => !only || location === only).flatMap((location): MenuView[] => {
     const menu = menus.find(m => m.location === location);
     if (!menu) return [];
     return [{
       location, enabled: menu.isEnabled === 1, version: menu.version, updatedBy: menu.updatedBy, updatedAt: menu.updatedAt,
-      items: treeOf(rows.filter(r => r.location === location)).map(item => rowOf(item, now, names)),
+      items: treeOf(rows.filter(r => r.location === location)).map(item => rowOf(item, now)),
     }];
   });
 }
