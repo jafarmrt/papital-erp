@@ -17,8 +17,8 @@ export function loader() {
   return { siteUrl: siteEnv().siteUrl };
 }
 
-export function meta({ data }: Route.MetaArgs) {
-  return [...pageMeta({ title: 'گذاشتن رمز حساب', description: 'گذاشتن رمز حساب خرید در پاپیتال', path: '/account/set-password', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
+export function meta({ data, matches }: Route.MetaArgs) {
+  return [...pageMeta({ matches, title: 'گذاشتن رمز حساب', description: 'گذاشتن رمز حساب خرید در پاپیتال', path: '/account/set-password', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
 }
 
 export async function action({ request }: Route.ActionArgs) {

@@ -23,6 +23,7 @@ import { EMAIL_ADDRESS_MAX, EMAIL_PROOF_MAX } from '../lib/storefront/storefront
 import { storefrontEmailRoutes } from './storefrontApiEmail.routes.js';
 import { ACCESS_KEY_MAX } from '../services/storefront/storefrontOrderKeys.js';
 import { publicSeo } from '../services/storefront/storefrontSeo.service.js';
+import { publicShopInfo } from '../services/storefront/storefrontShopInfo.service.js';
 import { catalogFeed } from '../services/storefront/storefrontFeed.service.js';
 import { campaignHeroFile, publicCampaign, publicCampaigns } from '../services/storefront/storefrontCampaigns.service.js';
 import { publicMenus } from '../services/storefront/storefrontMenuPublic.js';
@@ -160,6 +161,12 @@ router.get('/brand', asyncHandler(async (_req: Request, res: Response) => {
 // redirects of the old WooCommerce addresses (old path → a product slug, a collection or category name, or a site path)
 router.get('/seo', asyncHandler(async (_req: Request, res: Response) => {
   res.json({ data: await publicSeo() });
+}));
+
+// v12 phase 10a: «اطلاعات فروشگاه»: the brand's name and motto, contact details, social pages, the footer's texts, the
+// e-namad seal and the floating WhatsApp button (its own security review: no customer, amount or secret)
+router.get('/shop-info', asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ data: await publicShopInfo() });
 }));
 
 router.get('/redirects', asyncHandler(async (_req: Request, res: Response) => {

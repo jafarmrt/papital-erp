@@ -1,3 +1,4 @@
+import { enamadUrl } from '@erp/storefront/storefrontShopInfoRules';
 import type { AnalyticsConfig } from '../components/Analytics';
 
 /**
@@ -5,12 +6,14 @@ import type { AnalyticsConfig } from '../components/Analytics';
  * hydration data, the JSON-LD and, in phase 8.5, the setup of the statistics service. With a statistics service on, only
  * that service's addresses join (Google's published list for GA4; the owner's Matomo server). `server.mjs` sends the same
  * base policy with the static files.
+ * v12 phase 10a: while the ERP's «اطلاعات فروشگاه» holds the e-namad seal, the host of its picture (on enamad.ir, checked
+ * again here) may serve images; with no seal the policy is the one above, to the letter.
  */
 const GA4_SCRIPT = ['https://www.googletagmanager.com'];
 const GA4_CONNECT = ['https://*.google-analytics.com', 'https://*.analytics.google.com', 'https://*.googletagmanager.com'];
 const GA4_IMAGES = ['https://*.google-analytics.com', 'https://*.googletagmanager.com'];
 
-export function contentSecurityPolicy(analytics: AnalyticsConfig | null): string {
+export function contentSecurityPolicy(analytics: AnalyticsConfig | null, sealImageUrl = ''): string {
   const script = ["'self'", "'unsafe-inline'"];
   const connect = ["'self'"];
   const img = ["'self'", 'data:'];
@@ -24,6 +27,11 @@ export function contentSecurityPolicy(analytics: AnalyticsConfig | null): string
     connect.push(origin);
     img.push(origin);
   }
+  const seal = sealImageUrl ? enamadUrl(sealImageUrl) : '';
+  // 10a review: an origin is written into the header only as https and a plain host, so nothing of it can end a
+  // directive («;»), end the policy («,») or stand for other hosts («*»), whatever passed the checks before this one
+  const origin = seal ? new URL(seal).origin : '';
+  if (/^https:\/\/[a-z0-9.-]+$/.test(origin)) img.push(origin);
   return [
     "default-src 'self'",
     `img-src ${img.join(' ')}`,

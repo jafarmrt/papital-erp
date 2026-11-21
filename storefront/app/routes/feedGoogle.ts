@@ -1,7 +1,8 @@
 import type { StorefrontFeedItem } from '@erp/storefront/storefrontContracts';
-import { feed } from '../lib/api.server';
+import { feed, shopInfo } from '../lib/api.server';
 import { siteEnv } from '../lib/site.server';
-import { BRAND, mediaPath, productPath } from '../lib/brand';
+import { mediaPath, productPath } from '../lib/brand';
+import { DEFAULT_SHOP, type SiteBrand } from '../lib/shopInfo';
 
 /**
  * v11 phase 8.5b (start plan 8.5 §4): the product feed in Google's format (RSS 2.0 with the `g:` fields), at
@@ -24,9 +25,9 @@ const xml = (text: string) => text
 const tag = (name: string, value: string) => (value ? `<${name}>${xml(value)}</${name}>` : '');
 
 /** One item of the feed; a price is whole rials, as Google reads «14500000 IRR» */
-export function feedItem(item: StorefrontFeedItem, siteUrl: string): string {
+export function feedItem(item: StorefrontFeedItem, siteUrl: string, brand: SiteBrand = DEFAULT_SHOP.brand): string {
   const photos = item.images.map(image => `${siteUrl}${mediaPath(image.sha256)}`);
-  const description = item.description || `${item.name}، ${BRAND.tagline}.`;
+  const description = item.description || `${item.name}، ${brand.tagline}.`;
   return [
     '<item>',
     tag('g:id', item.sku),
@@ -37,7 +38,7 @@ export function feedItem(item: StorefrontFeedItem, siteUrl: string): string {
     ...photos.slice(1).map(url => tag('g:additional_image_link', url)),
     tag('g:availability', item.inStock ? 'in_stock' : 'out_of_stock'),
     tag('g:price', `${item.retailPrice} IRR`),
-    tag('g:brand', BRAND.fullName),
+    tag('g:brand', brand.fullName),
     tag('g:condition', 'new'),
     // handmade pieces have no GTIN or maker's part number
     tag('g:identifier_exists', 'no'),
@@ -52,17 +53,18 @@ export function feedItem(item: StorefrontFeedItem, siteUrl: string): string {
 export async function loader() {
   const { siteUrl, indexable } = siteEnv();
   if (!indexable) throw new Response('پیدا نشد', { status: 404 });
-  const items = await feed();
+  // v12 phase 10a: the brand's name and motto are the ERP's «اطلاعات فروشگاه»
+  const [items, { brand }] = await Promise.all([feed(), shopInfo()]);
   // an item without a photo is refused by Google; it stays on the site and its sitemap
   const listed = items.filter(item => item.images.length > 0);
   const body = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">',
     '<channel>',
-    tag('title', BRAND.fullName),
+    tag('title', brand.fullName),
     tag('link', `${siteUrl}/`),
-    tag('description', BRAND.tagline),
-    ...listed.map(item => feedItem(item, siteUrl)),
+    tag('description', brand.tagline),
+    ...listed.map(item => feedItem(item, siteUrl, brand)),
     '</channel>',
     '</rss>',
     '',

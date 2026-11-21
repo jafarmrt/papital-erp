@@ -5,10 +5,12 @@ import { isbot } from 'isbot';
 import { renderToPipeableStream } from 'react-dom/server';
 import { contentSecurityPolicy } from './lib/csp';
 import { siteSeo } from './lib/seo.server';
+import { shopInfo } from './lib/api.server';
 
 /**
  * React Router's own server entry (as `react-router reveal` writes it), with one addition of phase 8.5: every page's
  * security policy is written here, so it allows the statistics service the owner chose (and nothing else from another site).
+ * v12 phase 10a: and the picture of the e-namad seal, while the ERP's «اطلاعات فروشگاه» holds one.
  */
 export const streamTimeout = 5_000;
 
@@ -18,8 +20,8 @@ export default async function handleRequest(
   responseHeaders: Headers,
   routerContext: EntryContext,
 ): Promise<Response> {
-  const { analytics } = await siteSeo();
-  responseHeaders.set('Content-Security-Policy', contentSecurityPolicy(analytics));
+  const [{ analytics }, shop] = await Promise.all([siteSeo(), shopInfo()]);
+  responseHeaders.set('Content-Security-Policy', contentSecurityPolicy(analytics, shop.enamad?.imageUrl ?? ''));
 
   // https://httpwg.org/specs/rfc9110.html#HEAD
   if (request.method.toUpperCase() === 'HEAD') return new Response(null, { status: responseStatusCode, headers: responseHeaders });

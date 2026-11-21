@@ -46,8 +46,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   };
 }
 
-export function meta({ data }: Route.MetaArgs) {
-  return [...pageMeta({ title: 'ساختن حساب', description: 'ساختن حساب خرید در پاپیتال', path: '/account/sign-up', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
+export function meta({ data, matches }: Route.MetaArgs) {
+  return [...pageMeta({ matches, title: 'ساختن حساب', description: 'ساختن حساب خرید در پاپیتال', path: '/account/sign-up', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
 }
 
 function clearProofs(headers: Headers) {

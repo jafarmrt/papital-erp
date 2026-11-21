@@ -58,8 +58,8 @@ export async function action({ request }: Route.ActionArgs) {
 
 export const headers = () => ({ 'Cache-Control': 'no-store' });
 
-export function meta({ data }: Route.MetaArgs) {
-  return [...pageMeta({ title: 'حساب من', description: 'حساب خرید شما در پاپیتال', path: '/account', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
+export function meta({ data, matches }: Route.MetaArgs) {
+  return [...pageMeta({ matches, title: 'حساب من', description: 'حساب خرید شما در پاپیتال', path: '/account', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
 }
 
 export default function AccountPage({ loaderData, actionData }: Route.ComponentProps) {

@@ -3,7 +3,8 @@ import { ArrowLeft, Building2, Hand, Leaf, Truck } from 'lucide-react';
 import type { Route } from './+types/home';
 import { campaigns, catalog, facets, seo } from '../lib/api.server';
 import { siteEnv } from '../lib/site.server';
-import { BRAND, campaignPath, categoryPath, collectionPath, productPath } from '../lib/brand';
+import { campaignPath, categoryPath, collectionPath, productPath } from '../lib/brand';
+import { DEFAULT_SHOP } from '../lib/shopInfo';
 import { faDay, faNumber, formatPrice } from '../lib/format';
 import { pageMeta } from '../lib/meta';
 import { whatsappLink } from '../lib/whatsapp';
@@ -41,9 +42,10 @@ export async function loader({ request }: Route.LoaderArgs) {
   };
 }
 
-export function meta({ data }: Route.MetaArgs) {
+export function meta({ data, matches }: Route.MetaArgs) {
   return pageMeta({
-    title: BRAND.fullName,
+    matches,
+    title: '',
     description: 'گردنبند، گوشواره و ست هدیهٔ دست‌ساز با نقش کاشی‌کاری مسجدها و کاخ‌های ایران. قیمت روشن، ارسال به سراسر ایران، هدیهٔ سازمانی و خرید عمده.',
     path: '/',
     siteUrl: data?.siteUrl ?? '',
@@ -209,7 +211,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <div className="lg:col-span-2">
             <h2 id="b2b" className="text-2xl font-extrabold lg:text-3xl">هدیهٔ سازمانی و خرید عمده</h2>
             <p className="mt-3 max-w-2xl leading-8 text-primary-foreground/80">
-              برای هدیهٔ مناسبتی کارکنان و مشتریان، یا فروش در فروشگاه و گالری خودتان، با قیمت عمده و فاکتور رسمی سفارش بدهید.
+              برای هدیهٔ مناسبتی همکاران و مشتریان، یا فروش در فروشگاه و گالری خودتان، با قیمت عمده و فاکتور رسمی سفارش بدهید.
             </p>
           </div>
           {/* v12 phase 8a (site review 2.3): the wholesale request and the corporate gift form, then a chat for questions */}
@@ -226,7 +228,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           </div>
         </div>
       </section>
-      <JsonLdScripts blocks={homeLd(siteUrl, root?.logoUrl ?? '')} siteUrl={siteUrl} />
+      <JsonLdScripts blocks={homeLd(siteUrl, root?.logoUrl ?? '', root?.shop ?? DEFAULT_SHOP)} siteUrl={siteUrl} />
     </>
   );
 }

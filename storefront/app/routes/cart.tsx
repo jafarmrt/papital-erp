@@ -60,8 +60,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 /** the buyer's own cart, address or order: never kept by a browser or a cache in between */
 export const headers = () => ({ 'Cache-Control': 'no-store' });
 
-export function meta({ data }: Route.MetaArgs) {
-  return [...pageMeta({ title: 'سبد خرید', description: 'سبد خرید پاپیتال', path: '/cart', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
+export function meta({ data, matches }: Route.MetaArgs) {
+  return [...pageMeta({ matches, title: 'سبد خرید', description: 'سبد خرید پاپیتال', path: '/cart', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
 }
 
 export async function action({ request }: Route.ActionArgs) {

@@ -1,7 +1,8 @@
 import { Form, Link, useLocation } from 'react-router';
 import { ChevronDown, Menu, Search, ShoppingBag, UserRound, X } from 'lucide-react';
 import type { StorefrontFacet } from '@erp/storefront/storefrontContracts';
-import { BRAND, categoryPath } from '../lib/brand';
+import { categoryPath } from '../lib/brand';
+import type { SiteBrand } from '../lib/shopInfo';
 import { faNumber } from '../lib/format';
 import { outsideLink, type SiteMenuItem } from '../lib/menus';
 
@@ -22,8 +23,9 @@ function MenuLink({ item, className, current }: { item: SiteMenuItem; className:
     : <Link to={item.href} className={className} aria-current={current ? 'page' : undefined}>{item.label}</Link>;
 }
 
-export function SiteHeader({ categories, logoUrl, ordering, cartCount, signedIn, headerMenu = null, drawerMenu = null }: {
-  categories: StorefrontFacet[]; logoUrl: string; ordering: boolean; cartCount: number; signedIn: boolean;
+export function SiteHeader({ brand, categories, logoUrl, ordering, cartCount, signedIn, headerMenu = null, drawerMenu = null }: {
+  /** v12 phase 10a: the brand's name and motto of the ERP's «اطلاعات فروشگاه» */
+  brand: SiteBrand; categories: StorefrontFacet[]; logoUrl: string; ordering: boolean; cartCount: number; signedIn: boolean;
   headerMenu?: SiteMenuItem[] | null; drawerMenu?: SiteMenuItem[] | null;
 }) {
   const accountTo = signedIn ? '/account' : '/account/sign-in';
@@ -89,11 +91,11 @@ export function SiteHeader({ categories, logoUrl, ordering, cartCount, signedIn,
           </nav>
         </details>
 
-        <Link to="/" className="flex items-center gap-3" aria-label={`${BRAND.fullName}، صفحهٔ اصلی`}>
+        <Link to="/" className="flex items-center gap-3" aria-label={`${brand.fullName}، صفحهٔ اصلی`}>
           {logoUrl
-            ? <img src={logoUrl} alt={BRAND.fullName} className="h-9 w-auto max-w-28 object-contain sm:h-10 sm:max-w-40 lg:h-12 lg:max-w-52" />
-            : <span className="text-xl font-extrabold sm:text-2xl lg:text-3xl">{BRAND.name}</span>}
-          <span className="hidden text-sm opacity-70 sm:inline">{BRAND.tagline}</span>
+            ? <img src={logoUrl} alt={brand.fullName} className="h-9 w-auto max-w-28 object-contain sm:h-10 sm:max-w-40 lg:h-12 lg:max-w-52" />
+            : <span className="max-w-36 truncate text-xl font-extrabold sm:max-w-none sm:text-2xl lg:text-3xl">{brand.name}</span>}
+          <span className="hidden text-sm opacity-70 sm:inline">{brand.tagline}</span>
         </Link>
 
         <nav className="ms-auto hidden lg:block" aria-label="دسته‌ها">

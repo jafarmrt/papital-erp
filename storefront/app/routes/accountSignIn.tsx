@@ -31,8 +31,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   };
 }
 
-export function meta({ data }: Route.MetaArgs) {
-  return [...pageMeta({ title: 'ورود به حساب', description: 'ورود به حساب خرید در پاپیتال', path: '/account/sign-in', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
+export function meta({ data, matches }: Route.MetaArgs) {
+  return [...pageMeta({ matches, title: 'ورود به حساب', description: 'ورود به حساب خرید در پاپیتال', path: '/account/sign-in', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
 }
 
 function signedIn(token: string, next: string) {

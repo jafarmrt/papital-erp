@@ -1,11 +1,5 @@
-/** Public facts of the brand that every page shows; nothing here is a secret or a server detail */
-export const BRAND = {
-  name: 'پاپیتال',
-  fullName: 'گالری پاپیتال',
-  tagline: 'زیورآلات دست‌ساز با نقش کاشی‌های ایران',
-  instagram: 'https://www.instagram.com/papital.gallery/',
-  instagramHandle: 'papital.gallery',
-} as const;
+// v12 phase 10a: the brand's name, motto and Instagram page were fixed here; they now come from the ERP's «اطلاعات
+// فروشگاه» (`shopInfo.ts`), with the same words while a field is empty.
 
 export const SORT_TITLES = {
   default: 'پیشنهاد ما',

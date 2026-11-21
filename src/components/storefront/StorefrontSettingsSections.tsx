@@ -11,6 +11,7 @@ import { DiscountCodesSection } from './DiscountCodesSection';
 import { StorefrontSmsSection } from './StorefrontSmsSection';
 import { StorefrontEmailSection } from './StorefrontEmailSection';
 import { StorefrontSeoSection } from './StorefrontSeoForm';
+import { StorefrontShopInfoSection } from './StorefrontShopInfoForm';
 import { StorefrontRedirectsSection } from './StorefrontRedirectsSection';
 import { StorefrontCampaignsSection } from './StorefrontCampaignsSection';
 
@@ -19,14 +20,16 @@ import { StorefrontCampaignsSection } from './StorefrontCampaignsSection';
  * which runs as its own app on the site's domain and reads the ERP through the Storefront API. `storefront.view` sees,
  * `storefront.manage` changes. v12 phase 9a (V12_SITE_NEXT_START_PLAN.md §6): once a settings tab, now the page
  * «کالاها و تنظیمات سایت» (`/site-settings`) of the sidebar's «فروشگاه سایت», with the open section in its address.
+ * v12 phase 10a: «اطلاعات فروشگاه» (`info`), the brand's name, the contact details and the footer's texts.
  */
-export const STOREFRONT_SECTION_IDS = ['products', 'settings', 'brand', 'shipping', 'groups', 'discounts', 'campaigns', 'sms', 'email', 'seo', 'redirects', 'key'] as const;
+export const STOREFRONT_SECTION_IDS = ['products', 'settings', 'info', 'brand', 'shipping', 'groups', 'discounts', 'campaigns', 'sms', 'email', 'seo', 'redirects', 'key'] as const;
 export type StorefrontSection = typeof STOREFRONT_SECTION_IDS[number];
 export const isStorefrontSection = (value: unknown): value is StorefrontSection => (STOREFRONT_SECTION_IDS as readonly unknown[]).includes(value);
 
 const SECTIONS: Array<{ id: StorefrontSection; label: string }> = [
   { id: 'products', label: 'کالاهای سایت' },
   { id: 'settings', label: 'پرداخت، قیمت و موجودی' },
+  { id: 'info', label: 'اطلاعات فروشگاه' },
   { id: 'brand', label: 'لوگو و آیکون' },
   { id: 'shipping', label: 'روش‌های ارسال' },
   { id: 'groups', label: 'گروه‌های خریدار' },
@@ -72,6 +75,7 @@ export function StorefrontSettingsSections({ canManage, section, onSection }: {
       {section === 'campaigns' && <StorefrontCampaignsSection canManage={canManage} />}
       {section === 'sms' && <StorefrontSmsSection canManage={canManage} />}
       {section === 'email' && <StorefrontEmailSection canManage={canManage} />}
+      {section === 'info' && <StorefrontShopInfoSection canManage={canManage} />}
       {section === 'seo' && <StorefrontSeoSection canManage={canManage} />}
       {section === 'redirects' && <StorefrontRedirectsSection canManage={canManage} />}
       {(section === 'settings' || section === 'brand' || section === 'key') && (

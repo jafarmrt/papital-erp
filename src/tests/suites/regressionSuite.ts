@@ -11243,6 +11243,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v12 phase 9c: the menus the site reads (Storefront API security review)
   const { runStorefrontMenusPublicV12Tests } = await import('../regression/storefrontMenusPublicV12Tests.js');
   results.push(...await runStorefrontMenusPublicV12Tests(shouldRun));
+  // v12 phase 10a: «اطلاعات فروشگاه» and what the site reads of it (Storefront API security review)
+  const { runStorefrontShopInfoV12Tests } = await import('../regression/storefrontShopInfoV12Tests.js');
+  results.push(...await runStorefrontShopInfoV12Tests(shouldRun));
 
   return results;
 }

@@ -1,3 +1,4 @@
+import { shopInfo } from '../lib/api.server';
 import { siteEnv } from '../lib/site.server';
 
 /**
@@ -9,9 +10,12 @@ import { siteEnv } from '../lib/site.server';
  */
 const CACHE_VERSION = 1;
 
-const OFFLINE_PAGE = `<!doctype html>
+const html = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** v12 phase 10a: the page's title ends with the brand's name of the ERP's «اطلاعات فروشگاه» */
+const offlinePage = (brandFullName: string) => `<!doctype html>
 <html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>اتصال برقرار نیست | گالری پاپیتال</title>
+<title>اتصال برقرار نیست | ${html(brandFullName)}</title>
 <style>
 @font-face{font-family:Vazirmatn;src:url(/fonts/Vazirmatn-Regular.woff2) format("woff2");font-display:swap}
 body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#fff;color:#162644;font-family:Vazirmatn,Tahoma,sans-serif;text-align:center}
@@ -24,11 +28,11 @@ img{width:96px;height:96px}button{margin-top:1.5rem;min-height:44px;padding:0 1.
 <button type="button" onclick="location.reload()">تلاش دوباره</button>
 </main></body></html>`;
 
-const worker = `'use strict';
+const workerScript = (brandFullName: string) => `'use strict';
 const STATIC = 'papital-static-v${CACHE_VERSION}';
 const MEDIA = 'papital-media-v${CACHE_VERSION}';
 const LIMITS = { [STATIC]: 80, [MEDIA]: 150 };
-const OFFLINE = ${JSON.stringify(OFFLINE_PAGE)};
+const OFFLINE = ${JSON.stringify(offlinePage(brandFullName))};
 const PHOTO = /^\\/media\\/[0-9a-f]{64}(-thumb)?\\.webp$/;
 
 self.addEventListener('install', event => {
@@ -79,9 +83,9 @@ self.addEventListener('fetch', event => {
 });
 `;
 
-export function loader() {
+export async function loader() {
   if (!siteEnv().pwa) throw new Response('پیدا نشد', { status: 404 });
-  return new Response(worker, {
+  return new Response(workerScript((await shopInfo()).brand.fullName), {
     headers: { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' },
   });
 }

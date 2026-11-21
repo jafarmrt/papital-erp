@@ -127,8 +127,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 /** the buyer's own cart, address or order: never kept by a browser or a cache in between */
 export const headers = () => ({ 'Cache-Control': 'no-store' });
 
-export function meta({ data }: Route.MetaArgs) {
-  return [...pageMeta({ title: 'ثبت سفارش', description: 'نشانی و روش ارسال سفارش پاپیتال', path: '/checkout', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
+export function meta({ data, matches }: Route.MetaArgs) {
+  return [...pageMeta({ matches, title: 'ثبت سفارش', description: 'نشانی و روش ارسال سفارش پاپیتال', path: '/checkout', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
 }
 
 const fieldsOf = (form: FormData) => Object.fromEntries(FIELDS.map(f => [f, String(form.get(f) ?? '').slice(0, FIELD_MAX[f] + 1)])) as Fields;

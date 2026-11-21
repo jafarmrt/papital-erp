@@ -2,8 +2,8 @@ import { Link } from 'react-router';
 import type { Route } from './+types/info';
 import { publicSettings } from '../lib/api.server';
 import { siteEnv } from '../lib/site.server';
-import { BRAND } from '../lib/brand';
-import { faNumber, formatPrice } from '../lib/format';
+import { faDigits, faNumber, formatPrice } from '../lib/format';
+import { DEFAULT_SHOP } from '../lib/shopInfo';
 import { pageMeta } from '../lib/meta';
 import { breadcrumbLd } from '../lib/jsonLd';
 import { whatsappLink } from '../lib/whatsapp';
@@ -43,14 +43,17 @@ function shippingCost(pricing: string, flatRate: string): string {
   }
 }
 
-export function meta({ data }: Route.MetaArgs) {
+export function meta({ data, matches }: Route.MetaArgs) {
   if (!data) return [];
-  return pageMeta({ title: data.page.title, description: data.page.description, path: `/${data.page.slug}`, siteUrl: data.siteUrl });
+  return pageMeta({ matches, title: data.page.title, description: data.page.description, path: `/${data.page.slug}`, siteUrl: data.siteUrl });
 }
 
 export default function InfoPage({ loaderData }: Route.ComponentProps) {
   const { page, shipping, siteUrl } = loaderData;
   const root = useRootData();
+  const shop = root?.shop ?? DEFAULT_SHOP;
+  const { address, postalCode, phone, mobile, email, hours } = shop.contact;
+  const contactLink = 'inline-flex min-h-11 items-center font-medium text-primary underline-offset-4 hover:underline';
   return (
     <div className="mx-auto max-w-3xl px-4 pt-8 lg:px-8 lg:pt-12">
       <nav aria-label="مسیر" className="text-sm text-muted-foreground">
@@ -73,19 +76,48 @@ export default function InfoPage({ loaderData }: Route.ComponentProps) {
         ))}
 
         {page.slug === 'contact' ? (
-          <section className="space-y-4">
-            <h2 className="text-lg font-bold text-foreground">راه‌های گفت‌وگو</h2>
-            <ul className="space-y-3">
-              {root?.whatsapp ? (
-                <li><a href={whatsappLink(root.whatsapp)} rel="noopener" className="inline-flex min-h-11 items-center font-medium text-primary underline-offset-4 hover:underline">گفت‌وگو در واتس‌اپ</a></li>
-              ) : null}
-              <li>
-                <a href={BRAND.instagram} rel="noopener" className="inline-flex min-h-11 items-center font-medium text-primary underline-offset-4 hover:underline">
-                  اینستاگرام <span dir="ltr" className="ms-1">@{BRAND.instagramHandle}</span>
-                </a>
-              </li>
-            </ul>
-          </section>
+          <>
+            {/* v12 phase 10a: the address and contact details of the ERP's «اطلاعات فروشگاه»; nothing while none is written */}
+            {address || postalCode || phone || mobile || email || hours ? (
+              <section className="space-y-4" aria-labelledby="shop-contact" data-shop-contact>
+                <h2 id="shop-contact" className="text-lg font-bold text-foreground">نشانی و تماس</h2>
+                <dl className="divide-y divide-border rounded-surface border border-border bg-card">
+                  {address ? (
+                    <div className="px-4 py-3"><dt className="text-sm text-muted-foreground">نشانی</dt><dd>{address}{postalCode ? <>، کد پستی <span dir="ltr">{faDigits(postalCode)}</span></> : null}</dd></div>
+                  ) : postalCode ? (
+                    <div className="px-4 py-3"><dt className="text-sm text-muted-foreground">کد پستی</dt><dd dir="ltr" className="text-end">{faDigits(postalCode)}</dd></div>
+                  ) : null}
+                  {phone ? (
+                    <div className="px-4 py-3"><dt className="text-sm text-muted-foreground">تلفن</dt><dd><a href={`tel:${phone}`} dir="ltr" className={contactLink}>{faDigits(phone)}</a></dd></div>
+                  ) : null}
+                  {mobile ? (
+                    <div className="px-4 py-3"><dt className="text-sm text-muted-foreground">همراه</dt><dd><a href={`tel:${mobile}`} dir="ltr" className={contactLink}>{faDigits(mobile)}</a></dd></div>
+                  ) : null}
+                  {email ? (
+                    <div className="px-4 py-3"><dt className="text-sm text-muted-foreground">ایمیل</dt><dd><a href={`mailto:${email}`} dir="ltr" className={`${contactLink} break-all`}>{email}</a></dd></div>
+                  ) : null}
+                  {hours ? (
+                    <div className="px-4 py-3"><dt className="text-sm text-muted-foreground">ساعت پاسخ‌گویی</dt><dd>{hours}</dd></div>
+                  ) : null}
+                </dl>
+              </section>
+            ) : null}
+            <section className="space-y-4">
+              <h2 className="text-lg font-bold text-foreground">راه‌های گفت‌وگو</h2>
+              <ul className="space-y-3">
+                {root?.whatsapp ? (
+                  <li><a href={whatsappLink(root.whatsapp)} rel="noopener" className={contactLink}>گفت‌وگو در واتس‌اپ</a></li>
+                ) : null}
+                {shop.social.map(social => (
+                  <li key={social.name}>
+                    <a href={social.href} rel="noopener" className={contactLink}>
+                      {social.name === 'instagram' && shop.instagramHandle ? <>{`${social.title} `}<span dir="ltr" className="ms-1">@{shop.instagramHandle}</span></> : social.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </>
         ) : null}
 
         {shipping ? (

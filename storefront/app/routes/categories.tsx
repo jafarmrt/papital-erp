@@ -15,8 +15,8 @@ export function loader() {
   return { siteUrl: siteEnv().siteUrl };
 }
 
-export function meta({ data }: Route.MetaArgs) {
-  return pageMeta({ title: 'دسته‌ها', description: 'همهٔ دسته‌ها و کالکشن‌های پاپیتال', path: '/categories', siteUrl: data?.siteUrl ?? '' });
+export function meta({ data, matches }: Route.MetaArgs) {
+  return pageMeta({ matches, title: 'دسته‌ها', description: 'همهٔ دسته‌ها و کالکشن‌های پاپیتال', path: '/categories', siteUrl: data?.siteUrl ?? '' });
 }
 
 function Rows({ title, rows }: { title: string; rows: Array<{ to: string; label: string; count?: number }> }) {
