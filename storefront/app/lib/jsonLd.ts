@@ -1,4 +1,4 @@
-import { BRAND } from './brand';
+import type { SiteShop } from './shopInfo';
 
 /**
  * Structured data for search engines (schema.org JSON-LD). Every address in it must be absolute, so nothing is written
@@ -22,21 +22,28 @@ export function breadcrumbLd(steps: Array<{ name: string; path?: string }>, site
   };
 }
 
-/** The shop itself and its search box, on the home page */
-export function homeLd(siteUrl: string, logoUrl: string): JsonLd[] {
+/**
+ * The shop itself and its search box, on the home page. v12 phase 10a: its name, social pages, address and contact
+ * details are the ERP's «اطلاعات فروشگاه»; a detail the owner has not written is left out.
+ */
+export function homeLd(siteUrl: string, logoUrl: string, shop: SiteShop): JsonLd[] {
+  const { address, postalCode, phone, mobile, email } = shop.contact;
   return [
     {
       '@context': 'https://schema.org',
       '@type': 'Organization',
-      name: BRAND.fullName,
+      name: shop.brand.fullName,
       url: `${siteUrl}/`,
       ...(logoUrl ? { logo: `${siteUrl}${logoUrl}` } : {}),
-      sameAs: [BRAND.instagram],
+      sameAs: shop.social.map(page => page.href),
+      ...(address ? { address: { '@type': 'PostalAddress', streetAddress: address, ...(postalCode ? { postalCode } : {}), addressCountry: 'IR' } } : {}),
+      ...(phone || mobile ? { telephone: phone || mobile } : {}),
+      ...(email ? { email } : {}),
     },
     {
       '@context': 'https://schema.org',
       '@type': 'WebSite',
-      name: BRAND.fullName,
+      name: shop.brand.fullName,
       url: `${siteUrl}/`,
       inLanguage: 'fa-IR',
       potentialAction: {

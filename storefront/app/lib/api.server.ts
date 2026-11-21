@@ -8,6 +8,7 @@ import { siteEnv } from './site.server';
 import { STOREFRONT_QUERY_TEXT_MAX, STOREFRONT_SLUG_MAX } from '@erp/storefront/storefrontRules';
 import { CATALOG_PAGE_SIZE, type CatalogSort } from './catalog';
 import { NO_MENUS, safeMenus, type SiteMenus } from './menus';
+import { DEFAULT_SHOP, siteShop, type SiteShop } from './shopInfo';
 
 /**
  * The only door to the ERP: the five read routes of the Storefront API (phase 8.1), called from this server with the
@@ -33,7 +34,7 @@ const CACHE_MAX = 500;
  * crawler walking random addresses (each a remembered 404 there) never pushes out the feed or the settings (the security
  * review of 8.5b)
  */
-const PINNED_PATHS = new Set(['/facets', '/settings', '/brand', '/seo', '/redirects', '/feed', '/campaigns', '/menus']);
+const PINNED_PATHS = new Set(['/facets', '/settings', '/brand', '/seo', '/redirects', '/feed', '/campaigns', '/menus', '/shop-info']);
 const pinned = new Map<string, Entry>();
 const kept = (path: string) => (PINNED_PATHS.has(path) ? pinned : cache).get(path);
 /** Many visitors asking for the same address at once make one call */
@@ -179,6 +180,23 @@ export async function menus(): Promise<SiteMenus> {
   } catch {
     menusFailedAt = Date.now();
     return NO_MENUS;
+  }
+}
+
+let shopInfoFailedAt = 0;
+
+/**
+ * v12 phase 10a: «اطلاعات فروشگاه» (the brand's name, the contact details, the footer's texts, the e-namad seal), read by
+ * every page and kept a minute like the settings. Any failure (an ERP not yet updated answers 404) means the words the
+ * site always had, never a down shop, and is remembered a little while like the menus.
+ */
+export async function shopInfo(): Promise<SiteShop> {
+  if (Date.now() - shopInfoFailedAt < SEO_FAILURE_TTL_MS) return DEFAULT_SHOP;
+  try {
+    return siteShop((await get<{ data: unknown }>('/shop-info', SETTINGS_TTL_MS)).data);
+  } catch {
+    shopInfoFailedAt = Date.now();
+    return DEFAULT_SHOP;
   }
 }
 

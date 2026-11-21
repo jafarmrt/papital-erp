@@ -35,13 +35,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   return { result, collection, category, q, sort, page, siteUrl: siteEnv().siteUrl, path: url.pathname + url.search };
 }
 
-export function meta({ data }: Route.MetaArgs) {
+export function meta({ data, matches }: Route.MetaArgs) {
   if (!data) return [];
   const title = data.collection ? `کالکشن ${data.collection}` : data.category || (data.q ? `جست‌وجوی «${data.q}»` : 'همهٔ محصولات');
   const description = data.collection && COLLECTION_TEXTS[data.collection]
     ? COLLECTION_TEXTS[data.collection].slice(0, 160)
     : `${title} پاپیتال: زیورآلات دست‌ساز با نقش کاشی‌های ایران، با قیمت روشن و ارسال به سراسر ایران.`;
-  return pageMeta({ title, description, path: data.path, siteUrl: data.siteUrl });
+  return pageMeta({ matches, title, description, path: data.path, siteUrl: data.siteUrl });
 }
 
 export default function Products({ loaderData }: Route.ComponentProps) {

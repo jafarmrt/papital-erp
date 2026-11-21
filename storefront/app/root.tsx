@@ -2,12 +2,14 @@ import { useEffect } from 'react';
 import { Links, Meta, Outlet, Scripts, ScrollRestoration, isRouteErrorResponse, useNavigation, useRouteLoaderData, type LinksFunction } from 'react-router';
 import type { Route } from './+types/root';
 import './app.css';
-import { brand, facets, menus, publicSettings } from './lib/api.server';
+import { brand, facets, menus, publicSettings, shopInfo } from './lib/api.server';
 import { imageVersion } from './lib/brandImage.server';
 import { siteEnv } from './lib/site.server';
 import { SiteHeader } from './components/SiteHeader';
 import { SiteFooter } from './components/SiteFooter';
 import { BottomNav, BottomNavSpace } from './components/BottomNav';
+import { FloatingWhatsApp } from './components/FloatingWhatsApp';
+import { DEFAULT_SHOP } from './lib/shopInfo';
 import { AnalyticsScripts, MatomoPageViews } from './components/Analytics';
 import { siteSeo } from './lib/seo.server';
 import { sessionOf } from './lib/account.server';
@@ -19,7 +21,7 @@ export const links: LinksFunction = () => [
 ];
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const [f, settings, images, seo, menu] = await Promise.all([facets(), publicSettings(), brand(), siteSeo(), menus()]);
+  const [f, settings, images, seo, menu, shop] = await Promise.all([facets(), publicSettings(), brand(), siteSeo(), menus(), shopInfo()]);
   const env = siteEnv();
   return {
     categories: f.categories,
@@ -44,6 +46,8 @@ export async function loader({ request }: Route.LoaderArgs) {
     seo,
     /** v12 phase 9c: the menus of «فهرست‌های سایت»; a null place keeps the fixed menu */
     menus: menu,
+    /** v12 phase 10a: «اطلاعات فروشگاه»: the brand's name, contact details, the footer's texts, the e-namad seal */
+    shop,
   };
 }
 
@@ -52,6 +56,7 @@ export const useRootData = () => useRouteLoaderData<RootData>('root');
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const data = useRootData();
+  const shop = data?.shop ?? DEFAULT_SHOP;
   return (
     <html lang="fa" dir="rtl">
       <head>
@@ -75,7 +80,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <link rel="manifest" href="/manifest.webmanifest" />
             {data.faviconIsBitmap ? null : <link rel="apple-touch-icon" href="/pwa/icon-192.png" />}
             <meta name="mobile-web-app-capable" content="yes" />
-            <meta name="apple-mobile-web-app-title" content="پاپیتال" />
+            <meta name="apple-mobile-web-app-title" content={shop.brand.name} />
           </>
         ) : null}
       </head>
@@ -84,11 +89,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {data?.previewNotice ? (
           <p className="bg-brand px-4 py-2 text-center text-sm text-brand-foreground">{data.previewNotice}</p>
         ) : null}
-        <SiteHeader categories={data?.categories ?? []} logoUrl={data?.logoUrl ?? ''} ordering={data?.ordering ?? false} cartCount={data?.cartCount ?? 0} signedIn={data?.signedIn ?? false}
+        <SiteHeader brand={shop.brand} categories={data?.categories ?? []} logoUrl={data?.logoUrl ?? ''} ordering={data?.ordering ?? false} cartCount={data?.cartCount ?? 0} signedIn={data?.signedIn ?? false}
           headerMenu={data?.menus.header ?? null} drawerMenu={data?.menus.drawer ?? null} />
         <main id="main" className="flex-1">{children}</main>
         <SiteFooter data={data} />
         <BottomNavSpace />
+        <FloatingWhatsApp number={shop.whatsappFloat} />
         <BottomNav ordering={data?.ordering ?? false} cartCount={data?.cartCount ?? 0} signedIn={data?.signedIn ?? false} menu={data?.menus.bottom ?? null} />
         <ScrollRestoration />
         <Scripts />
@@ -152,11 +158,11 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   }
   return (
     <section className="mx-auto max-w-xl px-4 py-24 text-center">
-      <h1 className="text-2xl font-extrabold">{notFound ? 'این صفحه پیدا نشد' : 'فروشگاه الان در دسترس نیست'}</h1>
+      <h1 className="text-2xl font-extrabold">{notFound ? 'این صفحه پیدا نشد' : 'فروشگاه لحظه‌ای در دسترس نیست'}</h1>
       <p className="mt-3 text-muted-foreground">
         {notFound
           ? 'شاید نشانی عوض شده یا این محصول دیگر روی سایت نیست.'
-          : 'ارتباط با انبار برقرار نشد. چند دقیقهٔ دیگر دوباره سر بزنید.'}
+          : 'چند دقیقهٔ دیگر دوباره سر بزنید.'}
       </p>
       <a href="/" className="mt-8 inline-flex min-h-11 items-center rounded-control bg-primary px-6 font-medium text-primary-foreground">بازگشت به صفحهٔ اصلی</a>
     </section>

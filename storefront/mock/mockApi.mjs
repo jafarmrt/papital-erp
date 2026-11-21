@@ -47,6 +47,15 @@ const seo = process.env.MOCK_SEO ? JSON.parse(process.env.MOCK_SEO) : await read
 // MOCK_CAMPAIGNS=0 for none)
 const campaignList = process.env.MOCK_CAMPAIGNS === '0' ? [] : await readFile(path.join(dir, 'campaigns.json'), 'utf8').then(JSON.parse).catch(() => []);
 const campaignSummary = ({ slug, title, summary, hero, homeBanner, endsOn }) => ({ slug, title, summary, hero, homeBanner, endsOn });
+// v12 phase 10a: «اطلاعات فروشگاه»; every field empty (the site keeps its own words) unless MOCK_SHOP_INFO gives the answer
+// as JSON (MOCK_SHOP_INFO=fail answers 500 and MOCK_SHOP_INFO=missing 404, as an ERP not yet updated does)
+const shopInfoMode = process.env.MOCK_SHOP_INFO ?? '';
+const shopInfo = shopInfoMode && shopInfoMode !== 'fail' && shopInfoMode !== 'missing' ? JSON.parse(shopInfoMode) : {
+  brand: { name: '', fullName: '', tagline: '' }, footerNote: '',
+  contact: { address: '', postalCode: '', phone: '', mobile: '', email: '', hours: '' },
+  social: { instagram: '', telegram: '', youtube: '', aparat: '', linkedin: '' },
+  copyright: '', shipping: { title: '', lines: [] }, alternateSiteLabel: '', enamad: { linkUrl: '', imageUrl: '' }, whatsappFloat: '',
+};
 // v12 phase 9c: the menus of «فهرست‌های سایت»; every place off (null) unless MOCK_MENUS names them as JSON
 // (MOCK_MENUS=fail answers 500, to test the site's fallback)
 const menusFail = process.env.MOCK_MENUS === 'fail';
@@ -426,6 +435,11 @@ createServer(async (req, res) => {
   if (route === '/brand') return send(res, 200, { data: brand });
   if (route === '/menus') return menusFail ? send(res, 500, { error: 'down' }) : send(res, 200, { data: menuPlaces });
   if (route === '/seo') return send(res, 200, { data: seo });
+  if (route === '/shop-info') {
+    if (shopInfoMode === 'fail') return send(res, 500, { error: 'down' });
+    if (shopInfoMode === 'missing') return send(res, 404, { error: 'not found' });
+    return send(res, 200, { data: shopInfo });
+  }
   if (route === '/redirects') return send(res, 200, { data: redirectList });
   // phase 8.5b: the product feed, the same fields as the ERP's (storefrontFeed.service.ts)
   if (route === '/feed') {

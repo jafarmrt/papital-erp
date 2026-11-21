@@ -31,8 +31,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export const headers = () => ({ 'Cache-Control': 'no-store' });
 
-export function meta({ data }: Route.MetaArgs) {
-  return [...pageMeta({ title: 'ایمیل و شمارهٔ حساب', description: 'ایمیل و شمارهٔ همراه حساب خرید در پاپیتال', path: '/account/contact', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
+export function meta({ data, matches }: Route.MetaArgs) {
+  return [...pageMeta({ matches, title: 'ایمیل و شمارهٔ حساب', description: 'ایمیل و شمارهٔ همراه حساب خرید در پاپیتال', path: '/account/contact', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
 }
 
 export async function action({ request }: Route.ActionArgs): Promise<ActionAnswer | Response> {

@@ -24,6 +24,7 @@ import {
 import { ORDER_STATUSES, REJECT_REASON_MAX, TRACKING_CODE_MAX, type OrderStatus } from '../lib/storefront/storefrontOrderRules.js';
 import { ANALYTICS_PROVIDERS, REDIRECT_SOURCES, REDIRECT_TARGET_KINDS, type RedirectSource } from '../lib/storefront/storefrontSeoRules.js';
 import { readStorefrontSeoSettings, saveStorefrontSeoSettings } from '../services/storefront/storefrontSeo.service.js';
+import { readStorefrontShopInfo, saveStorefrontShopInfo } from '../services/storefront/storefrontShopInfo.service.js';
 import {
   REDIRECT_PAGE_MAX, createRedirect, deleteRedirect, listRedirects, setRedirectActive, updateRedirect,
 } from '../services/storefront/storefrontRedirects.service.js';
@@ -133,6 +134,15 @@ const seoSchema = z.object({
     analyticsId: text(60), analyticsUrl: text(300), alternateSiteUrl: text(300), version,
   }).strict(),
 });
+// v12 phase 10a: «اطلاعات فروشگاه»; the service checks every field again (lengths, https addresses, the e-namad host)
+const shopInfoSchema = z.object({
+  body: z.object({
+    brandName: text(200), brandFullName: text(200), brandTagline: text(400), footerNote: text(600), address: text(900), postalCode: text(40),
+    phone: text(60), mobile: text(60), email: text(400), hours: text(400), instagram: text(600), telegram: text(600), youtube: text(600),
+    aparat: text(600), linkedin: text(600), copyright: text(600), shippingTitle: text(200), shippingText: text(2000), alternateSiteLabel: text(200),
+    enamadLinkUrl: text(600), enamadImageUrl: text(600), whatsappFloat: z.boolean(), version,
+  }).strict(),
+});
 const redirectBody = z.object({
   fromPath: text(1000), targetKind: z.enum(REDIRECT_TARGET_KINDS), targetItemId: z.number().int().min(1).max(2_147_483_647).nullable(),
   target: text(400), note: text(400), isActive: z.boolean(),
@@ -208,6 +218,14 @@ router.get('/seo', requirePermission(STOREFRONT_VIEW_PERMISSION), asyncHandler(a
 
 router.put('/seo', requirePermission(STOREFRONT_MANAGE_PERMISSION), validate(seoSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: await saveStorefrontSeoSettings(req, req.body) });
+}));
+
+router.get('/shop-info', requirePermission(STOREFRONT_VIEW_PERMISSION), asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ data: await readStorefrontShopInfo(orm) });
+}));
+
+router.put('/shop-info', requirePermission(STOREFRONT_MANAGE_PERMISSION), validate(shopInfoSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await saveStorefrontShopInfo(req, req.body) });
 }));
 
 router.get('/redirects', requirePermission(STOREFRONT_VIEW_PERMISSION), validate(redirectListSchema), asyncHandler(async (req: Request, res: Response) => {

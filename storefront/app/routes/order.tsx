@@ -52,8 +52,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
 export const headers = () => ({ 'Cache-Control': 'no-store' });
 
-export function meta({ data }: Route.MetaArgs) {
-  return [...pageMeta({ title: `سفارش ${faDigits(data?.order.number ?? '')}`, description: 'وضعیت سفارش پاپیتال', path: '/orders', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
+export function meta({ data, matches }: Route.MetaArgs) {
+  return [...pageMeta({ matches, title: `سفارش ${faDigits(data?.order.number ?? '')}`, description: 'وضعیت سفارش پاپیتال', path: '/orders', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
 }
 
 interface ActionAnswer { error?: string; field?: string; done?: 'receipt' | 'claim' }

@@ -1,15 +1,30 @@
-import { BRAND } from './brand';
+import type { RootData } from '../root';
+import { DEFAULT_SHOP, type SiteBrand } from './shopInfo';
 
-/** Title, description, canonical and social card of a page; absolute links only when the site address is known */
-export function pageMeta({ title, description, path, image, siteUrl }: { title: string; description: string; path: string; image?: string; siteUrl: string }) {
-  const full = title === BRAND.fullName ? title : `${title} | ${BRAND.fullName}`;
+/** The matched routes as a page's `meta` gets them; the root's data holds the shop's name */
+export type MetaMatches = ReadonlyArray<{ id: string; data?: unknown } | undefined>;
+
+/** v12 phase 10a: the brand's name as the ERP's «اطلاعات فروشگاه» has it (the site's own while the root could not load) */
+export const brandOf = (matches: MetaMatches | undefined): SiteBrand => (
+  (matches?.find(m => m?.id === 'root')?.data as RootData | undefined)?.shop?.brand ?? DEFAULT_SHOP.brand
+);
+
+/**
+ * Title, description, canonical and social card of a page; absolute links only when the site address is known. A page
+ * passes its `matches` so its title ends with the brand's name of now; `title: ''` is the brand's full name alone.
+ */
+export function pageMeta({ title, description, path, image, siteUrl, matches }: {
+  title: string; description: string; path: string; image?: string; siteUrl: string; matches: MetaMatches | undefined;
+}) {
+  const brand = brandOf(matches);
+  const full = title === '' || title === brand.fullName ? brand.fullName : `${title} | ${brand.fullName}`;
   const tags: Array<Record<string, string>> = [
     { title: full },
     { name: 'description', content: description },
     { property: 'og:title', content: full },
     { property: 'og:description', content: description },
     { property: 'og:locale', content: 'fa_IR' },
-    { property: 'og:site_name', content: BRAND.fullName },
+    { property: 'og:site_name', content: brand.fullName },
   ];
   if (siteUrl) {
     tags.push({ tagName: 'link', rel: 'canonical', href: `${siteUrl}${path}` }, { property: 'og:url', content: `${siteUrl}${path}` });

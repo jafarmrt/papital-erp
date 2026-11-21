@@ -1,5 +1,4 @@
-import { brand } from '../lib/api.server';
-import { BRAND } from '../lib/brand';
+import { brand, shopInfo } from '../lib/api.server';
 import { decodeDataUrl, imageVersion, pngSize } from '../lib/brandImage.server';
 import { siteEnv } from '../lib/site.server';
 
@@ -31,10 +30,12 @@ function iconsOf(favicon: string) {
 /** The web app manifest: what a phone shows when the site is added to its home screen; none while the switch is off */
 export async function loader() {
   if (!siteEnv().pwa) throw new Response('پیدا نشد', { status: 404 });
+  // v12 phase 10a: the app's name on the phone is the brand's name of the ERP's «اطلاعات فروشگاه»
+  const [images, shop] = await Promise.all([brand(), shopInfo()]);
   const manifest = {
-    name: BRAND.fullName,
-    short_name: BRAND.name,
-    description: BRAND.tagline,
+    name: shop.brand.fullName,
+    short_name: shop.brand.name,
+    description: shop.brand.tagline,
     lang: 'fa-IR',
     dir: 'rtl',
     id: '/',
@@ -45,7 +46,7 @@ export async function loader() {
     background_color: PWA_THEME.background,
     theme_color: PWA_THEME.theme,
     categories: ['shopping'],
-    icons: iconsOf((await brand()).favicon),
+    icons: iconsOf(images.favicon),
   };
   return new Response(JSON.stringify(manifest), {
     headers: { 'Content-Type': 'application/manifest+json; charset=utf-8', 'Cache-Control': 'public, max-age=3600' },

@@ -45,8 +45,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 /** the buyer's own cart, address or order: never kept by a browser or a cache in between */
 export const headers = () => ({ 'Cache-Control': 'no-store' });
 
-export function meta({ data: loaded }: Route.MetaArgs) {
-  return [...pageMeta({ title: 'پیگیری سفارش', description: 'پیگیری سفارش پاپیتال', path: '/orders/track', siteUrl: loaded?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
+export function meta({ data: loaded, matches }: Route.MetaArgs) {
+  return [...pageMeta({ matches, title: 'پیگیری سفارش', description: 'پیگیری سفارش پاپیتال', path: '/orders/track', siteUrl: loaded?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
 }
 
 const latin = (value: string) => value.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/\s+/g, '');

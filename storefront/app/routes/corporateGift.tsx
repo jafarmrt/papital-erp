@@ -31,8 +31,9 @@ export function loader() {
   return { siteUrl: siteEnv().siteUrl, stamp: formStamp() };
 }
 
-export function meta({ data }: Route.MetaArgs) {
+export function meta({ data, matches }: Route.MetaArgs) {
   return pageMeta({
+    matches,
     title: 'هدیهٔ سازمانی', description: 'هدیهٔ سازمانی پاپیتال برای شرکت‌ها و سازمان‌ها، با فاکتور رسمی', path: '/corporate-gift', siteUrl: data?.siteUrl ?? '',
   });
 }

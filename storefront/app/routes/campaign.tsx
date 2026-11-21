@@ -24,10 +24,11 @@ export async function loader({ params }: Route.LoaderArgs) {
   return { page, siteUrl: siteEnv().siteUrl };
 }
 
-export function meta({ data }: Route.MetaArgs) {
+export function meta({ data, matches }: Route.MetaArgs) {
   if (!data) return [];
   const { page, siteUrl } = data;
   return pageMeta({
+    matches,
     title: page.title,
     description: page.summary || `${page.title}: زیورآلات دست‌ساز پاپیتال با نقش کاشی‌های ایران.`,
     path: campaignPath(page.slug),

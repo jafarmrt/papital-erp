@@ -14,8 +14,8 @@ export function loader() {
   return { siteUrl: siteEnv().siteUrl };
 }
 
-export function meta({ data }: Route.MetaArgs) {
-  return [...pageMeta({ title: 'جست‌وجو', description: 'جست‌وجو در محصولات پاپیتال', path: '/search', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
+export function meta({ data, matches }: Route.MetaArgs) {
+  return [...pageMeta({ matches, title: 'جست‌وجو', description: 'جست‌وجو در محصولات پاپیتال', path: '/search', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
 }
 
 export default function SearchPage() {

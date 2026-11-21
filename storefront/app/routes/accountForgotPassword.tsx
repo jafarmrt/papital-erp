@@ -25,8 +25,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   };
 }
 
-export function meta({ data }: Route.MetaArgs) {
-  return [...pageMeta({ title: 'فراموشی رمز', description: 'گذاشتن رمز تازه برای حساب خرید در پاپیتال', path: '/account/forgot-password', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
+export function meta({ data, matches }: Route.MetaArgs) {
+  return [...pageMeta({ matches, title: 'فراموشی رمز', description: 'گذاشتن رمز تازه برای حساب خرید در پاپیتال', path: '/account/forgot-password', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
 }
 
 export async function action({ request }: Route.ActionArgs): Promise<ActionAnswer | Response> {

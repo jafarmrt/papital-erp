@@ -3,7 +3,8 @@ import { MessageCircle, ShoppingBag, Truck, Hand, ShieldCheck } from 'lucide-rea
 import type { Route } from './+types/product';
 import { catalog, product as productBySlug } from '../lib/api.server';
 import { siteEnv } from '../lib/site.server';
-import { BRAND, categoryPath, collectionPath, mediaPath, productPath } from '../lib/brand';
+import { categoryPath, collectionPath, mediaPath, productPath } from '../lib/brand';
+import { DEFAULT_SHOP } from '../lib/shopInfo';
 import { faDigits, faNumber, priceUnit, tomanDigits } from '../lib/format';
 import { pageMeta, productMeta } from '../lib/meta';
 import { whatsappLink } from '../lib/whatsapp';
@@ -32,17 +33,17 @@ export async function loader({ params }: Route.LoaderArgs) {
   };
 }
 
-export function meta({ data }: Route.MetaArgs) {
+export function meta({ data, matches }: Route.MetaArgs) {
   if (!data) return [];
   const { item, siteUrl } = data;
   const description = item.seoDescription || `${item.name}، ساخت دست پاپیتال با نقش کاشی‌های ایران.`;
   return [
-    ...pageMeta({ title: item.seoTitle || item.name, description, path: productPath(item.slug), image: item.cover ? mediaPath(item.cover.sha256) : undefined, siteUrl }),
+    ...pageMeta({ matches, title: item.seoTitle || item.name, description, path: productPath(item.slug), image: item.cover ? mediaPath(item.cover.sha256) : undefined, siteUrl }),
     ...productMeta(item),
   ];
 }
 
-function productJsonLd(item: Route.ComponentProps['loaderData']['item'], siteUrl: string) {
+function productJsonLd(item: Route.ComponentProps['loaderData']['item'], siteUrl: string, brandName: string) {
   const photos = item.images.length ? item.images : item.cover ? [item.cover] : [];
   const availability = item.stock.status === 'out' ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock';
   return {
@@ -52,7 +53,7 @@ function productJsonLd(item: Route.ComponentProps['loaderData']['item'], siteUrl
     sku: item.sku,
     description: item.seoDescription || item.description.slice(0, 300),
     ...(photos.length ? { image: photos.map(i => `${siteUrl}${mediaPath(i.sha256)}`) } : {}),
-    brand: { '@type': 'Brand', name: BRAND.fullName },
+    brand: { '@type': 'Brand', name: brandName },
     offers: { '@type': 'Offer', priceCurrency: 'IRR', price: item.retailPrice, availability, url: `${siteUrl}${productPath(item.slug)}` },
   };
 }
@@ -178,7 +179,7 @@ export default function ProductPage({ loaderData }: Route.ComponentProps) {
       <JsonLdScripts
         siteUrl={siteUrl}
         blocks={[
-          productJsonLd(item, siteUrl),
+          productJsonLd(item, siteUrl, (root?.shop ?? DEFAULT_SHOP).brand.fullName),
           breadcrumbLd([
             { name: 'خانه', path: '/' },
             item.category ? { name: item.category, path: categoryPath(item.category) } : { name: 'محصولات', path: '/products' },

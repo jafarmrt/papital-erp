@@ -59,8 +59,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 /** the buyer's own details: never kept by a browser or a cache in between */
 export const headers = () => ({ 'Cache-Control': 'no-store' });
 
-export function meta({ data }: Route.MetaArgs) {
+export function meta({ data, matches }: Route.MetaArgs) {
   return pageMeta({
+    matches,
     title: 'درخواست خرید عمده', description: 'خرید عمدهٔ پاپیتال برای فروشگاه‌ها و گالری‌ها، با قیمت عمده و فاکتور رسمی', path: '/wholesale', siteUrl: data?.siteUrl ?? '',
   });
 }
