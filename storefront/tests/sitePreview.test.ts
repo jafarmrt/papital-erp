@@ -28,7 +28,11 @@ const DRAFT = {
 
 beforeAll(async () => {
   mock = spawn(process.execPath, [path.join(import.meta.dirname, '../mock/mockApi.mjs')], {
-    env: { ...process.env, MOCK_PORT: String(PORT), MOCK_API_KEY: KEY, MOCK_PREVIEWS: JSON.stringify({ [TOKEN]: DRAFT }), MOCK_PREVIEW_MEDIA: `${A}.webp,${A}-thumb.webp,${B}.webp` },
+    env: {
+      ...process.env, MOCK_PORT: String(PORT), MOCK_API_KEY: KEY, MOCK_PREVIEWS: JSON.stringify({ [TOKEN]: DRAFT }), MOCK_PREVIEW_MEDIA: `${A}.webp,${A}-thumb.webp,${B}.webp`,
+      // visit statistics are on, as on the live site: the preview must still load none
+      MOCK_SEO: JSON.stringify({ verification: { google: '', bing: '' }, analytics: { provider: 'ga4', id: 'G-TEST123', url: '' }, alternateSiteUrl: '' }),
+    },
     stdio: 'pipe',
   });
   await new Promise<void>((resolve, reject) => {
@@ -75,6 +79,19 @@ describe('the preview of a page\'s draft', () => {
     expect(html).not.toContain('name="description"');
   });
 
+  it('loads no visit statistics, which would read the key from the address, though every other page does', async () => {
+    const home = await (await ask('/')).text();
+    expect(home).toContain('googletagmanager.com/gtag/js?id=G-TEST123');
+    const html = await (await ask(`/preview/${TOKEN}`)).text();
+    expect(html).not.toContain('googletagmanager');
+    expect(html).not.toContain('gtag(');
+    expect(html).not.toContain('_paq');
+    // an ended link's «پیدا نشد» has the key in its address too
+    const ended = await ask(`/preview/${ENDED}`);
+    expect(ended.status).toBe(404);
+    expect(await ended.text()).not.toContain('googletagmanager');
+  });
+
   it('reads the draft\'s own images under the key, and a product\'s photo from the site as always', async () => {
     const html = await (await ask(`/preview/${TOKEN}`)).text();
     expect(html).toContain(`src="/preview/${TOKEN}/media/${A}.webp"`);
@@ -94,7 +111,10 @@ describe('the preview of a page\'s draft', () => {
     expect(await good.text()).toBe(`preview-image-${A}.webp`);
     // an image the draft does not name, a name that is no file, and the site's own route for the same file
     expect((await ask(`/preview/${TOKEN}/media/${'c'.repeat(64)}.webp`)).status).toBe(404);
-    expect((await ask(`/preview/${TOKEN}/media/..%2F..%2Fsecret`)).status).toBe(404);
+    // a name that climbs out of the image route to another answer of the ERP (its settings, the site's pages) is not asked for
+    for (const climb of ['..%2F..%2Fsettings', '..%2F..%2F..%2Fsettings', '..%2Fmedia%2F..%2F..%2Fpages', '%2e%2e%2f%2e%2e%2fsettings']) {
+      expect((await ask(`/preview/${TOKEN}/media/${climb}`)).status, climb).toBe(404);
+    }
     expect((await ask(`/media/${A}.webp`)).status).toBe(404);
     expect((await ask(`/preview/${ENDED}/media/${A}.webp`)).status).toBe(404);
   });
@@ -107,10 +127,18 @@ describe('the preview of a page\'s draft', () => {
   });
 
   it('is the same 404 for an unknown or ended key and for a key in another shape, which is never sent to the ERP', async () => {
-    const before = await reads();
+    // an ended key has the right shape: the ERP is asked, and says no
+    const first = await reads();
     expect((await ask(`/preview/${ENDED}`)).status).toBe(404);
-    for (const wrong of ['short', `${TOKEN}x`, `${TOKEN.slice(0, 42)}.`, '..%2Fpages', 'x'.repeat(200)]) expect((await ask(`/preview/${wrong}`)).status, wrong).toBe(404);
+    expect(await reads()).toBe(first + 1);
+    const before = await reads();
+    for (const wrong of ['short', `${TOKEN}x`, `${TOKEN.slice(0, 42)}.`, '..%2Fpages', 'x'.repeat(200)]) {
+      expect((await ask(`/preview/${wrong}`)).status, wrong).toBe(404);
+      expect((await ask(`/preview/${wrong}/media/${A}.webp`)).status, `${wrong} image`).toBe(404);
+    }
     expect((await ask('/preview')).status).toBe(404);
+    // nor is a file name in another shape, under a good key
+    expect((await ask(`/preview/${TOKEN}/media/${A}.png`)).status).toBe(404);
     expect(await reads()).toBe(before);
     // and it is in no list of the site's pages
     const xml = await (await ask('/sitemap.xml')).text();

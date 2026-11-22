@@ -82,6 +82,8 @@ describe('search and statistics settings', () => {
   it('takes the new site\'s own address only as an https address, kept without a last slash (v12 phase 10c)', () => {
     expect(seoSettingsError({ ...base, siteUrl: 'http://test.example' })?.field).toBe('siteUrl');
     expect(seoSettingsError({ ...base, siteUrl: 'test.example' })?.field).toBe('siteUrl');
+    // the address of the site alone: a path would make a link the site does not serve
+    expect(seoSettingsError({ ...base, siteUrl: 'https://test.example/shop' })?.field).toBe('siteUrl');
     expect(seoSettingsError({ ...base, siteUrl: ' https://test.example/ ' })).toBeNull();
     expect(normalizedSeoSettings({ ...base, siteUrl: ' https://test.example/ ' }).siteUrl).toBe('https://test.example');
     expect(normalizedSeoSettings(base).siteUrl).toBe('');

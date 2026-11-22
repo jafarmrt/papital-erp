@@ -131,7 +131,7 @@ const fulfilSchema = z.object({
 const seoSchema = z.object({
   body: z.object({
     googleVerification: text(200), bingVerification: text(200), analyticsProvider: z.enum(ANALYTICS_PROVIDERS),
-    analyticsId: text(60), analyticsUrl: text(300), alternateSiteUrl: text(300), siteUrl: text(300).optional().default(''), version,
+    analyticsId: text(60), analyticsUrl: text(300), alternateSiteUrl: text(300), siteUrl: text(300).optional(), version,
   }).strict(),
 });
 // v12 phase 10a: «اطلاعات فروشگاه»; the service checks every field again (lengths, https addresses, the e-namad host)

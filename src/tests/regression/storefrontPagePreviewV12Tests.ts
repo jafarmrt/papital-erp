@@ -16,7 +16,8 @@ import { STOREFRONT_SITE_ORIGIN } from '../../lib/storefront/storefrontBuyerRule
  * one-hour link to a page's draft, on real Express routes, PostgreSQL and files on disk. The key of the link is only
  * in the answer that makes it: the database keeps its SHA-256, and no audit row has either. Under the key the site
  * gets the saved draft in the shape of a published page (always `noindex`, no id of the library or of a row) and the
- * images that draft names; without the key, after the hour, after a newer link, or for a removed page, nothing: the
+ * images that draft names (the site sends the key in `X-Preview-Key`, so no log of the ERP has it); without the key,
+ * after the hour, after a newer link, or for a removed page, nothing: the
  * draft stays off the site's own page and image routes. Making a link needs `site_content.manage` and leaves the page's
  * version as it is.
  */
@@ -68,6 +69,9 @@ export async function runStorefrontPagePreviewV12Tests(shouldRun: (id: string, .
     if (on.status !== 200) throw new Error(`turning the site on: ${on.status} ${JSON.stringify(on.body)}`);
     const apiKey = String((await erp.post('/api/storefront/api-key')).body.data?.apiKey ?? '');
     const site = (url: string) => request(app).get(`/api/storefront/v1${url}`).set('Authorization', `Bearer ${apiKey}`);
+    // the preview's key goes in a header, never in the address
+    const preview = (key: string) => site('/page-preview').set('X-Preview-Key', key);
+    const previewImage = (key: string, file: string) => site(`/page-preview/media/${file}`).set('X-Preview-Key', key);
 
     // two images of the library with files on the disk (one without a small version) and a third the draft does not name
     const [section] = await orm.insert(mediaSections).values({ kind: 'custom', title: `عکس‌های پیش‌نمایش ${tag}` }).returning({ id: mediaSections.id });
@@ -114,7 +118,7 @@ export async function runStorefrontPagePreviewV12Tests(shouldRun: (id: string, .
     const link = (made.body.data ?? {}) as { path?: string; url?: string; expiresAt?: string };
     const token = String(link.path ?? '').slice('/preview/'.length);
     const lasts = Date.parse(String(link.expiresAt)) - before;
-    if (made.status !== 201 || keys(link) !== 'expiresAt,path,url' || !/^\/preview\/[A-Za-z0-9_-]{43}$/.test(String(link.path)) || link.url !== `${STOREFRONT_SITE_ORIGIN}${link.path}`
+    if (made.status !== 201 || keys(link) !== 'addressSet,expiresAt,path,url' || (link as Body).addressSet !== false || !/^\/preview\/[A-Za-z0-9_-]{43}$/.test(String(link.path)) || link.url !== `${STOREFRONT_SITE_ORIGIN}${link.path}`
       || !(lasts > 58 * 60_000 && lasts < 62 * 60_000)) {
       wrong.push(`the link: ${made.status} ${JSON.stringify({ ...link, path: String(link.path).length, url: String(link.url).slice(0, 30) })} lasts ${Math.round(lasts / 60_000)} min`);
     }
@@ -126,7 +130,7 @@ export async function runStorefrontPagePreviewV12Tests(shouldRun: (id: string, .
     if (!String(audit?.description).includes('پیش‌نمایش') || auditText.includes(token) || auditText.includes(hash)) wrong.push(`the audit row of the link: ${auditText.slice(0, 300)}`);
 
     // 2) under the key: the draft in the shape of a page of the site, never to be listed, with no id anywhere
-    const read = await site(`/page-previews/${token}`);
+    const read = await preview(token);
     const page = (read.body.data ?? {}) as { sections?: Array<Record<string, unknown>> } & Body;
     if (read.status !== 200 || keys(page) !== 'expiresAt,kind,noindex,sections,seoDescription,seoTitle,shareImage,slug,title,updatedAt' || read.headers['cache-control'] !== 'no-store') {
       wrong.push(`the preview's fields: ${read.status} ${keys(page)} cache «${read.headers['cache-control']}»`);
@@ -146,12 +150,15 @@ export async function runStorefrontPagePreviewV12Tests(shouldRun: (id: string, .
     // read only under the key (the small version only where there is one; an image the draft does not name never)
     const publicPage = await site(`/pages/${slug}`);
     const publicImage = await site(`/media/${inHero.sha256}.webp`);
-    const light = await site(`/page-previews/${token}/media/${inHero.sha256}.webp`);
-    const thumb = await site(`/page-previews/${token}/media/${inHero.sha256}-thumb.webp`);
-    const inTextLight = await site(`/page-previews/${token}/media/${inText.sha256}.webp`);
-    const inTextThumb = await site(`/page-previews/${token}/media/${inText.sha256}-thumb.webp`);
-    const notNamed = await site(`/page-previews/${token}/media/${unnamed.sha256}.webp`);
-    const badName = await site(`/page-previews/${token}/media/..%2F..%2Fpackage.json`);
+    const light = await previewImage(token, `${inHero.sha256}.webp`);
+    const thumb = await previewImage(token, `${inHero.sha256}-thumb.webp`);
+    const inTextLight = await previewImage(token, `${inText.sha256}.webp`);
+    const inTextThumb = await previewImage(token, `${inText.sha256}-thumb.webp`);
+    const notNamed = await previewImage(token, `${unnamed.sha256}.webp`);
+    const badName = await previewImage(token, `..%2F..%2Fpackage.json`);
+    // a body is not read: a link is asked for with an empty one
+    const withBody = await erp.post(`/api/storefront/pages/${pageId}/preview`, { title: 'x' });
+    if (withBody.status !== 400) wrong.push(`a link asked for with a body: ${withBody.status}`);
     if (publicPage.status !== 404 || publicImage.status !== 404) wrong.push(`the draft on the site's own routes: page ${publicPage.status}, image ${publicImage.status}`);
     if (light.status !== 200 || light.headers['content-type'] !== 'image/webp' || light.headers['cache-control'] !== 'no-store' || String(light.body) !== 'webp-light-1') {
       wrong.push(`a preview image: ${light.status} ${light.headers['content-type']} cache «${light.headers['cache-control']}»`);
@@ -161,24 +168,27 @@ export async function runStorefrontPagePreviewV12Tests(shouldRun: (id: string, .
     }
 
     // 4) the door: the site's key is needed too; a key in another shape, an unknown one and one letter off are the same 404
-    const noSiteKey = await request(app).get(`/api/storefront/v1/page-previews/${token}`);
+    const noSiteKey = await request(app).get('/api/storefront/v1/page-preview').set('X-Preview-Key', token);
     const offByOne = `${token.slice(0, 42)}${token.endsWith('A') ? 'B' : 'A'}`;
-    const refusals = await Promise.all([offByOne, 'short', `${token}x`, hash, '%00'].map(t => site(`/page-previews/${t}`)));
-    const unknownImage = await site(`/page-previews/${offByOne}/media/${inHero.sha256}.webp`);
-    if (noSiteKey.status !== 401 || refusals.some(r => r.status !== 404 && r.status !== 400) || refusals[0].status !== 404 || unknownImage.status !== 404) {
-      wrong.push(`the door: ${noSiteKey.status} / ${refusals.map(r => r.status).join(',')} / ${unknownImage.status}`);
+    const refusals = await Promise.all([offByOne, 'short', `${token}x`, hash, ''].map(t => preview(t)));
+    // the key in the address, as it once was, opens nothing: no route reads it there
+    const inAddress = await site(`/page-previews/${token}`);
+    const noHeader = await site('/page-preview');
+    const unknownImage = await previewImage(offByOne, `${inHero.sha256}.webp`);
+    if (noSiteKey.status !== 401 || refusals.some(r => r.status !== 404) || unknownImage.status !== 404 || ![401, 404].includes(inAddress.status) || noHeader.status !== 404) {
+      wrong.push(`the door: ${noSiteKey.status} / ${refusals.map(r => r.status).join(',')} / ${unknownImage.status} / ${inAddress.status} / ${noHeader.status}`);
     }
-    if (refusals[0].body.code !== 'STOREFRONT_PAGE_PREVIEW_NOT_FOUND' || refusals[0].body.error !== refusals[1].body.error && refusals[1].status === 404) {
+    if (refusals.some(r => r.body.code !== 'STOREFRONT_PAGE_PREVIEW_NOT_FOUND' || r.body.error !== refusals[0].body.error)) {
       wrong.push(`the refusal's words: ${JSON.stringify(refusals[0].body)} / ${JSON.stringify(refusals[1].body)}`);
     }
 
     // 5) a draft saved later shows at once, under the same link; publishing changes nothing about the link, which shows the draft
     const later = await erp.put(`/api/storefront/pages/${pageId}`, form(2, 'متن تازه'));
-    const afterSave = (await site(`/page-previews/${token}`)).body.data as { sections: Array<Record<string, unknown>> };
+    const afterSave = (await preview(token)).body.data as { sections: Array<Record<string, unknown>> };
     if (later.status !== 200 || afterSave.sections[0].text !== 'متن تازه') wrong.push(`a later draft in the same preview: ${later.status} ${JSON.stringify(afterSave.sections[0]).slice(0, 120)}`);
     const publishedNow = await erp.post(`/api/storefront/pages/${pageId}/publish`, { version: 3 });
     const draftAfter = await erp.put(`/api/storefront/pages/${pageId}`, form(4, 'پیش‌نویس پس از انتشار'));
-    const [onSiteNow, inPreview] = [(await site(`/pages/${slug}`)).body.data, (await site(`/page-previews/${token}`)).body.data] as Array<{ sections: Array<Record<string, unknown>>; noindex: boolean }>;
+    const [onSiteNow, inPreview] = [(await site(`/pages/${slug}`)).body.data, (await preview(token)).body.data] as Array<{ sections: Array<Record<string, unknown>>; noindex: boolean }>;
     if (publishedNow.status !== 200 || draftAfter.status !== 200 || onSiteNow.sections[0].text !== 'متن تازه' || inPreview.sections[0].text !== 'پیش‌نویس پس از انتشار' || onSiteNow.noindex !== false || inPreview.noindex !== true) {
       wrong.push(`the site and the preview after publishing: «${onSiteNow?.sections?.[0]?.text}» / «${inPreview?.sections?.[0]?.text}»`);
     }
@@ -187,13 +197,24 @@ export async function runStorefrontPagePreviewV12Tests(shouldRun: (id: string, .
     const seo = (await erp.get('/api/storefront/seo')).body.data as Body;
     const seoSaved = await erp.put('/api/storefront/seo', { ...seo, siteUrl: ' https://test-site.example/ ' });
     const second = await erp.post(`/api/storefront/pages/${pageId}/preview`);
-    const secondLink = second.body.data as { path: string; url: string };
+    const secondLink = second.body.data as { path: string; url: string; addressSet: boolean };
     const secondToken = secondLink.path.slice('/preview/'.length);
-    const [oldNow, oldImage, newNow] = [await site(`/page-previews/${token}`), await site(`/page-previews/${token}/media/${inHero.sha256}.webp`), await site(`/page-previews/${secondToken}`)];
-    if (seoSaved.status !== 200 || seoSaved.body.data.siteUrl !== 'https://test-site.example' || second.status !== 201 || secondToken === token || secondLink.url !== `https://test-site.example/preview/${secondToken}`) {
+    const [oldNow, oldImage, newNow] = [await preview(token), await previewImage(token, `${inHero.sha256}.webp`), await preview(secondToken)];
+    if (seoSaved.status !== 200 || seoSaved.body.data.siteUrl !== 'https://test-site.example' || second.status !== 201 || secondToken === token || secondLink.addressSet !== true || secondLink.url !== `https://test-site.example/preview/${secondToken}`) {
       wrong.push(`the second link: seo ${seoSaved.status} «${seoSaved.body.data?.siteUrl}», ${second.status} ${String(secondLink?.url).slice(0, 40)}`);
     }
     if (oldNow.status !== 404 || oldImage.status !== 404 || newNow.status !== 200) wrong.push(`the old and the new link: ${oldNow.status}/${oldImage.status}/${newNow.status}`);
+    // a search settings form opened before this field existed sends no address: the saved one stays; one with a path is refused
+    const { siteUrl: _left, ...olderForm } = seoSaved.body.data as Body;
+    const [keptAddress, withPath] = [await erp.put('/api/storefront/seo', { ...olderForm, googleVerification: 'kept_1' }), await erp.put('/api/storefront/seo', { ...seoSaved.body.data, siteUrl: 'https://test-site.example/shop' })];
+    if (keptAddress.status !== 200 || keptAddress.body.data.siteUrl !== 'https://test-site.example' || withPath.status !== 422) {
+      wrong.push(`the address after an older form, and one with a path: ${keptAddress.status} «${keptAddress.body.data?.siteUrl}» / ${withPath.status}`);
+    }
+    // an image removed from the library is no longer read, though the draft still names it
+    await orm.update(mediaAssets).set({ isDeleted: 1 }).where(eq(mediaAssets.id, inText.id));
+    const removedImage = await previewImage(secondToken, `${inText.sha256}.webp`);
+    await orm.update(mediaAssets).set({ isDeleted: 0 }).where(eq(mediaAssets.id, inText.id));
+    if (removedImage.status !== 404) wrong.push(`an image removed from the library, under the key: ${removedImage.status}`);
     // the site's address is the ERP's own business: the site is not sent it
     const publicSeo = await site('/seo');
     if (JSON.stringify(publicSeo.body).includes('test-site.example') || keys(publicSeo.body.data) !== 'alternateSiteUrl,analytics,verification') wrong.push(`the site's address went out: ${JSON.stringify(publicSeo.body)}`);
@@ -201,21 +222,28 @@ export async function runStorefrontPagePreviewV12Tests(shouldRun: (id: string, .
     // 7) a base page has a preview too, though it is not published
     if (aboutBefore) {
       const aboutLink = await erp.post(`/api/storefront/pages/${aboutBefore.id}/preview`);
-      const aboutRead = await site(`/page-previews/${String(aboutLink.body.data?.path).slice('/preview/'.length)}`);
+      const aboutRead = await preview(String(aboutLink.body.data?.path).slice('/preview/'.length));
       if (aboutLink.status !== 201 || aboutRead.status !== 200 || aboutRead.body.data.kind !== 'base' || aboutRead.body.data.slug !== 'about') wrong.push(`a base page's preview: ${aboutLink.status}/${aboutRead.status}`);
     }
 
     // 8) after its hour the link opens nothing, the page and the images alike; and a removed page has no preview
     await orm.update(storefrontPages).set({ previewExpiresAt: new Date(Date.now() - 1000).toISOString() }).where(eq(storefrontPages.id, pageId));
-    const [ended, endedImage] = [await site(`/page-previews/${secondToken}`), await site(`/page-previews/${secondToken}/media/${inHero.sha256}.webp`)];
+    const [ended, endedImage] = [await preview(secondToken), await previewImage(secondToken, `${inHero.sha256}.webp`)];
     if (ended.status !== 404 || endedImage.status !== 404 || ended.body.code !== 'STOREFRONT_PAGE_PREVIEW_NOT_FOUND') wrong.push(`an ended link: ${ended.status}/${endedImage.status} ${ended.body.code}`);
     const third = await erp.post(`/api/storefront/pages/${pageId}/preview`);
     const thirdToken = String(third.body.data?.path).slice('/preview/'.length);
     const detail = await erp.get(`/api/storefront/pages/${pageId}`);
     if (/previewHash|previewExpiresAt|preview_hash/.test(JSON.stringify(detail.body)) || JSON.stringify(detail.body).includes(thirdToken)) wrong.push('the page\'s detail in the ERP carries the preview\'s hash or time');
     const removed = await erp.del(`/api/storefront/pages/${pageId}?version=${Number(detail.body.data.version)}`);
-    const afterRemoval = await site(`/page-previews/${thirdToken}`);
-    if (third.status !== 201 || ![200, 204].includes(removed.status) || afterRemoval.status !== 404) wrong.push(`a removed page's preview: ${third.status}/${removed.status}/${afterRemoval.status}`);
+    const afterRemoval = await preview(thirdToken);
+    const linkOfRemoved = await erp.post(`/api/storefront/pages/${pageId}/preview`);
+    if (third.status !== 201 || ![200, 204].includes(removed.status) || afterRemoval.status !== 404 || linkOfRemoved.status !== 404) {
+      wrong.push(`a removed page's preview: ${third.status}/${removed.status}/${afterRemoval.status}, a new link for it ${linkOfRemoved.status}`);
+    }
+    // a copy of the data carries neither the hash of a link nor its end
+    const { DATA_EXPORT_TABLE_SOURCES } = await import('../../services/system/dataExportSources.js');
+    const exported = Object.keys((DATA_EXPORT_TABLE_SOURCES as Record<string, { columns?: Record<string, unknown> }>).storefront_pages?.columns ?? {});
+    if (exported.length === 0 || exported.some(c => /preview/i.test(c)) || !exported.includes('sections')) wrong.push(`the exported columns of a page: ${exported.join(',')}`);
 
     // 9) the constraints of migration 0031, against a direct write
     const direct = async (values: Partial<typeof storefrontPages.$inferInsert>) => orm.update(storefrontPages).set(values).where(eq(storefrontPages.id, pageId)).then(() => 'written', () => 'refused');

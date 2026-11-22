@@ -181,6 +181,13 @@ export function httpsSiteUrl(value: string): string | null {
   return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
 }
 
+/** The address of a site alone (`https://host`), as `httpsSiteUrl` takes it but with no path: '' for empty, null when it is not one */
+export function httpsSiteOrigin(value: string): string | null {
+  const url = httpsSiteUrl(value);
+  if (!url) return url;
+  return new URL(url).pathname === '/' ? url : null;
+}
+
 export interface SeoSettingsValues {
   googleVerification: string;
   bingVerification: string;
@@ -239,8 +246,8 @@ export function seoSettingsError(raw: SeoSettingsValues): { field: keyof SeoSett
   if (values.alternateSiteUrl && httpsSiteUrl(values.alternateSiteUrl) === null) {
     return { field: 'alternateSiteUrl', message: 'نشانی سایت زبان دیگر باید با https:// آغاز شود، مانند https://papital.gallery.' };
   }
-  if (values.siteUrl && httpsSiteUrl(values.siteUrl) === null) {
-    return { field: 'siteUrl', message: 'نشانی سایت تازه باید با https:// آغاز شود، مانند https://papitalgallery.com.' };
+  if (values.siteUrl && httpsSiteOrigin(values.siteUrl) === null) {
+    return { field: 'siteUrl', message: 'نشانی فروشگاه سایت باید با https:// آغاز شود و فقط نام دامنه باشد، مانند https://papitalgallery.com.' };
   }
   return null;
 }
@@ -255,6 +262,6 @@ export function normalizedSeoSettings(values: SeoSettingsValues): SeoSettingsVal
     analyticsId: provider === 'none' ? '' : provider === 'ga4' ? values.analyticsId.trim().toUpperCase() : values.analyticsId.trim(),
     analyticsUrl: provider === 'matomo' ? (httpsSiteUrl(values.analyticsUrl) ?? '') : '',
     alternateSiteUrl: httpsSiteUrl(values.alternateSiteUrl) ?? '',
-    siteUrl: httpsSiteUrl(values.siteUrl ?? '') ?? '',
+    siteUrl: httpsSiteOrigin(values.siteUrl ?? '') ?? '',
   };
 }

@@ -33,6 +33,7 @@ export const PAGE_SLUG_MAX = 60;
 /** v12 phase 10c: a preview link lives an hour; its key is 32 random bytes in base64url (43 characters) */
 export const PAGE_PREVIEW_MINUTES = 60;
 export const PAGE_PREVIEW_TOKEN = /^[A-Za-z0-9_-]{43}$/;
+export const PAGE_PREVIEW_KEY_MAX = 43;
 /**
  * Three addresses a page may not take: the key of an old address (`legacyPathKey`) drops a last «feed», «amp» or «embed»
  * (WordPress's own endings), so `/pages/feed` could not be told from `/pages` in «نشانی‌های سایت قبلی» (10c review).

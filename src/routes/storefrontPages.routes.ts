@@ -60,6 +60,8 @@ const saveSchema = z.object({
   }).strict(),
 });
 const versionSchema = z.object({ params: idParams, body: z.object({ version }).strict() });
+// a link is asked for with an empty body: nothing of the page is sent, so nothing of it can be changed here
+const previewSchema = z.object({ params: idParams, body: z.object({}).strict() });
 const moveSchema = z.object({ params: idParams, body: z.object({ slug: z.string().max(PAGE_SLUG_MAX * 2), version }).strict() });
 const deleteSchema = z.object({
   params: idParams,
@@ -110,7 +112,7 @@ router.post('/:id/unpublish', requirePermission(MANAGE), validate(versionSchema)
 }));
 
 // v12 phase 10c: «پیش‌نمایش»: a one-hour link on the site to the page's saved draft; the answer is the only place its key is
-router.post('/:id/preview', requirePermission(MANAGE), validate(detailSchema), asyncHandler(async (req: Request, res: Response) => {
+router.post('/:id/preview', requirePermission(MANAGE), validate(previewSchema), asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json({ success: true, data: await createPagePreview(req, Number(req.params.id)) });
 }));
 

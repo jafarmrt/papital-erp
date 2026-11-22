@@ -150,7 +150,8 @@ export const DATA_EXPORT_TABLE_SOURCES: Readonly<Record<string, TableSpecSource>
   storefront_menus: { table: storefrontMenus, key: ['location'] },
   storefront_menu_items: { table: storefrontMenuItems, key: ['id'] },
   // v12 phase 10b: the site's pages
-  storefront_pages: { table: storefrontPages, key: ['id'] },
+  // a preview link lasts an hour and is of no use in a copy of the data: neither its hash nor its end goes out
+  storefront_pages: { table: storefrontPages, key: ['id'], columns: withoutColumns(storefrontPages, ['previewHash', 'previewExpiresAt']) },
   storefront_content_assets: { table: storefrontContentAssets, key: ['id'] },
 };
 

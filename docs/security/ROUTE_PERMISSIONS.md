@@ -537,8 +537,8 @@
 | GET | `/api/storefront/v1/orders/:number` | public |
 | POST | `/api/storefront/v1/orders/:number/access` | public |
 | POST | `/api/storefront/v1/orders/:number/receipts` | public |
-| GET | `/api/storefront/v1/page-previews/:token` | public |
-| GET | `/api/storefront/v1/page-previews/:token/media/:file` | public |
+| GET | `/api/storefront/v1/page-preview` | public |
+| GET | `/api/storefront/v1/page-preview/media/:file` | public |
 | GET | `/api/storefront/v1/pages` | public |
 | GET | `/api/storefront/v1/pages/:slug` | public |
 | GET | `/api/storefront/v1/products` | public |

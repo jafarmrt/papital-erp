@@ -121,7 +121,7 @@ async function publicSection(section: PageSection, images: Images): Promise<Stor
  * One copy of a page as the site gets it: the copy on the site, or (10c, `storefrontPagePreview.service.ts`) the draft
  * for a preview link. The same building either way, so a preview shows what publishing would put on the site.
  */
-export async function pageForSite(row: PageRecord, copy: PublishedPage, summary: StorefrontPageSummary): Promise<StorefrontPublicPage> {
+export async function pageForSite(copy: PublishedPage, summary: StorefrontPageSummary): Promise<StorefrontPublicPage> {
   const sections = Array.isArray(copy.sections) ? copy.sections : [];
   const images = await imagesOf(pageAssetIds({ shareImageAssetId: copy.shareImageAssetId, sections }));
   const out: StorefrontPageSection[] = [];
@@ -134,12 +134,11 @@ export async function pageForSite(row: PageRecord, copy: PublishedPage, summary:
 export async function publicPage(slug: string): Promise<StorefrontPublicPage> {
   const [row] = await orm.select().from(storefrontPages).where(and(onSite(), eq(storefrontPages.slug, slug))).limit(1);
   if (!row?.published) throw notFound();
-  return pageForSite(row, row.published, summaryOf(row));
+  return pageForSite(row.published, summaryOf(row));
 }
 
-/** The light (or small) WEBP of a live image of the library by its file name, for a caller that has decided the image may be read */
+/** The name of an image file as the site asks for it: the content's SHA-256, `-thumb` for the small version */
 export const MEDIA_FILE_NAME = /^([0-9a-f]{64})(-thumb)?\.webp$/;
-
 
 /**
  * The light (or small) WEBP of an image that a page on the site now names (`storefront_content_assets`, written by

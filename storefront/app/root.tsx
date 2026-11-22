@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Links, Meta, Outlet, Scripts, ScrollRestoration, isRouteErrorResponse, useNavigation, useRouteLoaderData, type LinksFunction } from 'react-router';
+import { Links, Meta, Outlet, Scripts, ScrollRestoration, isRouteErrorResponse, useLocation, useNavigation, useRouteLoaderData, type LinksFunction } from 'react-router';
 import type { Route } from './+types/root';
 import './app.css';
 import { brand, facets, menus, publicSettings, shopInfo } from './lib/api.server';
@@ -54,8 +54,15 @@ export async function loader({ request }: Route.LoaderArgs) {
 export type RootData = Awaited<ReturnType<typeof loader>>;
 export const useRootData = () => useRouteLoaderData<RootData>('root');
 
+/**
+ * v12 phase 10c: a draft's preview (`/preview/<key>`) has the link's key in its address, and a statistics script reads
+ * the address itself (`Referrer-Policy` does not stop it): no statistics service is loaded or told of that page
+ */
+const useInPreview = () => useLocation().pathname.startsWith('/preview/');
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const data = useRootData();
+  const inPreview = useInPreview();
   const shop = data?.shop ?? DEFAULT_SHOP;
   return (
     <html lang="fa" dir="rtl">
@@ -74,7 +81,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {data.faviconIsBitmap ? <link rel="apple-touch-icon" href={data.faviconUrl} /> : null}
           </>
         ) : <link rel="icon" href="/favicon.svg" type="image/svg+xml" />}
-        {data?.seo.analytics ? <AnalyticsScripts config={data.seo.analytics} /> : null}
+        {data?.seo.analytics && !inPreview ? <AnalyticsScripts config={data.seo.analytics} /> : null}
         {data?.pwa ? (
           <>
             <link rel="manifest" href="/manifest.webmanifest" />
@@ -125,11 +132,12 @@ function useServiceWorker(enabled: boolean) {
 
 export default function App() {
   const data = useRootData();
+  const inPreview = useInPreview();
   useServiceWorker(data?.pwa ?? false);
   return (
     <>
       <NavigationProgress />
-      {data?.seo.analytics?.provider === 'matomo' ? <MatomoPageViews /> : null}
+      {data?.seo.analytics?.provider === 'matomo' && !inPreview ? <MatomoPageViews /> : null}
       <Outlet />
     </>
   );

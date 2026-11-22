@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { PageDetail } from '../../lib/storefront/storefrontPageContracts';
@@ -11,8 +11,9 @@ import type { PageDetail } from '../../lib/storefront/storefrontPageContracts';
  */
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ API_URL: '/api', fetchJson: (...args: unknown[]) => fetchJson(...(args as [])), isAbortError: () => false }));
+const toastError = vi.hoisted(() => vi.fn());
 vi.mock('react-hot-toast', () => {
-  const t = Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), loading: vi.fn(), dismiss: vi.fn() });
+  const t = Object.assign(vi.fn(), { success: vi.fn(), error: toastError, loading: vi.fn(), dismiss: vi.fn() });
   return { toast: t, default: t };
 });
 const permissions = vi.hoisted(() => ({ current: [] as string[] }));
@@ -30,10 +31,14 @@ const DETAIL: PageDetail = {
   assets: [], menuPlaces: [],
 };
 
+/** the head of the link the server answers, and whether it is the address written in the settings */
+const site = { origin: 'https://test-site.example', written: true };
+
 afterEach(() => {
   cleanup();
   fetchJson.mockReset();
   permissions.current = [];
+  Object.assign(site, { origin: 'https://test-site.example', written: true });
 });
 
 type Call = [string, { method?: string; body?: string } | undefined];
@@ -45,7 +50,7 @@ function open() {
     if (url === '/storefront/menus/link-options') return { data: { categories: [], collections: [], campaigns: [], products: [] } };
     if (url === '/storefront/pages/9' && !init) return { data: DETAIL };
     if (init?.method === 'POST' && url === '/storefront/pages/9/preview') {
-      return { data: { path: '/preview/KEY', url: 'https://test-site.example/preview/KEY', expiresAt: '2026-11-22T09:30:00.000Z' } };
+      return { data: { path: '/preview/KEY', url: `${site.origin}/preview/KEY`, expiresAt: '2026-11-22T09:30:00.000Z', addressSet: site.written } };
     }
     throw new Error(`unexpected call ${init?.method ?? 'GET'} ${url}`);
   });
@@ -54,6 +59,16 @@ function open() {
 }
 
 describe('the preview link of a page in the ERP', () => {
+  it('says so when no site address is written in the settings and the link begins with the main domain', async () => {
+    permissions.current = ['site_content.view', 'site_content.manage'];
+    Object.assign(site, { origin: 'https://papitalgallery.com', written: false });
+    open();
+    fireEvent.click(await screen.findByRole('button', { name: 'پیش‌نمایش روی سایت' }));
+    const box = within(await screen.findByRole('group', { name: 'پیوند پیش‌نمایش' }));
+    expect(box.getByRole('note').textContent).toMatch(/«نشانی فروشگاه سایت» در «جست‌وجو و آمار» نوشته نشده است/);
+    expect(box.getByRole('link', { name: 'باز کردن پیش‌نمایش' }).getAttribute('href')).toBe('https://papitalgallery.com/preview/KEY');
+  });
+
   it('makes a preview link of the saved draft, shows it to open or copy, and waits while something is unsaved (v12 phase 10c)', async () => {
     permissions.current = ['site_content.view', 'site_content.manage'];
     const written: string[] = [];
@@ -63,9 +78,12 @@ describe('the preview link of a page in the ERP', () => {
     // with an unsaved edit there is nothing saved to show yet: the button waits and says why
     fireEvent.change(screen.getByLabelText('عنوان صفحه'), { target: { value: 'داستان تازه' } });
     expect(button.disabled).toBe(true);
-    expect(button.title).toContain('نخست ذخیره کنید');
+    // the reason is a sentence on the screen tied to the button, not a tooltip a keyboard never reaches
+    expect(document.getElementById(String(button.getAttribute('aria-describedby')))?.textContent).toContain('نخست ذخیره کنید');
     fireEvent.change(screen.getByLabelText('عنوان صفحه'), { target: { value: 'داستان ما' } });
     expect(button.disabled).toBe(false);
+    expect(button.getAttribute('aria-describedby')).toBeNull();
+    expect(screen.getByRole('status').textContent).toBe('');
     expect(screen.queryByRole('group', { name: 'پیوند پیش‌نمایش' })).toBeNull();
     fireEvent.click(button);
     fireEvent.click(button);
@@ -75,6 +93,9 @@ describe('the preview link of a page in the ERP', () => {
     expect(calls('POST')[0][0]).toBe('/storefront/pages/9/preview');
     expect(JSON.parse(String(calls('POST')[0][1]?.body))).toEqual({});
     expect(screen.getByText('https://test-site.example/preview/KEY')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('پیوند پیش‌نمایش ساخته شد.');
+    // the address is the one written in the settings: nothing to warn about
+    expect(box.queryByRole('note')).toBeNull();
     const openLink = box.getByRole('link', { name: 'باز کردن پیش‌نمایش' });
     expect(openLink.getAttribute('href')).toBe('https://test-site.example/preview/KEY');
     expect(openLink.getAttribute('target')).toBe('_blank');
@@ -85,6 +106,10 @@ describe('the preview link of a page in the ERP', () => {
     expect(written).toEqual(['https://test-site.example/preview/KEY']);
     // the editor is as it was: nothing unsaved, nothing stale
     expect((screen.getByRole('button', { name: 'ذخیرهٔ پیش‌نویس' }) as HTMLButtonElement).disabled).toBe(true);
+    // a browser without a clipboard (a page not on https): the click says so and breaks nothing
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+    fireEvent.click(box.getByRole('button', { name: 'کپی پیوند' }));
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('کپی نشد؛ پیوند را از همین‌جا بردارید.'));
     cleanup();
     fetchJson.mockReset();
     permissions.current = ['site_content.view'];

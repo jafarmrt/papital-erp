@@ -12,23 +12,28 @@ import { PAGE_PREVIEW_MINUTES, PAGE_PREVIEW_TOKEN, isPageKind, pageAssetIds, typ
 import type { PagePreviewLink } from '../../lib/storefront/storefrontPageContracts.js';
 import type { StorefrontPagePreview } from '../../lib/storefront/storefrontPagePublicContracts.js';
 import { STOREFRONT_SEO_SETTING_KEYS } from '../../lib/storefront/storefrontSeoContracts.js';
-import { httpsSiteUrl } from '../../lib/storefront/storefrontSeoRules.js';
+import { httpsSiteOrigin } from '../../lib/storefront/storefrontSeoRules.js';
 import { MEDIA_FILE_NAME, isoOf, pageForSite, type PageRecord } from './storefrontPagePublic.js';
 
 /**
  * v12 phase 10c (start plan §7.2, «پیش‌نمایش»; migration 0031): a link on the site itself that shows a page's saved
  * draft for one hour, so a colleague sees it as a visitor would before «انتشار». The key of the link is 32 random
- * bytes; only its SHA-256 is kept, so reading the database gives no link. A page has one link at a time: a new one ends
+ * bytes; only its SHA-256 is kept, so reading the database gives no link. The site presents the key to the ERP in a
+ * header (`X-Preview-Key`), so the ERP's logs have no key either. A page has one link at a time: a new one ends
  * the old. The link shows the draft as it is saved at the moment it is opened (a later save shows at once), its images
  * through a route of its own under the same key, and nothing of it is reachable without the key or after the hour.
  */
 const hashOf = (token: string): string => crypto.createHash('sha256').update(token, 'utf8').digest('hex');
 const notFound = () => new NotFoundError('پیش‌نمایش پیدا نشد یا زمانش گذشته است.', undefined, 'STOREFRONT_PAGE_PREVIEW_NOT_FOUND');
 
-/** The address of the new site, for links the ERP shows to a colleague: the one written in «جست‌وجو و آمار», else the main domain */
-async function siteOrigin(): Promise<string> {
+/**
+ * The address of the site, for links the ERP shows to a colleague: the one written in «جست‌وجو و آمار», else the main
+ * domain (`written` false: the screen then says so, because until the domain is moved the main domain is the earlier site)
+ */
+async function siteOrigin(): Promise<{ origin: string; written: boolean }> {
   const [row] = await orm.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, STOREFRONT_SEO_SETTING_KEYS.siteUrl));
-  return httpsSiteUrl(String(row?.value ?? '')) || STOREFRONT_SITE_ORIGIN;
+  const written = httpsSiteOrigin(String(row?.value ?? ''));
+  return written ? { origin: written, written: true } : { origin: STOREFRONT_SITE_ORIGIN, written: false };
 }
 
 /** `POST /api/storefront/pages/:id/preview`: a new one-hour link to the page's saved draft (it replaces the page's earlier link) */
@@ -47,7 +52,8 @@ export async function createPagePreview(req: Request, id: number): Promise<PageP
     });
   });
   const path = `/preview/${token}`;
-  return { path, url: `${await siteOrigin()}${path}`, expiresAt };
+  const site = await siteOrigin();
+  return { path, url: `${site.origin}${path}`, expiresAt, addressSet: site.written };
 }
 
 /** The live page a presented key opens now, or the same refusal for a wrong shape, an unknown key, an ended link and a removed page */
@@ -60,26 +66,27 @@ async function pageOfToken(token: string): Promise<PageRecord> {
   return row;
 }
 
+/** The saved draft as a copy to build for the site (`noindex` is part of a copy's shape; what goes out is the summary's, always true) */
 const draftOf = (row: PageRecord): Omit<PageValues, 'slug'> => ({
   title: row.title, seoTitle: row.seoTitle, seoDescription: row.seoDescription, noindex: true, shareImageAssetId: row.shareImageAssetId,
   sections: Array.isArray(row.sections) ? row.sections : [],
 });
 
 /**
- * `GET /api/storefront/v1/page-previews/:token`: the page's saved draft in the shape of a page of the site (built by
+ * `GET /api/storefront/v1/page-preview` (key in `X-Preview-Key`): the page's saved draft in the shape of a page of the site (built by
  * the same code as a published page, so nothing more goes out than publishing would send), marked «noindex» whatever
  * the draft says, with the time the link ends
  */
 export async function publicPagePreview(token: string): Promise<StorefrontPagePreview> {
   const row = await pageOfToken(token);
-  const page = await pageForSite(row, draftOf(row), {
+  const page = await pageForSite(draftOf(row), {
     slug: row.slug, kind: isPageKind(row.kind) ? row.kind : 'custom', title: row.title, noindex: true, updatedAt: isoOf(row.updatedAt),
   });
   return { ...page, expiresAt: isoOf(row.previewExpiresAt ?? '') };
 }
 
 /**
- * `GET /api/storefront/v1/page-previews/:token/media/:file`: an image the page's draft names, while the link is open.
+ * `GET /api/storefront/v1/page-preview/media/:file` (key in `X-Preview-Key`): an image the page's draft names, while the link is open.
  * An image of a draft is not served by the site's image route (only a published page's is), so a preview reads its
  * images here, under its own key; any other file is the same 404.
  */

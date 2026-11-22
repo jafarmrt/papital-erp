@@ -302,16 +302,17 @@ export async function page(slug: string, { fallback = false } = {}): Promise<Sit
 export const isPreviewToken = (token: string) => PAGE_PREVIEW_TOKEN.test(token);
 
 /** One read of the ERP under a preview key, kept nowhere: not in the page cache (the key would be its name) and not as a missing address */
-async function previewFetch(path: string, accept: string): Promise<Response | null> {
+async function previewFetch(path: string, token: string, accept: string): Promise<Response | null> {
   const { apiUrl, apiKey } = siteEnv();
   let res: Response;
   try {
-    res = await fetch(`${apiUrl}${path}`, { headers: { Authorization: `Bearer ${apiKey}`, Accept: accept }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    // the key goes in a header, never in the address, so it is in no log of the ERP
+    res = await fetch(`${apiUrl}${path}`, { headers: { Authorization: `Bearer ${apiKey}`, 'X-Preview-Key': token, Accept: accept }, signal: AbortSignal.timeout(TIMEOUT_MS) });
   } catch {
-    throw new StorefrontApiError(503, '/page-previews');
+    throw new StorefrontApiError(503, '/page-preview');
   }
   if (res.status === 404) return null;
-  if (!res.ok) throw new StorefrontApiError(res.status, '/page-previews');
+  if (!res.ok) throw new StorefrontApiError(res.status, '/page-preview');
   return res;
 }
 
@@ -322,17 +323,17 @@ async function previewFetch(path: string, accept: string): Promise<Response | nu
  */
 export async function pagePreview(token: string): Promise<{ page: SitePage; expiresAt: string } | null> {
   if (!isPreviewToken(token)) return null;
-  const res = await previewFetch(`/page-previews/${token}`, 'application/json');
+  const res = await previewFetch('/page-preview', token, 'application/json');
   if (!res) return null;
   let answer: unknown;
   try {
     answer = await res.json();
   } catch {
-    throw new StorefrontApiError(502, '/page-previews');
+    throw new StorefrontApiError(502, '/page-preview');
   }
   const data = typeof answer === 'object' && answer !== null ? (answer as { data?: unknown }).data : null;
   const page = sitePage(data);
-  if (!page) throw new StorefrontApiError(502, '/page-previews');
+  if (!page) throw new StorefrontApiError(502, '/page-preview');
   const expiresAt = (data as { expiresAt?: unknown }).expiresAt;
   // whatever the answer says, a preview is never for a search engine
   return { page: { ...page, noindex: true }, expiresAt: typeof expiresAt === 'string' ? expiresAt : '' };
@@ -341,7 +342,7 @@ export async function pagePreview(token: string): Promise<{ page: SitePage; expi
 /** An image the previewed draft names, under the same key; never kept in this server's memory (it is not on the site) */
 export async function pagePreviewMedia(token: string, file: string): Promise<Uint8Array<ArrayBuffer> | null> {
   if (!isPreviewToken(token) || !isMediaFile(file)) return null;
-  const res = await previewFetch(`/page-previews/${token}/media/${file}`, 'image/webp');
+  const res = await previewFetch(`/page-preview/media/${file}`, token, 'image/webp');
   return res ? new Uint8Array<ArrayBuffer>(await res.arrayBuffer()) : null;
 }
 

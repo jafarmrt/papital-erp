@@ -379,7 +379,7 @@ createServer(async (req, res) => {
   }
   // v12 phase 10c: the tests make the page routes fail (`fail`), vanish (`missing`), answer something that is no page
   // (`html`, `empty`, `null`) or answer again (`ok`) while the mock runs
-  // how many times a preview was read (the site must read it each time and keep none)
+  // how many requests came under a preview key, pages and images (the site must read each time, keep none, and send no key of another shape)
   if (url.pathname === '/__mock/preview-reads') return send(res, 200, { reads: previewReads });
   if (url.pathname === '/__mock/pages') {
     pagesMode = url.searchParams.get('mode') ?? 'ok';
@@ -500,17 +500,16 @@ createServer(async (req, res) => {
     if (!found) return send(res, 404, { error: 'صفحه پیدا نشد.', code: 'STOREFRONT_PAGE_NOT_FOUND' });
     return send(res, 200, { data: withCards(found) });
   }
-  // v12 phase 10c: «پیش‌نمایش»: MOCK_PREVIEWS (JSON) maps a key to a page as the ERP answers it (with `expiresAt`); any other
-  // key is 404, as an unknown or ended link is. An image under a key answers a few bytes for a file named in MOCK_PREVIEW_MEDIA.
-  if (route.startsWith('/page-previews/')) {
-    const [token, kind, file] = route.slice('/page-previews/'.length).split('/');
-    const found = previews[token];
+  // v12 phase 10c: «پیش‌نمایش»: MOCK_PREVIEWS (JSON) maps a key (sent in `X-Preview-Key`) to a page as the ERP answers it (with
+  // `expiresAt`); any other key is 404, as an unknown or ended link is. An image under a key answers a few bytes for a file named in MOCK_PREVIEW_MEDIA.
+  if (route === '/page-preview' || route.startsWith('/page-preview/media/')) {
+    // every request counts, whatever its key: a test then sees that a key in another shape was never sent here
+    previewReads += 1;
+    const found = previews[String(req.headers['x-preview-key'] ?? '')];
     if (!found) return send(res, 404, { error: 'پیش‌نمایش پیدا نشد یا زمانش گذشته است.', code: 'STOREFRONT_PAGE_PREVIEW_NOT_FOUND' });
-    if (kind === undefined) {
-      previewReads += 1;
-      return send(res, 200, { data: withCards(found) });
-    }
-    if (kind === 'media' && previewMedia.includes(file)) return send(res, 200, Buffer.from(`preview-image-${file}`), { 'Content-Type': 'image/webp' });
+    if (route === '/page-preview') return send(res, 200, { data: withCards(found) });
+    const file = route.slice('/page-preview/media/'.length);
+    if (previewMedia.includes(file)) return send(res, 200, Buffer.from(`preview-image-${file}`), { 'Content-Type': 'image/webp' });
     return send(res, 404, { error: 'not found' });
   }
   if (route === '/facets') {

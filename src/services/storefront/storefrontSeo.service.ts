@@ -48,7 +48,7 @@ export async function saveStorefrontSeoSettings(req: Request, input: StorefrontS
   const { version, ...raw } = input;
   const problem = seoSettingsError(raw);
   if (problem) throw new ValidationError(problem.message, { field: problem.field }, 'STOREFRONT_SEO_INVALID');
-  const values = normalizedSeoSettings(raw);
+  const sent = normalizedSeoSettings(raw);
   await orm.transaction(async (tx) => {
     await tx.insert(appSettings).values({ key: KEYS.version, value: '0' }).onConflictDoNothing({ target: appSettings.key });
     const [row] = await tx.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, KEYS.version)).for('update');
@@ -57,6 +57,8 @@ export async function saveStorefrontSeoSettings(req: Request, input: StorefrontS
       throw new OptimisticLockError({ entityType: 'StorefrontSeoSettings', entityId: KEYS.version, expectedVersion: version, currentVersion: current });
     }
     const before = valuesOf(await readStored(tx));
+    // a form opened before the site's address was a field does not send it: the saved address stays as it is
+    const values = { ...sent, siteUrl: raw.siteUrl === undefined ? before.siteUrl : sent.siteUrl };
     const changes: Partial<Record<Field, { before: string; after: string }>> = {};
     for (const field of FIELDS) {
       if (before[field] === values[field]) continue;

@@ -49,6 +49,8 @@ export interface PagePreviewLink {
   url: string;
   /** ISO time in UTC */
   expiresAt: string;
+  /** false = no address is written in «جست‌وجو و آمار», so `url` begins with the main domain */
+  addressSet: boolean;
 }
 
 export interface PageSaveInput extends PageValues {

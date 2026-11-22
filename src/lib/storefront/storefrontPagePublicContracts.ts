@@ -47,7 +47,7 @@ export interface StorefrontPageSummary {
   updatedAt: string;
 }
 
-/** `GET /api/storefront/v1/page-previews/:token`: a page's saved draft as the site draws it (always `noindex`), and when its link ends */
+/** `GET /api/storefront/v1/page-preview` (key in `X-Preview-Key`): a page's saved draft as the site draws it (always `noindex`), and when its link ends */
 export interface StorefrontPagePreview extends StorefrontPublicPage {
   /** ISO time in UTC */
   expiresAt: string;
