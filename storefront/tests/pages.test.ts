@@ -166,6 +166,17 @@ describe('search engines and information pages', () => {
     const sitemap = await page('/sitemap.xml');
     expect(sitemap.status).toBe(200);
     expect(sitemap.html).toContain('<loc>https://shop.example/p/tile-necklace-sample</loc>');
+    // v12 phase 10c: a product carries the day its page last changed (the feed's `updatedAt`, a UTC day), before its photo;
+    // a time without a zone is not a day anyone can trust, and a product without a time has none
+    expect(sitemap.html).toMatch(/<url><loc>https:\/\/shop\.example\/p\/tile-necklace-sample<\/loc><lastmod>2026-11-20<\/lastmod><image:image>/);
+    // the photo is the cover (the first of the feed's images), and only that one
+    expect(sitemap.html).toContain(`<loc>https://shop.example/p/tile-necklace-sample</loc><lastmod>2026-11-20</lastmod><image:image><image:loc>https://shop.example/media/${'5a'.repeat(32)}.webp</image:loc></image:image></url>`);
+    expect(sitemap.html).not.toContain('6b'.repeat(32));
+    expect(sitemap.html).toMatch(/<url><loc>https:\/\/shop\.example\/p\/tile-earrings-sample<\/loc>(<image:image>|<\/url>)/);
+    expect(sitemap.html).toMatch(/<url><loc>https:\/\/shop\.example\/p\/gift-set-sample<\/loc>(<image:image>|<\/url>)/);
+    expect(sitemap.html.match(/<lastmod>/g)).toHaveLength(1);
+    // the day is the feed's alone: no card and no product page carries it
+    expect((await page('/p/tile-necklace-sample')).html).not.toContain('2026-11-20T21:45');
     expect(sitemap.html).toContain('<loc>https://shop.example/shipping</loc>');
     expect(sitemap.html).toContain('<loc>https://shop.example/collections/');
     expect(sitemap.html).not.toContain(KEY);
