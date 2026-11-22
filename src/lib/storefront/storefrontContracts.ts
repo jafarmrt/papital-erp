@@ -222,6 +222,11 @@ export interface StorefrontFeedItem extends Omit<StorefrontProductCard, 'cover' 
   inStock: boolean;
   /** the cover first, at most FEED_IMAGES_MAX */
   images: StorefrontImage[];
+  /**
+   * v12 phase 10c: an ISO instant in UTC ('' = unknown): the latest recorded change of the item's row of the site, its
+   * images or its price on the site. The sitemap writes its day as `lastmod`.
+   */
+  updatedAt: string;
 }
 
 export interface StorefrontCatalogPage {

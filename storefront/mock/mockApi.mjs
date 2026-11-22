@@ -79,7 +79,8 @@ const menuPlaces = { header: null, drawer: null, footer: null, bottom: null, ...
 const fold = s => String(s).toLowerCase().replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/[‌\s]+/g, ' ');
 const card = ({ slug, sku, name, category, collections, retailPrice, stock, cover }) => ({ slug, sku, name, category, collections, retailPrice, stock, cover });
 // like the ERP: the transfer code links items of one design («هم‌طرح») and is never sent
-const detail = ({ itemId: _id, transferCode, ...rest }) => ({
+// (nor is the day of the last change, which only the feed carries)
+const detail = ({ itemId: _id, transferCode, updatedAt: _changed, ...rest }) => ({
   ...rest,
   sameDesign: transferCode ? products.filter(p => p.transferCode === transferCode && p.slug !== rest.slug).slice(0, 12).map(card) : [],
 });
@@ -471,6 +472,8 @@ createServer(async (req, res) => {
         slug: p.slug, sku: p.sku, name: p.name, category: p.category, collections: p.collections, retailPrice: p.retailPrice,
         description: (p.seoDescription || p.description || '').slice(0, 5000), material: p.material ?? '', color: p.color ?? '',
         inStock: p.stock.status !== 'out', images: (p.images.length ? p.images : p.cover ? [p.cover] : []).slice(0, 10),
+        // v12 phase 10c: the day the product's page last changed; a product of the sample without one has none ('')
+        updatedAt: p.updatedAt ?? '',
       })),
     });
   }
