@@ -108,6 +108,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         {inPreview ? <PreviewLeaves /> : null}
+        {data?.seo.analytics?.provider === 'matomo' && !inPreview ? <MatomoPageViews /> : null}
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:start-4 focus:top-4 focus:z-50 focus:rounded-control focus:bg-card focus:px-4 focus:py-2">پرش به محتوا</a>
         {data?.previewNotice ? (
           <p className="bg-brand px-4 py-2 text-center text-sm text-brand-foreground">{data.previewNotice}</p>
@@ -148,12 +149,10 @@ function useServiceWorker(enabled: boolean) {
 
 export default function App() {
   const data = useRootData();
-  const inPreview = useInPreview();
   useServiceWorker(data?.pwa ?? false);
   return (
     <>
       <NavigationProgress />
-      {data?.seo.analytics?.provider === 'matomo' && !inPreview ? <MatomoPageViews /> : null}
       <Outlet />
     </>
   );
