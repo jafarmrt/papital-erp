@@ -45,7 +45,7 @@ describe('the pages when the ERP answers with an error', () => {
     expect(shipping).toContain('پرداخت کارت‌به‌کارت است.');
   });
 
-  it('still writes the sitemap, with the base pages and no date', async () => {
+  it('still writes the sitemap, with the base pages and no date of theirs', async () => {
     const res = await handle(new Request('http://localhost/sitemap.xml'));
     expect(res.status).toBe(200);
     const xml = await res.text();

@@ -215,7 +215,7 @@ export async function shopInfo(): Promise<SiteShop> {
 
 const FEED_TTL_MS = 600_000;
 
-/** v11 phase 8.5b: every item on the site with its feed fields; read only by the feed, which is fetched a few times a day */
+/** v11 phase 8.5b: every item on the site with its feed fields; read by the feed (fetched a few times a day) and, v12 phase 10c, by the sitemap */
 export async function feed(): Promise<StorefrontFeedItem[]> {
   return (await get<{ data: StorefrontFeedItem[] }>('/feed', FEED_TTL_MS)).data;
 }

@@ -11,8 +11,9 @@ import { forgetOnSale } from '../../services/storefront/storefrontOnSaleCache.js
 /**
  * v12 phase 10c (the sitemap's `lastmod`; docs/roadmap/V12_SITE_NEXT_START_PLAN.md §7.2, `AGENTS.md` §1.9c): the feed
  * gives each item the instant its page on the site last changed, on real Express routes and PostgreSQL. It is the
- * latest of three recorded times: the item's row of the site, its images in the library (a removed one too) and its
- * price in the site's price list. Another item's image and a price of another list do not move it. Nothing else is
+ * latest of three recorded times: the item's row of the site, its images in the library (their removal too, through
+ * the library's own route) and its price in the site's price list. Another item's image, a video of the item and a
+ * price of the wholesale list do not move it. Nothing else is
  * added to the feed, and no card or product page carries the time.
  */
 interface Session { cookie: string; csrfToken: string }
@@ -54,7 +55,7 @@ export async function runStorefrontProductLastmodV12Tests(shouldRun: (id: string
     const base = (await erp.get('/api/storefront/settings')).body.data;
     const on = await erp.put('/api/storefront/settings', {
       cardNumber: '', cardHolder: '', bankName: '', iban: '', freeShippingThreshold: '', reservationHours: 24, retailPriceList: retailList,
-      wholesalePriceList: '', lowStockThreshold: 3, stockDisplay: 'status', warehouseCode: '', whatsappNumber: '', whatsappEnabled: false,
+      wholesalePriceList: otherList, lowStockThreshold: 3, stockDisplay: 'status', warehouseCode: '', whatsappNumber: '', whatsappEnabled: false,
       enabled: true, ordersEnabled: false, treasuryAccountId: 0, openOrdersPerPhone: 3, version: base.version,
     });
     if (on.status !== 200) throw new Error(`turning the site on: ${on.status} ${JSON.stringify(on.body)}`);
@@ -75,15 +76,15 @@ export async function runStorefrontProductLastmodV12Tests(shouldRun: (id: string
     await priceRow(other.id, retailList, '1500000', day(1));
     const [section] = await orm.insert(mediaSections).values({ kind: 'custom', title: `عکس‌های تاریخ ${tag}` }).returning({ id: mediaSections.id });
     sectionId = section.id;
-    const image = async (n: number, itemId: number) => {
+    const image = async (n: number, itemId: number, kind: 'image' | 'video' = 'image') => {
       const [asset] = await orm.insert(mediaAssets).values({
-        sectionId, itemId, kind: 'image', title: `عکس تاریخ ${n} ${tag}`, originalName: `lastmod-${n}.jpg`, mimeType: 'image/jpeg', sizeBytes: 1000,
+        sectionId, itemId, kind, title: `عکس تاریخ ${n} ${tag}`, originalName: `lastmod-${n}.jpg`, mimeType: 'image/jpeg', sizeBytes: 1000,
         sha256: `${String(n).repeat(8)}${tag}`.padEnd(64, 'e').slice(0, 64), width: 1200, height: 1200, lightBytes: 12, thumbBytes: 12,
       }).returning({ id: mediaAssets.id });
       assetIds.push(asset.id);
       return asset.id;
     };
-    const [ringImage, ringRemoved, otherImage] = [await image(1, ring.id), await image(2, ring.id), await image(3, other.id)];
+    const [ringImage, ringRemoved, otherImage, ringVideo] = [await image(1, ring.id), await image(2, ring.id), await image(3, other.id), await image(4, ring.id, 'video')];
     const slugs = [`lastmod-ring-${tag}`, `lastmod-other-${tag}`];
     for (const [index, item] of [ring, other].entries()) {
       const pub = await erp.put(`/api/storefront/products/${item.id}`, { published: true, slug: slugs[index], seoTitle: '', seoDescription: '', sortOrder: index + 1, version: 0 });
@@ -108,7 +109,7 @@ export async function runStorefrontProductLastmodV12Tests(shouldRun: (id: string
 
     await stamp.row(day(1));
     await stamp.row(day(1), other.id);
-    for (const assetId of [ringImage, ringRemoved, otherImage]) await stamp.image(assetId, day(1));
+    for (const assetId of [ringImage, ringRemoved, otherImage, ringVideo]) await stamp.image(assetId, day(1));
 
     // 1) the fields: the reviewed ones and the time, an instant in UTC
     const first = await fed();
@@ -124,22 +125,29 @@ export async function runStorefrontProductLastmodV12Tests(shouldRun: (id: string
     await orm.update(itemPrices).set({ isDeleted: 1 }).where(eq(itemPrices.id, ringPrice));
     const newPrice = await priceRow(ring.id, retailList, '3300000', day(4));
     await expectDay('after a new price of the site list', day(4));
-    // an image removed from the library is a change of the page too
-    await orm.update(mediaAssets).set({ isDeleted: 1, updatedAt: day(6) }).where(eq(mediaAssets.id, ringRemoved));
-    await expectDay('after an image was removed', day(6));
     // an older time never moves it back
     await stamp.row(day(3));
-    await expectDay('after an older change of the row', day(6));
+    await expectDay('after an older change of the row', day(4));
+    // a video of the item is not on the site: its time is not the page's
+    await stamp.image(ringVideo, day(7));
+    await expectDay('after a video of the item changed', day(4));
+    // an image removed from the library, through the library's own route, is a change of the page: the library times the
+    // removal itself (`deleted_at`), so the time is this moment
+    const isNow = (at: string) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(at) && Math.abs(Date.parse(at) - Date.now()) < 120_000;
+    const removal = await request(app).delete(`/api/media/assets/${ringRemoved}`).set('Cookie', admin.cookie).set('x-csrf-token', admin.csrfToken);
+    const removedAt = String((await fed()).ring?.updatedAt);
+    if (removal.status !== 200 || !isNow(removedAt)) wrong.push(`after an image was removed: ${removal.status} «${removedAt}»`);
+    await new Promise(resolve => setTimeout(resolve, 20));
 
     // an edit of the price row itself is timed by the database (its trigger), so the time is this moment
     await orm.update(itemPrices).set({ price: money('3400000') }).where(eq(itemPrices.id, newPrice));
     const edited = String((await fed()).ring?.updatedAt);
-    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(edited) || Math.abs(Date.parse(edited) - Date.now()) > 120_000) wrong.push(`after the price row was edited: «${edited}»`);
+    if (!isNow(edited) || !(Date.parse(edited) > Date.parse(removedAt))) wrong.push(`after the price row was edited: «${edited}» (the removal was at «${removedAt}»)`);
 
-    // 3) what does not move it: another item's image, a price of another list (a new row, written now), the item card itself
+    // 3) what does not move it: another item's image, a price of the wholesale list (a new row, written now), the item card itself
     await stamp.image(otherImage, day(8));
     await new Promise(resolve => setTimeout(resolve, 20));
-    await priceRow(ring.id, `${otherList} ۲`, '2100000', new Date().toISOString());
+    await priceRow(ring.id, otherList, '2100000', new Date(Date.now() + 60_000).toISOString());
     await orm.update(items).set({ productDescription: `متن تازه ${tag}` }).where(eq(items.id, ring.id));
     const after = await fed();
     if (after.ring?.updatedAt !== edited) wrong.push(`moved by something of another item or list: «${String(after.ring?.updatedAt)}», not «${edited}»`);
@@ -154,7 +162,7 @@ export async function runStorefrontProductLastmodV12Tests(shouldRun: (id: string
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'a feed item had the reviewed fields and `updatedAt`, an instant in UTC; a later change of the item\'s row of the site, of an image, a new price in the site list, the removal of an image and an edit of the price row each moved it, and an older change never moved it back; another item\'s image, a price of another list and an edit of the item card did not; a card and a product page had no time',
+      details: 'a feed item had the reviewed fields and `updatedAt`, an instant in UTC; a later change of the item\'s row of the site, of an image, a new price in the site list, the removal of an image through the library\'s route and an edit of the price row each moved it, and an older change never moved it back; a video of the item, another item\'s image, a newer price of the wholesale list and an edit of the item card did not; a card and a product page had no time',
     }));
   } catch (err) {
     results.push(makeTestCase({

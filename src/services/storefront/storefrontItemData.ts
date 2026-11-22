@@ -83,9 +83,11 @@ const later = (a: string | undefined, b: unknown): string | undefined => {
 /**
  * v12 phase 10c (the sitemap's `lastmod`): when each item's page on the site last changed, as far as a row records it
  * (an ISO instant in UTC): the item's row of the site (publishing, address, search title and description, order), its
- * images in the library (added, replaced, renamed, removed) and its price in the site's price list. The item card has
- * no time of its own, so a change of its name or description alone does not move this; the date is then older than
- * the truth, never newer, which is the safe side for a search engine.
+ * image rows in the library (a change of the row, or its removal, which the library times in `deleted_at`) and its
+ * price in the site's price list. It is a hint for a search engine, not a record: the item card has no time of its own,
+ * so a change of the item's name, description, material, colour, size, category or collections alone does not move it
+ * (the day is then older than the truth), and a save that changes nothing a visitor sees (an image's tags, a row of the
+ * site saved as it was) moves it all the same. Stock never moves it: that would tell when an item sells.
  */
 export async function changedAtOf(executor: DbExecutor, itemIds: number[], priceList: string): Promise<Map<number, string>> {
   const changed = new Map<number, string>();
@@ -98,7 +100,11 @@ export async function changedAtOf(executor: DbExecutor, itemIds: number[], price
     const rows = await executor.select({ itemId: storefrontProducts.itemId, at: storefrontProducts.updatedAt }).from(storefrontProducts)
       .where(inArray(storefrontProducts.itemId, part));
     for (const row of rows) note(row.itemId, row.at);
-    const images = await executor.select({ itemId: mediaAssets.itemId, at: sql<string | null>`max(${mediaAssets.updatedAt})` }).from(mediaAssets)
+    const images = await executor.select({
+      itemId: mediaAssets.itemId,
+      // removing an image writes `deleted_at` and leaves `updated_at` as it was
+      at: sql<string | null>`max(greatest(${mediaAssets.updatedAt}, coalesce(${mediaAssets.deletedAt}, ${mediaAssets.updatedAt})))`,
+    }).from(mediaAssets)
       .where(and(inArray(mediaAssets.itemId, part), eq(mediaAssets.kind, 'image'))).groupBy(mediaAssets.itemId);
     for (const row of images) note(row.itemId, row.at);
     if (!priceList) continue;
