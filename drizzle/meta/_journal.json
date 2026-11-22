@@ -218,6 +218,13 @@
       "when": 1798444800000,
       "tag": "0030_storefront_menu_page_link",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1798531200000,
+      "tag": "0031_storefront_page_preview",
+      "breakpoints": true
     }
   ]
 }

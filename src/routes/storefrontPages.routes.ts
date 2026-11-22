@@ -8,6 +8,7 @@ import { orm } from '../db/drizzle.js';
 import { PAGE_SECTIONS_MAX, PAGE_SEO_DESCRIPTION_MAX, PAGE_SEO_TITLE_MAX, PAGE_SLUG_MAX, PAGE_TEMPLATES, PAGE_TITLE_MAX } from '../lib/storefront/storefrontPageRules.js';
 import { HERO_OPTIONS_PAGE_MAX, campaignHeroOptions } from '../services/storefront/storefrontCampaigns.service.js';
 import { movePage } from '../services/storefront/storefrontPageMove.service.js';
+import { createPagePreview } from '../services/storefront/storefrontPagePreview.service.js';
 import {
   createPage, deletePage, listPages, pageDetail, publishPage, revertDraft, saveDraft, unpublishPage,
 } from '../services/storefront/storefrontPages.service.js';
@@ -59,6 +60,8 @@ const saveSchema = z.object({
   }).strict(),
 });
 const versionSchema = z.object({ params: idParams, body: z.object({ version }).strict() });
+// a link is asked for with an empty body: nothing of the page is sent, so nothing of it can be changed here
+const previewSchema = z.object({ params: idParams, body: z.object({}).strict() });
 const moveSchema = z.object({ params: idParams, body: z.object({ slug: z.string().max(PAGE_SLUG_MAX * 2), version }).strict() });
 const deleteSchema = z.object({
   params: idParams,
@@ -106,6 +109,11 @@ router.post('/:id/revert', requirePermission(MANAGE), validate(versionSchema), a
 
 router.post('/:id/unpublish', requirePermission(MANAGE), validate(versionSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: await unpublishPage(req, Number(req.params.id), req.body.version) });
+}));
+
+// v12 phase 10c: «پیش‌نمایش»: a one-hour link on the site to the page's saved draft; the answer is the only place its key is
+router.post('/:id/preview', requirePermission(MANAGE), validate(previewSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.status(201).json({ success: true, data: await createPagePreview(req, Number(req.params.id)) });
 }));
 
 // v12 phase 10c: «تغییر نشانی»: a page the shop made takes a new address; while it is on the site its old address is redirected

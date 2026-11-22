@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Links, Meta, Outlet, Scripts, ScrollRestoration, isRouteErrorResponse, useNavigation, useRouteLoaderData, type LinksFunction } from 'react-router';
+import { Links, Meta, Outlet, Scripts, ScrollRestoration, isRouteErrorResponse, useBlocker, useMatches, useNavigation, useRouteLoaderData, type LinksFunction } from 'react-router';
 import type { Route } from './+types/root';
 import './app.css';
 import { brand, facets, menus, publicSettings, shopInfo } from './lib/api.server';
@@ -54,8 +54,30 @@ export async function loader({ request }: Route.LoaderArgs) {
 export type RootData = Awaited<ReturnType<typeof loader>>;
 export const useRootData = () => useRouteLoaderData<RootData>('root');
 
+/**
+ * v12 phase 10c: a draft's preview (`/preview/<key>`) has the link's key in its address, and a statistics script reads
+ * the address itself (`Referrer-Policy` does not stop it): no statistics service is loaded or told of that page. The
+ * page is known by its route, not by how its address is spelled (`/PREVIEW/…` is the same route). The route makes
+ * coming to it and leaving it a fresh load of the document, so a script loaded on another page is never running here.
+ */
+const useInPreview = () => useMatches().some(match => match.id === 'routes/pagePreview');
+
+/**
+ * Leaving a preview for another page of the site is a fresh load of that page, never a move inside the preview's
+ * document (see `clientLoader` of `routes/pagePreview.tsx`). It is part of the layout, so it is there as well when the
+ * preview's read failed and the page is this file's «پیدا نشد» or «در دسترس نیست».
+ */
+function PreviewLeaves() {
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => nextLocation.pathname !== currentLocation.pathname);
+  useEffect(() => {
+    if (blocker.state === 'blocked') window.location.assign(`${blocker.location.pathname}${blocker.location.search}${blocker.location.hash}`);
+  }, [blocker]);
+  return null;
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const data = useRootData();
+  const inPreview = useInPreview();
   const shop = data?.shop ?? DEFAULT_SHOP;
   return (
     <html lang="fa" dir="rtl">
@@ -74,7 +96,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {data.faviconIsBitmap ? <link rel="apple-touch-icon" href={data.faviconUrl} /> : null}
           </>
         ) : <link rel="icon" href="/favicon.svg" type="image/svg+xml" />}
-        {data?.seo.analytics ? <AnalyticsScripts config={data.seo.analytics} /> : null}
+        {data?.seo.analytics && !inPreview ? <AnalyticsScripts config={data.seo.analytics} /> : null}
         {data?.pwa ? (
           <>
             <link rel="manifest" href="/manifest.webmanifest" />
@@ -85,6 +107,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         ) : null}
       </head>
       <body>
+        {inPreview ? <PreviewLeaves /> : null}
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:start-4 focus:top-4 focus:z-50 focus:rounded-control focus:bg-card focus:px-4 focus:py-2">پرش به محتوا</a>
         {data?.previewNotice ? (
           <p className="bg-brand px-4 py-2 text-center text-sm text-brand-foreground">{data.previewNotice}</p>
@@ -125,11 +148,12 @@ function useServiceWorker(enabled: boolean) {
 
 export default function App() {
   const data = useRootData();
+  const inPreview = useInPreview();
   useServiceWorker(data?.pwa ?? false);
   return (
     <>
       <NavigationProgress />
-      {data?.seo.analytics?.provider === 'matomo' ? <MatomoPageViews /> : null}
+      {data?.seo.analytics?.provider === 'matomo' && !inPreview ? <MatomoPageViews /> : null}
       <Outlet />
     </>
   );

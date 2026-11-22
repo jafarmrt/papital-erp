@@ -11,6 +11,7 @@ import { NO_MENUS, safeMenus, type SiteMenus } from './menus';
 import { DEFAULT_SHOP, siteShop, type SiteShop } from './shopInfo';
 import type { StorefrontPageSummary } from '@erp/storefront/storefrontPagePublicContracts';
 import { isPageSlug, sitePage, sitePageList, type SitePage } from './pages';
+import { PAGE_PREVIEW_TOKEN } from '@erp/storefront/storefrontPageParts';
 
 /**
  * The only door to the ERP: the five read routes of the Storefront API (phase 8.1), called from this server with the
@@ -295,6 +296,54 @@ export async function page(slug: string, { fallback = false } = {}): Promise<Sit
     if (fallback) return lastGoodBasePage.get(slug) ?? null;
     throw error;
   }
+}
+
+/** The key of a preview link as the ERP makes it (32 random bytes in base64url); another shape is never sent to the ERP */
+export const isPreviewToken = (token: string) => PAGE_PREVIEW_TOKEN.test(token);
+
+/** One read of the ERP under a preview key, kept nowhere: not in the page cache (the key would be its name) and not as a missing address */
+async function previewFetch(path: string, token: string, accept: string): Promise<Response | null> {
+  const { apiUrl, apiKey } = siteEnv();
+  let res: Response;
+  try {
+    // the key goes in a header, never in the address, so it is in no log of the ERP
+    res = await fetch(`${apiUrl}${path}`, { headers: { Authorization: `Bearer ${apiKey}`, 'X-Preview-Key': token, Accept: accept }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+  } catch {
+    throw new StorefrontApiError(503, '/page-preview');
+  }
+  if (res.status === 404) return null;
+  if (!res.ok) throw new StorefrontApiError(res.status, '/page-preview');
+  return res;
+}
+
+/**
+ * v12 phase 10c: «پیش‌نمایش»: the saved draft of a page of the ERP, for the one-hour link a colleague made there; null
+ * when the key opens nothing (unknown, ended, or the page removed). Read from the ERP each time, so a draft saved a
+ * moment ago shows at once and an ended link stops at once.
+ */
+export async function pagePreview(token: string): Promise<{ page: SitePage; expiresAt: string } | null> {
+  if (!isPreviewToken(token)) return null;
+  const res = await previewFetch('/page-preview', token, 'application/json');
+  if (!res) return null;
+  let answer: unknown;
+  try {
+    answer = await res.json();
+  } catch {
+    throw new StorefrontApiError(502, '/page-preview');
+  }
+  const data = typeof answer === 'object' && answer !== null ? (answer as { data?: unknown }).data : null;
+  const page = sitePage(data);
+  if (!page) throw new StorefrontApiError(502, '/page-preview');
+  const expiresAt = (data as { expiresAt?: unknown }).expiresAt;
+  // whatever the answer says, a preview is never for a search engine
+  return { page: { ...page, noindex: true }, expiresAt: typeof expiresAt === 'string' ? expiresAt : '' };
+}
+
+/** An image the previewed draft names, under the same key; never kept in this server's memory (it is not on the site) */
+export async function pagePreviewMedia(token: string, file: string): Promise<Uint8Array<ArrayBuffer> | null> {
+  if (!isPreviewToken(token) || !isMediaFile(file)) return null;
+  const res = await previewFetch(`/page-preview/media/${file}`, token, 'image/webp');
+  return res ? new Uint8Array<ArrayBuffer>(await res.arrayBuffer()) : null;
 }
 
 const REDIRECTS_TTL_MS = 300_000;

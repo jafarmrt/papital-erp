@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { mediaAssets, storefrontContentAssets, storefrontPages } from '../../db/schema.js';
+import { mediaAssets, storefrontContentAssets, storefrontPages, type PublishedPage } from '../../db/schema.js';
 import { NotFoundError } from '../../errors/customErrors.js';
 import { mediaFilePath } from '../../lib/media/mediaPaths.js';
 import { serverTimestampToUtcIso } from '../../lib/serverTimestamp.js';
@@ -18,14 +18,14 @@ import { campaignCards } from './storefrontCatalog.service.js';
  * still has it with a light version; a row of products is the cards of the items on the site now. A text is checked
  * again on its way out (`safeRichDoc`), so a row changed by hand in the database still cannot send an unknown node.
  */
-type PageRecord = typeof storefrontPages.$inferSelect;
+export type PageRecord = typeof storefrontPages.$inferSelect;
 type Images = ReadonlyMap<number, Omit<StorefrontPageImage, 'alt'>>;
 
 const onSite = () => and(eq(storefrontPages.isDeleted, 0), isNotNull(storefrontPages.published), isNotNull(storefrontPages.publishedAt));
 const notFound = () => new NotFoundError('صفحه پیدا نشد.', undefined, 'STOREFRONT_PAGE_NOT_FOUND');
 
 /** A stored time as `2026-11-21T18:13:41.727Z` ('' when it cannot be read) */
-function isoOf(stored: string): string {
+export function isoOf(stored: string): string {
   const at = new Date(serverTimestampToUtcIso(stored) ?? '');
   return Number.isNaN(at.getTime()) ? '' : at.toISOString();
 }
@@ -117,30 +117,35 @@ async function publicSection(section: PageSection, images: Images): Promise<Stor
   }
 }
 
-/** `GET /api/storefront/v1/pages/:slug`: the copy on the site of one page, or the same 404 for any other address */
-export async function publicPage(slug: string): Promise<StorefrontPublicPage> {
-  const [row] = await orm.select().from(storefrontPages).where(and(onSite(), eq(storefrontPages.slug, slug))).limit(1);
-  const published = row?.published;
-  if (!row || !published) throw notFound();
-  const sections = Array.isArray(published.sections) ? published.sections : [];
-  const images = await imagesOf(pageAssetIds({ shareImageAssetId: published.shareImageAssetId, sections }));
+/**
+ * One copy of a page as the site gets it: the copy on the site, or (10c, `storefrontPagePreview.service.ts`) the draft
+ * for a preview link. The same building either way, so a preview shows what publishing would put on the site.
+ */
+export async function pageForSite(copy: PublishedPage, summary: StorefrontPageSummary): Promise<StorefrontPublicPage> {
+  const sections = Array.isArray(copy.sections) ? copy.sections : [];
+  const images = await imagesOf(pageAssetIds({ shareImageAssetId: copy.shareImageAssetId, sections }));
   const out: StorefrontPageSection[] = [];
   // one after another: a row of products reads the catalog, which is kept a few seconds
   for (const section of sections) out.push(await publicSection(section, images));
-  return {
-    ...summaryOf(row), seoTitle: published.seoTitle, seoDescription: published.seoDescription,
-    shareImage: imageOf(images, published.shareImageAssetId, published.title), sections: out,
-  };
+  return { ...summary, seoTitle: copy.seoTitle, seoDescription: copy.seoDescription, shareImage: imageOf(images, copy.shareImageAssetId, copy.title), sections: out };
 }
 
-const MEDIA_FILE = /^([0-9a-f]{64})(-thumb)?\.webp$/;
+/** `GET /api/storefront/v1/pages/:slug`: the copy on the site of one page, or the same 404 for any other address */
+export async function publicPage(slug: string): Promise<StorefrontPublicPage> {
+  const [row] = await orm.select().from(storefrontPages).where(and(onSite(), eq(storefrontPages.slug, slug))).limit(1);
+  if (!row?.published) throw notFound();
+  return pageForSite(row.published, summaryOf(row));
+}
+
+/** The name of an image file as the site asks for it: the content's SHA-256, `-thumb` for the small version */
+export const MEDIA_FILE_NAME = /^([0-9a-f]{64})(-thumb)?\.webp$/;
 
 /**
  * The light (or small) WEBP of an image that a page on the site now names (`storefront_content_assets`, written by
  * «انتشار»); any other file, an image of a draft among them, is the same 404
  */
 export async function contentImageFile(file: string): Promise<string> {
-  const match = MEDIA_FILE.exec(file);
+  const match = MEDIA_FILE_NAME.exec(file);
   if (!match) throw new NotFoundError('پیدا نشد');
   const [sha256, thumb] = [match[1], Boolean(match[2])];
   const rows = await orm.select({ lightBytes: mediaAssets.lightBytes, thumbBytes: mediaAssets.thumbBytes }).from(mediaAssets)

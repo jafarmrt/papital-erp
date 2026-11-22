@@ -17,9 +17,9 @@ import {
  * chooses one) and the address of the brand's site in another language. A group of its own with its own version row, so
  * saving it never makes the open payment and shipping form stale; one save is one audit row in the same transaction.
  */
-const VALUE_KEYS = [KEYS.googleVerification, KEYS.bingVerification, KEYS.analyticsProvider, KEYS.analyticsId, KEYS.analyticsUrl, KEYS.alternateSiteUrl] as const;
+const VALUE_KEYS = [KEYS.googleVerification, KEYS.bingVerification, KEYS.analyticsProvider, KEYS.analyticsId, KEYS.analyticsUrl, KEYS.alternateSiteUrl, KEYS.siteUrl] as const;
 type Field = keyof SeoSettingsValues;
-const FIELDS: Field[] = ['googleVerification', 'bingVerification', 'analyticsProvider', 'analyticsId', 'analyticsUrl', 'alternateSiteUrl'];
+const FIELDS: Field[] = ['googleVerification', 'bingVerification', 'analyticsProvider', 'analyticsId', 'analyticsUrl', 'alternateSiteUrl', 'siteUrl'];
 
 async function readStored(executor: DbExecutor): Promise<Record<string, string>> {
   const rows = await executor.select().from(appSettings).where(inArray(appSettings.key, [...VALUE_KEYS, KEYS.version]));
@@ -35,6 +35,7 @@ function valuesOf(stored: Record<string, string>): SeoSettingsValues {
     analyticsId: stored[KEYS.analyticsId] ?? '',
     analyticsUrl: stored[KEYS.analyticsUrl] ?? '',
     alternateSiteUrl: stored[KEYS.alternateSiteUrl] ?? '',
+    siteUrl: stored[KEYS.siteUrl] ?? '',
   };
 }
 
@@ -44,10 +45,11 @@ export async function readStorefrontSeoSettings(executor: DbExecutor): Promise<S
 }
 
 export async function saveStorefrontSeoSettings(req: Request, input: StorefrontSeoSettingsInput): Promise<StorefrontSeoSettingsView> {
-  const { version, ...raw } = input;
+  const { version, ...given } = input;
+  const raw = { ...given, siteUrl: given.siteUrl ?? '' };
   const problem = seoSettingsError(raw);
   if (problem) throw new ValidationError(problem.message, { field: problem.field }, 'STOREFRONT_SEO_INVALID');
-  const values = normalizedSeoSettings(raw);
+  const sent = normalizedSeoSettings(raw);
   await orm.transaction(async (tx) => {
     await tx.insert(appSettings).values({ key: KEYS.version, value: '0' }).onConflictDoNothing({ target: appSettings.key });
     const [row] = await tx.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, KEYS.version)).for('update');
@@ -56,6 +58,8 @@ export async function saveStorefrontSeoSettings(req: Request, input: StorefrontS
       throw new OptimisticLockError({ entityType: 'StorefrontSeoSettings', entityId: KEYS.version, expectedVersion: version, currentVersion: current });
     }
     const before = valuesOf(await readStored(tx));
+    // a form opened before the site's address was a field does not send it: the saved address stays as it is
+    const values = { ...sent, siteUrl: given.siteUrl === undefined ? before.siteUrl : sent.siteUrl };
     const changes: Partial<Record<Field, { before: string; after: string }>> = {};
     for (const field of FIELDS) {
       if (before[field] === values[field]) continue;

@@ -11262,5 +11262,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runStorefrontPageMoveV12Tests } = await import('../regression/storefrontPageMoveV12Tests.js');
   results.push(...await runStorefrontPageMoveV12Tests(shouldRun));
 
+  // v12 phase 10c (migration 0031): the one-hour preview link of a page's draft
+  const { runStorefrontPagePreviewV12Tests } = await import('../regression/storefrontPagePreviewV12Tests.js');
+  results.push(...await runStorefrontPagePreviewV12Tests(shouldRun));
+
   return results;
 }

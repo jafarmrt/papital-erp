@@ -37,6 +37,9 @@ export const storefrontPages = pgTable('storefront_pages', {
   published: jsonb('published').$type<PublishedPage>(),
   publishedAt: timestamp('published_at', { withTimezone: true, mode: 'string' }),
   publishedBy: text('published_by').notNull().default(''),
+  /** v12 phase 10c (migration 0031): the SHA-256 of the key of the page's preview link, and when the link ends */
+  previewHash: text('preview_hash'),
+  previewExpiresAt: timestamp('preview_expires_at', { withTimezone: true, mode: 'string' }),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').notNull().default(0),
   createdBy: text('created_by').notNull().default(''),
@@ -45,6 +48,7 @@ export const storefrontPages = pgTable('storefront_pages', {
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (table) => ({
   uq_storefront_pages_slug_live: uniqueIndex('uq_storefront_pages_slug_live').on(table.slug).where(sql`${table.isDeleted} = 0`),
+  uq_storefront_pages_preview_hash: uniqueIndex('uq_storefront_pages_preview_hash').on(table.previewHash).where(sql`${table.previewHash} IS NOT NULL`),
   idx_storefront_pages_share_image_asset_id: index('idx_storefront_pages_share_image_asset_id').on(table.shareImageAssetId).where(sql`${table.shareImageAssetId} IS NOT NULL`),
 }));
 

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import type { CampaignHeroOptionPage } from '../../lib/storefront/storefrontCampaignContracts';
-import type { PageCreateInput, PageDetail, PageListRow, PageSaveInput } from '../../lib/storefront/storefrontPageContracts';
+import type { PageCreateInput, PageDetail, PageListRow, PagePreviewLink, PageSaveInput } from '../../lib/storefront/storefrontPageContracts';
 import { STOREFRONT_KEY } from './useStorefrontQueries';
 
 /** v12 phase 10b: «صفحه‌های سایت», the page builder of the sidebar's «فروشگاه سایت» */
@@ -78,6 +78,13 @@ export function useMovePageMutation(id: number) {
       (await fetchJson(`/storefront/pages/${id}/move`, { method: 'POST', body: JSON.stringify({ slug, version }) })) as { data: PageDetail }).data,
     onSuccess: (detail) => { queryClient.setQueryData([...PAGES_KEY, 'detail', id], detail); },
     onSettled: () => { void queryClient.invalidateQueries({ queryKey: PAGES_KEY }); },
+  });
+}
+
+/** v12 phase 10c: «پیش‌نمایش»: a new one-hour link on the site to the page's saved draft (it changes nothing a colleague edits) */
+export function usePagePreviewMutation(id: number) {
+  return useMutation({
+    mutationFn: async () => ((await fetchJson(`/storefront/pages/${id}/preview`, { method: 'POST', body: JSON.stringify({}) })) as { data: PagePreviewLink }).data,
   });
 }
 

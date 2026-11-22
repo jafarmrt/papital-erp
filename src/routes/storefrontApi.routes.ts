@@ -21,8 +21,9 @@ import { buyerOrder, sendReceipt } from '../services/storefront/storefrontOrderB
 import { orderAccessByPhone } from '../services/storefront/storefrontOrderTrack.service.js';
 import { EMAIL_ADDRESS_MAX, EMAIL_PROOF_MAX } from '../lib/storefront/storefrontEmailRules.js';
 import { storefrontEmailRoutes } from './storefrontApiEmail.routes.js';
-import { PAGE_SLUG_MAX } from '../lib/storefront/storefrontPageRules.js';
+import { PAGE_PREVIEW_KEY_MAX, PAGE_SLUG_MAX } from '../lib/storefront/storefrontPageRules.js';
 import { contentImageFile, publicPage, publicPages } from '../services/storefront/storefrontPagePublic.js';
+import { pagePreviewImageFile, publicPagePreview } from '../services/storefront/storefrontPagePreview.service.js';
 import { ACCESS_KEY_MAX } from '../services/storefront/storefrontOrderKeys.js';
 import { publicSeo } from '../services/storefront/storefrontSeo.service.js';
 import { publicShopInfo } from '../services/storefront/storefrontShopInfo.service.js';
@@ -239,15 +240,28 @@ async function siteMediaFile(file: string): Promise<string> {
   return contentImageFile(file);
 }
 
+const sendImage = (res: Response, filePath: string, cacheControl: string) => new Promise<void>((resolve, reject) => {
+  res.sendFile(filePath, { headers: { 'Content-Type': 'image/webp', 'Cache-Control': cacheControl, 'X-Content-Type-Options': 'nosniff' }, dotfiles: 'deny' },
+    (err) => (err && !res.headersSent ? reject(new NotFoundError('پیدا نشد')) : resolve()));
+});
+
 router.get('/media/:file', validate(mediaSchema), asyncHandler(async (req: Request, res: Response) => {
-  const filePath = await siteMediaFile(String(req.params.file));
-  await new Promise<void>((resolve, reject) => {
-    res.sendFile(filePath, {
-      // a file is named by its content, so the app may keep it for a long time
-      headers: { 'Content-Type': 'image/webp', 'Cache-Control': 'private, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' },
-      dotfiles: 'deny',
-    }, (err) => (err && !res.headersSent ? reject(new NotFoundError('پیدا نشد')) : resolve()));
-  });
+  // a file is named by its content, so the app may keep it for a long time
+  await sendImage(res, await siteMediaFile(String(req.params.file)), 'private, max-age=31536000, immutable');
+}));
+
+// v12 phase 10c: a page's preview link: its saved draft in the shape of a page of the site, and the images that draft
+// names, both only under the link's key and while its hour lasts. The key comes in `X-Preview-Key`, never in the
+// address (as an order's key does, above), so it is in no access or error log of the ERP. The answers are `no-store`
+// (every answer of this router is; the image says so itself).
+const previewKeyOf = (req: Request): string => String(req.headers['x-preview-key'] ?? '').trim().slice(0, PAGE_PREVIEW_KEY_MAX + 1);
+
+router.get('/page-preview', asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await publicPagePreview(previewKeyOf(req)) });
+}));
+
+router.get('/page-preview/media/:file', validate(mediaSchema), asyncHandler(async (req: Request, res: Response) => {
+  await sendImage(res, await pagePreviewImageFile(previewKeyOf(req), String(req.params.file)), 'no-store');
 }));
 
 router.post('/shipping/quote', writeLimiter, validate(quoteSchema), asyncHandler(async (req: Request, res: Response) => {

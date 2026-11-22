@@ -17,6 +17,9 @@ export default [
   ...(['about', 'contact', 'shipping', 'terms', 'privacy'] as const).map(slug => route(slug, 'routes/info.tsx', { id: `info-${slug}` })),
   // v12 phase 10c: a page the shop made in the ERP's «صفحه‌های سایت» (the five base pages keep the addresses above)
   route('pages/:slug', 'routes/page.tsx'),
+  // v12 phase 10c: «پیش‌نمایش»: a colleague's one-hour link to a page's draft, and the draft's images under the same key
+  route('preview/:token', 'routes/pagePreview.tsx'),
+  route('preview/:token/media/:file', 'routes/pagePreviewMedia.ts'),
   // v11 phase 8.4b: sign-in, sign-up, the set-password link and sign-out (the /account area itself is 8.2b's)
   route('account/sign-in', 'routes/accountSignIn.tsx'),
   route('account/sign-up', 'routes/accountSignUp.tsx'),
