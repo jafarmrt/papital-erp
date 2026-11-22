@@ -9,10 +9,13 @@ const PORT = 3934;
 const KEY = 'test-key-not-a-secret';
 let mock: ChildProcess;
 let handle: (request: Request) => Promise<Response>;
+let build: ServerBuild;
 
 // keys in the shape the ERP makes (43 characters of base64url); these open nothing anywhere but in this mock
 const TOKEN = 'Ab3_dE5-gH7jK9mN1pQ3sT5vX7zB9dF1hJ3lM5oP7rS';
 const ENDED = 'Zz9_yX7-wV5uT3sR1qP9oN7mL5kJ3iH1gF9eD7cB5aA';
+// a good link whose read fails at the ERP
+const FAILING = 'Qq1_wW2-eE3rR4tT5yY6uU7iI8oO9pP0aA1sS2dD3fF';
 const A = 'a'.repeat(64);
 const B = 'b'.repeat(64);
 const image = (sha256: string, alt: string) => ({ sha256, width: 1600, height: 1000, alt, thumb: true });
@@ -29,7 +32,7 @@ const DRAFT = {
 beforeAll(async () => {
   mock = spawn(process.execPath, [path.join(import.meta.dirname, '../mock/mockApi.mjs')], {
     env: {
-      ...process.env, MOCK_PORT: String(PORT), MOCK_API_KEY: KEY, MOCK_PREVIEWS: JSON.stringify({ [TOKEN]: DRAFT }), MOCK_PREVIEW_MEDIA: `${A}.webp,${A}-thumb.webp,${B}.webp`,
+      ...process.env, MOCK_PORT: String(PORT), MOCK_API_KEY: KEY, MOCK_PREVIEWS: JSON.stringify({ [TOKEN]: DRAFT, [FAILING]: 'fail' }), MOCK_PREVIEW_MEDIA: `${A}.webp,${A}-thumb.webp,${B}.webp`,
       // visit statistics are on, as on the live site: the preview must still load none
       MOCK_SEO: JSON.stringify({ verification: { google: '', bing: '' }, analytics: { provider: 'ga4', id: 'G-TEST123', url: '' }, alternateSiteUrl: '' }),
     },
@@ -42,7 +45,7 @@ beforeAll(async () => {
   process.env.STOREFRONT_API_URL = `http://127.0.0.1:${PORT}/api/storefront/v1`;
   process.env.STOREFRONT_API_KEY = KEY;
   process.env.STOREFRONT_SITE_URL = 'https://shop.example';
-  const build = await import(path.join(import.meta.dirname, '../build/server/index.js')) as ServerBuild;
+  build = await import(path.join(import.meta.dirname, '../build/server/index.js')) as ServerBuild;
   handle = createRequestHandler(build, 'production');
 });
 
@@ -88,11 +91,32 @@ describe('the preview of a page\'s draft', () => {
     expect(html).not.toContain('gtag(');
     // the page is known by its route, however its address is spelled
     const shouted = await ask(`/PREVIEW/${TOKEN}`);
-    if (shouted.status === 200) expect(await shouted.text()).not.toContain('googletagmanager');
-    // an ended link's «پیدا نشد» has the key in its address too
-    const ended = await ask(`/preview/${ENDED}`);
-    expect(ended.status).toBe(404);
-    expect(await ended.text()).not.toContain('googletagmanager');
+    expect(shouted.status).toBe(200);
+    expect(await shouted.text()).not.toContain('googletagmanager');
+  });
+
+  it('is sent as no page of the site when its read fails too: the key is in the address whatever the answer', async () => {
+    // an ended link's «پیدا نشد», and a good link while the ERP is in trouble (that key still opens the draft later)
+    for (const [key, status] of [[ENDED, 404], [FAILING, 500]] as const) {
+      const res = await ask(`/preview/${key}`);
+      expect(res.status, key).toBe(status);
+      expect(res.headers.get('referrer-policy'), key).toBe('no-referrer');
+      expect(res.headers.get('cache-control'), key).toBe('private, no-store');
+      expect(res.headers.get('x-robots-tag'), key).toBe('noindex, nofollow');
+      const html = await res.text();
+      expect(html, key).not.toContain('googletagmanager');
+      expect(html, key).not.toContain('data-preview-note');
+    }
+    // a page of the site that is not there keeps the site's ordinary answer
+    expect((await ask('/pages/no-such-page')).headers.get('referrer-policy')).not.toBe('no-referrer');
+  });
+
+  it('is never reached by a move inside the site: the route answers such a move with a fresh load of the document', () => {
+    // the browser side of this (`clientLoader`, and `PreviewLeaves` in the layout) runs only in a browser; here the build
+    // is asked whether the route has its client loader at all. The moves themselves were checked by hand in Chrome.
+    const routes = build.assets.routes as Record<string, { hasClientLoader?: boolean } | undefined>;
+    expect(routes['routes/pagePreview']?.hasClientLoader).toBe(true);
+    expect(routes['routes/page']?.hasClientLoader).toBe(false);
   });
 
   it('reads the draft\'s own images under the key, and a product\'s photo from the site as always', async () => {

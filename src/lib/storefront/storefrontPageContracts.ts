@@ -45,11 +45,11 @@ export interface PageDetail extends PageListRow {
 export interface PagePreviewLink {
   /** the path on the site, `/preview/<key>` */
   path: string;
-  /** the whole address, with the site's address of «جست‌وجو و آمار» (the main domain when none is written) */
+  /** the whole address, with the site's address of «جست‌وجو و آمار بازدید» (the main domain when none is written) */
   url: string;
   /** ISO time in UTC */
   expiresAt: string;
-  /** false = no address is written in «جست‌وجو و آمار», so `url` begins with the main domain */
+  /** false = no address is written in «جست‌وجو و آمار بازدید», so `url` begins with the main domain */
   addressSet: boolean;
 }
 

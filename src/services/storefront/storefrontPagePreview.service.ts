@@ -27,7 +27,7 @@ const hashOf = (token: string): string => crypto.createHash('sha256').update(tok
 const notFound = () => new NotFoundError('پیش‌نمایش پیدا نشد یا زمانش گذشته است.', undefined, 'STOREFRONT_PAGE_PREVIEW_NOT_FOUND');
 
 /**
- * The address of the site, for links the ERP shows to a colleague: the one written in «جست‌وجو و آمار», else the main
+ * The address of the site, for links the ERP shows to a colleague: the one written in «جست‌وجو و آمار بازدید», else the main
  * domain (`written` false: the screen then says so, because until the domain is moved the main domain is the earlier site)
  */
 async function siteOrigin(): Promise<{ origin: string; written: boolean }> {

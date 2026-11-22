@@ -11,6 +11,7 @@ import { shopInfo } from './lib/api.server';
  * React Router's own server entry (as `react-router reveal` writes it), with one addition of phase 8.5: every page's
  * security policy is written here, so it allows the statistics service the owner chose (and nothing else from another site).
  * v12 phase 10a: and the picture of the e-namad seal, while the ERP's «اطلاعات فروشگاه» holds one.
+ * v12 phase 10c: and a draft's preview (`/preview/<key>`) is sent as no page of the site whatever its answer is.
  */
 export const streamTimeout = 5_000;
 
@@ -22,6 +23,15 @@ export default async function handleRequest(
 ): Promise<Response> {
   const [{ analytics }, shop] = await Promise.all([siteSeo(), shopInfo()]);
   responseHeaders.set('Content-Security-Policy', contentSecurityPolicy(analytics, shop.enamad?.imageUrl ?? ''));
+
+  // The key of a preview link is in its address. When the preview's read fails (the ERP is down, the link has ended),
+  // the page is the root's «پیدا نشد» or «در دسترس نیست» and the route's own headers are not used; the address is the
+  // same, so the same three are written here by the matched route, for every answer.
+  if (routerContext.staticHandlerContext.matches.some(match => match.route.id === 'routes/pagePreview')) {
+    responseHeaders.set('Cache-Control', 'private, no-store');
+    responseHeaders.set('X-Robots-Tag', 'noindex, nofollow');
+    responseHeaders.set('Referrer-Policy', 'no-referrer');
+  }
 
   // https://httpwg.org/specs/rfc9110.html#HEAD
   if (request.method.toUpperCase() === 'HEAD') return new Response(null, { status: responseStatusCode, headers: responseHeaders });

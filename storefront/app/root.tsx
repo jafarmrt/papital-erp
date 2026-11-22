@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Links, Meta, Outlet, Scripts, ScrollRestoration, isRouteErrorResponse, useMatches, useNavigation, useRouteLoaderData, type LinksFunction } from 'react-router';
+import { Links, Meta, Outlet, Scripts, ScrollRestoration, isRouteErrorResponse, useBlocker, useMatches, useNavigation, useRouteLoaderData, type LinksFunction } from 'react-router';
 import type { Route } from './+types/root';
 import './app.css';
 import { brand, facets, menus, publicSettings, shopInfo } from './lib/api.server';
@@ -62,6 +62,19 @@ export const useRootData = () => useRouteLoaderData<RootData>('root');
  */
 const useInPreview = () => useMatches().some(match => match.id === 'routes/pagePreview');
 
+/**
+ * Leaving a preview for another page of the site is a fresh load of that page, never a move inside the preview's
+ * document (see `clientLoader` of `routes/pagePreview.tsx`). It is part of the layout, so it is there as well when the
+ * preview's read failed and the page is this file's «پیدا نشد» or «در دسترس نیست».
+ */
+function PreviewLeaves() {
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => nextLocation.pathname !== currentLocation.pathname);
+  useEffect(() => {
+    if (blocker.state === 'blocked') window.location.assign(`${blocker.location.pathname}${blocker.location.search}${blocker.location.hash}`);
+  }, [blocker]);
+  return null;
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const data = useRootData();
   const inPreview = useInPreview();
@@ -94,6 +107,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         ) : null}
       </head>
       <body>
+        {inPreview ? <PreviewLeaves /> : null}
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:start-4 focus:top-4 focus:z-50 focus:rounded-control focus:bg-card focus:px-4 focus:py-2">پرش به محتوا</a>
         {data?.previewNotice ? (
           <p className="bg-brand px-4 py-2 text-center text-sm text-brand-foreground">{data.previewNotice}</p>

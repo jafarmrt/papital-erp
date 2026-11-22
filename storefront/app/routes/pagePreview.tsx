@@ -1,5 +1,3 @@
-import { useEffect } from 'react';
-import { useBlocker } from 'react-router';
 import type { Route } from './+types/pagePreview';
 import { pagePreview } from '../lib/api.server';
 import { siteEnv } from '../lib/site.server';
@@ -13,7 +11,8 @@ import { SitePageView } from '../components/SitePageView';
  * v12 phase 10c («پیش‌نمایش»): a page's saved draft as a visitor would see it, for the one-hour link a colleague made
  * in the ERP's «صفحه‌های سایت». The page is drawn by the same parts as a published one. It is not a page of the site:
  * no search engine may list it, nothing may keep it, the browser tells no other site where a click came from (the
- * key is in the address), and it is not in the sitemap. An unknown or ended key is the same 404 as any address.
+ * key is in the address; `entry.server.tsx` writes the same headers when this page's read fails), and it is not in
+ * the sitemap. An unknown or ended key is the same 404 as any address.
  */
 export async function loader({ params }: Route.LoaderArgs) {
   const found = await pagePreview(params.token);
@@ -29,9 +28,15 @@ export async function loader({ params }: Route.LoaderArgs) {
  * document reports every later change of its address by itself, so a preview reached by a move inside the site (a link
  * on a page, Back after such a move) would hand its key to that service. Coming here from another page of the site is
  * therefore a fresh load of the document (this never answers, so the move inside the site is never finished), and
- * leaving is one too (the component below). On a first load this is not called: the server's answer is used.
+ * leaving is one too (`PreviewLeaves` in `root.tsx`, which is there for the «پیدا نشد» of a preview as well). On a
+ * first load this is not called: the server's answer is used. Anything that reads this page's data again inside the
+ * document (a fetcher's submit, Back from a `#` link) comes here too and reloads the page once; a section that needs
+ * a fetcher or a POST form on a preview has to take that into account.
  */
 export function clientLoader({ params }: Route.ClientLoaderArgs): Promise<never> {
+  // the page left behind may be kept by the browser as it is (back-forward cache) with this move still open: on its
+  // return it is loaded again, so its progress bar does not stay
+  window.addEventListener('pageshow', (event) => { if (event.persisted) window.location.reload(); }, { once: true });
   window.location.assign(`/preview/${encodeURIComponent(params.token)}`);
   return new Promise<never>(() => undefined);
 }
@@ -51,11 +56,6 @@ export function meta({ data, matches }: Route.MetaArgs) {
 
 export default function PagePreview({ loaderData }: Route.ComponentProps) {
   const { page, endsAt, token, shipping, siteUrl } = loaderData;
-  // leaving for another page of the site is a fresh load of that page, never a move inside this document (see `clientLoader`)
-  const blocker = useBlocker(({ currentLocation, nextLocation }) => nextLocation.pathname !== currentLocation.pathname);
-  useEffect(() => {
-    if (blocker.state === 'blocked') window.location.assign(`${blocker.location.pathname}${blocker.location.search}${blocker.location.hash}`);
-  }, [blocker]);
   return (
     <>
       <p role="status" data-preview-note className="bg-primary px-4 py-3 text-center text-sm font-bold text-primary-foreground">

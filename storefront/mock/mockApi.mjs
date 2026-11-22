@@ -510,6 +510,8 @@ createServer(async (req, res) => {
     // the key belongs in the header alone: an address (or its query) that carries it would put it in the ERP's log
     if (url.search !== '' || (presented !== '' && String(req.url).includes(presented))) previewKeysInAddress += 1;
     const found = previews[presented];
+    // a key given as "fail" answers 500, as an ERP in trouble does for a link that is still good
+    if (found === 'fail') return send(res, 500, { error: 'خطای سرور' });
     if (!found) return send(res, 404, { error: 'پیش‌نمایش پیدا نشد یا زمانش گذشته است.', code: 'STOREFRONT_PAGE_PREVIEW_NOT_FOUND' });
     if (route === '/page-preview') return send(res, 200, { data: withCards(found) });
     const file = route.slice('/page-preview/media/'.length);
