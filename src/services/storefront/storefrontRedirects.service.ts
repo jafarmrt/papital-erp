@@ -1,7 +1,7 @@
 import type { Request } from 'express';
-import { and, asc, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, sql, type SQL } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { items, storefrontProducts, storefrontRedirects } from '../../db/schema.js';
+import { items, storefrontPages, storefrontProducts, storefrontRedirects } from '../../db/schema.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { OptimisticLockError, nextVersion } from '../../lib/occHelper.js';
@@ -114,6 +114,22 @@ async function assertFromFree(tx: DbExecutor, fromPath: string, exceptId: number
   if (taken) throw new ConflictError(`برای نشانی «${fromPath}» پیش‌تر انتقالی ثبت شده است.`, { id: taken.id }, 'STOREFRONT_REDIRECT_FROM_TAKEN');
 }
 
+/**
+ * v12 phase 10c (review): a page of «صفحه‌های سایت» that is on the site answers at its own address; a redirect away from
+ * it would never be followed there, yet it would carry off every earlier address that leads to the page. Asked of a new
+ * row and of a row whose old address is changed, not of another edit of a row that is already there.
+ */
+async function assertNoPageAt(tx: DbExecutor, fromPath: string): Promise<void> {
+  const slug = /^\/pages\/([a-z0-9-]+)$/.exec(fromPath)?.[1];
+  if (slug) {
+    const [page] = await tx.select({ id: storefrontPages.id }).from(storefrontPages)
+      .where(and(eq(storefrontPages.slug, slug), eq(storefrontPages.kind, 'custom'), eq(storefrontPages.isDeleted, 0), isNotNull(storefrontPages.published))).limit(1);
+    if (page) {
+      throw new ConflictError('در این نشانی صفحه‌ای روی سایت است؛ برای عوض کردن نشانی آن، از «تغییر نشانی» در «صفحه‌های سایت» استفاده کنید.', { field: 'fromPath' }, 'STOREFRONT_REDIRECT_FROM_IS_PAGE');
+    }
+  }
+}
+
 const auditView = (r: Pick<RawRow, 'fromPath' | 'targetKind' | 'targetItemId' | 'target' | 'note' | 'isActive'>) => ({
   fromPath: r.fromPath, targetKind: r.targetKind, targetItemId: r.targetItemId, target: r.target, note: r.note, isActive: r.isActive === 1,
 });
@@ -129,6 +145,7 @@ export async function createRedirect(req: Request, input: StorefrontRedirectInpu
     await lockRedirects(tx);
     const values = await checkedInput(tx, input);
     await assertFromFree(tx, values.fromPath, null);
+    await assertNoPageAt(tx, values.fromPath);
     const [created] = await tx.insert(storefrontRedirects).values({
       ...values, isActive: values.isActive ? 1 : 0, source: 'manual', createdBy: userOf(req), updatedBy: userOf(req),
     }).returning({ id: storefrontRedirects.id });
@@ -159,6 +176,7 @@ export async function updateRedirect(req: Request, id: number, input: Storefront
     const current = await lockedRow(tx, id, input.version);
     const values = await checkedInput(tx, input);
     await assertFromFree(tx, values.fromPath, id);
+    if (values.fromPath !== current.fromPath) await assertNoPageAt(tx, values.fromPath);
     const after = { ...values, isActive: values.isActive ? 1 : 0 };
     if (JSON.stringify(auditView(current)) === JSON.stringify(auditView(after))) return;
     await tx.update(storefrontRedirects).set({
@@ -204,6 +222,93 @@ export async function deleteRedirect(req: Request, id: number, version: number):
   });
 }
 
+/** The key of a page's address in this table, or null for an address whose key is not itself (it could not be told from another) */
+const pageKey = (path: string): string | null => (legacyPathKey(path) === path ? path : null);
+
+async function removeRedirect(req: Request, tx: DbExecutor, row: RawRow, why: string): Promise<void> {
+  await tx.update(storefrontRedirects).set({ isDeleted: 1, updatedBy: userOf(req), updatedAt: systemNowUtcIso(), version: nextVersion(row.version) })
+    .where(eq(storefrontRedirects.id, row.id));
+  await logActivity({
+    req, tx, action: 'DELETE', entity: 'فروشگاه سایت', entityId: `redirect-${row.id}`,
+    description: `انتقال نشانی قدیمی «${row.fromPath}» حذف شد، ${why}`, details: { before: auditView(row) },
+  });
+}
+
+/**
+ * v12 phase 10c: a page of «صفحه‌های سایت» is published at `path`, so no redirect may lead away from that address any
+ * more (the site would follow it whenever the page could not be read, and other redirects would be led on through it).
+ * In the publisher's own transaction.
+ */
+export async function clearRedirectFrom(req: Request, tx: DbExecutor, path: string): Promise<void> {
+  const key = pageKey(path);
+  if (!key) return;
+  await lockRedirects(tx);
+  const rows = await tx.select().from(storefrontRedirects).where(and(eq(storefrontRedirects.isDeleted, 0), eq(storefrontRedirects.fromPath, key))).for('update');
+  for (const row of rows) await removeRedirect(req, tx, row, 'چون صفحه‌ای به همین نشانی روی سایت آمد');
+}
+
+/**
+ * v12 phase 10c: a page's address changed from `from` to `to`, in the changer's own transaction
+ * (`storefrontPageMove.service.ts`, and a draft save of a page that is off the site). Whatever the page's state:
+ * redirects that led to the old address lead to the new one, so an earlier address never ends at an address the page
+ * has left (one that would then lead from the new address to itself is removed instead). And when the page is on the
+ * site: a redirect away from the new address is removed (a page lives there now; an earlier move in the other
+ * direction leaves such a row), and the old address itself goes to the new one: a row made here, or the row the owner
+ * already kept on it, pointed anew and switched on. Each row changed writes its own audit row.
+ * Answers whether the old address now leads to the new one.
+ */
+export async function redirectMovedPage(req: Request, tx: DbExecutor, move: { from: string; to: string; title: string; onSite: boolean }): Promise<boolean> {
+  const fromKey = pageKey(move.from);
+  const toKey = pageKey(move.to);
+  if (!toKey || fromKey === toKey) return false;
+  await lockRedirects(tx);
+  const actor = userOf(req);
+  const at = systemNowUtcIso();
+
+  // a target is matched by its key, so one written with a last slash, a query, in capitals or behind `/index.php`
+  // (`/pages/a/`, `/pages/a?x=1`, `/pages/A`) follows too: the rows that hold the address anywhere are read through the
+  // lists' own folded search (no pattern is built here), then told apart by their key
+  const near = await tx.select().from(storefrontRedirects)
+    .where(and(eq(storefrontRedirects.isDeleted, 0), eq(storefrontRedirects.targetKind, 'path'), foldedContains([storefrontRedirects.target], move.from))).for('update');
+  const led = near.filter(row => row.target === move.from || (fromKey !== null && legacyPathKey(row.target) === fromKey));
+  for (const row of led) {
+    if (row.fromPath === toKey) {
+      await removeRedirect(req, tx, row, 'چون صفحه به همین نشانی برگشت');
+      continue;
+    }
+    await tx.update(storefrontRedirects).set({ target: move.to, updatedBy: actor, updatedAt: at, version: nextVersion(row.version) }).where(eq(storefrontRedirects.id, row.id));
+    await logActivity({
+      req, tx, action: 'UPDATE', entity: 'فروشگاه سایت', entityId: `redirect-${row.id}`,
+      description: `مقصد انتقال نشانی قدیمی «${row.fromPath}» به نشانی تازهٔ صفحه عوض شد`,
+      details: { before: auditView(row), after: auditView({ ...row, target: move.to }) },
+    });
+  }
+  if (!move.onSite || !fromKey) return false;
+
+  const live = await tx.select().from(storefrontRedirects)
+    .where(and(eq(storefrontRedirects.isDeleted, 0), inArray(storefrontRedirects.fromPath, [fromKey, toKey]))).for('update');
+  for (const away of live.filter(r => r.fromPath === toKey)) await removeRedirect(req, tx, away, 'چون صفحه‌ای به همین نشانی آمد');
+
+  const note = `تغییر نشانی صفحهٔ «${move.title}»`.slice(0, REDIRECT_NOTE_MAX);
+  const own = live.find(r => r.fromPath === fromKey);
+  const values = { targetKind: 'path' as const, targetItemId: null, target: move.to, note, isActive: 1 };
+  if (own) {
+    await tx.update(storefrontRedirects).set({ ...values, updatedBy: actor, updatedAt: at, version: nextVersion(own.version) }).where(eq(storefrontRedirects.id, own.id));
+    await logActivity({
+      req, tx, action: 'UPDATE', entity: 'فروشگاه سایت', entityId: `redirect-${own.id}`,
+      description: `انتقال نشانی قدیمی «${fromKey}» به نشانی تازهٔ صفحه داده شد`, details: { before: auditView(own), after: auditView({ ...own, ...values }) },
+    });
+    return true;
+  }
+  const [created] = await tx.insert(storefrontRedirects).values({ fromPath: fromKey, ...values, source: 'manual', createdBy: actor, updatedBy: actor })
+    .returning({ id: storefrontRedirects.id });
+  await logActivity({
+    req, tx, action: 'CREATE', entity: 'فروشگاه سایت', entityId: `redirect-${created.id}`,
+    description: `انتقال نشانی «${fromKey}» به نشانی تازهٔ صفحه ثبت شد`, details: { after: auditView({ fromPath: fromKey, ...values }) },
+  });
+  return true;
+}
+
 /**
  * `GET /api/storefront/v1/redirects`: every live, switched-on redirect whose target is on the site: a product only while it
  * is published (by its current slug), the other kinds as saved. A product that left the site drops out, so its old
@@ -218,8 +323,14 @@ export async function publicRedirects(): Promise<StorefrontPublicRedirect[]> {
     .leftJoin(storefrontProducts, eq(storefrontProducts.itemId, storefrontRedirects.targetItemId))
     .where(and(eq(storefrontRedirects.isDeleted, 0), eq(storefrontRedirects.isActive, 1)))
     .orderBy(asc(storefrontRedirects.id)).limit(REDIRECTS_MAX);
+  // v12 phase 10c (review): a row from the address of a page that is on the site never goes out (one written before the
+  // page came there and switched on later, or by the import): the site must not need its list of pages to ignore it
+  const pages = await orm.select({ slug: storefrontPages.slug }).from(storefrontPages)
+    .where(and(eq(storefrontPages.kind, 'custom'), eq(storefrontPages.isDeleted, 0), isNotNull(storefrontPages.published)));
+  const pageAddresses = new Set(pages.map(page => `/pages/${page.slug}`));
   const out: StorefrontPublicRedirect[] = [];
   for (const r of rows) {
+    if (pageAddresses.has(r.from)) continue;
     const kind = r.kind as RedirectTargetKind;
     if (kind === 'product') {
       // the same test as the catalog's: a live product item, published on the site

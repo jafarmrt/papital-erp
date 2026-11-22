@@ -70,6 +70,17 @@ export function usePageActionMutation(id: number) {
   });
 }
 
+/** v12 phase 10c: «تغییر نشانی», a new address for a page the shop made, under the page's version */
+export function useMovePageMutation(id: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ slug, version }: { slug: string; version: number }) => (
+      (await fetchJson(`/storefront/pages/${id}/move`, { method: 'POST', body: JSON.stringify({ slug, version }) })) as { data: PageDetail }).data,
+    onSuccess: (detail) => { queryClient.setQueryData([...PAGES_KEY, 'detail', id], detail); },
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: PAGES_KEY }); },
+  });
+}
+
 export function useDeletePageMutation() {
   const queryClient = useQueryClient();
   return useMutation({

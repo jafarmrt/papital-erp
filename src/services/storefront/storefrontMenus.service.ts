@@ -13,7 +13,7 @@ import {
 import type { MenuItemRow, MenuLinkOptions, MenuSaveInput, MenuView, MenusView } from '../../lib/storefront/storefrontMenuContracts.js';
 import { catalogItems } from './storefrontCatalog.service.js';
 import { campaignOpenNow } from './storefrontCampaigns.service.js';
-import { pageLinkTargets, type PageLinkTarget } from './storefrontPages.service.js';
+import { pageLinkTargets, type PageLinkTarget } from './storefrontPageLinks.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
 
 /**

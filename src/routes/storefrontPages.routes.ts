@@ -7,6 +7,7 @@ import { numericIdString, validate } from '../middleware/validate.js';
 import { orm } from '../db/drizzle.js';
 import { PAGE_SECTIONS_MAX, PAGE_SEO_DESCRIPTION_MAX, PAGE_SEO_TITLE_MAX, PAGE_SLUG_MAX, PAGE_TEMPLATES, PAGE_TITLE_MAX } from '../lib/storefront/storefrontPageRules.js';
 import { HERO_OPTIONS_PAGE_MAX, campaignHeroOptions } from '../services/storefront/storefrontCampaigns.service.js';
+import { movePage } from '../services/storefront/storefrontPageMove.service.js';
 import {
   createPage, deletePage, listPages, pageDetail, publishPage, revertDraft, saveDraft, unpublishPage,
 } from '../services/storefront/storefrontPages.service.js';
@@ -58,6 +59,7 @@ const saveSchema = z.object({
   }).strict(),
 });
 const versionSchema = z.object({ params: idParams, body: z.object({ version }).strict() });
+const moveSchema = z.object({ params: idParams, body: z.object({ slug: z.string().max(PAGE_SLUG_MAX * 2), version }).strict() });
 const deleteSchema = z.object({
   params: idParams,
   query: z.object({ version: z.string().regex(/^[1-9]\d{0,9}$/).transform(Number) }).passthrough(),
@@ -104,6 +106,11 @@ router.post('/:id/revert', requirePermission(MANAGE), validate(versionSchema), a
 
 router.post('/:id/unpublish', requirePermission(MANAGE), validate(versionSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: await unpublishPage(req, Number(req.params.id), req.body.version) });
+}));
+
+// v12 phase 10c: «تغییر نشانی»: a page the shop made takes a new address; while it is on the site its old address is redirected
+router.post('/:id/move', requirePermission(MANAGE), validate(moveSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await movePage(req, Number(req.params.id), String(req.body.slug), req.body.version) });
 }));
 
 router.delete('/:id', requirePermission(MANAGE), validate(deleteSchema), asyncHandler(async (req: Request, res: Response) => {

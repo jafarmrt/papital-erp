@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useId, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowRight, ArrowUp, MoreVertical, Plus, Save, Send, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useDeletePageMutation, usePageActionMutation, useSavePageMutation, type PageAction } from '../../../hooks/queries/useStorefrontPageQueries';
+import { useDeletePageMutation, useMovePageMutation, usePageActionMutation, useSavePageMutation, type PageAction } from '../../../hooks/queries/useStorefrontPageQueries';
 import type { MenuLinkOptions } from '../../../lib/storefront/storefrontMenuContracts';
 import { PAGE_STATUS_TITLES, type PageDetail } from '../../../lib/storefront/storefrontPageContracts';
 import {
@@ -10,6 +10,7 @@ import {
   type SectionBackground, type SectionKind,
 } from '../../../lib/storefront/storefrontPageRules';
 import { MENU_LOCATION_TITLES, isMenuLocation } from '../../../lib/storefront/storefrontMenuRules';
+import { PageAddressMove } from './PageAddressMove';
 import { formatPersianNumber } from '../../../utils/persianNumber';
 import { errorMessageOf } from '../../../utils';
 import { LibraryImageField } from './LibraryImageField';
@@ -51,6 +52,7 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
   const save = useSavePageMutation(detail.id);
   const act = usePageActionMutation(detail.id);
   const remove = useDeletePageMutation();
+  const mover = useMovePageMutation(detail.id);
   const [draft, setDraft] = useState<PageValues>(detail.draft);
   /** one key per section of the draft, in the same order */
   const [keys, setKeys] = useState<string[]>(() => detail.draft.sections.map(newKey));
@@ -86,7 +88,8 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
 
   const problem = useMemo(() => checkedPage(draft, { forPublish: false, baseSlug }).problem, [draft, baseSlug]);
   const notReady = useMemo(() => checkedPage(base.draft, { forPublish: true, baseSlug }).problem, [base.draft, baseSlug]);
-  const busy = save.isPending || act.isPending || remove.isPending;
+  // a move on its way closes the editor like a save: what is typed meanwhile would be lost when its answer is taken (10c review)
+  const busy = save.isPending || act.isPending || remove.isPending || mover.isPending;
   const disabled = !canManage || busy;
   const onSite = base.status !== 'draft';
 
@@ -190,9 +193,15 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
             <div>
               <label htmlFor={`${id}-slug`} className={label}>نشانی لاتین</label>
               <input id={`${id}-slug`} dir="ltr" className={field} maxLength={PAGE_SLUG_MAX} value={draft.slug} disabled={detail.kind === 'base' || onSite} onChange={e => set('slug', e.target.value)} />
+              {canManage && detail.kind === 'custom' && onSite && (
+                <PageAddressMove
+                  move={mover} slug={base.draft.slug} version={base.version} onMoved={() => setOwn(true)} onFailed={() => setOwn(false)}
+                  blocked={dirty ? 'نخست پیش‌نویس را ذخیره کنید یا تغییرها را برگردانید.' : outdated ? 'نسخهٔ تازهٔ این صفحه هنوز خوانده نشده است.' : ''}
+                />
+              )}
               <p className={hint}>
                 {detail.kind === 'base' ? 'نشانی صفحه‌های پایهٔ سایت عوض نمی‌شود.'
-                  : onSite ? 'نشانی صفحه‌ای که روی سایت است عوض نمی‌شود؛ برای عوض کردنش، نخست صفحه را از روی سایت بردارید.'
+                  : onSite ? (canManage ? 'این صفحه روی سایت است؛ نشانی آن با «تغییر نشانی» عوض می‌شود تا نشانی کنونی به نشانی تازه منتقل شود.' : 'این صفحه روی سایت است.')
                     : 'حرف کوچک انگلیسی، رقم و خط تیره، مانند our-story.'}
               </p>
             </div>

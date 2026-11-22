@@ -47,7 +47,11 @@ afterEach(() => {
   cleanup();
   fetchJson.mockReset();
   permissions.current = [];
+  holdMove.current = false;
 });
+
+/** a test keeps the answer of a move back until it lets it go */
+const holdMove: { current: boolean; release: () => void } = { current: false, release: () => undefined };
 
 type Call = [string, { method?: string; body?: string } | undefined];
 const calls = (method: string) => (fetchJson.mock.calls as Call[]).filter(([, init]) => init?.method === method);
@@ -63,6 +67,12 @@ function open(address: string, first = detailOf()) {
     if (url === '/storefront/pages/12' && !init) return { data: detailOf({ id: 12 }) };
     if (init?.method === 'PUT') {
       detail = { ...detail, version: detail.version + 1, draft: (({ version: _v, ...draft }) => draft)(JSON.parse(init.body ?? '{}')) };
+      return { data: detail };
+    }
+    if (init?.method === 'POST' && url.endsWith('/move')) {
+      if (holdMove.current) await new Promise<void>((resolve) => { holdMove.release = resolve; });
+      const slug = String(JSON.parse(init.body ?? '{}').slug);
+      detail = { ...detail, slug, version: detail.version + 1, draft: { ...detail.draft, slug } };
       return { data: detail };
     }
     if (init?.method === 'POST') {
@@ -232,6 +242,80 @@ describe('the site pages screen', () => {
     open('/site-pages?page=9', detailOf({ status: 'published' }));
     fireEvent.click(await screen.findByRole('button', { name: 'حذف صفحه' }));
     expect(screen.getByRole('group', { name: 'تأیید این کار' }).textContent).not.toContain('پیوند دارد');
+  });
+
+  it('changes the address of a page on the site only through its own step, under the version, with nothing unsaved (v12 phase 10c)', async () => {
+    permissions.current = ['site_content.view', 'site_content.manage'];
+    open('/site-pages?page=9', detailOf({ status: 'published' }));
+    // on the site, the address field itself is closed; the step is a button under it
+    expect((await screen.findByLabelText('نشانی لاتین') as HTMLInputElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'تغییر نشانی' }));
+    const step = within(screen.getByRole('group', { name: 'تغییر نشانی صفحه' }));
+    expect(screen.getByRole('group', { name: 'تغییر نشانی صفحه' }).textContent).toContain('/pages/our-story');
+    const input = step.getByLabelText('نشانی لاتین تازه') as HTMLInputElement;
+    expect(input.value).toBe('our-story');
+    expect(document.activeElement).toBe(input);
+    // a wrong shape and an address the site keeps for itself are named on the screen, and nothing is sent
+    for (const [bad, why] of [['Our Story', /فقط حرف کوچک انگلیسی/], ['feed', /feed، amp یا embed/]] as const) {
+      fireEvent.change(input, { target: { value: bad } });
+      expect(screen.getByRole('group', { name: 'تغییر نشانی صفحه' }).textContent).toMatch(why);
+      expect((step.getByRole('button', { name: 'نشانی عوض شود' }) as HTMLButtonElement).disabled).toBe(true);
+      expect(input.getAttribute('aria-describedby')).toBeTruthy();
+    }
+    fireEvent.change(input, { target: { value: 'our-story' } });
+    // the same address is nothing to send
+    expect((step.getByRole('button', { name: 'نشانی عوض شود' }) as HTMLButtonElement).disabled).toBe(true);
+    // with an unsaved edit the step waits and says why
+    fireEvent.change(screen.getByLabelText('عنوان صفحه'), { target: { value: 'داستان تازه' } });
+    fireEvent.change(input, { target: { value: 'our-new-story' } });
+    expect((step.getByRole('button', { name: 'نشانی عوض شود' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('group', { name: 'تغییر نشانی صفحه' }).textContent).toContain('نخست پیش‌نویس را ذخیره کنید');
+    fireEvent.change(screen.getByLabelText('عنوان صفحه'), { target: { value: 'داستان ما' } });
+    fireEvent.click(step.getByRole('button', { name: 'نشانی عوض شود' }));
+    await waitFor(() => expect(calls('POST')).toHaveLength(1));
+    expect(calls('POST')[0][0]).toBe('/storefront/pages/9/move');
+    expect(JSON.parse(String(calls('POST')[0][1]?.body))).toEqual({ slug: 'our-new-story', version: 4 });
+    // the screen takes the answer: the new address, and the step closes, giving the focus back to its button
+    await waitFor(() => expect((screen.getByLabelText('نشانی لاتین') as HTMLInputElement).value).toBe('our-new-story'));
+    expect(screen.queryByRole('group', { name: 'تغییر نشانی صفحه' })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'تغییر نشانی' }));
+    // the words under the field name the step (10c review: they still said to take the page off the site first)
+    expect(screen.getByText(/نشانی آن با «تغییر نشانی» عوض می‌شود/)).toBeTruthy();
+    expect(screen.queryByText(/نخست صفحه را از روی سایت بردارید/)).toBeNull();
+    cleanup();
+    fetchJson.mockReset();
+    // a page off the site changes its address in the field itself; a base page never; the view key sees no step
+    open('/site-pages?page=9', detailOf({ status: 'draft' }));
+    expect((await screen.findByLabelText('نشانی لاتین') as HTMLInputElement).disabled).toBe(false);
+    expect(screen.queryByRole('button', { name: 'تغییر نشانی' })).toBeNull();
+    cleanup();
+    fetchJson.mockReset();
+    open('/site-pages?page=1', { ...detailOf({ status: 'published' }), id: 1, kind: 'base', slug: 'about', title: 'درباره ما', draft: { ...detailOf().draft, slug: 'about', title: 'درباره ما' } });
+    await screen.findByRole('button', { name: 'ذخیرهٔ پیش‌نویس' });
+    expect(screen.queryByRole('button', { name: 'تغییر نشانی' })).toBeNull();
+    cleanup();
+    fetchJson.mockReset();
+    permissions.current = ['site_content.view'];
+    open('/site-pages?page=9', detailOf({ status: 'published' }));
+    await screen.findByLabelText('عنوان صفحه');
+    expect(screen.queryByRole('button', { name: 'تغییر نشانی' })).toBeNull();
+  });
+
+  it('closes the editor while a change of address is on its way, so nothing typed meanwhile is lost to its answer', async () => {
+    permissions.current = ['site_content.view', 'site_content.manage'];
+    holdMove.current = true;
+    open('/site-pages?page=9', detailOf({ status: 'published' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'تغییر نشانی' }));
+    const step = within(screen.getByRole('group', { name: 'تغییر نشانی صفحه' }));
+    fireEvent.change(step.getByLabelText('نشانی لاتین تازه'), { target: { value: 'our-new-story' } });
+    fireEvent.click(step.getByRole('button', { name: 'نشانی عوض شود' }));
+    await waitFor(() => expect(calls('POST')).toHaveLength(1));
+    // on its way: the title cannot be typed in and the draft cannot be saved
+    await waitFor(() => expect((screen.getByLabelText('عنوان صفحه') as HTMLInputElement).matches(':disabled')).toBe(true));
+    expect(calls('PUT')).toHaveLength(0);
+    holdMove.release();
+    await waitFor(() => expect((screen.getByLabelText('نشانی لاتین') as HTMLInputElement).value).toBe('our-new-story'));
+    expect((screen.getByLabelText('عنوان صفحه') as HTMLInputElement).matches(':disabled')).toBe(false);
   });
 
   it('shows a page without any way to change it to a holder of the view key', async () => {

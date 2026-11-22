@@ -38,7 +38,8 @@ if (settings.ordering && !settings.payment.cardNumber) settings.payment = { card
 const brand = await readFile(path.join(dir, 'brand.json'), 'utf8').then(JSON.parse).catch(() => ({ logo: '', favicon: '' }));
 // phase 8.5: the old-address redirects (`redirects.json`, a list of { from, kind, target }) and the search and statistics
 // settings (`seo.json`, or MOCK_SEO as JSON for a test); both optional
-const redirectList = await readFile(path.join(dir, 'redirects.json'), 'utf8').then(JSON.parse).catch(() => []);
+// MOCK_REDIRECTS (JSON) takes the file's place, so a test brings its own list
+const redirectList = process.env.MOCK_REDIRECTS ? JSON.parse(process.env.MOCK_REDIRECTS) : await readFile(path.join(dir, 'redirects.json'), 'utf8').then(JSON.parse).catch(() => []);
 const seo = process.env.MOCK_SEO ? JSON.parse(process.env.MOCK_SEO) : await readFile(path.join(dir, 'seo.json'), 'utf8').then(JSON.parse).catch(() => ({
   verification: { google: '', bing: '' }, analytics: { provider: 'none', id: '', url: '' }, alternateSiteUrl: '',
 }));

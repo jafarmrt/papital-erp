@@ -1,7 +1,7 @@
 import { redirect } from 'react-router';
 import type { StorefrontPublicRedirect } from '@erp/storefront/storefrontSeoContracts';
 import { campaignParams, isSafeSitePath, legacyFallback, legacyPathKey } from '@erp/storefront/storefrontSeoRules';
-import { redirects } from './api.server';
+import { pages, redirects } from './api.server';
 import { categoryPath, collectionPath, productPath } from './brand';
 
 /**
@@ -32,6 +32,17 @@ export async function legacyRedirect(request: Request): Promise<Response | null>
     const words = (url.searchParams.get('s') ?? '').trim().slice(0, 100);
     return url.pathname === '/' && words ? redirect(withCampaign(`/products?q=${encodeURIComponent(words)}`, url.search), 301) : null;
   }
+  // v12 phase 10c (review): the address of a page of the ERP that is on the site, written another way (in capitals, with
+  // WordPress's «/feed» after it): it goes to the page's own address, never along a row that leads away from the page
+  let livePages: Set<string> | null = null;
+  const pageAt = async (address: string) => {
+    if (!address.startsWith('/pages/')) return false;
+    if (livePages === null) livePages = new Set((await pages()).filter(page => page.kind === 'custom').map(page => `/pages/${page.slug}`));
+    return livePages.has(address);
+  };
+  if (await pageAt(key)) {
+    return url.pathname === key ? null : redirect(withCampaign(key, url.search), { status: 301, headers: { 'Cache-Control': 'no-cache' } });
+  }
   const listed = await redirects();
   let kept = listed.get(key);
   // a listed redirect to another listed old address is followed here, so the browser makes one hop and two rows that
@@ -41,6 +52,9 @@ export async function legacyRedirect(request: Request): Promise<Response | null>
     const next = legacyPathKey(kept.target);
     const further = next ? listed.get(next) : undefined;
     if (!next || !further) break;
+    // a page answers at that address, so the chain ends there: a row that leads away from a page's own address must not
+    // carry off the earlier addresses that lead to the page
+    if (await pageAt(next)) break;
     if (seen.has(next) || seen.size >= 5) return null;
     seen.add(next);
     kept = further;
