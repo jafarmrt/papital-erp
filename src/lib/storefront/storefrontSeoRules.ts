@@ -191,6 +191,11 @@ export interface SeoSettingsValues {
   analyticsUrl: string;
   /** the brand's site in another language (papital.gallery), linked from the home page as its other-language version */
   alternateSiteUrl: string;
+  /**
+   * v12 phase 10c: the address the new site is at now ('' = the main domain). The ERP writes it at the head of a link it
+   * gives a colleague to open on the site (a page's preview); it is not sent to the site.
+   */
+  siteUrl: string;
 }
 
 /**
@@ -213,7 +218,7 @@ export const verificationToken = (value: string): string => (VERIFICATION_TOKEN.
 export function seoSettingsError(raw: SeoSettingsValues): { field: keyof SeoSettingsValues; message: string } | null {
   const values = {
     ...raw, googleVerification: raw.googleVerification.trim(), bingVerification: raw.bingVerification.trim(), analyticsId: raw.analyticsId.trim(),
-    analyticsUrl: raw.analyticsUrl.trim(), alternateSiteUrl: raw.alternateSiteUrl.trim(),
+    analyticsUrl: raw.analyticsUrl.trim(), alternateSiteUrl: raw.alternateSiteUrl.trim(), siteUrl: (raw.siteUrl ?? '').trim(),
   };
   if (values.googleVerification && !VERIFICATION_TOKEN.test(values.googleVerification)) {
     return { field: 'googleVerification', message: 'کد تأیید گوگل فقط حرف انگلیسی، رقم، «-» و «_» دارد؛ فقط کد درون برچسب را بنویسید.' };
@@ -234,6 +239,9 @@ export function seoSettingsError(raw: SeoSettingsValues): { field: keyof SeoSett
   if (values.alternateSiteUrl && httpsSiteUrl(values.alternateSiteUrl) === null) {
     return { field: 'alternateSiteUrl', message: 'نشانی سایت زبان دیگر باید با https:// آغاز شود، مانند https://papital.gallery.' };
   }
+  if (values.siteUrl && httpsSiteUrl(values.siteUrl) === null) {
+    return { field: 'siteUrl', message: 'نشانی سایت تازه باید با https:// آغاز شود، مانند https://papitalgallery.com.' };
+  }
   return null;
 }
 
@@ -247,5 +255,6 @@ export function normalizedSeoSettings(values: SeoSettingsValues): SeoSettingsVal
     analyticsId: provider === 'none' ? '' : provider === 'ga4' ? values.analyticsId.trim().toUpperCase() : values.analyticsId.trim(),
     analyticsUrl: provider === 'matomo' ? (httpsSiteUrl(values.analyticsUrl) ?? '') : '',
     alternateSiteUrl: httpsSiteUrl(values.alternateSiteUrl) ?? '',
+    siteUrl: httpsSiteUrl(values.siteUrl ?? '') ?? '',
   };
 }

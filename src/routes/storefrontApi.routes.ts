@@ -23,6 +23,7 @@ import { EMAIL_ADDRESS_MAX, EMAIL_PROOF_MAX } from '../lib/storefront/storefront
 import { storefrontEmailRoutes } from './storefrontApiEmail.routes.js';
 import { PAGE_SLUG_MAX } from '../lib/storefront/storefrontPageRules.js';
 import { contentImageFile, publicPage, publicPages } from '../services/storefront/storefrontPagePublic.js';
+import { pagePreviewImageFile, publicPagePreview } from '../services/storefront/storefrontPagePreview.service.js';
 import { ACCESS_KEY_MAX } from '../services/storefront/storefrontOrderKeys.js';
 import { publicSeo } from '../services/storefront/storefrontSeo.service.js';
 import { publicShopInfo } from '../services/storefront/storefrontShopInfo.service.js';
@@ -151,6 +152,8 @@ const campaignSlugSchema = z.object({ params: z.object({ slug: z.string().min(1)
 // a page's address is lowercase Latin, so anything else (a NUL among them, which PostgreSQL refuses) is not asked of the database
 const pageSlugSchema = z.object({ params: z.object({ slug: z.string().min(1).max(PAGE_SLUG_MAX).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/) }).passthrough() });
 const mediaSchema = z.object({ params: z.object({ file: z.string().min(1).max(80) }).passthrough() });
+const previewSchema = z.object({ params: z.object({ token: z.string().min(1).max(64) }).passthrough() });
+const previewMediaSchema = z.object({ params: z.object({ token: z.string().min(1).max(64), file: z.string().min(1).max(80) }).passthrough() });
 
 router.get('/settings', asyncHandler(async (_req: Request, res: Response) => {
   res.json({ data: await publicSettings() });
@@ -248,6 +251,22 @@ router.get('/media/:file', validate(mediaSchema), asyncHandler(async (req: Reque
       dotfiles: 'deny',
     }, (err) => (err && !res.headersSent ? reject(new NotFoundError('پیدا نشد')) : resolve()));
   });
+}));
+
+const sendImage = (res: Response, filePath: string, cacheControl: string) => new Promise<void>((resolve, reject) => {
+  res.sendFile(filePath, { headers: { 'Content-Type': 'image/webp', 'Cache-Control': cacheControl, 'X-Content-Type-Options': 'nosniff' }, dotfiles: 'deny' },
+    (err) => (err && !res.headersSent ? reject(new NotFoundError('پیدا نشد')) : resolve()));
+});
+
+// v12 phase 10c: a page's preview link: its saved draft in the shape of a page of the site, and the images that draft
+// names, both only under the link's key and while its hour lasts; never kept by anything in between
+router.get('/page-previews/:token', validate(previewSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ data: await publicPagePreview(String(req.params.token)) });
+}));
+
+router.get('/page-previews/:token/media/:file', validate(previewMediaSchema), asyncHandler(async (req: Request, res: Response) => {
+  await sendImage(res, await pagePreviewImageFile(String(req.params.token), String(req.params.file)), 'no-store');
 }));
 
 router.post('/shipping/quote', writeLimiter, validate(quoteSchema), asyncHandler(async (req: Request, res: Response) => {

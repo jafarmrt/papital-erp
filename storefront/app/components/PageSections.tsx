@@ -2,7 +2,8 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Clock, Gift, Handshake, Heart, Leaf, Mail, MapPin, Phone, ShieldCheck, Sparkles, Star, Truck, type LucideIcon } from 'lucide-react';
 import type { PageIcon, SectionBackground } from '@erp/storefront/storefrontPageParts';
-import { collectionPath, mediaPath } from '../lib/brand';
+import { collectionPath } from '../lib/brand';
+import { usePageMediaPath } from '../lib/pageMedia';
 import { formatPrice } from '../lib/format';
 import { docIsBlank, isBlank, type SitePageImage, type SitePageSection } from '../lib/pages';
 import { ProductGrid } from './ProductCard';
@@ -38,6 +39,7 @@ const ICONS: Readonly<Record<PageIcon, LucideIcon>> = {
 const CARD_COLUMNS: Readonly<Record<number, string>> = { 1: '', 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-2 lg:grid-cols-3', 4: 'sm:grid-cols-2 lg:grid-cols-4' };
 
 function PageImg({ image, sizes, eager = false, className = '' }: { image: SitePageImage; sizes: string; eager?: boolean; className?: string }) {
+  const mediaPath = usePageMediaPath();
   const width = image.width ?? 1600;
   return (
     <img

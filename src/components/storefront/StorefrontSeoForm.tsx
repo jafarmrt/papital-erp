@@ -106,6 +106,16 @@ function StorefrontSeoForm({ view, canManage }: { view: StorefrontSeoSettingsVie
             <input id={`${id}-alt`} dir="ltr" autoComplete="off" placeholder="https://" className={field} value={form.alternateSiteUrl} onChange={e => set('alternateSiteUrl', e.target.value)} />
           </div>
         </section>
+        <section aria-label="نشانی سایت تازه" className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
+          <h3 className="text-sm font-black text-slate-800">نشانی سایت تازه</h3>
+          <p className={hint}>
+            پیوندهایی که ERP برای باز کردن روی سایت می‌سازد (مانند پیش‌نمایش یک صفحه) با این نشانی آغاز می‌شوند. تا پیش از جابه‌جایی دامنه، نشانی آزمایشی سایت تازه را بنویسید؛ اگر خالی بماند، دامنهٔ اصلی به کار می‌رود.
+          </p>
+          <div className="max-w-md">
+            <label htmlFor={`${id}-site`} className={label}>نشانی این سایت</label>
+            <input id={`${id}-site`} dir="ltr" autoComplete="off" placeholder="https://" className={field} value={form.siteUrl ?? ''} onChange={e => set('siteUrl', e.target.value)} />
+          </div>
+        </section>
       </fieldset>
       {problem && <p role="alert" className="text-xs text-rose-700">{problem.message}</p>}
       {canManage && (

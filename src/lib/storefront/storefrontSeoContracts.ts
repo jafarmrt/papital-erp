@@ -13,6 +13,7 @@ export const STOREFRONT_SEO_SETTING_KEYS = {
   analyticsId: 'sf_seo_analytics_id',
   analyticsUrl: 'sf_seo_analytics_url',
   alternateSiteUrl: 'sf_seo_alternate_site_url',
+  siteUrl: 'sf_seo_site_url',
   version: 'sf_seo_version',
 } as const;
 

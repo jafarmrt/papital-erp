@@ -9,7 +9,11 @@ import { PageSections, type ShippingView } from './PageSections';
  * sections, and its place for a search engine. The page's `<h1>` is the title of its first section when that has one,
  * else the page's own title above the sections.
  */
-export function SitePageView({ page, shipping, siteUrl }: { page: SitePage; shipping: ShippingView | null; siteUrl: string }) {
+export function SitePageView({ page, shipping, siteUrl, preview = false }: {
+  page: SitePage; shipping: ShippingView | null; siteUrl: string;
+  /** a draft shown by a preview link: it has no place for a search engine, so none is written */
+  preview?: boolean;
+}) {
   return (
     <div data-site-page={page.slug}>
       <nav aria-label="مسیر" className="mx-auto max-w-5xl px-4 pt-6 text-sm text-muted-foreground lg:px-8 lg:pt-8">
@@ -25,7 +29,7 @@ export function SitePageView({ page, shipping, siteUrl }: { page: SitePage; ship
           </header>
         )}
       />
-      <JsonLdScripts blocks={[breadcrumbLd([{ name: 'خانه', path: '/' }, { name: page.title, path: pagePath(page) }], siteUrl)]} siteUrl={siteUrl} />
+      {preview ? null : <JsonLdScripts blocks={[breadcrumbLd([{ name: 'خانه', path: '/' }, { name: page.title, path: pagePath(page) }], siteUrl)]} siteUrl={siteUrl} />}
     </div>
   );
 }

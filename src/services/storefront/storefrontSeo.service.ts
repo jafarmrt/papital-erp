@@ -17,9 +17,9 @@ import {
  * chooses one) and the address of the brand's site in another language. A group of its own with its own version row, so
  * saving it never makes the open payment and shipping form stale; one save is one audit row in the same transaction.
  */
-const VALUE_KEYS = [KEYS.googleVerification, KEYS.bingVerification, KEYS.analyticsProvider, KEYS.analyticsId, KEYS.analyticsUrl, KEYS.alternateSiteUrl] as const;
+const VALUE_KEYS = [KEYS.googleVerification, KEYS.bingVerification, KEYS.analyticsProvider, KEYS.analyticsId, KEYS.analyticsUrl, KEYS.alternateSiteUrl, KEYS.siteUrl] as const;
 type Field = keyof SeoSettingsValues;
-const FIELDS: Field[] = ['googleVerification', 'bingVerification', 'analyticsProvider', 'analyticsId', 'analyticsUrl', 'alternateSiteUrl'];
+const FIELDS: Field[] = ['googleVerification', 'bingVerification', 'analyticsProvider', 'analyticsId', 'analyticsUrl', 'alternateSiteUrl', 'siteUrl'];
 
 async function readStored(executor: DbExecutor): Promise<Record<string, string>> {
   const rows = await executor.select().from(appSettings).where(inArray(appSettings.key, [...VALUE_KEYS, KEYS.version]));
@@ -35,6 +35,7 @@ function valuesOf(stored: Record<string, string>): SeoSettingsValues {
     analyticsId: stored[KEYS.analyticsId] ?? '',
     analyticsUrl: stored[KEYS.analyticsUrl] ?? '',
     alternateSiteUrl: stored[KEYS.alternateSiteUrl] ?? '',
+    siteUrl: stored[KEYS.siteUrl] ?? '',
   };
 }
 

@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router';
 import { TEXT_ALIGNS, TEXT_COLORS, pageLink, type RichDoc, type TextAlign, type TextColor } from '@erp/storefront/storefrontPageParts';
-import { mediaPath } from '../lib/brand';
+import { usePageMediaPath, type PageMediaPath } from '../lib/pageMedia';
 import { DOC_DEPTH_MAX, docIsBlank, pageImage } from '../lib/pages';
 
 /**
@@ -60,9 +60,9 @@ const inline = (nodes: Node[]): ReactNode[] => nodes.flatMap((node, i): ReactNod
   return [];
 });
 
-function block(node: Node, key: number, depth: number): ReactNode {
+function block(node: Node, key: number, depth: number, mediaPath: PageMediaPath): ReactNode {
   if (depth > DOC_DEPTH_MAX) return null;
-  const inside = () => childrenOf(node).map((child, i) => block(child, i, depth + 1));
+  const inside = () => childrenOf(node).map((child, i) => block(child, i, depth + 1, mediaPath));
   switch (node.type) {
     case 'paragraph':
       return <p key={key} style={alignOf(node)}>{inline(childrenOf(node))}</p>;
@@ -114,6 +114,7 @@ function block(node: Node, key: number, depth: number): ReactNode {
 }
 
 export function RichText({ doc, className = '' }: { doc: RichDoc; className?: string }) {
+  const mediaPath = usePageMediaPath();
   if (docIsBlank(doc)) return null;
-  return <div className={`space-y-4 leading-8 break-words ${className}`}>{childrenOf(doc).map((node, i) => block(node, i, 1))}</div>;
+  return <div className={`space-y-4 leading-8 break-words ${className}`}>{childrenOf(doc).map((node, i) => block(node, i, 1, mediaPath))}</div>;
 }

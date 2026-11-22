@@ -41,6 +41,16 @@ export interface PageDetail extends PageListRow {
   menuPlaces: string[];
 }
 
+/** v12 phase 10c: what «پیش‌نمایش» answers: the link on the site (its key is in it and is kept nowhere else) and when it ends */
+export interface PagePreviewLink {
+  /** the path on the site, `/preview/<key>` */
+  path: string;
+  /** the whole address, with the site's address of «جست‌وجو و آمار» (the main domain when none is written) */
+  url: string;
+  /** ISO time in UTC */
+  expiresAt: string;
+}
+
 export interface PageSaveInput extends PageValues {
   version: number;
 }

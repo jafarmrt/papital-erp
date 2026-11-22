@@ -52,6 +52,17 @@ const campaignSummary = ({ slug, title, summary, hero, homeBanner, endsOn }) => 
 // as JSON (MOCK_SHOP_INFO=fail answers 500 and MOCK_SHOP_INFO=missing 404, as an ERP not yet updated does)
 const shopInfoMode = process.env.MOCK_SHOP_INFO ?? '';
 let pagesMode = process.env.MOCK_PAGES ?? '';
+const previews = process.env.MOCK_PREVIEWS ? JSON.parse(process.env.MOCK_PREVIEWS) : {};
+const previewMedia = (process.env.MOCK_PREVIEW_MEDIA ?? '').split(',').filter(Boolean);
+let previewReads = 0;
+/** A page of MOCK_PAGES or MOCK_PREVIEWS as the ERP answers it: a «ردیف محصولات» names catalog slugs, sent as their cards */
+const withCards = page => ({
+  ...page,
+  sections: (page.sections ?? []).map(section => (section.kind === 'products'
+    // a slug is a product of the catalog; an object is sent as it is (a test's own card, in whatever shape)
+    ? { ...section, products: (section.products ?? []).map(entry => (typeof entry === 'string' ? products.find(p => p.slug === entry) && card(products.find(p => p.slug === entry)) : entry)).filter(Boolean) }
+    : section)),
+});
 const pageList = pagesMode.startsWith('[') ? JSON.parse(pagesMode) : [];
 const shopInfo = shopInfoMode && shopInfoMode !== 'fail' && shopInfoMode !== 'missing' ? JSON.parse(shopInfoMode) : {
   brand: { name: '', fullName: '', tagline: '' }, footerNote: '',
@@ -368,6 +379,8 @@ createServer(async (req, res) => {
   }
   // v12 phase 10c: the tests make the page routes fail (`fail`), vanish (`missing`), answer something that is no page
   // (`html`, `empty`, `null`) or answer again (`ok`) while the mock runs
+  // how many times a preview was read (the site must read it each time and keep none)
+  if (url.pathname === '/__mock/preview-reads') return send(res, 200, { reads: previewReads });
   if (url.pathname === '/__mock/pages') {
     pagesMode = url.searchParams.get('mode') ?? 'ok';
     return send(res, 200, { pages: pagesMode });
@@ -485,11 +498,20 @@ createServer(async (req, res) => {
     }
     const found = pageList.find(p => p.slug === route.slice('/pages/'.length));
     if (!found) return send(res, 404, { error: 'صفحه پیدا نشد.', code: 'STOREFRONT_PAGE_NOT_FOUND' });
-    const sections = (found.sections ?? []).map(section => (section.kind === 'products'
-      // a slug is a product of the catalog; an object is sent as it is (a test's own card, in whatever shape)
-      ? { ...section, products: (section.products ?? []).map(entry => (typeof entry === 'string' ? products.find(p => p.slug === entry) && card(products.find(p => p.slug === entry)) : entry)).filter(Boolean) }
-      : section));
-    return send(res, 200, { data: { ...found, sections } });
+    return send(res, 200, { data: withCards(found) });
+  }
+  // v12 phase 10c: «پیش‌نمایش»: MOCK_PREVIEWS (JSON) maps a key to a page as the ERP answers it (with `expiresAt`); any other
+  // key is 404, as an unknown or ended link is. An image under a key answers a few bytes for a file named in MOCK_PREVIEW_MEDIA.
+  if (route.startsWith('/page-previews/')) {
+    const [token, kind, file] = route.slice('/page-previews/'.length).split('/');
+    const found = previews[token];
+    if (!found) return send(res, 404, { error: 'پیش‌نمایش پیدا نشد یا زمانش گذشته است.', code: 'STOREFRONT_PAGE_PREVIEW_NOT_FOUND' });
+    if (kind === undefined) {
+      previewReads += 1;
+      return send(res, 200, { data: withCards(found) });
+    }
+    if (kind === 'media' && previewMedia.includes(file)) return send(res, 200, Buffer.from(`preview-image-${file}`), { 'Content-Type': 'image/webp' });
+    return send(res, 404, { error: 'not found' });
   }
   if (route === '/facets') {
     return send(res, 200, { data: { collections: facet(products.flatMap(p => p.collections)), categories: facet(products.map(p => p.category)) } });
