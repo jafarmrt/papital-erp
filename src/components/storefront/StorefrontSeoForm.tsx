@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { BarChart3, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSaveStorefrontSeoMutation, useStorefrontSeoQuery } from '../../hooks/queries/useStorefrontSeoQueries';
-import type { StorefrontSeoSettingsInput, StorefrontSeoSettingsView } from '../../lib/storefront/storefrontSeoContracts';
+import type { StorefrontSeoSettingsView } from '../../lib/storefront/storefrontSeoContracts';
 import { ANALYTICS_PROVIDERS, ANALYTICS_PROVIDER_TITLES, seoSettingsError, type AnalyticsProvider } from '../../lib/storefront/storefrontSeoRules';
 import { errorMessageOf } from '../../utils';
 
@@ -15,7 +15,8 @@ const field = 'w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 t
 const label = 'block text-xs font-bold text-slate-700 mb-1';
 const hint = 'mt-1 text-xs leading-6 text-slate-500';
 
-const formOf = (view: StorefrontSeoSettingsView): StorefrontSeoSettingsInput => ({ ...view });
+// a view read from a server not yet updated has no site address: the form holds an empty one
+const formOf = (view: StorefrontSeoSettingsView): StorefrontSeoSettingsView => ({ ...view, siteUrl: view.siteUrl ?? '' });
 
 export function StorefrontSeoSection({ canManage }: { canManage: boolean }) {
   const seo = useStorefrontSeoQuery();
@@ -27,9 +28,9 @@ export function StorefrontSeoSection({ canManage }: { canManage: boolean }) {
 function StorefrontSeoForm({ view, canManage }: { view: StorefrontSeoSettingsView; canManage: boolean }) {
   const id = useId();
   const save = useSaveStorefrontSeoMutation();
-  const [form, setForm] = useState<StorefrontSeoSettingsInput>(() => formOf(view));
+  const [form, setForm] = useState<StorefrontSeoSettingsView>(() => formOf(view));
   useEffect(() => { setForm(formOf(view)); }, [view]);
-  const set = <K extends keyof StorefrontSeoSettingsInput>(key: K, value: StorefrontSeoSettingsInput[K]) => setForm(f => ({ ...f, [key]: value }));
+  const set = <K extends keyof StorefrontSeoSettingsView>(key: K, value: StorefrontSeoSettingsView[K]) => setForm(f => ({ ...f, [key]: value }));
   const problem = seoSettingsError(form);
 
   const submit = () => {
@@ -113,7 +114,7 @@ function StorefrontSeoForm({ view, canManage }: { view: StorefrontSeoSettingsVie
           </p>
           <div className="max-w-md">
             <label htmlFor={`${id}-site`} className={label}>نشانی فروشگاه سایت</label>
-            <input id={`${id}-site`} dir="ltr" autoComplete="off" placeholder="https://" className={field} value={form.siteUrl ?? ''} onChange={e => set('siteUrl', e.target.value)} />
+            <input id={`${id}-site`} dir="ltr" autoComplete="off" placeholder="https://" className={field} value={form.siteUrl} onChange={e => set('siteUrl', e.target.value)} />
           </div>
         </section>
       </fieldset>

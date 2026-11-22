@@ -112,7 +112,9 @@ export async function runStorefrontPagePreviewV12Tests(shouldRun: (id: string, .
     const viewer = as(await loginTestUserWithSession(app, (await createTestUser({ role: (await createTestRole({ permissions: ['site_content.view'] })).code })).username));
     const byViewer = await viewer.post(`/api/storefront/pages/${pageId}/preview`);
     const unknownPage = await erp.post('/api/storefront/pages/2000000000/preview');
-    if (byViewer.status !== 403 || unknownPage.status !== 404) wrong.push(`the view key and an unknown page: ${byViewer.status}/${unknownPage.status}`);
+    // a body is not read: a link is asked for with an empty one (asked of a page that is not there, so a wrong answer makes no link)
+    const withBody = await erp.post('/api/storefront/pages/2000000000/preview', { title: 'x' });
+    if (byViewer.status !== 403 || unknownPage.status !== 404 || withBody.status !== 400) wrong.push(`the view key, an unknown page, and a link asked for with a body: ${byViewer.status}/${unknownPage.status}/${withBody.status}`);
     const before = Date.now();
     const made = await erp.post(`/api/storefront/pages/${pageId}/preview`);
     const link = (made.body.data ?? {}) as { path?: string; url?: string; expiresAt?: string };
@@ -156,9 +158,7 @@ export async function runStorefrontPagePreviewV12Tests(shouldRun: (id: string, .
     const inTextThumb = await previewImage(token, `${inText.sha256}-thumb.webp`);
     const notNamed = await previewImage(token, `${unnamed.sha256}.webp`);
     const badName = await previewImage(token, `..%2F..%2Fpackage.json`);
-    // a body is not read: a link is asked for with an empty one
-    const withBody = await erp.post(`/api/storefront/pages/${pageId}/preview`, { title: 'x' });
-    if (withBody.status !== 400) wrong.push(`a link asked for with a body: ${withBody.status}`);
+
     if (publicPage.status !== 404 || publicImage.status !== 404) wrong.push(`the draft on the site's own routes: page ${publicPage.status}, image ${publicImage.status}`);
     if (light.status !== 200 || light.headers['content-type'] !== 'image/webp' || light.headers['cache-control'] !== 'no-store' || String(light.body) !== 'webp-light-1') {
       wrong.push(`a preview image: ${light.status} ${light.headers['content-type']} cache «${light.headers['cache-control']}»`);
@@ -189,6 +189,11 @@ export async function runStorefrontPagePreviewV12Tests(shouldRun: (id: string, .
     const publishedNow = await erp.post(`/api/storefront/pages/${pageId}/publish`, { version: 3 });
     const draftAfter = await erp.put(`/api/storefront/pages/${pageId}`, form(4, 'پیش‌نویس پس از انتشار'));
     const [onSiteNow, inPreview] = [(await site(`/pages/${slug}`)).body.data, (await preview(token)).body.data] as Array<{ sections: Array<Record<string, unknown>>; noindex: boolean }>;
+    // once published, the page's image is an image of the site: kept for a long time there, never under the preview's key
+    const [siteImage, keyImage] = [await site(`/media/${inHero.sha256}.webp`), await previewImage(token, `${inHero.sha256}.webp`)];
+    if (siteImage.status !== 200 || siteImage.headers['cache-control'] !== 'private, max-age=31536000, immutable' || siteImage.headers['x-content-type-options'] !== 'nosniff' || keyImage.headers['cache-control'] !== 'no-store') {
+      wrong.push(`a published page's image: ${siteImage.status} cache «${siteImage.headers['cache-control']}», under the key «${keyImage.headers['cache-control']}»`);
+    }
     if (publishedNow.status !== 200 || draftAfter.status !== 200 || onSiteNow.sections[0].text !== 'متن تازه' || inPreview.sections[0].text !== 'پیش‌نویس پس از انتشار' || onSiteNow.noindex !== false || inPreview.noindex !== true) {
       wrong.push(`the site and the preview after publishing: «${onSiteNow?.sections?.[0]?.text}» / «${inPreview?.sections?.[0]?.text}»`);
     }

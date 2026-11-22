@@ -65,7 +65,7 @@ describe('the preview link of a page in the ERP', () => {
     open();
     fireEvent.click(await screen.findByRole('button', { name: 'پیش‌نمایش روی سایت' }));
     const box = within(await screen.findByRole('group', { name: 'پیوند پیش‌نمایش' }));
-    expect(box.getByRole('note').textContent).toMatch(/«نشانی فروشگاه سایت» در «جست‌وجو و آمار» نوشته نشده است/);
+    expect(box.getByRole('note').textContent).toMatch(/«نشانی فروشگاه سایت» در «جست‌وجو و آمار بازدید» نوشته نشده است/);
     expect(box.getByRole('link', { name: 'باز کردن پیش‌نمایش' }).getAttribute('href')).toBe('https://papitalgallery.com/preview/KEY');
   });
 

@@ -17,11 +17,12 @@ export const STOREFRONT_SEO_SETTING_KEYS = {
   version: 'sf_seo_version',
 } as const;
 
-export interface StorefrontSeoSettingsInput extends SeoSettingsValues {
+export interface StorefrontSeoSettingsView extends SeoSettingsValues {
   version: number;
 }
 
-export type StorefrontSeoSettingsView = StorefrontSeoSettingsInput;
+/** What the form sends; one opened before «نشانی فروشگاه سایت» was a field sends no `siteUrl`, and the saved address then stays */
+export type StorefrontSeoSettingsInput = Omit<StorefrontSeoSettingsView, 'siteUrl'> & { siteUrl?: string };
 
 /** `GET /api/storefront/v1/seo`: what every page of the site needs for search engines and visit statistics */
 export interface StorefrontPublicSeo {

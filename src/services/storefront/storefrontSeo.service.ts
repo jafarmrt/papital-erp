@@ -45,7 +45,8 @@ export async function readStorefrontSeoSettings(executor: DbExecutor): Promise<S
 }
 
 export async function saveStorefrontSeoSettings(req: Request, input: StorefrontSeoSettingsInput): Promise<StorefrontSeoSettingsView> {
-  const { version, ...raw } = input;
+  const { version, ...given } = input;
+  const raw = { ...given, siteUrl: given.siteUrl ?? '' };
   const problem = seoSettingsError(raw);
   if (problem) throw new ValidationError(problem.message, { field: problem.field }, 'STOREFRONT_SEO_INVALID');
   const sent = normalizedSeoSettings(raw);
@@ -58,7 +59,7 @@ export async function saveStorefrontSeoSettings(req: Request, input: StorefrontS
     }
     const before = valuesOf(await readStored(tx));
     // a form opened before the site's address was a field does not send it: the saved address stays as it is
-    const values = { ...sent, siteUrl: raw.siteUrl === undefined ? before.siteUrl : sent.siteUrl };
+    const values = { ...sent, siteUrl: given.siteUrl === undefined ? before.siteUrl : sent.siteUrl };
     const changes: Partial<Record<Field, { before: string; after: string }>> = {};
     for (const field of FIELDS) {
       if (before[field] === values[field]) continue;

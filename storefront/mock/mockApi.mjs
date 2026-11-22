@@ -55,6 +55,7 @@ let pagesMode = process.env.MOCK_PAGES ?? '';
 const previews = process.env.MOCK_PREVIEWS ? JSON.parse(process.env.MOCK_PREVIEWS) : {};
 const previewMedia = (process.env.MOCK_PREVIEW_MEDIA ?? '').split(',').filter(Boolean);
 let previewReads = 0;
+let previewKeysInAddress = 0;
 /** A page of MOCK_PAGES or MOCK_PREVIEWS as the ERP answers it: a «ردیف محصولات» names catalog slugs, sent as their cards */
 const withCards = page => ({
   ...page,
@@ -380,7 +381,7 @@ createServer(async (req, res) => {
   // v12 phase 10c: the tests make the page routes fail (`fail`), vanish (`missing`), answer something that is no page
   // (`html`, `empty`, `null`) or answer again (`ok`) while the mock runs
   // how many requests came under a preview key, pages and images (the site must read each time, keep none, and send no key of another shape)
-  if (url.pathname === '/__mock/preview-reads') return send(res, 200, { reads: previewReads });
+  if (url.pathname === '/__mock/preview-reads') return send(res, 200, { reads: previewReads, keysInAddress: previewKeysInAddress });
   if (url.pathname === '/__mock/pages') {
     pagesMode = url.searchParams.get('mode') ?? 'ok';
     return send(res, 200, { pages: pagesMode });
@@ -505,7 +506,10 @@ createServer(async (req, res) => {
   if (route === '/page-preview' || route.startsWith('/page-preview/media/')) {
     // every request counts, whatever its key: a test then sees that a key in another shape was never sent here
     previewReads += 1;
-    const found = previews[String(req.headers['x-preview-key'] ?? '')];
+    const presented = String(req.headers['x-preview-key'] ?? '');
+    // the key belongs in the header alone: an address (or its query) that carries it would put it in the ERP's log
+    if (url.search !== '' || (presented !== '' && String(req.url).includes(presented))) previewKeysInAddress += 1;
+    const found = previews[presented];
     if (!found) return send(res, 404, { error: 'پیش‌نمایش پیدا نشد یا زمانش گذشته است.', code: 'STOREFRONT_PAGE_PREVIEW_NOT_FOUND' });
     if (route === '/page-preview') return send(res, 200, { data: withCards(found) });
     const file = route.slice('/page-preview/media/'.length);

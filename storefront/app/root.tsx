@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Links, Meta, Outlet, Scripts, ScrollRestoration, isRouteErrorResponse, useLocation, useNavigation, useRouteLoaderData, type LinksFunction } from 'react-router';
+import { Links, Meta, Outlet, Scripts, ScrollRestoration, isRouteErrorResponse, useMatches, useNavigation, useRouteLoaderData, type LinksFunction } from 'react-router';
 import type { Route } from './+types/root';
 import './app.css';
 import { brand, facets, menus, publicSettings, shopInfo } from './lib/api.server';
@@ -56,9 +56,11 @@ export const useRootData = () => useRouteLoaderData<RootData>('root');
 
 /**
  * v12 phase 10c: a draft's preview (`/preview/<key>`) has the link's key in its address, and a statistics script reads
- * the address itself (`Referrer-Policy` does not stop it): no statistics service is loaded or told of that page
+ * the address itself (`Referrer-Policy` does not stop it): no statistics service is loaded or told of that page. The
+ * page is known by its route, not by how its address is spelled (`/PREVIEW/…` is the same route). The route makes
+ * coming to it and leaving it a fresh load of the document, so a script loaded on another page is never running here.
  */
-const useInPreview = () => useLocation().pathname.startsWith('/preview/');
+const useInPreview = () => useMatches().some(match => match.id === 'routes/pagePreview');
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const data = useRootData();

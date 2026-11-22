@@ -51,7 +51,8 @@ afterAll(() => {
 });
 
 const ask = (pathname: string) => handle(new Request(`http://localhost${pathname}`));
-const reads = async () => Number((await (await fetch(`http://127.0.0.1:${PORT}/__mock/preview-reads`)).json() as { reads: number }).reads);
+const counts = async () => await (await fetch(`http://127.0.0.1:${PORT}/__mock/preview-reads`)).json() as { reads: number; keysInAddress: number };
+const reads = async () => (await counts()).reads;
 
 describe('the preview of a page\'s draft', () => {
   it('draws the draft as a page, says that it is a preview and until when, and is for no search engine and no cache', async () => {
@@ -85,7 +86,9 @@ describe('the preview of a page\'s draft', () => {
     const html = await (await ask(`/preview/${TOKEN}`)).text();
     expect(html).not.toContain('googletagmanager');
     expect(html).not.toContain('gtag(');
-    expect(html).not.toContain('_paq');
+    // the page is known by its route, however its address is spelled
+    const shouted = await ask(`/PREVIEW/${TOKEN}`);
+    if (shouted.status === 200) expect(await shouted.text()).not.toContain('googletagmanager');
     // an ended link's «پیدا نشد» has the key in its address too
     const ended = await ask(`/preview/${ENDED}`);
     expect(ended.status).toBe(404);
@@ -124,6 +127,9 @@ describe('the preview of a page\'s draft', () => {
     await ask(`/preview/${TOKEN}`);
     await ask(`/preview/${TOKEN}`);
     expect(await reads()).toBe(before + 2);
+    // and the key went to the ERP in a header, never in an address (which the ERP writes in its log)
+    await ask(`/preview/${TOKEN}/media/${A}.webp`);
+    expect((await counts()).keysInAddress).toBe(0);
   });
 
   it('is the same 404 for an unknown or ended key and for a key in another shape, which is never sent to the ERP', async () => {

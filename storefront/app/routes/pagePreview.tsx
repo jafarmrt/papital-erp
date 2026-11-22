@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { useBlocker } from 'react-router';
 import type { Route } from './+types/pagePreview';
 import { pagePreview } from '../lib/api.server';
 import { siteEnv } from '../lib/site.server';
@@ -22,6 +24,18 @@ export async function loader({ params }: Route.LoaderArgs) {
   return { page: found.page, endsAt, token: params.token, shipping: await shippingViewFor(found.page.sections), siteUrl: siteEnv().siteUrl };
 }
 
+/**
+ * A preview and the rest of the site never share a document. A visit-statistics script that is already running in a
+ * document reports every later change of its address by itself, so a preview reached by a move inside the site (a link
+ * on a page, Back after such a move) would hand its key to that service. Coming here from another page of the site is
+ * therefore a fresh load of the document (this never answers, so the move inside the site is never finished), and
+ * leaving is one too (the component below). On a first load this is not called: the server's answer is used.
+ */
+export function clientLoader({ params }: Route.ClientLoaderArgs): Promise<never> {
+  window.location.assign(`/preview/${encodeURIComponent(params.token)}`);
+  return new Promise<never>(() => undefined);
+}
+
 export const headers = () => ({
   'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer',
 });
@@ -37,6 +51,11 @@ export function meta({ data, matches }: Route.MetaArgs) {
 
 export default function PagePreview({ loaderData }: Route.ComponentProps) {
   const { page, endsAt, token, shipping, siteUrl } = loaderData;
+  // leaving for another page of the site is a fresh load of that page, never a move inside this document (see `clientLoader`)
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => nextLocation.pathname !== currentLocation.pathname);
+  useEffect(() => {
+    if (blocker.state === 'blocked') window.location.assign(`${blocker.location.pathname}${blocker.location.search}${blocker.location.hash}`);
+  }, [blocker]);
   return (
     <>
       <p role="status" data-preview-note className="bg-primary px-4 py-3 text-center text-sm font-bold text-primary-foreground">

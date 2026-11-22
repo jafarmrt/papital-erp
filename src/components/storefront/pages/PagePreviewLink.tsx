@@ -54,7 +54,7 @@ export function PagePreviewLink({ pageId, blocked }: {
           </p>
           {!link.addressSet && (
             <p role="note" className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1.5 text-amber-900">
-              «نشانی فروشگاه سایت» در «جست‌وجو و آمار» نوشته نشده است، پس این پیوند با دامنهٔ اصلی ساخته شد. اگر سایت تازه هنوز روی دامنهٔ اصلی نیست، این پیوند آنجا باز نمی‌شود؛ نخست آن نشانی را بنویسید و پیوند تازه بسازید.
+              «نشانی فروشگاه سایت» در «جست‌وجو و آمار بازدید» نوشته نشده است، پس این پیوند با دامنهٔ اصلی ساخته شد. اگر سایت تازه هنوز روی دامنهٔ اصلی نیست، این پیوند آنجا باز نمی‌شود؛ نخست آن نشانی را بنویسید و پیوند تازه بسازید.
             </p>
           )}
           <p dir="ltr" className="break-all rounded-lg bg-white px-2 py-1.5 font-mono text-[11px] text-slate-700">{link.url}</p>
