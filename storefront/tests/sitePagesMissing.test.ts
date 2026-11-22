@@ -44,7 +44,8 @@ describe('the pages with an ERP that does not have them yet', () => {
     expect(map.status).toBe(200);
     const xml = await map.text();
     expect(xml).toContain('<url><loc>https://shop.example/terms</loc></url>');
-    expect(xml).not.toContain('<lastmod>');
+    // no page has a day (a product keeps the day the feed gives it)
+    expect(xml.split('\n').filter(line => line.includes('<lastmod>') && !line.includes('/p/'))).toEqual([]);
     expect((await handle(new Request('http://localhost/pages/our-story'))).status).toBe(404);
   });
 });

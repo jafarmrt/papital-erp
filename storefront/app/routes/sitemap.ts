@@ -1,34 +1,23 @@
-import type { StorefrontProductCard } from '@erp/storefront/storefrontContracts';
-import { campaigns, catalog, facets, pages as sitePages } from '../lib/api.server';
+import { campaigns, facets, feed, pages as sitePages } from '../lib/api.server';
 import { lastModOf, pagePath } from '../lib/pages';
 import { siteEnv } from '../lib/site.server';
 import { campaignPath, categoryPath, collectionPath, mediaPath, productPath } from '../lib/brand';
 import { INFO_PAGES } from '../content/pages';
 
-/** The ERP answers at most this many cards a page (CATALOG_PAGE_MAX); a shop of a few hundred items is a few calls */
-const PAGE = 60;
-const MAX_PAGES = 50;
-
 const xml = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-async function everyProduct(): Promise<StorefrontProductCard[]> {
-  const all: StorefrontProductCard[] = [];
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    const result = await catalog({ page, limit: PAGE });
-    all.push(...result.data);
-    if (page * PAGE >= result.total || result.data.length === 0) break;
-  }
-  return all;
-}
-
-/** Every page a buyer can reach, with each product's cover photo (Google's image extension); none while not indexable */
+/**
+ * Every page a buyer can reach, with each product's cover photo (Google's image extension); none while not indexable.
+ * The products are the feed's (every item on the site in one read, which the site keeps ten minutes), so each comes
+ * with the day its page last changed (v12 phase 10c); an ERP not yet updated sends no day and the entry has none.
+ */
 export async function loader() {
   const { siteUrl, indexable } = siteEnv();
   if (!indexable) throw new Response('پیدا نشد', { status: 404 });
-  const [f, products, pages, written] = await Promise.all([facets(), everyProduct(), campaigns(), sitePages()]);
+  const [f, products, pages, written] = await Promise.all([facets(), feed(), campaigns(), sitePages()]);
   // v12 phase 10c: a page published in the ERP's «صفحه‌های سایت» carries the day it was published (`lastmod`), and one
   // marked «در موتور جست‌وجو نیاید» is not in the map at all (also when it is one of the five base pages)
-  const lastmod = (iso: string) => (lastModOf(iso) ? `<lastmod>${lastModOf(iso)}</lastmod>` : '');
+  const lastmod = (iso: unknown) => (typeof iso === 'string' && lastModOf(iso) ? `<lastmod>${lastModOf(iso)}</lastmod>` : '');
   const base = new Map(written.filter(page => page.kind === 'base').map(page => [page.slug, page]));
   const url = (path: string, extra = '') => `<url><loc>${xml(`${siteUrl}${path}`)}</loc>${extra}</url>`;
   const entries = [
@@ -36,9 +25,9 @@ export async function loader() {
     url('/products'),
     ...f.categories.map(c => url(categoryPath(c.name))),
     ...f.collections.map(c => url(collectionPath(c.name))),
-    ...products.map(p => url(productPath(p.slug), p.cover
-      ? `<image:image><image:loc>${xml(`${siteUrl}${mediaPath(p.cover.sha256)}`)}</image:loc></image:image>`
-      : '')),
+    ...products.map(p => url(productPath(p.slug), `${lastmod(p.updatedAt)}${p.images[0]
+      ? `<image:image><image:loc>${xml(`${siteUrl}${mediaPath(p.images[0].sha256)}`)}</image:loc></image:image>`
+      : ''}`)),
     ...INFO_PAGES.filter(page => !base.get(page.slug)?.noindex).map(page => url(`/${page.slug}`, lastmod(base.get(page.slug)?.updatedAt ?? ''))),
     ...written.filter(page => page.kind === 'custom' && !page.noindex).map(page => url(pagePath(page), lastmod(page.updatedAt))),
     url('/corporate-gift'),

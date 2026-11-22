@@ -166,7 +166,7 @@ export async function runStorefrontCampaignsV11Tests(shouldRun: (id: string, ...
     const feed = await site('/api/storefront/v1/feed');
     const fed = (feed.body.data ?? []).filter((f: Body) => String(f.sku).endsWith(tag));
     if (feed.status !== 200 || fed.length !== 2
-      || keys(fed[0] ?? {}) !== 'category,collections,color,description,images,inStock,material,name,retailPrice,sku,slug') {
+      || keys(fed[0] ?? {}) !== 'category,collections,color,description,images,inStock,material,name,retailPrice,sku,slug,updatedAt') {
       wrong.push(`the feed: ${feed.status} ${JSON.stringify(fed)}`);
     }
     if ((await site('/api/storefront/v1/campaigns/Yalda')).status !== 404) wrong.push('an address no page has was not a 404');

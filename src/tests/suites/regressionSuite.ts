@@ -11266,5 +11266,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runStorefrontPagePreviewV12Tests } = await import('../regression/storefrontPagePreviewV12Tests.js');
   results.push(...await runStorefrontPagePreviewV12Tests(shouldRun));
 
+  // v12 phase 10c: the feed carries each item's last recorded change, for the sitemap's lastmod
+  const { runStorefrontProductLastmodV12Tests } = await import('../regression/storefrontProductLastmodV12Tests.js');
+  results.push(...await runStorefrontProductLastmodV12Tests(shouldRun));
+
   return results;
 }

@@ -45,12 +45,13 @@ describe('the pages when the ERP answers with an error', () => {
     expect(shipping).toContain('پرداخت کارت‌به‌کارت است.');
   });
 
-  it('still writes the sitemap, with the base pages and no date', async () => {
+  it('still writes the sitemap, with the base pages and no date of theirs', async () => {
     const res = await handle(new Request('http://localhost/sitemap.xml'));
     expect(res.status).toBe(200);
     const xml = await res.text();
     expect(xml).toContain('<url><loc>https://shop.example/about</loc></url>');
-    expect(xml).not.toContain('<lastmod>');
+    // no page has a day (a product keeps the day the feed gives it)
+    expect(xml.split('\n').filter(line => line.includes('<lastmod>') && !line.includes('/p/'))).toEqual([]);
   });
 
   it('does not call a page the shop made «not found» while it cannot be read', async () => {
