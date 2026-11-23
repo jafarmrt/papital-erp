@@ -5,6 +5,9 @@ import { GIFT_CONTACT_MAX, GIFT_NOTE_MAX, GIFT_ORGANIZATION_MAX } from '@erp/sto
 import { accountCall, crossSite, sameSite } from '../lib/account.server';
 import { siteEnv } from '../lib/site.server';
 import { pageMeta } from '../lib/meta';
+import { fixedText } from '../lib/fixedText.server';
+import { fixedHead, fixedTitle } from '../lib/fixedText';
+import { FixedIntro } from '../components/FixedIntro';
 import { faNumber } from '../lib/format';
 import { formStamp, keptStamp, trapRefusal } from '../lib/botTrap.server';
 import { AccountShell, BotTrapFields, Field, FormError, SubmitButton, TextAreaField } from '../components/AccountForm';
@@ -27,14 +30,14 @@ interface ActionAnswer {
   stamp?: string;
 }
 
-export function loader() {
-  return { siteUrl: siteEnv().siteUrl, stamp: formStamp() };
+export async function loader() {
+  return { siteUrl: siteEnv().siteUrl, stamp: formStamp(), text: await fixedText('fixed-corporate-gift') };
 }
 
 export function meta({ data, matches }: Route.MetaArgs) {
   return pageMeta({
     matches,
-    title: 'هدیهٔ سازمانی', description: 'هدیهٔ سازمانی پاپیتال برای شرکت‌ها و سازمان‌ها، با فاکتور رسمی', path: '/corporate-gift', siteUrl: data?.siteUrl ?? '',
+    ...fixedHead(data?.text, { title: 'هدیهٔ سازمانی', description: 'هدیهٔ سازمانی پاپیتال برای شرکت‌ها و سازمان‌ها، با فاکتور رسمی' }), path: '/corporate-gift', siteUrl: data?.siteUrl ?? '',
   });
 }
 
@@ -76,7 +79,8 @@ export default function CorporateGiftPage({ loaderData, actionData }: Route.Comp
   }
 
   return (
-    <AccountShell title="هدیهٔ سازمانی" intro="برای هدیهٔ همکاران، مشتریان یا مناسبت‌های سازمان، چند خط بنویسید تا با شما تماس بگیریم. فاکتور رسمی صادر می‌شود.">
+    <AccountShell title={fixedTitle(loaderData.text, 'هدیهٔ سازمانی')}
+      intro={<FixedIntro text={loaderData.text}>برای هدیهٔ همکاران، مشتریان یا مناسبت‌های سازمان، چند خط بنویسید تا با شما تماس بگیریم. فاکتور رسمی صادر می‌شود.</FixedIntro>}>
       <Form method="post" className="space-y-5" replace>
         <FormError message={answer?.error} />
         <BotTrapFields stamp={answer?.stamp ?? loaderData.stamp} />

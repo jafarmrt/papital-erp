@@ -6,7 +6,7 @@ import { useHasPermission } from '../contexts/AuthContext';
 import { useMenuLinkOptionsQuery } from '../hooks/queries/useStorefrontMenuQueries';
 import { useCreatePageMutation, usePageQuery, usePagesQuery } from '../hooks/queries/useStorefrontPageQueries';
 import { PAGE_STATUS_TITLES } from '../lib/storefront/storefrontPageContracts';
-import { PAGE_SLUG_MAX, PAGE_TEMPLATES, PAGE_TITLE_MAX, checkedPage, isPageTemplateKey, type PageTemplateKey } from '../lib/storefront/storefrontPageRules';
+import { PAGE_SLUG_MAX, PAGE_TEMPLATES, PAGE_TITLE_MAX, checkedPage, fixedPageOf, isPageTemplateKey, type PageTemplateKey } from '../lib/storefront/storefrontPageRules';
 import { PageEditor } from '../components/storefront/pages/PageEditor';
 import { errorMessageOf } from '../utils';
 
@@ -81,6 +81,7 @@ export default function StorefrontPagesPage() {
         </h1>
         <p className="text-xs leading-6 text-slate-500">
           هر صفحه از بخش‌های آماده ساخته می‌شود. ذخیرهٔ پیش‌نویس سایت را عوض نمی‌کند؛ صفحه با «انتشار» روی سایت می‌رود. صفحه‌های پایه تا منتشر نشده‌اند، سایت متن ثابت پیشین خودش را برای آن‌ها نشان می‌دهد.
+          {' صفحه‌های ثابت (مانند «سبد خرید») کارشان در خود سایت است؛ این‌جا فقط عنوان، متن بالای صفحه و عنوان و توضیح جست‌وجوی آن‌ها نوشته می‌شود.'}
           {!canManage && ' شما فقط می‌توانید ببینید.'}
         </p>
       </header>
@@ -94,9 +95,10 @@ export default function StorefrontPagesPage() {
               <li key={row.id} className="flex flex-wrap items-center gap-2 px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold text-slate-800">{row.title}</p>
-                  <p dir="ltr" className="truncate text-end text-xs text-slate-500">{row.kind === 'base' ? `/${row.slug}` : `/pages/${row.slug}`}</p>
+                  <p dir="ltr" className="truncate text-end text-xs text-slate-500">{row.kind === 'base' ? `/${row.slug}` : row.kind === 'fixed' ? (fixedPageOf(row.slug)?.path ?? '') : `/pages/${row.slug}`}</p>
                 </div>
                 {row.kind === 'base' && <span className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-bold text-violet-800">صفحهٔ پایه</span>}
+                {row.kind === 'fixed' && <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-800">صفحهٔ ثابت</span>}
                 <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${row.status === 'published' ? 'bg-emerald-50 text-emerald-800' : row.status === 'changed' ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>
                   {PAGE_STATUS_TITLES[row.status]}
                 </span>

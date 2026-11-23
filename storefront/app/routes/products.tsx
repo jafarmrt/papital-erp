@@ -7,6 +7,9 @@ import { clientAddress } from '../lib/account.server';
 import { allowSearch, searchRetryAfter } from '../lib/visitorLimit.server';
 import { SORT_TITLES, categoryPath, collectionPath } from '../lib/brand';
 import { faNumber } from '../lib/format';
+import { fixedText } from '../lib/fixedText.server';
+import { fixedHead, fixedTitle } from '../lib/fixedText';
+import { FixedIntro } from '../components/FixedIntro';
 import { pageMeta } from '../lib/meta';
 import { COLLECTION_TEXTS } from '../content/collections';
 import { ProductGrid } from '../components/ProductCard';
@@ -32,7 +35,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const result = await catalog({ page, collection, category, q, sort }, q ? visitor : '');
   // a collection that holds nothing is not a page; a filter that empties a real collection is only an empty list
   if (collection && result.total === 0 && !category && !q && page === 1) throw new Response('پیدا نشد', { status: 404 });
-  return { result, collection, category, q, sort, page, siteUrl: siteEnv().siteUrl, path: url.pathname + url.search };
+  // v12 phase 10c: «همهٔ محصولات» itself (no collection, category or search) takes the words the shop wrote for it
+  const text = !collection && !category && !q ? await fixedText('fixed-products') : null;
+  return { result, collection, category, q, sort, page, siteUrl: siteEnv().siteUrl, path: url.pathname + url.search, text };
 }
 
 export function meta({ data, matches }: Route.MetaArgs) {
@@ -41,7 +46,7 @@ export function meta({ data, matches }: Route.MetaArgs) {
   const description = data.collection && COLLECTION_TEXTS[data.collection]
     ? COLLECTION_TEXTS[data.collection].slice(0, 160)
     : `${title} پاپیتال: زیورآلات دست‌ساز با نقش کاشی‌های ایران، با قیمت روشن و ارسال به سراسر ایران.`;
-  return pageMeta({ matches, title, description, path: data.path, siteUrl: data.siteUrl });
+  return pageMeta({ matches, ...fixedHead(data.text, { title, description }), path: data.path, siteUrl: data.siteUrl });
 }
 
 export default function Products({ loaderData }: Route.ComponentProps) {
@@ -58,7 +63,7 @@ export default function Products({ loaderData }: Route.ComponentProps) {
     if (n > 1) s.set('page', String(n));
     return s.size ? `${base}?${s}` : base;
   };
-  const title = collection ? `کالکشن ${collection}` : category || (q ? `نتیجهٔ جست‌وجوی «${q}»` : 'همهٔ محصولات');
+  const title = collection ? `کالکشن ${collection}` : category || (q ? `نتیجهٔ جست‌وجوی «${q}»` : fixedTitle(loaderData.text, 'همهٔ محصولات'));
   const intro = collection ? COLLECTION_TEXTS[collection] : '';
   const chip = (active: boolean) =>
     `inline-flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-full border px-4 text-sm font-medium transition-colors duration-(--motion) ${active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card hover:border-foreground/30'}`;
@@ -73,6 +78,7 @@ export default function Products({ loaderData }: Route.ComponentProps) {
       <header className="mt-3 max-w-3xl">
         <h1 className="text-3xl font-extrabold lg:text-4xl">{title}</h1>
         {intro ? <p className="mt-4 text-lg leading-9 text-muted-foreground">{intro}</p> : null}
+        <FixedIntro text={loaderData.text} className="mt-4 text-muted-foreground" />
         <p className="mt-2 text-sm text-muted-foreground">{`${faNumber(result.total)} محصول`}</p>
       </header>
 

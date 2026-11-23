@@ -24,6 +24,23 @@ export const STOREFRONT_BASE_PAGE_ROWS: ReadonlyArray<{ kind: 'base'; slug: stri
   { kind: 'base', slug: 'privacy', title: 'حریم خصوصی' },
 ];
 
+/**
+ * v12 phase 10c: the nine rows of kind 'fixed' as migration 0032 makes them (the words of the pages whose work is in the
+ * site's code). The factory reset makes them again from this list; `storefrontPageRulesV12.test.ts` keeps it equal to
+ * `FIXED_PAGES` and the migration.
+ */
+export const STOREFRONT_FIXED_PAGE_ROWS: ReadonlyArray<{ kind: 'fixed'; slug: string; title: string }> = [
+  { kind: 'fixed', slug: 'fixed-products', title: 'همهٔ محصولات' },
+  { kind: 'fixed', slug: 'fixed-categories', title: 'دسته‌ها' },
+  { kind: 'fixed', slug: 'fixed-search', title: 'جست‌وجو' },
+  { kind: 'fixed', slug: 'fixed-cart', title: 'سبد خرید' },
+  { kind: 'fixed', slug: 'fixed-wholesale', title: 'درخواست خرید عمده' },
+  { kind: 'fixed', slug: 'fixed-corporate-gift', title: 'هدیهٔ سازمانی' },
+  { kind: 'fixed', slug: 'fixed-order-track', title: 'پیگیری سفارش' },
+  { kind: 'fixed', slug: 'fixed-account', title: 'حساب من' },
+  { kind: 'fixed', slug: 'fixed-not-found', title: 'این صفحه پیدا نشد' },
+];
+
 export const storefrontPages = pgTable('storefront_pages', {
   id: serial('id').primaryKey(),
   kind: text('kind').notNull().default('custom'),

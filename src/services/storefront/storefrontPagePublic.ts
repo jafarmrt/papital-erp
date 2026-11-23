@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, ne } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { mediaAssets, storefrontContentAssets, storefrontPages, type PublishedPage } from '../../db/schema.js';
 import { NotFoundError } from '../../errors/customErrors.js';
@@ -38,7 +38,9 @@ const summaryOf = (row: PageRecord): StorefrontPageSummary => ({
 
 /** `GET /api/storefront/v1/pages`: the pages on the site now, in the order of their addresses */
 export async function publicPages(): Promise<StorefrontPageSummary[]> {
-  const rows = await orm.select().from(storefrontPages).where(onSite()).orderBy(asc(storefrontPages.slug)).limit(PAGES_MAX);
+  // the fixed pages are not in this list: they are not pages to visit by this name (the site's own code has them at
+  // their addresses); the site asks for each one's words by its name
+  const rows = await orm.select().from(storefrontPages).where(and(onSite(), ne(storefrontPages.kind, 'fixed'))).orderBy(asc(storefrontPages.slug)).limit(PAGES_MAX);
   return rows.map(summaryOf);
 }
 

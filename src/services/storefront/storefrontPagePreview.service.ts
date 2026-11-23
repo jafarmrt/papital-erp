@@ -3,7 +3,7 @@ import type { Request } from 'express';
 import { and, eq, gt, inArray, isNotNull, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { appSettings, mediaAssets, storefrontPages } from '../../db/schema.js';
-import { NotFoundError } from '../../errors/customErrors.js';
+import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { mediaFilePath } from '../../lib/media/mediaPaths.js';
@@ -41,9 +41,12 @@ export async function createPagePreview(req: Request, id: number): Promise<PageP
   const token = crypto.randomBytes(32).toString('base64url');
   const expiresAt = new Date(Date.parse(systemNowUtcIso()) + PAGE_PREVIEW_MINUTES * 60_000).toISOString();
   await orm.transaction(async (tx) => {
-    const [row] = await tx.select({ id: storefrontPages.id, title: storefrontPages.title }).from(storefrontPages)
+    const [row] = await tx.select({ id: storefrontPages.id, title: storefrontPages.title, kind: storefrontPages.kind }).from(storefrontPages)
       .where(and(eq(storefrontPages.id, id), eq(storefrontPages.isDeleted, 0))).for('update');
     if (!row) throw new NotFoundError('صفحه پیدا نشد.', undefined, 'STOREFRONT_PAGE_NOT_FOUND');
+    // a fixed page is drawn by its own code on the site, around the words kept here: a preview of the words alone would
+    // not be the page
+    if (row.kind === 'fixed') throw new ValidationError('صفحهٔ ثابت پیش‌نمایش ندارد؛ متن آن پس از «انتشار» روی خود صفحه دیده می‌شود.', { field: 'id' }, 'STOREFRONT_PAGE_PREVIEW_FIXED');
     // the page's version is left as it is: a link changes nothing a colleague edits, so an open editor does not go stale
     await tx.update(storefrontPages).set({ previewHash: hashOf(token), previewExpiresAt: expiresAt }).where(eq(storefrontPages.id, id));
     await logActivity({

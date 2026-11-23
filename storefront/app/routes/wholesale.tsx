@@ -9,6 +9,9 @@ import {
 import { formStamp, keptStamp, trapRefusal } from '../lib/botTrap.server';
 import { siteEnv } from '../lib/site.server';
 import { pageMeta } from '../lib/meta';
+import { fixedText } from '../lib/fixedText.server';
+import { fixedHead, fixedTitle } from '../lib/fixedText';
+import { FixedIntro } from '../components/FixedIntro';
 import { AccountShell, BotTrapFields, CodeField, Field, FormError, FormNote, PhoneField, SubmitButton, TextAreaField } from '../components/AccountForm';
 
 /**
@@ -53,6 +56,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     provenPhone: wholesaleProofOf(request).phone,
     stamp: formStamp(),
     siteUrl: siteEnv().siteUrl,
+    text: await fixedText('fixed-wholesale'),
   };
 }
 
@@ -62,7 +66,7 @@ export const headers = () => ({ 'Cache-Control': 'no-store' });
 export function meta({ data, matches }: Route.MetaArgs) {
   return pageMeta({
     matches,
-    title: 'درخواست خرید عمده', description: 'خرید عمدهٔ پاپیتال برای فروشگاه‌ها و گالری‌ها، با قیمت عمده و فاکتور رسمی', path: '/wholesale', siteUrl: data?.siteUrl ?? '',
+    ...fixedHead(data?.text, { title: 'درخواست خرید عمده', description: 'خرید عمدهٔ پاپیتال برای فروشگاه‌ها و گالری‌ها، با قیمت عمده و فاکتور رسمی' }), path: '/wholesale', siteUrl: data?.siteUrl ?? '',
   });
 }
 
@@ -134,7 +138,7 @@ export default function WholesalePage({ loaderData, actionData }: Route.Componen
   const intro = 'برای فروش در فروشگاه یا گالری خودتان با قیمت عمده و فاکتور رسمی، مشخصات کسب‌وکار را بنویسید. همکاران ما درخواست را بررسی می‌کنند.';
   if (account && (account.application === 'pending' || account.application === 'approved' || account.kind === 'wholesale')) {
     return (
-      <AccountShell title="درخواست خرید عمده">
+      <AccountShell title={fixedTitle(loaderData.text, 'درخواست خرید عمده')}>
         <FormNote>{account.application === 'pending' ? 'درخواست خرید عمدهٔ شما ثبت شده و در دست بررسی است.' : 'حساب شما برای خرید عمده باز است.'}</FormNote>
         <Link to="/account" className="inline-flex min-h-12 items-center font-bold text-brand hover:underline">حساب من</Link>
       </AccountShell>
@@ -150,7 +154,7 @@ export default function WholesalePage({ loaderData, actionData }: Route.Componen
     : smsLogin ? 'phone' : 'details';
 
   return (
-    <AccountShell title="درخواست خرید عمده" intro={intro}>
+    <AccountShell title={fixedTitle(loaderData.text, 'درخواست خرید عمده')} intro={<FixedIntro text={loaderData.text}>{intro}</FixedIntro>}>
       {!account ? (
         <p className="text-base leading-8 text-muted-foreground">
           حساب دارید؟ <Link to={SIGN_IN} className="font-bold text-brand hover:underline">ورود به حساب</Link> و فرستادن درخواست از همان‌جا.

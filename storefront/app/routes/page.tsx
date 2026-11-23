@@ -1,4 +1,5 @@
 import type { Route } from './+types/page';
+import { FIXED_PAGE_PREFIX } from '@erp/storefront/storefrontPageParts';
 import { page } from '../lib/api.server';
 import { legacyRedirect } from '../lib/legacyRedirect.server';
 import { siteEnv } from '../lib/site.server';
@@ -12,7 +13,8 @@ import { SitePageView } from '../components/SitePageView';
  * (`/about` …), so `/pages/about` is not a second address for one of them.
  */
 export async function loader({ params, request }: Route.LoaderArgs) {
-  const found = await page(params.slug);
+  // v12 phase 10c: a name under `fixed-` is the row of a fixed page's words, never a page to visit: the ERP is not asked
+  const found = params.slug.startsWith(FIXED_PAGE_PREFIX) ? null : await page(params.slug);
   if (!found || found.kind !== 'custom') {
     // the address of a page that moved is kept in the ERP's «نشانی‌های سایت قبلی» and goes to the page's address of now (301)
     const moved = await legacyRedirect(request);

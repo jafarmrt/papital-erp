@@ -35,6 +35,7 @@ export async function movePage(req: Request, id: number, slug: string, version: 
   await orm.transaction(async (tx) => {
     const row = await lockedPageRow(tx, id, version);
     if (row.kind === 'base') throw new ValidationError('نشانی صفحه‌های پایهٔ سایت عوض نمی‌شود.', { field: 'slug' }, 'STOREFRONT_PAGE_BASE_KEPT');
+    if (row.kind !== 'custom') throw new ValidationError('نشانی صفحه‌های ثابت سایت عوض نمی‌شود.', { field: 'slug' }, 'STOREFRONT_PAGE_BASE_KEPT');
     if (wanted === row.slug) return;
     const [taken] = await tx.select({ id: storefrontPages.id }).from(storefrontPages)
       .where(and(eq(storefrontPages.slug, wanted), eq(storefrontPages.isDeleted, 0)));

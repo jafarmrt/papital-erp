@@ -8,6 +8,9 @@ import { siteEnv } from '../lib/site.server';
 import { publicSettings } from '../lib/api.server';
 import { faDateTime, faDigits, faNumber, formatPrice } from '../lib/format';
 import { pageMeta } from '../lib/meta';
+import { fixedText } from '../lib/fixedText.server';
+import { fixedHead, fixedTitle } from '../lib/fixedText';
+import { FixedIntro } from '../components/FixedIntro';
 import { Pagination } from '../components/Pagination';
 
 /**
@@ -37,7 +40,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (!account.data || !orders.data) throw new Response('در دسترس نیست', { status: 503 });
   return {
     account: account.data, orders: orders.data, addresses: book.data?.data ?? [], siteUrl: siteEnv().siteUrl,
-    smsLogin: settings.smsLogin === true, emailLogin: settings.emailLogin === true,
+    smsLogin: settings.smsLogin === true, emailLogin: settings.emailLogin === true, text: await fixedText('fixed-account'),
   };
 }
 
@@ -59,7 +62,7 @@ export async function action({ request }: Route.ActionArgs) {
 export const headers = () => ({ 'Cache-Control': 'no-store' });
 
 export function meta({ data, matches }: Route.MetaArgs) {
-  return [...pageMeta({ matches, title: 'حساب من', description: 'حساب خرید شما در پاپیتال', path: '/account', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
+  return [...pageMeta({ matches, ...fixedHead(data?.text, { title: 'حساب من', description: 'حساب خرید شما در پاپیتال' }), path: '/account', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
 }
 
 export default function AccountPage({ loaderData, actionData }: Route.ComponentProps) {
@@ -73,8 +76,9 @@ export default function AccountPage({ loaderData, actionData }: Route.ComponentP
 
   return (
     <div className="mx-auto w-full max-w-xl px-4 pt-6 pb-16 lg:pt-10">
-      <h1 className="text-2xl font-extrabold lg:text-3xl">حساب من</h1>
+      <h1 className="text-2xl font-extrabold lg:text-3xl">{fixedTitle(loaderData.text, 'حساب من')}</h1>
       <div className="tile-rule mt-4 w-24" aria-hidden />
+      <FixedIntro text={loaderData.text} className="mt-4 text-muted-foreground" />
 
       <section className="mt-6 space-y-2 rounded-surface border border-border bg-card p-5 leading-7">
         <p className="text-lg font-bold">{account.name}</p>

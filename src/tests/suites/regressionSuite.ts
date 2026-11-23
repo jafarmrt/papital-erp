@@ -11270,5 +11270,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runStorefrontProductLastmodV12Tests } = await import('../regression/storefrontProductLastmodV12Tests.js');
   results.push(...await runStorefrontProductLastmodV12Tests(shouldRun));
 
+  // v12 phase 10c (migration 0032): the words of the fixed pages of the site
+  const { runStorefrontFixedPagesV12Tests } = await import('../regression/storefrontFixedPagesV12Tests.js');
+  results.push(...await runStorefrontFixedPagesV12Tests(shouldRun));
+
   return results;
 }

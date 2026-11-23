@@ -14,6 +14,9 @@ import { AnalyticsScripts, MatomoPageViews } from './components/Analytics';
 import { siteSeo } from './lib/seo.server';
 import { sessionOf } from './lib/account.server';
 import { cartCount, cartOf } from './lib/cart.server';
+import { fixedText } from './lib/fixedText.server';
+import { fixedTitle } from './lib/fixedText';
+import { FixedIntro } from './components/FixedIntro';
 
 export const links: LinksFunction = () => [
   { rel: 'preload', href: '/fonts/Vazirmatn-Regular.woff2', as: 'font', type: 'font/woff2', crossOrigin: 'anonymous' },
@@ -21,7 +24,9 @@ export const links: LinksFunction = () => [
 ];
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const [f, settings, images, seo, menu, shop] = await Promise.all([facets(), publicSettings(), brand(), siteSeo(), menus(), shopInfo()]);
+  const [f, settings, images, seo, menu, shop, notFoundText] = await Promise.all([
+    facets(), publicSettings(), brand(), siteSeo(), menus(), shopInfo(), fixedText('fixed-not-found'),
+  ]);
   const env = siteEnv();
   return {
     categories: f.categories,
@@ -48,6 +53,8 @@ export async function loader({ request }: Route.LoaderArgs) {
     menus: menu,
     /** v12 phase 10a: «اطلاعات فروشگاه»: the brand's name, contact details, the footer's texts, the e-namad seal */
     shop,
+    /** v12 phase 10c: the words the shop wrote for «پیدا نشد» (null = the words of this file); the page is drawn here, in `ErrorBoundary` */
+    notFoundText,
   };
 }
 
@@ -167,8 +174,22 @@ export function headers({ errorHeaders }: Route.HeadersArgs) {
   return headers;
 }
 
+/**
+ * The title of a page that failed (the pages that work write their own): «پیدا نشد» with the words the shop wrote for
+ * it, and never a page for a search engine.
+ */
+export function meta({ error, data }: Route.MetaArgs) {
+  if (!error) return [];
+  const notFound = isRouteErrorResponse(error) && error.status === 404;
+  const text = notFound ? data?.notFoundText : null;
+  const brandName = data?.shop?.brand.fullName || DEFAULT_SHOP.brand.fullName;
+  const title = notFound ? (text?.seoTitle || fixedTitle(text, 'این صفحه پیدا نشد')) : 'فروشگاه لحظه‌ای در دسترس نیست';
+  return [{ title: `${title} | ${brandName}` }, { name: 'robots', content: 'noindex' }];
+}
+
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   const notFound = isRouteErrorResponse(error) && error.status === 404;
+  const text = useRootData()?.notFoundText;
   // v12 phase 7: one visitor's searches past the limit (the shop itself is fine)
   if (isRouteErrorResponse(error) && error.status === 429) {
     return (
@@ -181,12 +202,12 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   }
   return (
     <section className="mx-auto max-w-xl px-4 py-24 text-center">
-      <h1 className="text-2xl font-extrabold">{notFound ? 'این صفحه پیدا نشد' : 'فروشگاه لحظه‌ای در دسترس نیست'}</h1>
-      <p className="mt-3 text-muted-foreground">
+      <h1 className="text-2xl font-extrabold">{notFound ? fixedTitle(text, 'این صفحه پیدا نشد') : 'فروشگاه لحظه‌ای در دسترس نیست'}</h1>
+      <div className="mt-3 text-muted-foreground">
         {notFound
-          ? 'شاید نشانی عوض شده یا این محصول دیگر روی سایت نیست.'
-          : 'چند دقیقهٔ دیگر دوباره سر بزنید.'}
-      </p>
+          ? <FixedIntro text={text}><p>شاید نشانی عوض شده یا این محصول دیگر روی سایت نیست.</p></FixedIntro>
+          : <p>چند دقیقهٔ دیگر دوباره سر بزنید.</p>}
+      </div>
       <a href="/" className="mt-8 inline-flex min-h-11 items-center rounded-control bg-primary px-6 font-medium text-primary-foreground">بازگشت به صفحهٔ اصلی</a>
     </section>
   );
