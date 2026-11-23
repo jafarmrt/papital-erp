@@ -24,6 +24,7 @@ import { storefrontEmailRoutes } from './storefrontApiEmail.routes.js';
 import { PAGE_PREVIEW_KEY_MAX, PAGE_SLUG_MAX } from '../lib/storefront/storefrontPageRules.js';
 import { contentImageFile, publicPage, publicPages } from '../services/storefront/storefrontPagePublic.js';
 import { newsImageFile, publicNewsIndex, publicNewsItem, publicNewsList } from '../services/storefront/storefrontNewsPublic.js';
+import { collectionImageFile, publicCollectionTexts } from '../services/storefront/storefrontCollections.service.js';
 import { pagePreviewImageFile, publicPagePreview } from '../services/storefront/storefrontPagePreview.service.js';
 import { ACCESS_KEY_MAX } from '../services/storefront/storefrontOrderKeys.js';
 import { publicSeo } from '../services/storefront/storefrontSeo.service.js';
@@ -235,14 +236,20 @@ router.get('/news/:slug', validate(pageSlugSchema), asyncHandler(async (req: Req
   res.json({ data: await publicNewsItem(String(req.params.slug)) });
 }));
 
+// v12 phase 10e: «کالکشن‌های سایت»: the words the shop wrote for each collection that has an item on the site now (its
+// introduction, its image, the address of «آشنایی بیشتر»); never a row id, an editor or a collection with no item on the site
+router.get('/collections', asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ data: await publicCollectionTexts() });
+}));
+
 router.get('/facets', asyncHandler(async (_req: Request, res: Response) => {
   res.json({ data: await catalogFacets() });
 }));
 
 /**
  * A photo of an item on the site, else (v11 phase 8.5b) the hero image of a campaign page on the site now, else (v12
- * phase 10c) an image a published page names, else (10d) an image a news item on the site now names; an image of a
- * draft is the same 404 as a file that does not exist
+ * phase 10c) an image a published page names, else (10d) an image a news item on the site now names, else (10e) the
+ * image of a collection that has an item on the site now; an image of a draft is the same 404 as a file that does not exist
  */
 async function siteMediaFile(file: string): Promise<string> {
   try {
@@ -260,7 +267,12 @@ async function siteMediaFile(file: string): Promise<string> {
   } catch (error) {
     if (!(error instanceof NotFoundError)) throw error;
   }
-  return newsImageFile(file);
+  try {
+    return await newsImageFile(file);
+  } catch (error) {
+    if (!(error instanceof NotFoundError)) throw error;
+  }
+  return collectionImageFile(file);
 }
 
 const sendImage = (res: Response, filePath: string, cacheControl: string) => new Promise<void>((resolve, reject) => {

@@ -18,7 +18,7 @@ import {
   integrationDeliveryJobs, eventActionRuleRetirements, webhookEventPatternRepairs, itemPriceTitleCleanup,
   dailyLogVisibilityRepairs, statutoryRemittanceLines, settlementAllocations, payrollStatutoryRates, payrollEidiRates, itemCodeHistory,
   mediaAssets, mediaSections, storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontRedirects, storefrontSmsCodes, storefrontEmailCodes, storefrontSmsMessages,
-  storefrontBuyerGroups, storefrontBuyerAccounts, storefrontBuyerAddresses, storefrontBuyerSessions, storefrontPasswordTokens, storefrontDiscountCodes, storefrontDiscountRedemptions, storefrontCampaigns, storefrontMenuItems, storefrontPages, storefrontNews, storefrontContentAssets, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
+  storefrontBuyerGroups, storefrontBuyerAccounts, storefrontBuyerAddresses, storefrontBuyerSessions, storefrontPasswordTokens, storefrontDiscountCodes, storefrontDiscountRedemptions, storefrontCampaigns, storefrontMenuItems, storefrontPages, storefrontNews, storefrontCollections, storefrontContentAssets, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
 } from '../../db/schema.js';
 
 /**
@@ -168,6 +168,8 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   // v12 phase 10b: the images published content names and the pages (their sharing image) point to media images too;
   // the five base pages, which only migration 0029 makes, are made again empty right after the wipe
   { name: 'storefront_content_assets', table: storefrontContentAssets },
+  // v12 phase 10e: the words of a collection point to a media image and to a page («آشنایی بیشتر»), so they go before both
+  { name: 'storefront_collections', table: storefrontCollections },
   { name: 'storefront_pages', table: storefrontPages },
   // v12 phase 10d: the news of the site point to media images (their cover) too
   { name: 'storefront_news', table: storefrontNews },

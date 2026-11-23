@@ -12,6 +12,7 @@ import { DEFAULT_SHOP, siteShop, type SiteShop } from './shopInfo';
 import type { StorefrontPageSummary } from '@erp/storefront/storefrontPagePublicContracts';
 import { isPageSlug, sitePage, sitePageList, type SitePage } from './pages';
 import { siteNewsIndex, siteNewsItem, siteNewsList, type SiteNewsIndexRow, type SiteNewsItem, type SiteNewsList } from './news';
+import { siteCollectionTexts, type SiteCollectionText } from './collections';
 import { PAGE_PREVIEW_TOKEN } from '@erp/storefront/storefrontPageParts';
 
 /**
@@ -38,7 +39,7 @@ const CACHE_MAX = 500;
  * crawler walking random addresses (each a remembered 404 there) never pushes out the feed or the settings (the security
  * review of 8.5b)
  */
-const PINNED_PATHS = new Set(['/facets', '/settings', '/brand', '/seo', '/redirects', '/feed', '/campaigns', '/menus', '/shop-info', '/pages', '/news', '/news-index']);
+const PINNED_PATHS = new Set(['/facets', '/settings', '/brand', '/seo', '/redirects', '/feed', '/campaigns', '/menus', '/shop-info', '/pages', '/news', '/news-index', '/collections']);
 const pinned = new Map<string, Entry>();
 const kept = (path: string) => (PINNED_PATHS.has(path) ? pinned : cache).get(path);
 /** Many visitors asking for the same address at once make one call */
@@ -308,6 +309,19 @@ export async function newsIndex(): Promise<SiteNewsIndexRow[]> {
     return siteNewsIndex((await get<{ data: unknown }>('/news-index', NEWS_TTL_MS)).data);
   } catch (error) {
     if (error instanceof StorefrontApiError) return [];
+    throw error;
+  }
+}
+
+/**
+ * v12 phase 10e: the words the shop wrote for one collection («کالکشن‌های سایت»), or null. They are an extra above the
+ * list of products: any failure (an ERP not yet updated answers 404) is a page without them, never a down shop.
+ */
+export async function collectionText(name: string): Promise<SiteCollectionText | null> {
+  try {
+    return siteCollectionTexts((await get<{ data: unknown }>('/collections', PAGE_TTL_MS)).data).get(name) ?? null;
+  } catch (error) {
+    if (error instanceof StorefrontApiError) return null;
     throw error;
   }
 }

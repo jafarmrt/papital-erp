@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 643
+تعداد مسیرها: 646
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -452,6 +452,8 @@
 | DELETE | `/api/storefront/campaigns/:id` | storefront.manage |
 | PUT | `/api/storefront/campaigns/:id` | storefront.manage |
 | GET | `/api/storefront/campaigns/hero-images` | storefront.view & media.view |
+| GET | `/api/storefront/collections/` | site_content.view |
+| PUT | `/api/storefront/collections/` | site_content.manage |
 | GET | `/api/storefront/discounts` | storefront.view |
 | POST | `/api/storefront/discounts` | storefront.manage |
 | DELETE | `/api/storefront/discounts/:id` | storefront.manage |
@@ -537,6 +539,7 @@
 | GET | `/api/storefront/v1/brand` | public |
 | GET | `/api/storefront/v1/campaigns` | public |
 | GET | `/api/storefront/v1/campaigns/:slug` | public |
+| GET | `/api/storefront/v1/collections` | public |
 | GET | `/api/storefront/v1/facets` | public |
 | GET | `/api/storefront/v1/feed` | public |
 | POST | `/api/storefront/v1/inquiries/corporate-gift` | public |

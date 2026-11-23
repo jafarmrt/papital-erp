@@ -38,6 +38,7 @@ G  scripts/check-version-sync.ts
 18 src/routes/storefrontMenus.routes.ts
 18 src/routes/storefrontPages.routes.ts
 18 src/routes/storefrontNews.routes.ts
+18 src/routes/storefrontCollections.routes.ts
 18 src/lib/storefront/**
 18 src/components/storefront/**
 18 src/hooks/queries/useStorefrontQueries.ts
@@ -46,6 +47,7 @@ G  scripts/check-version-sync.ts
 18 src/hooks/queries/useStorefrontCampaignQueries.ts
 18 src/hooks/queries/useStorefrontPageQueries.ts
 18 src/hooks/queries/useStorefrontNewsQueries.ts
+18 src/hooks/queries/useStorefrontCollectionQueries.ts
 18 src/hooks/queries/useStorefrontMenuQueries.ts
 # 17 v11 history import (1405 replay from Excel): replays documents of several packages through their services
 17 src/services/historyImport/**
