@@ -18,9 +18,12 @@ import { Pagination } from '../components/Pagination';
  */
 export async function loader({ request }: Route.LoaderArgs) {
   const page = parsePage(new URL(request.url).searchParams.get('page'));
-  const list = await newsList(page);
-  const pages = list ? Math.ceil(list.total / list.pageSize) : 0;
-  if (!list || list.total === 0 || page > pages || list.items.length === 0) throw new Response('پیدا نشد', { status: 404 });
+  // the first page (kept a minute) says how many pages there are: a page past the last is a 404 the ERP is never asked for
+  const first = await newsList(1);
+  const pages = first ? Math.ceil(first.total / first.pageSize) : 0;
+  if (!first || page > pages) throw new Response('پیدا نشد', { status: 404 });
+  const list = page === 1 ? first : await newsList(page);
+  if (!list || list.items.length === 0) throw new Response('پیدا نشد', { status: 404 });
   return { items: list.items, page, pages, siteUrl: siteEnv().siteUrl };
 }
 
@@ -49,9 +52,9 @@ export default function NewsListPage({ loaderData }: Route.ComponentProps) {
         <h1 className="text-3xl font-extrabold text-balance lg:text-4xl">{TITLE}</h1>
         <div className="tile-rule mt-4 w-24" aria-hidden />
       </header>
-      <ul className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((item, i) => (
-          <li key={item.slug}>
+          <li key={item.slug} className="min-w-0">
             <article className="flex h-full flex-col overflow-hidden rounded-surface border border-border bg-card">
               {item.cover ? (
                 <Link to={newsPath(item.slug)} tabIndex={-1} aria-hidden className="block aspect-[16/10] overflow-hidden bg-muted">

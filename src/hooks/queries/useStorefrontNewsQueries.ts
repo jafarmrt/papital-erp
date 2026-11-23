@@ -46,6 +46,10 @@ export function useNewsOnSiteMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (enabled: boolean) => ((await fetchJson('/storefront/news/site', { method: 'PUT', body: JSON.stringify({ enabled }) })) as { data: { enabled: boolean } }).data,
+    // the lists on the screen show the new state at once, before they are read again
+    onSuccess: (now) => {
+      queryClient.setQueriesData<NewsList>({ queryKey: [...NEWS_KEY, 'list'] }, old => (old ? { ...old, siteEnabled: now.enabled } : old));
+    },
     onSettled: () => { void queryClient.invalidateQueries({ queryKey: [...NEWS_KEY, 'list'] }); },
   });
 }

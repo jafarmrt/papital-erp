@@ -1,8 +1,11 @@
 import { mediaPath } from '../lib/brand';
 import type { SitePageImage } from '../lib/pages';
 
-/** The main image of a news item: the small version where the box is small, the light one otherwise */
-export function NewsCover({ image, sizes, eager = false, className = '' }: { image: SitePageImage; sizes: string; eager?: boolean; className?: string }) {
+/**
+ * The main image of a news item: the small version where the box is small, the light one otherwise. By itself it keeps
+ * its own shape inside its column; a caller that fits it to a box says how (`className`).
+ */
+export function NewsCover({ image, sizes, eager = false, className = 'h-auto max-w-full' }: { image: SitePageImage; sizes: string; eager?: boolean; className?: string }) {
   const width = image.width ?? 1600;
   return (
     <img
@@ -15,7 +18,7 @@ export function NewsCover({ image, sizes, eager = false, className = '' }: { ima
       loading={eager ? 'eager' : 'lazy'}
       fetchPriority={eager ? 'high' : undefined}
       decoding="async"
-      className={`h-auto max-w-full ${className}`}
+      className={className}
     />
   );
 }

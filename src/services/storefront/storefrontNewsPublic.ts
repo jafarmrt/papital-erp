@@ -5,8 +5,10 @@ import { appSettings, mediaAssets, storefrontContentAssets, storefrontNews } fro
 import { NotFoundError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { invalidateSettingsCache } from '../../lib/memoryCache.js';
 import { mediaFilePath } from '../../lib/media/mediaPaths.js';
 import { NEWS_MAX, NEWS_SECTION_KINDS, newsExcerpt } from '../../lib/storefront/storefrontNewsRules.js';
+import type { PageSection } from '../../lib/storefront/storefrontPageRules.js';
 import {
   NEWS_EXCERPT_MAX, NEWS_SITE_PAGE_SIZE, STOREFRONT_NEWS_SETTING_KEYS as KEYS,
   type StorefrontNewsCard, type StorefrontNewsIndexRow, type StorefrontNewsList, type StorefrontPublicNews,
@@ -41,6 +43,8 @@ export async function setNewsOnSite(req: Request, enabled: boolean): Promise<{ e
       description: enabled ? 'خبرها روی سایت روشن شد' : 'خبرها روی سایت خاموش شد', details: { before: { enabled: before }, after: { enabled } },
     });
   });
+  // the staff's own reading of the settings is kept a while; the site's readers here always ask the table
+  invalidateSettingsCache();
   return { enabled: await newsOnSite(orm) };
 }
 
@@ -48,13 +52,29 @@ const onSite = (today: string) => and(
   eq(storefrontNews.isDeleted, 0), isNotNull(storefrontNews.published), isNotNull(storefrontNews.publishedAt), lte(storefrontNews.publishedDate, today),
 );
 
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * The parts of a copy a news item may have, each in the shape its kind is drawn from: a row changed by hand cannot send
+ * a part of another kind (a row of products, a button), and a part that is no part does not take the item down
+ */
+function partsOf(copy: { sections?: unknown }): PageSection[] {
+  return (Array.isArray(copy.sections) ? copy.sections : []).filter((section): section is PageSection => (
+    isRecord(section) && NEWS_SECTION_KINDS.includes(section.kind as PageSection['kind'])
+    && (section.kind === 'text' ? isRecord(section.doc) : Array.isArray(section.images) && section.images.every(isRecord))
+  ));
+}
+const summaryOf = (copy: { summary?: unknown }, parts: readonly PageSection[]): string => (
+  typeof copy.summary === 'string' && copy.summary ? copy.summary : newsExcerpt(parts, NEWS_EXCERPT_MAX)
+);
+
+/** One item of the list; null for a row whose copy cannot be read (it is left out, the list is not taken down by it) */
 function cardOf(row: NewsRecord, images: Images): StorefrontNewsCard | null {
   const copy = row.published;
-  if (!copy || !row.publishedDate) return null;
-  const sections = Array.isArray(copy.sections) ? copy.sections : [];
+  if (!isRecord(copy) || typeof copy.title !== 'string' || !row.publishedDate) return null;
   return {
-    slug: row.slug, title: copy.title, summary: copy.summary || newsExcerpt(sections, NEWS_EXCERPT_MAX), date: row.publishedDate,
-    cover: imageOf(images, copy.coverAssetId, copy.title),
+    slug: row.slug, title: copy.title, summary: summaryOf(copy, partsOf(copy)), date: row.publishedDate,
+    cover: imageOf(images, typeof copy.coverAssetId === 'number' ? copy.coverAssetId : null, copy.title),
   };
 }
 
@@ -65,11 +85,11 @@ export async function publicNewsList(page: number): Promise<StorefrontNewsList> 
   const [{ total }] = await orm.select({ total: sql<number>`count(*)::int` }).from(storefrontNews).where(where);
   const rows = await orm.select().from(storefrontNews).where(where).orderBy(desc(storefrontNews.publishedDate), desc(storefrontNews.id))
     .limit(NEWS_SITE_PAGE_SIZE).offset((page - 1) * NEWS_SITE_PAGE_SIZE);
-  const images = await imagesOf(rows.flatMap(row => row.published?.coverAssetId ?? []));
+  const images = await imagesOf(rows.flatMap(row => (typeof row.published?.coverAssetId === 'number' ? [row.published.coverAssetId] : [])));
   return { enabled: true, data: rows.flatMap(row => cardOf(row, images) ?? []), total, page, pageSize: NEWS_SITE_PAGE_SIZE };
 }
 
-/** `GET /api/storefront/v1/news-index`: the address, day and last change of every item on the site now (none while the switch is off) */
+/** `GET /api/storefront/v1/news-index`: the address, day and time of publishing of every item on the site now (none while the switch is off) */
 export async function publicNewsIndex(): Promise<StorefrontNewsIndexRow[]> {
   if (!await newsOnSite(orm)) return [];
   const rows = await orm.select({ slug: storefrontNews.slug, date: storefrontNews.publishedDate, publishedAt: storefrontNews.publishedAt }).from(storefrontNews)
@@ -82,16 +102,18 @@ export async function publicNewsItem(slug: string): Promise<StorefrontPublicNews
   if (!await newsOnSite(orm)) throw notFound();
   const [row] = await orm.select().from(storefrontNews).where(and(onSite(await businessTodayIsoDate()), eq(storefrontNews.slug, slug))).limit(1);
   const copy = row?.published;
-  if (!row || !copy || !row.publishedDate) throw notFound();
-  // a row changed by hand cannot send a part a news item does not have (a row of products, a button)
-  const sections = (Array.isArray(copy.sections) ? copy.sections : []).filter(section => NEWS_SECTION_KINDS.includes(section.kind));
+  if (!row || !isRecord(copy) || typeof copy.title !== 'string' || !row.publishedDate) throw notFound();
+  const sections = partsOf(copy);
   const updatedAt = isoOf(row.publishedAt ?? '');
   const drawn = await pageForSite(
-    { title: copy.title, seoTitle: copy.seoTitle, seoDescription: copy.seoDescription, noindex: false, shareImageAssetId: copy.coverAssetId, sections },
+    {
+      title: copy.title, seoTitle: typeof copy.seoTitle === 'string' ? copy.seoTitle : '', seoDescription: typeof copy.seoDescription === 'string' ? copy.seoDescription : '',
+      noindex: false, shareImageAssetId: typeof copy.coverAssetId === 'number' ? copy.coverAssetId : null, sections,
+    },
     { slug: row.slug, kind: 'custom', title: copy.title, noindex: false, updatedAt },
   );
   return {
-    slug: row.slug, title: copy.title, summary: copy.summary || newsExcerpt(sections, NEWS_EXCERPT_MAX), date: row.publishedDate, cover: drawn.shareImage,
+    slug: row.slug, title: copy.title, summary: summaryOf(copy, sections), date: row.publishedDate, cover: drawn.shareImage,
     updatedAt, seoTitle: drawn.seoTitle, seoDescription: drawn.seoDescription, sections: drawn.sections,
   };
 }

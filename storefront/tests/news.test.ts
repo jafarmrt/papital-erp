@@ -37,6 +37,11 @@ const ITEMS = [
   item('workshop-visit', 'بازدید از کارگاه', '2026-11-15'),
   item('opening-hours', 'ساعت کار تازه', '2026-11-01'),
   item('first-news', 'نخستین خبر <b>گالری</b>', '2026-10-10'),
+  // its text begins with a gallery that has a title, and its copy was published weeks before its day
+  item('gallery-first', 'آلبوم تابستان', '2026-09-01', {
+    updatedAt: '2026-08-15T08:00:00.000Z',
+    sections: [{ kind: 'gallery', background: 'white', title: 'عکس‌های تابستان', images: [{ sha256: SHA('c'), width: 800, height: 600, alt: 'ساحل', thumb: false }] }],
+  }),
 ];
 
 beforeAll(async () => {
@@ -86,6 +91,10 @@ describe('the news of the site', () => {
     // plain links to the other pages
     expect(first.html).toContain('href="/news?page=2"');
     expect(first.html).toContain('href="/news?page=3"');
+    // a card is never wider than its column, whatever its words (a long unbroken address in a summary)
+    expect(first.html).toMatch(/<ul class="[^"]*\bgrid-cols-1\b[^"]*"><li class="min-w-0">/);
+    // the cover fills its box: nothing of the image's own shape is forced on it there
+    expect(first.html).toMatch(/<img[^>]*class="size-full object-cover"/);
 
     const second = await page('/news?page=2');
     expect(second.status).toBe(200);
@@ -110,6 +119,16 @@ describe('the news of the site', () => {
     expect((await page('/news?page=abc')).status).toBe(200);
   });
 
+  it('never asks the ERP for a page past the last one: the first page says how many there are', async () => {
+    const reads = async () => await (await fetch(`http://127.0.0.1:${PORT}/__mock/news-reads`)).json() as Record<string, number>;
+    await page('/news');
+    const before = await reads();
+    // red before: each of these went to the ERP, and one it refuses (past 9999) came back as «در دسترس نیست»
+    for (const number of [4, 500, 10000, 100000]) expect((await page(`/news?page=${number}`)).status, String(number)).toBe(404);
+    expect(await reads()).toEqual(before);
+    expect(before['1']).toBe(1);
+  });
+
   it('draws an item with its title, day, cover and text, keeping only the parts and marks a news item may have', async () => {
     const { status, html } = await page('/news/yalda-night');
     expect(status).toBe(200);
@@ -118,7 +137,9 @@ describe('the news of the site', () => {
     expect((html.match(/<h1/g) ?? []).length).toBe(1);
     expect(article).toMatch(/<time dateTime="2026-12-20">۲۹ آذر ۱۴۰۵<\/time>/);
     expect(article).toContain(`src="/media/${SHA('a')}.webp"`);
-    expect(article).toContain('alt="ویترین یلدا"');
+    // the title is written just above the cover, so the cover says nothing more to a screen reader, and is held to a height
+    expect(article).toMatch(/<figure[^>]*>(<!--.*?-->)?<img[^>]*alt=""[^>]*class="[^"]*max-h-\[36rem\][^"]*"/s);
+    expect(article).not.toContain('alt="ویترین یلدا"');
     expect(article).toContain('گالری در شب یلدا تا نیمه‌شب باز است.');
     // the gallery's title is a heading under the item's own, and an image that is no file is left out
     expect(article).toMatch(/<h2[^>]*>عکس‌های پارسال<\/h2>/);
@@ -165,6 +186,14 @@ describe('the news of the site', () => {
     expect(plain.html).toContain('<meta name="description" content="متن کالکشن تازه رسید"/>');
     // one with a summary and no search description is described by its summary
     expect((await page('/news/workshop-visit')).html).toContain('<meta name="description" content="خلاصهٔ بازدید از کارگاه"/>');
+    // an item whose copy was published before its own day is not «changed» before it was «published», and an item that
+    // begins with a titled gallery keeps its own title as the page's one `<h1>`
+    const ahead = await page('/news/gallery-first');
+    expect(ahead.html).toMatch(/<h1[^>]*>آلبوم تابستان<\/h1>/);
+    expect((ahead.html.match(/<h1/g) ?? []).length).toBe(1);
+    expect(ahead.html).toMatch(/<h2[^>]*>عکس‌های تابستان<\/h2>/);
+    expect(ahead.html).not.toContain('article:modified_time');
+    expect(ldBlocks(ahead.html).find(block => block['@type'] === 'NewsArticle')).not.toHaveProperty('dateModified');
     // a title that carries markup is escaped inside the structured data too
     const odd = await page('/news/first-news');
     expect(odd.status).toBe(200);
@@ -177,6 +206,8 @@ describe('the news of the site', () => {
     expect(html).toContain('<url><loc>https://shop.example/news</loc></url>');
     expect(html).toContain('<url><loc>https://shop.example/news/yalda-night</loc><lastmod>2026-12-20</lastmod></url>');
     for (const { slug } of ITEMS) expect(html, slug).toContain(`<loc>https://shop.example/news/${slug}</loc>`);
+    // the day of an item published ahead is its own day, the later of the two
+    expect(html).toContain('<url><loc>https://shop.example/news/gallery-first</loc><lastmod>2026-09-01</lastmod></url>');
   });
 });
 
@@ -211,7 +242,13 @@ describe('an answer about news that is not what the site expects', () => {
     expect(siteNewsItem({ slug: 'x', title: 'x' })).toBeNull();
     expect(siteNewsItem({ slug: 'ok', title: 'خبر', summary: '', date: '2026-11-23', sections: 'x' })?.page.sections).toEqual([]);
     expect(siteNewsIndex('x')).toEqual([]);
-    expect(siteNewsIndex([{ slug: 'a-b', updatedAt: '2026-11-23T08:00:00.000Z' }, { slug: 'no-time' }, { slug: 'Bad' }, 5, { slug: 'zoneless', updatedAt: '2026-11-23 08:00:00' }]))
-      .toEqual([{ slug: 'a-b', lastmod: '2026-11-23' }, { slug: 'no-time', lastmod: '' }, { slug: 'zoneless', lastmod: '' }]);
+    expect(siteNewsIndex([
+      { slug: 'a-b', updatedAt: '2026-11-23T08:00:00.000Z' }, { slug: 'no-time' }, { slug: 'Bad' }, 5, { slug: 'zoneless', updatedAt: '2026-11-23 08:00:00' },
+      { slug: 'ahead', date: '2026-12-01', updatedAt: '2026-11-23T08:00:00.000Z' }, { slug: 'edited', date: '2026-11-01', updatedAt: '2026-11-23T08:00:00.000Z' },
+      { slug: 'day-only', date: '2026-11-05' }, { slug: 'bad-day', date: '5 Nov', updatedAt: '2026-11-23T08:00:00.000Z' },
+    ])).toEqual([
+      { slug: 'a-b', lastmod: '2026-11-23' }, { slug: 'no-time', lastmod: '' }, { slug: 'zoneless', lastmod: '' },
+      { slug: 'ahead', lastmod: '2026-12-01' }, { slug: 'edited', lastmod: '2026-11-23' }, { slug: 'day-only', lastmod: '2026-11-05' }, { slug: 'bad-day', lastmod: '2026-11-23' },
+    ]);
   });
 });

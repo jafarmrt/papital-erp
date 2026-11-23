@@ -53,7 +53,7 @@ const TEXT = { kind: 'text', background: 'white', doc: { type: 'doc', content: [
 /** an item on the site whose saved draft differs from it: every action is open */
 const CHANGED: NewsDetail = { ...DRAFT, status: 'changed', newsDate: '2026-11-20', publishedDate: '2026-11-20', draft: { ...DRAFT.draft, newsDate: '2026-11-20', sections: [TEXT] } };
 
-function open(at: string, detail: NewsDetail = DRAFT, options: { list?: (page: number) => NewsList; acted?: (action: string) => Partial<NewsDetail> } = {}) {
+function open(at: string, detail: NewsDetail = DRAFT, options: { list?: (page: number) => NewsList | Promise<NewsList>; acted?: (action: string) => Partial<NewsDetail> } = {}) {
   fetchJson.mockImplementation(async (url: string, init?: { method?: string; body?: string }) => {
     if (url.startsWith('/storefront/news?page=') && !init) return options.list ? options.list(Number(url.split('=')[1])) : { data: ROWS, total: 2, page: 1, pageSize: 50, siteEnabled: false };
     if (init?.method === 'PUT' && url === '/storefront/news/site') return { data: JSON.parse(String(init.body)) as { enabled: boolean } };
@@ -256,15 +256,22 @@ describe('the news of the site in the ERP', () => {
   it('turns the news of the site on and off by sending the state the switch should take, once', async () => {
     permissions.current = ['site_content.view', 'site_content.manage'];
     let enabled = false;
-    open('/site-news', DRAFT, { list: page => ({ data: ROWS, total: 2, page, pageSize: 50, siteEnabled: enabled }) });
+    // the next reading of the list is held back until the test lets it go
+    let held: Promise<void> = Promise.resolve();
+    let letGo = () => {};
+    open('/site-news', DRAFT, { list: async (page) => { await held; return { data: ROWS, total: 2, page, pageSize: 50, siteEnabled: enabled }; } });
     const box = within(await screen.findByRole('region', { name: 'خبرها روی سایت' }));
     const tick = box.getByRole('checkbox', { name: 'خبرها روی سایت بیایند' }) as HTMLInputElement;
     expect(tick.checked).toBe(false);
     expect(box.getByText(/تا این کلید خاموش است، سایت هیچ خبری نشان نمی‌دهد/)).toBeTruthy();
+    held = new Promise<void>((resolve) => { letGo = resolve; });
     enabled = true;
     fireEvent.click(tick);
     fireEvent.click(tick);
     await waitFor(() => expect(calls('PUT')).toHaveLength(1));
+    // the switch shows the new state as soon as the answer is in, before the list has been read again
+    await waitFor(() => expect((within(screen.getByRole('region', { name: 'خبرها روی سایت' })).getByRole('checkbox') as HTMLInputElement).checked).toBe(true));
+    letGo();
     expect(calls('PUT')[0][0]).toBe('/storefront/news/site');
     expect(JSON.parse(String(calls('PUT')[0][1]?.body))).toEqual({ enabled: true });
     // the list is read again and the switch shows what the server has

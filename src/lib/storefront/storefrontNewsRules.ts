@@ -1,5 +1,6 @@
 import { checkedPage, pageAssetIds, type PageSection, type SectionKind } from './storefrontPageRules.js';
 import { text } from './storefrontPageParts.js';
+import { safeRichDoc } from './storefrontPageRichText.js';
 
 /**
  * v12 phase 10d (docs/roadmap/V12_SITE_NEXT_START_PLAN.md §7.2): the rules of a news item of the site, shared by the
@@ -87,12 +88,18 @@ function plainText(part: { type?: string; text?: string; content?: readonly unkn
   return part.type === 'paragraph' || part.type === 'heading' ? inside.join('') : inside.filter(Boolean).join(' ');
 }
 
-/** The first words of an item's text, for the list of news where the item has no summary of its own ('' when it has no words) */
-export function newsExcerpt(sections: readonly PageSection[], max: number): string {
+/**
+ * The first words of an item's text, for the list of news where the item has no summary of its own ('' when it has no
+ * words). The text is checked first (`safeRichDoc`), so the words of a node the site would not draw are not taken, and a
+ * part that is no part (a row changed by hand) is passed over. The cut is by whole characters, never through an emoji.
+ */
+export function newsExcerpt(sections: readonly unknown[], max: number): string {
   for (const section of sections) {
-    if (section.kind !== 'text') continue;
-    const words = plainText(section.doc).replace(/\s+/g, ' ').trim();
-    if (words) return words.length > max ? `${words.slice(0, max - 1).trimEnd()}…` : words;
+    if (!isRecord(section) || section.kind !== 'text') continue;
+    const doc = safeRichDoc(section.doc).doc;
+    if (!doc) continue;
+    const letters = Array.from(plainText(doc).replace(/\s+/g, ' ').trim());
+    if (letters.length > 0) return letters.length > max ? `${letters.slice(0, max - 1).join('').trimEnd()}…` : letters.join('');
   }
   return '';
 }

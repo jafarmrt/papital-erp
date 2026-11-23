@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import request from 'supertest';
-import { and, eq, inArray, like } from 'drizzle-orm';
+import { and, desc, eq, inArray, like } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { activityLogs, appSettings, mediaAssets, mediaSections, storefrontContentAssets, storefrontNews } from '../../db/schema.js';
@@ -110,9 +110,12 @@ export async function runStorefrontNewsSiteV12Tests(shouldRun: (id: string, ...e
       newsDate: '2020-03-01', coverAssetId: cover.id, seoTitle: 'عنوان جست‌وجوی خبر', seoDescription: 'توضیح جست‌وجوی خبر',
       sections: [text('نخستین جملهٔ خبر که خلاصه‌اش می‌شود.'), gallery([first.id, second.id])],
     });
-    // its draft goes on changing after «انتشار»: none of this is on the site
+    // its draft goes on changing after «انتشار», every field of it: none of this is on the site
     const secret = `پیش‌نویس محرمانه ${tag}`;
-    const redraft = await erp.put(`/api/storefront/news/${shown.id}`, { ...shown.form, title: secret, summary: secret, coverAssetId: draftOnly.id, version: shown.version });
+    const redraft = await erp.put(`/api/storefront/news/${shown.id}`, {
+      ...shown.form, title: secret, summary: '', coverAssetId: draftOnly.id, newsDate: '2021-07-07', seoTitle: `${secret} در جست‌وجو`, seoDescription: `${secret} در توضیح`,
+      sections: [text(`${secret} در متن`), gallery([first.id, draftOnly.id])], version: shown.version,
+    });
     if (redraft.status !== 200) throw new Error(`changing the draft: ${redraft.status} ${JSON.stringify(redraft.body)}`);
     const todays = await make('today', `خبر امروز ${tag}`, { summary: 'خلاصهٔ خبر امروز' });
     const later = await make('later', `خبر در نوبت ${tag}`, { newsDate: '2099-01-01', coverAssetId: waiting.id });
@@ -156,6 +159,10 @@ export async function runStorefrontNewsSiteV12Tests(shouldRun: (id: string, ...e
     const list = await site('/news');
     const cards = (list.body.data ?? []) as Array<Record<string, unknown>>;
     const [newest, older] = cards;
+    // the last audit row of the switch keeps both sides of the change
+    const [switched] = await orm.select().from(activityLogs).where(and(eq(activityLogs.entity, 'فروشگاه سایت'), eq(activityLogs.entityId, 'news'))).orderBy(desc(activityLogs.id)).limit(1);
+    const sides = (switched?.details ?? {}) as { before?: { enabled?: boolean }; after?: { enabled?: boolean } };
+    if (switched?.action !== 'SETTING_CHANGE' || sides.before?.enabled !== false || sides.after?.enabled !== true) wrong.push(`the audit row of the switch: ${switched?.action} ${JSON.stringify(sides)}`);
     if (list.status !== 200 || keys(list.body) !== 'data,enabled,page,pageSize,total' || list.body.enabled !== true || list.body.total !== 2 || list.body.page !== 1 || list.body.pageSize !== 12
       || cards.map(c => c.slug).join(',') !== `${todays.slug},${shown.slug}` || cards.some(c => keys(c) !== 'cover,date,slug,summary,title')) {
       wrong.push(`the list: ${list.status} [${keys(list.body)}] total ${list.body.total}: ${cards.map(c => `${String(c.slug)} [${keys(c)}]`).join(' | ')}`);
@@ -188,7 +195,7 @@ export async function runStorefrontNewsSiteV12Tests(shouldRun: (id: string, ...e
     // nothing of the draft, of another item's state or of the ERP's own ids in any answer
     const everything = JSON.stringify([list.body, index.body, item.body, (await site(`/news/${todays.slug}`)).body]);
     for (const [what, leak] of [
-      ['the draft', secret], ['a library id', '"assetId"'], ['a row id', '"id"'], ['an editor', '"updatedBy"'], ['an editor', '"publishedBy"'], ['a version', '"version"'],
+      ['the draft', secret], ['the draft\'s day', '2021-07-07'], ['a library id', '"assetId"'], ['a row id', '"id"'], ['an editor', '"updatedBy"'], ['an editor', '"publishedBy"'], ['a version', '"version"'],
       ['the draft\'s image', draftOnly.sha256], ['the image of an item waiting for its day', waiting.sha256], ...hidden.map(h => ['an item that is not on the site', h.slug]),
     ]) if (everything.includes(leak)) wrong.push(`an answer carries ${what}: ${leak.slice(0, 24)}`);
     for (const one of hidden) {
@@ -212,6 +219,27 @@ export async function runStorefrontNewsSiteV12Tests(shouldRun: (id: string, ...e
     const forged = ((await site(`/news/${shown.slug}`)).body.data?.sections ?? []) as Array<{ kind: string }>;
     if (forged.map(s => s.kind).join(',') !== 'text,gallery') wrong.push(`a part written by hand into the copy: ${forged.map(s => s.kind).join(',')}`);
 
+    // a copy that cannot be read (a row changed by hand) does not take the list or the item down: what is no part is
+    // passed over, a summary that is no text is not sent, and the words of a node the site would not draw are not taken
+    await orm.update(storefrontNews).set({
+      published: {
+        ...row.published!, summary: { a: 1 } as unknown as string,
+        sections: [null, { kind: 'text', background: 'white' }, { kind: 'gallery', background: 'white', title: 'x', images: 'no' },
+          { kind: 'text', background: 'white', doc: { type: 'doc', content: [{ type: 'iframe', content: [p('متن گره ناشناخته')] }] } }, text('متن درست')] as never,
+      },
+    }).where(eq(storefrontNews.id, shown.id));
+    const [bentList, bentItem] = [await site('/news'), await site(`/news/${shown.slug}`)];
+    const bentCard = ((bentList.body.data ?? []) as Array<Record<string, unknown>>).find(c => c.slug === shown.slug);
+    if (bentList.status !== 200 || bentItem.status !== 200 || bentCard?.summary !== 'متن درست' || bentItem.body.data?.summary !== 'متن درست' || JSON.stringify(bentItem.body).includes('گره ناشناخته')) {
+      wrong.push(`a copy that cannot be read: list ${bentList.status}, item ${bentItem.status}, summary ${JSON.stringify(bentCard?.summary)}`);
+    }
+    await orm.update(storefrontNews).set({ published: row.published }).where(eq(storefrontNews.id, shown.id));
+    // a removed row whose copy was left by hand is not on the site either
+    await orm.update(storefrontNews).set({ isDeleted: 1 }).where(eq(storefrontNews.id, shown.id));
+    const [removedItem, removedList, removedImage] = [await site(`/news/${shown.slug}`), await site('/news'), await media(cover.sha256)];
+    if (removedItem.status !== 404 || removedList.body.total !== 1 || removedImage !== '404/404') wrong.push(`a removed row with its copy left: ${removedItem.status} total ${removedList.body.total} image ${removedImage}`);
+    await orm.update(storefrontNews).set({ isDeleted: 0 }).where(eq(storefrontNews.id, shown.id));
+
     // 7) an item comes on the day it is dated, not before: the waiting item with its day set to today is on the site
     const [waitingRow] = await orm.select().from(storefrontNews).where(eq(storefrontNews.id, later.id));
     await orm.update(storefrontNews).set({ publishedDate: today, published: { ...waitingRow.published!, newsDate: today } }).where(eq(storefrontNews.id, later.id));
@@ -232,7 +260,7 @@ export async function runStorefrontNewsSiteV12Tests(shouldRun: (id: string, ...e
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'with the switch off (the default) the list was empty, an item 404 and its image 404; only the manage key turned the switch, a wrong body was 400 and a repeat wrote no second audit row; the list held the two items on the site, the newest first, each with exactly five fields, and was paged; the index named them with their time; one item had exactly its nine fields, its images by file key and only text and gallery parts; no answer carried the draft, a row or library id, an editor or an item waiting, taken off, removed or never published; each of those was 404; the images of items on the site were given, light and small, and no other; a part written by hand was not sent; an item came on its day; taken off, an item and its image were gone; with the switch off again everything was',
+      details: 'with the switch off (the default) the list was empty, an item 404 and its image 404; only the manage key turned the switch, a wrong body was 400 and a repeat wrote no second audit row; the list held the two items on the site, the newest first, each with exactly five fields, and was paged; the index named them with their time; one item had exactly its nine fields, its images by file key and only text and gallery parts; no answer carried the draft, a row or library id, an editor or an item waiting, taken off, removed or never published; each of those was 404; the images of items on the site were given, light and small, and no other; a part written by hand was not sent, a copy that cannot be read took neither the list nor the item down, and a removed row with its copy left was not on the site; an item came on its day; taken off, an item and its image were gone; with the switch off again everything was',
     }));
   } catch (err) {
     results.push(makeTestCase({

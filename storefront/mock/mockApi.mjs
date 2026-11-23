@@ -57,6 +57,8 @@ let pagesMode = process.env.MOCK_PAGES ?? '';
 // newest first; MOCK_NEWS=fail answers 500 and MOCK_NEWS=missing 404 for all three addresses (an ERP not yet updated).
 const newsMode = process.env.MOCK_NEWS ?? '';
 const news = newsMode.startsWith('{') ? JSON.parse(newsMode) : { enabled: false, items: [] };
+/** how many times each page of the list of news was asked for (`/__mock/news-reads`), so a test can see what the site kept to itself */
+const newsReads = {};
 const previews = process.env.MOCK_PREVIEWS ? JSON.parse(process.env.MOCK_PREVIEWS) : {};
 const previewMedia = (process.env.MOCK_PREVIEW_MEDIA ?? '').split(',').filter(Boolean);
 let previewReads = 0;
@@ -387,6 +389,7 @@ createServer(async (req, res) => {
   // v12 phase 10c: the tests make the page routes fail (`fail`), vanish (`missing`), answer something that is no page
   // (`html`, `empty`, `null`) or answer again (`ok`) while the mock runs
   // how many requests came under a preview key, pages and images (the site must read each time, keep none, and send no key of another shape)
+  if (url.pathname === '/__mock/news-reads') return send(res, 200, newsReads);
   if (url.pathname === '/__mock/preview-reads') return send(res, 200, { reads: previewReads, keysInAddress: previewKeysInAddress });
   if (url.pathname === '/__mock/pages') {
     pagesMode = url.searchParams.get('mode') ?? 'ok';
@@ -518,6 +521,9 @@ createServer(async (req, res) => {
     if (route === '/news') {
       const pageSize = news.pageSize ?? 12;
       const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
+      newsReads[page] = (newsReads[page] ?? 0) + 1;
+      // as the ERP: a page past 9999 is refused
+      if (page > 9999) return send(res, 400, { error: 'validation', code: 'VALIDATION_ERROR' });
       const data = items.slice((page - 1) * pageSize, page * pageSize).map(({ slug, title, summary, date, cover }) => ({ slug, title, summary, date, cover: cover ?? null }));
       return send(res, 200, { enabled: Boolean(news.enabled), data, total: items.length, page: news.enabled ? page : 1, pageSize });
     }

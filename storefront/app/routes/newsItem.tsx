@@ -6,7 +6,7 @@ import { mediaPath } from '../lib/brand';
 import { faFullDay } from '../lib/format';
 import { breadcrumbLd, newsArticleLd } from '../lib/jsonLd';
 import { brandOf, pageMeta } from '../lib/meta';
-import { NEWS_PATH, newsPath, type SiteNewsItem } from '../lib/news';
+import { NEWS_PATH, newsDayStart, newsModifiedAt, newsPath, type SiteNewsItem } from '../lib/news';
 import { isBlank, pageCardImage, pageDescription } from '../lib/pages';
 import { useRootData } from '../root';
 import { JsonLdScripts } from '../components/JsonLdScripts';
@@ -38,8 +38,8 @@ export function meta({ data, matches }: Route.MetaArgs) {
       image: image ? mediaPath(image.sha256) : undefined, siteUrl,
     }),
     { property: 'og:type', content: 'article' },
-    { property: 'article:published_time', content: `${item.date}T00:00:00+03:30` },
-    ...(item.page.updatedAt ? [{ property: 'article:modified_time', content: item.page.updatedAt }] : []),
+    { property: 'article:published_time', content: newsDayStart(item.date) },
+    ...(newsModifiedAt(item) ? [{ property: 'article:modified_time', content: newsModifiedAt(item) }] : []),
     // the name of the brand as the publisher, for a reader that looks for one
     { property: 'article:publisher', content: brandOf(matches).fullName },
   ];
@@ -66,8 +66,9 @@ export default function NewsItemPage({ loaderData }: Route.ComponentProps) {
             <p className="mt-3 text-sm text-muted-foreground"><time dateTime={item.date}>{faFullDay(item.date)}</time></p>
             <div className="tile-rule mt-4 w-24" aria-hidden />
             {item.cover ? (
-              <figure className="mt-6 overflow-hidden rounded-surface border border-border">
-                <NewsCover image={item.cover} sizes="(min-width: 1024px) 960px, 100vw" eager className="w-full" />
+              <figure className="mt-6 overflow-hidden rounded-surface border border-border bg-muted">
+                {/* the title is written just above: the image says nothing more to a screen reader; a tall image is held to a height */}
+                <NewsCover image={{ ...item.cover, alt: '' }} sizes="(min-width: 1024px) 960px, 100vw" eager className="mx-auto h-auto max-h-[36rem] w-auto max-w-full" />
               </figure>
             ) : null}
           </header>
@@ -79,7 +80,7 @@ export default function NewsItemPage({ loaderData }: Route.ComponentProps) {
       <JsonLdScripts
         blocks={[
           newsArticleLd(
-            { title: item.title, description: descriptionOf(item), path: newsPath(item.slug), date: item.date, updatedAt: item.page.updatedAt, image: image ? mediaPath(image.sha256) : '' },
+            { title: item.title, description: descriptionOf(item), path: newsPath(item.slug), date: item.date, updatedAt: newsModifiedAt(item), image: image ? mediaPath(image.sha256) : '' },
             siteUrl, { name: root?.shop?.brand.fullName ?? '', logoUrl: root?.logoUrl ?? '' },
           ),
           breadcrumbLd([{ name: 'خانه', path: '/' }, { name: 'خبرها', path: NEWS_PATH }, { name: item.title, path: newsPath(item.slug) }], siteUrl),

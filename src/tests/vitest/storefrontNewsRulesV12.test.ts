@@ -116,6 +116,15 @@ describe('a news item of the site', () => {
     expect(newsExcerpt(parts, 12)).toBe('سرخط جملهٔ…');
     expect(newsExcerpt(parts, 12).length).toBeLessThanOrEqual(12);
     expect(newsExcerpt([], 200)).toBe('');
+    // a text part with no words is passed over for the next one, and so is anything that is no part or no safe text
+    const empty = { kind: 'text', background: 'white', doc: { type: 'doc', content: [{ type: 'paragraph' }] } };
+    const unsafe = { kind: 'text', background: 'white', doc: { type: 'doc', content: [{ type: 'iframe', content: [p('پنهان')] }] } };
+    expect(newsExcerpt([null, 'x', { kind: 'text' }, empty, unsafe, text(p('واژه‌های خبر'))], 200)).toBe('واژه‌های خبر');
+    // the cut never goes through an emoji (a pair of code units)
+    const smile = String.fromCodePoint(0x1f600);
+    const cut = newsExcerpt([text(p(`${'ب'.repeat(8)}${smile}${smile}${smile}`))], 10);
+    expect(cut).toBe(`${'ب'.repeat(8)}${smile}…`);
+    expect(/[\ud800-\udbff](?![\udc00-\udfff])/.test(cut)).toBe(false);
     expect(newsExcerpt(checkedNews(news({ sections: [gallery(8, 9)] }), { forPublish: false }).news!.sections, 200)).toBe('');
   });
 });

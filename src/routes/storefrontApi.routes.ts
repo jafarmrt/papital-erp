@@ -151,8 +151,9 @@ const catalogSchema = z.object({
 const slugSchema = z.object({ params: z.object({ slug: z.string().min(1).max(STOREFRONT_SLUG_MAX) }).passthrough() });
 const campaignSlugSchema = z.object({ params: z.object({ slug: z.string().min(1).max(CAMPAIGN_SLUG_MAX) }).passthrough() });
 // a page's address is lowercase Latin, so anything else (a NUL among them, which PostgreSQL refuses) is not asked of the database
-const newsListSchema = z.object({ query: z.object({ page: z.string().regex(/^[1-9]\d{0,3}$/).transform(Number).optional() }).passthrough() });
 const pageSlugSchema = z.object({ params: z.object({ slug: z.string().min(1).max(PAGE_SLUG_MAX).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/) }).passthrough() });
+// v12 phase 10d: a page of the list of news, 1 to 9999 (the site asks for no page past the list's last)
+const newsListSchema = z.object({ query: z.object({ page: z.string().regex(/^[1-9]\d{0,3}$/).transform(Number).optional() }).passthrough() });
 const mediaSchema = z.object({ params: z.object({ file: z.string().min(1).max(80) }).passthrough() });
 
 router.get('/settings', asyncHandler(async (_req: Request, res: Response) => {

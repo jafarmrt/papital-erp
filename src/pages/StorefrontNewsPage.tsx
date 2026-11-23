@@ -42,7 +42,7 @@ function NewsOnSite({ enabled, canManage }: { enabled: boolean; canManage: boole
       </label>
       <p className="text-xs leading-6 text-slate-500">
         {enabled
-          ? 'خبرهای منتشرشده‌ای که روزشان رسیده در بخش خبرهای سایت دیده می‌شوند.'
+          ? 'خبرهای منتشرشده‌ای که روزشان رسیده روی سایت دیده می‌شوند.'
           : 'تا این کلید خاموش است، سایت هیچ خبری نشان نمی‌دهد و نشانی خبرها «پیدا نشد» است، هر چه این‌جا منتشر شده باشد.'}
       </p>
     </section>

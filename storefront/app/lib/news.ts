@@ -18,6 +18,7 @@ export interface SiteNewsCard {
 export interface SiteNewsList { enabled: boolean; items: SiteNewsCard[]; total: number; page: number; pageSize: number }
 /** One item: its card, and its text and search words in the shape of a page (so the site draws and describes it as one) */
 export interface SiteNewsItem extends SiteNewsCard { page: SitePage }
+/** `lastmod`: the later of the item's day and the day its copy was published ('' when neither can be read) */
 export interface SiteNewsIndexRow { slug: string; lastmod: string }
 
 const DAY = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
@@ -27,6 +28,15 @@ export const NEWS_PATH = '/news';
 /** An item's address; its slug is lowercase Latin, so it needs no encoding */
 export const newsPath = (slug: string) => `${NEWS_PATH}/${slug}`;
 export const newsListPath = (page: number) => (page > 1 ? `${NEWS_PATH}?page=${page}` : NEWS_PATH);
+/** The first moment of an item's day, a day of Tehran, as a time with its zone */
+export const newsDayStart = (day: string) => `${day}T00:00:00+03:30`;
+/**
+ * When an item last changed, for a search engine: the time its copy was published, but only when that is not before
+ * the item's own day (an item published ahead of its day would otherwise be «changed» before it was «published»)
+ */
+export const newsModifiedAt = (item: { date: string; page: { updatedAt: string } }): string => (
+  item.page.updatedAt && Date.parse(item.page.updatedAt) >= Date.parse(newsDayStart(item.date)) ? item.page.updatedAt : ''
+);
 
 function card(value: unknown): SiteNewsCard | null {
   if (!isRecord(value) || typeof value.slug !== 'string' || !isPageSlug(value.slug) || typeof value.date !== 'string' || !DAY.test(value.date)) return null;
@@ -56,10 +66,15 @@ export function siteNewsItem(value: unknown): SiteNewsItem | null {
   return { ...top, page: { ...page, sections: page.sections.filter(section => NEWS_SECTION_KINDS.includes(section.kind)).map(section => ({ ...section, background: 'white' as const })) } };
 }
 
+/** two days as `YYYY-MM-DD` ('' = none) compare as text */
+const laterDay = (a: string, b: string) => (a > b ? a : b);
+
 /** `GET /news-index` of the Storefront API: each item's address and the day of its last change, for the sitemap */
 export function siteNewsIndex(value: unknown): SiteNewsIndexRow[] {
   if (!Array.isArray(value)) return [];
   return value.slice(0, 5000).flatMap((raw): SiteNewsIndexRow[] => (
-    isRecord(raw) && typeof raw.slug === 'string' && isPageSlug(raw.slug) ? [{ slug: raw.slug, lastmod: typeof raw.updatedAt === 'string' ? lastModOf(raw.updatedAt) : '' }] : []
+    isRecord(raw) && typeof raw.slug === 'string' && isPageSlug(raw.slug)
+      ? [{ slug: raw.slug, lastmod: laterDay(typeof raw.date === 'string' && DAY.test(raw.date) ? raw.date : '', typeof raw.updatedAt === 'string' ? lastModOf(raw.updatedAt) : '') }]
+      : []
   ));
 }
