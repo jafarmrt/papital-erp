@@ -28,7 +28,9 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (!first || page > pages) throw new Response('پیدا نشد', { status: 404 });
   const list = page === 1 ? first : await newsList(page);
   if (!list || list.items.length === 0) throw new Response('پیدا نشد', { status: 404 });
-  return { items: list.items, page, pages, siteUrl: siteEnv().siteUrl, text: await fixedText('fixed-news') };
+  const text = await fixedText('fixed-news');
+  // the text above the list is drawn on its first page only, so a later page does not carry it at all
+  return { items: list.items, page, pages, siteUrl: siteEnv().siteUrl, text: text && page > 1 ? { ...text, intro: null } : text };
 }
 
 const TITLE = 'خبرها';
@@ -51,8 +53,8 @@ export default function NewsListPage({ loaderData }: Route.ComponentProps) {
       <header className="mt-2">
         <h1 className="text-3xl font-extrabold text-balance lg:text-4xl">{title}</h1>
         <div className="tile-rule mt-4 w-24" aria-hidden />
-        {/* the shop's own words above the list, on its first page */}
-        {page === 1 ? <FixedIntro text={text} className="mt-4 text-muted-foreground" /> : null}
+        {/* the shop's own words above the list (the loader gives them to the first page only) */}
+        <FixedIntro text={text} className="mt-4 text-muted-foreground" />
       </header>
       <ul className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((item, i) => (

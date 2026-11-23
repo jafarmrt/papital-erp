@@ -216,7 +216,7 @@ export async function unpublishNews(req: Request, id: number, version: number): 
     await writeContentAssetRows(tx, CONTENT_KIND, id, []);
     await logActivity({
       req, tx, action: 'UPDATE', entity: AUDIT_ENTITY, entityId: `news-${id}`,
-      description: `خبر «${row.title}» از روی سایت برداشته شد`, details: { before: auditOf(row.published), after: null },
+      description: `خبر «${row.title}» از روی سایت برداشته شد`, details: { before: auditOf(row.published), after: null, linkedFromMenus: await newsMenuPlacesOf(tx, id) },
     });
   });
   return newsDetail(orm, id);

@@ -198,6 +198,8 @@ describe('a page', () => {
     expect(STOREFRONT_FIXED_PAGE_ROWS.map(({ slug, title }) => ({ slug, title }))).toEqual(FIXED_PAGES.map(({ slug, title }) => ({ slug, title })));
     const migration = ['0032_storefront_fixed_pages', '0034_storefront_news_links'].map(name => fs.readFileSync(path.resolve(process.cwd(), `drizzle/${name}.sql`), 'utf8')).join('\n');
     expect(FIXED_PAGES).toHaveLength(10);
+    // the tenth is the site's list of news, at its own address
+    expect(FIXED_PAGES.find(fixed => fixed.slug === 'fixed-news')).toMatchObject({ title: 'خبرها', path: '/news' });
     for (const fixed of FIXED_PAGES) expect(migration, fixed.slug).toContain(`('fixed', '${fixed.slug}', '${fixed.title}')`);
     expect(new Set(FIXED_PAGES.map(fixed => fixed.path).filter(Boolean)).size).toBe(FIXED_PAGES.length - 1);
   });

@@ -216,7 +216,7 @@ async function checkReferences(tx: DbExecutor, list: readonly MenuItemValues[]):
   if (newsIds.length) {
     const found = await newsLinkTargets(tx, newsIds);
     const missing = all.find(i => i.newsId !== null && !found.has(i.newsId));
-    if (missing) throw invalid(`خبری که گزینهٔ «${missing.label}» به آن پیوند دارد حذف شده است؛ خبر دیگری برگزینید.`, 'items', 'STOREFRONT_MENU_NEWS_UNKNOWN');
+    if (missing) throw invalid(`خبری که گزینهٔ «${missing.label}» به آن پیوند دارد در «خبرهای سایت» نیست (حذف شده است)؛ خبر دیگری برگزینید یا این گزینه را بردارید.`, 'items', 'STOREFRONT_MENU_NEWS_UNKNOWN');
   }
 }
 

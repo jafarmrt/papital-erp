@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, isNotNull, lte, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { storefrontMenuItems, storefrontNews } from '../../db/schema.js';
-import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { businessTodayIsoDate, getDisplayTimezone } from '../../lib/businessClock.js';
 import { MENU_LOCATIONS } from '../../lib/storefront/storefrontMenuRules.js';
 import { newsOnSite } from './storefrontNewsPublic.js';
 
@@ -19,19 +19,20 @@ export const NEWS_LINK_OPTIONS_MAX = 200;
 
 /**
  * v12 phase 10d (migration 0034): the news items a menu link («خبر») may name, by row id; `ids` narrows the read to the
- * items a menu names, otherwise the newest are read. A removed item is not here. The item's copy itself is not read,
+ * items a menu names, otherwise the newest are read, in the order of «خبرهای سایت». A removed item is not here. The item's copy itself is not read,
  * only whether it is on the site now.
  */
 export async function newsLinkTargets(executor: DbExecutor, ids?: readonly number[]): Promise<Map<number, NewsLinkTarget>> {
   const out = new Map<number, NewsLinkTarget>();
   if (ids && ids.length === 0) return out;
-  const [enabled, today] = [await newsOnSite(executor), await businessTodayIsoDate()];
+  const [enabled, today, timeZone] = [await newsOnSite(executor), await businessTodayIsoDate(), await getDisplayTimezone()];
   const rows = await executor.select({
     id: storefrontNews.id, slug: storefrontNews.slug, title: storefrontNews.title,
     onSite: sql<boolean>`${storefrontNews.published} IS NOT NULL AND ${storefrontNews.publishedDate} <= ${today}`,
   }).from(storefrontNews)
     .where(and(eq(storefrontNews.isDeleted, 0), ids ? inArray(storefrontNews.id, [...new Set(ids)]) : undefined))
-    .orderBy(desc(sql`coalesce(${storefrontNews.newsDate}, ${storefrontNews.publishedDate})`), desc(storefrontNews.id))
+    // in the order «خبرهای سایت» lists them: an item without a day goes by the day it has on the site, else by the day it was made
+    .orderBy(desc(sql`coalesce(${storefrontNews.newsDate}, ${storefrontNews.publishedDate}, to_char(${storefrontNews.createdAt} AT TIME ZONE ${timeZone}::text, 'YYYY-MM-DD'))`), desc(storefrontNews.id))
     .limit(ids ? Math.max(1, ids.length) : NEWS_LINK_OPTIONS_MAX);
   for (const row of rows) out.set(row.id, { title: row.title, href: `/news/${row.slug}`, live: enabled && row.onSite === true });
   return out;

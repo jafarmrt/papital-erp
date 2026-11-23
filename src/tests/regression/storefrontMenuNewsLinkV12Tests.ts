@@ -2,7 +2,7 @@ import request from 'supertest';
 import { and, desc, eq, gt, inArray, like, max } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { activityLogs, appSettings, storefrontContentAssets, storefrontMenuItems, storefrontMenus, storefrontNews } from '../../db/schema.js';
+import { activityLogs, appSettings, items as itemsTable, storefrontCampaigns, storefrontContentAssets, storefrontMenuItems, storefrontMenus, storefrontNews, storefrontPages } from '../../db/schema.js';
 import { invalidateSettingsCache } from '../../lib/memoryCache.js';
 import { readPricingStrategies } from '../../lib/items/pricingStrategies.js';
 
@@ -31,12 +31,14 @@ export async function runStorefrontMenuNewsLinkV12Tests(shouldRun: (id: string, 
   const tStart = Date.now();
   const wrong: string[] = [];
   const tag = String(Date.now()).slice(-7);
+  const made = { itemId: 0, campaignId: 0 };
   const savedSettings = await orm.select().from(appSettings).where(like(appSettings.key, 'sf\\_%'));
   const savedStrategies = await orm.select().from(appSettings).where(eq(appSettings.key, 'pricing_strategies'));
   const savedMenus = await orm.select().from(storefrontMenus);
   const [{ lastItem }] = await orm.select({ lastItem: max(storefrontMenuItems.id) }).from(storefrontMenuItems);
   try {
     const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+    const { createTestItem } = await import('../fixtures/factories.js');
     const app = await getTestApp();
     const admin: Session = await getAdminSession();
     const erp = {
@@ -101,6 +103,8 @@ export async function runStorefrontMenuNewsLinkV12Tests(shouldRun: (id: string, 
       ['an item not chosen', [leaf('خبر', 'news')], 422, 'STOREFRONT_MENU_TARGET_REQUIRED'],
       ['an item that is not there', [leaf('خبر', 'news', { newsId: 2_000_000_000 })], 422, 'STOREFRONT_MENU_NEWS_UNKNOWN'],
       ['an id that is no number', [leaf('خبر', 'news', { newsId: 'seven' })], 400, 'VALIDATION_ERROR'],
+      ['an id that is no whole number', [leaf('خبر', 'news', { newsId: 1.5 })], 400, 'VALIDATION_ERROR'],
+      ['an id past the largest', [leaf('خبر', 'news', { newsId: 2_147_483_648 })], 400, 'VALIDATION_ERROR'],
     ];
     for (const [what, list, status, code] of refusals) {
       const res = await erp.put('/api/storefront/menus/header', { enabled: true, version, items: list });
@@ -158,6 +162,9 @@ export async function runStorefrontMenuNewsLinkV12Tests(shouldRun: (id: string, 
     const offSite = await erp.post(`/api/storefront/news/${shown.id}/unpublish`, { version: shown.version });
     const afterOff = await hrefs();
     if (offSite.status !== 200 || afterOff !== 'محصولات→/products|نشانی→/about') wrong.push(`the site after the item left it: ${offSite.status} ${afterOff}`);
+    // taking it off records the menus that linked to it, as its removal would
+    const [offAudit] = await orm.select().from(activityLogs).where(eq(activityLogs.entityId, `news-${shown.id}`)).orderBy(desc(activityLogs.id)).limit(1);
+    if (JSON.stringify((offAudit?.details as Body | null)?.linkedFromMenus) !== '["header"]') wrong.push(`the audit row of taking a linked item off: ${JSON.stringify(offAudit?.details).slice(0, 200)}`);
     // the day of the waiting item comes: it and the list are on the site
     const [waiting] = await orm.select().from(storefrontNews).where(eq(storefrontNews.id, later.id));
     await orm.update(storefrontNews).set({ publishedDate: '2020-01-01', published: { ...waiting.published!, newsDate: '2020-01-01' } }).where(eq(storefrontNews.id, later.id));
@@ -175,7 +182,18 @@ export async function runStorefrontMenuNewsLinkV12Tests(shouldRun: (id: string, 
     const resave = await erp.put('/api/storefront/menus/header', { enabled: true, version: Number(viewAfter.version), items: asSent });
     if (resave.status !== 422 || resave.body.code !== 'STOREFRONT_MENU_NEWS_UNKNOWN') wrong.push(`saving a menu that names a removed item: ${resave.status} ${resave.body.code}`);
 
+    // a menu option that is removed is no link any more: the item is then linked from no menu
+    const lastView = ((await erp.get('/api/storefront/menus')).body.data.menus as Body[]).find(m => m.location === 'header') as Body;
+    const dropped = await erp.put('/api/storefront/menus/header', { enabled: true, version: Number(lastView.version), items: [leaf('محصولات', 'path', { target: '/products' })] });
+    const placesAfter = (await erp.get(`/api/storefront/news/${later.id}`)).body.data?.menuPlaces;
+    if (dropped.status !== 200 || JSON.stringify(placesAfter) !== '[]') wrong.push(`the menus an item is linked from once the option is removed: ${dropped.status} ${JSON.stringify(placesAfter)}`);
+
     // 7) the constraints of migration 0034, against a direct write; the kinds of 0028 and 0030 still pass
+    const product = await createTestItem({ name: `کالای پیوند خبر ${tag}`, code: `NL-${tag}` });
+    made.itemId = product.id;
+    const [campaign] = await orm.insert(storefrontCampaigns).values({ slug: `news-link-${tag}`, title: `صفحهٔ ویژهٔ پیوند ${tag}`, source: 'collection', collection: `کالکشن پیوند ${tag}` }).returning({ id: storefrontCampaigns.id });
+    made.campaignId = campaign.id;
+    const [aPage] = await orm.select({ id: storefrontPages.id }).from(storefrontPages).where(eq(storefrontPages.slug, 'about'));
     const direct = async (values: Partial<typeof storefrontMenuItems.$inferInsert>) => orm.insert(storefrontMenuItems).values({ location: 'drawer', label: `آزمون ${tag}`, linkKind: 'none', ...values })
       .then(() => 'written', () => 'refused');
     const checks: Array<[string, string, string]> = [
@@ -185,19 +203,30 @@ export async function runStorefrontMenuNewsLinkV12Tests(shouldRun: (id: string, 
       ['a path with a news item', await direct({ linkKind: 'path', target: '/about', targetNewsId: later.id }), 'refused'],
       ['a page of the site with a news item', await direct({ linkKind: 'page', target: 'news', targetNewsId: later.id }), 'refused'],
       ['a heading with a news item', await direct({ linkKind: 'none', targetNewsId: later.id }), 'refused'],
+      ['an outside address with a news item', await direct({ linkKind: 'url', target: 'https://example.com/', targetNewsId: later.id }), 'refused'],
+      ['a page link with a news item', await direct({ linkKind: 'content', targetPageId: aPage.id, targetNewsId: later.id }), 'refused'],
+      ['a product with a news item', await direct({ linkKind: 'product', targetItemId: product.id, targetNewsId: later.id }), 'refused'],
+      ['a campaign page with a news item', await direct({ linkKind: 'campaign', targetCampaignId: campaign.id, targetNewsId: later.id }), 'refused'],
+      ['a news link with a product too', await direct({ linkKind: 'news', targetNewsId: later.id, targetItemId: product.id }), 'refused'],
+      ['a news link with a campaign page too', await direct({ linkKind: 'news', targetNewsId: later.id, targetCampaignId: campaign.id }), 'refused'],
       ['a news item that is no row', await direct({ linkKind: 'news', targetNewsId: 2_000_000_000 }), 'refused'],
       ['an unknown kind', await direct({ linkKind: 'article', target: 'x' }), 'refused'],
       ['a news link', await direct({ linkKind: 'news', targetNewsId: later.id }), 'written'],
       ['a path', await direct({ linkKind: 'path', target: '/about' }), 'written'],
       ['a page of the site', await direct({ linkKind: 'page', target: 'news' }), 'written'],
       ['a heading', await direct({ linkKind: 'none' }), 'written'],
+      // each of the kinds refused above is written without the news item, so it was the item that was refused
+      ['an outside address', await direct({ linkKind: 'url', target: 'https://example.com/' }), 'written'],
+      ['a page link', await direct({ linkKind: 'content', targetPageId: aPage.id }), 'written'],
+      ['a product', await direct({ linkKind: 'product', targetItemId: product.id }), 'written'],
+      ['a campaign page', await direct({ linkKind: 'campaign', targetCampaignId: campaign.id }), 'written'],
     ];
     for (const [what, got, want] of checks) if (got !== want) wrong.push(`constraint, ${what}: ${got}`);
 
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'the link options named the news items, none on the site with the switch off; a link with no item, with an unknown one or with a wrong id was refused; the menu was saved with the item by its row and the list as a page of the site, and another kind kept no item; with the switch off the site got no news link; with it on it got the list and the item on the site by their addresses, with the reviewed fields only, and not the item waiting or the draft; an item\'s detail named the menu; taken off, its link and the list\'s were gone, and the waiting item came on its day; removing a linked item recorded the menu, left its link leading nowhere and stopped a menu naming it from being saved; the constraints refused eight wrong direct writes and passed four right ones',
+      details: 'the link options named the news items, none on the site with the switch off; a link with no item, with an unknown one or with a wrong id was refused; the menu was saved with the item by its row and the list as a page of the site, and another kind kept no item; with the switch off the site got no news link; with it on it got the list and the item on the site by their addresses, with the reviewed fields only, and not the item waiting or the draft; an item\'s detail named the menu; taken off, its link and the list\'s were gone, and the waiting item came on its day; removing a linked item recorded the menu, left its link leading nowhere and stopped a menu naming it from being saved; a removed option was no link any more; the constraints refused fourteen wrong direct writes and passed eight right ones',
     }));
   } catch (err) {
     results.push(makeTestCase({
@@ -207,6 +236,8 @@ export async function runStorefrontMenuNewsLinkV12Tests(shouldRun: (id: string, 
   } finally {
     await orm.delete(storefrontMenuItems).where(gt(storefrontMenuItems.id, lastItem ?? 0)).catch(() => undefined);
     for (const menu of savedMenus) await orm.update(storefrontMenus).set(menu).where(eq(storefrontMenus.location, menu.location)).catch(() => undefined);
+    if (made.campaignId) await orm.delete(storefrontCampaigns).where(eq(storefrontCampaigns.id, made.campaignId)).catch(() => undefined);
+    if (made.itemId) await orm.update(itemsTable).set({ isDeleted: 1 }).where(eq(itemsTable.id, made.itemId)).catch(() => undefined);
     const mine = await orm.select({ id: storefrontNews.id }).from(storefrontNews).where(like(storefrontNews.slug, `%${tag}`)).catch(() => []);
     if (mine.length > 0) {
       await orm.delete(storefrontContentAssets).where(and(eq(storefrontContentAssets.contentKind, 'news'), inArray(storefrontContentAssets.contentId, mine.map(r => r.id)))).catch(() => undefined);

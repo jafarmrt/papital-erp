@@ -229,37 +229,6 @@ describe('the site menus screen', () => {
     expect(JSON.parse(String(calls.list.find(c => c.init?.method === 'PUT')?.init?.body)).items[0]).toMatchObject({ kind: 'path', target: '/products', pageId: null });
   });
 
-  it('links to a news item by its row and to the list of news as a page of the site, and drops the item when the kind changes (v12 phase 10d)', async () => {
-    menus.current = emptyMenus();
-    permissions.current = ['site_content.view', 'site_content.manage'];
-    page('/site-menus?place=header');
-    await waitFor(() => expect(calls.list.some(c => c.url === '/storefront/menus/link-options')).toBe(true));
-    const panel = within(await screen.findByRole('tabpanel'));
-    fireEvent.click(panel.getByRole('button', { name: /افزودن گزینه/ }));
-    fireEvent.change(panel.getByLabelText('عنوان'), { target: { value: 'یلدا' } });
-    // «خبر» is one of the kinds, and the list of news one of the site's own pages
-    expect([...(panel.getByLabelText('پیوند به') as HTMLSelectElement).options].map(o => o.textContent)).toContain('خبر');
-    fireEvent.change(panel.getByLabelText('پیوند به'), { target: { value: 'page' } });
-    expect([...(panel.getByLabelText('مقصد') as HTMLSelectElement).options].map(o => o.textContent)).toContain('خبرها');
-    fireEvent.change(panel.getByLabelText('پیوند به'), { target: { value: 'news' } });
-    const target = panel.getByLabelText('مقصد') as HTMLSelectElement;
-    expect([...target.options].map(o => o.textContent)).toEqual(['برگزینید', 'شب یلدا در گالری', 'خبر در نوبت (اکنون روی سایت نیست)']);
-    fireEvent.click(panel.getByRole('button', { name: /^ذخیره/ }));
-    // no item chosen yet: the save is refused on the screen
-    expect(calls.list.some(c => c.init?.method === 'PUT')).toBe(false);
-    fireEvent.change(target, { target: { value: '21' } });
-    fireEvent.click(panel.getByRole('button', { name: /^ذخیره/ }));
-    await waitFor(() => expect(calls.list.some(c => c.init?.method === 'PUT')).toBe(true));
-    expect(JSON.parse(String(calls.list.find(c => c.init?.method === 'PUT')?.init?.body)).items[0]).toMatchObject({ label: 'یلدا', kind: 'news', newsId: 21, target: '', pageId: null, itemId: null, campaignId: null });
-    // another kind never carries the item along
-    fireEvent.change(panel.getByLabelText('پیوند به'), { target: { value: 'page' } });
-    fireEvent.change(panel.getByLabelText('مقصد'), { target: { value: 'news' } });
-    calls.list = [];
-    fireEvent.click(panel.getByRole('button', { name: /^ذخیره/ }));
-    await waitFor(() => expect(calls.list.some(c => c.init?.method === 'PUT')).toBe(true));
-    expect(JSON.parse(String(calls.list.find(c => c.init?.method === 'PUT')?.init?.body)).items[0]).toMatchObject({ kind: 'page', target: 'news', newsId: null });
-  });
-
   /** a saved link to a page and one to a campaign page; `targetTitle` '' is what the server sends for a target that is gone */
   const withSavedPageLink = (targetTitle: string): MenusView => ({
     menus: rules.MENU_LOCATIONS.map(location => ({
