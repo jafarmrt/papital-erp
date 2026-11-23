@@ -246,9 +246,13 @@ const writesTitle = (section: SitePageSection): boolean => (
  * The sections of a page, top to bottom. The page has one `<h1>`: the title of its first drawn section when that section
  * has one, else `header` (the page's own title), which is then drawn above the sections.
  */
-export function PageSections({ sections, shipping, header }: { sections: readonly SitePageSection[]; shipping: ShippingView | null; header: ReactNode }) {
+export function PageSections({ sections, shipping, header, keepHeader = false }: {
+  sections: readonly SitePageSection[]; shipping: ShippingView | null; header: ReactNode;
+  /** v12 phase 10d: the header is always drawn and no section takes the page's `<h1>` (a news item's title is its own) */
+  keepHeader?: boolean;
+}) {
   const drawn = sections.filter(section => body(section, false, shipping) !== null);
-  const titled = drawn.length > 0 && writesTitle(drawn[0]);
+  const titled = !keepHeader && drawn.length > 0 && writesTitle(drawn[0]);
   return (
     <>
       {titled ? null : header}

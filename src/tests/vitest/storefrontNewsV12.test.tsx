@@ -53,9 +53,10 @@ const TEXT = { kind: 'text', background: 'white', doc: { type: 'doc', content: [
 /** an item on the site whose saved draft differs from it: every action is open */
 const CHANGED: NewsDetail = { ...DRAFT, status: 'changed', newsDate: '2026-11-20', publishedDate: '2026-11-20', draft: { ...DRAFT.draft, newsDate: '2026-11-20', sections: [TEXT] } };
 
-function open(at: string, detail: NewsDetail = DRAFT, options: { list?: (page: number) => NewsList; acted?: (action: string) => Partial<NewsDetail> } = {}) {
+function open(at: string, detail: NewsDetail = DRAFT, options: { list?: (page: number) => NewsList | Promise<NewsList>; acted?: (action: string) => Partial<NewsDetail> } = {}) {
   fetchJson.mockImplementation(async (url: string, init?: { method?: string; body?: string }) => {
-    if (url.startsWith('/storefront/news?page=') && !init) return options.list ? options.list(Number(url.split('=')[1])) : { data: ROWS, total: 2, page: 1, pageSize: 50 };
+    if (url.startsWith('/storefront/news?page=') && !init) return options.list ? options.list(Number(url.split('=')[1])) : { data: ROWS, total: 2, page: 1, pageSize: 50, siteEnabled: false };
+    if (init?.method === 'PUT' && url === '/storefront/news/site') return { data: JSON.parse(String(init.body)) as { enabled: boolean } };
     if (init?.method === 'POST' && url.startsWith(`/storefront/news/${detail.id}/`)) return { data: { ...detail, version: detail.version + 1, ...options.acted?.(url.split('/').pop() ?? '') } };
     if (url === `/storefront/news/${detail.id}` && !init) return { data: detail };
     if (init?.method === 'POST' && url === '/storefront/news') return { data: { ...DRAFT, id: 12, ...(JSON.parse(String(init.body)) as object) } };
@@ -221,7 +222,7 @@ describe('the news of the site in the ERP', () => {
     open('/site-news', DRAFT, {
       list: (page) => {
         if (page === 3) total = 100;
-        return { data: page === 3 ? [] : [row({ id: page, title: `خبر صفحهٔ ${page}` })], total, page, pageSize: 50 };
+        return { data: page === 3 ? [] : [row({ id: page, title: `خبر صفحهٔ ${page}` })], total, page, pageSize: 50, siteEnabled: false };
       },
     });
     await screen.findByText('خبر صفحهٔ 1');
@@ -241,14 +242,51 @@ describe('the news of the site in the ERP', () => {
   it('says there is no news yet only when there is none at all', async () => {
     permissions.current = ['site_content.view'];
     // a page with no row of a list that has items (its items were just removed) is not an empty list
-    open('/site-news', DRAFT, { list: page => ({ data: [], total: 7, page, pageSize: 50 }) });
+    open('/site-news', DRAFT, { list: page => ({ data: [], total: 7, page, pageSize: 50, siteEnabled: false }) });
     await waitFor(() => expect(fetchJson).toHaveBeenCalled());
     await waitFor(() => expect(screen.queryByText('در حال خواندن…')).toBeNull());
     expect(screen.queryByText('هنوز خبری ساخته نشده است.')).toBeNull();
     cleanup();
     fetchJson.mockReset();
-    open('/site-news', DRAFT, { list: page => ({ data: [], total: 0, page, pageSize: 50 }) });
+    open('/site-news', DRAFT, { list: page => ({ data: [], total: 0, page, pageSize: 50, siteEnabled: false }) });
     expect(await screen.findByText('هنوز خبری ساخته نشده است.')).toBeTruthy();
     expect(screen.queryByRole('navigation', { name: 'صفحه‌های فهرست خبرها' })).toBeNull();
+  });
+
+  it('turns the news of the site on and off by sending the state the switch should take, once', async () => {
+    permissions.current = ['site_content.view', 'site_content.manage'];
+    let enabled = false;
+    // the next reading of the list is held back until the test lets it go
+    let held: Promise<void> = Promise.resolve();
+    let letGo = () => {};
+    open('/site-news', DRAFT, { list: async (page) => { await held; return { data: ROWS, total: 2, page, pageSize: 50, siteEnabled: enabled }; } });
+    const box = within(await screen.findByRole('region', { name: 'خبرها روی سایت' }));
+    const tick = box.getByRole('checkbox', { name: 'خبرها روی سایت بیایند' }) as HTMLInputElement;
+    expect(tick.checked).toBe(false);
+    expect(box.getByText(/تا این کلید خاموش است، سایت هیچ خبری نشان نمی‌دهد/)).toBeTruthy();
+    held = new Promise<void>((resolve) => { letGo = resolve; });
+    enabled = true;
+    fireEvent.click(tick);
+    fireEvent.click(tick);
+    await waitFor(() => expect(calls('PUT')).toHaveLength(1));
+    // the switch shows the new state as soon as the answer is in, before the list has been read again
+    await waitFor(() => expect((within(screen.getByRole('region', { name: 'خبرها روی سایت' })).getByRole('checkbox') as HTMLInputElement).checked).toBe(true));
+    // and the list is read again: the reading held back here is that one
+    await waitFor(() => expect((fetchJson.mock.calls as Call[]).filter(([url, init]) => url.startsWith('/storefront/news?page=') && !init).length).toBeGreaterThanOrEqual(2));
+    letGo();
+    expect(calls('PUT')[0][0]).toBe('/storefront/news/site');
+    expect(JSON.parse(String(calls('PUT')[0][1]?.body))).toEqual({ enabled: true });
+    // the list is read again and the switch shows what the server has
+    await waitFor(() => expect((within(screen.getByRole('region', { name: 'خبرها روی سایت' })).getByRole('checkbox') as HTMLInputElement).checked).toBe(true));
+    expect(screen.getByText(/خبرهای منتشرشده‌ای که روزشان رسیده/)).toBeTruthy();
+    expect(vi.mocked(toast.success).mock.calls.map(call => String(call[0]))).toContain('خبرها روی سایت روشن شد.');
+  });
+
+  it('shows the switch to a holder of the view key without letting them turn it', async () => {
+    permissions.current = ['site_content.view'];
+    open('/site-news', DRAFT, { list: page => ({ data: ROWS, total: 2, page, pageSize: 50, siteEnabled: true }) });
+    const tick = within(await screen.findByRole('region', { name: 'خبرها روی سایت' })).getByRole('checkbox') as HTMLInputElement;
+    expect(tick.checked).toBe(true);
+    expect(tick.disabled).toBe(true);
   });
 });

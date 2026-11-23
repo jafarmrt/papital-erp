@@ -11,6 +11,7 @@ import { NO_MENUS, safeMenus, type SiteMenus } from './menus';
 import { DEFAULT_SHOP, siteShop, type SiteShop } from './shopInfo';
 import type { StorefrontPageSummary } from '@erp/storefront/storefrontPagePublicContracts';
 import { isPageSlug, sitePage, sitePageList, type SitePage } from './pages';
+import { siteNewsIndex, siteNewsItem, siteNewsList, type SiteNewsIndexRow, type SiteNewsItem, type SiteNewsList } from './news';
 import { PAGE_PREVIEW_TOKEN } from '@erp/storefront/storefrontPageParts';
 
 /**
@@ -37,7 +38,7 @@ const CACHE_MAX = 500;
  * crawler walking random addresses (each a remembered 404 there) never pushes out the feed or the settings (the security
  * review of 8.5b)
  */
-const PINNED_PATHS = new Set(['/facets', '/settings', '/brand', '/seo', '/redirects', '/feed', '/campaigns', '/menus', '/shop-info', '/pages']);
+const PINNED_PATHS = new Set(['/facets', '/settings', '/brand', '/seo', '/redirects', '/feed', '/campaigns', '/menus', '/shop-info', '/pages', '/news', '/news-index']);
 const pinned = new Map<string, Entry>();
 const kept = (path: string) => (PINNED_PATHS.has(path) ? pinned : cache).get(path);
 /** Many visitors asking for the same address at once make one call */
@@ -261,6 +262,50 @@ const PAGE_TTL_MS = 60_000;
 export async function pages(): Promise<StorefrontPageSummary[]> {
   try {
     return sitePageList((await get<{ data: unknown }>('/pages', PAGE_TTL_MS)).data);
+  } catch (error) {
+    if (error instanceof StorefrontApiError) return [];
+    throw error;
+  }
+}
+
+const NEWS_TTL_MS = 60_000;
+
+/**
+ * v12 phase 10d: a page of the list of news; null when the site has no news (the switch «خبرها روی سایت بیایند» is off,
+ * or the ERP is not yet updated and answers 404), so `/news` is then a 404 like any other address. A read that failed
+ * in any other way is an error, never «no news».
+ */
+export async function newsList(page: number): Promise<SiteNewsList | null> {
+  const path = page > 1 ? `/news?page=${page}` : '/news';
+  try {
+    const list = siteNewsList(await get<unknown>(path, NEWS_TTL_MS));
+    if (!list) throw new StorefrontApiError(502, path);
+    return list.enabled ? list : null;
+  } catch (error) {
+    if (error instanceof StorefrontApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+/** v12 phase 10d: one news item on the site now; null when there is none by that address (a read error is not «no such item») */
+export async function newsItem(slug: string): Promise<SiteNewsItem | null> {
+  if (!isPageSlug(slug)) return null;
+  const path = `/news/${slug}`;
+  try {
+    const answer = await get<unknown>(path, NEWS_TTL_MS);
+    const found = siteNewsItem(typeof answer === 'object' && answer !== null ? (answer as { data?: unknown }).data : null);
+    if (!found || found.slug !== slug) throw new StorefrontApiError(502, path);
+    return found;
+  } catch (error) {
+    if (error instanceof StorefrontApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+/** v12 phase 10d: every news item on the site now, for the sitemap; any failure is no news, never a missing sitemap */
+export async function newsIndex(): Promise<SiteNewsIndexRow[]> {
+  try {
+    return siteNewsIndex((await get<{ data: unknown }>('/news-index', NEWS_TTL_MS)).data);
   } catch (error) {
     if (error instanceof StorefrontApiError) return [];
     throw error;

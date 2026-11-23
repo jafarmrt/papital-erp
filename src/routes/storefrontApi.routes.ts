@@ -23,6 +23,7 @@ import { EMAIL_ADDRESS_MAX, EMAIL_PROOF_MAX } from '../lib/storefront/storefront
 import { storefrontEmailRoutes } from './storefrontApiEmail.routes.js';
 import { PAGE_PREVIEW_KEY_MAX, PAGE_SLUG_MAX } from '../lib/storefront/storefrontPageRules.js';
 import { contentImageFile, publicPage, publicPages } from '../services/storefront/storefrontPagePublic.js';
+import { newsImageFile, publicNewsIndex, publicNewsItem, publicNewsList } from '../services/storefront/storefrontNewsPublic.js';
 import { pagePreviewImageFile, publicPagePreview } from '../services/storefront/storefrontPagePreview.service.js';
 import { ACCESS_KEY_MAX } from '../services/storefront/storefrontOrderKeys.js';
 import { publicSeo } from '../services/storefront/storefrontSeo.service.js';
@@ -151,6 +152,8 @@ const slugSchema = z.object({ params: z.object({ slug: z.string().min(1).max(STO
 const campaignSlugSchema = z.object({ params: z.object({ slug: z.string().min(1).max(CAMPAIGN_SLUG_MAX) }).passthrough() });
 // a page's address is lowercase Latin, so anything else (a NUL among them, which PostgreSQL refuses) is not asked of the database
 const pageSlugSchema = z.object({ params: z.object({ slug: z.string().min(1).max(PAGE_SLUG_MAX).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/) }).passthrough() });
+// v12 phase 10d: a page of the list of news, 1 to 9999 (the site asks for no page past the list's last)
+const newsListSchema = z.object({ query: z.object({ page: z.string().regex(/^[1-9]\d{0,3}$/).transform(Number).optional() }).passthrough() });
 const mediaSchema = z.object({ params: z.object({ file: z.string().min(1).max(80) }).passthrough() });
 
 router.get('/settings', asyncHandler(async (_req: Request, res: Response) => {
@@ -218,13 +221,28 @@ router.get('/pages/:slug', validate(pageSlugSchema), asyncHandler(async (req: Re
   res.json({ data: await publicPage(String(req.params.slug)) });
 }));
 
+// v12 phase 10d: «خبرهای سایت»: the items on the site now (the copy on the site of each, its day come), a page at a time,
+// their addresses for the sitemap, and one of them; nothing while «خبرها روی سایت بیایند» is off
+router.get('/news', validate(newsListSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json(await publicNewsList((req.query as { page?: number }).page ?? 1));
+}));
+
+router.get('/news-index', asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ data: await publicNewsIndex() });
+}));
+
+router.get('/news/:slug', validate(pageSlugSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await publicNewsItem(String(req.params.slug)) });
+}));
+
 router.get('/facets', asyncHandler(async (_req: Request, res: Response) => {
   res.json({ data: await catalogFacets() });
 }));
 
 /**
  * A photo of an item on the site, else (v11 phase 8.5b) the hero image of a campaign page on the site now, else (v12
- * phase 10c) an image a published page names; an image of a draft is the same 404 as a file that does not exist
+ * phase 10c) an image a published page names, else (10d) an image a news item on the site now names; an image of a
+ * draft is the same 404 as a file that does not exist
  */
 async function siteMediaFile(file: string): Promise<string> {
   try {
@@ -237,7 +255,12 @@ async function siteMediaFile(file: string): Promise<string> {
   } catch (error) {
     if (!(error instanceof NotFoundError)) throw error;
   }
-  return contentImageFile(file);
+  try {
+    return await contentImageFile(file);
+  } catch (error) {
+    if (!(error instanceof NotFoundError)) throw error;
+  }
+  return newsImageFile(file);
 }
 
 const sendImage = (res: Response, filePath: string, cacheControl: string) => new Promise<void>((resolve, reject) => {

@@ -13,7 +13,7 @@ let handle: (request: Request) => Promise<Response>;
 
 beforeAll(async () => {
   mock = spawn(process.execPath, [path.join(import.meta.dirname, '../mock/mockApi.mjs')], {
-    env: { ...process.env, MOCK_PORT: String(PORT), MOCK_API_KEY: KEY, MOCK_PAGES: 'missing' },
+    env: { ...process.env, MOCK_PORT: String(PORT), MOCK_API_KEY: KEY, MOCK_PAGES: 'missing', MOCK_NEWS: 'missing' },
     stdio: 'pipe',
   });
   await new Promise<void>((resolve, reject) => {
@@ -47,5 +47,9 @@ describe('the pages with an ERP that does not have them yet', () => {
     // no page has a day (a product keeps the day the feed gives it)
     expect(xml.split('\n').filter(line => line.includes('<lastmod>') && !line.includes('/p/'))).toEqual([]);
     expect((await handle(new Request('http://localhost/pages/our-story'))).status).toBe(404);
+    // v12 phase 10d: such an ERP has no news either: the site then has none, as before, and its map does not name it
+    expect((await handle(new Request('http://localhost/news'))).status).toBe(404);
+    expect((await handle(new Request('http://localhost/news/any-item'))).status).toBe(404);
+    expect(xml).not.toContain('/news');
   });
 });

@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { NEWS_SECTION_KINDS, NEWS_SUMMARY_MAX, checkedNews, isNewsDate, newsAssetIds } from '../../lib/storefront/storefrontNewsRules';
+import { NEWS_SECTION_KINDS, NEWS_SUMMARY_MAX, checkedNews, isNewsDate, newsAssetIds, newsExcerpt } from '../../lib/storefront/storefrontNewsRules';
 
 const p = (text: string) => ({ type: 'paragraph', content: [{ type: 'text', text }] });
 const text = (...content: unknown[]) => ({ kind: 'text', background: 'white', doc: { type: 'doc', content } });
@@ -102,5 +102,29 @@ describe('a news item of the site', () => {
       expect(migration).toContain(`${column} text,`);
       expect(migration).toContain(`CONSTRAINT chk_storefront_news_${column}_datefmt CHECK (erp_date_text_ok(${column}, 'iso'::text))`);
     }
+  });
+
+  it('takes the first words of the text for an item with no summary, as plain words cut at a limit', () => {
+    const parts = checkedNews(news({ sections: [
+      gallery(8, 9),
+      text({ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'سرخط' }] }, { type: 'paragraph', content: [{ type: 'text', text: 'جملهٔ ' }, { type: 'text', text: 'نخست', marks: [{ type: 'bold' }] }, { type: 'hardBreak' }, { type: 'text', text: 'خط دوم' }] },
+        { type: 'bulletList', content: [{ type: 'listItem', content: [p('یک')] }, { type: 'listItem', content: [p('دو')] }] }),
+      text(p('بخش دیگر')),
+    ] }), { forPublish: false }).news!.sections;
+    // the first text part with words, its blocks a space apart and the pieces of a line run together
+    expect(newsExcerpt(parts, 200)).toBe('سرخط جملهٔ نخست خط دوم یک دو');
+    expect(newsExcerpt(parts, 12)).toBe('سرخط جملهٔ…');
+    expect(newsExcerpt(parts, 12).length).toBeLessThanOrEqual(12);
+    expect(newsExcerpt([], 200)).toBe('');
+    // a text part with no words is passed over for the next one, and so is anything that is no part or no safe text
+    const empty = { kind: 'text', background: 'white', doc: { type: 'doc', content: [{ type: 'paragraph' }] } };
+    const unsafe = { kind: 'text', background: 'white', doc: { type: 'doc', content: [{ type: 'iframe', content: [p('پنهان')] }] } };
+    expect(newsExcerpt([null, 'x', { kind: 'text' }, empty, unsafe, text(p('واژه‌های خبر'))], 200)).toBe('واژه‌های خبر');
+    // the cut never goes through an emoji (a pair of code units)
+    const smile = String.fromCodePoint(0x1f600);
+    const cut = newsExcerpt([text(p(`${'ب'.repeat(8)}${smile}${smile}${smile}`))], 10);
+    expect(cut).toBe(`${'ب'.repeat(8)}${smile}…`);
+    expect(/[\ud800-\udbff](?![\udc00-\udfff])/.test(cut)).toBe(false);
+    expect(newsExcerpt(checkedNews(news({ sections: [gallery(8, 9)] }), { forPublish: false }).news!.sections, 200)).toBe('');
   });
 });

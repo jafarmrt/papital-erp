@@ -11,8 +11,9 @@ import { businessTodayIsoDate } from '../../lib/businessClock.js';
  * taken off the site and removed softly, each with its audit row. Published without a day it is dated today (Tehran);
  * with a day to come it waits for that day. Its body takes only text and gallery parts; its images must be live images
  * of the library, and the rows that name a published item's images are kept under content kind 'news'. Reading needs
- * `site_content.view`, changing `site_content.manage`, and a new image `media.view` too. The Storefront API has no news
- * yet, and the site's image route gives no image of a news item, even beside a page on the site with the item's own id.
+ * `site_content.view`, changing `site_content.manage`, and a new image `media.view` too. The image reader of the site's
+ * pages gives no image of a news item, even beside a page on the site with the item's own id (what the site reads of the
+ * news is `storefrontNewsSiteV12Tests.ts`).
  */
 interface Session { cookie: string; csrfToken: string }
 type Body = Record<string, unknown>;

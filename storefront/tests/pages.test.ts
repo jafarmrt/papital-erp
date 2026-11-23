@@ -166,6 +166,10 @@ describe('search engines and information pages', () => {
     const sitemap = await page('/sitemap.xml');
     expect(sitemap.status).toBe(200);
     expect(sitemap.html).toContain('<loc>https://shop.example/p/tile-necklace-sample</loc>');
+    // v12 phase 10d: while the shop has not turned «خبرها روی سایت بیایند» on, the site has no news: not in the map, and no page
+    expect(sitemap.html).not.toContain('/news');
+    expect((await page('/news')).status).toBe(404);
+    expect((await page('/news/any-item')).status).toBe(404);
     // v12 phase 10c: a product carries the day its page last changed (the feed's `updatedAt`, a UTC day), before its photo;
     // a time without a zone is not a day anyone can trust, and a product without a time has none
     expect(sitemap.html).toMatch(/<url><loc>https:\/\/shop\.example\/p\/tile-necklace-sample<\/loc><lastmod>2026-11-20<\/lastmod><image:image>/);

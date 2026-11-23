@@ -19,7 +19,7 @@ import { campaignCards } from './storefrontCatalog.service.js';
  * again on its way out (`safeRichDoc`), so a row changed by hand in the database still cannot send an unknown node.
  */
 export type PageRecord = typeof storefrontPages.$inferSelect;
-type Images = ReadonlyMap<number, Omit<StorefrontPageImage, 'alt'>>;
+export type Images = ReadonlyMap<number, Omit<StorefrontPageImage, 'alt'>>;
 
 const onSite = () => and(eq(storefrontPages.isDeleted, 0), isNotNull(storefrontPages.published), isNotNull(storefrontPages.publishedAt));
 const notFound = () => new NotFoundError('صفحه پیدا نشد.', undefined, 'STOREFRONT_PAGE_NOT_FOUND');
@@ -46,7 +46,8 @@ export async function publicPages(): Promise<StorefrontPageSummary[]> {
   return rows.map(summaryOf);
 }
 
-async function imagesOf(ids: readonly number[]): Promise<Images> {
+/** The live images of the library with a light version among `ids`, each by the key of its file */
+export async function imagesOf(ids: readonly number[]): Promise<Images> {
   const out = new Map<number, Omit<StorefrontPageImage, 'alt'>>();
   if (ids.length === 0) return out;
   const assets = await orm.select({
@@ -57,7 +58,7 @@ async function imagesOf(ids: readonly number[]): Promise<Images> {
   return out;
 }
 
-const imageOf = (images: Images, assetId: number | null, alt: string): StorefrontPageImage | null => {
+export const imageOf = (images: Images, assetId: number | null, alt: string): StorefrontPageImage | null => {
   const image = assetId !== null ? images.get(assetId) : undefined;
   return image ? { ...image, alt } : null;
 };

@@ -1,5 +1,6 @@
 import { checkedPage, pageAssetIds, type PageSection, type SectionKind } from './storefrontPageRules.js';
 import { text } from './storefrontPageParts.js';
+import { safeRichDoc } from './storefrontPageRichText.js';
 
 /**
  * v12 phase 10d (docs/roadmap/V12_SITE_NEXT_START_PLAN.md §7.2): the rules of a news item of the site, shared by the
@@ -77,6 +78,30 @@ export function checkedNews(raw: unknown, options: { forPublish: boolean }): Che
     },
     problem: null,
   };
+}
+
+/** The words of a rich-text node without its formatting: the pieces of a paragraph run together, blocks are a space apart */
+function plainText(part: { type?: string; text?: string; content?: readonly unknown[] }): string {
+  if (typeof part.text === 'string') return part.text;
+  if (part.type === 'hardBreak') return ' ';
+  const inside = (Array.isArray(part.content) ? part.content : []).map(child => plainText(child as Parameters<typeof plainText>[0]));
+  return part.type === 'paragraph' || part.type === 'heading' ? inside.join('') : inside.filter(Boolean).join(' ');
+}
+
+/**
+ * The first words of an item's text, for the list of news where the item has no summary of its own ('' when it has no
+ * words). The text is checked first (`safeRichDoc`), so the words of a node the site would not draw are not taken, and a
+ * part that is no part (a row changed by hand) is passed over. The cut is by whole characters, never through an emoji.
+ */
+export function newsExcerpt(sections: readonly unknown[], max: number): string {
+  for (const section of sections) {
+    if (!isRecord(section) || section.kind !== 'text') continue;
+    const doc = safeRichDoc(section.doc).doc;
+    if (!doc) continue;
+    const letters = Array.from(plainText(doc).replace(/\s+/g, ' ').trim());
+    if (letters.length > 0) return letters.length > max ? `${letters.slice(0, max - 1).join('').trimEnd()}…` : letters.join('');
+  }
+  return '';
 }
 
 /** every image of the media library a news item names: its cover and the images of its body */

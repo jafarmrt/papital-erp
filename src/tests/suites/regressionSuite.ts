@@ -11278,5 +11278,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runStorefrontNewsV12Tests } = await import('../regression/storefrontNewsV12Tests.js');
   results.push(...await runStorefrontNewsV12Tests(shouldRun));
 
+  // v12 phase 10d, part 2: what the site reads of the news, and the switch that lets it
+  const { runStorefrontNewsSiteV12Tests } = await import('../regression/storefrontNewsSiteV12Tests.js');
+  results.push(...await runStorefrontNewsSiteV12Tests(shouldRun));
+
   return results;
 }

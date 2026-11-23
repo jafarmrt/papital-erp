@@ -32,6 +32,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 // half of a pair (an emoji cut in two, by the ERP or by the cut below): no address can be written from it
 const LONE_HALF = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
 const str = (value: unknown, max: number) => (typeof value === 'string' ? value.replace(UNSEEN, '').slice(0, max).replace(LONE_HALF, '') : '');
+/** A text of an answer as the site keeps it: no unseen or line-turning character, cut to `max` */
+export const cleanText = str;
 const side = (value: unknown) => (typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 20_000 ? value : null);
 const href = (value: unknown) => (typeof value === 'string' && TURNS_LINE.test(value) ? '' : pageLink(value) ?? '');
 const list = (value: unknown, max: number): unknown[] => (Array.isArray(value) ? value.slice(0, max) : []);
