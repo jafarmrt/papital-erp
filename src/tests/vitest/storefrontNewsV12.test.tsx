@@ -271,6 +271,8 @@ describe('the news of the site in the ERP', () => {
     await waitFor(() => expect(calls('PUT')).toHaveLength(1));
     // the switch shows the new state as soon as the answer is in, before the list has been read again
     await waitFor(() => expect((within(screen.getByRole('region', { name: 'خبرها روی سایت' })).getByRole('checkbox') as HTMLInputElement).checked).toBe(true));
+    // and the list is read again: the reading held back here is that one
+    await waitFor(() => expect((fetchJson.mock.calls as Call[]).filter(([url, init]) => url.startsWith('/storefront/news?page=') && !init).length).toBeGreaterThanOrEqual(2));
     letGo();
     expect(calls('PUT')[0][0]).toBe('/storefront/news/site');
     expect(JSON.parse(String(calls('PUT')[0][1]?.body))).toEqual({ enabled: true });

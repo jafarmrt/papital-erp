@@ -68,7 +68,7 @@ export default function NewsItemPage({ loaderData }: Route.ComponentProps) {
             {item.cover ? (
               <figure className="mt-6 overflow-hidden rounded-surface border border-border bg-muted">
                 {/* the title is written just above: the image says nothing more to a screen reader; a tall image is held to a height */}
-                <NewsCover image={{ ...item.cover, alt: '' }} sizes="(min-width: 1024px) 960px, 100vw" eager className="mx-auto h-auto max-h-[36rem] w-auto max-w-full" />
+                <NewsCover image={{ ...item.cover, alt: '' }} sizes="(min-width: 1024px) 960px, 100vw" eager className="mx-auto h-auto max-h-[40rem] w-auto max-w-full" />
               </figure>
             ) : null}
           </header>

@@ -113,7 +113,7 @@ export async function runStorefrontNewsSiteV12Tests(shouldRun: (id: string, ...e
     // its draft goes on changing after «انتشار», every field of it: none of this is on the site
     const secret = `پیش‌نویس محرمانه ${tag}`;
     const redraft = await erp.put(`/api/storefront/news/${shown.id}`, {
-      ...shown.form, title: secret, summary: '', coverAssetId: draftOnly.id, newsDate: '2021-07-07', seoTitle: `${secret} در جست‌وجو`, seoDescription: `${secret} در توضیح`,
+      ...shown.form, title: secret, summary: `${secret} در خلاصه`, coverAssetId: draftOnly.id, newsDate: '2021-07-07', seoTitle: `${secret} در جست‌وجو`, seoDescription: `${secret} در توضیح`,
       sections: [text(`${secret} در متن`), gallery([first.id, draftOnly.id])], version: shown.version,
     });
     if (redraft.status !== 200) throw new Error(`changing the draft: ${redraft.status} ${JSON.stringify(redraft.body)}`);
@@ -223,15 +223,22 @@ export async function runStorefrontNewsSiteV12Tests(shouldRun: (id: string, ...e
     // passed over, a summary that is no text is not sent, and the words of a node the site would not draw are not taken
     await orm.update(storefrontNews).set({
       published: {
-        ...row.published!, summary: { a: 1 } as unknown as string,
+        ...row.published!, summary: { a: 1 } as unknown as string, coverAssetId: 1.5,
         sections: [null, { kind: 'text', background: 'white' }, { kind: 'gallery', background: 'white', title: 'x', images: 'no' },
+          { kind: 'text', background: 'white', doc: { type: 'doc', content: [null] } }, { kind: 'text', background: 'white', doc: { type: 'doc', content: 'no' } },
+          { kind: 'gallery', background: 5, title: 7, images: [{ assetId: 'x' }, { assetId: 1.5 }, { assetId: 99_999_999_999 }, null, { assetId: first.id, alt: { a: 1 } }] },
           { kind: 'text', background: 'white', doc: { type: 'doc', content: [{ type: 'iframe', content: [p('متن گره ناشناخته')] }] } }, text('متن درست')] as never,
       },
     }).where(eq(storefrontNews.id, shown.id));
     const [bentList, bentItem] = [await site('/news'), await site(`/news/${shown.slug}`)];
     const bentCard = ((bentList.body.data ?? []) as Array<Record<string, unknown>>).find(c => c.slug === shown.slug);
-    if (bentList.status !== 200 || bentItem.status !== 200 || bentCard?.summary !== 'متن درست' || bentItem.body.data?.summary !== 'متن درست' || JSON.stringify(bentItem.body).includes('گره ناشناخته')) {
-      wrong.push(`a copy that cannot be read: list ${bentList.status}, item ${bentItem.status}, summary ${JSON.stringify(bentCard?.summary)}`);
+    const bentParts = ((bentItem.body.data?.sections ?? []) as Array<Record<string, unknown>>).map(part => (
+      part.kind === 'gallery' ? `gallery «${String(part.title)}» ${String(part.background)} ${JSON.stringify((part.images as Array<Record<string, unknown>>).map(i => [i.sha256 === first.sha256, i.alt]))}` : String(part.kind)
+    )).join(' | ');
+    // of the parts, the two galleries (the first with no image, the second with its one real image and no words of its own) and the good text are left
+    if (bentList.status !== 200 || bentItem.status !== 200 || bentCard?.summary !== 'متن درست' || bentCard.cover !== null || bentItem.body.data?.summary !== 'متن درست'
+      || bentItem.body.data?.cover !== null || JSON.stringify(bentItem.body).includes('گره ناشناخته') || bentParts !== 'gallery «x» white [] | gallery «» white [[true,""]] | text') {
+      wrong.push(`a copy that cannot be read: list ${bentList.status}, item ${bentItem.status}, summary ${JSON.stringify(bentCard?.summary)}, parts ${bentParts}`);
     }
     await orm.update(storefrontNews).set({ published: row.published }).where(eq(storefrontNews.id, shown.id));
     // a removed row whose copy was left by hand is not on the site either

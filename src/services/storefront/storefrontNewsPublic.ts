@@ -9,6 +9,8 @@ import { invalidateSettingsCache } from '../../lib/memoryCache.js';
 import { mediaFilePath } from '../../lib/media/mediaPaths.js';
 import { NEWS_MAX, NEWS_SECTION_KINDS, newsExcerpt } from '../../lib/storefront/storefrontNewsRules.js';
 import type { PageSection } from '../../lib/storefront/storefrontPageRules.js';
+import { isId } from '../../lib/storefront/storefrontPageParts.js';
+import { docIsEmpty, safeRichDoc } from '../../lib/storefront/storefrontPageRichText.js';
 import {
   NEWS_EXCERPT_MAX, NEWS_SITE_PAGE_SIZE, STOREFRONT_NEWS_SETTING_KEYS as KEYS,
   type StorefrontNewsCard, type StorefrontNewsIndexRow, type StorefrontNewsList, type StorefrontPublicNews,
@@ -54,15 +56,27 @@ const onSite = (today: string) => and(
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
+/** The id of an image of the library as a copy names it; anything else (a row changed by hand) is no image */
+const coverOf = (copy: { coverAssetId?: unknown }): number | null => (isId(copy.coverAssetId) ? copy.coverAssetId : null);
+
 /**
- * The parts of a copy a news item may have, each in the shape its kind is drawn from: a row changed by hand cannot send
- * a part of another kind (a row of products, a button), and a part that is no part does not take the item down
+ * The parts of a copy a news item may have, each rebuilt from the fields its kind is drawn from: a text is its checked
+ * text (`safeRichDoc`) and is passed over when that is refused or empty, a gallery is its title and the images it names by a
+ * whole id. So a row changed by hand cannot send a part of another kind (a row of products, a button) or a field of its
+ * own, and a part that is no part takes neither the item nor the list down.
  */
 function partsOf(copy: { sections?: unknown }): PageSection[] {
-  return (Array.isArray(copy.sections) ? copy.sections : []).filter((section): section is PageSection => (
-    isRecord(section) && NEWS_SECTION_KINDS.includes(section.kind as PageSection['kind'])
-    && (section.kind === 'text' ? isRecord(section.doc) : Array.isArray(section.images) && section.images.every(isRecord))
-  ));
+  return (Array.isArray(copy.sections) ? copy.sections : []).flatMap((section): PageSection[] => {
+    if (!isRecord(section) || !NEWS_SECTION_KINDS.includes(section.kind as PageSection['kind'])) return [];
+    if (section.kind === 'text') {
+      const doc = safeRichDoc(section.doc).doc;
+      // a text with nothing in it is never published; one left so by hand is passed over too
+      return doc && !docIsEmpty(doc) ? [{ kind: 'text', background: 'white', doc }] : [];
+    }
+    const images = (Array.isArray(section.images) ? section.images : [])
+      .flatMap(image => (isRecord(image) && isId(image.assetId) ? [{ assetId: image.assetId, alt: typeof image.alt === 'string' ? image.alt : '' }] : []));
+    return [{ kind: 'gallery', background: 'white', title: typeof section.title === 'string' ? section.title : '', images }];
+  });
 }
 const summaryOf = (copy: { summary?: unknown }, parts: readonly PageSection[]): string => (
   typeof copy.summary === 'string' && copy.summary ? copy.summary : newsExcerpt(parts, NEWS_EXCERPT_MAX)
@@ -74,7 +88,7 @@ function cardOf(row: NewsRecord, images: Images): StorefrontNewsCard | null {
   if (!isRecord(copy) || typeof copy.title !== 'string' || !row.publishedDate) return null;
   return {
     slug: row.slug, title: copy.title, summary: summaryOf(copy, partsOf(copy)), date: row.publishedDate,
-    cover: imageOf(images, typeof copy.coverAssetId === 'number' ? copy.coverAssetId : null, copy.title),
+    cover: imageOf(images, coverOf(copy), copy.title),
   };
 }
 
@@ -85,7 +99,7 @@ export async function publicNewsList(page: number): Promise<StorefrontNewsList> 
   const [{ total }] = await orm.select({ total: sql<number>`count(*)::int` }).from(storefrontNews).where(where);
   const rows = await orm.select().from(storefrontNews).where(where).orderBy(desc(storefrontNews.publishedDate), desc(storefrontNews.id))
     .limit(NEWS_SITE_PAGE_SIZE).offset((page - 1) * NEWS_SITE_PAGE_SIZE);
-  const images = await imagesOf(rows.flatMap(row => (typeof row.published?.coverAssetId === 'number' ? [row.published.coverAssetId] : [])));
+  const images = await imagesOf(rows.flatMap(row => (isRecord(row.published) ? coverOf(row.published) ?? [] : [])));
   return { enabled: true, data: rows.flatMap(row => cardOf(row, images) ?? []), total, page, pageSize: NEWS_SITE_PAGE_SIZE };
 }
 
@@ -108,7 +122,7 @@ export async function publicNewsItem(slug: string): Promise<StorefrontPublicNews
   const drawn = await pageForSite(
     {
       title: copy.title, seoTitle: typeof copy.seoTitle === 'string' ? copy.seoTitle : '', seoDescription: typeof copy.seoDescription === 'string' ? copy.seoDescription : '',
-      noindex: false, shareImageAssetId: typeof copy.coverAssetId === 'number' ? copy.coverAssetId : null, sections,
+      noindex: false, shareImageAssetId: coverOf(copy), sections,
     },
     { slug: row.slug, kind: 'custom', title: copy.title, noindex: false, updatedAt },
   );

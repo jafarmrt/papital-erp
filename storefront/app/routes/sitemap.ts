@@ -32,7 +32,7 @@ export async function loader() {
     ...INFO_PAGES.filter(page => !base.get(page.slug)?.noindex).map(page => url(`/${page.slug}`, lastmod(base.get(page.slug)?.updatedAt ?? ''))),
     ...written.filter(page => page.kind === 'custom' && !page.noindex).map(page => url(pagePath(page), lastmod(page.updatedAt))),
     url('/corporate-gift'),
-    // v12 phase 10d: the list of news and each item on the site now, with the day it was published; none while the shop
+    // v12 phase 10d: the list of news and each item on the site now, with the later of its own day and the day its copy was published; none while the shop
     // has not turned «خبرها روی سایت بیایند» on or has no item on the site
     ...(news.length > 0 ? [url(NEWS_PATH), ...news.map(item => url(newsPath(item.slug), item.lastmod ? `<lastmod>${item.lastmod}</lastmod>` : ''))] : []),
     // phase 8.5b: the «صفحه‌های ویژه» on the site now; one that ends leaves the map with it

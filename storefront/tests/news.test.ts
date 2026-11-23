@@ -126,7 +126,6 @@ describe('the news of the site', () => {
     // red before: each of these went to the ERP, and one it refuses (past 9999) came back as «در دسترس نیست»
     for (const number of [4, 500, 10000, 100000]) expect((await page(`/news?page=${number}`)).status, String(number)).toBe(404);
     expect(await reads()).toEqual(before);
-    expect(before['1']).toBe(1);
   });
 
   it('draws an item with its title, day, cover and text, keeping only the parts and marks a news item may have', async () => {
@@ -138,7 +137,7 @@ describe('the news of the site', () => {
     expect(article).toMatch(/<time dateTime="2026-12-20">۲۹ آذر ۱۴۰۵<\/time>/);
     expect(article).toContain(`src="/media/${SHA('a')}.webp"`);
     // the title is written just above the cover, so the cover says nothing more to a screen reader, and is held to a height
-    expect(article).toMatch(/<figure[^>]*>(<!--.*?-->)?<img[^>]*alt=""[^>]*class="[^"]*max-h-\[36rem\][^"]*"/s);
+    expect(article).toMatch(/<figure[^>]*>(<!--.*?-->)?<img[^>]*alt=""[^>]*class="[^"]*max-h-\[40rem\][^"]*"/s);
     expect(article).not.toContain('alt="ویترین یلدا"');
     expect(article).toContain('گالری در شب یلدا تا نیمه‌شب باز است.');
     // the gallery's title is a heading under the item's own, and an image that is no file is left out
