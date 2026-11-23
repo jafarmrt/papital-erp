@@ -127,6 +127,8 @@ export const PAGE_ACCESS = {
   '/site-menus': { gate: anyOf('site_content.view'), api: ['GET /api/storefront/menus/', 'GET /api/storefront/menus/link-options'] },
   // v12 phase 10b: the page builder; every change needs site_content.manage (a new image also media.view)
   '/site-pages': { gate: anyOf('site_content.view'), api: ['GET /api/storefront/pages/', 'GET /api/storefront/pages/:id', 'GET /api/storefront/menus/link-options'] },
+  // v12 phase 10d: «خبرهای سایت», under the same keys as the pages
+  '/site-news': { gate: anyOf('site_content.view'), api: ['GET /api/storefront/news/', 'GET /api/storefront/news/:id'] },
   '/reserved-items': { gate: anyOf('products.view', 'reports.view', 'warehouse.view', 'documents.view'), api: ['GET /api/inventory/reserved-items'] },
   '/transactions': { gate: anyOf('warehouse.view', 'accounting.view'), api: ['GET /api/transactions'] },
   '/accounting': { gate: { anyOf: ACCOUNTING_KEYS }, api: [] },

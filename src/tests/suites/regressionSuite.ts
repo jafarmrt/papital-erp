@@ -6743,8 +6743,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         WHERE rel.relnamespace = current_schema()::regnamespace AND pc.conname LIKE 'chk%datefmt' AND pc.convalidated`) as unknown as { rows: Array<{ n: number }> }).rows;
       // v7.0.82 (TD-231): ۲۴ قید مهاجرت 0028 و ۳ قید مهاجرت 0030؛ v10.0.199 (TD-1086): ۱ قید مهاجرت 0103 (personnel.start_date)؛
       // v10.0.254 (TD-971): ۱ قید مهاجرت 0108 (cheques.reconciled_at)؛ v10.3.19 (OBS-R1-65): ۱ قید مهاجرت 0134 (bank_accounts.opening_date)؛
-      // v11 (ابزار ۴): ۱ قید مهاجرت 0009 (colleague_expenses.date)
-      if (covered !== 31) violations.push(`number of validated date format constraints: ${covered} (expected 31)`);
+      // v11 (ابزار ۴): ۱ قید مهاجرت 0009 (colleague_expenses.date)؛ v12 (۱۰د): ۲ قید مهاجرت 0033 (storefront_news.news_date و published_date)
+      if (covered !== 33) violations.push(`number of validated date format constraints: ${covered} (expected 33)`);
       if (missingRows.length > 0) violations.push(`without a valid format constraint: ${missingRows.map(r => `${r.table_name}.${r.column_name}`).join(', ')}`);
 
       const ROLLBACK = new Error('ROLLBACK_P3_15');
@@ -11273,6 +11273,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v12 phase 10c (migration 0032): the words of the fixed pages of the site
   const { runStorefrontFixedPagesV12Tests } = await import('../regression/storefrontFixedPagesV12Tests.js');
   results.push(...await runStorefrontFixedPagesV12Tests(shouldRun));
+
+  // v12 phase 10d (migration 0033): the news of the site on the ERP side
+  const { runStorefrontNewsV12Tests } = await import('../regression/storefrontNewsV12Tests.js');
+  results.push(...await runStorefrontNewsV12Tests(shouldRun));
 
   return results;
 }

@@ -23,6 +23,7 @@ import {
   Handshake,
   Landmark,
   FileText,
+  Newspaper,
   Building2,
   CreditCard,
   BarChart3,
@@ -112,6 +113,7 @@ export function getMenuGroups(
         { name: 'کالاها و تنظیمات سایت', path: '/site-settings', icon: SlidersHorizontal, visible: open('/site-settings') },
         { name: 'فهرست‌های سایت', path: '/site-menus', icon: PanelTop, visible: open('/site-menus') },
         { name: 'صفحه‌های سایت', path: '/site-pages', icon: FileText, visible: open('/site-pages') },
+        { name: 'خبرهای سایت', path: '/site-news', icon: Newspaper, visible: open('/site-news') },
       ]
     },
     {

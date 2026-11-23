@@ -121,6 +121,8 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   // v12 phase 10b: the site's pages (draft and published copy) and the library images published content names
   { table: 'storefront_pages', group: 'settings' },
   { table: 'storefront_content_assets', group: 'settings' },
+  // v12 phase 10d: the news of the site (draft and published copy)
+  { table: 'storefront_news', group: 'settings' },
 ];
 
 /** Exported only on request, for a business-day range */

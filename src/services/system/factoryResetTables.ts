@@ -18,7 +18,7 @@ import {
   integrationDeliveryJobs, eventActionRuleRetirements, webhookEventPatternRepairs, itemPriceTitleCleanup,
   dailyLogVisibilityRepairs, statutoryRemittanceLines, settlementAllocations, payrollStatutoryRates, payrollEidiRates, itemCodeHistory,
   mediaAssets, mediaSections, storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontRedirects, storefrontSmsCodes, storefrontEmailCodes, storefrontSmsMessages,
-  storefrontBuyerGroups, storefrontBuyerAccounts, storefrontBuyerAddresses, storefrontBuyerSessions, storefrontPasswordTokens, storefrontDiscountCodes, storefrontDiscountRedemptions, storefrontCampaigns, storefrontMenuItems, storefrontPages, storefrontContentAssets, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
+  storefrontBuyerGroups, storefrontBuyerAccounts, storefrontBuyerAddresses, storefrontBuyerSessions, storefrontPasswordTokens, storefrontDiscountCodes, storefrontDiscountRedemptions, storefrontCampaigns, storefrontMenuItems, storefrontPages, storefrontNews, storefrontContentAssets, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
 } from '../../db/schema.js';
 
 /**
@@ -169,6 +169,8 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   // the five base pages, which only migration 0029 makes, are made again empty right after the wipe
   { name: 'storefront_content_assets', table: storefrontContentAssets },
   { name: 'storefront_pages', table: storefrontPages },
+  // v12 phase 10d: the news of the site point to media images (their cover) too
+  { name: 'storefront_news', table: storefrontNews },
   { name: 'storefront_shipping_rates', table: storefrontShippingRates },
   { name: 'storefront_shipping_methods', table: storefrontShippingMethods },
   { name: 'item_prices', table: itemPrices },

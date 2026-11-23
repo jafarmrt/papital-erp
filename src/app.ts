@@ -53,6 +53,7 @@ import storefrontEmailRoutes from './routes/storefrontEmail.routes.js';
 import storefrontCampaignRoutes from './routes/storefrontCampaigns.routes.js';
 import storefrontMenuRoutes from './routes/storefrontMenus.routes.js';
 import storefrontPageRoutes from './routes/storefrontPages.routes.js';
+import storefrontNewsRoutes from './routes/storefrontNews.routes.js';
 import accountingRoutes from './routes/accounting.routes.js';
 import historyImportRoutes from './routes/historyImport.routes.js';
 import workflowRoutes from './routes/workflow.routes.js';
@@ -377,6 +378,7 @@ export async function createApp(): Promise<express.Express> {
   app.use('/api/storefront/menus', storefrontMenuRoutes);
   // v12 phase 10b: «صفحه‌های سایت», the page builder
   app.use('/api/storefront/pages', storefrontPageRoutes);
+  app.use('/api/storefront/news', storefrontNewsRoutes);
   app.use('/api/storefront', storefrontRoutes);
   app.use('/api', authRoutes);
   app.use('/api', usersRoutes);
