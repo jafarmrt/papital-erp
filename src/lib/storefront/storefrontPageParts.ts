@@ -49,6 +49,8 @@ export const FIXED_PAGES = [
   { slug: 'fixed-order-track', title: 'پیگیری سفارش', path: '/orders/track' },
   { slug: 'fixed-account', title: 'حساب من', path: '/account' },
   { slug: 'fixed-not-found', title: 'این صفحه پیدا نشد', path: '' },
+  // v12 phase 10d: the list of news (a page only while the site has news)
+  { slug: 'fixed-news', title: 'خبرها', path: '/news' },
 ] as const;
 export type FixedPageSlug = typeof FIXED_PAGES[number]['slug'];
 export const fixedPageOf = (slug: string) => FIXED_PAGES.find(page => page.slug === slug) ?? null;

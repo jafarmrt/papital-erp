@@ -167,11 +167,11 @@ async function everyTableCase(): Promise<TestCaseResult> {
     if (places.rows.length !== 4 || places.rows.some((r: { is_enabled: number; updated_by: string }) => r.is_enabled !== 0 || r.updated_by !== '')) {
       wrong.push(`menu places after the reset: ${JSON.stringify(places.rows)}`);
     }
-    // v12 phase 10b: only the five base pages are left, as migration 0029 made them (and, 10c, the nine fixed ones of 0032), and no image row
+    // v12 phase 10b: only the five base pages are left, as migration 0029 made them (and, 10c, the nine fixed ones of 0032; 10d, the tenth of 0034), and no image row
     const pagesLeft = await pool.query(`SELECT kind, slug, title, (published IS NULL) AS off_site, share_image_asset_id, sections::text AS sections, updated_by FROM storefront_pages ORDER BY id`);
     const expectedPages = 'about:درباره ما,contact:تماس با ما,shipping:ارسال و پرداخت,terms:قوانین خرید,privacy:حریم خصوصی'
       + ',fixed-products:همهٔ محصولات,fixed-categories:دسته‌ها,fixed-search:جست‌وجو,fixed-cart:سبد خرید,fixed-wholesale:درخواست خرید عمده'
-      + ',fixed-corporate-gift:هدیهٔ سازمانی,fixed-order-track:پیگیری سفارش,fixed-account:حساب من,fixed-not-found:این صفحه پیدا نشد';
+      + ',fixed-corporate-gift:هدیهٔ سازمانی,fixed-order-track:پیگیری سفارش,fixed-account:حساب من,fixed-not-found:این صفحه پیدا نشد,fixed-news:خبرها';
     type PageLeft = { kind: string; slug: string; title: string; off_site: boolean; share_image_asset_id: number | null; sections: string; updated_by: string };
     const left = pagesLeft.rows as PageLeft[];
     if (left.map(r => `${r.slug}:${r.title}`).join(',') !== expectedPages

@@ -24,7 +24,7 @@ const id = z.number().int().min(1).max(2_147_483_647);
 // the service checks every rule with its message; these only bound what a request may carry
 const leaf = z.object({
   id: id.nullable().optional(), label: z.string().max(MENU_LABEL_MAX * 2), kind: z.enum(MENU_LINK_KINDS),
-  target: z.string().max(MENU_URL_MAX), itemId: id.nullable(), campaignId: id.nullable(), pageId: id.nullable().optional(), icon: z.string().max(20), isActive: z.boolean(),
+  target: z.string().max(MENU_URL_MAX), itemId: id.nullable(), campaignId: id.nullable(), pageId: id.nullable().optional(), newsId: id.nullable().optional(), icon: z.string().max(20), isActive: z.boolean(),
 }).strict();
 const item = leaf.extend({ children: z.array(leaf).max(MENU_CHILDREN_MAX * 2) }).strict();
 const saveSchema = z.object({

@@ -27,7 +27,7 @@ vi.mock('../../api', () => ({
     calls.list.push({ url, init });
     if (url === '/storefront/menus') return stall.afterPut && stall.put ? new Promise(() => undefined) : Promise.resolve({ data: menus.current });
     if (url === '/storefront/menus/link-options' && optionsMode.current !== 'ok') return optionsMode.current === 'never' ? new Promise(() => undefined) : Promise.reject(new Error('read failed'));
-    if (url === '/storefront/menus/link-options') return Promise.resolve({ data: { categories: ['انگشتر', 'دستبند'], collections: ['یلدا'], campaigns: [], pages: [{ id: 8, title: 'راهنمای اندازه', live: true }, { id: 9, title: 'داستان ما', live: false }], products: [] } });
+    if (url === '/storefront/menus/link-options') return Promise.resolve({ data: { categories: ['انگشتر', 'دستبند'], collections: ['یلدا'], campaigns: [], pages: [{ id: 8, title: 'راهنمای اندازه', live: true }, { id: 9, title: 'داستان ما', live: false }], news: [{ id: 21, title: 'شب یلدا در گالری', live: true }, { id: 22, title: 'خبر در نوبت', live: false }], products: [] } });
     if (init?.method === 'PUT') {
       stall.put = true;
       const body = JSON.parse(String(init.body));
@@ -157,7 +157,7 @@ describe('the site menus screen', () => {
   it('marks a saved link the site does not show now', async () => {
     const view = emptyMenus();
     view.menus[0].items = [{
-      id: 7, label: 'خالی', kind: 'category', target: 'خالی', itemId: null, campaignId: null, pageId: null, icon: '', isActive: true,
+      id: 7, label: 'خالی', kind: 'category', target: 'خالی', itemId: null, campaignId: null, pageId: null, newsId: null, icon: '', isActive: true,
       targetTitle: '', live: false, children: [],
     }];
     menus.current = view;
@@ -229,13 +229,44 @@ describe('the site menus screen', () => {
     expect(JSON.parse(String(calls.list.find(c => c.init?.method === 'PUT')?.init?.body)).items[0]).toMatchObject({ kind: 'path', target: '/products', pageId: null });
   });
 
+  it('links to a news item by its row and to the list of news as a page of the site, and drops the item when the kind changes (v12 phase 10d)', async () => {
+    menus.current = emptyMenus();
+    permissions.current = ['site_content.view', 'site_content.manage'];
+    page('/site-menus?place=header');
+    await waitFor(() => expect(calls.list.some(c => c.url === '/storefront/menus/link-options')).toBe(true));
+    const panel = within(await screen.findByRole('tabpanel'));
+    fireEvent.click(panel.getByRole('button', { name: /افزودن گزینه/ }));
+    fireEvent.change(panel.getByLabelText('عنوان'), { target: { value: 'یلدا' } });
+    // «خبر» is one of the kinds, and the list of news one of the site's own pages
+    expect([...(panel.getByLabelText('پیوند به') as HTMLSelectElement).options].map(o => o.textContent)).toContain('خبر');
+    fireEvent.change(panel.getByLabelText('پیوند به'), { target: { value: 'page' } });
+    expect([...(panel.getByLabelText('مقصد') as HTMLSelectElement).options].map(o => o.textContent)).toContain('خبرها');
+    fireEvent.change(panel.getByLabelText('پیوند به'), { target: { value: 'news' } });
+    const target = panel.getByLabelText('مقصد') as HTMLSelectElement;
+    expect([...target.options].map(o => o.textContent)).toEqual(['برگزینید', 'شب یلدا در گالری', 'خبر در نوبت (اکنون روی سایت نیست)']);
+    fireEvent.click(panel.getByRole('button', { name: /^ذخیره/ }));
+    // no item chosen yet: the save is refused on the screen
+    expect(calls.list.some(c => c.init?.method === 'PUT')).toBe(false);
+    fireEvent.change(target, { target: { value: '21' } });
+    fireEvent.click(panel.getByRole('button', { name: /^ذخیره/ }));
+    await waitFor(() => expect(calls.list.some(c => c.init?.method === 'PUT')).toBe(true));
+    expect(JSON.parse(String(calls.list.find(c => c.init?.method === 'PUT')?.init?.body)).items[0]).toMatchObject({ label: 'یلدا', kind: 'news', newsId: 21, target: '', pageId: null, itemId: null, campaignId: null });
+    // another kind never carries the item along
+    fireEvent.change(panel.getByLabelText('پیوند به'), { target: { value: 'page' } });
+    fireEvent.change(panel.getByLabelText('مقصد'), { target: { value: 'news' } });
+    calls.list = [];
+    fireEvent.click(panel.getByRole('button', { name: /^ذخیره/ }));
+    await waitFor(() => expect(calls.list.some(c => c.init?.method === 'PUT')).toBe(true));
+    expect(JSON.parse(String(calls.list.find(c => c.init?.method === 'PUT')?.init?.body)).items[0]).toMatchObject({ kind: 'page', target: 'news', newsId: null });
+  });
+
   /** a saved link to a page and one to a campaign page; `targetTitle` '' is what the server sends for a target that is gone */
   const withSavedPageLink = (targetTitle: string): MenusView => ({
     menus: rules.MENU_LOCATIONS.map(location => ({
       location, enabled: true, version: 2, updatedBy: '', updatedAt: '',
       items: location === 'header' ? [
-        { id: 4, label: 'صفحهٔ قدیمی', kind: 'content', target: '', itemId: null, campaignId: null, pageId: 77, icon: '', isActive: true, targetTitle, live: targetTitle !== '', children: [] },
-        { id: 5, label: 'یلدای قدیمی', kind: 'campaign', target: '', itemId: null, campaignId: 66, pageId: null, icon: '', isActive: true, targetTitle: targetTitle && 'یلدای پارسال', live: false, children: [] },
+        { id: 4, label: 'صفحهٔ قدیمی', kind: 'content', target: '', itemId: null, campaignId: null, pageId: 77, newsId: null, icon: '', isActive: true, targetTitle, live: targetTitle !== '', children: [] },
+        { id: 5, label: 'یلدای قدیمی', kind: 'campaign', target: '', itemId: null, campaignId: 66, pageId: null, newsId: null, icon: '', isActive: true, targetTitle: targetTitle && 'یلدای پارسال', live: false, children: [] },
       ] : [],
     })),
   } as MenusView);
@@ -265,7 +296,7 @@ describe('the site menus screen', () => {
     await waitFor(() => expect(calls.list.some(c => c.init?.method === 'PUT')).toBe(true));
     const body = JSON.parse(String(calls.list.find(c => c.init?.method === 'PUT')?.init?.body));
     // the server's schema is strict: a field of the screen's own would be a 400 on every save
-    for (const sent of body.items) expect(Object.keys(sent).sort()).toEqual(['campaignId', 'children', 'icon', 'id', 'isActive', 'itemId', 'kind', 'label', 'pageId', 'target']);
+    for (const sent of body.items) expect(Object.keys(sent).sort()).toEqual(['campaignId', 'children', 'icon', 'id', 'isActive', 'itemId', 'kind', 'label', 'newsId', 'pageId', 'target']);
   });
 
   it.each(['never', 'fail'] as const)('keeps the saved name of a link\'s page while the list of pages is not read (%s)', async (mode) => {

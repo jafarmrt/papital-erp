@@ -192,10 +192,12 @@ describe('a page', () => {
     expect(refusal(page([], { slug: 'fixed-anything' }))).toMatchObject({ field: 'slug' });
     expect(refusal(page([], { slug: 'fixedprice' }))).toBeNull();
     expect(isReservedPageSlug('fixed-x')).toBe(true);
-    // the migration, the rules and the list the factory reset makes the rows again from are the same nine
+    // the migrations (nine rows in 0032, the tenth for the list of news in 0034), the rules and the list the factory reset
+    // makes the rows again from are the same ten
     expect(FIXED_PAGES.every(fixed => fixed.slug.startsWith(FIXED_PAGE_PREFIX))).toBe(true);
     expect(STOREFRONT_FIXED_PAGE_ROWS.map(({ slug, title }) => ({ slug, title }))).toEqual(FIXED_PAGES.map(({ slug, title }) => ({ slug, title })));
-    const migration = fs.readFileSync(path.resolve(process.cwd(), 'drizzle/0032_storefront_fixed_pages.sql'), 'utf8');
+    const migration = ['0032_storefront_fixed_pages', '0034_storefront_news_links'].map(name => fs.readFileSync(path.resolve(process.cwd(), `drizzle/${name}.sql`), 'utf8')).join('\n');
+    expect(FIXED_PAGES).toHaveLength(10);
     for (const fixed of FIXED_PAGES) expect(migration, fixed.slug).toContain(`('fixed', '${fixed.slug}', '${fixed.title}')`);
     expect(new Set(FIXED_PAGES.map(fixed => fixed.path).filter(Boolean)).size).toBe(FIXED_PAGES.length - 1);
   });

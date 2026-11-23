@@ -16,6 +16,7 @@ export interface DraftItem {
   itemId: number | null;
   campaignId: number | null;
   pageId: number | null;
+  newsId: number | null;
   /** the name of the saved link's target as the server sent it (a product, a campaign page, a page); '' for a new item */
   targetTitle?: string;
   icon: MenuIcon | '';
@@ -79,6 +80,17 @@ function TargetField({ item, options, onChange, id }: {
         </select>
       );
     }
+    case 'news': {
+      // v12 phase 10d: the newest items of «خبرهای سایت»; an older one already chosen stays, under its own title
+      const list = Array.isArray(options?.news) ? options.news : [];
+      return (
+        <select id={id} className={field} value={item.newsId ?? ''} onChange={e => onChange({ newsId: e.target.value ? Number(e.target.value) : null })}>
+          <option value="">برگزینید</option>
+          {item.newsId !== null && !list.some(n => n.id === item.newsId) && <option value={item.newsId}>{goneLabel(item, options, 'خبری که حذف شده است')}</option>}
+          {list.map(n => <option key={n.id} value={n.id}>{n.live ? n.title : `${n.title} (اکنون روی سایت نیست)`}</option>)}
+        </select>
+      );
+    }
     case 'product': {
       const list = Array.isArray(options?.products) ? options.products : [];
       return (
@@ -116,7 +128,7 @@ export function MenuItemFields({ item, location, child, options, notOnSite, firs
         <div>
           <label htmlFor={`${id}-kind`} className={label}>پیوند به</label>
           <select id={`${id}-kind`} className={field} value={item.kind}
-            onChange={e => onChange({ kind: e.target.value as MenuLinkKind, target: '', itemId: null, campaignId: null, pageId: null, targetTitle: '' })}>
+            onChange={e => onChange({ kind: e.target.value as MenuLinkKind, target: '', itemId: null, campaignId: null, pageId: null, newsId: null, targetTitle: '' })}>
             {kinds.map(k => <option key={k} value={k}>{MENU_LINK_KIND_TITLES[k]}</option>)}
           </select>
         </div>

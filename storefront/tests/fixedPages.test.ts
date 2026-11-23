@@ -29,6 +29,11 @@ const PAGES = [
   fixed('fixed-corporate-gift', 'هدیه برای سازمان شما', { sections: [{ kind: 'text', background: 'white', doc: { type: 'doc', content: [p('متن تازهٔ هدیهٔ سازمانی')] } }] }),
   fixed('fixed-order-track', 'سفارش من کجاست؟'),
   fixed('fixed-not-found', 'چیزی این‌جا نیست', { seoTitle: 'صفحه‌ای نیست', seoDescription: 'این نشانی صفحه‌ای ندارد', sections: [{ kind: 'text', background: 'white', doc: { type: 'doc', content: [p('از فهرست بالا ادامه دهید.')] } }] }),
+  // v12 phase 10d: the list of news
+  fixed('fixed-news', 'تازه‌های گالری', {
+    seoTitle: 'خبرهای گالری پاپیتال', seoDescription: 'توضیح نوشتهٔ فروشگاه برای خبرها',
+    sections: [{ kind: 'text', background: 'white', doc: { type: 'doc', content: [p('متن بالای فهرست خبرها')] } }],
+  }),
   fixed('fixed-search', 'بگردید', { sections: [{ kind: 'text', background: 'white', doc: { type: 'doc', content: [p('متن بالای جست‌وجو')] } }] }),
   fixed('fixed-cart', 'سبد شما', { seoTitle: 'سبد خرید شما', sections: [{ kind: 'text', background: 'white', doc: { type: 'doc', content: [p('متن بالای سبد')] } }] }),
   fixed('fixed-account', 'حساب شما', { sections: [{ kind: 'text', background: 'white', doc: { type: 'doc', content: [p('متن بالای حساب')] } }] }),
@@ -42,7 +47,13 @@ const PAGES = [
 beforeAll(async () => {
   mock = spawn(process.execPath, [path.join(import.meta.dirname, '../mock/mockApi.mjs')], {
     // ordering is on, so the cart is a page
-    env: { ...process.env, MOCK_PORT: String(PORT), MOCK_API_KEY: KEY, MOCK_PAGES: JSON.stringify(PAGES), MOCK_ORDERING: '1' },
+    env: {
+      ...process.env, MOCK_PORT: String(PORT), MOCK_API_KEY: KEY, MOCK_PAGES: JSON.stringify(PAGES), MOCK_ORDERING: '1',
+      // three news items, two a page, so the list has a second page
+      MOCK_NEWS: JSON.stringify({ enabled: true, pageSize: 2, items: ['یک', 'دو', 'سه'].map((word, i) => ({
+        slug: `news-${i + 1}`, title: `خبر ${word}`, summary: '', date: `2026-11-0${i + 1}`, cover: null, updatedAt: '2026-11-05T08:00:00.000Z', seoTitle: '', seoDescription: '', sections: [],
+      })) }),
+    },
     stdio: 'pipe',
   });
   await new Promise<void>((resolve, reject) => {
@@ -160,6 +171,27 @@ describe('the words of the fixed pages', () => {
       expect(description(html), address).toBe('این نشانی صفحه‌ای ندارد');
       expect(html, address).toContain('name="robots" content="noindex"');
     }
+  });
+
+  it('writes the shop\'s words above the list of news: its title, the text on the first page, and the search words (v12 phase 10d)', async () => {
+    const first = await page('/news');
+    expect(first.status).toBe(200);
+    expect(first.html).toMatch(/<h1[^>]*>تازه‌های گالری<\/h1>/);
+    // what is drawn of the list, from its top to its page links (the page's own data, further down, carries the words on every page)
+    const drawn = (html: string) => html.slice(html.indexOf('data-news-list'), html.indexOf('aria-label="صفحه‌ها"'));
+    expect(drawn(first.html)).toContain('متن بالای فهرست خبرها');
+    expect(title(first.html)).toBe('خبرهای گالری پاپیتال | گالری پاپیتال');
+    expect(description(first.html)).toBe('توضیح نوشتهٔ فروشگاه برای خبرها');
+    // the trail a search engine reads names the list as the shop does
+    expect(first.html).toMatch(/"name":"تازه‌های گالری","item":"https:\/\/shop\.example\/news"/);
+    // a later page keeps the title and the search words, with its number, and does not repeat the text
+    const second = await page('/news?page=2');
+    expect(second.html).toMatch(/<h1[^>]*>تازه‌های گالری<\/h1>/);
+    expect(drawn(second.html)).toContain('خبر سه');
+    expect(drawn(second.html)).not.toContain('متن بالای فهرست خبرها');
+    expect(title(second.html)).toBe('خبرهای گالری پاپیتال، صفحهٔ ۲ | گالری پاپیتال');
+    // the row is words, not a page to visit
+    expect((await page('/pages/fixed-news')).status).toBe(404);
   });
 
   it('is no page to visit by its row\'s name, is in no sitemap, and is not taken from a row of another kind', async () => {

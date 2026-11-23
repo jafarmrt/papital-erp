@@ -7,6 +7,9 @@ import { faFullDay, faNumber } from '../lib/format';
 import { breadcrumbLd } from '../lib/jsonLd';
 import { pageMeta } from '../lib/meta';
 import { NEWS_PATH, newsListPath, newsPath } from '../lib/news';
+import { fixedText } from '../lib/fixedText.server';
+import { fixedHead, fixedTitle } from '../lib/fixedText';
+import { FixedIntro } from '../components/FixedIntro';
 import { JsonLdScripts } from '../components/JsonLdScripts';
 import { NewsCover } from '../components/NewsCover';
 import { Pagination } from '../components/Pagination';
@@ -14,7 +17,8 @@ import { Pagination } from '../components/Pagination';
 /**
  * v12 phase 10d: the news of the shop, written in the ERP's «خبرهای سایت», the newest day first, a page at a time (the
  * ERP pages the list). It is a page only while the shop has turned «خبرها روی سایت بیایند» on and an item is on the
- * site; otherwise, and past the last page, its address is a 404 like any other.
+ * site; otherwise, and past the last page, its address is a 404 like any other. Its title, the text above the list and
+ * its search words are the shop's own once written in «صفحه‌های سایت» (the fixed row `fixed-news`, part 3).
  */
 export async function loader({ request }: Route.LoaderArgs) {
   const page = parsePage(new URL(request.url).searchParams.get('page'));
@@ -24,33 +28,31 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (!first || page > pages) throw new Response('پیدا نشد', { status: 404 });
   const list = page === 1 ? first : await newsList(page);
   if (!list || list.items.length === 0) throw new Response('پیدا نشد', { status: 404 });
-  return { items: list.items, page, pages, siteUrl: siteEnv().siteUrl };
+  return { items: list.items, page, pages, siteUrl: siteEnv().siteUrl, text: await fixedText('fixed-news') };
 }
 
 const TITLE = 'خبرها';
 
 export function meta({ data, matches }: Route.MetaArgs) {
   if (!data) return [];
-  const { page, siteUrl } = data;
-  return pageMeta({
-    matches,
-    title: page > 1 ? `${TITLE}، صفحهٔ ${faNumber(page)}` : TITLE,
-    description: 'تازه‌ترین خبرها و رویدادهای گالری.',
-    path: newsListPath(page),
-    siteUrl,
-  });
+  const { page, siteUrl, text } = data;
+  const head = fixedHead(text, { title: TITLE, description: 'تازه‌ترین خبرها و رویدادهای گالری.' });
+  return pageMeta({ matches, title: page > 1 ? `${head.title}، صفحهٔ ${faNumber(page)}` : head.title, description: head.description, path: newsListPath(page), siteUrl });
 }
 
 export default function NewsListPage({ loaderData }: Route.ComponentProps) {
-  const { items, page, pages, siteUrl } = loaderData;
+  const { items, page, pages, siteUrl, text } = loaderData;
+  const title = fixedTitle(text, TITLE);
   return (
     <div className="mx-auto max-w-5xl px-4 pt-6 lg:px-8 lg:pt-10" data-news-list>
       <nav aria-label="مسیر" className="text-sm text-muted-foreground">
         <Link to="/" className="inline-flex min-h-10 items-center hover:text-foreground">خانه</Link>
       </nav>
       <header className="mt-2">
-        <h1 className="text-3xl font-extrabold text-balance lg:text-4xl">{TITLE}</h1>
+        <h1 className="text-3xl font-extrabold text-balance lg:text-4xl">{title}</h1>
         <div className="tile-rule mt-4 w-24" aria-hidden />
+        {/* the shop's own words above the list, on its first page */}
+        {page === 1 ? <FixedIntro text={text} className="mt-4 text-muted-foreground" /> : null}
       </header>
       <ul className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((item, i) => (
@@ -73,7 +75,7 @@ export default function NewsListPage({ loaderData }: Route.ComponentProps) {
         ))}
       </ul>
       <Pagination page={page} pages={pages} hrefOf={newsListPath} />
-      <JsonLdScripts blocks={[breadcrumbLd([{ name: 'خانه', path: '/' }, { name: TITLE, path: NEWS_PATH }], siteUrl)]} siteUrl={siteUrl} />
+      <JsonLdScripts blocks={[breadcrumbLd([{ name: 'خانه', path: '/' }, { name: title, path: NEWS_PATH }], siteUrl)]} siteUrl={siteUrl} />
     </div>
   );
 }

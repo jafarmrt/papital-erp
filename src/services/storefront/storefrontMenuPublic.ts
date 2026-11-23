@@ -9,6 +9,7 @@ import { publicItemsOnSale } from './storefrontCatalog.service.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
 import { campaignOpenNow } from './storefrontCampaigns.service.js';
 import { pageLinkTargets } from './storefrontPageLinks.js';
+import { newsLinkTargets, newsListLive } from './storefrontNewsLinks.js';
 
 /**
  * v12 phase 9c (V12_SITE_NEXT_START_PLAN.md §6, `AGENTS.md` §1.9c): `GET /api/storefront/v1/menus`, the menus the site
@@ -39,6 +40,9 @@ export async function publicMenus(): Promise<StorefrontPublicMenus> {
     .from(storefrontCampaigns).where(and(inArray(storefrontCampaigns.id, campaignIds), campaignOpenNow()))).map(r => [r.id, r.slug]));
 
   const pages = await pageLinkTargets(orm, rows.map(r => r.targetPageId).filter((id): id is number => id !== null));
+  // v12 phase 10d: the news items the menus name, and whether the site has its list of news now (read only when a menu links there)
+  const news = await newsLinkTargets(orm, rows.map(r => r.targetNewsId).filter((id): id is number => id !== null));
+  const newsList = rows.some(r => r.linkKind === 'page' && r.target === 'news') && await newsListLive(orm);
 
   /** the address of a link the site has now, '' for a heading, null for a link that leads nowhere today */
   const hrefOf = (row: ItemRecord): string | null => {
@@ -60,7 +64,13 @@ export async function publicMenus(): Promise<StorefrontPublicMenus> {
         const page = row.targetPageId !== null ? pages.get(row.targetPageId) : undefined;
         return page?.live ? page.href : null;
       }
+      case 'news': {
+        // v12 phase 10d: the address is the item's own; an item that is not on the site now leads nowhere
+        const item = row.targetNewsId !== null ? news.get(row.targetNewsId) : undefined;
+        return item?.live ? item.href : null;
+      }
       case 'page':
+        if (row.target === 'news' && !newsList) return null;
         return !ordering && (row.target === 'cart' || row.target === 'track') ? null : menuRuleHref(kind, row.target);
       case 'path': case 'url': return menuRuleHref(kind, row.target);
       default: return null;

@@ -14,6 +14,7 @@ import type { MenuItemRow, MenuLinkOptions, MenuSaveInput, MenuView, MenusView }
 import { catalogItems } from './storefrontCatalog.service.js';
 import { campaignOpenNow } from './storefrontCampaigns.service.js';
 import { pageLinkTargets, type PageLinkTarget } from './storefrontPageLinks.js';
+import { newsLinkTargets, newsListLive, type NewsLinkTarget } from './storefrontNewsLinks.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
 
 /**
@@ -36,11 +37,14 @@ interface SiteNow {
   products: Map<number, string>;
   campaigns: Map<number, { title: string; live: boolean }>;
   pages: Map<number, PageLinkTarget>;
+  /** v12 phase 10d: the news items the menu names, and whether the site has its list of news now */
+  news: Map<number, NewsLinkTarget>;
+  newsList: boolean;
   /** the site takes orders, so it shows the cart and order tracking (9b review) */
   ordering: boolean;
 }
 
-async function siteNow(executor: DbExecutor, campaignIds: readonly number[], pageIds: readonly number[]): Promise<SiteNow> {
+async function siteNow(executor: DbExecutor, campaignIds: readonly number[], pageIds: readonly number[], newsIds: readonly number[]): Promise<SiteNow> {
   const settings = await storefrontSettingValues(executor);
   const onSale = await catalogItems(executor, settings);
   const campaigns = new Map<number, { title: string; live: boolean }>();
@@ -57,6 +61,8 @@ async function siteNow(executor: DbExecutor, campaignIds: readonly number[], pag
     products: new Map(onSale.map(i => [i.itemId, i.name])),
     campaigns,
     pages: await pageLinkTargets(executor, pageIds),
+    news: await newsLinkTargets(executor, newsIds),
+    newsList: await newsListLive(executor),
     ordering: settings.enabled && settings.ordersEnabled,
   };
 }
@@ -64,7 +70,7 @@ async function siteNow(executor: DbExecutor, campaignIds: readonly number[], pag
 function valuesOf(row: ItemRecord, children: MenuItemValues[]): MenuItemValues {
   return {
     id: row.id, label: row.label, kind: isMenuLinkKind(row.linkKind) ? row.linkKind : 'none', target: row.target,
-    itemId: row.targetItemId, campaignId: row.targetCampaignId, pageId: row.targetPageId, icon: isMenuIcon(row.icon) ? row.icon : '',
+    itemId: row.targetItemId, campaignId: row.targetCampaignId, pageId: row.targetPageId, newsId: row.targetNewsId, icon: isMenuIcon(row.icon) ? row.icon : '',
     isActive: row.isActive === 1, children,
   };
 }
@@ -87,6 +93,8 @@ function rowOf(item: MenuItemValues, now: SiteNow): MenuItemRow {
     case 'page':
       targetTitle = isMenuSitePage(item.target) ? MENU_SITE_PAGES[item.target].title : '';
       live &&= now.ordering || !ORDERING_PAGES.includes(item.target);
+      // v12 phase 10d: the list of news is a page only while the site has news
+      live &&= item.target !== 'news' || now.newsList;
       break;
     case 'category': live &&= now.categories.has(item.target); break;
     case 'collection': live &&= now.collections.has(item.target); break;
@@ -107,6 +115,12 @@ function rowOf(item: MenuItemValues, now: SiteNow): MenuItemRow {
       live &&= Boolean(page?.live);
       break;
     }
+    case 'news': {
+      const news = item.newsId !== null ? now.news.get(item.newsId) : undefined;
+      targetTitle = news?.title ?? '';
+      live &&= Boolean(news?.live);
+      break;
+    }
     default: break;
   }
   const children = item.children.map(child => rowOf(child, now));
@@ -123,6 +137,7 @@ async function menuViews(executor: DbExecutor, only?: MenuLocation): Promise<Men
   const now = await siteNow(
     executor, [...new Set(rows.map(r => r.targetCampaignId).filter((id): id is number => id !== null))],
     [...new Set(rows.map(r => r.targetPageId).filter((id): id is number => id !== null))],
+    [...new Set(rows.map(r => r.targetNewsId).filter((id): id is number => id !== null))],
   );
   return MENU_LOCATIONS.filter(location => !only || location === only).flatMap((location): MenuView[] => {
     const menu = menus.find(m => m.location === location);
@@ -151,6 +166,7 @@ export async function menuLinkOptions(executor: DbExecutor): Promise<MenuLinkOpt
     collections: [...new Set(onSale.flatMap(i => i.collections).filter(Boolean))].sort(fa),
     campaigns: campaigns.map(c => ({ id: c.id, title: c.title, live: open.has(c.id) })),
     pages: [...await pageLinkTargets(executor)].map(([id, page]) => ({ id, title: page.title, live: page.live })),
+    news: [...await newsLinkTargets(executor)].map(([id, news]) => ({ id, title: news.title, live: news.live })),
     products: onSale.map(i => ({ itemId: i.itemId, name: i.name, sku: i.sku })).sort((a, b) => fa(a.name, b.name)),
   };
 }
@@ -158,7 +174,7 @@ export async function menuLinkOptions(executor: DbExecutor): Promise<MenuLinkOpt
 /** The menu as a short list for the audit row: «عنوان ← مقصد», children indented */
 function auditLines(list: readonly MenuItemValues[], indent = ''): string[] {
   return list.flatMap(item => {
-    const target = item.kind === 'product' ? `کالا ${item.itemId}` : item.kind === 'campaign' ? `صفحهٔ ویژه ${item.campaignId}` : item.kind === 'content' ? `صفحهٔ متنی ${item.pageId}` : item.target;
+    const target = item.kind === 'product' ? `کالا ${item.itemId}` : item.kind === 'campaign' ? `صفحهٔ ویژه ${item.campaignId}` : item.kind === 'content' ? `صفحهٔ متنی ${item.pageId}` : item.kind === 'news' ? `خبر ${item.newsId}` : item.target;
     const line = `${indent}${item.label} ← ${item.kind}${target ? `: ${target}` : ''}${item.icon ? ` [${item.icon}]` : ''}${item.isActive ? '' : ' (خاموش)'}`;
     return [line, ...auditLines(item.children, `${indent}  `)];
   });
@@ -196,11 +212,17 @@ async function checkReferences(tx: DbExecutor, list: readonly MenuItemValues[]):
     const missing = all.find(i => i.pageId !== null && !found.has(i.pageId));
     if (missing) throw invalid(`صفحه‌ای که گزینهٔ «${missing.label}» به آن پیوند دارد در فهرست «صفحهٔ متنی» نیست (حذف شده یا از صفحه‌های پایه است)؛ صفحهٔ دیگری برگزینید یا این گزینه را بردارید.`, 'items', 'STOREFRONT_MENU_PAGE_UNKNOWN');
   }
+  const newsIds = [...new Set(all.map(i => i.newsId).filter((id): id is number => id !== null))];
+  if (newsIds.length) {
+    const found = await newsLinkTargets(tx, newsIds);
+    const missing = all.find(i => i.newsId !== null && !found.has(i.newsId));
+    if (missing) throw invalid(`خبری که گزینهٔ «${missing.label}» به آن پیوند دارد حذف شده است؛ خبر دیگری برگزینید.`, 'items', 'STOREFRONT_MENU_NEWS_UNKNOWN');
+  }
 }
 
 const columnsOf = (location: MenuLocation, item: MenuItemValues, parentId: number | null, position: number) => ({
   location, parentId, position, label: item.label, linkKind: item.kind, target: item.target, targetItemId: item.itemId,
-  targetCampaignId: item.campaignId, targetPageId: item.pageId, icon: item.icon, isActive: item.isActive ? 1 : 0,
+  targetCampaignId: item.campaignId, targetPageId: item.pageId, targetNewsId: item.newsId, icon: item.icon, isActive: item.isActive ? 1 : 0,
 });
 
 /** `PUT /api/storefront/menus/:location`: the whole place, under its version */
