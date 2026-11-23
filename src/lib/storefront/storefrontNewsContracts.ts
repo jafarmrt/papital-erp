@@ -32,6 +32,8 @@ export interface NewsList {
   total: number;
   page: number;
   pageSize: number;
+  /** «خبرها روی سایت بیایند»: while it is off the site has no news at all, whatever is published here */
+  siteEnabled: boolean;
 }
 
 export interface NewsCreateInput { title: string; slug: string }

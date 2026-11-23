@@ -10,6 +10,7 @@ import { PAGE_SECTIONS_MAX, PAGE_SEO_DESCRIPTION_MAX, PAGE_SEO_TITLE_MAX, PAGE_S
 import {
   createNews, deleteNews, listNews, newsDetail, publishNews, revertNewsDraft, saveNewsDraft, unpublishNews,
 } from '../services/storefront/storefrontNews.service.js';
+import { setNewsOnSite } from '../services/storefront/storefrontNewsPublic.js';
 
 /**
  * v12 phase 10d (V12_SITE_NEXT_START_PLAN.md §7.2): «خبرهای سایت» in the ERP (`/api/storefront/news`), under the keys
@@ -46,6 +47,7 @@ const saveSchema = z.object({
   }).strict(),
 });
 const versionSchema = z.object({ params: idParams, body: z.object({ version }).strict() });
+const siteSchema = z.object({ body: z.object({ enabled: z.boolean() }).strict() });
 const deleteSchema = z.object({
   params: idParams,
   query: z.object({ version: z.string().regex(/^[1-9]\d{0,9}$/).transform(Number) }).passthrough(),
@@ -63,6 +65,11 @@ router.get('/:id', requirePermission(VIEW), validate(detailSchema), asyncHandler
 
 router.post('/', requirePermission(MANAGE), validate(createSchema), asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json({ success: true, data: await createNews(req, req.body) });
+}));
+
+// «خبرها روی سایت بیایند»: the switch is sent its target state (before `/:id`, which is a number)
+router.put('/site', requirePermission(MANAGE), validate(siteSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await setNewsOnSite(req, req.body.enabled) });
 }));
 
 router.put('/:id', requirePermission(MANAGE), validate(saveSchema), asyncHandler(async (req: Request, res: Response) => {

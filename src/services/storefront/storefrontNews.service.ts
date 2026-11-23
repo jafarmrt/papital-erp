@@ -10,6 +10,7 @@ import { NEWS_MAX, NEWS_PAGE_SIZE, checkedNews, newsAssetIds, type NewsValues } 
 import type { NewsCreateInput, NewsDetail, NewsList, NewsListRow, NewsSaveInput } from '../../lib/storefront/storefrontNewsContracts.js';
 import type { PageStatus } from '../../lib/storefront/storefrontPageContracts.js';
 import { assetInfos, auditSections, canonical, checkContentReferences, refuseNewContentImages, writeContentAssetRows } from './storefrontContentShared.js';
+import { newsOnSite } from './storefrontNewsPublic.js';
 
 /**
  * v12 phase 10d (package 18, V12_SITE_NEXT_START_PLAN.md §7.2): «خبرهای سایت» on the ERP side, made like «صفحه‌های
@@ -66,7 +67,7 @@ export async function listNews(executor: DbExecutor, page: number): Promise<News
     .orderBy(sql`coalesce(${storefrontNews.newsDate}, ${storefrontNews.publishedDate}, to_char(${storefrontNews.createdAt} AT TIME ZONE ${timeZone}::text, 'YYYY-MM-DD')) DESC`, desc(storefrontNews.id))
     .limit(NEWS_PAGE_SIZE).offset((page - 1) * NEWS_PAGE_SIZE);
   const today = await businessTodayIsoDate();
-  return { data: rows.map(row => listRowOf(row, today)), total, page, pageSize: NEWS_PAGE_SIZE };
+  return { data: rows.map(row => listRowOf(row, today)), total, page, pageSize: NEWS_PAGE_SIZE, siteEnabled: await newsOnSite(executor) };
 }
 
 /** `GET /api/storefront/news/:id`: a news item with its draft, as the editor opens it */

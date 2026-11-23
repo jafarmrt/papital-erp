@@ -79,5 +79,23 @@ export function checkedNews(raw: unknown, options: { forPublish: boolean }): Che
   };
 }
 
+/** The words of a rich-text node without its formatting: the pieces of a paragraph run together, blocks are a space apart */
+function plainText(part: { type?: string; text?: string; content?: readonly unknown[] }): string {
+  if (typeof part.text === 'string') return part.text;
+  if (part.type === 'hardBreak') return ' ';
+  const inside = (Array.isArray(part.content) ? part.content : []).map(child => plainText(child as Parameters<typeof plainText>[0]));
+  return part.type === 'paragraph' || part.type === 'heading' ? inside.join('') : inside.filter(Boolean).join(' ');
+}
+
+/** The first words of an item's text, for the list of news where the item has no summary of its own ('' when it has no words) */
+export function newsExcerpt(sections: readonly PageSection[], max: number): string {
+  for (const section of sections) {
+    if (section.kind !== 'text') continue;
+    const words = plainText(section.doc).replace(/\s+/g, ' ').trim();
+    if (words) return words.length > max ? `${words.slice(0, max - 1).trimEnd()}…` : words;
+  }
+  return '';
+}
+
 /** every image of the media library a news item names: its cover and the images of its body */
 export const newsAssetIds = (news: Pick<NewsValues, 'sections' | 'coverAssetId'>): number[] => pageAssetIds({ sections: news.sections, shareImageAssetId: news.coverAssetId });

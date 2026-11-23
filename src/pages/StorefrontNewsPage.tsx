@@ -1,9 +1,9 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Newspaper, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useHasPermission } from '../contexts/AuthContext';
-import { useCreateNewsMutation, useNewsListQuery, useNewsQuery } from '../hooks/queries/useStorefrontNewsQueries';
+import { useCreateNewsMutation, useNewsListQuery, useNewsOnSiteMutation, useNewsQuery } from '../hooks/queries/useStorefrontNewsQueries';
 import { checkedNews } from '../lib/storefront/storefrontNewsRules';
 import { PAGE_STATUS_TITLES } from '../lib/storefront/storefrontPageContracts';
 import { PAGE_SLUG_MAX, PAGE_TITLE_MAX } from '../lib/storefront/storefrontPageRules';
@@ -14,11 +14,40 @@ import { formatPersianNumber } from '../utils/persianNumber';
 /**
  * v12 phase 10d (docs/roadmap/V12_SITE_NEXT_START_PLAN.md §7.2): «خبرهای سایت» of the sidebar's «فروشگاه سایت»: the news
  * items of the site, the newest day first. `site_content.view` sees, `site_content.manage` changes; the open item is in
- * the address (`/site-news?item=12`). The site does not show news yet: its pages come in the next part of 10d.
+ * the address (`/site-news?item=12`). The site shows published items whose day has come only while «خبرها روی سایت
+ * بیایند» is on (off by default).
  */
 const field = 'w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm';
 const label = 'block text-xs font-bold text-slate-700 mb-1';
 const pager = 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40';
+
+/** «خبرها روی سایت بیایند»: the switch is sent the state it should take, and a second click while it is on its way does nothing */
+function NewsOnSite({ enabled, canManage }: { enabled: boolean; canManage: boolean }) {
+  const change = useNewsOnSiteMutation();
+  const sending = useRef(false);
+  const set = (next: boolean) => {
+    if (sending.current) return;
+    sending.current = true;
+    change.mutate(next, {
+      onSuccess: now => toast.success(now.enabled ? 'خبرها روی سایت روشن شد.' : 'خبرها روی سایت خاموش شد.'),
+      onError: err => toast.error(errorMessageOf(err)),
+      onSettled: () => { sending.current = false; },
+    });
+  };
+  return (
+    <section aria-label="خبرها روی سایت" className="space-y-1 rounded-2xl border border-slate-200 bg-white p-4">
+      <label className="flex items-center gap-2 text-sm font-bold text-slate-800">
+        <input type="checkbox" checked={enabled} disabled={!canManage || change.isPending} onChange={e => set(e.target.checked)} />
+        خبرها روی سایت بیایند
+      </label>
+      <p className="text-xs leading-6 text-slate-500">
+        {enabled
+          ? 'خبرهای منتشرشده‌ای که روزشان رسیده در بخش خبرهای سایت دیده می‌شوند.'
+          : 'تا این کلید خاموش است، سایت هیچ خبری نشان نمی‌دهد و نشانی خبرها «پیدا نشد» است، هر چه این‌جا منتشر شده باشد.'}
+      </p>
+    </section>
+  );
+}
 
 function NewNewsForm({ onCreated }: { onCreated: (id: number) => void }) {
   const id = useId();
@@ -80,7 +109,7 @@ export default function StorefrontNewsPage() {
           خبرهای سایت
         </h1>
         <p className="text-xs leading-6 text-slate-500">
-          هر خبر عنوان، خلاصه، تصویر شاخص، تاریخ و متن دارد. ذخیرهٔ پیش‌نویس سایت را عوض نمی‌کند؛ خبر با «انتشار» آمادهٔ سایت می‌شود. بخش خبرهای خود سایت هنوز ساخته نشده است و در گام بعد می‌آید.
+          هر خبر عنوان، خلاصه، تصویر شاخص، تاریخ و متن دارد. ذخیرهٔ پیش‌نویس سایت را عوض نمی‌کند؛ خبر با «انتشار» و رسیدن روزش روی سایت می‌آید، اگر کلید «خبرها روی سایت بیایند» روشن باشد.
           {!canManage && ' شما فقط می‌توانید ببینید.'}
         </p>
       </header>
@@ -89,6 +118,7 @@ export default function StorefrontNewsPage() {
         <>
           {list.isLoading && <p className="text-xs text-slate-500">در حال خواندن…</p>}
           {list.isError && <p className="text-xs text-rose-700">{errorMessageOf(list.error)}</p>}
+          {list.data && <NewsOnSite enabled={list.data.siteEnabled === true} canManage={canManage} />}
           {list.data && total === 0 && <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-xs text-slate-500">هنوز خبری ساخته نشده است.</p>}
           {rows.length > 0 && (
             <ul aria-label="خبرها" className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white">

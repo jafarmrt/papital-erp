@@ -54,3 +54,23 @@ export function homeLd(siteUrl: string, logoUrl: string, shop: SiteShop): JsonLd
     },
   ];
 }
+
+/**
+ * v12 phase 10d: a news item, as schema.org's NewsArticle. Its day is a day of Tehran, written with that zone's offset;
+ * the image, the last change and the publisher's logo are written only when there is one.
+ */
+export function newsArticleLd(item: { title: string; description: string; path: string; date: string; updatedAt: string; image: string }, siteUrl: string, publisher: { name: string; logoUrl: string }): JsonLd {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'NewsArticle',
+    headline: item.title.slice(0, 110),
+    ...(item.description ? { description: item.description } : {}),
+    mainEntityOfPage: { '@type': 'WebPage', '@id': `${siteUrl}${item.path}` },
+    datePublished: `${item.date}T00:00:00+03:30`,
+    ...(item.updatedAt ? { dateModified: item.updatedAt } : {}),
+    ...(item.image ? { image: [`${siteUrl}${item.image}`] } : {}),
+    inLanguage: 'fa-IR',
+    author: { '@type': 'Organization', name: publisher.name, url: `${siteUrl}/` },
+    publisher: { '@type': 'Organization', name: publisher.name, ...(publisher.logoUrl ? { logo: { '@type': 'ImageObject', url: `${siteUrl}${publisher.logoUrl}` } } : {}) },
+  };
+}

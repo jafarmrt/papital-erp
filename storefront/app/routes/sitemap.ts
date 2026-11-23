@@ -1,5 +1,6 @@
-import { campaigns, facets, feed, pages as sitePages } from '../lib/api.server';
+import { campaigns, facets, feed, newsIndex, pages as sitePages } from '../lib/api.server';
 import { lastModOf, pagePath } from '../lib/pages';
+import { NEWS_PATH, newsPath } from '../lib/news';
 import { siteEnv } from '../lib/site.server';
 import { campaignPath, categoryPath, collectionPath, mediaPath, productPath } from '../lib/brand';
 import { INFO_PAGES } from '../content/pages';
@@ -14,7 +15,7 @@ const xml = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').
 export async function loader() {
   const { siteUrl, indexable } = siteEnv();
   if (!indexable) throw new Response('پیدا نشد', { status: 404 });
-  const [f, products, pages, written] = await Promise.all([facets(), feed(), campaigns(), sitePages()]);
+  const [f, products, pages, written, news] = await Promise.all([facets(), feed(), campaigns(), sitePages(), newsIndex()]);
   // v12 phase 10c: a page published in the ERP's «صفحه‌های سایت» carries the day it was published (`lastmod`), and one
   // marked «در موتور جست‌وجو نیاید» is not in the map at all (also when it is one of the five base pages)
   const lastmod = (iso: unknown) => (typeof iso === 'string' && lastModOf(iso) ? `<lastmod>${lastModOf(iso)}</lastmod>` : '');
@@ -31,6 +32,9 @@ export async function loader() {
     ...INFO_PAGES.filter(page => !base.get(page.slug)?.noindex).map(page => url(`/${page.slug}`, lastmod(base.get(page.slug)?.updatedAt ?? ''))),
     ...written.filter(page => page.kind === 'custom' && !page.noindex).map(page => url(pagePath(page), lastmod(page.updatedAt))),
     url('/corporate-gift'),
+    // v12 phase 10d: the list of news and each item on the site now, with the day it was published; none while the shop
+    // has not turned «خبرها روی سایت بیایند» on or has no item on the site
+    ...(news.length > 0 ? [url(NEWS_PATH), ...news.map(item => url(newsPath(item.slug), item.lastmod ? `<lastmod>${item.lastmod}</lastmod>` : ''))] : []),
     // phase 8.5b: the «صفحه‌های ویژه» on the site now; one that ends leaves the map with it
     ...pages.map(c => url(campaignPath(c.slug))),
   ];
