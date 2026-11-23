@@ -152,7 +152,7 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
     sending.current = true;
     setOwn(true);
     act.mutate({ action, version: base.version }, {
-      onSuccess: () => toast.success(DONE[action]),
+      onSuccess: (after) => { if (after.version === base.version) setOwn(false); toast.success(DONE[action]); },
       onError: (err) => { setOwn(false); toast.error(errorMessageOf(err)); },
       onSettled: () => { sending.current = false; },
     });

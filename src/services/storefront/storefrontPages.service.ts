@@ -42,7 +42,7 @@ const draftOf = (row: PageRecord): PageValues => ({
   shareImageAssetId: row.shareImageAssetId, sections: Array.isArray(row.sections) ? row.sections : [],
 });
 const publishedCopyOf = ({ slug: _slug, ...page }: PageValues): PublishedPage => page;
-/** A value as text with every object's keys in one order: PostgreSQL's jsonb keeps keys in its own order, not the one written */
+/** Two copies hold the same when they are equal with their keys in one order (`canonical`): jsonb keeps keys in its own order */
 const sameCopy = (a: PublishedPage, b: PublishedPage | null): boolean => b !== null && canonical(a) === canonical(b);
 
 function statusOf(row: PageRecord): PageStatus {

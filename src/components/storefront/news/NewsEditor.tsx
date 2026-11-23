@@ -10,7 +10,7 @@ import {
 } from '../../../lib/storefront/storefrontPageRules';
 import { JalaliDateInput } from '../../common/JalaliDateInput';
 import { formatPersianNumber } from '../../../utils/persianNumber';
-import { errorMessageOf } from '../../../utils';
+import { errorMessageOf, formatPersianDate } from '../../../utils';
 import { LibraryImageField } from '../pages/LibraryImageField';
 import { SectionFields, type AssetTitles } from '../pages/SectionFields';
 
@@ -112,7 +112,11 @@ export function NewsEditor({ detail, canManage, onBack, onDeleted }: { detail: N
     sending.current = true;
     setOwn(true);
     act.mutate({ action, version: base.version }, {
-      onSuccess: () => toast.success(DONE[action]),
+      // an action that changed nothing leaves the version as it was: the next version is then not this screen's own
+      onSuccess: (after) => {
+        if (after.version === base.version) setOwn(false);
+        toast.success(action === 'publish' && after.scheduled ? 'خبر منتشر شد و در روز خودش روی سایت می‌آید.' : DONE[action]);
+      },
       onError: (err) => { setOwn(false); toast.error(errorMessageOf(err)); },
       onSettled: () => { sending.current = false; },
     });
@@ -166,6 +170,7 @@ export function NewsEditor({ detail, canManage, onBack, onDeleted }: { detail: N
               <label htmlFor={`${id}-date`} className={label}>تاریخ خبر (اختیاری)</label>
               <JalaliDateInput id={`${id}-date`} className={field} value={draft.newsDate} onChange={iso => set('newsDate', iso)} disabled={disabled} />
               <p className={hint}>اگر خالی بماند، روز انتشار نوشته می‌شود. با تاریخی در آینده، خبر پس از «انتشار» در همان روز خودش روی سایت می‌آید.</p>
+              {detail.publishedDate && detail.publishedDate !== draft.newsDate && <p className={hint}>{`تاریخ این خبر روی سایت: ${formatPersianDate(detail.publishedDate)}`}</p>}
             </div>
             <div>
               <label htmlFor={`${id}-summary`} className={label}>خلاصه (اختیاری)</label>

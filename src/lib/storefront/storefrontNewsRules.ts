@@ -1,4 +1,5 @@
 import { checkedPage, pageAssetIds, type PageSection, type SectionKind } from './storefrontPageRules.js';
+import { text } from './storefrontPageParts.js';
 
 /**
  * v12 phase 10d (docs/roadmap/V12_SITE_NEXT_START_PLAN.md §7.2): the rules of a news item of the site, shared by the
@@ -31,7 +32,9 @@ export interface NewsProblem { field: string; section: number; message: string; 
 export type CheckedNews = { news: NewsValues; problem: null } | { news: null; problem: NewsProblem };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
-const refuse = (field: string, message: string, code: string): CheckedNews => ({ news: null, problem: { field, section: -1, message, code } });
+const refuse = (field: string, message: string, code: string, section = -1): CheckedNews => ({ news: null, problem: { field, section, message, code } });
+/** A message of the page's rules, said of a news item: its cover is «تصویر شاخص» and what it checks is a «خبر» */
+const inNewsWords = (message: string): string => message.replaceAll('تصویر اشتراک‌گذاری', 'تصویر شاخص').replaceAll('صفحه', NOUN).replaceAll('our-story', 'new-collection');
 
 /** A day as it is kept: `YYYY-MM-DD` of a real day between 2000 and 2100 */
 export function isNewsDate(value: string): boolean {
@@ -49,12 +52,20 @@ export function checkedNews(raw: unknown, options: { forPublish: boolean }): Che
     { title: raw.title, slug: raw.slug, seoTitle: raw.seoTitle, seoDescription: raw.seoDescription, shareImageAssetId: raw.coverAssetId ?? null, sections: raw.sections },
     { forPublish: options.forPublish, baseSlug: null, noun: NOUN, kinds: NEWS_SECTION_KINDS },
   );
-  if (page.problem) return { news: null, problem: { ...page.problem, field: page.problem.field === 'shareImageAssetId' ? 'coverAssetId' : page.problem.field } };
+  if (page.problem) {
+    return { news: null, problem: { ...page.problem, message: inNewsWords(page.problem.message), field: page.problem.field === 'shareImageAssetId' ? 'coverAssetId' : page.problem.field } };
+  }
+  // the editor of a news item offers no background; the site draws every part of an item on one
+  const coloured = page.page.sections.findIndex(section => section.background !== 'white');
+  if (coloured >= 0) return refuse('sections', 'بخش‌های خبر رنگ زمینه نمی‌گیرند.', 'STOREFRONT_PAGE_SECTION_INVALID', coloured);
   if (raw.summary !== undefined && typeof raw.summary !== 'string') return refuse('summary', 'خلاصهٔ خبر خوانا نیست.', 'STOREFRONT_NEWS_FIELD_INVALID');
-  const summary = String(raw.summary ?? '').replace(/\s+/g, ' ').trim();
-  // eslint-disable-next-line no-control-regex
-  if (summary.length > NEWS_SUMMARY_MAX || /[\u0000-\u001f\u007f]/.test(summary)) {
-    return refuse('summary', `خلاصهٔ خبر حداکثر ${NEWS_SUMMARY_MAX.toLocaleString('fa-IR')} نویسه است.`, 'STOREFRONT_NEWS_FIELD_INVALID');
+  // the lines of the box become one line; then it is a plain line of text by the page's own rule (no control or
+  // direction character, no half of a broken emoji, which PostgreSQL would refuse)
+  let summary: string;
+  try {
+    summary = text(String(raw.summary ?? '').replace(/\s+/g, ' '), NEWS_SUMMARY_MAX, 'خلاصهٔ خبر');
+  } catch (err) {
+    return refuse('summary', (err as Error).message, 'STOREFRONT_NEWS_FIELD_INVALID');
   }
   if (raw.newsDate !== undefined && typeof raw.newsDate !== 'string') return refuse('newsDate', 'تاریخ خبر خوانا نیست.', 'STOREFRONT_NEWS_DATE_INVALID');
   const newsDate = String(raw.newsDate ?? '').trim();

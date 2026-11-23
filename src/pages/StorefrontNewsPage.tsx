@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Newspaper, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -64,7 +64,11 @@ export default function StorefrontNewsPage() {
   const list = useNewsListQuery(page);
   const detail = useNewsQuery(openId);
   const rows = Array.isArray(list.data?.data) ? list.data.data : [];
-  const pages = Math.max(1, Math.ceil((list.data?.total ?? 0) / (list.data?.pageSize ?? 50)));
+  const total = list.data?.total ?? 0;
+  const pages = Math.max(1, Math.ceil(total / (list.data?.pageSize ?? 50)));
+  // the page being shown can end when its last item is removed (here or by a colleague): the list goes to its last page
+  const lastPage = list.data && !list.isPlaceholderData ? pages : null;
+  useEffect(() => { if (lastPage !== null && page > lastPage) setPage(lastPage); }, [lastPage, page]);
   const open = (id: number | null) => setParams(id === null ? {} : { item: String(id) }, { replace: false });
 
   return (
@@ -84,7 +88,7 @@ export default function StorefrontNewsPage() {
         <>
           {list.isLoading && <p className="text-xs text-slate-500">در حال خواندن…</p>}
           {list.isError && <p className="text-xs text-rose-700">{errorMessageOf(list.error)}</p>}
-          {list.data && rows.length === 0 && <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-xs text-slate-500">هنوز خبری ساخته نشده است.</p>}
+          {list.data && total === 0 && <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-xs text-slate-500">هنوز خبری ساخته نشده است.</p>}
           {rows.length > 0 && (
             <ul aria-label="خبرها" className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white">
               {rows.map(row => (

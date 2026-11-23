@@ -36,7 +36,6 @@ export async function assetInfos(executor: DbExecutor, ids: readonly number[]): 
   });
 }
 
-
 /**
  * The images and products a page names exist. An image must be a live image of the library with a light version;
  * `mayKeep` names the images the page already had, which a draft may go on naming after they left the library (so the

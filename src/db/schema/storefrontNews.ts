@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, jsonb, date, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, integer, timestamp, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { mediaAssets } from './media';
 import type { PageSection } from '../../lib/storefront/storefrontPageRules';
@@ -8,7 +8,7 @@ import type { NewsValues } from '../../lib/storefront/storefrontNewsRules';
  * v12 phase 10d (migration 0033, package 18, start plan V12_SITE_NEXT_START_PLAN.md §7.2): the news of the site.
  * Like a page, `sections` is the draft and `published` the copy on the site (null = not on the site), which only
  * «انتشار» writes. `newsDate` is the day (Tehran) the draft is dated; `publishedDate` is that day as it was at «انتشار»,
- * and the site shows the item from that day on. Removing a news item is a soft delete.
+ * and the site shows the item from that day on (both text days `YYYY-MM-DD`, null when there is none). Removing a news item is a soft delete.
  */
 export type PublishedNews = Omit<NewsValues, 'slug'>;
 
@@ -18,13 +18,13 @@ export const storefrontNews = pgTable('storefront_news', {
   title: text('title').notNull(),
   summary: text('summary').notNull().default(''),
   coverAssetId: integer('cover_asset_id').references(() => mediaAssets.id),
-  newsDate: date('news_date', { mode: 'string' }),
+  newsDate: text('news_date'),
   seoTitle: text('seo_title').notNull().default(''),
   seoDescription: text('seo_description').notNull().default(''),
   sections: jsonb('sections').$type<PageSection[]>().notNull().default([]),
   published: jsonb('published').$type<PublishedNews>(),
   publishedAt: timestamp('published_at', { withTimezone: true, mode: 'string' }),
-  publishedDate: date('published_date', { mode: 'string' }),
+  publishedDate: text('published_date'),
   publishedBy: text('published_by').notNull().default(''),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').notNull().default(0),

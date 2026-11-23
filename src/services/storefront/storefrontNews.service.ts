@@ -4,7 +4,7 @@ import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { storefrontNews, type PublishedNews } from '../../db/schema.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
-import { businessTodayIsoDate, systemNowUtcIso } from '../../lib/businessClock.js';
+import { businessTodayIsoDate, getDisplayTimezone, systemNowUtcIso } from '../../lib/businessClock.js';
 import { OptimisticLockError, nextVersion } from '../../lib/occHelper.js';
 import { NEWS_MAX, NEWS_PAGE_SIZE, checkedNews, newsAssetIds, type NewsValues } from '../../lib/storefront/storefrontNewsRules.js';
 import type { NewsCreateInput, NewsDetail, NewsList, NewsListRow, NewsSaveInput } from '../../lib/storefront/storefrontNewsContracts.js';
@@ -35,9 +35,15 @@ const draftOf = (row: NewsRecord): NewsValues => ({
 const copyOf = ({ slug: _slug, ...news }: NewsValues): PublishedNews => news;
 const sameCopy = (a: PublishedNews, b: PublishedNews | null): boolean => b !== null && canonical(a) === canonical(b);
 
+/** A draft without a day is dated as its copy on the site is («انتشار» keeps that day), so emptying the day alone changes nothing */
+const draftCopyOf = (row: NewsRecord): PublishedNews => {
+  const copy = copyOf(draftOf(row));
+  return { ...copy, newsDate: copy.newsDate || row.published?.newsDate || '' };
+};
+
 function statusOf(row: NewsRecord): PageStatus {
   if (row.published === null) return 'draft';
-  return sameCopy(copyOf(draftOf(row)), row.published) ? 'published' : 'changed';
+  return sameCopy(draftCopyOf(row), row.published) ? 'published' : 'changed';
 }
 
 const listRowOf = (row: NewsRecord, today: string): NewsListRow => ({
@@ -54,8 +60,10 @@ async function detailOf(executor: DbExecutor, row: NewsRecord): Promise<NewsDeta
 export async function listNews(executor: DbExecutor, page: number): Promise<NewsList> {
   const live = eq(storefrontNews.isDeleted, 0);
   const [{ total }] = await executor.select({ total: sql<number>`count(*)::int` }).from(storefrontNews).where(live);
+  // an item without a day is placed by the day it was made, as that day was in the business time zone
+  const timeZone = await getDisplayTimezone();
   const rows = await executor.select().from(storefrontNews).where(live)
-    .orderBy(sql`coalesce(${storefrontNews.newsDate}, (${storefrontNews.createdAt})::date) DESC`, desc(storefrontNews.id))
+    .orderBy(sql`coalesce(${storefrontNews.newsDate}, to_char(${storefrontNews.createdAt} AT TIME ZONE ${timeZone}::text, 'YYYY-MM-DD')) DESC`, desc(storefrontNews.id))
     .limit(NEWS_PAGE_SIZE).offset((page - 1) * NEWS_PAGE_SIZE);
   const today = await businessTodayIsoDate();
   return { data: rows.map(row => listRowOf(row, today)), total, page, pageSize: NEWS_PAGE_SIZE };
@@ -83,9 +91,18 @@ const auditOf = (news: NewsValues | PublishedNews) => ({
 });
 const refused = (problem: { field: string; section: number; message: string; code: string }) => invalid(problem.message, problem.field, problem.code, { section: problem.section });
 
+const slugTaken = () => new ConflictError('خبر دیگری همین نشانی را دارد.', { field: 'slug' }, 'STOREFRONT_NEWS_SLUG_TAKEN');
 async function refuseTakenSlug(tx: DbExecutor, slug: string): Promise<void> {
   const [taken] = await tx.select({ id: storefrontNews.id }).from(storefrontNews).where(and(eq(storefrontNews.slug, slug), eq(storefrontNews.isDeleted, 0)));
-  if (taken) throw new ConflictError('خبر دیگری همین نشانی را دارد.', { field: 'slug' }, 'STOREFRONT_NEWS_SLUG_TAKEN');
+  if (taken) throw slugTaken();
+}
+/** Two requests that took one address at the same moment: the second is stopped by the unique index and gets the same answer */
+function slugRace(err: unknown): never {
+  type PgError = { code?: string; message?: string; constraint?: string };
+  const e = err as (PgError & { cause?: PgError }) | null;
+  const text = `${e?.constraint ?? ''} ${e?.cause?.constraint ?? ''} ${e?.message ?? ''} ${e?.cause?.message ?? ''}`;
+  if ((e?.cause?.code ?? e?.code) === '23505' && text.includes('uq_storefront_news_slug_live')) throw slugTaken();
+  throw err;
 }
 
 /** `POST /api/storefront/news`: a new news item; it starts as an empty draft */
@@ -101,7 +118,7 @@ export async function createNews(req: Request, input: NewsCreateInput): Promise<
     const [row] = await tx.insert(storefrontNews).values({ slug: news.slug, title: news.title, createdBy: actor, updatedBy: actor }).returning({ id: storefrontNews.id });
     await logActivity({ req, tx, action: 'CREATE', entity: AUDIT_ENTITY, entityId: `news-${row.id}`, description: `خبر «${news.title}» ساخته شد`, details: { after: auditOf(news) } });
     return row.id;
-  });
+  }).catch(slugRace);
   return newsDetail(orm, id);
 }
 
@@ -131,7 +148,7 @@ export async function saveNewsDraft(req: Request, id: number, input: NewsSaveInp
       req, tx, action: 'UPDATE', entity: AUDIT_ENTITY, entityId: `news-${id}`,
       description: `پیش‌نویس خبر «${news.title}» ذخیره شد`, details: { before: auditOf(before), after: auditOf(news) },
     });
-  });
+  }).catch(slugRace);
   return newsDetail(orm, id);
 }
 
@@ -142,7 +159,8 @@ export async function publishNews(req: Request, id: number, version: number): Pr
     const checked = checkedNews(draftOf(row), { forPublish: true });
     if (checked.problem) throw refused(checked.problem);
     // an item without a day keeps the day it already has on the site; one that was never there takes today
-    const news = { ...checked.news, newsDate: checked.news.newsDate || row.published?.newsDate || await businessTodayIsoDate() };
+    const today = await businessTodayIsoDate();
+    const news = { ...checked.news, newsDate: checked.news.newsDate || row.published?.newsDate || today };
     await checkContentReferences(tx, { assetIds: newsAssetIds(news), itemIds: [] }, [], NOUN);
     const copy = copyOf(news);
     if (sameCopy(copy, row.published)) return;
@@ -155,7 +173,8 @@ export async function publishNews(req: Request, id: number, version: number): Pr
     await writeContentAssetRows(tx, CONTENT_KIND, id, newsAssetIds(news));
     await logActivity({
       req, tx, action: 'UPDATE', entity: AUDIT_ENTITY, entityId: `news-${id}`,
-      description: `خبر «${news.title}» روی سایت منتشر شد`, details: { before: row.published ? auditOf(row.published) : null, after: auditOf(news) },
+      description: news.newsDate > today ? `خبر «${news.title}» منتشر شد و تا روز خودش در نوبت انتشار است` : `خبر «${news.title}» روی سایت منتشر شد`,
+      details: { before: row.published ? auditOf(row.published) : null, after: auditOf(news) },
     });
   });
   return newsDetail(orm, id);
@@ -167,7 +186,7 @@ export async function revertNewsDraft(req: Request, id: number, version: number)
     const row = await lockedRow(tx, id, version);
     if (row.published === null) throw invalid('این خبر هنوز نسخه‌ای روی سایت ندارد.', 'version', 'STOREFRONT_NEWS_NOT_PUBLISHED');
     const published = row.published;
-    if (sameCopy(copyOf(draftOf(row)), published)) return;
+    if (sameCopy(draftCopyOf(row), published)) return;
     await tx.update(storefrontNews).set({
       title: published.title, summary: published.summary, coverAssetId: published.coverAssetId, newsDate: published.newsDate || null,
       seoTitle: published.seoTitle, seoDescription: published.seoDescription, sections: published.sections, version: nextVersion(row.version),

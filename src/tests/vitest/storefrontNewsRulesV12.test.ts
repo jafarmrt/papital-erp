@@ -44,7 +44,25 @@ describe('a news item of the site', () => {
     expect(problem(null)).toMatchObject({ code: 'STOREFRONT_NEWS_INVALID' });
     expect(problem(news({ title: ' ' }))).toMatchObject({ field: 'title', message: 'خبر عنوان می‌خواهد.' });
     for (const slug of ['', 'New', 'خبر', 'a--b', 'x'.repeat(61)]) expect(problem(news({ slug })), slug).toMatchObject({ field: 'slug' });
-    expect(problem(news({ slug: 'x' }))?.message ?? '').not.toContain('صفحه');
+    // a message of the page's own rules is said of a news item
+    for (const slug of ['feed', 'amp', 'fixed-cart']) {
+      const refused = problem(news({ slug }));
+      expect(refused, slug).toMatchObject({ field: 'slug' });
+      expect(refused?.message, slug).toContain('نشانی خبر');
+      expect(refused?.message, slug).not.toContain('صفحه');
+    }
+    expect(problem(news({ slug: 'Bad Address' }))?.message).toContain('new-collection');
+    const unknownNode = problem(news({ sections: [text(p('x'), { type: 'iframe', attrs: { src: 'https://evil.example' } })] }));
+    expect(unknownNode?.message).toContain('خبر');
+    expect(unknownNode?.message).not.toContain('صفحه');
+    expect(problem(news({ coverAssetId: 'seven' }))?.message).toContain('تصویر شاخص');
+    // the summary is one plain line: half of a broken emoji (which PostgreSQL refuses) and a direction mark are refused
+    for (const code of [0xd800, 0xdc00, 0x202e, 0x2066, 0x0085]) {
+      expect(problem(news({ summary: `a${String.fromCharCode(code)}b` })), code.toString(16)).toMatchObject({ field: 'summary', code: 'STOREFRONT_NEWS_FIELD_INVALID' });
+    }
+    expect(checkedNews(news({ summary: ' two\n lines\t here ' }), { forPublish: false }).news?.summary).toBe('two lines here');
+    // a part of a news item has no background of its own
+    expect(problem(news({ sections: [text(p('x')), { ...text(p('y')), background: 'dark' }] }))).toMatchObject({ section: 1, code: 'STOREFRONT_PAGE_SECTION_INVALID' });
     expect(problem(news({ summary: 'ب'.repeat(NEWS_SUMMARY_MAX + 1) }))).toMatchObject({ field: 'summary', code: 'STOREFRONT_NEWS_FIELD_INVALID' });
     expect(problem(news({ summary: 'ب'.repeat(NEWS_SUMMARY_MAX) }))).toBeNull();
     expect(problem(news({ summary: 5 }))).toMatchObject({ field: 'summary' });
@@ -71,5 +89,10 @@ describe('a news item of the site', () => {
     const migration = fs.readFileSync(path.resolve(process.cwd(), 'drizzle/0033_storefront_news.sql'), 'utf8');
     expect(migration).toContain(`length(summary) <= ${NEWS_SUMMARY_MAX}`);
     expect(migration).toContain("content_kind IN ('page', 'news')");
+    // both days are text days with the format check every day of this database has (AGENTS.md §2.10)
+    for (const column of ['news_date', 'published_date']) {
+      expect(migration).toContain(`${column} text,`);
+      expect(migration).toContain(`CONSTRAINT chk_storefront_news_${column}_datefmt CHECK (erp_date_text_ok(${column}, 'iso'::text))`);
+    }
   });
 });
