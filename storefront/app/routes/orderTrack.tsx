@@ -9,6 +9,9 @@ import {
 import { isOrderKey, isOrderNumber, rememberOrderCookie } from '../lib/orderKeys.server';
 import { siteEnv } from '../lib/site.server';
 import { pageMeta } from '../lib/meta';
+import { fixedText } from '../lib/fixedText.server';
+import { fixedHead, fixedTitle } from '../lib/fixedText';
+import { FixedIntro } from '../components/FixedIntro';
 import { contactLabel } from '../lib/contactLabel';
 import { AccountShell, CodeField, ContactField, Field, FormError, FormNote, SubmitButton } from '../components/AccountForm';
 
@@ -39,6 +42,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   return {
     number: isOrderNumber(number) ? number : '', siteUrl: siteEnv().siteUrl,
     smsLogin: settings.smsLogin === true, emailLogin: settings.emailLogin === true, proven: keptContactProof(request)?.contact.value ?? '',
+    text: await fixedText('fixed-order-track'),
   };
 }
 
@@ -46,7 +50,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 export const headers = () => ({ 'Cache-Control': 'no-store' });
 
 export function meta({ data: loaded, matches }: Route.MetaArgs) {
-  return [...pageMeta({ matches, title: 'پیگیری سفارش', description: 'پیگیری سفارش پاپیتال', path: '/orders/track', siteUrl: loaded?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
+  return [...pageMeta({ matches, ...fixedHead(loaded?.text, { title: 'پیگیری سفارش', description: 'پیگیری سفارش پاپیتال' }), path: '/orders/track', siteUrl: loaded?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
 }
 
 const latin = (value: string) => value.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/\s+/g, '');
@@ -131,7 +135,8 @@ export default function OrderTrackPage({ loaderData, actionData }: Route.Compone
   const proven = answer?.codeFor ? '' : loaderData.proven;
   const { smsLogin, emailLogin } = loaderData;
   return (
-    <AccountShell title="پیگیری سفارش" intro="شمارهٔ سفارش و کد پیگیری‌ای را که پس از ثبت سفارش نشان داده شد بنویسید.">
+    <AccountShell title={fixedTitle(loaderData.text, 'پیگیری سفارش')}
+      intro={<FixedIntro text={loaderData.text}>شمارهٔ سفارش و کد پیگیری‌ای را که پس از ثبت سفارش نشان داده شد بنویسید.</FixedIntro>}>
       <Form method="post" className="space-y-5" replace>
         <FormError message={answer?.by !== 'phone' ? answer?.error : undefined} />
         <Field label="شمارهٔ سفارش" name="number" inputMode="numeric" autoComplete="off" dir="ltr" maxLength={20} defaultValue={number} />

@@ -3,7 +3,7 @@ import type {
   StorefrontPageImage, StorefrontPageSection, StorefrontPageSummary, StorefrontPublicPage,
 } from '@erp/storefront/storefrontPagePublicContracts';
 import {
-  BASE_PAGES, PAGE_ICONS, PAGE_SLUG_MAX, RICH_TEXT_CHARS_MAX, RICH_TEXT_DEPTH_MAX, RICH_TEXT_NODES_MAX, SECTION_BACKGROUNDS, TEXT_ALIGNS, TEXT_COLORS, pageLink,
+  BASE_PAGES, FIXED_PAGES, FIXED_PAGE_PREFIX, PAGE_ICONS, PAGE_SLUG_MAX, RICH_TEXT_CHARS_MAX, RICH_TEXT_DEPTH_MAX, RICH_TEXT_NODES_MAX, SECTION_BACKGROUNDS, TEXT_ALIGNS, TEXT_COLORS, pageLink,
   type PageIcon, type RichDoc, type RichMark, type RichNode, type SectionBackground, type TextAlign, type TextColor,
 } from '@erp/storefront/storefrontPageParts';
 
@@ -179,7 +179,10 @@ const isInstant = (text: string) => INSTANT.test(text) && !Number.isNaN(Date.par
 
 const summary = (value: unknown): StorefrontPageSummary | null => {
   if (!isRecord(value) || typeof value.slug !== 'string' || !isPageSlug(value.slug) || isBlank(str(value.title, 200))) return null;
-  const kind = value.kind === 'base' ? 'base' : 'custom';
+  const kind = value.kind === 'base' ? 'base' : value.kind === 'fixed' ? 'fixed' : 'custom';
+  // v12 phase 10c: the words of a page whose work is in this site's code; one the site has no such page for is nothing
+  // and a name under `fixed-` belongs to those rows alone: a row of another kind by such a name is nothing either
+  if ((kind === 'fixed') !== value.slug.startsWith(FIXED_PAGE_PREFIX) || (kind === 'fixed' && !FIXED_PAGES.some(page => page.slug === value.slug))) return null;
   // a base page is one of the five the site has an address for; any other "base" page has nowhere to be shown
   if (kind === 'base' && !isBasePageSlug(value.slug)) return null;
   const at = typeof value.updatedAt === 'string' && isInstant(value.updatedAt) ? value.updatedAt : '';

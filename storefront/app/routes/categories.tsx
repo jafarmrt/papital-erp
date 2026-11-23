@@ -6,17 +6,20 @@ import { siteEnv } from '../lib/site.server';
 import { categoryPath, collectionPath } from '../lib/brand';
 import { faNumber } from '../lib/format';
 import { pageMeta } from '../lib/meta';
+import { fixedText } from '../lib/fixedText.server';
+import { fixedHead, fixedTitle } from '../lib/fixedText';
+import { FixedIntro } from '../components/FixedIntro';
 
 /**
  * v12 phase 8a: «دسته‌ها» of the phone's bottom bar: every category and collection on the site as one tappable list,
  * from the same counts the header's menu reads (the root loader), so it costs no extra request to the ERP.
  */
-export function loader() {
-  return { siteUrl: siteEnv().siteUrl };
+export async function loader() {
+  return { siteUrl: siteEnv().siteUrl, text: await fixedText('fixed-categories') };
 }
 
 export function meta({ data, matches }: Route.MetaArgs) {
-  return pageMeta({ matches, title: 'دسته‌ها', description: 'همهٔ دسته‌ها و کالکشن‌های پاپیتال', path: '/categories', siteUrl: data?.siteUrl ?? '' });
+  return pageMeta({ matches, ...fixedHead(data?.text, { title: 'دسته‌ها', description: 'همهٔ دسته‌ها و کالکشن‌های پاپیتال' }), path: '/categories', siteUrl: data?.siteUrl ?? '' });
 }
 
 function Rows({ title, rows }: { title: string; rows: Array<{ to: string; label: string; count?: number }> }) {
@@ -41,12 +44,13 @@ function Rows({ title, rows }: { title: string; rows: Array<{ to: string; label:
   );
 }
 
-export default function CategoriesPage() {
+export default function CategoriesPage({ loaderData }: Route.ComponentProps) {
   const root = useRootData();
   return (
     <div className="mx-auto w-full max-w-xl px-4 pt-6 pb-16 lg:pt-10">
-      <h1 className="text-2xl font-extrabold lg:text-3xl">دسته‌ها</h1>
+      <h1 className="text-2xl font-extrabold lg:text-3xl">{fixedTitle(loaderData.text, 'دسته‌ها')}</h1>
       <div className="tile-rule mt-4 w-24" aria-hidden />
+      <FixedIntro text={loaderData.text} className="mt-4 text-muted-foreground" />
       <Rows title="دسته‌ها" rows={[{ to: '/products', label: 'همهٔ محصولات' }, ...(root?.categories ?? []).map(c => ({ to: categoryPath(c.name), label: c.name, count: c.count }))]} />
       <Rows title="کالکشن‌ها" rows={(root?.collections ?? []).map(c => ({ to: collectionPath(c.name), label: c.name, count: c.count }))} />
     </div>

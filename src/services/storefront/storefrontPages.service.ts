@@ -8,7 +8,7 @@ import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { OptimisticLockError, nextVersion } from '../../lib/occHelper.js';
 import { can } from '../../middleware/authorize.js';
 import {
-  BASE_PAGES, PAGES_MAX, PAGE_TEMPLATES, SECTION_KIND_TITLES, checkedPage, isPageKind, pageAssetIds, pageItemIds, sectionAssetIds, type BasePageSlug,
+  BASE_PAGES, FIXED_PAGES, PAGES_MAX, PAGE_TEMPLATES, SECTION_KIND_TITLES, checkedPage, isPageKind, pageAssetIds, pageItemIds, sectionAssetIds, type BasePageSlug,
   type PageSection, type PageValues, type RichDoc, type RichNode,
 } from '../../lib/storefront/storefrontPageRules.js';
 import type { PageAssetInfo, PageCreateInput, PageDetail, PageListRow, PageSaveInput, PageStatus } from '../../lib/storefront/storefrontPageContracts.js';
@@ -35,6 +35,8 @@ const invalid = (message: string, field: string, code: string, extra: Record<str
 const baseSlugOf = (row: Pick<PageRecord, 'kind' | 'slug'>): BasePageSlug | null => (
   row.kind === 'base' ? (BASE_PAGES.find(page => page.slug === row.slug)?.slug ?? null) : null
 );
+/** v12 phase 10c: the row holds the words of a page whose work is in the site's code; its slug never changes */
+const fixedSlugOf = (row: Pick<PageRecord, 'kind' | 'slug'>): string | null => (row.kind === 'fixed' ? row.slug : null);
 
 const draftOf = (row: PageRecord): PageValues => ({
   title: row.title, slug: row.slug, seoTitle: row.seoTitle, seoDescription: row.seoDescription, noindex: row.noindex === 1,
@@ -77,10 +79,15 @@ async function detailOf(executor: DbExecutor, row: PageRecord): Promise<PageDeta
   return { ...listRowOf(row), draft, assets: await assetInfos(executor, pageAssetIds(draft)), menuPlaces: await menuPlacesOf(executor, row.id) };
 }
 
-/** `GET /api/storefront/pages`: every page, the five base ones first */
+/** `GET /api/storefront/pages`: every page, the five base ones first, then the fixed ones */
 export async function listPages(executor: DbExecutor): Promise<PageListRow[]> {
   const rows = await executor.select().from(storefrontPages).where(eq(storefrontPages.isDeleted, 0)).orderBy(asc(storefrontPages.id));
-  const order = (row: PageRecord) => (row.kind === 'base' ? BASE_PAGES.findIndex(page => page.slug === row.slug) : BASE_PAGES.length);
+  // the base pages, then the fixed ones (each in its own order), then the pages the shop made
+  const order = (row: PageRecord) => (
+    row.kind === 'base' ? BASE_PAGES.findIndex(page => page.slug === row.slug)
+      : row.kind === 'fixed' ? BASE_PAGES.length + FIXED_PAGES.findIndex(page => page.slug === row.slug)
+        : BASE_PAGES.length + FIXED_PAGES.length
+  );
   return [...rows].sort((a, b) => (order(a) - order(b)) || (a.id - b.id)).map(listRowOf);
 }
 
@@ -196,8 +203,9 @@ export async function createPage(req: Request, input: PageCreateInput): Promise<
   if (checked.problem) throw refused(checked.problem);
   const page = checked.page;
   const id = await orm.transaction(async (tx) => {
-    const live = await tx.select({ id: storefrontPages.id, slug: storefrontPages.slug }).from(storefrontPages).where(eq(storefrontPages.isDeleted, 0));
-    if (live.length >= PAGES_MAX) throw invalid('شمار صفحه‌ها به سقف رسیده است؛ صفحه‌ای را که لازم نیست بردارید.', 'title', 'STOREFRONT_PAGE_TOO_MANY');
+    const live = await tx.select({ id: storefrontPages.id, slug: storefrontPages.slug, kind: storefrontPages.kind }).from(storefrontPages).where(eq(storefrontPages.isDeleted, 0));
+    // the ceiling is for the pages the shop makes: the base and the fixed rows are not counted against it
+    if (live.filter(row => row.kind === 'custom').length >= PAGES_MAX) throw invalid('شمار صفحه‌ها به سقف رسیده است؛ صفحه‌ای را که لازم نیست بردارید.', 'title', 'STOREFRONT_PAGE_TOO_MANY');
     if (live.some(row => row.slug === page.slug)) throw new ConflictError('صفحهٔ دیگری همین نشانی را دارد.', { field: 'slug' }, 'STOREFRONT_PAGE_SLUG_TAKEN');
     const actor = actorOf(req);
     const [row] = await tx.insert(storefrontPages).values({
@@ -217,7 +225,7 @@ export async function saveDraft(req: Request, id: number, input: PageSaveInput):
   const { version, ...raw } = input;
   await orm.transaction(async (tx) => {
     const row = await lockedRow(tx, id, version);
-    const checked = checkedPage(raw, { forPublish: false, baseSlug: baseSlugOf(row) });
+    const checked = checkedPage(raw, { forPublish: false, baseSlug: baseSlugOf(row), fixedSlug: fixedSlugOf(row) });
     if (checked.problem) throw refused(checked.problem);
     const page = checked.page;
     const before = draftOf(row);
@@ -267,7 +275,7 @@ export async function publishPage(req: Request, id: number, version: number): Pr
   await orm.transaction(async (tx) => {
     const row = await lockedRow(tx, id, version);
     // the draft was checked when it was saved; it is checked whole again here, now as a page that must be finished
-    const checked = checkedPage(draftOf(row), { forPublish: true, baseSlug: baseSlugOf(row) });
+    const checked = checkedPage(draftOf(row), { forPublish: true, baseSlug: baseSlugOf(row), fixedSlug: fixedSlugOf(row) });
     if (checked.problem) throw refused(checked.problem);
     const page = checked.page;
     await checkReferences(tx, page, []);
@@ -329,11 +337,12 @@ export async function unpublishPage(req: Request, id: number, version: number): 
   return pageDetail(orm, id);
 }
 
-/** `DELETE /api/storefront/pages/:id`: a custom page is removed softly; a base page never */
+/** `DELETE /api/storefront/pages/:id`: a custom page is removed softly; a base or a fixed page never */
 export async function deletePage(req: Request, id: number, version: number): Promise<void> {
   await orm.transaction(async (tx) => {
     const row = await lockedRow(tx, id, version);
     if (row.kind === 'base') throw invalid('صفحه‌های پایهٔ سایت حذف نمی‌شوند؛ می‌توانید آن را از روی سایت بردارید.', 'id', 'STOREFRONT_PAGE_BASE_KEPT');
+    if (row.kind !== 'custom') throw invalid('صفحه‌های ثابت سایت حذف نمی‌شوند؛ می‌توانید متن آن را از روی سایت بردارید.', 'id', 'STOREFRONT_PAGE_BASE_KEPT');
     const actor = actorOf(req);
     await tx.update(storefrontPages).set({
       isDeleted: 1, published: null, publishedAt: null, publishedBy: '', version: nextVersion(row.version), updatedBy: actor, updatedAt: systemNowUtcIso(),

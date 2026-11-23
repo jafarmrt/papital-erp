@@ -6,10 +6,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { STOREFRONT_BASE_PAGE_ROWS } from '../../db/schema/storefrontPages';
+import { STOREFRONT_BASE_PAGE_ROWS, STOREFRONT_FIXED_PAGE_ROWS } from '../../db/schema/storefrontPages';
 import {
-  BASE_PAGES, PAGE_SECTIONS_MAX, PAGE_TEMPLATES, RICH_TEXT_CHARS_MAX, SECTION_KINDS, checkedPage, emptySection, pageAssetIds, pageItemIds, pageLink,
-  safeRichDoc, type PageSection,
+  BASE_PAGES, FIXED_PAGES, FIXED_PAGE_PREFIX, PAGE_SECTIONS_MAX, PAGE_TEMPLATES, RICH_TEXT_CHARS_MAX, SECTION_KINDS, checkedPage, emptySection, isReservedPageSlug,
+  pageAssetIds, pageItemIds, pageLink, safeRichDoc, type PageSection,
 } from '../../lib/storefront/storefrontPageRules';
 
 const draft = { forPublish: false, baseSlug: null } as const;
@@ -167,6 +167,37 @@ describe('a page', () => {
     expect(STOREFRONT_BASE_PAGE_ROWS.map(({ slug, title }) => ({ slug, title }))).toEqual(BASE_PAGES.map(({ slug, title }) => ({ slug, title })));
     const migration = fs.readFileSync(path.resolve(process.cwd(), 'drizzle/0029_storefront_pages.sql'), 'utf8');
     for (const base of BASE_PAGES) expect(migration, base.slug).toContain(`('base', '${base.slug}', '${base.title}')`);
+  });
+
+  it('keeps a fixed page to its words: its own name, at most one text, no search switch and no share image (v12 phase 10c)', () => {
+    const fixedOf = (slug: string) => ({ forPublish: false, baseSlug: null, fixedSlug: slug });
+    const text = { kind: 'text', background: 'white', doc: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'متن بالای صفحه' }] }] } };
+    const button = { kind: 'button', background: 'white', label: 'خرید', href: '/products' };
+    expect(refusal(page([], { slug: 'fixed-cart' }), fixedOf('fixed-cart'))).toBeNull();
+    expect(refusal(page([text], { slug: 'fixed-cart' }), fixedOf('fixed-cart'))).toBeNull();
+    // a fixed page goes on the site with a title alone
+    expect(refusal(page([], { slug: 'fixed-cart' }), { ...fixedOf('fixed-cart'), forPublish: true })).toBeNull();
+    expect(refusal(page([], { slug: 'fixed-search' }), fixedOf('fixed-cart'))).toMatchObject({ field: 'slug', code: 'STOREFRONT_PAGE_SLUG_INVALID' });
+    expect(refusal(page([text, text], { slug: 'fixed-cart' }), fixedOf('fixed-cart'))).toMatchObject({ code: 'STOREFRONT_PAGE_SECTION_INVALID' });
+    expect(refusal(page([button], { slug: 'fixed-cart' }), fixedOf('fixed-cart'))).toMatchObject({ code: 'STOREFRONT_PAGE_SECTION_INVALID' });
+    expect(refusal(page([], { slug: 'fixed-cart', noindex: true }), fixedOf('fixed-cart'))).toMatchObject({ field: 'noindex' });
+    expect(refusal(page([], { slug: 'fixed-cart', shareImageAssetId: 5 }), fixedOf('fixed-cart'))).toMatchObject({ field: 'shareImageAssetId' });
+    // a few lines at most; a page the shop makes keeps its own, larger limit
+    const long = (letters: number) => ({ kind: 'text', background: 'white', doc: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'ب'.repeat(letters) }] }] } });
+    expect(refusal(page([long(2000)], { slug: 'fixed-cart' }), fixedOf('fixed-cart'))).toBeNull();
+    expect(refusal(page([long(2001)], { slug: 'fixed-cart' }), fixedOf('fixed-cart'))).toMatchObject({ code: 'STOREFRONT_PAGE_SECTION_INVALID' });
+    expect(refusal(page([long(2001)]))).toBeNull();
+    // no other page may take a name under `fixed-`
+    expect(refusal(page([], { slug: 'fixed-cart' }))).toMatchObject({ field: 'slug', code: 'STOREFRONT_PAGE_SLUG_INVALID' });
+    expect(refusal(page([], { slug: 'fixed-anything' }))).toMatchObject({ field: 'slug' });
+    expect(refusal(page([], { slug: 'fixedprice' }))).toBeNull();
+    expect(isReservedPageSlug('fixed-x')).toBe(true);
+    // the migration, the rules and the list the factory reset makes the rows again from are the same nine
+    expect(FIXED_PAGES.every(fixed => fixed.slug.startsWith(FIXED_PAGE_PREFIX))).toBe(true);
+    expect(STOREFRONT_FIXED_PAGE_ROWS.map(({ slug, title }) => ({ slug, title }))).toEqual(FIXED_PAGES.map(({ slug, title }) => ({ slug, title })));
+    const migration = fs.readFileSync(path.resolve(process.cwd(), 'drizzle/0032_storefront_fixed_pages.sql'), 'utf8');
+    for (const fixed of FIXED_PAGES) expect(migration, fixed.slug).toContain(`('fixed', '${fixed.slug}', '${fixed.title}')`);
+    expect(new Set(FIXED_PAGES.map(fixed => fixed.path).filter(Boolean)).size).toBe(FIXED_PAGES.length - 1);
   });
 
   it('keeps the live shipping section for the shipping page alone, once', () => {

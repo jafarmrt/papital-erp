@@ -10,6 +10,9 @@ import { siteEnv } from '../lib/site.server';
 import { productPath } from '../lib/brand';
 import { faNumber, formatPrice } from '../lib/format';
 import { pageMeta } from '../lib/meta';
+import { fixedText } from '../lib/fixedText.server';
+import { fixedHead, fixedTitle } from '../lib/fixedText';
+import { FixedIntro } from '../components/FixedIntro';
 import { ProductImage } from '../components/ProductCard';
 import { FormError } from '../components/AccountForm';
 
@@ -54,14 +57,14 @@ export async function loader({ request }: Route.LoaderArgs) {
     };
   });
   const total = rows.reduce((sum, r) => (r.amount ? sum + BigInt(r.amount) : sum), 0n).toString();
-  return { rows, total, group, siteUrl: siteEnv().siteUrl };
+  return { rows, total, group, siteUrl: siteEnv().siteUrl, text: await fixedText('fixed-cart') };
 }
 
 /** the buyer's own cart, address or order: never kept by a browser or a cache in between */
 export const headers = () => ({ 'Cache-Control': 'no-store' });
 
 export function meta({ data, matches }: Route.MetaArgs) {
-  return [...pageMeta({ matches, title: 'سبد خرید', description: 'سبد خرید پاپیتال', path: '/cart', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
+  return [...pageMeta({ matches, ...fixedHead(data?.text, { title: 'سبد خرید', description: 'سبد خرید پاپیتال' }), path: '/cart', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -91,8 +94,9 @@ export default function CartPage({ loaderData, actionData }: Route.ComponentProp
 
   return (
     <div className="mx-auto max-w-3xl px-4 pt-6 pb-16 lg:pt-10">
-      <h1 className="text-2xl font-extrabold lg:text-3xl">سبد خرید</h1>
+      <h1 className="text-2xl font-extrabold lg:text-3xl">{fixedTitle(loaderData.text, 'سبد خرید')}</h1>
       <div className="tile-rule mt-4 w-24" aria-hidden />
+      <FixedIntro text={loaderData.text} className="mt-4 text-muted-foreground" />
       <div className="mt-6"><FormError message={(actionData as { error?: string } | undefined)?.error} /></div>
 
       {rows.length === 0 ? (

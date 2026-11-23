@@ -498,7 +498,8 @@ createServer(async (req, res) => {
     if (pagesMode === 'empty') return send(res, 200, {});
     if (pagesMode === 'null') return send(res, 200, null);
     if (route === '/pages') {
-      return send(res, 200, { data: pageList.map(({ slug, kind, title, noindex, updatedAt }) => ({ slug, kind, title, noindex, updatedAt })) });
+      // as the ERP: the words of a fixed page (kind 'fixed') are read by name and are not in the list of pages
+      return send(res, 200, { data: pageList.filter(p => p.kind !== 'fixed').map(({ slug, kind, title, noindex, updatedAt }) => ({ slug, kind, title, noindex, updatedAt })) });
     }
     const found = pageList.find(p => p.slug === route.slice('/pages/'.length));
     if (!found) return send(res, 404, { error: 'صفحه پیدا نشد.', code: 'STOREFRONT_PAGE_NOT_FOUND' });

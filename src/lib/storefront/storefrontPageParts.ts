@@ -15,7 +15,7 @@ import { httpsLink } from './storefrontShopInfoRules.js';
  * is refused on every save, what only makes it unfinished is refused when it is published.
  */
 
-export const PAGE_KINDS = ['base', 'custom'] as const;
+export const PAGE_KINDS = ['base', 'custom', 'fixed'] as const;
 export type PageKind = typeof PAGE_KINDS[number];
 export const isPageKind = (value: unknown): value is PageKind => PAGE_KINDS.includes(value as PageKind);
 
@@ -29,6 +29,30 @@ export const BASE_PAGES = [
 ] as const;
 export type BasePageSlug = typeof BASE_PAGES[number]['slug'];
 
+/**
+ * v12 phase 10c (owner's decision 23): the pages whose work is in the site's code (a list, a form, a cart). Each has a
+ * row (kind 'fixed', made by migration 0032, never removed) that holds only its words: the title, one text above the
+ * page's own work, and the search title and description. The page's form and work never change, and while the row is
+ * not published the site keeps the words it has today. `slug` is the row's name (always under `fixed-`, a start no
+ * other page may take); `path` is where the page is on the site ('' for «پیدا نشد», which has no address of its own).
+ */
+export const FIXED_PAGE_PREFIX = 'fixed-';
+/** the text above a fixed page is a few lines, not an article: the words of «پیدا نشد» ride in every page of the site */
+export const FIXED_PAGE_TEXT_MAX = 2000;
+export const FIXED_PAGES = [
+  { slug: 'fixed-products', title: 'همهٔ محصولات', path: '/products' },
+  { slug: 'fixed-categories', title: 'دسته‌ها', path: '/categories' },
+  { slug: 'fixed-search', title: 'جست‌وجو', path: '/search' },
+  { slug: 'fixed-cart', title: 'سبد خرید', path: '/cart' },
+  { slug: 'fixed-wholesale', title: 'درخواست خرید عمده', path: '/wholesale' },
+  { slug: 'fixed-corporate-gift', title: 'هدیهٔ سازمانی', path: '/corporate-gift' },
+  { slug: 'fixed-order-track', title: 'پیگیری سفارش', path: '/orders/track' },
+  { slug: 'fixed-account', title: 'حساب من', path: '/account' },
+  { slug: 'fixed-not-found', title: 'این صفحه پیدا نشد', path: '' },
+] as const;
+export type FixedPageSlug = typeof FIXED_PAGES[number]['slug'];
+export const fixedPageOf = (slug: string) => FIXED_PAGES.find(page => page.slug === slug) ?? null;
+
 export const PAGE_SLUG_MAX = 60;
 /** v12 phase 10c: a preview link lives an hour; its key is 32 random bytes in base64url (43 characters) */
 export const PAGE_PREVIEW_MINUTES = 60;
@@ -39,8 +63,8 @@ export const PAGE_PREVIEW_KEY_MAX = 43;
  * (WordPress's own endings), so `/pages/feed` could not be told from `/pages` in «نشانی‌های سایت قبلی» (10c review).
  */
 export const RESERVED_PAGE_SLUGS: readonly string[] = ['feed', 'amp', 'embed'];
-export const isReservedPageSlug = (slug: string): boolean => RESERVED_PAGE_SLUGS.includes(slug);
-export const RESERVED_PAGE_SLUG_MESSAGE = 'نشانی صفحه نمی‌تواند feed، amp یا embed باشد؛ نشانی دیگری بنویسید.';
+export const isReservedPageSlug = (slug: string): boolean => RESERVED_PAGE_SLUGS.includes(slug) || slug.startsWith(FIXED_PAGE_PREFIX);
+export const RESERVED_PAGE_SLUG_MESSAGE = 'نشانی صفحه نمی‌تواند feed، amp یا embed باشد و با «fixed-» آغاز نمی‌شود؛ نشانی دیگری بنویسید.';
 export const PAGE_TITLE_MAX = 120;
 export const PAGE_SEO_TITLE_MAX = 200;
 export const PAGE_SEO_DESCRIPTION_MAX = 400;

@@ -5,24 +5,28 @@ import { useRootData } from '../root';
 import { siteEnv } from '../lib/site.server';
 import { categoryPath } from '../lib/brand';
 import { pageMeta } from '../lib/meta';
+import { fixedText } from '../lib/fixedText.server';
+import { fixedHead, fixedTitle } from '../lib/fixedText';
+import { FixedIntro } from '../components/FixedIntro';
 
 /**
  * v12 phase 8a: «جست‌وجو» of the phone's bottom bar: one wide field that searches the products (a GET form to /products,
  * so it works without JavaScript and counts against the same per-visitor search limit), and the categories to browse.
  */
-export function loader() {
-  return { siteUrl: siteEnv().siteUrl };
+export async function loader() {
+  return { siteUrl: siteEnv().siteUrl, text: await fixedText('fixed-search') };
 }
 
 export function meta({ data, matches }: Route.MetaArgs) {
-  return [...pageMeta({ matches, title: 'جست‌وجو', description: 'جست‌وجو در محصولات پاپیتال', path: '/search', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
+  return [...pageMeta({ matches, ...fixedHead(data?.text, { title: 'جست‌وجو', description: 'جست‌وجو در محصولات پاپیتال' }), path: '/search', siteUrl: data?.siteUrl ?? '' }), { name: 'robots', content: 'noindex' }];
 }
 
-export default function SearchPage() {
+export default function SearchPage({ loaderData }: Route.ComponentProps) {
   const root = useRootData();
   return (
     <div className="mx-auto w-full max-w-xl px-4 pt-6 pb-16 lg:pt-10">
-      <h1 className="text-2xl font-extrabold lg:text-3xl">جست‌وجو</h1>
+      <h1 className="text-2xl font-extrabold lg:text-3xl">{fixedTitle(loaderData.text, 'جست‌وجو')}</h1>
+      <FixedIntro text={loaderData.text} className="mt-4 text-muted-foreground" />
       <Form method="get" action="/products" role="search" className="mt-6">
         <label className="relative flex items-center">
           <span className="sr-only">جست‌وجو در محصولات</span>

@@ -4,7 +4,7 @@ import {
   MAP_ADDRESS_MAX, PAGE_ICONS, PAGE_SECTIONS_MAX, PAGE_SEO_DESCRIPTION_MAX, PAGE_SEO_TITLE_MAX, PAGE_SLUG_MAX, PAGE_TITLE_MAX, PEOPLE_MAX, PERSON_CONTACT_MAX,
   PERSON_NAME_MAX, PERSON_ROLE_MAX, PRODUCT_ROW_MAX, Refused, SECTION_BACKGROUNDS, SECTION_KINDS, SECTION_KIND_TITLES, SECTION_TEXT_MAX, SECTION_TITLE_MAX,
   RESERVED_PAGE_SLUG_MESSAGE, SHIPPING_SECTION_PAGE, assetId, fa, isId, isRecord, isReservedPageSlug, link, list, oneOf, onlyKeys, refuse, text, type BasePageSlug, type GalleryImage, type IconCard,
-  type PageProblem, type PageSection, type PageValues, type Person,
+  type PageProblem, type PageSection, type PageValues, type Person, FIXED_PAGE_TEXT_MAX,
 } from './storefrontPageParts.js';
 import { docAssetIds, docIsEmpty, richDoc } from './storefrontPageRichText.js';
 
@@ -167,27 +167,37 @@ export const pageItemIds = (page: Pick<PageValues, 'sections'>): number[] => [
   ...new Set(page.sections.flatMap(section => (section.kind === 'products' && section.source === 'items' ? section.itemIds : []))),
 ];
 
+const FIXED_PAGE_TEXT_ONLY = 'صفحهٔ ثابت فقط یک «متن» بالای صفحه می‌گیرد.';
+/** the letters of a text, without its formatting */
+const docChars = (node: { text?: string; content?: unknown[] }): number => (
+  (typeof node.text === 'string' ? node.text.length : 0) + (Array.isArray(node.content) ? node.content : []).reduce<number>((sum, child) => sum + docChars(child as { text?: string; content?: unknown[] }), 0)
+);
+
 export type CheckedPage = { page: PageValues; problem: null } | { page: null; problem: PageProblem };
 
 /**
  * A page as it is kept, from whatever a request carried: every text trimmed, every section rebuilt from its known fields
- * alone. `forPublish` also refuses a page that is safe but unfinished. `basePage`: the page is one of the five (its slug
- * is fixed, and only «ارسال و پرداخت» takes the shipping section).
+ * alone. `forPublish` also refuses a page that is safe but unfinished. `baseSlug`: the page is one of the five (its slug
+ * is fixed, and only «ارسال و پرداخت» takes the shipping section). `fixedSlug` (10c): the row holds the words of a page
+ * whose work is in the site's code: its slug is fixed too, it takes at most one section, a text, and neither «در موتور
+ * جست‌وجو نیاید» nor a share image (the site's own code decides both for such a page).
  */
-export function checkedPage(raw: unknown, options: { forPublish: boolean; baseSlug: BasePageSlug | null }): CheckedPage {
+export function checkedPage(raw: unknown, options: { forPublish: boolean; baseSlug: BasePageSlug | null; fixedSlug?: string | null }): CheckedPage {
   let section = -1;
   try {
     if (!isRecord(raw)) return refuse('صفحه خوانا نیست.', 'STOREFRONT_PAGE_INVALID', 'page');
     const title = (() => { try { return text(raw.title ?? '', PAGE_TITLE_MAX, 'عنوان صفحه'); } catch (e) { return refuse((e as Error).message, 'STOREFRONT_PAGE_TITLE_INVALID', 'title'); } })();
     if (!title) return refuse('صفحه عنوان می‌خواهد.', 'STOREFRONT_PAGE_TITLE_INVALID', 'title');
     const slug = typeof raw.slug === 'string' ? raw.slug.trim() : '';
-    if (options.baseSlug !== null ? slug !== options.baseSlug : (!slug || slug.length > PAGE_SLUG_MAX || !STOREFRONT_SLUG_PATTERN.test(slug))) {
+    const fixedSlug = options.fixedSlug ?? null;
+    if (fixedSlug !== null && slug !== fixedSlug) return refuse('نشانی این صفحهٔ ثابت عوض نمی‌شود.', 'STOREFRONT_PAGE_SLUG_INVALID', 'slug');
+    if (fixedSlug !== null ? false : options.baseSlug !== null ? slug !== options.baseSlug : (!slug || slug.length > PAGE_SLUG_MAX || !STOREFRONT_SLUG_PATTERN.test(slug))) {
       return refuse(
         options.baseSlug !== null ? 'نشانی این صفحهٔ پایه عوض نمی‌شود.' : `نشانی لاتین صفحه حداکثر ${fa(PAGE_SLUG_MAX)} نویسه است و فقط حرف کوچک انگلیسی، رقم و خط تیره میان کلمه‌ها دارد، مانند our-story.`,
         'STOREFRONT_PAGE_SLUG_INVALID', 'slug',
       );
     }
-    if (options.baseSlug === null && isReservedPageSlug(slug)) return refuse(RESERVED_PAGE_SLUG_MESSAGE, 'STOREFRONT_PAGE_SLUG_INVALID', 'slug');
+    if (options.baseSlug === null && fixedSlug === null && isReservedPageSlug(slug)) return refuse(RESERVED_PAGE_SLUG_MESSAGE, 'STOREFRONT_PAGE_SLUG_INVALID', 'slug');
     const field = (name: 'seoTitle' | 'seoDescription', max: number, label: string) => {
       try { return text(raw[name] ?? '', max, label); } catch (e) { return refuse((e as Error).message, 'STOREFRONT_PAGE_FIELD_INVALID', name); }
     };
@@ -195,11 +205,18 @@ export function checkedPage(raw: unknown, options: { forPublish: boolean; baseSl
     const seoDescription = field('seoDescription', PAGE_SEO_DESCRIPTION_MAX, 'توضیح جست‌وجو');
     if (raw.noindex !== undefined && typeof raw.noindex !== 'boolean') return refuse('«در موتور جست‌وجو نیاید» روشن یا خاموش است.', 'STOREFRONT_PAGE_FIELD_INVALID', 'noindex');
     const shareImageAssetId = (() => { try { return assetId(raw.shareImageAssetId, 'تصویر اشتراک‌گذاری'); } catch (e) { return refuse((e as Error).message, 'STOREFRONT_PAGE_IMAGE_INVALID', 'shareImageAssetId'); } })();
+    if (fixedSlug !== null && raw.noindex === true) return refuse('دیده شدن صفحهٔ ثابت در موتور جست‌وجو را خود سایت تعیین می‌کند.', 'STOREFRONT_PAGE_FIELD_INVALID', 'noindex');
+    if (fixedSlug !== null && shareImageAssetId !== null) return refuse('صفحهٔ ثابت تصویر اشتراک‌گذاری نمی‌گیرد.', 'STOREFRONT_PAGE_IMAGE_INVALID', 'shareImageAssetId');
     const rawSections = list(raw.sections ?? [], PAGE_SECTIONS_MAX, 'بخش‌های صفحه');
+    if (fixedSlug !== null && rawSections.length > 1) return refuse(FIXED_PAGE_TEXT_ONLY, 'STOREFRONT_PAGE_SECTION_INVALID');
     const sections: PageSection[] = [];
     for (const [index, rawSection] of rawSections.entries()) {
       section = index;
       const kept = sectionOf(rawSection);
+      if (fixedSlug !== null && kept.kind !== 'text') return refuse(FIXED_PAGE_TEXT_ONLY, 'STOREFRONT_PAGE_SECTION_INVALID');
+      if (fixedSlug !== null && kept.kind === 'text' && docChars(kept.doc) > FIXED_PAGE_TEXT_MAX) {
+        return refuse(`متن بالای صفحهٔ ثابت حداکثر ${fa(FIXED_PAGE_TEXT_MAX)} نویسه است.`, 'STOREFRONT_PAGE_SECTION_INVALID');
+      }
       if (kept.kind === 'shippingMethods' && options.baseSlug !== SHIPPING_SECTION_PAGE) {
         return refuse('بخش «روش‌ها و هزینهٔ ارسال» فقط در صفحهٔ «ارسال و پرداخت» می‌آید.', 'STOREFRONT_PAGE_SECTION_INVALID');
       }
@@ -211,7 +228,8 @@ export function checkedPage(raw: unknown, options: { forPublish: boolean; baseSl
     }
     section = -1;
     if (sections.filter(s => s.kind === 'shippingMethods').length > 1) return refuse('بخش «روش‌ها و هزینهٔ ارسال» یک بار می‌آید.', 'STOREFRONT_PAGE_SECTION_INVALID');
-    if (options.forPublish && sections.length === 0) return refuse('صفحه هنوز بخشی ندارد.', 'STOREFRONT_PAGE_UNFINISHED');
+    // a fixed page may go on the site with its title and search words alone
+    if (options.forPublish && sections.length === 0 && fixedSlug === null) return refuse('صفحه هنوز بخشی ندارد.', 'STOREFRONT_PAGE_UNFINISHED');
     return { page: { title, slug, seoTitle, seoDescription, noindex: raw.noindex === true, shareImageAssetId, sections }, problem: null };
   } catch (error) {
     if (error instanceof Refused) return { page: null, problem: { field: error.field, section, message: error.message, code: error.code } };
