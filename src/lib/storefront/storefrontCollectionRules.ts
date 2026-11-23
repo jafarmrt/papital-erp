@@ -55,7 +55,7 @@ export function checkedCollectionText(raw: unknown): CheckedCollectionText {
   }
   if (raw.morePageId !== null && raw.morePageId !== undefined && !isId(raw.morePageId)) return refuse('morePageId', 'صفحهٔ «آشنایی بیشتر» خوانا نیست.');
   const morePageId = isId(raw.morePageId) ? raw.morePageId : null;
-  // an alternative text with no image, and a link with no words to lead to it, have nothing to belong to
+  // an alternative text with no image has nothing to belong to
   return { values: { name, intro, imageAssetId, imageAlt: imageAssetId === null ? '' : imageAlt, morePageId }, problem: null };
 }
 

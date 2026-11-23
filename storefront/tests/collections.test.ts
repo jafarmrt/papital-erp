@@ -23,8 +23,8 @@ const TEXTS = [
     // fields the ERP never sends: the site must not draw or keep them
     id: 7, updatedBy: 'owner-name-not-for-site',
   },
-  // an image alone, a link that leads out of the site, and a second answer for the same name
-  { name: SECOND, intro: '', image: { sha256: SHA('e'), width: 800, height: 800, alt: '', thumb: false }, moreHref: 'https://evil.example/pages/x' },
+  // an image alone with its link, and a second answer for the same name
+  { name: SECOND, intro: '', image: { sha256: SHA('e'), width: 800, height: 800, alt: '', thumb: false }, moreHref: '/pages/about-turquoise' },
   { name: SECOND, intro: 'پاسخ دوم برای همان نام', image: null, moreHref: '' },
 ];
 
@@ -79,20 +79,22 @@ describe('the words of a collection on its page', () => {
     expect(html).not.toContain('owner-name-not-for-site');
   });
 
-  it('draws an image alone, takes the first answer for a name and never a link out of the site', async () => {
+  it('draws an image alone with its link under it, and takes the first answer for a name', async () => {
     const { status, html } = await page(collectionUrl(SECOND));
     expect(status).toBe(200);
     const intro = introOf(html);
     expect(intro).toContain(`src="/media/${SHA('e')}.webp"`);
     expect(intro).not.toContain('srcSet');
-    expect(intro).not.toContain('آشنایی بیشتر');
-    expect(html).not.toContain('evil.example');
+    // no text to sit under: the link is drawn under the image
+    expect(intro).not.toContain('whitespace-pre-line');
+    expect(intro).toMatch(/<a[^>]*href="\/pages\/about-turquoise"[^>]*>آشنایی بیشتر<\/a>/);
+    expect(intro.indexOf('آشنایی بیشتر')).toBeGreaterThan(intro.indexOf('<img'));
     expect(html).not.toContain('پاسخ دوم برای همان نام');
   });
 
   it('keeps the words to the collection page itself: not a category inside it, a later page or the list of all products', async () => {
     const category = catalog.products.find(product => product.collections.includes(FIRST)) as unknown as { category: string };
-    for (const pathname of [`${collectionUrl(FIRST)}?category=${encodeURIComponent(category.category)}`, '/products']) {
+    for (const pathname of [`${collectionUrl(FIRST)}?category=${encodeURIComponent(category.category)}`, `${collectionUrl(FIRST)}?page=2`, `${collectionUrl(FIRST)}?q=${encodeURIComponent(FIRST)}`, '/products']) {
       const { status, html } = await page(pathname);
       expect(status, pathname).toBe(200);
       expect(html, pathname).not.toContain('data-collection-intro');
@@ -107,11 +109,16 @@ describe('the answer of the Storefront API for the words of the collections', ()
     const texts = siteCollectionTexts([
       { name: 'a', intro: `one${turn}two\r\n\r\n\r\n  three  \n\n \n`, image: { sha256: 'short' }, moreHref: '/pages/Not-A-Slug' },
       { name: 'b', intro: '   ', image: null, moreHref: '/pages/x' },
+      // a link is only ever a page of this site
+      { name: 'd', intro: 'd', image: null, moreHref: 'https://evil.example/pages/x' },
+      { name: 'e', intro: 'e', image: null, moreHref: '/pages/x/../../account' },
+      { name: 'f', intro: 'f', image: null, moreHref: '/pages/story' },
       { name: '', intro: 'no name', image: null },
       { name: 'c', intro: 7, image: { sha256: SHA('f'), width: -1, height: 'x', alt: 5 }, moreHref: '//evil.example' },
       'not a row', null,
     ]);
-    expect([...texts.keys()]).toEqual(['a', 'c']);
+    expect([...texts.keys()]).toEqual(['a', 'd', 'e', 'f', 'c']);
+    expect(['d', 'e', 'f'].map(name => texts.get(name)?.moreHref)).toEqual(['', '', '/pages/story']);
     expect(texts.get('a')).toEqual({ name: 'a', paragraphs: ['onetwo', 'three'], image: null, moreHref: '' });
     expect(texts.get('c')).toEqual({ name: 'c', paragraphs: [], image: { sha256: SHA('f'), width: null, height: null, alt: '', thumb: false }, moreHref: '' });
     expect(siteCollectionTexts({ data: [] }).size).toBe(0);

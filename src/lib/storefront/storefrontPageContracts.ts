@@ -39,6 +39,8 @@ export interface PageDetail extends PageListRow {
   assets: PageAssetInfo[];
   /** v12 phase 10c: the places of «فهرست‌های سایت» (`header`, `drawer`, `footer`, `bottom`) that link to this page */
   menuPlaces: string[];
+  /** v12 phase 10e: the collections of «کالکشن‌های سایت» whose «آشنایی بیشتر» leads to this page */
+  linkedCollections: string[];
 }
 
 /** v12 phase 10c: what «پیش‌نمایش» answers: the link on the site (its key is in it and is kept nowhere else) and when it ends */

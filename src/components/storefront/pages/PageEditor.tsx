@@ -322,7 +322,7 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
             <p className="text-xs text-amber-800">{`برای انتشار: ${notReady.section >= 0 ? `بخش ${formatPersianNumber(notReady.section + 1)}، ` : ''}${notReady.message.replace(/^بخش [۰-۹]+: /, '')}`}</p>
           )}
           {asking !== 'none' && (
-            <PageActionConfirm ref={confirmation} asking={asking} kind={detail.kind} dirty={dirty} linkedFrom={linkedFrom} busy={busy}
+            <PageActionConfirm ref={confirmation} asking={asking} kind={detail.kind} dirty={dirty} linkedFrom={linkedFrom} linkedCollections={detail.linkedCollections ?? []} busy={busy}
               onYes={() => (asking === 'delete' ? removePage() : run(asking))} onNo={() => setAsking('none')} />
           )}
         </div>

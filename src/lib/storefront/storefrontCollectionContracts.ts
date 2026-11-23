@@ -13,8 +13,6 @@ export interface CollectionTextRow extends CollectionTextValues {
   morePageLive: boolean;
   /** 0 while nothing has been saved for the collection yet; every save is sent under it */
   version: number;
-  updatedAt: string;
-  updatedBy: string;
 }
 export interface CollectionTextList {
   data: CollectionTextRow[];

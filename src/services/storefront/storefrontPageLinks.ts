@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { storefrontMenuItems, storefrontPages } from '../../db/schema.js';
+import { storefrontCollections, storefrontMenuItems, storefrontPages } from '../../db/schema.js';
 import { MENU_LOCATIONS } from '../../lib/storefront/storefrontMenuRules.js';
 import { PAGES_MAX } from '../../lib/storefront/storefrontPageRules.js';
 
@@ -42,4 +42,14 @@ export async function menuPlacesOf(executor: DbExecutor, pageId: number): Promis
   // in the order the menu builder shows its places
   const found = new Set(rows.map(r => r.location));
   return MENU_LOCATIONS.filter(location => found.has(location));
+}
+
+/**
+ * v12 phase 10e: the collections of «کالکشن‌های سایت» whose «آشنایی بیشتر» leads to a page, by name, so removing the page
+ * or taking it off the site can say that those links leave the site too (10e review)
+ */
+export async function collectionsLinkingTo(executor: DbExecutor, pageId: number): Promise<string[]> {
+  const rows = await executor.select({ name: storefrontCollections.name }).from(storefrontCollections)
+    .where(eq(storefrontCollections.morePageId, pageId)).orderBy(asc(storefrontCollections.name)).limit(50);
+  return rows.map(row => row.name);
 }

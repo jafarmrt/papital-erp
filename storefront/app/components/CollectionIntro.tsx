@@ -9,21 +9,26 @@ import { NewsCover } from './NewsCover';
  */
 export function CollectionIntro({ text }: { text: SiteCollectionText }) {
   const hasWords = text.paragraphs.length > 0;
+  const more = text.moreHref ? (
+    <p>
+      <Link to={text.moreHref} className="inline-flex min-h-11 items-center font-medium text-brand underline-offset-4 hover:underline">آشنایی بیشتر</Link>
+    </p>
+  ) : null;
   return (
     <div className={`mt-5 grid grid-cols-1 gap-6 ${text.image && hasWords ? 'lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-center lg:gap-10' : ''}`} data-collection-intro>
       {hasWords ? (
         <div className="min-w-0 max-w-3xl space-y-4 text-lg leading-9 text-muted-foreground">
           {text.paragraphs.map((paragraph, index) => <p key={index} className="whitespace-pre-line break-words">{paragraph}</p>)}
-          {text.moreHref ? (
-            <p>
-              <Link to={text.moreHref} className="inline-flex min-h-11 items-center font-medium text-brand underline-offset-4 hover:underline">آشنایی بیشتر</Link>
-            </p>
-          ) : null}
+          {more}
         </div>
       ) : null}
       {text.image ? (
-        <div className={`min-w-0 overflow-hidden rounded-surface bg-muted ${hasWords ? '' : 'max-w-xl'}`}>
-          <NewsCover image={text.image} sizes="(min-width: 1024px) 40vw, 100vw" eager className="h-auto w-full" />
+        <div className={`min-w-0 ${hasWords ? '' : 'max-w-xl'}`}>
+          <div className="overflow-hidden rounded-surface bg-muted">
+            <NewsCover image={text.image} sizes="(min-width: 1024px) 40vw, 100vw" eager className="h-auto w-full" />
+          </div>
+          {/* an image alone: the link has no text to sit under, so it sits under the image (10e review) */}
+          {hasWords ? null : <div className="mt-3 text-lg">{more}</div>}
         </div>
       ) : null}
     </div>

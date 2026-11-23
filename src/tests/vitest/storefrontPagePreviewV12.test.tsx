@@ -28,7 +28,7 @@ const StorefrontPagesPage = (await import('../../pages/StorefrontPagesPage')).de
 const DETAIL: PageDetail = {
   id: 9, kind: 'custom', slug: 'our-story', title: 'داستان ما', status: 'draft', publishedAt: '', updatedAt: '2026-11-21 10:00:00', updatedBy: '', version: 4,
   draft: { title: 'داستان ما', slug: 'our-story', seoTitle: '', seoDescription: '', noindex: false, shareImageAssetId: null, sections: [{ kind: 'button', background: 'white', label: 'خرید', href: '/products' }] },
-  assets: [], menuPlaces: [],
+  assets: [], menuPlaces: [], linkedCollections: [],
 };
 
 /** the head of the link the server answers, and whether it is the address written in the settings */

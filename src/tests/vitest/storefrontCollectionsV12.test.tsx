@@ -27,7 +27,7 @@ const { COLLECTIONS_KEY } = await import('../../hooks/queries/useStorefrontColle
 
 const row = (over: Partial<CollectionTextRow>): CollectionTextRow => ({
   name: 'کاشی', intro: '', imageAssetId: null, imageAlt: '', morePageId: null, count: 4, imageTitle: '', imageUsable: false, morePageTitle: '', morePageLive: false,
-  version: 0, updatedAt: '', updatedBy: '', ...over,
+  version: 0, ...over,
 });
 const WRITTEN = row({ name: 'فیروزه', intro: 'سنگ نیشابور', imageAssetId: 31, imageAlt: 'انگشتر فیروزه', morePageId: 8, imageTitle: 'عکس فیروزه', imageUsable: true, morePageTitle: 'داستان فیروزه', morePageLive: true, version: 3, count: 2 });
 /** what the server says when it refuses a save, and when the list cannot be read */
@@ -179,6 +179,35 @@ describe('the screen of the collections of the site', () => {
     expect(puts()).toEqual([]);
   });
 
+  it('keeps what was typed when a row is closed or another is opened, and marks the row', async () => {
+    permissions.current = ['site_content.manage'];
+    open();
+    const form = await openRow('فیروزه');
+    fireEvent.change(within(form).getByLabelText('متن معرفی (اختیاری)'), { target: { value: 'نیمه‌کاره' } });
+    const list = screen.getByRole('list', { name: 'کالکشن‌ها' });
+    const item = within(list).getAllByRole('listitem').find(li => within(li).queryByText('فیروزه')) as HTMLElement;
+    await within(item).findByText('تغییر ذخیره‌نشده');
+    // another row is opened: the first form is hidden, not thrown away
+    await openRow('کاشی');
+    expect(form.isConnected).toBe(true);
+    expect((form.parentElement as HTMLElement).hidden).toBe(true);
+    expect(within(item).getByText('تغییر ذخیره‌نشده')).toBeTruthy();
+    fireEvent.click(within(item).getByRole('button', { expanded: false }));
+    expect((form.parentElement as HTMLElement).hidden).toBe(false);
+    expect((within(form).getByLabelText('متن معرفی (اختیاری)') as HTMLTextAreaElement).value).toBe('نیمه‌کاره');
+    fireEvent.click(within(form).getByRole('button', { name: 'ذخیره' }));
+    await waitFor(() => expect(puts()).toEqual([expect.objectContaining({ name: 'فیروزه', intro: 'نیمه‌کاره', version: 3 })]));
+    await waitFor(() => expect(within(item).queryByText('تغییر ذخیره‌نشده')).toBeNull());
+  });
+
+  it('does not say a collection has an image when its only image has left the library', async () => {
+    permissions.current = ['site_content.manage'];
+    open({ list: () => ({ data: [row({ imageAssetId: 31, imageUsable: false, version: 1 }), row({ name: 'فیروزه', imageAssetId: 32, imageUsable: true, version: 1 })], pages: [] }) });
+    const items = within(await screen.findByRole('list', { name: 'کالکشن‌ها' })).getAllByRole('listitem');
+    expect(items[0].textContent).toContain('بی متن و تصویر');
+    expect(items[1].textContent).toContain('متن یا تصویر دارد');
+  });
+
   it('says so when no collection has an item on the site, and when the list cannot be read', async () => {
     permissions.current = ['site_content.manage'];
     open({ list: () => ({ data: [], pages: [] }) });
@@ -186,5 +215,20 @@ describe('the screen of the collections of the site', () => {
     cleanup();
     open({ list: () => { throw new Error(UNREAD); } });
     expect(await screen.findByText(UNREAD)).toBeTruthy();
+  });
+});
+
+describe('the question before a page leaves the site', () => {
+  it('names the collections whose link to the page leaves with it', async () => {
+    const { PageActionConfirm } = await import('../../components/storefront/pages/PageActionConfirm');
+    const ask = (asking: 'revert' | 'unpublish' | 'delete', linkedCollections: string[]) => {
+      cleanup();
+      render(<PageActionConfirm ref={null} asking={asking} kind="custom" dirty={false} linkedFrom="" linkedCollections={linkedCollections} busy={false} onYes={() => undefined} onNo={() => undefined} />);
+      return screen.getByRole('group').querySelector('[data-collection-warning]')?.textContent ?? '';
+    };
+    expect(ask('unpublish', ['کاشی', 'فیروزه'])).toBe('پیوند «آشنایی بیشتر» کالکشن «کاشی» و کالکشن «فیروزه» به این صفحه می‌آید و تا انتشار دوباره روی سایت نشان داده نمی‌شود.');
+    expect(ask('delete', ['کاشی'])).toBe('پیوند «آشنایی بیشتر» کالکشن «کاشی» به این صفحه می‌آید و دیگر روی سایت نشان داده نمی‌شود.');
+    expect(ask('revert', ['کاشی'])).toBe('');
+    expect(ask('delete', [])).toBe('');
   });
 });

@@ -152,29 +152,38 @@ export async function runStorefrontCollectionTextsV12Tests(shouldRun: (id: strin
       ['an introduction past its length', words({ intro: 'ب'.repeat(1501) }), 422, 'STOREFRONT_COLLECTION_FIELD_INVALID'],
       ['an introduction with a control character', words({ intro: `متن${control}پنهان` }), 422, 'STOREFRONT_COLLECTION_FIELD_INVALID'],
       ['an image that is not a whole number', words({ imageAssetId: 1.5 }), 400, 'VALIDATION_ERROR'],
-      ['an image that is not in the library', words({ imageAssetId: 2_000_000_000 }), 422, 'STOREFRONT_PAGE_IMAGE_UNKNOWN'],
-      ['an image that has left the library', words({ imageAssetId: gone.id }), 422, 'STOREFRONT_PAGE_IMAGE_UNKNOWN'],
+      ['an image that is not in the library', words({ imageAssetId: 2_000_000_000 }), 422, 'STOREFRONT_COLLECTION_IMAGE_UNKNOWN'],
+      ['an image that has left the library', words({ imageAssetId: gone.id }), 422, 'STOREFRONT_COLLECTION_IMAGE_UNKNOWN'],
       ['a page that is not there', words({ intro: 'متن', morePageId: 2_000_000_000 }), 422, 'STOREFRONT_COLLECTION_PAGE_UNKNOWN'],
       ['a base page', words({ intro: 'متن', morePageId: aboutPage?.id ?? 0 }), 422, 'STOREFRONT_COLLECTION_PAGE_UNKNOWN'],
-      ['a version for words never saved', words({ intro: 'متن', version: 1 }), 409, 'OPTIMISTIC_LOCK'],
+      ['a version for words never saved', words({ intro: 'متن', version: 1 }), 409, 'OCC_CONFLICT'],
     ];
     for (const [what, body, status, code] of refusals) {
       const res = await erp.put('/api/storefront/collections', body);
-      if (res.status !== status || (code !== 'OPTIMISTIC_LOCK' && res.body.code !== code)) wrong.push(`${what}: ${res.status} ${res.body.code}`);
+      if (res.status !== status || res.body.code !== code || (status === 422 && code.includes('IMAGE') && res.body.details?.field !== 'imageAssetId')) wrong.push(`${what}: ${res.status} ${res.body.code} ${JSON.stringify(res.body.details)}`);
     }
     const noImage = await editor.put('/api/storefront/collections', words({ intro: 'متن', imageAssetId: cover.id }));
-    if (noImage.status !== 403 || noImage.body.code !== 'STOREFRONT_PAGE_IMAGE_FORBIDDEN') wrong.push(`a new image without media.view: ${noImage.status} ${noImage.body.code}`);
+    if (noImage.status !== 403 || noImage.body.code !== 'STOREFRONT_COLLECTION_IMAGE_FORBIDDEN') wrong.push(`a new image without media.view: ${noImage.status} ${noImage.body.code}`);
     const stored = () => orm.select().from(storefrontCollections).where(like(storefrontCollections.name, `%${tag}`));
+    // a save with nothing in it is taken and keeps nothing
+    const empty = await erp.put('/api/storefront/collections', words());
+    if (empty.status !== 200 || empty.body.data?.version !== 0) wrong.push(`an empty first save: ${empty.status} version ${empty.body.data?.version}`);
     if ((await stored()).length !== 0) wrong.push(`rows after the refusals: ${(await stored()).length}`);
 
     // 4) the first save makes the row (version 1), keeps the text as the rules shape it, and writes one audit row
     const intro = '  نقش این کالکشن از کاشی هفت‌رنگ است.  \r\n\r\n\r\n\r\nهر قطعه با دست ساخته می‌شود.\nبا <b>نشانه</b>  ';
     const kept = 'نقش این کالکشن از کاشی هفت‌رنگ است.\n\nهر قطعه با دست ساخته می‌شود.\nبا <b>نشانه</b>';
-    const saved = await erp.put('/api/storefront/collections', words({ intro, imageAssetId: cover.id, imageAlt: '  ', morePageId: pageId }));
+    // the same first save sent six times at once: one is taken, the others are told their copy is stale
+    const firstBody = words({ intro, imageAssetId: cover.id, imageAlt: '  ', morePageId: pageId });
+    const firsts = await Promise.all([1, 2, 3, 4, 5, 6].map(() => erp.put('/api/storefront/collections', firstBody)));
+    const saved = firsts.find(res => res.status === 200) ?? firsts[0];
+    if (firsts.map(res => res.status).sort().join(',') !== '200,409,409,409,409,409' || firsts.some(res => res.status === 409 && res.body.code !== 'OCC_CONFLICT')) {
+      wrong.push(`six first saves at once: ${firsts.map(res => `${res.status} ${String(res.body.code ?? '')}`).join(', ')}`);
+    }
     const data = (saved.body.data ?? {}) as Body;
     if (saved.status !== 200 || data.version !== 1 || data.intro !== kept || data.imageAssetId !== cover.id || data.imageAlt !== '' || data.morePageId !== pageId || data.count !== 2
-      || data.imageTitle !== `عکس کالکشن 1 ${tag}` || data.imageUsable !== true || data.morePageTitle !== `داستان کاشی ${tag}` || data.morePageLive !== false || !data.updatedBy
-      || Object.keys(data).sort().join(',') !== 'count,imageAlt,imageAssetId,imageTitle,imageUsable,intro,morePageId,morePageLive,morePageTitle,name,updatedAt,updatedBy,version') {
+      || data.imageTitle !== `عکس کالکشن 1 ${tag}` || data.imageUsable !== true || data.morePageTitle !== `داستان کاشی ${tag}` || data.morePageLive !== false
+      || Object.keys(data).sort().join(',') !== 'count,imageAlt,imageAssetId,imageTitle,imageUsable,intro,morePageId,morePageLive,morePageTitle,name,version') {
       wrong.push(`the first save: ${saved.status} ${JSON.stringify(saved.body).slice(0, 500)}`);
     }
     const [row] = await orm.select().from(storefrontCollections).where(eq(storefrontCollections.name, onSite));
@@ -197,24 +206,39 @@ export async function runStorefrontCollectionTextsV12Tests(shouldRun: (id: strin
     const published = await erp.post(`/api/storefront/pages/${pageId}/publish`, { version: 2 });
     if (published.status !== 200 || (await mine())[0]?.moreHref !== `/pages/${pageSlug}`) wrong.push(`the link once the page is published: ${published.status} ${String((await mine())[0]?.moreHref)}`);
     if ((await rowsOf()).find(r => r.name === onSite)?.morePageLive !== true) wrong.push('the ERP does not say the page is on the site now');
+    // the page's own editor is told which collections lead to it, to say so before the page is removed or taken off the site
+    const linked = (await erp.get(`/api/storefront/pages/${pageId}`)).body.data?.linkedCollections;
+    if (JSON.stringify(linked) !== JSON.stringify([onSite])) wrong.push(`the collections that link to the page: ${JSON.stringify(linked)}`);
 
     // 6) saving the same words changes nothing; a stale version is refused; a change raises the version and is audited with both sides
     const same = await erp.put('/api/storefront/collections', words({ intro: kept, imageAssetId: cover.id, morePageId: pageId, version: 1 }));
     if (same.status !== 200 || same.body.data?.version !== 1 || (await auditOf('UPDATE')).length !== 0) wrong.push(`the same words saved again: ${same.status} version ${same.body.data?.version}, ${(await auditOf('UPDATE')).length} audit rows`);
     // the editor keeps the image the collection has (no media.view needed) and writes its alternative text
-    const changed = await editor.put('/api/storefront/collections', words({ intro: 'متن تازه', imageAssetId: cover.id, imageAlt: 'کاشی آبی', morePageId: pageId, version: 1 }));
+    const change = words({ intro: 'متن تازه', imageAssetId: cover.id, imageAlt: 'کاشی آبی', morePageId: pageId, version: 1 });
+    const changes = await Promise.all([1, 2, 3, 4].map(() => editor.put('/api/storefront/collections', change)));
+    const changed = changes.find(res => res.status === 200) ?? changes[0];
     const updates = await auditOf('UPDATE');
+    if (changes.map(res => res.status).sort().join(',') !== '200,409,409,409') wrong.push(`four changes at once: ${changes.map(res => res.status).join(',')}`);
     if (changed.status !== 200 || changed.body.data?.version !== 2 || updates.length !== 1 || !JSON.stringify(updates[0].details).includes('هفت‌رنگ') || !JSON.stringify(updates[0].details).includes('متن تازه')) {
       wrong.push(`a change by the editor: ${changed.status} version ${changed.body.data?.version}, ${updates.length} audit rows`);
     }
     const stale = await erp.put('/api/storefront/collections', words({ intro: 'متن کهنه', imageAssetId: cover.id, morePageId: pageId, version: 1 }));
-    if (stale.status !== 409 || (await stored())[0]?.intro !== 'متن تازه') wrong.push(`a stale save: ${stale.status}, kept «${String((await stored())[0]?.intro)}»`);
+    if (stale.status !== 409 || stale.body.code !== 'OCC_CONFLICT' || (await stored())[0]?.intro !== 'متن تازه') wrong.push(`a stale save: ${stale.status}, kept «${String((await stored())[0]?.intro)}»`);
     if ((await mine())[0]?.intro !== 'متن تازه' || ((await mine())[0]?.image as Body)?.alt !== 'کاشی آبی') wrong.push(`the site after the change: ${JSON.stringify((await mine())[0])}`);
 
     // 7) an image alone shows; a link alone shows nothing; an image that left the library is not sent, and its file is not served
     const imageOnly = await erp.put('/api/storefront/collections', words({ name: second, imageAssetId: other.id, imageAlt: 'فیروزه' }));
     const afterSecond = (await mine()).find(r => r.name === second);
     if (imageOnly.status !== 200 || !afterSecond || afterSecond.intro !== '' || (afterSecond.image as Body)?.sha256 !== other.sha256 || await media(other.sha256) !== '200/200') wrong.push(`an image alone: ${imageOnly.status} ${JSON.stringify(afterSecond)}`);
+    // the same row while its image has left the library: nothing is left to show, so the site gets nothing of it; and
+    // a small version the library does not have is not served
+    await orm.update(mediaAssets).set({ isDeleted: 1 }).where(eq(mediaAssets.id, other.id));
+    const lostImage = (await mine()).some(r => r.name === second);
+    const lostChip = (await rowsOf()).find(r => r.name === second)?.imageUsable;
+    await orm.update(mediaAssets).set({ isDeleted: 0, thumbBytes: null }).where(eq(mediaAssets.id, other.id));
+    const noThumb = { files: await media(other.sha256), flag: ((await mine()).find(r => r.name === second)?.image as Body | undefined)?.thumb };
+    await orm.update(mediaAssets).set({ thumbBytes: 12 }).where(eq(mediaAssets.id, other.id));
+    if (lostImage || lostChip !== false || noThumb.files !== '200/404' || noThumb.flag !== false) wrong.push(`an image alone that left the library: on the site ${lostImage}, usable ${String(lostChip)}; with no small version: ${JSON.stringify(noThumb)}`);
     const linkOnly = await erp.put('/api/storefront/collections', words({ name: second, morePageId: pageId, version: 1 }));
     if (linkOnly.status !== 200 || linkOnly.body.data?.version !== 2 || (await mine()).some(r => r.name === second) || await media(other.sha256) !== '404/404') {
       wrong.push(`a link alone: ${linkOnly.status}, on the site ${(await mine()).some(r => r.name === second)}, the old image ${await media(other.sha256)}`);
@@ -238,6 +262,17 @@ export async function runStorefrontCollectionTextsV12Tests(shouldRun: (id: strin
     await publish(made[0].id, true, made[0].slug);
     const back = (await mine()).find(r => r.name === onSite);
     if (!back || back.intro !== 'متن برای بازگشت' || back.moreHref !== '' || await media(cover.sha256) !== '200/200') wrong.push(`the collection back on the site: ${JSON.stringify(back)}`);
+
+    // taking the page off the site records the collection whose link leaves with it, and the site gets no link
+    await erp.put('/api/storefront/collections', words({ intro: 'متن برای بازگشت', imageAssetId: cover.id, morePageId: pageId, version: 3 }));
+    const pageVersion = Number((await erp.get(`/api/storefront/pages/${pageId}`)).body.data?.version);
+    const taken = await erp.post(`/api/storefront/pages/${pageId}/unpublish`, { version: pageVersion });
+    const [pageAudit] = await orm.select().from(activityLogs).where(and(eq(activityLogs.entity, 'صفحهٔ سایت'), eq(activityLogs.entityId, `page-${pageId}`))).orderBy(desc(activityLogs.id)).limit(1);
+    // both collections name the page by now (the second since its link-only save)
+    const recorded = ((pageAudit?.details ?? {}) as { linkedFromCollections?: string[] }).linkedFromCollections ?? [];
+    if (taken.status !== 200 || [...recorded].sort().join('|') !== [onSite, second].sort().join('|') || (await mine()).find(r => r.name === onSite)?.moreHref !== '') {
+      wrong.push(`taking the linked page off the site: ${taken.status}, audit ${String(JSON.stringify(pageAudit?.details)).slice(0, 200)}, link «${String((await mine()).find(r => r.name === onSite)?.moreHref)}»`);
+    }
 
     // 9) the rules of migration 0035 hold against a direct write
     const direct: Array<[string, () => Promise<unknown>]> = [

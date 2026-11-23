@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { ChevronDown, LayoutGrid } from 'lucide-react';
 import { useHasPermission } from '../contexts/AuthContext';
 import { useCollectionTextsQuery } from '../hooks/queries/useStorefrontCollectionQueries';
-import { collectionTextShows } from '../lib/storefront/storefrontCollectionRules';
 import { CollectionTextEditor } from '../components/storefront/collections/CollectionTextEditor';
 import { errorMessageOf } from '../utils';
 import { formatPersianNumber } from '../utils/persianNumber';
@@ -19,6 +18,15 @@ export default function StorefrontCollectionsPage() {
   const rows = Array.isArray(list.data?.data) ? list.data.data : [];
   const pages = Array.isArray(list.data?.pages) ? list.data.pages : [];
   const [open, setOpen] = useState<string | null>(null);
+  /** the rows opened so far: a form stays where it is when its row is closed, so what was typed in it is not lost (10e review) */
+  const [opened, setOpened] = useState<readonly string[]>([]);
+  /** the rows whose form holds edits not yet saved */
+  const [unsaved, setUnsaved] = useState<readonly string[]>([]);
+  const toggle = (name: string) => {
+    setOpen(now => (now === name ? null : name));
+    setOpened(list => (list.includes(name) ? list : [...list, name]));
+  };
+  const markUnsaved = (name: string, dirty: boolean) => setUnsaved(list => (dirty === list.includes(name) ? list : dirty ? [...list, name] : list.filter(n => n !== name)));
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 px-3 py-4 sm:px-6">
@@ -39,21 +47,24 @@ export default function StorefrontCollectionsPage() {
         <ul aria-label="کالکشن‌ها" className="space-y-3">
           {rows.map((row) => {
             const shown = open === row.name;
+            // what a visitor would see: a text, or an image the library still has
+            const shows = row.intro !== '' || (row.imageAssetId !== null && row.imageUsable);
             return (
               <li key={row.name} className="rounded-2xl border border-slate-200 bg-white">
-                <button type="button" aria-expanded={shown} onClick={() => setOpen(shown ? null : row.name)} className="flex w-full flex-wrap items-center gap-2 px-4 py-3 text-start">
+                <button type="button" aria-expanded={shown} onClick={() => toggle(row.name)} className="flex w-full flex-wrap items-center gap-2 px-4 py-3 text-start">
                   <span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-800">{row.name}</span>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${row.count > 0 ? 'bg-slate-100 text-slate-700' : 'bg-amber-50 text-amber-800'}`}>
                     {row.count > 0 ? `${formatPersianNumber(row.count)} کالا روی سایت` : 'اکنون کالایی روی سایت ندارد'}
                   </span>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${collectionTextShows(row) ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
-                    {collectionTextShows(row) ? 'متن یا تصویر دارد' : 'بی متن و تصویر'}
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${shows ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+                    {shows ? 'متن یا تصویر دارد' : 'بی متن و تصویر'}
                   </span>
+                  {unsaved.includes(row.name) && <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800">تغییر ذخیره‌نشده</span>}
                   <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform ${shown ? 'rotate-180' : ''}`} aria-hidden />
                 </button>
-                {shown && (
-                  <div className="border-t border-slate-100 p-4">
-                    <CollectionTextEditor row={row} pages={pages} canManage={canManage} />
+                {opened.includes(row.name) && (
+                  <div hidden={!shown} className="border-t border-slate-100 p-4">
+                    <CollectionTextEditor row={row} pages={pages} canManage={canManage} onDirty={dirty => markUnsaved(row.name, dirty)} />
                   </div>
                 )}
               </li>

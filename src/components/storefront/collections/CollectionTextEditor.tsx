@@ -20,7 +20,11 @@ const hint = 'mt-1 text-xs leading-6 text-slate-500';
 const valuesOf = (row: CollectionTextRow): CollectionTextValues => ({ name: row.name, intro: row.intro, imageAssetId: row.imageAssetId, imageAlt: row.imageAlt, morePageId: row.morePageId });
 const same = (a: CollectionTextValues, b: CollectionTextValues) => a.intro === b.intro && a.imageAssetId === b.imageAssetId && a.imageAlt === b.imageAlt && a.morePageId === b.morePageId;
 
-export function CollectionTextEditor({ row, pages, canManage }: { row: CollectionTextRow; pages: CollectionTextList['pages']; canManage: boolean }) {
+export function CollectionTextEditor({ row, pages, canManage, onDirty }: {
+  row: CollectionTextRow; pages: CollectionTextList['pages']; canManage: boolean;
+  /** told whenever the form starts or stops holding unsaved edits, so the list can say so on a closed row */
+  onDirty?: (dirty: boolean) => void;
+}) {
   const id = useId();
   const save = useSaveCollectionTextMutation();
   const [draft, setDraft] = useState<CollectionTextValues>(() => valuesOf(row));
@@ -30,6 +34,8 @@ export function CollectionTextEditor({ row, pages, canManage }: { row: Collectio
   const dirty = useMemo(() => !same(draft, base.values), [draft, base.values]);
   // only a newer copy counts: a list read that started before this form's own save may still arrive after it
   const outdated = row.version > base.version;
+  const tellDirty = useEffectEvent((now: boolean) => onDirty?.(now));
+  useEffect(() => { tellDirty(dirty); }, [dirty]);
   // a newer copy from the server replaces the form only while nothing here is unsaved
   const adopt = () => {
     setBase({ values: valuesOf(row), version: row.version });
@@ -84,7 +90,7 @@ export function CollectionTextEditor({ row, pages, canManage }: { row: Collectio
             {draft.morePageId !== null && !pageList.some(p => p.id === draft.morePageId) && <option value={draft.morePageId}>{row.morePageTitle || 'صفحه‌ای که حذف شده است'}</option>}
             {pageList.map(p => <option key={p.id} value={p.id}>{p.live ? p.title : `${p.title} (اکنون روی سایت نیست)`}</option>)}
           </select>
-          <p className={hint}>صفحه‌ای از «صفحه‌های سایت» که دربارهٔ این کالکشن بیشتر می‌گوید. پیوند فقط وقتی روی سایت می‌آید که آن صفحه منتشر باشد.</p>
+          <p className={hint}>صفحه‌ای از «صفحه‌های سایت» که دربارهٔ این کالکشن بیشتر می‌گوید. پیوند فقط وقتی روی سایت می‌آید که آن صفحه منتشر باشد و کالکشن متن یا تصویری هم داشته باشد.</p>
         </div>
       </fieldset>
       {staleCopy && (
