@@ -35,10 +35,14 @@ const STORY: PageDetail = {
   draft: { ...CART.draft, title: 'داستان ما', slug: 'our-story', sections: [{ kind: 'button', background: 'white', label: 'خرید', href: '/products' }] },
 };
 
+/** the cart row the server answers (a test may put it on the site) */
+const cart = { current: CART };
+
 afterEach(() => {
   cleanup();
   fetchJson.mockReset();
   permissions.current = [];
+  cart.current = CART;
 });
 
 type Call = [string, { method?: string; body?: string } | undefined];
@@ -48,7 +52,7 @@ function open(at: string) {
   fetchJson.mockImplementation(async (url: string, init?: { method?: string; body?: string }) => {
     if (url === '/storefront/pages' && !init) return { data: [CART, STORY] };
     if (url === '/storefront/menus/link-options') return { data: { categories: [], collections: [], campaigns: [], products: [] } };
-    if (url === '/storefront/pages/21' && !init) return { data: CART };
+    if (url === '/storefront/pages/21' && !init) return { data: cart.current };
     if (url === '/storefront/pages/9' && !init) return { data: STORY };
     if (init?.method === 'PUT' && url === '/storefront/pages/21') return { data: { ...CART, version: 2, draft: JSON.parse(String(init.body)) as PageDetail['draft'] } };
     throw new Error(`unexpected call ${init?.method ?? 'GET'} ${url}`);
@@ -84,13 +88,18 @@ describe('a fixed page of the site in the ERP', () => {
     expect(screen.queryByRole('button', { name: 'حذف صفحه' })).toBeNull();
     expect(screen.getByLabelText('عنوان جست‌وجو (اختیاری)')).toBeTruthy();
     expect(screen.getByLabelText('توضیح جست‌وجو (اختیاری)')).toBeTruthy();
-    // the one kind of part is a text, and only one
+    // the one kind of part is a text, and only one: once it is there, nothing more is offered
     const kinds = within(screen.getByLabelText('بخش تازه')).getAllByRole('option').map(option => option.textContent);
     expect(kinds).toEqual(['متن']);
     const add = screen.getByRole('button', { name: 'افزودن بخش' }) as HTMLButtonElement;
     fireEvent.click(add);
-    expect(add.disabled).toBe(true);
-    expect(within(screen.getByRole('region', { name: 'متن بالای صفحه' })).getAllByRole('listitem')).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'افزودن بخش' })).toBeNull();
+    expect(screen.queryByLabelText('بخش تازه')).toBeNull();
+    const parts = within(screen.getByRole('region', { name: 'متن بالای صفحه' })).getAllByRole('listitem');
+    expect(parts).toHaveLength(1);
+    expect(parts[0].getAttribute('aria-label')).toBe('متن بالای صفحه');
+    expect(within(parts[0]).queryByRole('button', { name: /بالا$|پایین$/ })).toBeNull();
+    expect(within(parts[0]).getByRole('button', { name: 'حذف متن بالای صفحه' })).toBeTruthy();
     expect(screen.queryByLabelText('زمینه')).toBeNull();
     // the words are saved under the row's own name
     fireEvent.change(titleField, { target: { value: 'سبد خرید شما' } });
@@ -100,6 +109,19 @@ describe('a fixed page of the site in the ERP', () => {
     const sent = JSON.parse(String(calls('PUT')[0][1]?.body)) as PageDetail['draft'] & { version: number };
     expect(sent).toMatchObject({ title: 'سبد خرید شما', slug: 'fixed-cart', seoDescription: 'سبد خرید گالری', noindex: false, shareImageAssetId: null, version: 1 });
     expect(sent.sections.map(section => section.kind)).toEqual(['text']);
+  });
+
+  it('says, before its words are taken off the site, that the page itself stays, and puts the focus on the question', async () => {
+    permissions.current = ['site_content.view', 'site_content.manage'];
+    cart.current = { ...CART, status: 'published', publishedAt: '2026-11-23 10:00:00' };
+    open('/site-pages?page=21');
+    await screen.findByLabelText('عنوان صفحه');
+    fireEvent.click(screen.getByRole('button', { name: 'برداشتن از روی سایت' }));
+    const question = screen.getByRole('group', { name: 'تأیید این کار' });
+    expect(question.textContent).toContain('خود صفحه سر جایش می‌ماند و متن خودش را نشان می‌دهد');
+    expect(question.textContent).not.toContain('این صفحه از روی سایت برداشته می‌شود');
+    expect(question.textContent).not.toContain('پیدا نشد');
+    expect(document.activeElement).toBe(question);
   });
 
   it('leaves the editor of a page the shop made as it was', async () => {

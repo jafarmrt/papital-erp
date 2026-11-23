@@ -203,8 +203,9 @@ export async function createPage(req: Request, input: PageCreateInput): Promise<
   if (checked.problem) throw refused(checked.problem);
   const page = checked.page;
   const id = await orm.transaction(async (tx) => {
-    const live = await tx.select({ id: storefrontPages.id, slug: storefrontPages.slug }).from(storefrontPages).where(eq(storefrontPages.isDeleted, 0));
-    if (live.length >= PAGES_MAX) throw invalid('شمار صفحه‌ها به سقف رسیده است؛ صفحه‌ای را که لازم نیست بردارید.', 'title', 'STOREFRONT_PAGE_TOO_MANY');
+    const live = await tx.select({ id: storefrontPages.id, slug: storefrontPages.slug, kind: storefrontPages.kind }).from(storefrontPages).where(eq(storefrontPages.isDeleted, 0));
+    // the ceiling is for the pages the shop makes: the base and the fixed rows are not counted against it
+    if (live.filter(row => row.kind === 'custom').length >= PAGES_MAX) throw invalid('شمار صفحه‌ها به سقف رسیده است؛ صفحه‌ای را که لازم نیست بردارید.', 'title', 'STOREFRONT_PAGE_TOO_MANY');
     if (live.some(row => row.slug === page.slug)) throw new ConflictError('صفحهٔ دیگری همین نشانی را دارد.', { field: 'slug' }, 'STOREFRONT_PAGE_SLUG_TAKEN');
     const actor = actorOf(req);
     const [row] = await tx.insert(storefrontPages).values({

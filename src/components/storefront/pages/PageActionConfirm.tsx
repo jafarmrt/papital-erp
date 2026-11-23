@@ -1,14 +1,16 @@
 import type { Ref } from 'react';
+import type { PageKind } from '../../../lib/storefront/storefrontPageRules';
 
 /**
  * The question before «برگرداندن», «برداشتن از روی سایت» and «حذف صفحه» in the page editor (v12 phase 10b; moved out of
- * `PageEditor.tsx` in 10c). `ownWords`: the page is a base or a fixed one, for which the site has words of its own to
- * show while nothing is published. The question takes the focus when it opens (the editor does that through `ref`).
+ * `PageEditor.tsx` in 10c). The words of «برداشتن» go by the page's kind: a page the shop made leaves the site, a base
+ * page goes back to the text in the site's code, and a fixed page stays where it is and only loses the words written
+ * here. The question takes the focus when it opens (the editor does that through `ref`).
  */
-export function PageActionConfirm({ ref, asking, ownWords, dirty, linkedFrom, busy, onYes, onNo }: {
+export function PageActionConfirm({ ref, asking, kind, dirty, linkedFrom, busy, onYes, onNo }: {
   ref: Ref<HTMLDivElement>;
   asking: 'revert' | 'unpublish' | 'delete';
-  ownWords: boolean;
+  kind: PageKind;
   dirty: boolean;
   /** the menus that link to the page, as a phrase ('' = none) */
   linkedFrom: string;
@@ -20,7 +22,8 @@ export function PageActionConfirm({ ref, asking, ownWords, dirty, linkedFrom, bu
     <div ref={ref} tabIndex={-1} role="group" aria-label="تأیید این کار" className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
       <p className="min-w-0 flex-1">
         {asking === 'revert' && 'تغییرهای پیش‌نویس دور ریخته می‌شود و پیش‌نویس همان نسخهٔ روی سایت می‌شود.'}
-        {asking === 'unpublish' && (ownWords ? 'این صفحه از روی سایت برداشته می‌شود و سایت متن ثابت پیشین خودش را برای آن نشان می‌دهد. پیش‌نویس می‌ماند.' : 'این صفحه از روی سایت برداشته می‌شود و نشانی‌اش «پیدا نشد» می‌شود. پیش‌نویس می‌ماند.')}
+        {asking === 'unpublish' && kind === 'fixed' && 'متنی که این‌جا برای این صفحه نوشته شده از روی سایت برداشته می‌شود. خود صفحه سر جایش می‌ماند و متن خودش را نشان می‌دهد. پیش‌نویس می‌ماند.'}
+        {asking === 'unpublish' && kind !== 'fixed' && (kind === 'base' ? 'این صفحه از روی سایت برداشته می‌شود و سایت متن ثابت پیشین خودش را برای آن نشان می‌دهد. پیش‌نویس می‌ماند.' : 'این صفحه از روی سایت برداشته می‌شود و نشانی‌اش «پیدا نشد» می‌شود. پیش‌نویس می‌ماند.')}
         {asking === 'delete' && `این صفحه حذف می‌شود و اگر روی سایت باشد از آن‌جا هم برداشته می‌شود.${dirty ? ' تغییرهای ذخیره‌نشدهٔ آن هم از میان می‌رود.' : ''}`}
         {/* v12 phase 10c: the menus that link to this page lose that link on the site (10c review: nothing said so) */}
         {(asking === 'delete' || asking === 'unpublish') && linkedFrom && (

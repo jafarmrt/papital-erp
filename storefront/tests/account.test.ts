@@ -174,6 +174,9 @@ describe('the per-visitor search limit', () => {
     const over = await search('انگشتر ۳۱', '203.0.113.50');
     expect(over.status).toBe(429);
     expect(over.html).toContain('جست‌وجوی زیادی در یک دقیقه');
+    // v12 phase 10c: the page has the title of its own heading (the shop is fine; only this visitor waits)
+    expect(over.html).toContain('<title>جست‌وجوی زیادی در یک دقیقه | گالری پاپیتال</title>');
+    expect(over.html).not.toContain('در دسترس نیست');
     expect(Number(over.retryAfter)).toBeGreaterThan(0);
     expect((await search('انگشتر ۳۱', '198.51.100.20')).status).toBe(200);
     // browsing without a search is never limited

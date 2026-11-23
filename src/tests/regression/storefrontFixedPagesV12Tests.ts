@@ -87,6 +87,8 @@ export async function runStorefrontFixedPagesV12Tests(shouldRun: (id: string, ..
       ['two texts', { sections: [text('یک'), text('دو')] }],
       ['a button', { sections: [{ kind: 'button', background: 'white', label: 'خرید', href: '/products' }] }],
       ['the search switch', { noindex: true }], ['a share image', { shareImageAssetId: 1 }],
+      // a few lines, not an article: the words of «پیدا نشد» ride in every page of the site
+      ['a text of 2001 letters', { sections: [text('ب'.repeat(2001))] }],
     ];
     for (const [what, over] of refusals) {
       const res = await erp.put(`/api/storefront/pages/${cart.id}`, form(detail.version, over));
@@ -103,8 +105,10 @@ export async function runStorefrontFixedPagesV12Tests(shouldRun: (id: string, ..
       await erp.del(`/api/storefront/pages/${cart.id}?version=${version}`), await erp.post(`/api/storefront/pages/${cart.id}/move`, { slug: `moved-${tag}`, version }),
       await erp.post(`/api/storefront/pages/${cart.id}/preview`),
     ];
-    if ([removal, move, preview].some(res => res.status !== 400 && res.status !== 422) || preview.body.code !== 'STOREFRONT_PAGE_PREVIEW_FIXED') {
-      wrong.push(`removal, move and preview of a fixed row: ${removal.status}/${move.status}/${preview.status} ${preview.body.code}`);
+    // each is refused by the service, by name (the table's own check would refuse a removal too, with another code)
+    if ([removal, move, preview].some(res => res.status !== 400 && res.status !== 422) || removal.body.code !== 'STOREFRONT_PAGE_BASE_KEPT' || move.body.code !== 'STOREFRONT_PAGE_BASE_KEPT'
+      || preview.body.code !== 'STOREFRONT_PAGE_PREVIEW_FIXED') {
+      wrong.push(`removal, move and preview of a fixed row: ${removal.status} ${removal.body.code}/${move.status} ${move.body.code}/${preview.status} ${preview.body.code}`);
     }
     const [row] = await orm.select().from(storefrontPages).where(eq(storefrontPages.id, cart.id));
     if (row.isDeleted !== 0 || row.slug !== 'fixed-cart' || row.previewHash !== null) wrong.push('a refused removal, move or preview changed the row');
@@ -127,10 +131,11 @@ export async function runStorefrontFixedPagesV12Tests(shouldRun: (id: string, ..
     const [byName, pages, asPagePath] = [await site('/pages/fixed-cart'), await site('/pages'), await site('/redirects')];
     const words = (byName.body.data ?? {}) as Body & { sections?: Array<{ kind: string }> };
     if (published.status !== 200 || byName.status !== 200 || keys(words) !== 'kind,noindex,sections,seoDescription,seoTitle,shareImage,slug,title,updatedAt'
-      || words.kind !== 'fixed' || words.title !== `سبد شما ${tag}` || words.seoTitle !== 'سبد خرید گالری' || words.noindex !== false || words.shareImage !== null
+      || words.kind !== 'fixed' || words.title !== `سبد شما ${tag}` || words.seoTitle !== 'سبد خرید گالری' || words.noindex !== true || words.shareImage !== null
       || (words.sections ?? []).map(s => s.kind).join(',') !== 'text') {
       wrong.push(`the published words: ${published.status}/${byName.status} ${JSON.stringify(words).slice(0, 300)}`);
     }
+    // (`noindex` is always true for a fixed row: a site not yet updated would draw it as a page, and must not have it listed)
     for (const leak of ['"id"', 'version', 'updatedBy', 'createdBy', 'previewHash']) if (JSON.stringify(byName.body).includes(leak)) wrong.push(`the published words carry «${leak}»`);
     if (pages.status !== 200 || (pages.body.data as Array<{ slug: string; kind: string }>).some(page => page.kind === 'fixed' || page.slug.startsWith('fixed-'))) {
       wrong.push(`the list of pages names a fixed row: ${JSON.stringify(pages.body.data).slice(0, 200)}`);
@@ -165,7 +170,7 @@ export async function runStorefrontFixedPagesV12Tests(shouldRun: (id: string, ..
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'the nine fixed rows of migration 0032 were there after the base pages, unpublished and 404 on the site; a row refused another name, a second text, a part that is no text, the search switch and a share image, and saved its title, one text and the search words; it was not removed, moved or previewed; a new page, a saved draft and a move could not take a name under fixed-; published, its words went to the site by name with kind fixed and no field of the row, were in no list of pages and not offered to a menu; a title alone could be published; taken off, the name was a 404 again; the constraints refused another kind and a removed fixed row',
+      details: 'the nine fixed rows of migration 0032 were there after the base pages, unpublished and 404 on the site; a row refused another name, a second text, a part that is no text, the search switch, a share image and a text past 2000 letters, and saved its title, one text and the search words; it was not removed, moved or previewed; a new page, a saved draft and a move could not take a name under fixed-; published, its words went to the site by name with kind fixed and no field of the row, were in no list of pages and not offered to a menu; a title alone could be published; taken off, the name was a 404 again; the constraints refused another kind and a removed fixed row',
     }));
   } catch (err) {
     results.push(makeTestCase({

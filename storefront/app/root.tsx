@@ -180,11 +180,16 @@ export function headers({ errorHeaders }: Route.HeadersArgs) {
  */
 export function meta({ error, data }: Route.MetaArgs) {
   if (!error) return [];
-  const notFound = isRouteErrorResponse(error) && error.status === 404;
-  const text = notFound ? data?.notFoundText : null;
+  const status = isRouteErrorResponse(error) ? error.status : 0;
+  const text = status === 404 ? data?.notFoundText : null;
   const brandName = data?.shop?.brand.fullName || DEFAULT_SHOP.brand.fullName;
-  const title = notFound ? (text?.seoTitle || fixedTitle(text, 'این صفحه پیدا نشد')) : 'فروشگاه لحظه‌ای در دسترس نیست';
-  return [{ title: `${title} | ${brandName}` }, { name: 'robots', content: 'noindex' }];
+  // each of the three pages `ErrorBoundary` draws has the title of its own heading
+  const title = status === 404 ? (text?.seoTitle || fixedTitle(text, 'این صفحه پیدا نشد'))
+    : status === 429 ? 'جست‌وجوی زیادی در یک دقیقه' : 'فروشگاه لحظه‌ای در دسترس نیست';
+  return [
+    { title: `${title} | ${brandName}` }, { name: 'robots', content: 'noindex' },
+    ...(text?.seoDescription ? [{ name: 'description', content: text.seoDescription }] : []),
+  ];
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

@@ -267,12 +267,19 @@ export async function pages(): Promise<StorefrontPageSummary[]> {
   }
 }
 
-/** The last copy read of each base page (five at most), to show while the ERP cannot be read */
+/** The last copy read of each base page and each fixed page's words (fourteen at most), to show while the ERP cannot be read */
 const lastGoodBasePage = new Map<string, SitePage>();
+/**
+ * When such a read last failed: for half a minute the ERP is not asked again for that page (the words of «پیدا نشد» are
+ * read for every page of the site, so a failing read would otherwise be tried on every visit).
+ */
+const FALLBACK_RETRY_MS = 30_000;
+const fallbackFailedAt = new Map<string, number>();
 
 /**
  * One published page; null when there is none by that address. A page the shop made is an error while the ERP cannot
- * be read (a read error is not «no such page»). `fallback` is for a base page, which must never be down: when the ERP
+ * be read (a read error is not «no such page»). `fallback` is for a base page and for the words of a fixed page (10c),
+ * which must never be down: when the ERP
  * says the page is not published (404) the caller shows the site's fixed text; when the ERP cannot be read at all, the
  * copy read last is shown (10c review: an error must not put the fixed text back in place of a published page), and
  * only a site that has never read the page falls back to the fixed text.
@@ -280,20 +287,28 @@ const lastGoodBasePage = new Map<string, SitePage>();
 export async function page(slug: string, { fallback = false } = {}): Promise<SitePage | null> {
   if (!isPageSlug(slug)) return null;
   const path = `/pages/${slug}`;
+  if (fallback && Date.now() - (fallbackFailedAt.get(slug) ?? -FALLBACK_RETRY_MS) < FALLBACK_RETRY_MS) return lastGoodBasePage.get(slug) ?? null;
   try {
     const answer = await get<unknown>(path, PAGE_TTL_MS);
     const found = sitePage(typeof answer === 'object' && answer !== null ? (answer as { data?: unknown }).data : null);
     // a 200 that is not a page, or is another address's page, is a failed read: «no page» is only the ERP's own 404
     if (!found || found.slug !== slug) throw new StorefrontApiError(502, path);
-    if (fallback) lastGoodBasePage.set(slug, found);
+    if (fallback) {
+      lastGoodBasePage.set(slug, found);
+      fallbackFailedAt.delete(slug);
+    }
     return found;
   } catch (error) {
     if (!(error instanceof StorefrontApiError)) throw error;
     if (error.status === 404) {
       lastGoodBasePage.delete(slug);
+      fallbackFailedAt.delete(slug);
       return null;
     }
-    if (fallback) return lastGoodBasePage.get(slug) ?? null;
+    if (fallback) {
+      fallbackFailedAt.set(slug, Date.now());
+      return lastGoodBasePage.get(slug) ?? null;
+    }
     throw error;
   }
 }

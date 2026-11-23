@@ -182,6 +182,11 @@ describe('a page', () => {
     expect(refusal(page([button], { slug: 'fixed-cart' }), fixedOf('fixed-cart'))).toMatchObject({ code: 'STOREFRONT_PAGE_SECTION_INVALID' });
     expect(refusal(page([], { slug: 'fixed-cart', noindex: true }), fixedOf('fixed-cart'))).toMatchObject({ field: 'noindex' });
     expect(refusal(page([], { slug: 'fixed-cart', shareImageAssetId: 5 }), fixedOf('fixed-cart'))).toMatchObject({ field: 'shareImageAssetId' });
+    // a few lines at most; a page the shop makes keeps its own, larger limit
+    const long = (letters: number) => ({ kind: 'text', background: 'white', doc: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'ب'.repeat(letters) }] }] } });
+    expect(refusal(page([long(2000)], { slug: 'fixed-cart' }), fixedOf('fixed-cart'))).toBeNull();
+    expect(refusal(page([long(2001)], { slug: 'fixed-cart' }), fixedOf('fixed-cart'))).toMatchObject({ code: 'STOREFRONT_PAGE_SECTION_INVALID' });
+    expect(refusal(page([long(2001)]))).toBeNull();
     // no other page may take a name under `fixed-`
     expect(refusal(page([], { slug: 'fixed-cart' }))).toMatchObject({ field: 'slug', code: 'STOREFRONT_PAGE_SLUG_INVALID' });
     expect(refusal(page([], { slug: 'fixed-anything' }))).toMatchObject({ field: 'slug' });

@@ -28,9 +28,12 @@ const PAGES = [
   // the form pages keep their form; the text replaces the page's own first lines
   fixed('fixed-corporate-gift', 'هدیه برای سازمان شما', { sections: [{ kind: 'text', background: 'white', doc: { type: 'doc', content: [p('متن تازهٔ هدیهٔ سازمانی')] } }] }),
   fixed('fixed-order-track', 'سفارش من کجاست؟'),
-  fixed('fixed-not-found', 'چیزی این‌جا نیست', { seoTitle: 'صفحه‌ای نیست', sections: [{ kind: 'text', background: 'white', doc: { type: 'doc', content: [p('از فهرست بالا ادامه دهید.')] } }] }),
+  fixed('fixed-not-found', 'چیزی این‌جا نیست', { seoTitle: 'صفحه‌ای نیست', seoDescription: 'این نشانی صفحه‌ای ندارد', sections: [{ kind: 'text', background: 'white', doc: { type: 'doc', content: [p('از فهرست بالا ادامه دهید.')] } }] }),
+  fixed('fixed-search', 'بگردید', { sections: [{ kind: 'text', background: 'white', doc: { type: 'doc', content: [p('متن بالای جست‌وجو')] } }] }),
+  fixed('fixed-cart', 'سبد شما', { seoTitle: 'سبد خرید شما', sections: [{ kind: 'text', background: 'white', doc: { type: 'doc', content: [p('متن بالای سبد')] } }] }),
+  fixed('fixed-account', 'حساب شما', { sections: [{ kind: 'text', background: 'white', doc: { type: 'doc', content: [p('متن بالای حساب')] } }] }),
   // a row that says it is a page the shop made is never taken as a fixed page's words
-  { ...fixed('fixed-search', 'جست‌وجوی جعلی'), kind: 'custom' },
+  { ...fixed('fixed-wholesale', 'عمدهٔ جعلی'), kind: 'custom' },
   // a fixed row the site has no page for is nothing at all
   fixed('fixed-unknown', 'ناشناخته'),
   { slug: 'our-story', kind: 'custom', title: 'داستان ما', noindex: false, updatedAt: '2026-11-20T08:30:00.000Z', seoTitle: '', seoDescription: '', shareImage: null, sections: [{ kind: 'button', background: 'white', label: 'خرید', href: '/products' }] },
@@ -38,7 +41,8 @@ const PAGES = [
 
 beforeAll(async () => {
   mock = spawn(process.execPath, [path.join(import.meta.dirname, '../mock/mockApi.mjs')], {
-    env: { ...process.env, MOCK_PORT: String(PORT), MOCK_API_KEY: KEY, MOCK_PAGES: JSON.stringify(PAGES) },
+    // ordering is on, so the cart is a page
+    env: { ...process.env, MOCK_PORT: String(PORT), MOCK_API_KEY: KEY, MOCK_PAGES: JSON.stringify(PAGES), MOCK_ORDERING: '1' },
     stdio: 'pipe',
   });
   await new Promise<void>((resolve, reject) => {
@@ -48,16 +52,19 @@ beforeAll(async () => {
   process.env.STOREFRONT_API_URL = `http://127.0.0.1:${PORT}/api/storefront/v1`;
   process.env.STOREFRONT_API_KEY = KEY;
   process.env.STOREFRONT_SITE_URL = 'https://shop.example';
+  process.env.STOREFRONT_TRUST_PROXY = '1';
+  process.env.STOREFRONT_FORM_MIN_SECONDS = '0';
   const build = await import(path.join(import.meta.dirname, '../build/server/index.js')) as ServerBuild;
-  handle = createRequestHandler(build, 'production');
+  // as server.mjs does: the site's own host is an allowed origin of a form post
+  handle = createRequestHandler({ ...build, allowedActionOrigins: ['shop.example'] }, 'production');
 });
 
 afterAll(() => {
   mock?.kill();
 });
 
-const page = async (pathname: string) => {
-  const res = await handle(new Request(`http://localhost${pathname}`));
+const page = async (pathname: string, cookie = '') => {
+  const res = await handle(new Request(`http://localhost${pathname}`, { headers: cookie ? { cookie } : {} }));
   return { status: res.status, html: await res.text() };
 };
 const h1 = (html: string) => (/<h1[^>]*>([\s\S]*?)<\/h1>/.exec(html)?.[1] ?? '').replace(/<[^>]+>/g, '').replace(/<!-- -->/g, '');
@@ -79,7 +86,7 @@ describe('the words of the fixed pages', () => {
   });
 
   it('keeps the words of a search, a category and a collection, which are not «همهٔ محصولات»', async () => {
-    for (const address of ['/products?q=%DA%AF%D8%B1%D8%AF%D9%86%D8%A8%D9%86%D8%AF', '/products?category=%DA%AF%D8%B1%D8%AF%D9%86%D8%A8%D9%86%D8%AF']) {
+    for (const address of ['/products?q=%DA%AF%D8%B1%D8%AF%D9%86%D8%A8%D9%86%D8%AF', '/products?category=%DA%AF%D8%B1%D8%AF%D9%86%D8%A8%D9%86%D8%AF', `/collections/${encodeURIComponent('نمونه‌الف')}`]) {
       const { status, html } = await page(address);
       expect(status, address).toBe(200);
       expect(h1(html), address).not.toBe('همهٔ زیورهای ما');
@@ -93,9 +100,11 @@ describe('the words of the fixed pages', () => {
     expect(h1(categories.html)).toBe('دسته‌بندی زیورها');
     expect(title(categories.html)).toBe('دسته‌بندی زیورها | گالری پاپیتال');
     expect(description(categories.html)).toBe('همهٔ دسته‌ها و کالکشن‌های پاپیتال');
+    // «درخواست خرید عمده»: the row of its name says it is a page the shop made, so it is not this page's words
     const wholesale = await page('/wholesale');
     expect(h1(wholesale.html)).toBe('درخواست خرید عمده');
     expect(wholesale.html).toContain('برای فروش در فروشگاه یا گالری خودتان');
+    expect(wholesale.html).not.toContain('عمدهٔ جعلی');
   });
 
   it('puts the shop\'s text in place of a form page\'s first lines and leaves the form itself', async () => {
@@ -111,6 +120,35 @@ describe('the words of the fixed pages', () => {
     expect(track.html).toContain('name="robots" content="noindex"');
   });
 
+  it('gives «جست‌وجو», «سبد خرید» and «حساب من» their words too, and keeps them out of a search engine as before', async () => {
+    const search = await page('/search');
+    expect(h1(search.html)).toBe('بگردید');
+    expect(search.html).toContain('متن بالای جست‌وجو');
+    expect(search.html).toContain('name="robots" content="noindex"');
+    expect(search.html).toMatch(/<form [^>]*action="\/products"/);
+    const cart = await page('/cart');
+    expect(cart.status).toBe(200);
+    expect(h1(cart.html)).toBe('سبد شما');
+    expect(cart.html).toContain('متن بالای سبد');
+    expect(title(cart.html)).toBe('سبد خرید شما | گالری پاپیتال');
+    expect(cart.html).toContain('name="robots" content="noindex"');
+    // «حساب من» is the buyer's own page: a phone is proven by code and signs up against the mock, which gives a session
+    const post = async (pathname: string, fields: Record<string, string>, cookie = '') => handle(new Request(`http://localhost${pathname}`, {
+      method: 'POST', body: new URLSearchParams(fields), headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: 'http://localhost', ...(cookie ? { cookie } : {}) },
+    }));
+    const kept = (res: Response, cookieName: string) => (res.headers.getSetCookie().find(c => c.startsWith(`${cookieName}=`)) ?? '').split(';')[0];
+    await post('/account/sign-in', { intent: 'send-code', contact: '09123456789', next: '/' });
+    const proof = kept(await post('/account/sign-in', { intent: 'verify-code', contact: '09123456789', code: '123456', next: '/' }), 'sf_proof');
+    const formAt = /name="formAt" value="([^"]+)"/.exec((await page('/corporate-gift')).html)?.[1] ?? '';
+    const session = kept(await post('/account/sign-up', { intent: 'register', phone: '09123456789', name: 'خریدار آزمون', password: 'رمز-آزمون-1405', next: '/', formAt }, proof), 'sf_session');
+    expect(session).toMatch(/^sf_session=/);
+    const account = await page('/account', session);
+    expect(account.status).toBe(200);
+    expect(h1(account.html)).toBe('حساب شما');
+    expect(account.html).toContain('متن بالای حساب');
+    expect(account.html).toContain('name="robots" content="noindex"');
+  });
+
   it('draws «پیدا نشد» with the shop\'s words, still a 404 no search engine lists', async () => {
     for (const address of ['/no-such-page-anywhere', '/p/no-such-product', '/pages/no-such-page']) {
       const { status, html } = await page(address);
@@ -119,6 +157,7 @@ describe('the words of the fixed pages', () => {
       expect(html, address).toContain('از فهرست بالا ادامه دهید.');
       expect(html, address).not.toContain('شاید نشانی عوض شده');
       expect(title(html), address).toBe('صفحه‌ای نیست | گالری پاپیتال');
+      expect(description(html), address).toBe('این نشانی صفحه‌ای ندارد');
       expect(html, address).toContain('name="robots" content="noindex"');
     }
   });
@@ -128,10 +167,6 @@ describe('the words of the fixed pages', () => {
     const sitemap = await page('/sitemap.xml');
     expect(sitemap.html).toContain('<loc>https://shop.example/pages/our-story</loc>');
     expect(sitemap.html).not.toContain('fixed-');
-    // «جست‌وجو» keeps its words: the row of that name says it is a page the shop made
-    const search = await page('/search');
-    expect(h1(search.html)).toBe('جست‌وجو');
-    expect(search.html).not.toContain('جست‌وجوی جعلی');
     // the reader of an answer knows the kind, and only for a page the site has
     expect(sitePage(PAGES[0])?.kind).toBe('fixed');
     expect(sitePage(PAGES.find(p2 => p2.slug === 'fixed-unknown'))).toBeNull();
@@ -140,13 +175,13 @@ describe('the words of the fixed pages', () => {
   it('keeps the words read last while the ERP cannot be read, and never takes the page down for its words', async () => {
     expect(h1((await page('/categories')).html)).toBe('دسته‌بندی زیورها');
     await fetch(`http://127.0.0.1:${PORT}/__mock/pages?mode=fail`);
-    // past the short time a read is kept
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // the words read are kept a minute, so the ERP is not asked again here; a page whose words were never read (hers is
+    // the first read, and it fails) is drawn with its own words, and is not down
     const down = await page('/categories');
     expect(down.status).toBe(200);
-    expect(['دسته‌بندی زیورها', 'دسته‌ها']).toContain(h1(down.html));
-    const search = await page('/search');
-    expect(search.status).toBe(200);
+    expect(h1(down.html)).toBe('دسته‌بندی زیورها');
+    const track = await page('/orders/track');
+    expect(track.status).toBe(200);
     await fetch(`http://127.0.0.1:${PORT}/__mock/pages?mode=ok`);
   });
 });

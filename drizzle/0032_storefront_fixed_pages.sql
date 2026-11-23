@@ -14,7 +14,9 @@ ALTER TABLE storefront_pages DROP CONSTRAINT chk_storefront_pages_base_kept;
 ALTER TABLE storefront_pages ADD CONSTRAINT chk_storefront_pages_base_kept CHECK (kind = 'custom' OR is_deleted = 0);
 --> statement-breakpoint
 -- A page someone already named `fixed-…` (possible only between 10b and this migration, on a test install) keeps its
--- row and its address; the fixed page of that name is then not made, and the screen and the site go on without it.
+-- row, but the name is no longer one a page of the shop may have: the site answers «پیدا نشد» for it and the row can
+-- only be moved to another address or removed. The fixed page of that name is then not made, and the screen and the
+-- site go on without it.
 INSERT INTO storefront_pages (kind, slug, title) VALUES
   ('fixed', 'fixed-products', 'همهٔ محصولات'),
   ('fixed', 'fixed-categories', 'دسته‌ها'),

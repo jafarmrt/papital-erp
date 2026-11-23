@@ -33,7 +33,9 @@ export function isoOf(stored: string): string {
 const summaryOf = (row: PageRecord): StorefrontPageSummary => ({
   slug: row.slug, kind: isPageKind(row.kind) ? row.kind : 'custom', title: row.published?.title ?? row.title,
   // a real ISO time with its zone (the column is read as UTC text without one): the site works out a day from it
-  noindex: row.published?.noindex === true, updatedAt: isoOf(row.publishedAt ?? row.updatedAt),
+  // a fixed row is words, not a page to visit by this name: it is always sent as not for a search engine, so a site
+  // not yet updated (which knows no such kind and would draw it at `/pages/<name>`) at least does not have it listed
+  noindex: row.published?.noindex === true || row.kind === 'fixed', updatedAt: isoOf(row.publishedAt ?? row.updatedAt),
 });
 
 /** `GET /api/storefront/v1/pages`: the pages on the site now, in the order of their addresses */

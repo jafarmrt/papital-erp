@@ -37,6 +37,8 @@ export type BasePageSlug = typeof BASE_PAGES[number]['slug'];
  * other page may take); `path` is where the page is on the site ('' for «پیدا نشد», which has no address of its own).
  */
 export const FIXED_PAGE_PREFIX = 'fixed-';
+/** the text above a fixed page is a few lines, not an article: the words of «پیدا نشد» ride in every page of the site */
+export const FIXED_PAGE_TEXT_MAX = 2000;
 export const FIXED_PAGES = [
   { slug: 'fixed-products', title: 'همهٔ محصولات', path: '/products' },
   { slug: 'fixed-categories', title: 'دسته‌ها', path: '/categories' },

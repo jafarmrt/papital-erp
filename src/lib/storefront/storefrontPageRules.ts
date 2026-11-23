@@ -4,7 +4,7 @@ import {
   MAP_ADDRESS_MAX, PAGE_ICONS, PAGE_SECTIONS_MAX, PAGE_SEO_DESCRIPTION_MAX, PAGE_SEO_TITLE_MAX, PAGE_SLUG_MAX, PAGE_TITLE_MAX, PEOPLE_MAX, PERSON_CONTACT_MAX,
   PERSON_NAME_MAX, PERSON_ROLE_MAX, PRODUCT_ROW_MAX, Refused, SECTION_BACKGROUNDS, SECTION_KINDS, SECTION_KIND_TITLES, SECTION_TEXT_MAX, SECTION_TITLE_MAX,
   RESERVED_PAGE_SLUG_MESSAGE, SHIPPING_SECTION_PAGE, assetId, fa, isId, isRecord, isReservedPageSlug, link, list, oneOf, onlyKeys, refuse, text, type BasePageSlug, type GalleryImage, type IconCard,
-  type PageProblem, type PageSection, type PageValues, type Person,
+  type PageProblem, type PageSection, type PageValues, type Person, FIXED_PAGE_TEXT_MAX,
 } from './storefrontPageParts.js';
 import { docAssetIds, docIsEmpty, richDoc } from './storefrontPageRichText.js';
 
@@ -168,6 +168,10 @@ export const pageItemIds = (page: Pick<PageValues, 'sections'>): number[] => [
 ];
 
 const FIXED_PAGE_TEXT_ONLY = 'صفحهٔ ثابت فقط یک «متن» بالای صفحه می‌گیرد.';
+/** the letters of a text, without its formatting */
+const docChars = (node: { text?: string; content?: unknown[] }): number => (
+  (typeof node.text === 'string' ? node.text.length : 0) + (Array.isArray(node.content) ? node.content : []).reduce<number>((sum, child) => sum + docChars(child as { text?: string; content?: unknown[] }), 0)
+);
 
 export type CheckedPage = { page: PageValues; problem: null } | { page: null; problem: PageProblem };
 
@@ -210,6 +214,9 @@ export function checkedPage(raw: unknown, options: { forPublish: boolean; baseSl
       section = index;
       const kept = sectionOf(rawSection);
       if (fixedSlug !== null && kept.kind !== 'text') return refuse(FIXED_PAGE_TEXT_ONLY, 'STOREFRONT_PAGE_SECTION_INVALID');
+      if (fixedSlug !== null && kept.kind === 'text' && docChars(kept.doc) > FIXED_PAGE_TEXT_MAX) {
+        return refuse(`متن بالای صفحهٔ ثابت حداکثر ${fa(FIXED_PAGE_TEXT_MAX)} نویسه است.`, 'STOREFRONT_PAGE_SECTION_INVALID');
+      }
       if (kept.kind === 'shippingMethods' && options.baseSlug !== SHIPPING_SECTION_PAGE) {
         return refuse('بخش «روش‌ها و هزینهٔ ارسال» فقط در صفحهٔ «ارسال و پرداخت» می‌آید.', 'STOREFRONT_PAGE_SECTION_INVALID');
       }

@@ -141,7 +141,8 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
     });
   };
   const DONE: Readonly<Record<PageAction, string>> = {
-    publish: 'صفحه روی سایت منتشر شد.', revert: 'پیش‌نویس به نسخهٔ روی سایت برگشت.', unpublish: 'صفحه از روی سایت برداشته شد.',
+    publish: fixed ? 'متن این صفحه روی سایت منتشر شد.' : 'صفحه روی سایت منتشر شد.', revert: 'پیش‌نویس به نسخهٔ روی سایت برگشت.',
+    unpublish: fixed ? 'متن این صفحه از روی سایت برداشته شد؛ خود صفحه می‌ماند.' : 'صفحه از روی سایت برداشته شد.',
   };
   // «انتشار», «برگرداندن» and «برداشتن» act on the saved draft, so they wait for a screen with nothing unsaved and
   // always go out under the version this screen has read
@@ -243,7 +244,7 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
           {draft.sections.length === 0 && <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-xs text-slate-500">{fixed ? 'این صفحه متنی بالای خود ندارد. اگر می‌خواهید، از پایین یک متن بیفزایید.' : 'این صفحه هنوز بخشی ندارد. نخستین بخش را از پایین بیفزایید.'}</p>}
           <ol className="space-y-3">
             {draft.sections.map((section, index) => {
-              const name = `بخش ${formatPersianNumber(index + 1)}، ${SECTION_KIND_TITLES[section.kind]}`;
+              const name = fixed ? 'متن بالای صفحه' : `بخش ${formatPersianNumber(index + 1)}، ${SECTION_KIND_TITLES[section.kind]}`;
               return (
                 <li key={keys[index] ?? index} aria-label={name} className={`${card} ${problem?.section === index ? 'border-rose-400' : ''}`}>
                   <div className="flex flex-wrap items-center gap-2">
@@ -253,8 +254,8 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
                       onChange={e => setSection(index, { ...section, background: e.target.value as SectionBackground })}>
                       {SECTION_BACKGROUNDS.map(background => <option key={background} value={background}>{SECTION_BACKGROUND_TITLES[background]}</option>)}
                     </select>
-                    <button type="button" className={iconButton} disabled={index === 0} aria-label={`${name}: بالا`} onClick={() => moveSection(index, index - 1)}><ArrowUp className="h-4 w-4" /></button>
-                    <button type="button" className={iconButton} disabled={index === draft.sections.length - 1} aria-label={`${name}: پایین`} onClick={() => moveSection(index, index + 1)}><ArrowDown className="h-4 w-4" /></button>
+                    <button type="button" hidden={fixed} className={iconButton} disabled={index === 0} aria-label={`${name}: بالا`} onClick={() => moveSection(index, index - 1)}><ArrowUp className="h-4 w-4" /></button>
+                    <button type="button" hidden={fixed} className={iconButton} disabled={index === draft.sections.length - 1} aria-label={`${name}: پایین`} onClick={() => moveSection(index, index + 1)}><ArrowDown className="h-4 w-4" /></button>
                     <button type="button" className={`${iconButton} text-rose-600`} aria-label={`حذف ${name}`} onClick={() => removeSection(index)}><Trash2 className="h-4 w-4" /></button>
                   </div>
                   <SectionFields section={section} name={`بخش ${formatPersianNumber(index + 1)}`} disabled={disabled} assets={assets} options={options} onChange={next => setSection(index, next)} />
@@ -262,7 +263,7 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
               );
             })}
           </ol>
-          {canManage && (
+          {canManage && !(fixed && draft.sections.length >= 1) && (
             <div className="flex flex-wrap items-end gap-2 rounded-2xl border border-slate-200 bg-white p-3">
               <div>
                 <label htmlFor={`${id}-add`} className={label}>بخش تازه</label>
@@ -321,7 +322,7 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
             <p className="text-xs text-amber-800">{`برای انتشار: ${notReady.section >= 0 ? `بخش ${formatPersianNumber(notReady.section + 1)}، ` : ''}${notReady.message.replace(/^بخش [۰-۹]+: /, '')}`}</p>
           )}
           {asking !== 'none' && (
-            <PageActionConfirm ref={confirmation} asking={asking} ownWords={detail.kind !== 'custom'} dirty={dirty} linkedFrom={linkedFrom} busy={busy}
+            <PageActionConfirm ref={confirmation} asking={asking} kind={detail.kind} dirty={dirty} linkedFrom={linkedFrom} busy={busy}
               onYes={() => (asking === 'delete' ? removePage() : run(asking))} onNo={() => setAsking('none')} />
           )}
         </div>
