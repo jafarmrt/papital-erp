@@ -10,7 +10,7 @@ import { FIXED_PAGES } from '../../lib/storefront/storefrontPageRules.js';
 /**
  * v12 phase 10c (owner's decision 23, migration 0032; docs/roadmap/V12_SITE_NEXT_START_PLAN.md §7.2, `AGENTS.md` §1.9c):
  * the words of the pages whose work is in the site's code, on real Express routes and PostgreSQL. Migration 0032 makes
- * nine rows of kind 'fixed', unpublished. A row takes a title, at most one text and the search words, under its own
+ * a row of kind 'fixed' each (nine by migration 0032, a tenth for the list of news by 0034), unpublished. A row takes a title, at most one text and the search words, under its own
  * name; it is never removed, moved or previewed, and no other page takes a name under `fixed-`. Published, its words
  * go to the site by name (`GET /v1/pages/<name>`, kind 'fixed') and are in no list of pages; unpublished, the name is a
  * 404 again and the site keeps its own words.
@@ -59,7 +59,7 @@ export async function runStorefrontFixedPagesV12Tests(shouldRun: (id: string, ..
     const apiKey = String((await erp.post('/api/storefront/api-key')).body.data?.apiKey ?? '');
     const site = (url: string) => request(app).get(`/api/storefront/v1${url}`).set('Authorization', `Bearer ${apiKey}`);
 
-    // 1) the nine rows of the migration: after the base pages, in their order, with the words of today as their titles
+    // 1) the rows of the migrations (nine of 0032, the tenth of 0034): after the base pages, in their order, with the words of today as their titles
     const list = (await erp.get('/api/storefront/pages')).body.data as Array<{ id: number; kind: string; slug: string; title: string; status: string }>;
     const fixedRows = list.filter(row => row.kind === 'fixed');
     if (fixedRows.map(row => `${row.slug}:${row.title}`).join(',') !== FIXED_PAGES.map(page => `${page.slug}:${page.title}`).join(',')) {
@@ -170,7 +170,7 @@ export async function runStorefrontFixedPagesV12Tests(shouldRun: (id: string, ..
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'the nine fixed rows of migration 0032 were there after the base pages, unpublished and 404 on the site; a row refused another name, a second text, a part that is no text, the search switch, a share image and a text past 2000 letters, and saved its title, one text and the search words; it was not removed, moved or previewed; a new page, a saved draft and a move could not take a name under fixed-; published, its words went to the site by name with kind fixed and no field of the row, were in no list of pages and not offered to a menu; a title alone could be published; taken off, the name was a 404 again; the constraints refused another kind and a removed fixed row',
+      details: 'the fixed rows of migrations 0032 and 0034 were there after the base pages, unpublished and 404 on the site; a row refused another name, a second text, a part that is no text, the search switch, a share image and a text past 2000 letters, and saved its title, one text and the search words; it was not removed, moved or previewed; a new page, a saved draft and a move could not take a name under fixed-; published, its words went to the site by name with kind fixed and no field of the row, were in no list of pages and not offered to a menu; a title alone could be published; taken off, the name was a 404 again; the constraints refused another kind and a removed fixed row',
     }));
   } catch (err) {
     results.push(makeTestCase({

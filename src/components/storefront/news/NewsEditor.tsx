@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { useDeleteNewsMutation, useNewsActionMutation, useSaveNewsMutation, type NewsAction } from '../../../hooks/queries/useStorefrontNewsQueries';
 import type { NewsDetail } from '../../../lib/storefront/storefrontNewsContracts';
 import { NEWS_SECTION_KINDS, NEWS_SUMMARY_MAX, checkedNews, type NewsValues } from '../../../lib/storefront/storefrontNewsRules';
+import { MENU_LOCATION_TITLES, isMenuLocation } from '../../../lib/storefront/storefrontMenuRules';
 import { PAGE_STATUS_TITLES } from '../../../lib/storefront/storefrontPageContracts';
 import {
   PAGE_SECTIONS_MAX, PAGE_SEO_DESCRIPTION_MAX, PAGE_SEO_TITLE_MAX, PAGE_SLUG_MAX, PAGE_TITLE_MAX, SECTION_KIND_TITLES, emptySection, type PageSection, type SectionKind,
@@ -76,6 +77,8 @@ export function NewsEditor({ detail, canManage, onBack, onDeleted }: { detail: N
   const busy = save.isPending || act.isPending || remove.isPending;
   const disabled = !canManage || busy;
   const onSite = base.status !== 'draft';
+  // the menus that link to this item, as a phrase: the question before a removal says what it touches
+  const linkedFrom = (Array.isArray(detail.menuPlaces) ? detail.menuPlaces : []).map(place => `«${isMenuLocation(place) ? MENU_LOCATION_TITLES[place] : place}»`).join(' و ');
 
   const assets: AssetTitles = {
     titleOf: assetId => (assetId === null ? '' : (pickedTitles[assetId] ?? detail.assets.find(a => a.assetId === assetId)?.title ?? '')),
@@ -264,7 +267,16 @@ export function NewsEditor({ detail, canManage, onBack, onDeleted }: { detail: N
           )}
           {asking !== 'none' && (
             <div ref={confirmation} tabIndex={-1} role="group" aria-label="تأیید این کار" className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
-              <p className="min-w-0 flex-1">{`${QUESTION[asking]}${asking === 'delete' && dirty ? ' تغییرهای ذخیره‌نشدهٔ آن هم از میان می‌رود.' : ''}`}</p>
+              <p className="min-w-0 flex-1">
+                {`${QUESTION[asking]}${asking === 'delete' && dirty ? ' تغییرهای ذخیره‌نشدهٔ آن هم از میان می‌رود.' : ''}`}
+                {asking !== 'revert' && linkedFrom && (
+                  <span data-menu-warning className="mt-1 block font-bold">
+                    {asking === 'delete'
+                      ? `این خبر در ${linkedFrom} پیوند دارد. آن پیوند دیگر روی سایت نمی‌آید؛ پس از حذف، آن گزینه را در «فهرست‌های سایت» بردارید یا به خبر دیگری بدهید.`
+                      : `این خبر در ${linkedFrom} پیوند دارد. تا انتشار دوباره، آن پیوند روی سایت نمی‌آید.`}
+                  </span>
+                )}
+              </p>
               <button type="button" disabled={busy} onClick={() => (asking === 'delete' ? removeNews() : run(asking))} className="rounded-lg bg-amber-800 px-3 py-1.5 font-bold text-white disabled:opacity-50">بله، انجام شود</button>
               <button type="button" onClick={() => setAsking('none')} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 font-bold">انصراف</button>
             </div>

@@ -24,7 +24,7 @@ export const MENU_LOCATION_HINTS: Readonly<Record<MenuLocation, string>> = {
 };
 
 /** Where an item leads. `none` is a heading that only opens its children */
-export const MENU_LINK_KINDS = ['none', 'page', 'content', 'category', 'collection', 'campaign', 'product', 'path', 'url'] as const;
+export const MENU_LINK_KINDS = ['none', 'page', 'content', 'news', 'category', 'collection', 'campaign', 'product', 'path', 'url'] as const;
 export type MenuLinkKind = typeof MENU_LINK_KINDS[number];
 export const isMenuLinkKind = (value: unknown): value is MenuLinkKind => (MENU_LINK_KINDS as readonly unknown[]).includes(value);
 
@@ -35,6 +35,8 @@ export const MENU_LINK_KIND_TITLES: Readonly<Record<MenuLinkKind, string>> = {
   collection: 'کالکشن',
   // v12 phase 10c: a page written in «صفحه‌های سایت», named by its row so the link follows a change of its address
   content: 'صفحهٔ متنی',
+  // v12 phase 10d: one news item of «خبرهای سایت», named by its row (the list of news is one of «صفحه‌ای از سایت»)
+  news: 'خبر',
   campaign: 'صفحهٔ ویژه',
   product: 'محصول',
   path: 'نشانی درون سایت',
@@ -52,6 +54,8 @@ export const MENU_SITE_PAGES = {
   track: { title: 'پیگیری سفارش', path: '/orders/track' },
   wholesale: { title: 'درخواست خرید عمده', path: '/wholesale' },
   corporate_gift: { title: 'هدیهٔ سازمانی', path: '/corporate-gift' },
+  // v12 phase 10d: the list of news; the site shows the link only while it has news
+  news: { title: 'خبرها', path: '/news' },
   about: { title: 'دربارهٔ پاپیتال', path: '/about' },
   contact: { title: 'تماس با ما', path: '/contact' },
   shipping: { title: 'ارسال و پرداخت', path: '/shipping' },
@@ -90,6 +94,8 @@ export interface MenuItemValues {
   itemId: number | null;
   campaignId: number | null;
   pageId: number | null;
+  /** v12 phase 10d: the news item a 'news' link names */
+  newsId: number | null;
   icon: MenuIcon | '';
   isActive: boolean;
   children: MenuItemValues[];
@@ -104,6 +110,7 @@ export interface MenuItemDraft {
   itemId?: number | null;
   campaignId?: number | null;
   pageId?: number | null;
+  newsId?: number | null;
   icon?: unknown;
   isActive?: unknown;
   children?: MenuItemDraft[];
@@ -133,6 +140,7 @@ export function normalizedMenuItem(location: MenuLocation, draft: MenuItemDraft)
     itemId: kind === 'product' && typeof draft.itemId === 'number' ? draft.itemId : null,
     campaignId: kind === 'campaign' && typeof draft.campaignId === 'number' ? draft.campaignId : null,
     pageId: kind === 'content' && typeof draft.pageId === 'number' ? draft.pageId : null,
+    newsId: kind === 'news' && typeof draft.newsId === 'number' ? draft.newsId : null,
     icon: location === 'bottom' && isMenuIcon(draft.icon) ? draft.icon : '',
     isActive: draft.isActive !== false,
     children: location === 'bottom' ? [] : (draft.children ?? []).map(child => normalizedMenuItem(location, { ...child, children: [] })),
@@ -188,6 +196,9 @@ function itemProblem(location: MenuLocation, item: MenuItemValues, where: string
       break;
     case 'content':
       if (!item.pageId) return problem(`صفحهٔ متنی «${item.label}» را برگزینید.`, target, 'STOREFRONT_MENU_TARGET_REQUIRED');
+      break;
+    case 'news':
+      if (!item.newsId) return problem(`خبر «${item.label}» را برگزینید.`, target, 'STOREFRONT_MENU_TARGET_REQUIRED');
       break;
     case 'product':
       if (!item.itemId) return problem(`محصول «${item.label}» را برگزینید.`, target, 'STOREFRONT_MENU_TARGET_REQUIRED');
@@ -251,7 +262,7 @@ export function menuRuleHref(kind: MenuLinkKind, target: string): string | null 
 export function currentSiteMenu(location: MenuLocation, site: { categories: readonly string[]; collections: readonly string[] }): MenuItemValues[] {
   const link = (label: string, kind: MenuLinkKind, target: string, icon: MenuIcon | '' = '', children: MenuItemValues[] = []): MenuItemValues => ({
     id: null, label: label.slice(0, location === 'bottom' ? MENU_BOTTOM_LABEL_MAX : MENU_LABEL_MAX), kind, target,
-    itemId: null, campaignId: null, pageId: null, icon, isActive: true, children,
+    itemId: null, campaignId: null, pageId: null, newsId: null, icon, isActive: true, children,
   });
   const shop = [link('همهٔ محصولات', 'page', 'products'), ...site.categories.map(c => link(c, 'category', c))];
   if (location === 'bottom') {

@@ -36,7 +36,7 @@ const row = (over: Partial<NewsListRow>): NewsListRow => ({
 const DRAFT: NewsDetail = {
   ...row({}),
   draft: { title: 'کالکشن تازه رسید', slug: 'new-collection', summary: '', coverAssetId: null, newsDate: '', seoTitle: '', seoDescription: '', sections: [] },
-  assets: [],
+  assets: [], menuPlaces: [],
 };
 const ROWS = [DRAFT, row({ id: 6, slug: 'yalda', title: 'یلدا در گالری', status: 'published', newsDate: '2026-12-20', publishedDate: '2026-12-20', scheduled: true })];
 
@@ -140,6 +140,26 @@ describe('the news of the site in the ERP', () => {
     fireEvent.click(within(question).getByRole('button', { name: 'بله، انجام شود' }));
     await waitFor(() => expect(calls('DELETE')).toHaveLength(1));
     expect(calls('DELETE')[0][0]).toBe('/storefront/news/5?version=2');
+  });
+
+  it('says which menus link to an item before it is removed or taken off the site (v12 phase 10d, part 3)', async () => {
+    permissions.current = ['site_content.view', 'site_content.manage'];
+    open('/site-news?item=5', { ...CHANGED, menuPlaces: ['header', 'footer'] });
+    await screen.findByLabelText('عنوان خبر');
+    const warning = () => screen.getByRole('group', { name: 'تأیید این کار' }).querySelector('[data-menu-warning]')?.textContent ?? '';
+    fireEvent.click(screen.getByRole('button', { name: 'حذف خبر' }));
+    expect(warning()).toMatch(/^این خبر در «[^»]+» و «[^»]+» پیوند دارد\. آن پیوند دیگر روی سایت نمی‌آید/);
+    fireEvent.click(screen.getByRole('button', { name: 'برداشتن از روی سایت' }));
+    expect(warning()).toContain('تا انتشار دوباره، آن پیوند روی سایت نمی‌آید.');
+    // throwing the draft's changes away touches no link
+    fireEvent.click(screen.getByRole('button', { name: 'برگرداندن به نسخهٔ روی سایت' }));
+    expect(warning()).toBe('');
+    cleanup();
+    fetchJson.mockReset();
+    // an item no menu links to is removed with no such word
+    open('/site-news?item=5', CHANGED);
+    fireEvent.click(await screen.findByRole('button', { name: 'حذف خبر' }));
+    expect(warning()).toBe('');
   });
 
   it('shows an item without any way to change it to a holder of the view key', async () => {

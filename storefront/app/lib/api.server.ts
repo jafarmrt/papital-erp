@@ -312,7 +312,7 @@ export async function newsIndex(): Promise<SiteNewsIndexRow[]> {
   }
 }
 
-/** The last copy read of each base page and each fixed page's words (fourteen at most), to show while the ERP cannot be read */
+/** The last copy read of each base page and each fixed page's words (fifteen at most), to show while the ERP cannot be read */
 const lastGoodBasePage = new Map<string, SitePage>();
 /**
  * When such a read last failed: for half a minute the ERP is not asked again for that page (the words of «پیدا نشد» are

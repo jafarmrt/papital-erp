@@ -25,6 +25,8 @@ export interface NewsDetail extends NewsListRow {
   draft: NewsValues;
   /** the images the draft names, with their titles */
   assets: PageAssetInfo[];
+  /** v12 phase 10d, part 3: the places of «فهرست‌های سایت» with a link to this item (also one switched off), so taking it off the site can say what it touches */
+  menuPlaces: string[];
 }
 
 export interface NewsList {

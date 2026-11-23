@@ -39,6 +39,8 @@ export const STOREFRONT_FIXED_PAGE_ROWS: ReadonlyArray<{ kind: 'fixed'; slug: st
   { kind: 'fixed', slug: 'fixed-order-track', title: 'پیگیری سفارش' },
   { kind: 'fixed', slug: 'fixed-account', title: 'حساب من' },
   { kind: 'fixed', slug: 'fixed-not-found', title: 'این صفحه پیدا نشد' },
+  // v12 phase 10d (migration 0034): the words above the site's list of news
+  { kind: 'fixed', slug: 'fixed-news', title: 'خبرها' },
 ];
 
 export const storefrontPages = pgTable('storefront_pages', {
