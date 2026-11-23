@@ -169,7 +169,7 @@ export function NewsEditor({ detail, canManage, onBack, onDeleted }: { detail: N
             <div>
               <label htmlFor={`${id}-date`} className={label}>تاریخ خبر (اختیاری)</label>
               <JalaliDateInput id={`${id}-date`} className={field} value={draft.newsDate} onChange={iso => set('newsDate', iso)} disabled={disabled} />
-              <p className={hint}>اگر خالی بماند، روز انتشار نوشته می‌شود. با تاریخی در آینده، خبر پس از «انتشار» در همان روز خودش روی سایت می‌آید.</p>
+              <p className={hint}>اگر خالی بماند، روز انتشار نوشته می‌شود (خبری که روی سایت است تاریخ روی سایتش را نگه می‌دارد). با تاریخی در آینده، خبر پس از «انتشار» در همان روز خودش روی سایت می‌آید.</p>
               {detail.publishedDate && detail.publishedDate !== draft.newsDate && <p className={hint}>{`تاریخ این خبر روی سایت: ${formatPersianDate(detail.publishedDate)}`}</p>}
             </div>
             <div>

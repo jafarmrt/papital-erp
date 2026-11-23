@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import toast from 'react-hot-toast';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -23,6 +24,7 @@ vi.mock('../../contexts/AuthContext', async () => {
 });
 
 const StorefrontPagesPage = (await import('../../pages/StorefrontPagesPage')).default;
+const { PAGES_KEY } = await import('../../hooks/queries/useStorefrontPageQueries');
 
 const text = (words: string, background: PageSection['background'] = 'white'): PageSection => ({
   kind: 'text', background, doc: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: words }] }] },
@@ -48,6 +50,8 @@ function open(first: PageDetail) {
     if (url === '/storefront/menus/link-options') return { data: { categories: [], collections: [], campaigns: [], products: [] } };
     if (url === '/storefront/pages' && !init) return { data: [] };
     if (url === '/storefront/pages/9' && !init) return { data: detail };
+    // an action that changes nothing answers with the page as it is, its version too
+    if (init?.method === 'POST' && url.startsWith('/storefront/pages/9/')) return { data: detail };
     if (init?.method === 'PUT') {
       detail = { ...detail, version: detail.version + 1, draft: (({ version: _v, ...draft }) => draft)(JSON.parse(init.body ?? '{}')) };
       return { data: detail };
@@ -56,6 +60,7 @@ function open(first: PageDetail) {
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/site-pages?page=9']}><StorefrontPagesPage /></MemoryRouter></QueryClientProvider>);
+  return client;
 }
 
 const sections = () => within(screen.getByRole('region', { name: 'بخش‌های صفحه' })).getAllByRole('listitem').filter(li => li.getAttribute('aria-label')?.startsWith('بخش '));
@@ -136,5 +141,21 @@ describe('the page builder with its real text editor', () => {
     expect(screen.getByText(/«برداشتن از روی سایت» پس از ذخیرهٔ پیش‌نویس روشن می‌شوند/)).toBeTruthy();
     expect(title.value).toBe('عنوان ذخیره‌نشده');
     expect(calls('POST')).toHaveLength(0);
+  });
+
+  it('never lets a colleague\'s newer version overwrite unsaved edits after an action of its own that changed nothing', async () => {
+    const first = detailOf([text('متن')], { status: 'changed', publishedAt: '2026-11-21 10:00:00' });
+    const client = open(first);
+    const title = await screen.findByLabelText('عنوان صفحه') as HTMLInputElement;
+    const publish = screen.getByRole('button', { name: 'انتشار روی سایت' }) as HTMLButtonElement;
+    await waitFor(() => expect(publish.disabled).toBe(false));
+    fireEvent.click(publish);
+    await waitFor(() => expect(calls('POST')).toHaveLength(1));
+    await waitFor(() => expect(vi.mocked(toast.success)).toHaveBeenCalled());
+    fireEvent.change(title, { target: { value: 'ویرایش من' } });
+    // red before: the screen still took the next version for its own and replaced the unsaved title without a word
+    act(() => { client.setQueryData([...PAGES_KEY, 'detail', 9], { ...first, version: 5, title: 'عنوان همکار', draft: { ...first.draft, title: 'عنوان همکار' } }); });
+    expect(await screen.findByText(/همکار دیگری این صفحه را در همین فاصله عوض کرده است/)).toBeTruthy();
+    expect(title.value).toBe('ویرایش من');
   });
 });

@@ -56,6 +56,14 @@ describe('a news item of the site', () => {
     expect(unknownNode?.message).toContain('خبر');
     expect(unknownNode?.message).not.toContain('صفحه');
     expect(problem(news({ coverAssetId: 'seven' }))?.message).toContain('تصویر شاخص');
+    // no message a news item can get is left half said of a page («صفحهٔ …» would become a broken word)
+    const told = [
+      news({ slug: 'feed' }), news({ slug: 'Bad Address' }), news({ title: '' }), news({ sections: 'x' }), news({ sections: [5] }), news({ sections: [{ kind: 'nothing' }] }),
+      news({ sections: [text({ type: 'iframe' })] }), news({ sections: [{ ...gallery(1), images: 'x' }] }), news({ coverAssetId: -1 }), news({ seoTitle: 5 }),
+      news({ sections: [{ kind: 'shippingMethods', background: 'white', title: '' }] }),
+    ].map(raw => problem(raw)?.message ?? '');
+    expect(told.every(message => message.length > 0)).toBe(true);
+    expect(told.join(' | ')).not.toMatch(/صفحه|خبرٔ|our-story/);
     // the summary is one plain line: half of a broken emoji (which PostgreSQL refuses) and a direction mark are refused
     for (const code of [0xd800, 0xdc00, 0x202e, 0x2066, 0x0085]) {
       expect(problem(news({ summary: `a${String.fromCharCode(code)}b` })), code.toString(16)).toMatchObject({ field: 'summary', code: 'STOREFRONT_NEWS_FIELD_INVALID' });

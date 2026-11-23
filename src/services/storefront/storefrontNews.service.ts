@@ -60,10 +60,10 @@ async function detailOf(executor: DbExecutor, row: NewsRecord): Promise<NewsDeta
 export async function listNews(executor: DbExecutor, page: number): Promise<NewsList> {
   const live = eq(storefrontNews.isDeleted, 0);
   const [{ total }] = await executor.select({ total: sql<number>`count(*)::int` }).from(storefrontNews).where(live);
-  // an item without a day is placed by the day it was made, as that day was in the business time zone
+  // an item without a day is placed by the day it has on the site, else by the day it was made (in the business time zone)
   const timeZone = await getDisplayTimezone();
   const rows = await executor.select().from(storefrontNews).where(live)
-    .orderBy(sql`coalesce(${storefrontNews.newsDate}, to_char(${storefrontNews.createdAt} AT TIME ZONE ${timeZone}::text, 'YYYY-MM-DD')) DESC`, desc(storefrontNews.id))
+    .orderBy(sql`coalesce(${storefrontNews.newsDate}, ${storefrontNews.publishedDate}, to_char(${storefrontNews.createdAt} AT TIME ZONE ${timeZone}::text, 'YYYY-MM-DD')) DESC`, desc(storefrontNews.id))
     .limit(NEWS_PAGE_SIZE).offset((page - 1) * NEWS_PAGE_SIZE);
   const today = await businessTodayIsoDate();
   return { data: rows.map(row => listRowOf(row, today)), total, page, pageSize: NEWS_PAGE_SIZE };
@@ -98,10 +98,11 @@ async function refuseTakenSlug(tx: DbExecutor, slug: string): Promise<void> {
 }
 /** Two requests that took one address at the same moment: the second is stopped by the unique index and gets the same answer */
 function slugRace(err: unknown): never {
-  type PgError = { code?: string; message?: string; constraint?: string };
-  const e = err as (PgError & { cause?: PgError }) | null;
-  const text = `${e?.constraint ?? ''} ${e?.cause?.constraint ?? ''} ${e?.message ?? ''} ${e?.cause?.message ?? ''}`;
-  if ((e?.cause?.code ?? e?.code) === '23505' && text.includes('uq_storefront_news_slug_live')) throw slugTaken();
+  // by the constraint's own name, never by the text of the error (which carries what the request sent)
+  for (let e: unknown = err, depth = 0; e && typeof e === 'object' && depth < 3; e = (e as { cause?: unknown }).cause, depth++) {
+    const pg = e as { code?: unknown; constraint?: unknown };
+    if (pg.code === '23505' && pg.constraint === 'uq_storefront_news_slug_live') throw slugTaken();
+  }
   throw err;
 }
 

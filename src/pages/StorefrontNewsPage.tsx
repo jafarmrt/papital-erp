@@ -67,7 +67,8 @@ export default function StorefrontNewsPage() {
   const total = list.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / (list.data?.pageSize ?? 50)));
   // the page being shown can end when its last item is removed (here or by a colleague): the list goes to its last page
-  const lastPage = list.data && !list.isPlaceholderData ? pages : null;
+  // only a fresh answer says so: a kept answer of that page can carry an older, smaller total
+  const lastPage = list.data && !list.isPlaceholderData && !list.isFetching ? pages : null;
   useEffect(() => { if (lastPage !== null && page > lastPage) setPage(lastPage); }, [lastPage, page]);
   const open = (id: number | null) => setParams(id === null ? {} : { item: String(id) }, { replace: false });
 
@@ -115,7 +116,7 @@ export default function StorefrontNewsPage() {
           {pages > 1 && (
             <nav aria-label="صفحه‌های فهرست خبرها" className="flex items-center justify-center gap-2 text-xs text-slate-600">
               <button type="button" className={pager} disabled={page <= 1} onClick={() => setPage(page - 1)}>قبلی</button>
-              <span>{`صفحهٔ ${formatPersianNumber(page)} از ${formatPersianNumber(pages)}`}</span>
+              <span>{`صفحهٔ ${formatPersianNumber(Math.min(page, pages))} از ${formatPersianNumber(pages)}`}</span>
               <button type="button" className={pager} disabled={page >= pages} onClick={() => setPage(page + 1)}>بعدی</button>
             </nav>
           )}

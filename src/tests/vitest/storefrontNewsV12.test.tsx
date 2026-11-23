@@ -237,4 +237,18 @@ describe('the news of the site in the ERP', () => {
     expect(screen.queryByText('هنوز خبری ساخته نشده است.')).toBeNull();
     expect((fetchJson.mock.calls as Call[]).map(([url]) => url).filter(url => url.includes('?page='))).toEqual(expect.arrayContaining(['/storefront/news?page=1', '/storefront/news?page=2', '/storefront/news?page=3']));
   });
+
+  it('says there is no news yet only when there is none at all', async () => {
+    permissions.current = ['site_content.view'];
+    // a page with no row of a list that has items (its items were just removed) is not an empty list
+    open('/site-news', DRAFT, { list: page => ({ data: [], total: 7, page, pageSize: 50 }) });
+    await waitFor(() => expect(fetchJson).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('در حال خواندن…')).toBeNull());
+    expect(screen.queryByText('هنوز خبری ساخته نشده است.')).toBeNull();
+    cleanup();
+    fetchJson.mockReset();
+    open('/site-news', DRAFT, { list: page => ({ data: [], total: 0, page, pageSize: 50 }) });
+    expect(await screen.findByText('هنوز خبری ساخته نشده است.')).toBeTruthy();
+    expect(screen.queryByRole('navigation', { name: 'صفحه‌های فهرست خبرها' })).toBeNull();
+  });
 });

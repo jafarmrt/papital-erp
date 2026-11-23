@@ -28,6 +28,8 @@ export async function runStorefrontNewsV12Tests(shouldRun: (id: string, ...extra
   let sectionId = 0;
   let twinId = 0;
   let twinBefore: typeof storefrontPages.$inferSelect | null = null;
+  // what was found wrong so far is told also when a later step throws
+  const wrong: string[] = [];
   const tag = String(Date.now()).slice(-7);
   try {
     const { getTestApp, getAdminSession, loginTestUserWithSession } = await import('../fixtures/httpTestHelper.js');
@@ -41,7 +43,6 @@ export async function runStorefrontNewsV12Tests(shouldRun: (id: string, ...extra
       del: (url: string) => request(app).delete(url).set('Cookie', s.cookie).set('x-csrf-token', s.csrfToken),
     });
     const erp = as(admin);
-    const wrong: string[] = [];
     const refusedCode = (res: { status: number; body: { code?: string } }) => `${res.status} ${res.body.code ?? ''}`;
     /** the newest audit row of an item is the one of the change just made: its action, a word of its sentence, and the sides it keeps */
     const audited = async (itemId: number, what: string, action: string, word: string, sides: string[]) => {
@@ -155,6 +156,8 @@ export async function runStorefrontNewsV12Tests(shouldRun: (id: string, ...extra
       || dayOnlyAgain.body.data?.publishedDate !== today || dayOnlyAgain.body.data?.version !== dayOnly.body.data?.version) {
       wrong.push(`the day alone emptied: ${dayOnly.status} ${dayOnly.body.data?.status} / ${dayOnlyAgain.status} ${dayOnlyAgain.body.data?.status} v${dayOnlyAgain.body.data?.version}`);
     }
+    const dayOnlyBack = await erp.post(`/api/storefront/news/${newsId}/revert`, { version: Number(dayOnlyAgain.body.data?.version) });
+    if (dayOnlyBack.status !== 200 || dayOnlyBack.body.data?.version !== dayOnlyAgain.body.data?.version) wrong.push(`reverting the day alone emptied: ${dayOnlyBack.status} v${dayOnlyBack.body.data?.version}`);
     version = Number(dayOnlyAgain.body.data?.version);
 
     // 5) a changed draft leaves the site as it is; an address cannot change while the item is on the site; «برگرداندن» throws the change away
@@ -235,6 +238,7 @@ export async function runStorefrontNewsV12Tests(shouldRun: (id: string, ...extra
     const [savedGone, publishedGone] = [await erp.put(`/api/storefront/news/${newsId}`, form(version + 1)), await erp.post(`/api/storefront/news/${newsId}/publish`, { version: version + 1 })];
     if (savedGone.status !== 404 || publishedGone.status !== 404) wrong.push(`a change to a removed item: ${savedGone.status}/${publishedGone.status}`);
     // an item removed while it is on the site leaves the site with it: no copy, no day, its image rows switched off
+    if (reuse.status !== 201) throw new Error(`the address of a removed item: ${refusedCode(reuse)}`);
     const secondId = Number(reuse.body.data?.id);
     const secondSaved = await erp.put(`/api/storefront/news/${secondId}`, form(1));
     const secondOn = await erp.post(`/api/storefront/news/${secondId}/publish`, { version: Number(secondSaved.body.data?.version) });
@@ -246,6 +250,8 @@ export async function runStorefrontNewsV12Tests(shouldRun: (id: string, ...extra
       wrong.push(`removing an item on the site: ${secondOn.body.data?.status}/${secondGone.status} deleted ${secondRow.isDeleted}, copy ${secondRow.published === null ? 'gone' : 'kept'}, image rows ${secondImages.map(r => r.isDeleted).join(',')}`);
     }
 
+    const copy0 = { title: 'x', summary: '', coverAssetId: null, newsDate: '2097-03-22', seoTitle: '', seoDescription: '', sections: [] };
+    const copy = { ...copy0, newsDate: '2026-11-23' };
     // 9) the list: the newest day first, then the newest made, a page at a time, and never a removed item
     await orm.insert(storefrontNews).values(Array.from({ length: 51 }, (_, i) => ({ slug: `bulk-${i}-${tag}`, title: `خبر ${i}`, newsDate: i === 7 ? '2098-06-01' : null })));
     const [{ live }] = await orm.select({ live: sql<number>`count(*)::int` }).from(storefrontNews).where(eq(storefrontNews.isDeleted, 0));
@@ -258,9 +264,24 @@ export async function runStorefrontNewsV12Tests(shouldRun: (id: string, ...extra
       wrong.push(`the list: total ${first.total} of ${live}, page one ${first.data.length} from «${first.data[0]?.slug}», page two ${next.data.length}, in order ${descending}`);
     }
 
+    // an item without a day is placed by its day on the site, else by the day it was made as that day was in Tehran:
+    // 20:35 UTC on the 20th is already the 21st there
+    await orm.insert(storefrontNews).values([
+      { slug: `day-a-${tag}`, title: 'الف', newsDate: '2097-03-21' }, { slug: `day-b-${tag}`, title: 'ب', newsDate: '2097-03-20' },
+      { slug: `day-c-${tag}`, title: 'پ', newsDate: null, createdAt: '2097-03-20T20:35:00Z' }, { slug: `day-d-${tag}`, title: 'ت', newsDate: null, createdAt: '2097-03-20T20:25:00Z' },
+      { slug: `day-e-${tag}`, title: 'ث', newsDate: null, published: copy0, publishedAt: new Date().toISOString(), publishedDate: '2097-03-22', createdAt: '2020-01-01T00:00:00Z' },
+    ]);
+    const dayOrder = ((await erp.get('/api/storefront/news')).body.data as ListRow[]).map(r => r.slug).filter(name => name.startsWith('day-')).map(name => name.slice(4, 5)).join('');
+    // e (on the site the 22nd), then the 21st: c (made 00:05 of the 21st in Tehran) above a by its newer id, then the 20th: d above b
+    if (dayOrder !== 'ecadb') wrong.push(`the order of undated items: ${dayOrder}`);
+
+    // two requests that take one address at the same moment: one makes it, each of the others is told it is taken
+    const race = await Promise.all(Array.from({ length: 6 }, () => erp.post('/api/storefront/news', { title: 'هم‌زمان', slug: `race-${tag}` })));
+    const raced = race.map(r => (r.status === 201 ? 'made' : refusedCode(r))).sort();
+    if (raced.filter(r => r === 'made').length !== 1 || raced.filter(r => r === '409 STOREFRONT_NEWS_SLUG_TAKEN').length !== 5) wrong.push(`six requests for one address: ${raced.join(', ')}`);
+
     // 10) the constraints of migration 0033, against a direct write
     const direct = async (values: Partial<typeof storefrontNews.$inferInsert>) => orm.update(storefrontNews).set(values).where(eq(storefrontNews.id, newsId)).then(() => 'written', () => 'refused');
-    const copy = { title: 'x', summary: '', coverAssetId: null, newsDate: '2026-11-23', seoTitle: '', seoDescription: '', sections: [] };
     const at = new Date().toISOString();
     const checks: Array<[string, string, string]> = [
       ['a copy without its time', await direct({ published: copy, publishedAt: null, publishedDate: '2026-11-23' }), 'refused'],
@@ -280,12 +301,12 @@ export async function runStorefrontNewsV12Tests(shouldRun: (id: string, ...extra
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'the view key read and could not change, another key could do neither; a new item was an empty draft, a bad address, a taken one and an unknown field were refused; six unsafe or wrong drafts were refused and a stale save was 409; a draft wrote no image row; published without a day the item was dated today with its three images named under kind news and an audit row; a changed draft left the site as it was, the address could not change on the site and reverting threw the change away; under a day to come the item was marked as waiting, and published again without a day it kept that day; the image route of the site gave no image of the item beside a page on the site with its id; taking it off switched its image rows off and removing it was soft, under its version, and freed its address; an item removed on the site left it; the list was in order, paged and without removed items; the constraints refused eight wrong direct writes and an unknown content kind; every change wrote its audit row',
+      details: 'the view key read and could not change, another key could do neither; a new item was an empty draft, a bad address, a taken one and an unknown field were refused; six unsafe or wrong drafts were refused and a stale save was 409; a draft wrote no image row; published without a day the item was dated today with its three images named under kind news and an audit row; a changed draft left the site as it was, the address could not change on the site and reverting threw the change away; under a day to come the item was marked as waiting, and published again without a day it kept that day; the image route of the site gave no image of the item beside a page on the site with its id; taking it off switched its image rows off and removing it was soft, under its version, and freed its address; an item removed on the site left it; the list was in order, paged and without removed items, an undated item placed by its day on the site or the day it was made in Tehran; of six requests for one address one made it and five were told it is taken; the constraints refused eight wrong direct writes and an unknown content kind; every change wrote its audit row',
     }));
   } catch (err) {
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: false, durationMs: Date.now() - tStart,
-      error: err instanceof Error ? err.message : String(err),
+      error: ((told: string) => (wrong.length > 0 && told !== wrong.join('; ') ? `${wrong.join('; ')}; ${told}` : told))(err instanceof Error ? err.message : String(err)),
     }));
   } finally {
     const mine = await orm.select({ id: storefrontNews.id }).from(storefrontNews).where(like(storefrontNews.slug, `%${tag}`)).catch(() => []);
