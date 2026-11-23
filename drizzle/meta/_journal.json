@@ -232,6 +232,13 @@
       "when": 1798617600000,
       "tag": "0032_storefront_fixed_pages",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1798704000000,
+      "tag": "0033_storefront_news",
+      "breakpoints": true
     }
   ]
 }

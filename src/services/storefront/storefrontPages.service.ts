@@ -1,18 +1,17 @@
 import type { Request } from 'express';
-import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, asc, eq, isNotNull } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { items, mediaAssets, storefrontContentAssets, storefrontPages, type PublishedPage } from '../../db/schema.js';
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { mediaAssets, storefrontContentAssets, storefrontPages, type PublishedPage } from '../../db/schema.js';
+import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { OptimisticLockError, nextVersion } from '../../lib/occHelper.js';
-import { can } from '../../middleware/authorize.js';
 import {
-  BASE_PAGES, FIXED_PAGES, PAGES_MAX, PAGE_TEMPLATES, SECTION_KIND_TITLES, checkedPage, isPageKind, pageAssetIds, pageItemIds, sectionAssetIds, type BasePageSlug,
-  type PageSection, type PageValues, type RichDoc, type RichNode,
+  BASE_PAGES, FIXED_PAGES, PAGES_MAX, PAGE_TEMPLATES, checkedPage, isPageKind, pageAssetIds, pageItemIds, type BasePageSlug, type PageValues,
 } from '../../lib/storefront/storefrontPageRules.js';
-import type { PageAssetInfo, PageCreateInput, PageDetail, PageListRow, PageSaveInput, PageStatus } from '../../lib/storefront/storefrontPageContracts.js';
+import type { PageCreateInput, PageDetail, PageListRow, PageSaveInput, PageStatus } from '../../lib/storefront/storefrontPageContracts.js';
 import { menuPlacesOf } from './storefrontPageLinks.js';
+import { assetInfos, auditSections, canonical, checkContentReferences, refuseNewContentImages, writeContentAssetRows } from './storefrontContentShared.js';
 import { clearRedirectFrom, redirectMovedPage } from './storefrontRedirects.service.js';
 
 /**
@@ -44,11 +43,6 @@ const draftOf = (row: PageRecord): PageValues => ({
 });
 const publishedCopyOf = ({ slug: _slug, ...page }: PageValues): PublishedPage => page;
 /** A value as text with every object's keys in one order: PostgreSQL's jsonb keeps keys in its own order, not the one written */
-const canonical = (value: unknown): string => JSON.stringify(value, (_key, inner: unknown) => (
-  inner && typeof inner === 'object' && !Array.isArray(inner)
-    ? Object.fromEntries(Object.entries(inner as Record<string, unknown>).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)))
-    : inner
-));
 const sameCopy = (a: PublishedPage, b: PublishedPage | null): boolean => b !== null && canonical(a) === canonical(b);
 
 function statusOf(row: PageRecord): PageStatus {
@@ -61,18 +55,10 @@ const listRowOf = (row: PageRecord): PageListRow => ({
   publishedAt: row.publishedAt ?? '', updatedAt: row.updatedAt, updatedBy: row.updatedBy, version: row.version,
 });
 
-async function assetInfos(executor: DbExecutor, ids: readonly number[]): Promise<PageAssetInfo[]> {
-  if (ids.length === 0) return [];
-  const rows = await executor.select({
-    id: mediaAssets.id, title: mediaAssets.title, originalName: mediaAssets.originalName, kind: mediaAssets.kind, isDeleted: mediaAssets.isDeleted,
-    lightBytes: mediaAssets.lightBytes,
-  }).from(mediaAssets).where(inArray(mediaAssets.id, [...ids]));
-  const byId = new Map(rows.map(r => [r.id, r]));
-  return ids.map((assetId) => {
-    const asset = byId.get(assetId);
-    return { assetId, title: asset ? (asset.title || asset.originalName) : '', usable: Boolean(asset && asset.isDeleted === 0 && asset.kind === 'image' && asset.lightBytes !== null) };
-  });
-}
+/** The checks and the image rows every content of the site shares (`storefrontContentShared.ts`), said for a page */
+const checkReferences = (tx: DbExecutor, page: PageValues, mayKeep: readonly number[]) => checkContentReferences(tx, { assetIds: pageAssetIds(page), itemIds: pageItemIds(page) }, mayKeep, 'صفحه');
+const refuseNewImagesWithoutMedia = (req: Request, page: PageValues, before: readonly number[]) => refuseNewContentImages(req, pageAssetIds(page), before, 'صفحه');
+const writeContentAssets = (tx: DbExecutor, contentId: number, assetIds: readonly number[]) => writeContentAssetRows(tx, CONTENT_KIND, contentId, assetIds);
 
 async function detailOf(executor: DbExecutor, row: PageRecord): Promise<PageDetail> {
   const draft = draftOf(row);
@@ -114,78 +100,6 @@ async function lockedRow(tx: DbExecutor, id: number, expectedVersion: number): P
   return row;
 }
 
-/**
- * The images and products a page names exist. An image must be a live image of the library with a light version;
- * `mayKeep` names the images the page already had, which a draft may go on naming after they left the library (so the
- * colleague can open the page and replace them), though a published page may not.
- */
-async function checkReferences(tx: DbExecutor, page: PageValues, mayKeep: readonly number[]): Promise<void> {
-  const assets = await assetInfos(tx, pageAssetIds(page));
-  const bad = assets.find(asset => !asset.usable && !mayKeep.includes(asset.assetId));
-  if (bad) {
-    throw invalid('یکی از عکس‌های صفحه در کتابخانهٔ تصاویر نیست یا نسخهٔ سبک ندارد؛ آن را عوض کنید.', 'sections', 'STOREFRONT_PAGE_IMAGE_UNKNOWN', { assetId: bad.assetId });
-  }
-  const itemIds = pageItemIds(page);
-  if (itemIds.length) {
-    const found = new Set((await tx.select({ id: items.id }).from(items)
-      .where(and(inArray(items.id, itemIds), eq(items.isDeleted, 0), eq(items.type, 'product')))).map(r => r.id));
-    if (itemIds.some(id => !found.has(id))) throw invalid('یکی از محصولات «ردیف محصولات» در ERP نیست.', 'sections', 'STOREFRONT_PAGE_PRODUCT_UNKNOWN');
-  }
-}
-
-/**
- * An image a page did not name before is a file of the media library going towards the site, so whoever adds it must be
- * allowed to see the library (the rule of a campaign page's hero); keeping the images a page already has needs nothing more
- */
-async function refuseNewImagesWithoutMedia(req: Request, page: PageValues, before: readonly number[]): Promise<void> {
-  if (pageAssetIds(page).every(id => before.includes(id))) return;
-  if (!(await can(req.user as { role?: string } | undefined, 'media.view'))) {
-    throw new ForbiddenError('برای افزودن عکس به صفحه، دسترسی «مشاهده کتابخانه تصاویر» لازم است.', { field: 'sections' }, 'STOREFRONT_PAGE_IMAGE_FORBIDDEN');
-  }
-}
-
-const AUDIT_TEXT_MAX = 200;
-
-/** The words and the link addresses of a text, for the audit row */
-function auditDoc(doc: RichDoc): { text: string; links: string[] } {
-  const words: string[] = [];
-  const links: string[] = [];
-  const walk = (node: RichNode | RichDoc) => {
-    const leaf = node as RichNode;
-    if (typeof leaf.text === 'string') words.push(leaf.text);
-    for (const mark of leaf.marks ?? []) if (mark.type === 'link' && mark.attrs?.href) links.push(mark.attrs.href);
-    for (const child of node.content ?? []) walk(child);
-  };
-  walk(doc);
-  return { text: words.join(' ').slice(0, AUDIT_TEXT_MAX), links: [...new Set(links)] };
-}
-
-/**
- * A section as the audit row keeps it: its kind, its titles and the start of its words, every address it links to, the
- * images and products it names. Enough to see afterwards what a change put on the public site (a link moved to another
- * address, a text rewritten, an image swapped), without copying whole pages into the log (10b review).
- */
-function auditSection(section: PageSection): Record<string, unknown> {
-  const base = { kind: SECTION_KIND_TITLES[section.kind], background: section.background };
-  const images = sectionAssetIds(section);
-  const withImages = images.length ? { images } : {};
-  switch (section.kind) {
-    case 'hero': return { ...base, title: section.title, text: section.text.slice(0, AUDIT_TEXT_MAX), ...(section.buttonHref ? { button: section.buttonLabel, links: [section.buttonHref] } : {}), ...withImages };
-    case 'text': return { ...base, ...auditDoc(section.doc), ...withImages };
-    case 'textImage': {
-      const doc = auditDoc(section.doc);
-      return { ...base, title: section.title, text: doc.text, links: [...doc.links, ...(section.buttonHref ? [section.buttonHref] : [])], ...withImages };
-    }
-    case 'iconCards': return { ...base, title: section.title, cards: section.cards.map(card => `${card.title}: ${card.text}`.slice(0, AUDIT_TEXT_MAX)) };
-    case 'gallery': return { ...base, title: section.title, ...withImages };
-    case 'people': return { ...base, title: section.title, people: section.people.map(person => [person.name, person.role, person.contact].filter(Boolean).join('، ')), ...withImages };
-    case 'map': return { ...base, title: section.title, address: section.address, links: [section.neshanUrl, section.baladUrl, section.googleUrl].filter(Boolean), ...withImages };
-    case 'products': return { ...base, title: section.title, ...(section.source === 'items' ? { items: section.itemIds } : { collection: section.collection }) };
-    case 'button': return { ...base, label: section.label, links: [section.href].filter(Boolean) };
-    default: return { ...base, title: section.title };
-  }
-}
-const auditSections = (sections: readonly PageSection[]): Array<Record<string, unknown>> => sections.map(auditSection);
 const auditOf = (page: PageValues) => ({
   title: page.title, slug: page.slug, seoTitle: page.seoTitle, seoDescription: page.seoDescription, noindex: page.noindex,
   shareImageAssetId: page.shareImageAssetId, sections: auditSections(page.sections),
@@ -254,20 +168,6 @@ export async function saveDraft(req: Request, id: number, input: PageSaveInput):
     });
   });
   return pageDetail(orm, id);
-}
-
-/** The images a published content names: the rows are switched on and off, never removed */
-async function writeContentAssets(tx: DbExecutor, contentId: number, assetIds: readonly number[]): Promise<void> {
-  const saved = await tx.select().from(storefrontContentAssets)
-    .where(and(eq(storefrontContentAssets.contentKind, CONTENT_KIND), eq(storefrontContentAssets.contentId, contentId))).for('update');
-  const at = systemNowUtcIso();
-  const off = saved.filter(row => row.isDeleted === 0 && !assetIds.includes(row.assetId)).map(row => row.id);
-  if (off.length) await tx.update(storefrontContentAssets).set({ isDeleted: 1, updatedAt: at }).where(inArray(storefrontContentAssets.id, off));
-  const on = saved.filter(row => row.isDeleted === 1 && assetIds.includes(row.assetId)).map(row => row.id);
-  if (on.length) await tx.update(storefrontContentAssets).set({ isDeleted: 0, updatedAt: at }).where(inArray(storefrontContentAssets.id, on));
-  const known = new Set(saved.map(row => row.assetId));
-  const fresh = assetIds.filter(assetId => !known.has(assetId));
-  if (fresh.length) await tx.insert(storefrontContentAssets).values(fresh.map(assetId => ({ contentKind: CONTENT_KIND, contentId, assetId })));
 }
 
 /** `POST /api/storefront/pages/:id/publish`: «انتشار»: the saved draft becomes the copy on the site */

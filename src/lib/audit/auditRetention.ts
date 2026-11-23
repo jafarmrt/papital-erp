@@ -128,7 +128,9 @@ export const CRITICAL_AUDIT_ENTITIES = [
   // v12 phase 9b: a save of one of the site's menus (before and after) is never purged from the log
   'منوی سایت',
   // v12 phase 10b: a page of the site made, saved, published, taken off the site or removed is never purged from the log
-  'صفحهٔ سایت'
+  'صفحهٔ سایت',
+  // v12 phase 10d: a news item of the site made, saved, published, taken off the site or removed is never purged from the log
+  'خبر سایت'
 ] as const;
 
 /**

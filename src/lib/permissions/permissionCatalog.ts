@@ -226,8 +226,8 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
       { key: 'storefront.manage', title: 'مدیریت فروشگاه سایت', description: 'انتشار و برداشتن کالا از سایت، نشانی و متن جست‌وجوی کالا، روش‌ها و نرخ‌های ارسال، کارت و شبا، سقف ارسال رایگان و ساخت کلید برنامه سایت', requires: ['storefront.view'] },
       // v12 phase 9b (V12_SITE_NEXT_START_PLAN.md §6): menus now, news, pages and banners from phase 10; apart from
       // storefront.manage, so an editor of content never reaches the card, the prices or the site's key
-      { key: 'site_content.view', title: 'مشاهده منوها و محتوای سایت', description: 'دیدن منوی بالا، منوی همبرگری، پاورقی و نوار پایین گوشی سایت و آنچه هر پیوند به آن می‌رود، و دیدن صفحه‌های سایت و پیش‌نویس آن‌ها' },
-      { key: 'site_content.manage', title: 'ویرایش منوها و محتوای سایت', description: 'ساخت و ویرایش منوهای سایت و روشن و خاموش کردن هر منو روی سایت؛ ساخت، ویرایش، انتشار و حذف صفحه‌های سایت', requires: ['site_content.view'] },
+      { key: 'site_content.view', title: 'مشاهده منوها و محتوای سایت', description: 'دیدن منوی بالا، منوی همبرگری، پاورقی و نوار پایین گوشی سایت و آنچه هر پیوند به آن می‌رود، و دیدن صفحه‌ها و خبرهای سایت و پیش‌نویس آن‌ها' },
+      { key: 'site_content.manage', title: 'ویرایش منوها و محتوای سایت', description: 'ساخت و ویرایش منوهای سایت و روشن و خاموش کردن هر منو روی سایت؛ ساخت، ویرایش، انتشار و حذف صفحه‌ها و خبرهای سایت', requires: ['site_content.view'] },
     ]
   },
   {
