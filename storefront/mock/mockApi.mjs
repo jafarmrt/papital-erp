@@ -59,6 +59,10 @@ const newsMode = process.env.MOCK_NEWS ?? '';
 const news = newsMode.startsWith('{') ? JSON.parse(newsMode) : { enabled: false, items: [] };
 /** how many times each page of the list of news was asked for (`/__mock/news-reads`), so a test can see what the site kept to itself */
 const newsReads = {};
+// v12 phase 10e: «کالکشن‌های سایت». MOCK_COLLECTIONS as JSON gives the list as the ERP answers it (`[{ name, intro, image,
+// moreHref }]`); none by default. MOCK_COLLECTIONS=fail answers 500 and MOCK_COLLECTIONS=missing 404 (an ERP not yet updated).
+const collectionsMode = process.env.MOCK_COLLECTIONS ?? '';
+const collectionTexts = collectionsMode.startsWith('[') ? JSON.parse(collectionsMode) : [];
 const previews = process.env.MOCK_PREVIEWS ? JSON.parse(process.env.MOCK_PREVIEWS) : {};
 const previewMedia = (process.env.MOCK_PREVIEW_MEDIA ?? '').split(',').filter(Boolean);
 let previewReads = 0;
@@ -512,6 +516,11 @@ createServer(async (req, res) => {
     const found = pageList.find(p => p.slug === route.slice('/pages/'.length));
     if (!found) return send(res, 404, { error: 'صفحه پیدا نشد.', code: 'STOREFRONT_PAGE_NOT_FOUND' });
     return send(res, 200, { data: withCards(found) });
+  }
+  if (route === '/collections') {
+    if (collectionsMode === 'fail') return send(res, 500, { error: 'mock failure' });
+    if (collectionsMode === 'missing') return send(res, 404, { error: 'not found' });
+    return send(res, 200, { data: collectionTexts });
   }
   if (route === '/news' || route === '/news-index' || route.startsWith('/news/')) {
     if (newsMode === 'fail') return send(res, 500, { error: 'mock failure' });

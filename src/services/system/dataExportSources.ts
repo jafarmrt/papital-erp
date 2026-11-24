@@ -12,7 +12,7 @@ import {
   workflowDefinitions, workflowDefinitionVersions, workflowStates, workflowTransitions, workflowInstances,
   workflowHistoryLogs, workflowTasks, workflowPendingApprovals, workflowDelegations,
   mediaSections, mediaAssets, projectManagers, stockReceiptConfirmations, workshopTaskReports,
-  storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontBuyerGroups, storefrontBuyerAccounts, storefrontBuyerAddresses, storefrontSmsMessages, storefrontRedirects, storefrontDiscountCodes, storefrontDiscountRedemptions, storefrontCampaigns, storefrontMenus, storefrontMenuItems, storefrontPages, storefrontNews, storefrontContentAssets,
+  storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontBuyerGroups, storefrontBuyerAccounts, storefrontBuyerAddresses, storefrontSmsMessages, storefrontRedirects, storefrontDiscountCodes, storefrontDiscountRedemptions, storefrontCampaigns, storefrontMenus, storefrontMenuItems, storefrontPages, storefrontNews, storefrontCollections, storefrontContentAssets,
 } from '../../db/schema.js';
 import { SENSITIVE_SETTING_PATTERN } from '../settings/systemSettings.service.js';
 
@@ -153,6 +153,7 @@ export const DATA_EXPORT_TABLE_SOURCES: Readonly<Record<string, TableSpecSource>
   // a preview link lasts an hour and is of no use in a copy of the data: neither its hash nor its end goes out
   storefront_pages: { table: storefrontPages, key: ['id'], columns: withoutColumns(storefrontPages, ['previewHash', 'previewExpiresAt']) },
   storefront_news: { table: storefrontNews, key: ['id'] },
+  storefront_collections: { table: storefrontCollections, key: ['id'] },
   storefront_content_assets: { table: storefrontContentAssets, key: ['id'] },
 };
 

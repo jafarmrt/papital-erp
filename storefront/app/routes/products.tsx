@@ -1,17 +1,18 @@
 import { Form, Link, useSubmit } from 'react-router';
 import type { Route } from './+types/products';
-import { catalog, tooLongForCatalog } from '../lib/api.server';
+import { catalog, collectionText, tooLongForCatalog } from '../lib/api.server';
+import { collectionDescription } from '../lib/collections';
 import { CATALOG_PAGE_SIZE, CATALOG_SORTS, parsePage, parseSort } from '../lib/catalog';
 import { siteEnv } from '../lib/site.server';
 import { clientAddress } from '../lib/account.server';
 import { allowSearch, searchRetryAfter } from '../lib/visitorLimit.server';
-import { SORT_TITLES, categoryPath, collectionPath } from '../lib/brand';
+import { SORT_TITLES, categoryPath, collectionPath, mediaPath } from '../lib/brand';
 import { faNumber } from '../lib/format';
 import { fixedText } from '../lib/fixedText.server';
 import { fixedHead, fixedTitle } from '../lib/fixedText';
 import { FixedIntro } from '../components/FixedIntro';
 import { pageMeta } from '../lib/meta';
-import { COLLECTION_TEXTS } from '../content/collections';
+import { CollectionIntro } from '../components/CollectionIntro';
 import { ProductGrid } from '../components/ProductCard';
 import { Pagination } from '../components/Pagination';
 import { useRootData } from '../root';
@@ -37,16 +38,17 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   if (collection && result.total === 0 && !category && !q && page === 1) throw new Response('پیدا نشد', { status: 404 });
   // v12 phase 10c: «همهٔ محصولات» itself (no collection, category or search) takes the words the shop wrote for it
   const text = !collection && !category && !q ? await fixedText('fixed-products') : null;
-  return { result, collection, category, q, sort, page, siteUrl: siteEnv().siteUrl, path: url.pathname + url.search, text };
+  // v12 phase 10e: a collection's own page (no category or search inside it, its first page) opens with the words the shop wrote for it
+  const words = collection && !category && !q && page === 1 ? await collectionText(collection) : null;
+  return { result, collection, category, q, sort, page, siteUrl: siteEnv().siteUrl, path: url.pathname + url.search, text, words };
 }
 
 export function meta({ data, matches }: Route.MetaArgs) {
   if (!data) return [];
   const title = data.collection ? `کالکشن ${data.collection}` : data.category || (data.q ? `جست‌وجوی «${data.q}»` : 'همهٔ محصولات');
-  const description = data.collection && COLLECTION_TEXTS[data.collection]
-    ? COLLECTION_TEXTS[data.collection].slice(0, 160)
-    : `${title} پاپیتال: زیورآلات دست‌ساز با نقش کاشی‌های ایران، با قیمت روشن و ارسال به سراسر ایران.`;
-  return pageMeta({ matches, ...fixedHead(data.text, { title, description }), path: data.path, siteUrl: data.siteUrl });
+  const description = collectionDescription(data.words)
+    || `${title} پاپیتال: زیورآلات دست‌ساز با نقش کاشی‌های ایران، با قیمت روشن و ارسال به سراسر ایران.`;
+  return pageMeta({ matches, ...fixedHead(data.text, { title, description }), path: data.path, image: data.words?.image ? mediaPath(data.words.image.sha256) : undefined, siteUrl: data.siteUrl });
 }
 
 export default function Products({ loaderData }: Route.ComponentProps) {
@@ -64,7 +66,6 @@ export default function Products({ loaderData }: Route.ComponentProps) {
     return s.size ? `${base}?${s}` : base;
   };
   const title = collection ? `کالکشن ${collection}` : category || (q ? `نتیجهٔ جست‌وجوی «${q}»` : fixedTitle(loaderData.text, 'همهٔ محصولات'));
-  const intro = collection ? COLLECTION_TEXTS[collection] : '';
   const chip = (active: boolean) =>
     `inline-flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-full border px-4 text-sm font-medium transition-colors duration-(--motion) ${active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card hover:border-foreground/30'}`;
 
@@ -75,10 +76,10 @@ export default function Products({ loaderData }: Route.ComponentProps) {
         <span className="mx-2" aria-hidden>/</span>
         {collection ? <span>کالکشن‌ها</span> : <Link to="/products" className="hover:text-foreground">محصولات</Link>}
       </nav>
-      <header className="mt-3 max-w-3xl">
-        <h1 className="text-3xl font-extrabold lg:text-4xl">{title}</h1>
-        {intro ? <p className="mt-4 text-lg leading-9 text-muted-foreground">{intro}</p> : null}
-        <FixedIntro text={loaderData.text} className="mt-4 text-muted-foreground" />
+      <header className="mt-3">
+        <h1 className="max-w-3xl text-3xl font-extrabold lg:text-4xl">{title}</h1>
+        {loaderData.words ? <CollectionIntro text={loaderData.words} /> : null}
+        <FixedIntro text={loaderData.text} className="mt-4 max-w-3xl text-muted-foreground" />
         <p className="mt-2 text-sm text-muted-foreground">{`${faNumber(result.total)} محصول`}</p>
       </header>
 

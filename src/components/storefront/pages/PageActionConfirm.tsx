@@ -7,13 +7,15 @@ import type { PageKind } from '../../../lib/storefront/storefrontPageRules';
  * page goes back to the text in the site's code, and a fixed page stays where it is and only loses the words written
  * here. The question takes the focus when it opens (the editor does that through `ref`).
  */
-export function PageActionConfirm({ ref, asking, kind, dirty, linkedFrom, busy, onYes, onNo }: {
+export function PageActionConfirm({ ref, asking, kind, dirty, linkedFrom, linkedCollections = [], busy, onYes, onNo }: {
   ref: Ref<HTMLDivElement>;
   asking: 'revert' | 'unpublish' | 'delete';
   kind: PageKind;
   dirty: boolean;
   /** the menus that link to the page, as a phrase ('' = none) */
   linkedFrom: string;
+  /** v12 phase 10e: the collections whose «آشنایی بیشتر» leads to the page */
+  linkedCollections?: readonly string[];
   busy: boolean;
   onYes: () => void;
   onNo: () => void;
@@ -31,6 +33,11 @@ export function PageActionConfirm({ ref, asking, kind, dirty, linkedFrom, busy, 
             {asking === 'delete'
               ? `این صفحه در ${linkedFrom} پیوند دارد. آن پیوند دیگر روی سایت نمی‌آید؛ پس از حذف، آن گزینه را در «فهرست‌های سایت» بردارید یا به صفحهٔ دیگری بدهید.`
               : `این صفحه در ${linkedFrom} پیوند دارد. تا انتشار دوباره، آن پیوند روی سایت نمی‌آید.`}
+          </span>
+        )}
+        {(asking === 'delete' || asking === 'unpublish') && linkedCollections.length > 0 && (
+          <span data-collection-warning className="mt-1 block font-bold">
+            {`پیوند «آشنایی بیشتر» ${linkedCollections.map(name => `کالکشن «${name}»`).join(' و ')} به این صفحه می‌آید و ${asking === 'delete' ? 'دیگر روی سایت نشان داده نمی‌شود؛ پس از حذف، در «کالکشن‌های سایت» صفحهٔ دیگری برایش برگزینید' : 'تا انتشار دوباره روی سایت نشان داده نمی‌شود'}.`}
           </span>
         )}
       </p>

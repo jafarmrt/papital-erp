@@ -123,6 +123,8 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   { table: 'storefront_content_assets', group: 'settings' },
   // v12 phase 10d: the news of the site (draft and published copy)
   { table: 'storefront_news', group: 'settings' },
+  // v12 phase 10e: the shop's own words for a collection of the site
+  { table: 'storefront_collections', group: 'settings' },
 ];
 
 /** Exported only on request, for a business-day range */

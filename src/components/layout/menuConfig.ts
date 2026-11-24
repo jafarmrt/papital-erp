@@ -24,6 +24,7 @@ import {
   Landmark,
   FileText,
   Newspaper,
+  LayoutGrid,
   Building2,
   CreditCard,
   BarChart3,
@@ -114,6 +115,7 @@ export function getMenuGroups(
         { name: 'فهرست‌های سایت', path: '/site-menus', icon: PanelTop, visible: open('/site-menus') },
         { name: 'صفحه‌های سایت', path: '/site-pages', icon: FileText, visible: open('/site-pages') },
         { name: 'خبرهای سایت', path: '/site-news', icon: Newspaper, visible: open('/site-news') },
+        { name: 'کالکشن‌های سایت', path: '/site-collections', icon: LayoutGrid, visible: open('/site-collections') },
       ]
     },
     {
