@@ -109,8 +109,12 @@ describe('the home page the shop published', () => {
     for (const title of ['اسلاید سوم', 'اسلاید چهارم']) expect(slider).toContain(title);
     for (const label of ['دکمهٔ بد', 'دکمهٔ بیرونی پنهان']) expect(slider).not.toContain(label);
     expect(slider).toContain('aria-label="۱ از ۴"');
-    // every slide has one box, upright on a phone and wide from 640 px, whatever the shape of its image
-    expect(slider.match(/class="relative aspect-\[4\/5\] max-h-\[78vh\] w-full shrink-0 snap-start overflow-hidden sm:aspect-\[8\/3\]"/g)?.length).toBe(4);
+    // every slide has one box, upright on a phone and wide otherwise, whatever the shape of its image; the words are
+    // part of the box's height (in its flow, not laid over it), so long words make it taller instead of being cut off
+    expect(slider.match(/class="relative flex aspect-\[4\/5\] w-full shrink-0 snap-start items-end sm:aspect-\[8\/3\] landscape:aspect-\[8\/3\]"/g)?.length).toBe(4);
+    expect(slider).not.toContain('overflow-hidden sm:aspect');
+    expect(slider.match(/<picture class="absolute inset-0 block overflow-hidden">/g)?.length).toBe(4);
+    expect(slider.match(/<div class="relative w-full bg-gradient-to-t /g)?.length).toBe(4);
     // the arrows, the dots and «ایستادن» are drawn in the browser, once the script that makes them work has loaded
     for (const control of ['اسلاید بعدی', 'اسلاید قبلی', 'ایستادن اسلایدها']) expect(slider).not.toContain(`aria-label="${control}"`);
   });

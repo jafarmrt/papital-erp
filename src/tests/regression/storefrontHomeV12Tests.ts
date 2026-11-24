@@ -354,7 +354,7 @@ export async function runStorefrontHomeV12Tests(shouldRun: (id: string, ...extra
     // 7b) «پیش‌نمایش»: the draft as the home page it would be today, under the link's key alone, while the site still has none
     const draft = await erp.put(`/api/storefront/pages/${homeId}`, { ...form([
       slider(slide({ title: 'اسلاید پیش‌نویس', mobileImageAssetId: tall.id }), slide({ title: 'اسلاید فردا', startsOn: tomorrow })),
-      { ...emptyHomeSection('homeCategories'), hidden: true }, emptyHomeSection('homeWholesale'),
+      { ...emptyHomeSection('homeCategories'), hidden: true }, emptyHomeSection('homeWholesale'), text('متن دیده‌شدنی پیش‌نویس'),
       // parts of every page that are switched off, and the image of one: none of it leaves under the key either
       { ...text(HIDDEN_WORDS), hidden: true }, { kind: 'hero', background: 'white', title: HIDDEN_WORDS, text: '', imageAssetId: bannerImage.id, buttonLabel: '', buttonHref: '', hidden: true },
     ], { seoTitle: 'عنوان پیش‌نویس خانه' }), version: Number(off.body.data?.version) });
@@ -365,7 +365,7 @@ export async function runStorefrontHomeV12Tests(shouldRun: (id: string, ...extra
     const draftSeen = (draftRead.body.data ?? {}) as Body & { home?: { seoTitle?: string; sections?: Array<Body & { slides?: Body[] }> } };
     const draftParts = draftSeen.home?.sections ?? [];
     if (draft.status !== 200 || draftLink.status !== 201 || draftRead.status !== 200 || draftSeen.slug !== HOME_PAGE_SLUG || draftSeen.noindex !== true || typeof draftSeen.expiresAt !== 'string'
-      || draftSeen.home?.seoTitle !== 'عنوان پیش‌نویس خانه' || draftParts.map(s => String(s.kind)).join(',') !== 'slider,homeWholesale'
+      || draftSeen.home?.seoTitle !== 'عنوان پیش‌نویس خانه' || draftParts.map(s => String(s.kind)).join(',') !== 'slider,homeWholesale,text'
       || (draftParts[0]?.slides ?? []).map(s => String(s.title)).join(',') !== 'اسلاید پیش‌نویس' || JSON.stringify(draftSeen.sections) !== '[]') {
       wrong.push(`the preview of the home page's draft: ${draft.status}/${draftLink.status}/${draftRead.status} ${JSON.stringify(draftSeen).slice(0, 500)}`);
     }

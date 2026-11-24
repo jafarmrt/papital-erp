@@ -12,20 +12,22 @@ export const SLIDE_SECONDS = 6;
 /**
  * v12 phase 10e: the home page's «اسلایدر» and «بنر». The slider is a row the browser itself scrolls and snaps, so it
  * works by a swipe before any script has loaded and needs no library; the arrows, the dots and its own movement only
- * ask the browser to scroll. Every slide has the same box (upright on a phone, wide from 640 px), whatever the shape
- * of its image, so the words over the image always have room and nothing jumps; the image fills the box, and a phone
- * gets the other crop when the shop chose one. The first slide's image is loaded early (it is the largest thing on
+ * ask the browser to scroll. Every slide has the same box (upright on a phone held upright, wide otherwise), whatever the shape
+ * of its image, so nothing jumps; the image fills the box, and a phone gets the other crop when the shop chose one.
+ * The words stand over the foot of the image and are part of the box's height: words too long for the box make the
+ * row taller (every slide with it) and are never cut off. The first slide's image is loaded early (it is the largest thing on
  * the page).
  *
  * It moves on by itself every six seconds, and stops while the pointer is over it or the focus is inside it, for good
- * once the visitor moves it by hand or presses «ایستادن», and never starts for a visitor who asked for less motion.
+ * once the visitor moves it by hand (an arrow, a dot, a swipe, the arrow keys) or presses «ایستادن», and never starts
+ * for a visitor who asked for less motion.
  * Without the script the first slide is there and the row still scrolls; the controls are drawn only once they work.
  */
 function WideImage({ image, mobile, eager, fill }: { image: SitePageImage; mobile: SitePageImage | null; eager: boolean; /** fill the slide's box */ fill: boolean }) {
   const media = usePageMediaPath();
   const [width, height] = [image.width ?? 1600, image.height ?? 600];
   return (
-    <picture className={fill ? 'absolute inset-0 block' : undefined}>
+    <picture className={fill ? 'absolute inset-0 block overflow-hidden' : undefined}>
       {mobile ? <source media="(max-width: 639px)" srcSet={media(mobile.sha256)} width={mobile.width ?? 800} height={mobile.height ?? 1000} /> : null}
       <img
         src={media(image.sha256)} alt={image.alt} width={width} height={height} loading={eager ? 'eager' : 'lazy'} fetchPriority={eager ? 'high' : undefined} decoding="async"
@@ -51,11 +53,17 @@ export function HomeSlider({ slides, heading }: { slides: readonly SiteSlide[]; 
   const many = slides.length > 1;
   // the controls are drawn once the script that makes them work has loaded
   const [ready, setReady] = useState(false);
+  // a visitor who asked for less motion: nothing moves by itself and nothing glides
+  const [calm, setCalm] = useState(true);
   const [playing, setPlaying] = useState(false);
-  const [held, setHeld] = useState(false);
+  // two holds, each lifted by its own end: the pointer over the slider, and the focus inside it
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const touching = useRef(false);
   useEffect(() => {
     if (!many) return;
     setReady(true);
+    setCalm(lessMotion());
     setPlaying(!lessMotion());
   }, [many]);
   // the slide most in view is the current one, however the visitor got there (a swipe, an arrow, a dot, the keyboard)
@@ -83,10 +91,10 @@ export function HomeSlider({ slides, heading }: { slides: readonly SiteSlide[]; 
     list.scrollTo({ left: list.scrollLeft + item.getBoundingClientRect().left - list.getBoundingClientRect().left, behavior: lessMotion() ? 'auto' : 'smooth' });
   }, [slides.length]);
   useEffect(() => {
-    if (!playing || held) return undefined;
+    if (!playing || hovered || focused) return undefined;
     const timer = window.setInterval(() => { if (!document.hidden) go(aim.current + 1); }, SLIDE_SECONDS * 1000);
     return () => window.clearInterval(timer);
-  }, [playing, held, go]);
+  }, [playing, hovered, focused, go]);
   /** the visitor moves the slider: from here on it is theirs */
   const byHand = (index: number) => {
     setPlaying(false);
@@ -98,26 +106,39 @@ export function HomeSlider({ slides, heading }: { slides: readonly SiteSlide[]; 
   return (
     <section
       aria-roledescription="carousel" aria-label="اسلایدهای صفحهٔ اصلی" className="relative border-b border-border bg-muted" data-home-part="slider"
-      onPointerEnter={event => { if (event.pointerType === 'mouse') setHeld(true); }} onPointerLeave={() => setHeld(false)}
-      onFocus={() => setHeld(true)} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setHeld(false); }}
+      onPointerEnter={event => { if (event.pointerType === 'mouse') setHovered(true); }} onPointerLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}
     >
-      <div ref={track} role="group" aria-label="اسلایدها" aria-live={playing ? 'off' : 'polite'} className="scrollbar-none flex snap-x snap-mandatory overflow-x-auto" tabIndex={many ? 0 : undefined}
-        // a swipe: the visitor moves the slider
-        onTouchStart={() => setPlaying(false)}
+      {/* first among the slider's controls, so a keyboard reaches it before the slides; pressing «پخش» starts it though the focus is on the button */}
+      {many && ready && !calm ? (
+        <button
+          type="button" className={`${round} absolute bottom-0 left-1 z-20 text-white`} aria-label={playing ? 'ایستادن اسلایدها' : 'پخش خودکار اسلایدها'}
+          onClick={() => { setPlaying(!playing); setFocused(false); }}
+        >
+          {playing ? <Pause className="size-4" aria-hidden /> : <Play className="size-4" aria-hidden />}
+        </button>
+      ) : null}
+      <div
+        ref={track} role="group" aria-label="اسلایدها" className="scrollbar-none flex snap-x snap-mandatory overflow-x-auto" tabIndex={many ? 0 : undefined}
+        // moved by the visitor (a swipe along the row, the arrow keys on it): from here on it is theirs
+        onTouchStart={() => { touching.current = true; }} onTouchEnd={() => { touching.current = false; }} onTouchCancel={() => { touching.current = false; }}
+        onScroll={() => { if (touching.current) setPlaying(false); }}
+        onKeyDown={(event) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') setPlaying(false); }}
       >
         {slides.map((slide, index) => {
           const Title = heading && index === 0 ? 'h1' : 'p';
           return (
+            // one box for every slide; words too long for it make the box (and with it the whole row) taller, never cut
             <div
               key={index} data-slide={index} role="group" aria-roledescription="slide" aria-label={many ? `${faNumber(index + 1)} از ${faNumber(slides.length)}` : undefined}
-              className="relative aspect-[4/5] max-h-[78vh] w-full shrink-0 snap-start overflow-hidden sm:aspect-[8/3]"
+              className="relative flex aspect-[4/5] w-full shrink-0 snap-start items-end sm:aspect-[8/3] landscape:aspect-[8/3]"
             >
               <WideImage image={slide.image} mobile={slide.mobileImage} eager={index === 0} fill />
               {slide.title || slide.text || slide.buttonLabel ? (
-                <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/45 to-transparent px-4 pt-16 text-white sm:px-8 lg:px-16 ${many ? 'pb-12 lg:pb-14' : 'pb-6 lg:pb-10'}`}>
+                <div className={`relative w-full bg-gradient-to-t from-black/75 via-black/45 to-transparent px-4 pt-16 text-white sm:px-16 sm:pt-10 lg:pt-16 ${many ? 'pb-12 lg:pb-14' : 'pb-6 lg:pb-10'}`}>
                   <div className="mx-auto max-w-7xl">
-                    {slide.title ? <Title className="line-clamp-3 max-w-2xl text-2xl font-extrabold leading-tight text-balance break-words sm:text-4xl lg:text-5xl">{slide.title}</Title> : null}
-                    {slide.text ? <p className="mt-2 line-clamp-3 max-w-xl leading-8 break-words sm:line-clamp-2 lg:mt-3 lg:line-clamp-3 lg:text-lg">{slide.text}</p> : null}
+                    {slide.title ? <Title className="line-clamp-3 max-w-2xl text-2xl font-extrabold leading-tight text-balance break-words sm:line-clamp-2 sm:text-4xl lg:text-5xl">{slide.title}</Title> : null}
+                    {slide.text ? <p className="mt-2 line-clamp-3 max-w-xl leading-8 break-words sm:line-clamp-2 lg:mt-3 lg:text-lg">{slide.text}</p> : null}
                     {slide.buttonLabel ? (
                       <SlideLink slide={slide} className="mt-4 inline-flex min-h-12 items-center gap-2 rounded-control bg-white px-6 text-lg font-bold text-neutral-900 hover:bg-white/90">
                         {slide.buttonLabel}<ArrowLeft className="size-5" aria-hidden />
@@ -134,18 +155,13 @@ export function HomeSlider({ slides, heading }: { slides: readonly SiteSlide[]; 
         <>
           <button type="button" className={`${arrow} right-3`} aria-label="اسلاید قبلی" onClick={() => byHand(aim.current - 1)}><ChevronRight className="size-6" aria-hidden /></button>
           <button type="button" className={`${arrow} left-3`} aria-label="اسلاید بعدی" onClick={() => byHand(aim.current + 1)}><ChevronLeft className="size-6" aria-hidden /></button>
-          <div className="absolute inset-x-0 bottom-0 z-10 flex justify-center">
+          {/* a shade of their own, for a slide without words */}
+          <div className="absolute inset-x-0 bottom-0 z-10 flex justify-center bg-gradient-to-t from-black/40 to-transparent">
             {slides.map((_, index) => (
               <button key={index} type="button" aria-label={`اسلاید ${faNumber(index + 1)}`} aria-current={index === current ? 'true' : undefined} onClick={() => byHand(index)} className={round}>
                 <span className={`block size-2.5 rounded-full ${index === current ? 'bg-white' : 'bg-white/50'}`} />
               </button>
             ))}
-            {/* a visitor who asked for less motion has nothing to stop or start */}
-            {lessMotion() ? null : (
-              <button type="button" className={`${round} text-white`} aria-label={playing ? 'ایستادن اسلایدها' : 'پخش خودکار اسلایدها'} onClick={() => setPlaying(!playing)}>
-                {playing ? <Pause className="size-4" aria-hidden /> : <Play className="size-4" aria-hidden />}
-              </button>
-            )}
           </div>
         </>
       ) : null}

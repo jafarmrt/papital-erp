@@ -13,6 +13,7 @@ let handle: (request: Request) => Promise<Response>;
 // keys in the shape the ERP makes (43 characters of base64url); these open nothing anywhere but in this mock
 const TOKEN = 'Hm3_dE5-gH7jK9mN1pQ3sT5vX7zB9dF1hJ3lM5oP7rS';
 const EMPTY = 'Em9_yX7-wV5uT3sR1qP9oN7mL5kJ3iH1gF9eD7cB5aA';
+const UNTITLED = 'Un5_kL2-pQ8rS4tU6vW1xY3zA7bC9dE2fG4hJ6mN8oP';
 const A = 'a'.repeat(64);
 const B = 'b'.repeat(64);
 const C = 'c'.repeat(64);
@@ -37,7 +38,10 @@ beforeAll(async () => {
   mock = spawn(process.execPath, [path.join(import.meta.dirname, '../mock/mockApi.mjs')], {
     env: {
       ...process.env, MOCK_PORT: String(PORT), MOCK_API_KEY: KEY, MOCK_CAMPAIGNS: '0',
-      MOCK_PREVIEWS: JSON.stringify({ [TOKEN]: DRAFT, [EMPTY]: { ...page, home: { ...DRAFT.home, sections: [] } } }),
+      MOCK_PREVIEWS: JSON.stringify({
+        [TOKEN]: DRAFT, [EMPTY]: { ...page, home: { ...DRAFT.home, sections: [] } },
+        [UNTITLED]: { ...page, home: { ...DRAFT.home, sections: [{ kind: 'homeCategories', title: 'دسته‌ها در پیش‌نویس' }] } },
+      }),
       MOCK_SEO: JSON.stringify({ verification: { google: '', bing: '' }, analytics: { provider: 'ga4', id: 'G-TEST123', url: '' }, alternateSiteUrl: '' }),
     },
     stdio: 'pipe',
@@ -96,6 +100,9 @@ describe('the preview of the home page\'s draft', () => {
     expect(html).toContain('این پیش‌نویس صفحهٔ اصلی امروز چیزی برای نشان دادن ندارد');
     expect(html).not.toContain('data-home-part=');
     expect([...html.matchAll(/<h1[^>]*>(.*?)<\/h1>/g)].map(match => match[1])).toEqual(['صفحهٔ اصلی']);
+    // a draft with no part that writes the page's heading has the shop's name for it, as the home page itself would
+    const untitled = await (await ask(`/preview/${UNTITLED}`)).text();
+    expect([...untitled.matchAll(/<h1[^>]*>(.*?)<\/h1>/g)].map(match => match[0])).toEqual(['<h1 class="sr-only">گالری پاپیتال</h1>']);
     const home = await (await ask('/')).text();
     // the site's own opening words, in two lines as they have always been
     expect(home).toMatch(/<h1[^>]*>کاشی‌های ایران،<br\/>این بار برای پوشیدن<\/h1>/);
