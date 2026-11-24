@@ -125,6 +125,8 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   { table: 'storefront_news', group: 'settings' },
   // v12 phase 10e: the shop's own words for a collection of the site
   { table: 'storefront_collections', group: 'settings' },
+  // v12 phase 10f: the forms the shop builds for its site (their fields and words; no answer of anyone)
+  { table: 'storefront_forms', group: 'settings' },
 ];
 
 /** Exported only on request, for a business-day range */

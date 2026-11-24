@@ -27,3 +27,4 @@ export * from './storefrontMenus';
 export * from './storefrontPages';
 export * from './storefrontNews';
 export * from './storefrontCollections';
+export * from './storefrontForms';
