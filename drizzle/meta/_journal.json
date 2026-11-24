@@ -260,6 +260,13 @@
       "when": 1798963200000,
       "tag": "0036_storefront_home_page",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1799049600000,
+      "tag": "0037_storefront_forms",
+      "breakpoints": true
     }
   ]
 }

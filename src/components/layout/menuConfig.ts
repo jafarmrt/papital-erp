@@ -116,6 +116,7 @@ export function getMenuGroups(
         { name: 'صفحه‌های سایت', path: '/site-pages', icon: FileText, visible: open('/site-pages') },
         { name: 'خبرهای سایت', path: '/site-news', icon: Newspaper, visible: open('/site-news') },
         { name: 'کالکشن‌های سایت', path: '/site-collections', icon: LayoutGrid, visible: open('/site-collections') },
+        { name: 'فرم‌های سایت', path: '/site-forms', icon: ClipboardList, visible: open('/site-forms') },
       ]
     },
     {

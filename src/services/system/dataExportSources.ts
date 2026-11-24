@@ -12,7 +12,7 @@ import {
   workflowDefinitions, workflowDefinitionVersions, workflowStates, workflowTransitions, workflowInstances,
   workflowHistoryLogs, workflowTasks, workflowPendingApprovals, workflowDelegations,
   mediaSections, mediaAssets, projectManagers, stockReceiptConfirmations, workshopTaskReports,
-  storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontBuyerGroups, storefrontBuyerAccounts, storefrontBuyerAddresses, storefrontSmsMessages, storefrontRedirects, storefrontDiscountCodes, storefrontDiscountRedemptions, storefrontCampaigns, storefrontMenus, storefrontMenuItems, storefrontPages, storefrontNews, storefrontCollections, storefrontContentAssets,
+  storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontBuyerGroups, storefrontBuyerAccounts, storefrontBuyerAddresses, storefrontSmsMessages, storefrontRedirects, storefrontDiscountCodes, storefrontDiscountRedemptions, storefrontCampaigns, storefrontMenus, storefrontMenuItems, storefrontPages, storefrontNews, storefrontCollections, storefrontForms, storefrontContentAssets,
 } from '../../db/schema.js';
 import { SENSITIVE_SETTING_PATTERN } from '../settings/systemSettings.service.js';
 
@@ -154,6 +154,7 @@ export const DATA_EXPORT_TABLE_SOURCES: Readonly<Record<string, TableSpecSource>
   storefront_pages: { table: storefrontPages, key: ['id'], columns: withoutColumns(storefrontPages, ['previewHash', 'previewExpiresAt']) },
   storefront_news: { table: storefrontNews, key: ['id'] },
   storefront_collections: { table: storefrontCollections, key: ['id'] },
+  storefront_forms: { table: storefrontForms, key: ['id'] },
   storefront_content_assets: { table: storefrontContentAssets, key: ['id'] },
 };
 
