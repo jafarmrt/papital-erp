@@ -32,7 +32,8 @@ describe('the home page row', () => {
     expect(home([]).problem).toBeNull();
     expect(home([], false, { slug: 'home' }).problem?.field).toBe('slug');
     expect(home([], false, { noindex: true }).problem?.field).toBe('noindex');
-    expect(home([], false, { title: 'خانهٔ من' }).problem?.field).toBe('title');
+    // its name is the rules' own, whatever a request carries
+    expect(home([], false, { title: 'خانهٔ من' }).page?.title).toBe(HOME_PAGE_TITLE);
     expect(home([], false, { shareImageAssetId: 5 }).page?.shareImageAssetId).toBe(5);
     // the name is the home row's alone: no other page takes it
     expect(checkedPage(page([]), { forPublish: false, baseSlug: null }).problem?.code).toBe('STOREFRONT_PAGE_SLUG_INVALID');
@@ -129,6 +130,10 @@ describe('a link chosen as in the menus', () => {
     expect(checkedSiteLink(link('collection', { target: ' کاشی ' }), 'پیوند').link?.target).toBe('کاشی');
     expect(normalizedSiteLink('url', { target: 'https://example.com', itemId: 3 })).toEqual(link('url', { target: 'https://example.com' }));
     expect(siteLinkWords(link('content', { pageId: 5 }) as never)).toBe('content: صفحهٔ متنی 5');
+    // an outside address follows the menu's rule: a real one may hold an apostrophe; names keep their half-space
+    expect(checkedSiteLink(link('url', { target: "https://example.com/Joe's+Cafe" }), 'پیوند').problem).toBeNull();
+    expect(checkedSiteLink(link('collection', { target: `کاشی${String.fromCharCode(0x200c)}ها` }), 'پیوند').problem).toBeNull();
+    expect(checkedSiteLink(link('path', { target: '/products?category=%D8%AF&sort=newest' }), 'پیوند').problem).toBeNull();
   });
 
   it('refuses half a link and anything that is not one', () => {
@@ -138,7 +143,7 @@ describe('a link chosen as in the menus', () => {
       link('url', { target: 'https://user:pass@example.com' }), { ...link('path', { target: '/x' }), extra: 1 }, link('product', { itemId: 1.5 }), link('path', { target: 5 }),
       // half of a surrogate pair (the database refuses it as text), a hidden direction character and markup in an address
       link('collection', { target: `a${String.fromCharCode(0xd83d)}` }), link('path', { target: `/a${String.fromCharCode(0xd83d)}` }), link('url', { target: `https://example.com/${String.fromCharCode(0xdc00)}` }),
-      link('path', { target: `/a${String.fromCharCode(0x202e)}b` }), link('path', { target: '/a"><x' }), link('url', { target: "https://example.com/'x" }), link('category', { target: `a${String.fromCharCode(7)}` }),
+      link('path', { target: `/a${String.fromCharCode(0x202e)}b` }), link('path', { target: '/a"><x' }), link('path', { target: "/it's" }), link('category', { target: `a${String.fromCharCode(7)}` }),
     ];
     for (const value of bad) expect(checkedSiteLink(value, 'پیوند').problem, JSON.stringify(value)).toBeTruthy();
   });

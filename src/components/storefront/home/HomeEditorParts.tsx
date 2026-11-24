@@ -1,6 +1,6 @@
 import { LayoutTemplate } from 'lucide-react';
 import {
-  HOME_KINDS_ONCE, HOME_KINDS_WITH_BACKGROUND, SECTION_KINDS, isHomeSectionKind, todayHomeSections, type PageSection, type SectionKind,
+  COLLECTION_INTROS_MAX, HOME_KINDS_ONCE, HOME_KINDS_WITH_BACKGROUND, SECTION_KINDS, isHomeSectionKind, todayHomeSections, type PageSection, type SectionKind,
 } from '../../../lib/storefront/storefrontPageRules';
 
 /**
@@ -13,6 +13,7 @@ export const ownLook = (section: PageSection): boolean => isHomeSectionKind(sect
 /** The kinds the home page can still take: every kind but the delivery table, and a part that comes once only while it is not there */
 export const homeKinds = (sections: readonly PageSection[]): SectionKind[] => SECTION_KINDS.filter(kind => (
   kind !== 'shippingMethods' && !(isHomeSectionKind(kind) && HOME_KINDS_ONCE.includes(kind) && sections.some(section => section.kind === kind))
+  && !(kind === 'collectionIntro' && sections.filter(section => section.kind === 'collectionIntro').length >= COLLECTION_INTROS_MAX)
 ));
 
 export function SectionSwitch({ name, hidden, onChange }: { name: string; hidden: boolean; onChange: (hidden: boolean) => void }) {

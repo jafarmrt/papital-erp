@@ -169,7 +169,6 @@ export async function runStorefrontHomeV12Tests(shouldRun: (id: string, ...extra
       ['a slide image that is not in the library', form([slider(slide({ mobileImageAssetId: 2_000_000_000 }))]), 'STOREFRONT_PAGE_IMAGE_UNKNOWN'],
       ['an unknown icon of a point', form([{ kind: 'homeWhy', background: 'white', points: [{ icon: 'skull', text: 'x' }, { icon: 'leaf', text: 'y' }] }]), 'STOREFRONT_PAGE_FIELD_INVALID'],
       ['a switch that is not on or off', form([{ ...emptyHomeSection('homeCategories'), hidden: 'yes' }]), 'STOREFRONT_PAGE_FIELD_INVALID'],
-      ['another name for the home page', form([], { title: 'خانهٔ من' }), 'STOREFRONT_PAGE_TITLE_INVALID'],
       ['a second slider', form([slider(slide()), slider(slide())]), 'STOREFRONT_PAGE_SECTION_INVALID'],
       ['four collection intros', form(['a', 'b', 'c', 'd'].map(c => ({ kind: 'collectionIntro', background: 'white', title: '', collection: c }))), 'STOREFRONT_PAGE_SECTION_INVALID'],
       // half of a surrogate pair is no text for the database: it is refused by name, not by a failed write
@@ -218,12 +217,15 @@ export async function runStorefrontHomeV12Tests(shouldRun: (id: string, ...extra
       // switched off, with an image of its own
       { ...bannerOf(offImage.id, 'بنر خاموش', null), hidden: true },
     ];
-    const saved = await erp.put(`/api/storefront/pages/${homeId}`, form(draftSections, { seoTitle: `عنوان خانه ${tag}`, seoDescription: 'توضیح خانه' }));
+    // the name of the home page is the rules' own, whatever a request carries
+    const saved = await erp.put(`/api/storefront/pages/${homeId}`, form(draftSections, { title: 'خانهٔ من', seoTitle: `عنوان خانه ${tag}`, seoDescription: 'توضیح خانه' }));
     if (saved.status !== 200 || saved.body.data?.status !== 'draft' || saved.body.data?.draft?.sections?.length !== draftSections.length || saved.body.data.draft.sections[13]?.hidden !== true || saved.body.data.draft.sections[14]?.hidden !== undefined) {
       throw new Error(`saving the draft: ${saved.status} ${JSON.stringify(saved.body).slice(0, 400)}`);
     }
     version = Number(saved.body.data.version);
     if ((await site('/home')).status !== 404) wrong.push('a saved draft reached the site');
+    // a link in the draft alone is already told to the page it leads to
+    if (saved.body.data.title !== 'صفحهٔ اصلی' || (await erp.get(`/api/storefront/pages/${pageId}`)).body.data?.linkedFromHome !== true) wrong.push(`the saved draft: named «${String(saved.body.data.title)}», its link told to the page ${String((await erp.get(`/api/storefront/pages/${pageId}`)).body.data?.linkedFromHome)}`);
 
     // 4) «انتشار» asks every part that is on to be finished, never one that is off
     await orm.update(mediaAssets).set({ isDeleted: 1 }).where(eq(mediaAssets.id, lost.id));
@@ -332,6 +334,15 @@ export async function runStorefrontHomeV12Tests(shouldRun: (id: string, ...extra
     const later = await erp.put(`/api/storefront/pages/${homeId}`, form([emptyHomeSection('homeIntro')], { seoTitle: 'پیش‌نویس تازه' }));
     version = Number(later.body.data?.version);
     if (later.status !== 200 || later.body.data?.status !== 'changed' || (await home())?.seoTitle !== `عنوان خانه ${tag}`) wrong.push(`a draft saved after «انتشار»: ${later.status} ${String(later.body.data?.status)}, on the site «${String((await home())?.seoTitle)}»`);
+    // the copy on the site still leads to the page and the news item, though the draft no longer does: both are told so,
+    // and removing the page or taking the item off the site records it
+    const newsNow = Number((await erp.get(`/api/storefront/news/${newsId}`)).body.data?.version);
+    const stillTold = `${String((await erp.get(`/api/storefront/pages/${pageId}`)).body.data?.linkedFromHome)},${String((await erp.get(`/api/storefront/news/${newsId}`)).body.data?.linkedFromHome)}`;
+    await erp.post(`/api/storefront/news/${newsId}/unpublish`, { version: newsNow });
+    await erp.del(`/api/storefront/pages/${pageId}?version=${Number((await erp.get(`/api/storefront/pages/${pageId}`)).body.data?.version)}`);
+    const lastOf = async (entity: string, entityId: string) => ((await orm.select().from(activityLogs).where(and(eq(activityLogs.entity, entity), eq(activityLogs.entityId, entityId))).orderBy(desc(activityLogs.id)).limit(1))[0]?.details ?? {}) as { linkedFromHome?: boolean };
+    const recorded = `${String((await lastOf('صفحهٔ سایت', `page-${pageId}`)).linkedFromHome)},${String((await lastOf('خبر سایت', `news-${newsId}`)).linkedFromHome)}`;
+    if (stillTold !== 'true,true' || recorded !== 'true,true') wrong.push(`a link of the copy on the site alone: told ${stillTold}, recorded ${recorded}`);
     const kept = [
       (await erp.del(`/api/storefront/pages/${homeId}?version=${version}`)).body.code, (await erp.post(`/api/storefront/pages/${homeId}/move`, { slug: `home-${tag}`, version })).body.code,
       (await erp.post(`/api/storefront/pages/${homeId}/preview`, {})).body.code,

@@ -56,9 +56,12 @@ export function checkedSiteLink(raw: unknown, title: string): CheckedSiteLink {
   if (typeof value.kind !== 'string' || !(SITE_LINK_KINDS as readonly string[]).includes(value.kind)) return { link: null, problem: `نوع «${title}» شناخته نیست.` };
   if (value.target !== undefined && typeof value.target !== 'string') return { link: null, problem: `مقصد «${title}» خوانا نیست.` };
   const link = normalizedSiteLink(value.kind as SiteLinkKind, value as Partial<SiteLink>);
-  // half of a surrogate pair is refused by PostgreSQL as text, a hidden or direction character is never part of an address,
-  // and a path of the site needs no quote or angle bracket as written (10e review; the page's own buttons hold the same)
-  if (LONE_SURROGATE.test(link.target) || UNSAFE.test(link.target) || ((link.kind === 'path' || link.kind === 'url') && /[<>"'`]/.test(link.target))) return { link: null, problem: `مقصد «${title}» خوانا نیست.` };
+  // half of a surrogate pair is refused by PostgreSQL as text, and a control or direction-override character is never
+  // part of a name or an address (10e review)
+  if (LONE_SURROGATE.test(link.target) || UNSAFE.test(link.target)) return { link: null, problem: `مقصد «${title}» خوانا نیست.` };
+  // a path of the site needs no quote, angle bracket or backtick as written, as a page's own button holds (`pageLink`);
+  // an outside address follows the menu's rule alone (a real one may hold an apostrophe)
+  if (link.kind === 'path' && /[<>"'`]/.test(link.target)) return { link: null, problem: `«${title}» نباید نشانه‌های < > " ' یا \` داشته باشد.` };
   const missing = { link: null, problem: `مقصد «${title}» را برگزینید.` };
   switch (link.kind) {
     case 'page': return isMenuSitePage(link.target) ? { link, problem: null } : missing;

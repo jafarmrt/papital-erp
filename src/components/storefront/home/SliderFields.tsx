@@ -85,8 +85,8 @@ export function SliderFields({ section, name, assets, options, onChange }: {
   section: SliderSection; name: string; assets: AssetTitles; options: MenuLinkOptions | undefined; onChange: (next: SliderSection) => void;
 }) {
   const [keys, setKeys] = useState<string[]>(() => section.slides.map(newSlideKey));
-  // the slides were replaced from outside (a newer copy of the page): every slide starts again
-  const slideKeys = keys.length === section.slides.length ? keys : section.slides.map((_, index) => keys[index] ?? `slide-fresh-${index}`);
+  // more or fewer slides than keys (the slides were changed from outside this part): each slide without a key gets a new one
+  const slideKeys = keys.length === section.slides.length ? keys : section.slides.map((_, index) => keys[index] ?? newSlideKey());
   const change = (slides: Slide[], nextKeys: string[]) => {
     setKeys(nextKeys);
     onChange({ ...section, slides });

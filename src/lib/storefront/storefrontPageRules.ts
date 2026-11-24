@@ -212,8 +212,6 @@ export function checkedPage(raw: unknown, options: {
     const slug = typeof raw.slug === 'string' ? raw.slug.trim() : '';
     const home = options.home === true;
     if (home && slug !== HOME_PAGE_SLUG) return refuse('نشانی صفحهٔ اصلی عوض نمی‌شود.', 'STOREFRONT_PAGE_SLUG_INVALID', 'slug');
-    // its name in the list is fixed too: the screen has no field for it (10e review)
-    if (home && title !== HOME_PAGE_TITLE) return refuse('نام صفحهٔ اصلی عوض نمی‌شود.', 'STOREFRONT_PAGE_TITLE_INVALID', 'title');
     const fixedSlug = options.fixedSlug ?? null;
     if (fixedSlug !== null && slug !== fixedSlug) return refuse('نشانی این صفحهٔ ثابت عوض نمی‌شود.', 'STOREFRONT_PAGE_SLUG_INVALID', 'slug');
     if (fixedSlug !== null || home ? false : options.baseSlug !== null ? slug !== options.baseSlug : (!slug || slug.length > PAGE_SLUG_MAX || !STOREFRONT_SLUG_PATTERN.test(slug))) {
@@ -263,7 +261,8 @@ export function checkedPage(raw: unknown, options: {
     if (options.forPublish && home && sections.length > 0 && sections.every(s => s.hidden)) return refuse('همهٔ بخش‌های صفحهٔ اصلی خاموش‌اند؛ دست‌کم یکی را روشن کنید.', 'STOREFRONT_PAGE_UNFINISHED');
     // a fixed page may go on the site with its title and search words alone
     if (options.forPublish && sections.length === 0 && fixedSlug === null) return refuse(`${noun} هنوز بخشی ندارد.`, 'STOREFRONT_PAGE_UNFINISHED');
-    return { page: { title, slug, seoTitle, seoDescription, noindex: raw.noindex === true, shareImageAssetId, sections }, problem: null };
+    // the home page's name in the list is fixed: the screen has no field for it, so it is written here whatever came (10e review)
+    return { page: { title: home ? HOME_PAGE_TITLE : title, slug, seoTitle, seoDescription, noindex: raw.noindex === true, shareImageAssetId, sections }, problem: null };
   } catch (error) {
     if (error instanceof Refused) return { page: null, problem: { field: error.field, section, message: error.message, code: error.code } };
     throw error;
