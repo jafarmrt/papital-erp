@@ -101,18 +101,20 @@ describe('the home page the shop published', () => {
   it('draws the slider: the first image early, the phone\'s own crop, buttons only where the address is one', () => {
     const slider = partOf('slider');
     expect(slider.match(/aria-roledescription="slide"/g)?.length).toBe(4);
-    expect(slider).toContain(`<source media="(max-width: 639px)" srcSet="/media/${SHA('b')}.webp" width="800" height="1000"/>`);
+    // the upright crop is for the upright box alone: a phone held upright
+    expect(slider).toContain(`<source media="(max-width: 639px) and (orientation: portrait)" srcSet="/media/${SHA('b')}.webp" width="800" height="1000"/>`);
     expect(slider).toMatch(new RegExp(`<img src="/media/${SHA('a')}.webp" alt="کاشی آبی" width="1600" height="600" loading="eager" fetchPriority="high"`));
     expect(slider).toMatch(new RegExp(`<img src="/media/${SHA('c')}.webp" alt="کارگاه" width="1600" height="600" loading="lazy"`));
-    expect(slider).toMatch(/<a[^>]*href="\/p\/tile-necklace-sample"[^>]*>دیدن محصول/);
-    expect(slider).toMatch(/<a href="https:\/\/example\.com\/papital" rel="noopener noreferrer"[^>]*>اینستاگرام/);
+    expect(slider).toMatch(/<a[^>]*href="\/p\/tile-necklace-sample"[^>]*><span[^>]*>دیدن محصول<\/span>/);
+    expect(slider).toMatch(/<a href="https:\/\/example\.com\/papital" rel="noopener noreferrer"[^>]*><span[^>]*>اینستاگرام<\/span>/);
     for (const title of ['اسلاید سوم', 'اسلاید چهارم']) expect(slider).toContain(title);
     for (const label of ['دکمهٔ بد', 'دکمهٔ بیرونی پنهان']) expect(slider).not.toContain(label);
     expect(slider).toContain('aria-label="۱ از ۴"');
     // every slide has one box, upright on a phone and wide otherwise, whatever the shape of its image; the words are
     // part of the box's height (in its flow, not laid over it), so long words make it taller instead of being cut off
-    expect(slider.match(/class="relative flex aspect-\[4\/5\] w-full shrink-0 snap-start items-end sm:aspect-\[8\/3\] landscape:aspect-\[8\/3\]"/g)?.length).toBe(4);
-    expect(slider).not.toContain('overflow-hidden sm:aspect');
+    // (4:5 of the window's width upright, 8:3 otherwise, and never more than 78% of the window's height)
+    expect(slider.match(/class="relative flex min-h-\[min\(125vw,78vh\)\] w-full shrink-0 snap-start items-end sm:min-h-\[min\(37\.5vw,78vh\)\] landscape:min-h-\[min\(37\.5vw,78vh\)\]"/g)?.length).toBe(4);
+    expect(slider).not.toMatch(/data-slide="\d"[^>]*overflow-hidden/);
     expect(slider.match(/<picture class="absolute inset-0 block overflow-hidden">/g)?.length).toBe(4);
     expect(slider.match(/<div class="relative w-full bg-gradient-to-t /g)?.length).toBe(4);
     // the arrows, the dots and «ایستادن» are drawn in the browser, once the script that makes them work has loaded
