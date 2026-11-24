@@ -48,7 +48,8 @@ export function FormEditor({ detail, canManage, onBack, onDeleted }: { detail: F
     setDraft(detail.form);
   };
   const adoptEvent = useEffectEvent(() => { if (outdated && (own || !dirty)) adopt(); });
-  useEffect(() => { adoptEvent(); }, [detail.version]);
+  // also when the edits are undone by hand beside a colleague's newer version: nothing is unsaved then, so it is read
+  useEffect(() => { adoptEvent(); }, [detail.version, dirty]);
   const stale = outdated && dirty && !own;
 
   const fields = Array.isArray(draft.fields) ? draft.fields : [];

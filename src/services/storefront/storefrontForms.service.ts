@@ -60,6 +60,9 @@ async function lockedRow(tx: DbExecutor, id: number, expectedVersion: number): P
   return row;
 }
 
+/** Two creations never interleave: the cap reads the whole table */
+const lockForms = (tx: DbExecutor) => tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${'storefront_forms'}))`);
+
 const keyTaken = () => new ConflictError('فرم دیگری همین نام لاتین را دارد.', { field: 'key' }, 'STOREFRONT_FORM_KEY_TAKEN');
 async function refuseTakenKey(tx: DbExecutor, key: string): Promise<void> {
   const [taken] = await tx.select({ id: storefrontForms.id }).from(storefrontForms).where(and(eq(storefrontForms.key, key), eq(storefrontForms.isDeleted, 0)));
@@ -82,6 +85,7 @@ export async function createForm(req: Request, input: FormCreateInput): Promise<
   if (checked.problem) throw refused(checked.problem);
   const form = checked.form;
   const id = await orm.transaction(async (tx) => {
+    await lockForms(tx);
     const [{ total }] = await tx.select({ total: sql<number>`count(*)::int` }).from(storefrontForms).where(eq(storefrontForms.isDeleted, 0));
     if (total >= FORMS_MAX) throw invalid('شمار فرم‌ها به سقف رسیده است؛ فرمی را که لازم نیست حذف کنید.', 'title', 'STOREFRONT_FORM_TOO_MANY');
     await refuseTakenKey(tx, form.key);

@@ -91,6 +91,9 @@ export async function runStorefrontFormsV12Tests(shouldRun: (id: string, ...extr
       ['a hidden character in a name', body({ fields: [field({ label: `نام${String.fromCharCode(0x202e)}` })] }), 'STOREFRONT_FORM_FIELD_INVALID'],
       ['a line break in a name', body({ fields: [field({ label: 'نام\nدوم' })] }), 'STOREFRONT_FORM_FIELD_INVALID'],
       ['an id of another shape', body({ fields: [field({ id: 'F 1' })] }), 'STOREFRONT_FORM_FIELD_INVALID'],
+      ['an id that is a word of every object', body({ fields: [field({ id: 'constructor' })] }), 'STOREFRONT_FORM_FIELD_INVALID'],
+      ['a name nobody can see', body({ fields: [field({ label: String.fromCharCode(0x200b, 0x200c) })] }), 'STOREFRONT_FORM_FIELD_INVALID'],
+      ['two names that read the same', body({ fields: [field({ label: 'کریمی' }), field({ id: 'f2', label: 'كريمي' })] }), 'STOREFRONT_FORM_FIELD_INVALID'],
       ['two fields by one id', body({ fields: [field(), field({ label: 'دوم' })] }), 'STOREFRONT_FORM_FIELD_INVALID'],
       ['two fields by one name', body({ fields: [field(), field({ id: 'f2' })] }), 'STOREFRONT_FORM_FIELD_INVALID'],
       ['options on a field that takes none', body({ fields: [field({ options: ['الف', 'ب'] })] }), 'STOREFRONT_FORM_FIELD_INVALID'],
@@ -172,9 +175,16 @@ export async function runStorefrontFormsV12Tests(shouldRun: (id: string, ...extr
       wrong.push(`removing a form: ${removals}, row ${String(gone?.isDeleted)}/${String(gone?.enabled)}, still listed ${listed}, audit ${String(removeAudit?.action)}, its key again ${reused.status}`);
     }
 
+    // two colleagues who make a form by one name at the same moment: one makes it, the others are told it is taken
+    const race = (await Promise.all(Array.from({ length: 6 }, () => erp.post('/api/storefront/forms', { title: `هم‌زمان ${tag}`, key: keyOf('race'), template: null })))).map(res => `${res.status}:${String(res.body.code ?? 'made')}`).sort().join(' ');
+    if (race !== '201:made 409:STOREFRONT_FORM_KEY_TAKEN 409:STOREFRONT_FORM_KEY_TAKEN 409:STOREFRONT_FORM_KEY_TAKEN 409:STOREFRONT_FORM_KEY_TAKEN 409:STOREFRONT_FORM_KEY_TAKEN') wrong.push(`six forms made by one name at once: ${race}`);
+
     // 6) the cap on how many forms a shop has
     const [{ live }] = await orm.select({ live: sql<number>`count(*)::int` }).from(storefrontForms).where(eq(storefrontForms.isDeleted, 0));
-    if (live < FORMS_MAX) await orm.insert(storefrontForms).values(Array.from({ length: FORMS_MAX - live }, (_, i) => ({ key: keyOf(`fill${i}`), title: `پرکننده ${i} ${tag}` })));
+    // one place is left: of several made at the same moment, one is made (the cap is read under a lock)
+    if (live < FORMS_MAX - 1) await orm.insert(storefrontForms).values(Array.from({ length: FORMS_MAX - 1 - live }, (_, i) => ({ key: keyOf(`fill${i}`), title: `پرکننده ${i} ${tag}` })));
+    const lastPlace = (await Promise.all(Array.from({ length: 5 }, (_, i) => erp.post('/api/storefront/forms', { title: `آخرین جا ${i}`, key: keyOf(`last${i}`), template: null })))).map(res => `${res.status}:${String(res.body.code ?? 'made')}`).sort().join(' ');
+    if (live < FORMS_MAX && lastPlace !== '201:made 422:STOREFRONT_FORM_TOO_MANY 422:STOREFRONT_FORM_TOO_MANY 422:STOREFRONT_FORM_TOO_MANY 422:STOREFRONT_FORM_TOO_MANY') wrong.push(`five forms made at once for the last place: ${lastPlace}`);
     const over = await erp.post('/api/storefront/forms', { title: 'یکی بیشتر', key: keyOf('over'), template: null });
     if (over.status !== 422 || over.body.code !== 'STOREFRONT_FORM_TOO_MANY') wrong.push(`one form more than the cap: ${over.status} ${String(over.body.code)}`);
 
@@ -189,6 +199,10 @@ export async function runStorefrontFormsV12Tests(shouldRun: (id: string, ...extr
       ['a removed form on the site', () => orm.update(storefrontForms).set({ enabled: 1 }).where(eq(storefrontForms.id, contactId))],
       ['a second live form by one key', () => orm.insert(storefrontForms).values({ key: keyOf('moved'), title: 'دومی' })],
       ['a title with a line break', () => orm.update(storefrontForms).set({ title: 'یک\nدو' }).where(eq(storefrontForms.id, formId))],
+      ['words above with a tab', () => orm.update(storefrontForms).set({ intro: 'یک\tدو' }).where(eq(storefrontForms.id, formId))],
+      ['words above too long', () => orm.update(storefrontForms).set({ intro: 'ا'.repeat(1001) }).where(eq(storefrontForms.id, formId))],
+      ['a button too long', () => orm.update(storefrontForms).set({ submitLabel: 'ب'.repeat(41) }).where(eq(storefrontForms.id, formId))],
+      ['a message after sending with a line break', () => orm.update(storefrontForms).set({ successMessage: 'یک\nدو' }).where(eq(storefrontForms.id, formId))],
     ];
     for (const [what, write] of direct) {
       const refused = await write().then(() => false, () => true);

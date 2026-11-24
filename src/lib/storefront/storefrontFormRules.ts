@@ -1,3 +1,4 @@
+import { compactSearchText } from '../search/searchText.js';
 import { STOREFRONT_SLUG_PATTERN } from './storefrontRules.js';
 import { Refused, fa, hasLoneSurrogate, isRecord, list, oneOf, onlyKeys, refuse, text } from './storefrontPageParts.js';
 
@@ -5,7 +6,7 @@ import { Refused, fa, hasLoneSurrogate, isRecord, list, oneOf, onlyKeys, refuse,
  * v12 phase 10f (docs/roadmap/V12_SITE_NEXT_START_PLAN.md §7.2 «۱۰و»): the rules of «فرم‌های سایت», shared by the server
  * and the screen (no I/O). A form is a title, a few plain lines above it, up to twelve fields of nine fixed kinds, the
  * words of its button and the message shown after it is sent. Nothing in a form is markup: every text is plain text,
- * a field is rebuilt from its known keys, and anything else is refused with its message (never dropped silently).
+ * a field is rebuilt from its known keys, and a key or a kind it does not know is refused with its message.
  * A form reaches the site only while its switch «این فرم روی سایت باشد» is on.
  */
 export const FORM_FIELD_KINDS = ['shortText', 'longText', 'mobile', 'email', 'number', 'choice', 'choices', 'date', 'consent'] as const;
@@ -33,8 +34,19 @@ export const FORM_SUBMIT_LABEL_MAX = 40;
 export const FORM_SUCCESS_MAX = 300;
 export const FORM_SUBMIT_LABEL_DEFAULT = 'فرستادن';
 export const FORM_SUCCESS_DEFAULT = 'پیام شما رسید. سپاس از شما.';
-/** a field's own name inside its form, given by the screen when the field is added and never shown */
-export const FORM_FIELD_ID = /^[a-z0-9]{1,12}$/;
+/**
+ * A field's own name inside its form (f1, f2, …), given by the screen when the field is added and never shown. Only
+ * this shape: the name is a key of the answers a visitor sends and the name of an input on the site, so it is never a
+ * word an object or a form element has a meaning for.
+ */
+export const FORM_FIELD_ID = /^f[1-9][0-9]{0,3}$/;
+/**
+ * What two names are compared by: the same letters whatever their case, their Arabic or Persian form, the spaces and
+ * the marks nobody sees between them. '' = nothing in the name can be seen.
+ */
+// marks and fillers nobody sees that the search fold keeps: the soft hyphen, joiners, Hangul fillers, variation selectors
+const UNSEEN = /[\u00ad\u034f\u115f\u1160\u2060-\u2064\u3164\ufe00-\ufe0f]/g;
+export const sameNameKey = (value: string): string => compactSearchText(value.normalize('NFC').replace(UNSEEN, ''));
 
 export interface FormField {
   id: string;
@@ -77,7 +89,7 @@ function checkedField(raw: unknown, position: number): FormField {
   if (typeof raw.id !== 'string' || !FORM_FIELD_ID.test(raw.id)) return refuse(`${where} خوانا نیست؛ آن را بردارید و دوباره بسازید.`, 'STOREFRONT_FORM_FIELD_INVALID');
   const kind = oneOf(raw.kind, FORM_FIELD_KINDS, `نوع ${where}`);
   const label = text(raw.label ?? '', kind === 'consent' ? FORM_CONSENT_LABEL_MAX : FORM_FIELD_LABEL_MAX, kind === 'consent' ? `جملهٔ ${where}` : `عنوان ${where}`);
-  if (!label) return refuse(kind === 'consent' ? `جملهٔ کنار تیک را برای ${where} بنویسید.` : `عنوان ${where} را بنویسید.`, 'STOREFRONT_FORM_FIELD_INVALID');
+  if (!sameNameKey(label)) return refuse(kind === 'consent' ? `جملهٔ کنار تیک را برای ${where} بنویسید.` : `عنوان ${where} را بنویسید.`, 'STOREFRONT_FORM_FIELD_INVALID');
   if (raw.required !== undefined && typeof raw.required !== 'boolean') return refuse(`«اجباری» ${where} خوانا نیست.`, 'STOREFRONT_FORM_FIELD_INVALID');
   const help = text(raw.help ?? '', FORM_FIELD_HELP_MAX, `راهنمای ${where}`);
   const given = raw.options === undefined ? [] : list(raw.options, FORM_OPTIONS_MAX, `گزینه‌های ${where}`);
@@ -86,9 +98,9 @@ function checkedField(raw: unknown, position: number): FormField {
     return { id: raw.id, kind, label, required: raw.required === true, help, options: [] };
   }
   const options = given.map((option, i) => text(option, FORM_OPTION_MAX, `گزینهٔ ${fa(i + 1)} ${where}`));
-  if (options.some(option => option === '')) return refuse(`گزینهٔ خالی را از ${where} بردارید.`, 'STOREFRONT_FORM_FIELD_INVALID');
+  if (options.some(option => sameNameKey(option) === '')) return refuse(`گزینهٔ خالی را از ${where} بردارید.`, 'STOREFRONT_FORM_FIELD_INVALID');
   if (options.length < FORM_OPTIONS_MIN) return refuse(`${where} دست‌کم ${fa(FORM_OPTIONS_MIN)} گزینه می‌خواهد.`, 'STOREFRONT_FORM_FIELD_INVALID');
-  if (new Set(options).size !== options.length) return refuse(`دو گزینهٔ ${where} یکسان‌اند.`, 'STOREFRONT_FORM_FIELD_INVALID');
+  if (new Set(options.map(sameNameKey)).size !== options.length) return refuse(`دو گزینهٔ ${where} یکسان‌اند.`, 'STOREFRONT_FORM_FIELD_INVALID');
   return { id: raw.id, kind, label, required: raw.required === true, help, options };
 }
 
@@ -114,7 +126,7 @@ export function checkedForm(raw: unknown, options: { forSite: boolean }): Checke
   }
   const title = line('title', raw.title, FORM_TITLE_MAX, 'عنوان فرم');
   if (typeof title !== 'string') return title;
-  if (!title) return problem('title', 'عنوان فرم را بنویسید.');
+  if (!sameNameKey(title)) return problem('title', 'عنوان فرم را بنویسید.');
   if (raw.intro !== undefined && typeof raw.intro !== 'string') return problem('intro', 'متن بالای فرم باید متن باشد.');
   const intro = formParagraphs(String(raw.intro ?? ''));
   if (UNSAFE_IN_PARAGRAPHS.test(intro) || hasLoneSurrogate(intro)) return problem('intro', 'متن بالای فرم متن ساده است؛ نویسهٔ پنهان یا ناقص در آن نمی‌آید.');
@@ -138,7 +150,8 @@ export function checkedForm(raw: unknown, options: { forSite: boolean }): Checke
   const twice = fields.findIndex((field, index) => fields.findIndex(other => other.id === field.id) !== index);
   if (twice >= 0) return problem('fields', `فیلد ${fa(twice + 1)} خوانا نیست؛ آن را بردارید و دوباره بسازید.`, 'STOREFRONT_FORM_FIELD_INVALID', twice);
   // two fields by one name cannot be told apart in a message
-  const sameName = fields.findIndex((field, index) => fields.findIndex(other => other.label === field.label) !== index);
+  const names = fields.map(field => sameNameKey(field.label));
+  const sameName = names.findIndex((name, index) => names.indexOf(name) !== index);
   if (sameName >= 0) return problem('fields', `دو فیلد عنوان «${fields[sameName].label.slice(0, 40)}» را دارند؛ یکی را عوض کنید.`, 'STOREFRONT_FORM_FIELD_INVALID', sameName);
   if (options.forSite && fields.length === 0) return problem('fields', 'فرمی که فیلد ندارد روی سایت نمی‌آید؛ دست‌کم یک فیلد بسازید.', 'STOREFRONT_FORM_EMPTY');
   // a form of ticks alone carries no message
@@ -149,9 +162,13 @@ export function checkedForm(raw: unknown, options: { forSite: boolean }): Checke
   };
 }
 
-/** A new field's own name: the first free one of f1, f2, … */
+/**
+ * A new field's own name: one past the highest the form has, so the name of a field removed on the screen is not given
+ * to another field beside it (an answer is told apart from its form by the form's version, not by this alone).
+ */
 export function nextFieldId(fields: readonly Pick<FormField, 'id'>[]): string {
-  for (let n = 1; ; n++) if (!fields.some(field => field.id === `f${n}`)) return `f${n}`;
+  const highest = fields.reduce((max, field) => Math.max(max, FORM_FIELD_ID.test(field.id) ? Number(field.id.slice(1)) : 0), 0);
+  return `f${highest + 1}`;
 }
 
 export const emptyField = (kind: FormFieldKind, fields: readonly Pick<FormField, 'id'>[]): FormField => ({
