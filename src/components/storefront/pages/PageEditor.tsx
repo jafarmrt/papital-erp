@@ -75,7 +75,7 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
   const home = detail.kind === 'home';
   const dirty = useMemo(() => canonical(draft) !== canonical(base.draft), [draft, base.draft]);
   const places = Array.isArray(detail.menuPlaces) ? detail.menuPlaces : [];
-  const linkedFrom = places.map(place => `«${isMenuLocation(place) ? MENU_LOCATION_TITLES[place] : place}»`).join(' و ');
+  const linkedFrom = [...places.map(place => `«${isMenuLocation(place) ? MENU_LOCATION_TITLES[place] : place}»`), ...(detail.linkedFromHome ? ['«صفحهٔ اصلی»'] : [])].join(' و ');
   const outdated = detail.version !== base.version;
   /**
    * The server's copy replaces the screen's when this screen itself moved the page's version, or when nothing here is
@@ -225,7 +225,7 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
             <div>
               <label htmlFor={`${id}-seo-title`} className={label}>عنوان جست‌وجو (اختیاری)</label>
               <input id={`${id}-seo-title`} className={field} maxLength={PAGE_SEO_TITLE_MAX} value={draft.seoTitle} onChange={e => set('seoTitle', e.target.value)} />
-              <p className={hint}>اگر خالی بماند، عنوان صفحه در نتیجهٔ موتور جست‌وجو می‌آید.</p>
+              <p className={hint}>{home ? 'اگر خالی بماند، عنوان خود سایت در نتیجهٔ موتور جست‌وجو می‌آید.' : 'اگر خالی بماند، عنوان صفحه در نتیجهٔ موتور جست‌وجو می‌آید.'}</p>
             </div>
             <div>
               <label htmlFor={`${id}-seo-description`} className={label}>توضیح جست‌وجو (اختیاری)</label>
@@ -246,7 +246,7 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
         <section aria-label={fixed ? 'متن بالای صفحه' : 'بخش‌های صفحه'} className="space-y-3">
           <h3 className="text-sm font-black text-slate-800">{fixed ? 'متن بالای صفحه (اختیاری)' : 'بخش‌های صفحه'}</h3>
           {home && canManage && draft.sections.length === 0 && <HomeStart onStart={(sections) => { setDraft(d => ({ ...d, sections })); setKeys(sections.map(newKey)); }} />}
-          {draft.sections.length === 0 && !home && <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-xs text-slate-500">{fixed ? 'این صفحه متنی بالای خود ندارد. اگر می‌خواهید، از پایین یک متن بیفزایید.' : 'این صفحه هنوز بخشی ندارد. نخستین بخش را از پایین بیفزایید.'}</p>}
+          {draft.sections.length === 0 && !(home && canManage) && <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-xs text-slate-500">{home ? 'صفحهٔ اصلی هنوز بخشی ندارد و سایت صفحهٔ اصلی خودش را نشان می‌دهد.' : fixed ? 'این صفحه متنی بالای خود ندارد. اگر می‌خواهید، از پایین یک متن بیفزایید.' : 'این صفحه هنوز بخشی ندارد. نخستین بخش را از پایین بیفزایید.'}</p>}
           <ol className="space-y-3">
             {draft.sections.map((section, index) => {
               const name = fixed ? 'متن بالای صفحه' : `بخش ${formatPersianNumber(index + 1)}، ${SECTION_KIND_TITLES[section.kind]}`;

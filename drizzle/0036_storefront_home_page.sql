@@ -6,7 +6,9 @@
 -- one before it is written). The row starts unpublished, and while it is unpublished the site keeps the home page in
 -- its own code, so this migration changes nothing on the site. Like a base and a fixed row it is never removed
 -- (chk_storefront_pages_base_kept of 0032 already keeps every row that is not 'custom'). Its name is under `fixed-`, a
--- start no page of the shop may take since 0032, so it cannot meet a page someone made.
+-- start no page of the shop may take since 0032. A page someone named `fixed-home` before 0032 (possible only on a test
+-- install, as 0032 says of its own rows) keeps its row; the home row is then not made, and the screen and the site go
+-- on without it until that page is moved or removed and the row is written by hand.
 -- Migrations 0029 and 0032 are not edited (AGENTS.md §2.11): the CHECK that lists the kinds is replaced with every kind
 -- it had and the new one. No existing row is changed. Runs inside the Drizzle migrator transaction.
 ALTER TABLE storefront_pages DROP CONSTRAINT chk_storefront_pages_kind;

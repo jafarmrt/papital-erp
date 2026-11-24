@@ -26,6 +26,8 @@ const NAME_MAX = 120;
 // eslint-disable-next-line no-control-regex
 const UNSAFE = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/;
 
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+
 /** A link with every field its kind does not use emptied (a form keeps the others while one edits) */
 export function normalizedSiteLink(kind: SiteLinkKind, draft: Partial<SiteLink>): SiteLink {
   const takesTarget = kind === 'page' || kind === 'category' || kind === 'collection' || kind === 'path' || kind === 'url';
@@ -54,12 +56,15 @@ export function checkedSiteLink(raw: unknown, title: string): CheckedSiteLink {
   if (typeof value.kind !== 'string' || !(SITE_LINK_KINDS as readonly string[]).includes(value.kind)) return { link: null, problem: `نوع «${title}» شناخته نیست.` };
   if (value.target !== undefined && typeof value.target !== 'string') return { link: null, problem: `مقصد «${title}» خوانا نیست.` };
   const link = normalizedSiteLink(value.kind as SiteLinkKind, value as Partial<SiteLink>);
+  // half of a surrogate pair is refused by PostgreSQL as text, a hidden or direction character is never part of an address,
+  // and a path of the site needs no quote or angle bracket as written (10e review; the page's own buttons hold the same)
+  if (LONE_SURROGATE.test(link.target) || UNSAFE.test(link.target) || ((link.kind === 'path' || link.kind === 'url') && /[<>"'`]/.test(link.target))) return { link: null, problem: `مقصد «${title}» خوانا نیست.` };
   const missing = { link: null, problem: `مقصد «${title}» را برگزینید.` };
   switch (link.kind) {
     case 'page': return isMenuSitePage(link.target) ? { link, problem: null } : missing;
     case 'category': case 'collection':
       if (!link.target) return missing;
-      return link.target.length > NAME_MAX || UNSAFE.test(link.target) ? { link: null, problem: `مقصد «${title}» خوانا نیست.` } : { link, problem: null };
+      return link.target.length > NAME_MAX ? { link: null, problem: `مقصد «${title}» خوانا نیست.` } : { link, problem: null };
     case 'path': return isMenuPath(link.target) ? { link, problem: null } : { link: null, problem: `«${title}» باید مسیری از همین سایت باشد که با «/» آغاز می‌شود.` };
     case 'url': return isMenuUrl(link.target) ? { link, problem: null } : { link: null, problem: `«${title}» باید نشانی‌ای باشد که با https:// آغاز می‌شود.` };
     case 'product': return link.itemId === null ? missing : { link, problem: null };

@@ -32,6 +32,7 @@ describe('the home page row', () => {
     expect(home([]).problem).toBeNull();
     expect(home([], false, { slug: 'home' }).problem?.field).toBe('slug');
     expect(home([], false, { noindex: true }).problem?.field).toBe('noindex');
+    expect(home([], false, { title: 'خانهٔ من' }).problem?.field).toBe('title');
     expect(home([], false, { shareImageAssetId: 5 }).page?.shareImageAssetId).toBe(5);
     // the name is the home row's alone: no other page takes it
     expect(checkedPage(page([]), { forPublish: false, baseSlug: null }).problem?.code).toBe('STOREFRONT_PAGE_SLUG_INVALID');
@@ -63,7 +64,13 @@ describe('the parts of the home page', () => {
       const twice = home([emptyHomeSection(kind), emptyHomeSection(kind)]).problem;
       expect(twice?.message, kind).toContain('یک بار می‌آید');
     }
-    expect(home([slider(slide()), slider(slide())]).problem).toBeNull();
+    // one slider, and a few collection intros at most; a banner as often as wanted
+    expect(home([slider(slide()), slider(slide())]).problem?.message).toContain('«اسلایدر» یک بار می‌آید');
+    const intro = (collection: string) => ({ kind: 'collectionIntro', background: 'white', title: '', collection });
+    expect(home([intro('a'), intro('b'), intro('c')]).problem).toBeNull();
+    expect(home([intro('a'), intro('b'), intro('c'), intro('d')]).problem?.message).toContain('حداکثر ۳ بخش «معرفی کالکشن»');
+    const banner = { kind: 'banner', background: 'white', imageAssetId: 8, mobileImageAssetId: null, imageAlt: 'بنر', link: null };
+    expect(home([banner, banner, banner, banner], true).problem).toBeNull();
   });
 
   it('switches a part off without asking it to be finished, on the home page alone', () => {
@@ -129,6 +136,9 @@ describe('a link chosen as in the menus', () => {
       'text', 7, [], link('none'), link('gopher'), link('page', { target: 'admin' }), link('category'), link('product'), link('campaign'), link('content'), link('news'),
       link('path', { target: '//evil.example' }), link('path', { target: 'javascript:alert(1)' }), link('url', { target: 'http://example.com' }),
       link('url', { target: 'https://user:pass@example.com' }), { ...link('path', { target: '/x' }), extra: 1 }, link('product', { itemId: 1.5 }), link('path', { target: 5 }),
+      // half of a surrogate pair (the database refuses it as text), a hidden direction character and markup in an address
+      link('collection', { target: `a${String.fromCharCode(0xd83d)}` }), link('path', { target: `/a${String.fromCharCode(0xd83d)}` }), link('url', { target: `https://example.com/${String.fromCharCode(0xdc00)}` }),
+      link('path', { target: `/a${String.fromCharCode(0x202e)}b` }), link('path', { target: '/a"><x' }), link('url', { target: "https://example.com/'x" }), link('category', { target: `a${String.fromCharCode(7)}` }),
     ];
     for (const value of bad) expect(checkedSiteLink(value, 'پیوند').problem, JSON.stringify(value)).toBeTruthy();
   });

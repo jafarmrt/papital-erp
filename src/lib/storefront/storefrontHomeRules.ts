@@ -1,5 +1,5 @@
 import {
-  HOME_KICKER_MAX, HOME_KINDS_ONCE, HOME_SECTION_KIND_TITLES, SLIDES_MAX, SLIDE_TEXT_MAX, SLIDE_TITLE_MAX, WHY_POINTS_MAX, WHY_POINTS_MIN, WHY_POINT_TEXT_MAX,
+  COLLECTION_INTROS_MAX, HOME_KICKER_MAX, HOME_KINDS_ONCE, HOME_SECTION_KIND_TITLES, SLIDES_MAX, SLIDE_TEXT_MAX, SLIDE_TITLE_MAX, WHY_POINTS_MAX, WHY_POINTS_MIN, WHY_POINT_TEXT_MAX,
   type HomeSection, type HomeSectionKind, type Slide, type WhyPoint,
 } from './storefrontHomeParts.js';
 import {
@@ -137,27 +137,32 @@ export function homeSectionLinks(sections: readonly PageSection[]): Array<{ link
 
 /** A part of the home page as the audit row keeps it */
 export function auditHomeSection(section: HomeSection): Record<string, unknown> {
-  const off = section.hidden ? { hidden: true } : {};
   const images = homeSectionAssetIds(section);
   const withImages = images.length ? { images } : {};
   switch (section.kind) {
     case 'slider':
       return {
-        ...off, ...withImages,
+        ...withImages,
         slides: section.slides.map(slide => [slide.title, slide.text, slide.buttonLabel, siteLinkWords(slide.link), slide.startsOn && `از ${slide.startsOn}`, slide.endsOn && `تا ${slide.endsOn}`].filter(Boolean).join(' | ').slice(0, 300)),
       };
-    case 'banner': return { ...off, ...withImages, alt: section.imageAlt, link: siteLinkWords(section.link) };
-    case 'collectionIntro': return { ...off, title: section.title, collection: section.collection };
-    case 'homeWhy': return { ...off, points: section.points.map(point => point.text) };
-    case 'homeIntro': return { ...off, kicker: section.kicker, title: section.title, text: section.text, button: section.buttonLabel, links: [section.buttonHref].filter(Boolean) };
-    case 'homeFeatured': case 'homeNewest': return { ...off, title: section.title, button: section.buttonLabel, links: [section.buttonHref].filter(Boolean) };
-    case 'homeCollections': return { ...off, title: section.title, text: section.text };
-    case 'homeWholesale': return { ...off, title: section.title, text: section.text, buttons: [section.buttonLabel, section.secondLabel].filter(Boolean), links: [section.buttonHref, section.secondHref].filter(Boolean) };
-    default: return { ...off, title: section.title };
+    case 'banner': return { ...withImages, alt: section.imageAlt, link: siteLinkWords(section.link) };
+    case 'collectionIntro': return { title: section.title, collection: section.collection };
+    case 'homeWhy': return { points: section.points.map(point => point.text) };
+    case 'homeIntro': return { kicker: section.kicker, title: section.title, text: section.text, button: section.buttonLabel, links: [section.buttonHref].filter(Boolean) };
+    case 'homeFeatured': case 'homeNewest': return { title: section.title, button: section.buttonLabel, links: [section.buttonHref].filter(Boolean) };
+    case 'homeCollections': return { title: section.title, text: section.text };
+    case 'homeWholesale': return { title: section.title, text: section.text, buttons: [section.buttonLabel, section.secondLabel].filter(Boolean), links: [section.buttonHref, section.secondHref].filter(Boolean) };
+    default: return { title: section.title };
   }
 }
 
-/** The parts the home page takes once, by the first one that comes twice; null when none does */
-export function homeKindTwice(sections: readonly PageSection[]): HomeSectionKind | null {
-  return HOME_KINDS_ONCE.find(kind => sections.filter(section => section.kind === kind).length > 1) ?? null;
+/**
+ * The first rule of the whole home page that its parts break, as a message; null when none. A part the page takes once
+ * comes once, and «معرفی کالکشن» a few times at most (each one reads the catalog when the site asks for the page).
+ */
+export function homePartsProblem(sections: readonly PageSection[]): string | null {
+  const twice = HOME_KINDS_ONCE.find(kind => sections.filter(section => section.kind === kind).length > 1);
+  if (twice) return `بخش «${HOME_SECTION_KIND_TITLES[twice]}» یک بار می‌آید.`;
+  const intros = sections.filter(section => section.kind === 'collectionIntro').length;
+  return intros > COLLECTION_INTROS_MAX ? `صفحهٔ اصلی حداکثر ${fa(COLLECTION_INTROS_MAX)} بخش «معرفی کالکشن» می‌گیرد.` : null;
 }

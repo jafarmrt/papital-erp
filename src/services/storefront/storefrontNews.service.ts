@@ -12,6 +12,7 @@ import type { PageStatus } from '../../lib/storefront/storefrontPageContracts.js
 import { assetInfos, auditSections, canonical, checkContentReferences, refuseNewContentImages, writeContentAssetRows } from './storefrontContentShared.js';
 import { newsOnSite } from './storefrontNewsPublic.js';
 import { newsMenuPlacesOf } from './storefrontNewsLinks.js';
+import { homeLinksTo } from './storefrontPageLinks.js';
 
 /**
  * v12 phase 10d (package 18, V12_SITE_NEXT_START_PLAN.md §7.2): «خبرهای سایت» on the ERP side, made like «صفحه‌های
@@ -56,7 +57,7 @@ const listRowOf = (row: NewsRecord, today: string): NewsListRow => ({
 async function detailOf(executor: DbExecutor, row: NewsRecord): Promise<NewsDetail> {
   const draft = draftOf(row);
   return {
-    ...listRowOf(row, await businessTodayIsoDate()), draft, assets: await assetInfos(executor, newsAssetIds(draft)), menuPlaces: await newsMenuPlacesOf(executor, row.id),
+    ...listRowOf(row, await businessTodayIsoDate()), draft, assets: await assetInfos(executor, newsAssetIds(draft)), menuPlaces: await newsMenuPlacesOf(executor, row.id), linkedFromHome: await homeLinksTo(executor, { newsId: row.id }),
   };
 }
 
@@ -216,7 +217,7 @@ export async function unpublishNews(req: Request, id: number, version: number): 
     await writeContentAssetRows(tx, CONTENT_KIND, id, []);
     await logActivity({
       req, tx, action: 'UPDATE', entity: AUDIT_ENTITY, entityId: `news-${id}`,
-      description: `خبر «${row.title}» از روی سایت برداشته شد`, details: { before: auditOf(row.published), after: null, linkedFromMenus: await newsMenuPlacesOf(tx, id) },
+      description: `خبر «${row.title}» از روی سایت برداشته شد`, details: { before: auditOf(row.published), after: null, linkedFromMenus: await newsMenuPlacesOf(tx, id), linkedFromHome: await homeLinksTo(tx, { newsId: id }) },
     });
   });
   return newsDetail(orm, id);
@@ -233,7 +234,7 @@ export async function deleteNews(req: Request, id: number, version: number): Pro
     await writeContentAssetRows(tx, CONTENT_KIND, id, []);
     await logActivity({
       req, tx, action: 'DELETE', entity: AUDIT_ENTITY, entityId: `news-${id}`,
-      description: `خبر «${row.title}» حذف شد`, details: { before: auditOf(draftOf(row)), wasOnSite: row.published !== null, linkedFromMenus: await newsMenuPlacesOf(tx, id) },
+      description: `خبر «${row.title}» حذف شد`, details: { before: auditOf(draftOf(row)), wasOnSite: row.published !== null, linkedFromMenus: await newsMenuPlacesOf(tx, id), linkedFromHome: await homeLinksTo(tx, { newsId: id }) },
     });
   });
 }

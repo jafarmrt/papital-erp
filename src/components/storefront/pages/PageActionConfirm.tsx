@@ -32,7 +32,7 @@ export function PageActionConfirm({ ref, asking, kind, dirty, linkedFrom, linked
         {(asking === 'delete' || asking === 'unpublish') && linkedFrom && (
           <span data-menu-warning className="mt-1 block font-bold">
             {asking === 'delete'
-              ? `این صفحه در ${linkedFrom} پیوند دارد. آن پیوند دیگر روی سایت نمی‌آید؛ پس از حذف، آن گزینه را در «فهرست‌های سایت» بردارید یا به صفحهٔ دیگری بدهید.`
+              ? `این صفحه در ${linkedFrom} پیوند دارد. آن پیوند دیگر روی سایت نمی‌آید؛ پس از حذف، آن پیوند را در همان‌جا بردارید یا به صفحهٔ دیگری بدهید.`
               : `این صفحه در ${linkedFrom} پیوند دارد. تا انتشار دوباره، آن پیوند روی سایت نمی‌آید.`}
           </span>
         )}

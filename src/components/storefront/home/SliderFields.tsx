@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react';
 import type { MenuLinkOptions } from '../../../lib/storefront/storefrontMenuContracts';
 import {
@@ -42,8 +42,8 @@ function ImagePair({ where, what, value, mobile, assets, onChange }: {
   );
 }
 
-function SlideFields({ slide, name, assets, options, onChange }: {
-  slide: Slide; name: string; assets: AssetTitles; options: MenuLinkOptions | undefined; onChange: (patch: Partial<Slide>) => void;
+function SlideFields({ slide, name, what, assets, options, onChange }: {
+  slide: Slide; name: string; what: string; assets: AssetTitles; options: MenuLinkOptions | undefined; onChange: (patch: Partial<Slide>) => void;
 }) {
   const id = useId();
   const text = (key: 'imageAlt' | 'title' | 'text' | 'buttonLabel', title: string, max: number) => (
@@ -54,7 +54,7 @@ function SlideFields({ slide, name, assets, options, onChange }: {
   );
   return (
     <div className="space-y-3">
-      <ImagePair where={name} what="اسلاید" value={slide.imageAssetId} mobile={slide.mobileImageAssetId} assets={assets} onChange={onChange} />
+      <ImagePair where={name} what={what} value={slide.imageAssetId} mobile={slide.mobileImageAssetId} assets={assets} onChange={onChange} />
       <div className="grid gap-3 md:grid-cols-2">
         {text('imageAlt', 'متن جایگزین عکس', IMAGE_ALT_MAX)}
         {text('title', 'تیتر (اختیاری)', SLIDE_TITLE_MAX)}
@@ -77,14 +77,25 @@ function SlideFields({ slide, name, assets, options, onChange }: {
   );
 }
 
+/** a name of its own for every slide on the screen, so a slide keeps its open image list and calendar when it moves (10e review) */
+let lastSlideKey = 0;
+const newSlideKey = (): string => { lastSlideKey += 1; return `slide-${lastSlideKey}`; };
+
 export function SliderFields({ section, name, assets, options, onChange }: {
   section: SliderSection; name: string; assets: AssetTitles; options: MenuLinkOptions | undefined; onChange: (next: SliderSection) => void;
 }) {
-  const move = (from: number, to: number) => {
-    const slides = [...section.slides];
-    const [slide] = slides.splice(from, 1);
-    slides.splice(to, 0, slide);
+  const [keys, setKeys] = useState<string[]>(() => section.slides.map(newSlideKey));
+  // the slides were replaced from outside (a newer copy of the page): every slide starts again
+  const slideKeys = keys.length === section.slides.length ? keys : section.slides.map((_, index) => keys[index] ?? `slide-fresh-${index}`);
+  const change = (slides: Slide[], nextKeys: string[]) => {
+    setKeys(nextKeys);
     onChange({ ...section, slides });
+  };
+  const moved = <T,>(list: readonly T[], from: number, to: number): T[] => {
+    const next = [...list];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    return next;
   };
   return (
     <div className="space-y-3">
@@ -93,22 +104,22 @@ export function SliderFields({ section, name, assets, options, onChange }: {
         {section.slides.map((slide, index) => {
           const what = `اسلاید ${formatPersianNumber(index + 1)}`;
           return (
-            <li key={index} aria-label={`${name}، ${what}`} className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+            <li key={slideKeys[index]} aria-label={`${name}، ${what}`} className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-black text-slate-700">{what}</p>
                 <div className="flex items-center">
-                  <button type="button" className={iconButton} disabled={index === 0} aria-label={`${what} بالاتر`} onClick={() => move(index, index - 1)}><ArrowUp className="h-4 w-4" /></button>
-                  <button type="button" className={iconButton} disabled={index === section.slides.length - 1} aria-label={`${what} پایین‌تر`} onClick={() => move(index, index + 1)}><ArrowDown className="h-4 w-4" /></button>
-                  <button type="button" className={`${iconButton} text-rose-600`} aria-label={`حذف ${what}`} onClick={() => onChange({ ...section, slides: section.slides.filter((_, i) => i !== index) })}><X className="h-4 w-4" /></button>
+                  <button type="button" className={iconButton} disabled={index === 0} aria-label={`${name}، ${what} بالاتر`} onClick={() => change(moved(section.slides, index, index - 1), moved(slideKeys, index, index - 1))}><ArrowUp className="h-4 w-4" /></button>
+                  <button type="button" className={iconButton} disabled={index === section.slides.length - 1} aria-label={`${name}، ${what} پایین‌تر`} onClick={() => change(moved(section.slides, index, index + 1), moved(slideKeys, index, index + 1))}><ArrowDown className="h-4 w-4" /></button>
+                  <button type="button" className={`${iconButton} text-rose-600`} aria-label={`حذف ${name}، ${what}`} onClick={() => change(section.slides.filter((_, i) => i !== index), slideKeys.filter((_, i) => i !== index))}><X className="h-4 w-4" /></button>
                 </div>
               </div>
-              <SlideFields slide={slide} name={`${name}، ${what}`} assets={assets} options={options}
+              <SlideFields slide={slide} name={`${name}، ${what}`} what={what} assets={assets} options={options}
                 onChange={patch => onChange({ ...section, slides: section.slides.map((s, i) => (i === index ? { ...s, ...patch } : s)) })} />
             </li>
           );
         })}
       </ol>
-      <button type="button" className={small} disabled={section.slides.length >= SLIDES_MAX} onClick={() => onChange({ ...section, slides: [...section.slides, emptySlide()] })}>
+      <button type="button" className={small} disabled={section.slides.length >= SLIDES_MAX} onClick={() => change([...section.slides, emptySlide()], [...slideKeys, newSlideKey()])}>
         <Plus className="h-4 w-4" />
         اسلاید تازه
       </button>

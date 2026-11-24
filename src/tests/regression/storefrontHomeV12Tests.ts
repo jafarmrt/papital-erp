@@ -113,7 +113,7 @@ export async function runStorefrontHomeV12Tests(shouldRun: (id: string, ...extra
       }
       return { id: asset.id, sha256 };
     };
-    const [wide, tall, bannerImage, collectionImage, lost] = [await image(1), await image(2), await image(3), await image(4), await image(5)];
+    const [wide, tall, bannerImage, collectionImage, lost, offImage] = [await image(1), await image(2), await image(3), await image(4), await image(5), await image(6)];
     const words = await erp.put('/api/storefront/collections', { name: collection, intro: 'نقش این کالکشن از کاشی هفت‌رنگ است.', imageAssetId: collectionImage.id, imageAlt: 'کاشی', morePageId: null, version: 0 });
     if (words.status !== 200) throw new Error(`the words of the collection: ${words.status} ${JSON.stringify(words.body)}`);
 
@@ -169,6 +169,12 @@ export async function runStorefrontHomeV12Tests(shouldRun: (id: string, ...extra
       ['a slide image that is not in the library', form([slider(slide({ mobileImageAssetId: 2_000_000_000 }))]), 'STOREFRONT_PAGE_IMAGE_UNKNOWN'],
       ['an unknown icon of a point', form([{ kind: 'homeWhy', background: 'white', points: [{ icon: 'skull', text: 'x' }, { icon: 'leaf', text: 'y' }] }]), 'STOREFRONT_PAGE_FIELD_INVALID'],
       ['a switch that is not on or off', form([{ ...emptyHomeSection('homeCategories'), hidden: 'yes' }]), 'STOREFRONT_PAGE_FIELD_INVALID'],
+      ['another name for the home page', form([], { title: 'خانهٔ من' }), 'STOREFRONT_PAGE_TITLE_INVALID'],
+      ['a second slider', form([slider(slide()), slider(slide())]), 'STOREFRONT_PAGE_SECTION_INVALID'],
+      ['four collection intros', form(['a', 'b', 'c', 'd'].map(c => ({ kind: 'collectionIntro', background: 'white', title: '', collection: c }))), 'STOREFRONT_PAGE_SECTION_INVALID'],
+      // half of a surrogate pair is no text for the database: it is refused by name, not by a failed write
+      ['a link target the database cannot keep', form([slider(slide({ link: linkTo('collection', { target: `a${String.fromCharCode(0xd83d)}` }) }))]), 'STOREFRONT_PAGE_LINK_INVALID'],
+      ['markup in a path', form([slider(slide({ link: linkTo('path', { target: '/a"><x' }) }))]), 'STOREFRONT_PAGE_LINK_INVALID'],
     ];
     for (const [what, body, code] of refusals) {
       const res = await erp.put(`/api/storefront/pages/${homeId}`, body);
@@ -194,6 +200,7 @@ export async function runStorefrontHomeV12Tests(shouldRun: (id: string, ...extra
       slide({ imageAssetId: lost.id, title: 'اسلاید بی‌عکس' }),
       slide({ title: 'اسلاید بیرونی', buttonLabel: 'اینستاگرام', link: linkTo('url', { target: 'https://example.com/papital' }) }),
     ];
+    const bannerOf = (imageAssetId: number, imageAlt: string, link: Body | null): Body => ({ kind: 'banner', background: 'white', imageAssetId, mobileImageAssetId: null, imageAlt, link });
     const draftSections: unknown[] = [
       slider(...slides),
       { kind: 'banner', background: 'white', imageAssetId: bannerImage.id, mobileImageAssetId: null, imageAlt: 'بنر کالکشن', link: linkTo('collection', { target: collection }) },
@@ -204,10 +211,15 @@ export async function runStorefrontHomeV12Tests(shouldRun: (id: string, ...extra
       // switched off: unfinished, and with a secret that must never reach the site
       { kind: 'banner', background: 'white', imageAssetId: null, mobileImageAssetId: null, imageAlt: '', link: null, hidden: true },
       { ...text(`راز خاموش ${tag}`), hidden: true },
-      slider(slide({ title: 'به صفحه', buttonLabel: 'داستان', link: linkTo('content', { pageId }) }), slide({ title: 'به خبر', buttonLabel: 'خبر', link: linkTo('news', { newsId }) })),
+      { ...text(`متن خاموش‌نشده ${tag}`) },
+      bannerOf(bannerImage.id, 'به صفحه', linkTo('content', { pageId })),
+      bannerOf(bannerImage.id, 'به خبر', linkTo('news', { newsId })),
+      bannerOf(lost.id, 'بنر بی‌عکس', null),
+      // switched off, with an image of its own
+      { ...bannerOf(offImage.id, 'بنر خاموش', null), hidden: true },
     ];
     const saved = await erp.put(`/api/storefront/pages/${homeId}`, form(draftSections, { seoTitle: `عنوان خانه ${tag}`, seoDescription: 'توضیح خانه' }));
-    if (saved.status !== 200 || saved.body.data?.status !== 'draft' || saved.body.data?.draft?.sections?.length !== draftSections.length || saved.body.data.draft.sections[13]?.hidden !== true) {
+    if (saved.status !== 200 || saved.body.data?.status !== 'draft' || saved.body.data?.draft?.sections?.length !== draftSections.length || saved.body.data.draft.sections[13]?.hidden !== true || saved.body.data.draft.sections[14]?.hidden !== undefined) {
       throw new Error(`saving the draft: ${saved.status} ${JSON.stringify(saved.body).slice(0, 400)}`);
     }
     version = Number(saved.body.data.version);
@@ -227,6 +239,8 @@ export async function runStorefrontHomeV12Tests(shouldRun: (id: string, ...extra
     if (out.status !== 200 || out.body.data?.status !== 'published') throw new Error(`publishing the home page: ${out.status} ${JSON.stringify(out.body).slice(0, 400)}`);
     version = Number(out.body.data.version);
     const [published] = await orm.select().from(activityLogs).where(and(eq(activityLogs.entity, 'صفحهٔ سایت'), eq(activityLogs.entityId, `page-${homeId}`))).orderBy(desc(activityLogs.id)).limit(1);
+    const auditParts = ((published?.details ?? {}) as { after?: { sections?: Body[] } }).after?.sections ?? [];
+    if (auditParts.filter(part => part.hidden === true).length !== 3 || auditParts.some(part => part.hidden === false)) wrong.push(`the parts switched off, in the audit row: ${JSON.stringify(auditParts.map(part => part.hidden ?? null))}`);
     if (!JSON.stringify(published?.details ?? '').includes('اسلاید امروز') || !JSON.stringify(published?.details ?? '').includes(`کالا ${leaving.id}`)) wrong.push(`the audit row of «انتشار»: ${String(JSON.stringify(published?.details)).slice(0, 300)}`);
 
     // 5) the site: the copy built for today
@@ -238,7 +252,7 @@ export async function runStorefrontHomeV12Tests(shouldRun: (id: string, ...extra
       wrong.push(`the answer of the site: ${answer.status} ${keys(data)} ${String(data.seoTitle)}`);
     }
     // no news yet (the switch is off), no collection without items, nothing switched off
-    const expected = 'slider,banner,homeIntro,homeCategories,homeWhy,homeFeatured,homeCollections,homeNewest,homeWholesale,collectionIntro,slider';
+    const expected = 'slider,banner,homeIntro,homeCategories,homeWhy,homeFeatured,homeCollections,homeNewest,homeWholesale,collectionIntro,text,banner,banner';
     if (await kindsOnSite() !== expected) wrong.push(`the parts on the site: ${await kindsOnSite()}`);
     const top = data.sections[0] as { slides: Body[] };
     const shown = (top.slides ?? []).map(s => String(s.title)).join('|');
@@ -258,16 +272,22 @@ export async function runStorefrontHomeV12Tests(shouldRun: (id: string, ...extra
     }
     const why = data.sections.find(s => s.kind === 'homeWhy') as { points: Body[] };
     if (keys(why) !== 'kind,points' || why.points.length !== 4 || why.points[2].icon !== 'truck' || why.points[2].text !== '') wrong.push(`«چرا پاپیتال»: ${JSON.stringify(why)}`);
-    const last = data.sections[data.sections.length - 1] as { slides: Body[] };
-    // the page is still a draft: its slide stays and its button is left out; the news item waits for the switch
-    if ((last.slides ?? []).map(s => `${String(s.title)}:${String(s.buttonLabel)}:${String(s.href)}`).join('|') !== 'به صفحه::|به خبر::') wrong.push(`links to a draft page and to news while the switch is off: ${JSON.stringify(last.slides)}`);
+    const linked = data.sections.slice(-2);
+    // the page is still a draft and the news waits for its switch: each banner stays, without an address
+    if (linked.map(s => `${String((s.image as Body)?.alt)}:${String(s.href)}`).join('|') !== 'به صفحه:|به خبر:') wrong.push(`links to a draft page and to news while the switch is off: ${JSON.stringify(linked)}`);
+    // the home row is not a page of the site by any other road, now that it is published
+    const listedNow = ((await site('/pages')).body.data ?? []) as Body[];
+    if (listedNow.some(row => row.slug === HOME_PAGE_SLUG || row.kind === 'home') || (await site(`/pages/${HOME_PAGE_SLUG}`)).status !== 404) wrong.push('the published home row is among the pages of the site');
+    // the ERP tells the page and the news item that the home page leads to them
+    const tells = [(await erp.get(`/api/storefront/pages/${pageId}`)).body.data?.linkedFromHome, (await erp.get(`/api/storefront/news/${newsId}`)).body.data?.linkedFromHome, (await erp.get(`/api/storefront/pages/${homeId}`)).body.data?.linkedFromHome].join(',');
+    if (tells !== 'true,true,false') wrong.push(`what the home page links to, as the ERP tells it: ${tells}`);
     const whole = JSON.stringify(answer.body);
-    for (const leak of [`راز خاموش ${tag}`, 'اسلاید فردا', 'اسلاید دیروز', 'اسلاید بی‌عکس', 'imageAssetId', 'itemId', 'pageId', 'newsId', '"hidden"', '"id"', 'updatedBy', '"version"', 'startsOn', lost.sha256]) {
+    for (const leak of [`راز خاموش ${tag}`, 'اسلاید فردا', 'اسلاید دیروز', 'اسلاید بی‌عکس', 'بنر بی‌عکس', 'بنر خاموش', offImage.sha256, 'imageAssetId', 'itemId', 'pageId', 'newsId', '"hidden"', '"id"', 'updatedBy', '"version"', 'startsOn', lost.sha256]) {
       if (whole.includes(leak)) wrong.push(`the answer of the site carries «${leak}»`);
     }
     const mediaOf = async (sha256: string) => (await site(`/media/${sha256}.webp`)).status;
-    if (await mediaOf(wide.sha256) !== 200 || await mediaOf(tall.sha256) !== 200 || await mediaOf(bannerImage.sha256) !== 200 || await mediaOf(lost.sha256) !== 404) {
-      wrong.push(`the image files: ${await mediaOf(wide.sha256)}/${await mediaOf(tall.sha256)}/${await mediaOf(bannerImage.sha256)}, the one that left the library ${await mediaOf(lost.sha256)}`);
+    if (await mediaOf(wide.sha256) !== 200 || await mediaOf(tall.sha256) !== 200 || await mediaOf(bannerImage.sha256) !== 200 || await mediaOf(lost.sha256) !== 404 || await mediaOf(offImage.sha256) !== 404) {
+      wrong.push(`the image files: ${await mediaOf(wide.sha256)}/${await mediaOf(tall.sha256)}/${await mediaOf(bannerImage.sha256)}, the one that left the library ${await mediaOf(lost.sha256)}, the one of a part switched off ${await mediaOf(offImage.sha256)}`);
     }
 
     // 6) the site follows what its links lead to: a published page, news switched on, a product that leaves the site
@@ -275,12 +295,38 @@ export async function runStorefrontHomeV12Tests(shouldRun: (id: string, ...extra
     await erp.put('/api/storefront/news/site', { enabled: true });
     await publishItem(leaving.id, false, leaving.slug);
     const followed = ((await home())?.sections ?? []) as Array<Body & { slides?: Body[]; items?: Body[] }>;
-    const lastNow = followed[followed.length - 1].slides ?? [];
+    const lastNow = followed.filter(s => s.kind === 'banner').slice(-2);
     if (lastNow.map(s => String(s.href)).join('|') !== `/pages/${pageSlug}|/news/home-news-${tag}`) wrong.push(`the links once their targets are on the site: ${JSON.stringify(lastNow)}`);
     const firstNow = (followed[0].slides ?? [])[0];
     if (firstNow?.title !== 'اسلاید امروز' || firstNow.href !== '' || firstNow.buttonLabel !== '') wrong.push(`a slide whose product left the site: ${JSON.stringify(firstNow)}`);
     const newsPart = followed.find(s => s.kind === 'latestNews');
     if (!newsPart || keys(newsPart) !== 'background,items,kind,title' || !(newsPart.items ?? []).some(item => item.slug === `home-news-${tag}`) || (newsPart.items ?? []).length > 3) wrong.push(`«تازه‌ترین خبرها»: ${JSON.stringify(newsPart).slice(0, 300)}`);
+
+    // «تازه‌ترین خبرها» is the three newest, however many there are
+    for (const n of [2, 3, 4]) {
+      const more = await erp.post('/api/storefront/news', { title: `خبر خانه ${n} ${tag}`, slug: `home-news-${n}-${tag}` });
+      const moreId = Number(more.body.data?.id);
+      await erp.put(`/api/storefront/news/${moreId}`, { title: `خبر خانه ${n} ${tag}`, slug: `home-news-${n}-${tag}`, summary: '', coverAssetId: null, newsDate: `2021-01-0${n}`, seoTitle: '', seoDescription: '', sections: [text('متن خبر')], version: 1 });
+      await erp.post(`/api/storefront/news/${moreId}/publish`, { version: 2 });
+    }
+    const newest = (((await home())?.sections ?? []).find(s => s.kind === 'latestNews') as { items?: Body[] } | undefined)?.items ?? [];
+    if (newest.length !== 3) wrong.push(`«تازه‌ترین خبرها» with more than three items on the site: ${newest.length}`);
+    // a copy changed by hand in the database: a part of another shape is left out and the rest of the page goes on
+    const [live] = await orm.select().from(storefrontPages).where(eq(storefrontPages.id, homeId));
+    const brokenParts = [null, { kind: 'slider', background: 'white' }, { kind: 'banner', background: 'white', imageAssetId: bannerImage.id, mobileImageAssetId: null, imageAlt: 'x', link: { kind: 'content', target: '', itemId: null, campaignId: null, pageId: 'one', newsId: null } }, { kind: 'homeWhy', background: 'white', points: [{ icon: 'skull', text: 'x' }, { icon: 'leaf', text: 'y' }] }, { kind: 'homeIntro', background: 'white', kicker: '', title: 'دست‌کاری', text: '', buttonLabel: 'برو', buttonHref: 'javascript:alert(1)' }, { ...emptyHomeSection('homeCategories') }];
+    await orm.update(storefrontPages).set({ published: { ...live.published!, sections: brokenParts as never } }).where(eq(storefrontPages.id, homeId));
+    const mended = await site('/home');
+    if (mended.status !== 200 || ((mended.body.data?.sections ?? []) as Body[]).map(s => String(s.kind)).join(',') !== 'homeCategories' || JSON.stringify(mended.body).includes('javascript')) wrong.push(`a copy changed by hand: ${mended.status} ${JSON.stringify(mended.body).slice(0, 300)}`);
+    // a copy with nothing to show today is the same as none: the site keeps its own home page
+    await orm.update(storefrontPages).set({ published: { ...live.published!, sections: [slider(slide({ endsOn: yesterday }))] as never } }).where(eq(storefrontPages.id, homeId));
+    const nothing = await site('/home');
+    if (nothing.status !== 404 || nothing.body.code !== 'STOREFRONT_HOME_NOT_PUBLISHED') wrong.push(`a home page with nothing to show today: ${nothing.status} ${nothing.body.code}`);
+    await orm.update(storefrontPages).set({ published: live.published }).where(eq(storefrontPages.id, homeId));
+    // taking the linked page off the site records that the home page led to it
+    const pageNow = Number((await erp.get(`/api/storefront/pages/${pageId}`)).body.data?.version);
+    await erp.post(`/api/storefront/pages/${pageId}/unpublish`, { version: pageNow });
+    const [pageOff] = await orm.select().from(activityLogs).where(and(eq(activityLogs.entity, 'صفحهٔ سایت'), eq(activityLogs.entityId, `page-${pageId}`))).orderBy(desc(activityLogs.id)).limit(1);
+    if ((pageOff?.details as { linkedFromHome?: boolean } | null)?.linkedFromHome !== true) wrong.push(`the audit row of a page the home page led to: ${String(JSON.stringify(pageOff?.details)).slice(0, 200)}`);
 
     // 7) a later draft does not change the site; «برداشتن» gives the site its own home page back; the row stays
     const later = await erp.put(`/api/storefront/pages/${homeId}`, form([emptyHomeSection('homeIntro')], { seoTitle: 'پیش‌نویس تازه' }));

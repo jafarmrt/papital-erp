@@ -28,7 +28,7 @@ const StorefrontPagesPage = (await import('../../pages/StorefrontPagesPage')).de
 const CART: PageDetail = {
   id: 21, kind: 'fixed', slug: 'fixed-cart', title: 'سبد خرید', status: 'draft', publishedAt: '', updatedAt: '2026-11-23 10:00:00', updatedBy: '', version: 1,
   draft: { title: 'سبد خرید', slug: 'fixed-cart', seoTitle: '', seoDescription: '', noindex: false, shareImageAssetId: null, sections: [] },
-  assets: [], menuPlaces: [], linkedCollections: [],
+  assets: [], menuPlaces: [], linkedCollections: [], linkedFromHome: false,
 };
 const STORY: PageDetail = {
   ...CART, id: 9, kind: 'custom', slug: 'our-story', title: 'داستان ما',

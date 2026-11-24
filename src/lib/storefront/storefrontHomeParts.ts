@@ -37,7 +37,8 @@ export const HOME_SECTION_KIND_TITLES: Readonly<Record<HomeSectionKind, string>>
 /** the parts whose look is the site's own: the ground chosen for a section is not theirs to take */
 export const HOME_KINDS_WITH_BACKGROUND: readonly HomeSectionKind[] = ['collectionIntro', 'latestNews'];
 /** the parts the home page takes once */
-export const HOME_KINDS_ONCE: readonly HomeSectionKind[] = ['homeIntro', 'homeCategories', 'homeWhy', 'homeFeatured', 'homeCollections', 'homeNewest', 'homeWholesale', 'latestNews'];
+// one slider: it is the top of the page, and a «صفحهٔ ویژه» that asks for the top takes its place (10e review)
+export const HOME_KINDS_ONCE: readonly HomeSectionKind[] = ['slider', 'homeIntro', 'homeCategories', 'homeWhy', 'homeFeatured', 'homeCollections', 'homeNewest', 'homeWholesale', 'latestNews'];
 
 export const SLIDES_MAX = 5;
 export const SLIDE_TITLE_MAX = 80;
@@ -48,6 +49,8 @@ export const WHY_POINTS_MAX = 4;
 export const WHY_POINT_TEXT_MAX = 60;
 /** how many products «معرفی کالکشن» shows, and how many news items «تازه‌ترین خبرها» */
 export const COLLECTION_INTRO_PRODUCTS = 3;
+/** each «معرفی کالکشن» reads the catalog when the site asks for the home page, so a page takes a few (10e review) */
+export const COLLECTION_INTROS_MAX = 3;
 export const LATEST_NEWS_COUNT = 3;
 
 interface HomeBase { background: SectionBackground; hidden?: boolean }

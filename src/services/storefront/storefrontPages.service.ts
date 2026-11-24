@@ -10,7 +10,7 @@ import {
   BASE_PAGES, FIXED_PAGES, PAGES_MAX, PAGE_TEMPLATES, checkedPage, homeSectionLinks, isPageKind, pageAssetIds, pageItemIds, type BasePageSlug, type PageValues,
 } from '../../lib/storefront/storefrontPageRules.js';
 import type { PageCreateInput, PageDetail, PageListRow, PageSaveInput, PageStatus } from '../../lib/storefront/storefrontPageContracts.js';
-import { collectionsLinkingTo, menuPlacesOf } from './storefrontPageLinks.js';
+import { collectionsLinkingTo, homeLinksTo, menuPlacesOf } from './storefrontPageLinks.js';
 import { assetInfos, auditSections, canonical, checkContentReferences, refuseNewContentImages, writeContentAssetRows } from './storefrontContentShared.js';
 import { checkSiteLinkReferences } from './storefrontSiteLinkTargets.js';
 import { clearRedirectFrom, redirectMovedPage } from './storefrontRedirects.service.js';
@@ -67,7 +67,7 @@ const writeContentAssets = (tx: DbExecutor, contentId: number, assetIds: readonl
 
 async function detailOf(executor: DbExecutor, row: PageRecord): Promise<PageDetail> {
   const draft = draftOf(row);
-  return { ...listRowOf(row), draft, assets: await assetInfos(executor, pageAssetIds(draft)), menuPlaces: await menuPlacesOf(executor, row.id), linkedCollections: await collectionsLinkingTo(executor, row.id) };
+  return { ...listRowOf(row), draft, assets: await assetInfos(executor, pageAssetIds(draft)), menuPlaces: await menuPlacesOf(executor, row.id), linkedCollections: await collectionsLinkingTo(executor, row.id), linkedFromHome: await homeLinksTo(executor, { pageId: row.id }) };
 }
 
 /** `GET /api/storefront/pages`: every page, the five base ones first, then the fixed ones */
@@ -192,7 +192,8 @@ export async function publishPage(req: Request, id: number, version: number): Pr
     await tx.update(storefrontPages).set({
       published: copy, publishedAt: at, publishedBy: actor, version: nextVersion(row.version), updatedBy: actor, updatedAt: at,
     }).where(eq(storefrontPages.id, id));
-    await writeContentAssets(tx, id, pageAssetIds(page));
+    // the images of a part switched off are not on the site, so the site's image route does not serve them (10e review)
+    await writeContentAssets(tx, id, pageAssetIds({ shareImageAssetId: page.shareImageAssetId, sections: page.sections.filter(section => !section.hidden) }));
     await logActivity({
       req, tx, action: 'UPDATE', entity: AUDIT_ENTITY, entityId: `page-${id}`,
       description: `صفحهٔ «${page.title}» روی سایت منتشر شد`,
@@ -236,7 +237,7 @@ export async function unpublishPage(req: Request, id: number, version: number): 
     await writeContentAssets(tx, id, []);
     await logActivity({
       req, tx, action: 'UPDATE', entity: AUDIT_ENTITY, entityId: `page-${id}`,
-      description: `صفحهٔ «${row.title}» از روی سایت برداشته شد`, details: { before: { title: row.published.title, sections: auditSections(row.published.sections) }, after: null, linkedFromMenus: await menuPlacesOf(tx, id), linkedFromCollections: await collectionsLinkingTo(tx, id) },
+      description: `صفحهٔ «${row.title}» از روی سایت برداشته شد`, details: { before: { title: row.published.title, sections: auditSections(row.published.sections) }, after: null, linkedFromMenus: await menuPlacesOf(tx, id), linkedFromCollections: await collectionsLinkingTo(tx, id), linkedFromHome: await homeLinksTo(tx, { pageId: id }) },
     });
   });
   return pageDetail(orm, id);
@@ -256,7 +257,7 @@ export async function deletePage(req: Request, id: number, version: number): Pro
     await writeContentAssets(tx, id, []);
     await logActivity({
       req, tx, action: 'DELETE', entity: AUDIT_ENTITY, entityId: `page-${id}`,
-      description: `صفحهٔ «${row.title}» حذف شد`, details: { before: auditOf(draftOf(row)), wasOnSite: row.published !== null, linkedFromMenus: await menuPlacesOf(tx, id), linkedFromCollections: await collectionsLinkingTo(tx, id) },
+      description: `صفحهٔ «${row.title}» حذف شد`, details: { before: auditOf(draftOf(row)), wasOnSite: row.published !== null, linkedFromMenus: await menuPlacesOf(tx, id), linkedFromCollections: await collectionsLinkingTo(tx, id), linkedFromHome: await homeLinksTo(tx, { pageId: id }) },
     });
   });
 }

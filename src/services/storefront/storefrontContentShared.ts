@@ -88,7 +88,8 @@ function auditDoc(doc: RichDoc): { text: string; links: string[] } {
  * address, a text rewritten, an image swapped), without copying whole pages into the log (10b review).
  */
 function auditSection(section: PageSection): Record<string, unknown> {
-  const base = { kind: SECTION_KIND_TITLES[section.kind], background: section.background };
+  // a part switched off says so, whatever its kind (10e review: only the home page's own kinds did)
+  const base = { kind: SECTION_KIND_TITLES[section.kind], background: section.background, ...(section.hidden ? { hidden: true } : {}) };
   const images = sectionAssetIds(section);
   const withImages = images.length ? { images } : {};
   switch (section.kind) {

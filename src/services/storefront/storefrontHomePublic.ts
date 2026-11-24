@@ -4,7 +4,8 @@ import { storefrontPages, type PublishedPage } from '../../db/schema.js';
 import { NotFoundError } from '../../errors/customErrors.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import {
-  COLLECTION_INTRO_PRODUCTS, HOME_PAGE_SLUG, LATEST_NEWS_COUNT, homeSectionLinks, isHomeSectionKind, pageAssetIds, pageLink, type HomeSection, type PageSection,
+  COLLECTION_INTRO_PRODUCTS, HOME_PAGE_SLUG, HOME_PAGE_TITLE, LATEST_NEWS_COUNT, checkedPage, homeSectionLinks, isHomeSectionKind, pageAssetIds, pageLink, type HomeSection,
+  type PageSection,
 } from '../../lib/storefront/storefrontPageRules.js';
 import type { StorefrontHomeOwnSection, StorefrontHomeSection, StorefrontPublicHome, StorefrontSlide } from '../../lib/storefront/storefrontHomePublicContracts.js';
 import type { StorefrontCollectionText } from '../../lib/storefront/storefrontCollectionContracts.js';
@@ -94,10 +95,22 @@ async function homeSection(section: HomeSection, now: HomeNow): Promise<Storefro
   }
 }
 
+/**
+ * The parts of a copy as the rules keep them, each checked again on its way out (as a page's text is): a row changed by
+ * hand in the database cannot send a part of another shape, an unknown field or a link the rules refuse; such a part is
+ * left out and the rest of the page goes on (10e review).
+ */
+function keptSections(raw: unknown): PageSection[] {
+  return (Array.isArray(raw) ? raw : []).flatMap((section: unknown): PageSection[] => {
+    const checked = checkedPage({ title: HOME_PAGE_TITLE, slug: HOME_PAGE_SLUG, sections: [section] }, { forPublish: false, baseSlug: null, home: true });
+    return checked.page ? checked.page.sections : [];
+  });
+}
+
 /** One copy of the home page as the site gets it: the copy on the site, or (a preview link) the draft, built the same way */
 export async function homeForSite(copy: PublishedPage, updatedAt: string): Promise<StorefrontPublicHome> {
   // a part switched off is not on the site at all: its images and links are not even read
-  const sections = (Array.isArray(copy.sections) ? copy.sections : []).filter((section: PageSection) => section.hidden !== true);
+  const sections = keptSections(copy.sections).filter(section => section.hidden !== true);
   const images = await imagesOf(pageAssetIds({ shareImageAssetId: copy.shareImageAssetId, sections }));
   const links = homeSectionLinks(sections).map(entry => entry.link);
   const resolve = links.length ? await siteLinkResolver(links) : () => null;
@@ -125,5 +138,8 @@ export async function publicHome(): Promise<StorefrontPublicHome> {
     .where(and(eq(storefrontPages.kind, 'home'), eq(storefrontPages.slug, HOME_PAGE_SLUG), eq(storefrontPages.isDeleted, 0), isNotNull(storefrontPages.published), isNotNull(storefrontPages.publishedAt)))
     .limit(1);
   if (!row?.published) throw notPublished();
-  return homeForSite(row.published, isoOf(row.publishedAt ?? row.updatedAt));
+  const home = await homeForSite(row.published, isoOf(row.publishedAt ?? row.updatedAt));
+  // nothing of it shows today (every slide outside its days, say): the site keeps its own home page, as before «انتشار»
+  if (home.sections.length === 0) throw notPublished();
+  return home;
 }

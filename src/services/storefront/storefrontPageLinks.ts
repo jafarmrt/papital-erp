@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { storefrontCollections, storefrontMenuItems, storefrontPages } from '../../db/schema.js';
 import { MENU_LOCATIONS } from '../../lib/storefront/storefrontMenuRules.js';
-import { PAGES_MAX } from '../../lib/storefront/storefrontPageRules.js';
+import { PAGES_MAX, homeSectionLinks } from '../../lib/storefront/storefrontPageRules.js';
 
 /** v12 phase 10c: what links a menu and a page of «صفحه‌های سایت»: the pages a menu may name, and the menus that name a page */
 export interface PageLinkTarget {
@@ -52,4 +52,21 @@ export async function collectionsLinkingTo(executor: DbExecutor, pageId: number)
   const rows = await executor.select({ name: storefrontCollections.name }).from(storefrontCollections)
     .where(eq(storefrontCollections.morePageId, pageId)).orderBy(asc(storefrontCollections.name)).limit(50);
   return rows.map(row => row.name);
+}
+
+/**
+ * v12 phase 10e: whether a slide's button or a banner of «صفحهٔ اصلی» (its draft, or its copy on the site) leads to a
+ * page or a news item, so removing it or taking it off the site can say that the home page loses that link (10e review)
+ */
+export async function homeLinksTo(executor: DbExecutor, target: { pageId?: number; newsId?: number }): Promise<boolean> {
+  const [home] = await executor.select({ sections: storefrontPages.sections, published: storefrontPages.published }).from(storefrontPages)
+    .where(and(eq(storefrontPages.kind, 'home'), eq(storefrontPages.isDeleted, 0))).limit(1);
+  if (!home) return false;
+  try {
+    const links = [...homeSectionLinks(Array.isArray(home.sections) ? home.sections : []), ...homeSectionLinks(Array.isArray(home.published?.sections) ? home.published.sections : [])];
+    return links.some(({ link }) => (target.pageId !== undefined && link.pageId === target.pageId) || (target.newsId !== undefined && link.newsId === target.newsId));
+  } catch {
+    // a row changed by hand into another shape names no link
+    return false;
+  }
 }

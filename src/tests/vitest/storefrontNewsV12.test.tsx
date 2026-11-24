@@ -36,7 +36,7 @@ const row = (over: Partial<NewsListRow>): NewsListRow => ({
 const DRAFT: NewsDetail = {
   ...row({}),
   draft: { title: 'کالکشن تازه رسید', slug: 'new-collection', summary: '', coverAssetId: null, newsDate: '', seoTitle: '', seoDescription: '', sections: [] },
-  assets: [], menuPlaces: [],
+  assets: [], menuPlaces: [], linkedFromHome: false,
 };
 const ROWS = [DRAFT, row({ id: 6, slug: 'yalda', title: 'یلدا در گالری', status: 'published', newsDate: '2026-12-20', publishedDate: '2026-12-20', scheduled: true })];
 
@@ -144,11 +144,12 @@ describe('the news of the site in the ERP', () => {
 
   it('says which menus link to an item before it is removed or taken off the site (v12 phase 10d, part 3)', async () => {
     permissions.current = ['site_content.view', 'site_content.manage'];
-    open('/site-news?item=5', { ...CHANGED, menuPlaces: ['header', 'footer'] });
+    // v12 phase 10e: a slide or a banner of the home page that leads to the item is named beside the menus
+    open('/site-news?item=5', { ...CHANGED, menuPlaces: ['header'], linkedFromHome: true });
     await screen.findByLabelText('عنوان خبر');
     const warning = () => screen.getByRole('group', { name: 'تأیید این کار' }).querySelector('[data-menu-warning]')?.textContent ?? '';
     fireEvent.click(screen.getByRole('button', { name: 'حذف خبر' }));
-    expect(warning()).toMatch(/^این خبر در «[^»]+» و «[^»]+» پیوند دارد\. آن پیوند دیگر روی سایت نمی‌آید/);
+    expect(warning()).toMatch(/^این خبر در «منوی بالا» و «صفحهٔ اصلی» پیوند دارد\. آن پیوند دیگر روی سایت نمی‌آید/);
     fireEvent.click(screen.getByRole('button', { name: 'برداشتن از روی سایت' }));
     expect(warning()).toContain('تا انتشار دوباره، آن پیوند روی سایت نمی‌آید.');
     // throwing the draft's changes away touches no link

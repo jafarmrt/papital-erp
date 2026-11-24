@@ -8,8 +8,8 @@ import {
  type SectionKind,
 } from './storefrontPageParts.js';
 import { docAssetIds, docIsEmpty, richDoc } from './storefrontPageRichText.js';
-import { HOME_PAGE_SLUG, HOME_SECTION_KIND_TITLES, isHomeSectionKind, type HomeSection } from './storefrontHomeParts.js';
-import { homeKindTwice, homeSectionAssetIds, homeSectionOf, homeUnfinished } from './storefrontHomeRules.js';
+import { HOME_PAGE_SLUG, HOME_PAGE_TITLE, HOME_SECTION_KIND_TITLES, isHomeSectionKind, type HomeSection } from './storefrontHomeParts.js';
+import { homePartsProblem, homeSectionAssetIds, homeSectionOf, homeUnfinished } from './storefrontHomeRules.js';
 
 /**
  * v12 phase 10b: the sections of a page and the page itself, as they are checked before every write. The constants, the
@@ -212,6 +212,8 @@ export function checkedPage(raw: unknown, options: {
     const slug = typeof raw.slug === 'string' ? raw.slug.trim() : '';
     const home = options.home === true;
     if (home && slug !== HOME_PAGE_SLUG) return refuse('نشانی صفحهٔ اصلی عوض نمی‌شود.', 'STOREFRONT_PAGE_SLUG_INVALID', 'slug');
+    // its name in the list is fixed too: the screen has no field for it (10e review)
+    if (home && title !== HOME_PAGE_TITLE) return refuse('نام صفحهٔ اصلی عوض نمی‌شود.', 'STOREFRONT_PAGE_TITLE_INVALID', 'title');
     const fixedSlug = options.fixedSlug ?? null;
     if (fixedSlug !== null && slug !== fixedSlug) return refuse('نشانی این صفحهٔ ثابت عوض نمی‌شود.', 'STOREFRONT_PAGE_SLUG_INVALID', 'slug');
     if (fixedSlug !== null || home ? false : options.baseSlug !== null ? slug !== options.baseSlug : (!slug || slug.length > PAGE_SLUG_MAX || !STOREFRONT_SLUG_PATTERN.test(slug))) {
@@ -256,8 +258,8 @@ export function checkedPage(raw: unknown, options: {
     }
     section = -1;
     if (sections.filter(s => s.kind === 'shippingMethods').length > 1) return refuse('بخش «روش‌ها و هزینهٔ ارسال» یک بار می‌آید.', 'STOREFRONT_PAGE_SECTION_INVALID');
-    const twice = home ? homeKindTwice(sections) : null;
-    if (twice) return refuse(`بخش «${HOME_SECTION_KIND_TITLES[twice]}» یک بار می‌آید.`, 'STOREFRONT_PAGE_SECTION_INVALID');
+    const whole = home ? homePartsProblem(sections) : null;
+    if (whole) return refuse(whole, 'STOREFRONT_PAGE_SECTION_INVALID');
     if (options.forPublish && home && sections.length > 0 && sections.every(s => s.hidden)) return refuse('همهٔ بخش‌های صفحهٔ اصلی خاموش‌اند؛ دست‌کم یکی را روشن کنید.', 'STOREFRONT_PAGE_UNFINISHED');
     // a fixed page may go on the site with its title and search words alone
     if (options.forPublish && sections.length === 0 && fixedSlug === null) return refuse(`${noun} هنوز بخشی ندارد.`, 'STOREFRONT_PAGE_UNFINISHED');

@@ -30,7 +30,7 @@ const StorefrontPagesPage = (await import('../../pages/StorefrontPagesPage')).de
 const detailOf = (sections: PageSection[], over: Partial<PageDetail> = {}): PageDetail => ({
   id: 9, kind: 'home', slug: HOME_PAGE_SLUG, title: 'صفحهٔ اصلی', status: 'draft', publishedAt: '', updatedAt: '2026-11-21 10:00:00', updatedBy: '', version: 4,
   draft: { title: 'صفحهٔ اصلی', slug: HOME_PAGE_SLUG, seoTitle: '', seoDescription: '', noindex: false, shareImageAssetId: null, sections },
-  menuPlaces: [], linkedCollections: [], assets: [{ assetId: 31, title: 'کاشی هفت‌رنگ در آفتاب', usable: true }], ...over,
+  menuPlaces: [], linkedCollections: [], linkedFromHome: false, assets: [{ assetId: 31, title: 'کاشی هفت‌رنگ در آفتاب', usable: true }], ...over,
 });
 const OPTIONS = {
   categories: ['گردنبند'], collections: ['کاشی'], campaigns: [], pages: [{ id: 8, title: 'داستان ما', live: true }], news: [{ id: 5, title: 'خبر تازه', live: false }],
@@ -90,6 +90,7 @@ describe('the home page in the page builder', () => {
     expect(screen.queryByRole('button', { name: 'شروع از صفحهٔ اصلی امروز' })).toBeNull();
     // a part the home page takes once is no longer offered; a slider, a banner and the parts of every page still are
     expect(kindsOffered()).toEqual(expect.arrayContaining(['اسلایدر', 'بنر', 'معرفی کالکشن', 'تازه‌ترین خبرها', 'متن', 'ردیف محصولات']));
+    expect((screen.getByLabelText('عنوان جست‌وجو (اختیاری)').parentElement as HTMLElement).textContent).toContain('عنوان خود سایت');
     expect(kindsOffered()).not.toEqual(expect.arrayContaining(['سربرگ صفحهٔ اصلی']));
     expect(kindsOffered()).not.toContain('روش‌ها و هزینهٔ ارسال');
     // the parts whose look is the site's own take no ground
@@ -151,10 +152,17 @@ describe('the home page in the page builder', () => {
     expect((saved()[1].sections[0].slides as Array<Record<string, unknown>>)[0].link).toEqual({ kind: 'content', target: '', itemId: null, campaignId: null, pageId: 8, newsId: null });
     // a second slide, moved before the first
     fireEvent.click(within(parts()[0]).getByRole('button', { name: 'اسلاید تازه' }));
-    fireEvent.click(within(parts()[0]).getByRole('button', { name: 'اسلاید ۲ بالاتر' }));
+    fireEvent.click(within(parts()[0]).getByRole('button', { name: 'بخش ۱، اسلاید ۲ بالاتر' }));
     fireEvent.click(screen.getByRole('button', { name: 'ذخیرهٔ پیش‌نویس' }));
     await waitFor(() => expect(saved().length).toBe(3));
     expect((saved()[2].sections[0].slides as Array<Record<string, unknown>>).map(s => s.title)).toEqual(['', 'کالکشن تازه']);
+    // each slide keeps its own fields where it now stands, and its controls say which slide they are for
+    const [nowFirst, nowSecond] = within(parts()[0]).getAllByRole('listitem').filter(li => li.getAttribute('aria-label')?.includes('اسلاید'));
+    expect((within(nowSecond).getByLabelText('تیتر (اختیاری)') as HTMLInputElement).value).toBe('کالکشن تازه');
+    expect(within(nowSecond).getByRole('button', { name: 'برداشتن عکس اسلاید ۲' })).toBeTruthy();
+    expect(within(nowFirst).queryByRole('button', { name: /^برداشتن/ })).toBeNull();
+    // one slider on the home page: it is no longer offered
+    expect(kindsOffered()).not.toContain('اسلایدر');
   });
 
   it('chooses the collection of the collection intro from the collections of the site and keeps one that left it', async () => {
