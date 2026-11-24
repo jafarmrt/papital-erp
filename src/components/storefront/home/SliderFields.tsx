@@ -99,7 +99,7 @@ export function SliderFields({ section, name, assets, options, onChange }: {
   };
   return (
     <div className="space-y-3">
-      <p className={hint}>{`تا ${formatPersianNumber(SLIDES_MAX)} اسلاید، به همین ترتیب. اگر بیش از یک اسلاید باشد، هر ۶ ثانیه خودش جلو می‌رود و بازدیدکننده با پیکان‌ها یا کشیدن هم جابه‌جا می‌شود. تیتر و متن بلند روی سایت پس از دو تا سه خط بریده می‌شود.`}</p>
+      <p className={hint}>{`تا ${formatPersianNumber(SLIDES_MAX)} اسلاید، به همین ترتیب. اگر بیش از یک اسلاید باشد، هر ۶ ثانیه خودش جلو می‌رود و بازدیدکننده با پیکان‌ها یا کشیدن هم جابه‌جا می‌شود. تیتر و متن بلند روی سایت پس از دو تا سه خط با سه‌نقطه کوتاه می‌شود.`}</p>
       <ol className="space-y-3">
         {section.slides.map((slide, index) => {
           const what = `اسلاید ${formatPersianNumber(index + 1)}`;
