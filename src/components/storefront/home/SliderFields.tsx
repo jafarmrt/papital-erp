@@ -36,7 +36,7 @@ function ImagePair({ where, what, value, mobile, assets, onChange }: {
       </div>
       <div>
         {pick(`عکس ${what} برای گوشی (اختیاری)`, mobile, 'mobileImageAssetId')}
-        <p className={hint}>برش دیگری از همان عکس برای صفحهٔ ایستادهٔ گوشی (مانند ۸۰۰ در ۱۰۰۰). اگر خالی بماند، همان عکس نشان داده می‌شود.</p>
+        <p className={hint}>برش دیگری از همان عکس برای صفحهٔ ایستادهٔ گوشی (مانند ۸۰۰ در ۱۰۰۰). اگر خالی بماند، میانهٔ همان عکس پهن در قاب ایستادهٔ گوشی دیده می‌شود.</p>
       </div>
     </div>
   );
@@ -99,7 +99,7 @@ export function SliderFields({ section, name, assets, options, onChange }: {
   };
   return (
     <div className="space-y-3">
-      <p className={hint}>{`تا ${formatPersianNumber(SLIDES_MAX)} اسلاید، به همین ترتیب. اگر بیش از یک اسلاید باشد، بازدیدکننده با پیکان‌ها یا کشیدن میانشان جابه‌جا می‌شود.`}</p>
+      <p className={hint}>{`تا ${formatPersianNumber(SLIDES_MAX)} اسلاید، به همین ترتیب. اگر بیش از یک اسلاید باشد، هر ۶ ثانیه خودش جلو می‌رود و بازدیدکننده با پیکان‌ها یا کشیدن هم جابه‌جا می‌شود. تیتر و متن بلند روی سایت پس از دو تا سه خط بریده می‌شود.`}</p>
       <ol className="space-y-3">
         {section.slides.map((slide, index) => {
           const what = `اسلاید ${formatPersianNumber(index + 1)}`;

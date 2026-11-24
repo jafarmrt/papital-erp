@@ -69,7 +69,7 @@ const save = async () => {
 };
 
 describe('the home page in the page builder', () => {
-  it('has no address, title or search switch to set, no preview and no removal', async () => {
+  it('has no address, title or search switch to set and no removal, and can be previewed like a page', async () => {
     open(detailOf([]));
     await screen.findByText(/این صفحهٔ اصلی سایت است/);
     const details = screen.getByRole('region', { name: 'مشخصات صفحه' });
@@ -77,7 +77,7 @@ describe('the home page in the page builder', () => {
     expect((within(details).getByLabelText('نشانی لاتین').closest('div[hidden]'))).not.toBeNull();
     expect(within(details).queryByLabelText('این صفحه در موتور جست‌وجو نیاید')).toBeNull();
     expect(within(details).getByLabelText('عنوان جست‌وجو (اختیاری)')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /پیش‌نمایش/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'پیش‌نمایش روی سایت' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'حذف صفحه' })).toBeNull();
   });
 

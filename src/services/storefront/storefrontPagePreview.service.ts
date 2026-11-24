@@ -13,6 +13,7 @@ import type { PagePreviewLink } from '../../lib/storefront/storefrontPageContrac
 import type { StorefrontPagePreview } from '../../lib/storefront/storefrontPagePublicContracts.js';
 import { STOREFRONT_SEO_SETTING_KEYS } from '../../lib/storefront/storefrontSeoContracts.js';
 import { httpsSiteOrigin } from '../../lib/storefront/storefrontSeoRules.js';
+import { homeForSite } from './storefrontHomePublic.js';
 import { MEDIA_FILE_NAME, isoOf, pageForSite, type PageRecord } from './storefrontPagePublic.js';
 
 /**
@@ -47,8 +48,6 @@ export async function createPagePreview(req: Request, id: number): Promise<PageP
     // a fixed page is drawn by its own code on the site, around the words kept here: a preview of the words alone would
     // not be the page
     if (row.kind === 'fixed') throw new ValidationError('صفحهٔ ثابت پیش‌نمایش ندارد؛ متن آن پس از «انتشار» روی خود صفحه دیده می‌شود.', { field: 'id' }, 'STOREFRONT_PAGE_PREVIEW_FIXED');
-    // v12 phase 10e: the home page is drawn by the site's home route, not by the page a preview link opens
-    if (row.kind === 'home') throw new ValidationError('صفحهٔ اصلی پیش‌نمایش ندارد.', { field: 'id' }, 'STOREFRONT_PAGE_PREVIEW_HOME');
     // the page's version is left as it is: a link changes nothing a colleague edits, so an open editor does not go stale
     await tx.update(storefrontPages).set({ previewHash: hashOf(token), previewExpiresAt: expiresAt }).where(eq(storefrontPages.id, id));
     await logActivity({
@@ -71,10 +70,14 @@ async function pageOfToken(token: string): Promise<PageRecord> {
   return row;
 }
 
-/** The saved draft as a copy to build for the site (`noindex` is part of a copy's shape; what goes out is the summary's, always true) */
+/**
+ * The saved draft as a copy to build for the site (`noindex` is part of a copy's shape; what goes out is the summary's,
+ * always true). A part switched off is not part of it, as it is not part of what publishing sends (only the home page
+ * has such parts).
+ */
 const draftOf = (row: PageRecord): Omit<PageValues, 'slug'> => ({
   title: row.title, seoTitle: row.seoTitle, seoDescription: row.seoDescription, noindex: true, shareImageAssetId: row.shareImageAssetId,
-  sections: Array.isArray(row.sections) ? row.sections : [],
+  sections: (Array.isArray(row.sections) ? row.sections : []).filter(section => !section?.hidden),
 });
 
 /**
@@ -84,10 +87,13 @@ const draftOf = (row: PageRecord): Omit<PageValues, 'slug'> => ({
  */
 export async function publicPagePreview(token: string): Promise<StorefrontPagePreview> {
   const row = await pageOfToken(token);
-  const page = await pageForSite(draftOf(row), {
-    slug: row.slug, kind: row.kind === 'base' || row.kind === 'fixed' ? row.kind : 'custom', title: row.title, noindex: true, updatedAt: isoOf(row.updatedAt),
-  });
-  return { ...page, expiresAt: isoOf(row.previewExpiresAt ?? '') };
+  const draft = draftOf(row);
+  const summary = { slug: row.slug, kind: row.kind === 'base' || row.kind === 'fixed' ? row.kind : 'custom', title: row.title, noindex: true, updatedAt: isoOf(row.updatedAt) } as const;
+  const expiresAt = isoOf(row.previewExpiresAt ?? '');
+  // v12 phase 10e: the draft of «صفحهٔ اصلی» goes out once, as the home page it would be today (`home`, built by the
+  // code that builds the published one); the page around it carries no parts of its own
+  if (row.kind === 'home') return { ...await pageForSite({ ...draft, sections: [] }, summary), home: await homeForSite(draft, summary.updatedAt), expiresAt };
+  return { ...await pageForSite(draft, summary), expiresAt };
 }
 
 /**
@@ -98,7 +104,8 @@ export async function publicPagePreview(token: string): Promise<StorefrontPagePr
 export async function pagePreviewImageFile(token: string, file: string): Promise<string> {
   const row = await pageOfToken(token);
   const match = MEDIA_FILE_NAME.exec(file);
-  const ids = pageAssetIds({ shareImageAssetId: row.shareImageAssetId, sections: Array.isArray(row.sections) ? row.sections : [] });
+  // as publishing does: the image of a part switched off is not one the draft shows
+  const ids = pageAssetIds({ shareImageAssetId: row.shareImageAssetId, sections: draftOf(row).sections });
   if (!match || ids.length === 0) throw new NotFoundError('پیدا نشد');
   const [sha256, thumb] = [match[1], Boolean(match[2])];
   const assets = await orm.select({ lightBytes: mediaAssets.lightBytes, thumbBytes: mediaAssets.thumbBytes }).from(mediaAssets)

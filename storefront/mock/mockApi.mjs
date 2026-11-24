@@ -63,6 +63,14 @@ const newsReads = {};
 // moreHref }]`); none by default. MOCK_COLLECTIONS=fail answers 500 and MOCK_COLLECTIONS=missing 404 (an ERP not yet updated).
 const collectionsMode = process.env.MOCK_COLLECTIONS ?? '';
 const collectionTexts = collectionsMode.startsWith('[') ? JSON.parse(collectionsMode) : [];
+// v12 phase 10e: «صفحهٔ اصلی». Not published (404) unless MOCK_HOME gives the answer as JSON (`{ seoTitle, seoDescription,
+// shareImage, updatedAt, sections }`, a «معرفی کالکشن» naming catalog slugs for its products); MOCK_HOME=fail answers 500.
+// `GET /__mock/home?mode=fail|ok|none|empty|nothing|gone` changes it while a test runs (the site must keep the copy it read last).
+let homeMode = process.env.MOCK_HOME ?? '';
+const homeAnswer = homeMode.startsWith('{') ? JSON.parse(homeMode) : null;
+if (homeAnswer) homeMode = 'ok';
+/** how many times `/home` was asked for, for a test of how often the site asks */
+let homeReads = 0;
 const previews = process.env.MOCK_PREVIEWS ? JSON.parse(process.env.MOCK_PREVIEWS) : {};
 const previewMedia = (process.env.MOCK_PREVIEW_MEDIA ?? '').split(',').filter(Boolean);
 let previewReads = 0;
@@ -72,6 +80,13 @@ const withCards = page => ({
   ...page,
   sections: (page.sections ?? []).map(section => (section.kind === 'products'
     // a slug is a product of the catalog; an object is sent as it is (a test's own card, in whatever shape)
+    ? { ...section, products: (section.products ?? []).map(entry => (typeof entry === 'string' ? products.find(p => p.slug === entry) && card(products.find(p => p.slug === entry)) : entry)).filter(Boolean) }
+    : section)),
+});
+/** A home page as the ERP answers it: the products of a «معرفی کالکشن» and of a «ردیف محصولات» named by slug are sent as their cards */
+const homeWithCards = home => ({
+  ...home,
+  sections: (home.sections ?? []).map(section => (section && (section.kind === 'collectionIntro' || section.kind === 'products')
     ? { ...section, products: (section.products ?? []).map(entry => (typeof entry === 'string' ? products.find(p => p.slug === entry) && card(products.find(p => p.slug === entry)) : entry)).filter(Boolean) }
     : section)),
 });
@@ -394,6 +409,10 @@ createServer(async (req, res) => {
   // (`html`, `empty`, `null`) or answer again (`ok`) while the mock runs
   // how many requests came under a preview key, pages and images (the site must read each time, keep none, and send no key of another shape)
   if (url.pathname === '/__mock/news-reads') return send(res, 200, newsReads);
+  if (url.pathname === '/__mock/home') {
+    if (url.searchParams.has('mode')) homeMode = url.searchParams.get('mode') ?? '';
+    return send(res, 200, { mode: homeMode, reads: homeReads });
+  }
   if (url.pathname === '/__mock/preview-reads') return send(res, 200, { reads: previewReads, keysInAddress: previewKeysInAddress });
   if (url.pathname === '/__mock/pages') {
     pagesMode = url.searchParams.get('mode') ?? 'ok';
@@ -517,6 +536,23 @@ createServer(async (req, res) => {
     if (!found) return send(res, 404, { error: 'صفحه پیدا نشد.', code: 'STOREFRONT_PAGE_NOT_FOUND' });
     return send(res, 200, { data: withCards(found) });
   }
+  // a look at the site with real pictures: MOCK_MEDIA_DIR names a folder of `<sha256>.webp` files to answer `/media/<file>` from
+  // (nothing is answered without it, as before)
+  if (route.startsWith('/media/') && process.env.MOCK_MEDIA_DIR && /^\/media\/[0-9a-f]{64}(-thumb)?\.webp$/.test(route)) {
+    const bytes = await readFile(path.join(process.env.MOCK_MEDIA_DIR, route.slice('/media/'.length))).catch(() => null);
+    if (bytes) return send(res, 200, bytes, { 'Content-Type': 'image/webp' });
+  }
+  if (route === '/home') {
+    homeReads += 1;
+    if (homeMode === 'fail') return send(res, 500, { error: 'mock failure' });
+    // a 404 that is not the ERP's (a web server in front of it): a failed read too, not «not published»
+    if (homeMode === 'gone') return send(res, 404, Buffer.from('<html><body>404 Not Found</body></html>'), { 'Content-Type': 'text/html' });
+    // a 200 that is no home page (an empty answer, one with nothing to draw) is a failed read for the site, not «not published»
+    if (homeMode === 'empty') return send(res, 200, {});
+    if (homeMode === 'nothing') return send(res, 200, { data: { ...homeAnswer, sections: [{ kind: 'unknown-part' }] } });
+    if (homeMode !== 'ok' || !homeAnswer) return send(res, 404, { error: 'صفحهٔ اصلی هنوز منتشر نشده است.', code: 'STOREFRONT_HOME_NOT_PUBLISHED' });
+    return send(res, 200, { data: homeWithCards(homeAnswer) });
+  }
   if (route === '/collections') {
     if (collectionsMode === 'fail') return send(res, 500, { error: 'mock failure' });
     if (collectionsMode === 'missing') return send(res, 404, { error: 'not found' });
@@ -552,7 +588,7 @@ createServer(async (req, res) => {
     // a key given as "fail" answers 500, as an ERP in trouble does for a link that is still good
     if (found === 'fail') return send(res, 500, { error: 'خطای سرور' });
     if (!found) return send(res, 404, { error: 'پیش‌نمایش پیدا نشد یا زمانش گذشته است.', code: 'STOREFRONT_PAGE_PREVIEW_NOT_FOUND' });
-    if (route === '/page-preview') return send(res, 200, { data: withCards(found) });
+    if (route === '/page-preview') return send(res, 200, { data: found.home ? { ...withCards(found), home: homeWithCards(found.home) } : withCards(found) });
     const file = route.slice('/page-preview/media/'.length);
     if (previewMedia.includes(file)) return send(res, 200, Buffer.from(`preview-image-${file}`), { 'Content-Type': 'image/webp' });
     return send(res, 404, { error: 'not found' });

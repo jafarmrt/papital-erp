@@ -38,7 +38,8 @@ export const newsModifiedAt = (item: { date: string; page: { updatedAt: string }
   item.page.updatedAt && Date.parse(item.page.updatedAt) >= Date.parse(newsDayStart(item.date)) ? item.page.updatedAt : ''
 );
 
-function card(value: unknown): SiteNewsCard | null {
+/** One card of the list of news, rebuilt from what the site draws */
+export function siteNewsCard(value: unknown): SiteNewsCard | null {
   if (!isRecord(value) || typeof value.slug !== 'string' || !isPageSlug(value.slug) || typeof value.date !== 'string' || !DAY.test(value.date)) return null;
   const title = cleanText(value.title, 200).trim();
   if (isBlank(title)) return null;
@@ -50,12 +51,12 @@ export function siteNewsList(value: unknown): SiteNewsList | null {
   if (!isRecord(value) || typeof value.enabled !== 'boolean' || !Array.isArray(value.data)) return null;
   const [total, page, pageSize] = [count(value.total, 100_000), count(value.page, 100_000), count(value.pageSize, 100)];
   if (total === null || page === null || !pageSize) return null;
-  return { enabled: value.enabled, items: value.data.slice(0, pageSize).flatMap(raw => card(raw) ?? []), total, page: Math.max(1, page), pageSize };
+  return { enabled: value.enabled, items: value.data.slice(0, pageSize).flatMap(raw => siteNewsCard(raw) ?? []), total, page: Math.max(1, page), pageSize };
 }
 
 /** `GET /news/:slug` of the Storefront API; null for an answer that is no item */
 export function siteNewsItem(value: unknown): SiteNewsItem | null {
-  const top = card(value);
+  const top = siteNewsCard(value);
   if (!top || !isRecord(value)) return null;
   const page = sitePage({
     slug: top.slug, kind: 'custom', title: top.title, noindex: false, updatedAt: value.updatedAt, seoTitle: value.seoTitle, seoDescription: value.seoDescription,

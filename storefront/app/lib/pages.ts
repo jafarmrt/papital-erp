@@ -36,6 +36,8 @@ const str = (value: unknown, max: number) => (typeof value === 'string' ? value.
 export const cleanText = str;
 const side = (value: unknown) => (typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 20_000 ? value : null);
 const href = (value: unknown) => (typeof value === 'string' && TURNS_LINE.test(value) ? '' : pageLink(value) ?? '');
+/** A link of an answer as the site keeps it: a path of this site or an https address, else '' (v12 phase 10e: the home page's parts use it too) */
+export const siteHref = href;
 const list = (value: unknown, max: number): unknown[] => (Array.isArray(value) ? value.slice(0, max) : []);
 /** Nothing a visitor would see: empty, spaces, or only the joiners and marks that draw nothing */
 export const isBlank = (value: string) => value.replace(/[\s\u200b-\u200f\u2060\ufeff]/g, '') === '';
@@ -48,7 +50,7 @@ export function pageImage(value: unknown): SitePageImage | null {
 const STOCK = ['in_stock', 'low', 'out'] as const;
 
 /** A product card rebuilt from the fields the site draws, so a field the ERP never meant for it cannot ride along */
-function card(value: unknown): StorefrontProductCard | null {
+export function siteProductCard(value: unknown): StorefrontProductCard | null {
   // a product's address is lowercase Latin (the ERP's own rule), so nothing in it can lead out of `/p/`
   if (!isRecord(value) || typeof value.slug !== 'string' || !PAGE_SLUG.test(value.slug) || value.slug.length > 200 || typeof value.name !== 'string' || typeof value.retailPrice !== 'string') return null;
   const stock = isRecord(value.stock) ? value.stock : {};
@@ -129,7 +131,8 @@ export const docIsBlank = (text: RichDoc): boolean => !text.content.some(functio
   return part.type === 'libraryImage' || part.type === 'horizontalRule' || (typeof part.text === 'string' && !isBlank(part.text)) || Boolean(part.content?.some(shows));
 });
 
-function section(value: unknown): SitePageSection | null {
+/** One section of a page of the ERP, rebuilt from what the site draws; null for a kind the site does not know */
+export function sitePageSection(value: unknown): SitePageSection | null {
   if (!isRecord(value)) return null;
   const background: SectionBackground = SECTION_BACKGROUNDS.includes(value.background as SectionBackground) ? value.background as SectionBackground : 'white';
   const title = str(value.title, 200);
@@ -162,7 +165,7 @@ function section(value: unknown): SitePageSection | null {
         neshanUrl: href(value.neshanUrl), baladUrl: href(value.baladUrl), googleUrl: href(value.googleUrl),
       };
     case 'products':
-      return { kind: 'products', background, title, collection: str(value.collection, 200), products: list(value.products, 12).flatMap(raw => card(raw) ?? []) };
+      return { kind: 'products', background, title, collection: str(value.collection, 200), products: list(value.products, 12).flatMap(raw => siteProductCard(raw) ?? []) };
     case 'button':
       return { kind: 'button', background, label: str(value.label, 80), href: href(value.href) };
     case 'shippingMethods':
@@ -196,7 +199,7 @@ export function sitePage(value: unknown): SitePage | null {
   if (!top || !isRecord(value)) return null;
   return {
     ...top, seoTitle: str(value.seoTitle, 300), seoDescription: str(value.seoDescription, 600), shareImage: pageImage(value.shareImage),
-    sections: list(value.sections, 40).flatMap(raw => section(raw) ?? []),
+    sections: list(value.sections, 40).flatMap(raw => sitePageSection(raw) ?? []),
   };
 }
 
