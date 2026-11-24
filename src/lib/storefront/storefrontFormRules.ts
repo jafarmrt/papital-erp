@@ -1,4 +1,4 @@
-import { compactSearchText } from '../search/searchText.js';
+import { normalizeSearchText } from '../search/searchText.js';
 import { STOREFRONT_SLUG_PATTERN } from './storefrontRules.js';
 import { Refused, fa, hasLoneSurrogate, isRecord, list, oneOf, onlyKeys, refuse, text } from './storefrontPageParts.js';
 
@@ -40,13 +40,21 @@ export const FORM_SUCCESS_DEFAULT = 'پیام شما رسید. سپاس از ش�
  * word an object or a form element has a meaning for.
  */
 export const FORM_FIELD_ID = /^f[1-9][0-9]{0,3}$/;
+// marks and fillers nobody sees that count as letters or symbols: the soft hyphen, joiners, Hangul fillers, the blank
+// of Braille, variation selectors
+const UNSEEN = /[\u00ad\u034f\u115f\u1160\u2060-\u2064\u2800\u3164\ufe00-\ufe0f\uffa0]/g;
+const SEEN = /[\p{L}\p{N}\p{P}\p{S}]/u;
+const seenPart = (value: string): string => value.normalize('NFC').replace(UNSEEN, '');
+/** Whether a name has anything that can be seen: a letter, a digit, a mark of punctuation or a symbol */
+export const isWritten = (value: string): boolean => SEEN.test(seenPart(value));
 /**
- * What two names are compared by: the same letters whatever their case, their Arabic or Persian form, the spaces and
- * the marks nobody sees between them. '' = nothing in the name can be seen.
+ * What two names are compared by: the same letters whatever their case and their Arabic or Persian form, with the
+ * marks nobody sees dropped and every run of spaces (the zero-width joiners among them) read as one space. A hyphen and
+ * every other mark that is seen stays, so «۱-۲ نفر» and «۱۲ نفر» are two names.
  */
-// marks and fillers nobody sees that the search fold keeps: the soft hyphen, joiners, Hangul fillers, variation selectors
-const UNSEEN = /[\u00ad\u034f\u115f\u1160\u2060-\u2064\u3164\ufe00-\ufe0f]/g;
-export const sameNameKey = (value: string): string => compactSearchText(value.normalize('NFC').replace(UNSEEN, ''));
+export const sameNameKey = (value: string): string => (
+  normalizeSearchText(seenPart(value)).replace(/[ةۀ]/g, 'ه').replace(/[\s\u200b-\u200f\ufeff]+/g, ' ').trim()
+);
 
 export interface FormField {
   id: string;
@@ -89,7 +97,7 @@ function checkedField(raw: unknown, position: number): FormField {
   if (typeof raw.id !== 'string' || !FORM_FIELD_ID.test(raw.id)) return refuse(`${where} خوانا نیست؛ آن را بردارید و دوباره بسازید.`, 'STOREFRONT_FORM_FIELD_INVALID');
   const kind = oneOf(raw.kind, FORM_FIELD_KINDS, `نوع ${where}`);
   const label = text(raw.label ?? '', kind === 'consent' ? FORM_CONSENT_LABEL_MAX : FORM_FIELD_LABEL_MAX, kind === 'consent' ? `جملهٔ ${where}` : `عنوان ${where}`);
-  if (!sameNameKey(label)) return refuse(kind === 'consent' ? `جملهٔ کنار تیک را برای ${where} بنویسید.` : `عنوان ${where} را بنویسید.`, 'STOREFRONT_FORM_FIELD_INVALID');
+  if (!isWritten(label)) return refuse(kind === 'consent' ? `جملهٔ کنار تیک را برای ${where} بنویسید.` : `عنوان ${where} را بنویسید.`, 'STOREFRONT_FORM_FIELD_INVALID');
   if (raw.required !== undefined && typeof raw.required !== 'boolean') return refuse(`«اجباری» ${where} خوانا نیست.`, 'STOREFRONT_FORM_FIELD_INVALID');
   const help = text(raw.help ?? '', FORM_FIELD_HELP_MAX, `راهنمای ${where}`);
   const given = raw.options === undefined ? [] : list(raw.options, FORM_OPTIONS_MAX, `گزینه‌های ${where}`);
@@ -98,7 +106,7 @@ function checkedField(raw: unknown, position: number): FormField {
     return { id: raw.id, kind, label, required: raw.required === true, help, options: [] };
   }
   const options = given.map((option, i) => text(option, FORM_OPTION_MAX, `گزینهٔ ${fa(i + 1)} ${where}`));
-  if (options.some(option => sameNameKey(option) === '')) return refuse(`گزینهٔ خالی را از ${where} بردارید.`, 'STOREFRONT_FORM_FIELD_INVALID');
+  if (options.some(option => !isWritten(option))) return refuse(`گزینهٔ خالی را از ${where} بردارید.`, 'STOREFRONT_FORM_FIELD_INVALID');
   if (options.length < FORM_OPTIONS_MIN) return refuse(`${where} دست‌کم ${fa(FORM_OPTIONS_MIN)} گزینه می‌خواهد.`, 'STOREFRONT_FORM_FIELD_INVALID');
   if (new Set(options.map(sameNameKey)).size !== options.length) return refuse(`دو گزینهٔ ${where} یکسان‌اند.`, 'STOREFRONT_FORM_FIELD_INVALID');
   return { id: raw.id, kind, label, required: raw.required === true, help, options };
@@ -126,7 +134,7 @@ export function checkedForm(raw: unknown, options: { forSite: boolean }): Checke
   }
   const title = line('title', raw.title, FORM_TITLE_MAX, 'عنوان فرم');
   if (typeof title !== 'string') return title;
-  if (!sameNameKey(title)) return problem('title', 'عنوان فرم را بنویسید.');
+  if (!isWritten(title)) return problem('title', 'عنوان فرم را بنویسید.');
   if (raw.intro !== undefined && typeof raw.intro !== 'string') return problem('intro', 'متن بالای فرم باید متن باشد.');
   const intro = formParagraphs(String(raw.intro ?? ''));
   if (UNSAFE_IN_PARAGRAPHS.test(intro) || hasLoneSurrogate(intro)) return problem('intro', 'متن بالای فرم متن ساده است؛ نویسهٔ پنهان یا ناقص در آن نمی‌آید.');
