@@ -75,7 +75,7 @@ export async function runStorefrontMessagesV12Tests(shouldRun: (id: string, ...e
     // each request as another visitor (the route is limited per visitor address, a few a minute)
     let visitor = 0;
     const submit = (key: string, answers: unknown, over: Body = {}) => request(app).post(`/api/storefront/v1/forms/${key}/submit`).set('Authorization', `Bearer ${apiKey}`)
-      .set('X-Storefront-Client-IP', `10.77.${Math.floor(++visitor / 250)}.${(visitor % 250) + 1}`).send({ requestKey: requestKey(), answers, ...over });
+      .set('X-Storefront-Client-IP', `10.77.${Math.floor(++visitor / 250)}.${(visitor % 250) + 1}`).send({ requestKey: requestKey(), formVersion, answers, ...over });
 
     // a form with one field of each kind, on the site
     const made = await erp.post('/api/storefront/forms', { title: `فرم پیام ${tag}`, key: keyOf('all'), template: null });
@@ -94,12 +94,15 @@ export async function runStorefrontMessagesV12Tests(shouldRun: (id: string, ...e
     const saved = await erp.put(`/api/storefront/forms/${formId}`, { key: keyOf('all'), title: `فرم پیام ${tag}`, intro: '', fields, submitLabel: '', successMessage: '', version: 1 });
     if (saved.status !== 200) throw new Error(`saving the form: ${saved.status} ${JSON.stringify(saved.body)}`);
 
+    // the version of the form a visitor filled in, as the site read it
+    let formVersion = 2;
     // 1) a form that is off, removed or unknown takes no answer; nor a request without the site's key
     const offForm = await submit(keyOf('all'), { f1: 'نام', f9: true });
     const turnedOn = await erp.put(`/api/storefront/forms/${formId}/enabled`, { enabled: true, version: 2 });
+    formVersion = Number(turnedOn.body.data?.version);
     const closed = [
       `${offForm.status}:${String(offForm.body.code)}`, `${(await submit(keyOf('nobody'), { f1: 'x' })).status}`, `${(await submit('Bad Key', { f1: 'x' })).status}`,
-      `${(await request(app).post(`/api/storefront/v1/forms/${keyOf('all')}/submit`).send({ requestKey: requestKey(), answers: { f1: 'x', f9: true } })).status}`,
+      `${(await request(app).post(`/api/storefront/v1/forms/${keyOf('all')}/submit`).send({ requestKey: requestKey(), formVersion, answers: { f1: 'x', f9: true } })).status}`,
     ].join(' ');
     if (turnedOn.status !== 200 || closed !== '404:STOREFRONT_FORM_NOT_FOUND 404 400 401') wrong.push(`a form that is off, unknown, misnamed, and a request without the key: ${turnedOn.status} ${closed}`);
 
@@ -127,9 +130,12 @@ export async function runStorefrontMessagesV12Tests(shouldRun: (id: string, ...e
     }
     const shapes = [
       (await submit(keyOf('all'), 'text')).status, (await submit(keyOf('all'), { f1: { nested: 'x' } })).status, (await submit(keyOf('all'), good, { requestKey: 'short' })).status,
-      (await submit(keyOf('all'), good, { extra: 1 })).status, (await submit(keyOf('all'), { ...good, f8: 'پ'.repeat(9000) })).status,
+      (await submit(keyOf('all'), good, { extra: 1 })).status, (await submit(keyOf('all'), { ...good, f8: 'پ'.repeat(9000) })).status, (await submit(keyOf('all'), good, { formVersion: undefined })).status,
     ].join('/');
-    if (shapes !== '400/400/422/400/400') wrong.push(`requests of another shape: ${shapes}`);
+    // answers written for another version of the form are never read by this one's fields
+    const otherVersion = await submit(keyOf('all'), good, { formVersion: formVersion - 1 });
+    if (otherVersion.status !== 422 || otherVersion.body.code !== 'STOREFRONT_MESSAGE_FORM_CHANGED') wrong.push(`answers for another version of the form: ${otherVersion.status} ${String(otherVersion.body.code)}`);
+    if (shapes !== '400/400/422/400/400/400') wrong.push(`requests of another shape: ${shapes}`);
     const [{ none }] = await orm.select({ none: sql<number>`count(*)::int` }).from(storefrontMessages).where(eq(storefrontMessages.formId, formId));
     if (none !== 0) wrong.push(`a refused request left ${none} message(s)`);
 
@@ -199,6 +205,7 @@ export async function runStorefrontMessagesV12Tests(shouldRun: (id: string, ...e
     const formNow = Number((await erp.get(`/api/storefront/forms/${formId}`)).body.data?.version);
     const leadOn = await erp.put(`/api/storefront/forms/${formId}/makes-lead`, { enabled: true, version: formNow });
     const leadOnAgain = await erp.put(`/api/storefront/forms/${formId}/makes-lead`, { enabled: true, version: formNow + 1 });
+    formVersion = formNow + 1;
     const viewerSwitch = await viewer.put(`/api/storefront/forms/${formId}/makes-lead`, { enabled: false, version: formNow + 1 });
     const withLead = await submit(keyOf('all'), { f1: `خریدار ${tag}`, f2: '09121112233', f8: 'می‌خواهم سفارش بدهم', f9: true });
     const leadMessage = (await viewer.get(`/api/storefront/messages/${Number(withLead.body.data?.reference)}`)).body.data as { leadId?: number | null } | undefined;
@@ -210,14 +217,23 @@ export async function runStorefrontMessagesV12Tests(shouldRun: (id: string, ...e
       wrong.push(`a message that opens a sales lead: switch ${leadOn.status} ${String(leadOn.body.data?.makesLead)}, again v${String(leadOnAgain.body.data?.version)}, viewer ${viewerSwitch.status}, message ${withLead.status}, lead ${JSON.stringify(lead ?? null).slice(0, 300)}`);
     }
 
+    // the switch off again: the messages below open no lead
+    const leadOff = await erp.put(`/api/storefront/forms/${formId}/makes-lead`, { enabled: false, version: formNow + 1 });
+    if (leadOff.body.data?.makesLead !== false) wrong.push(`turning the sales lead off: ${leadOff.status}`);
+
     // 8) a form changed while a visitor wrote, and a form taken off the site, take no answer; the message already made stays as it was
     const formV = Number((await erp.get(`/api/storefront/forms/${formId}`)).body.data?.version);
     await erp.put(`/api/storefront/forms/${formId}`, { key: keyOf('all'), title: `فرم پیام تازه ${tag}`, intro: '', fields: fields.filter(f => f.id !== 'f8').map(f => (f.id === 'f1' ? { ...f, label: 'نام شما' } : f)), submitLabel: '', successMessage: '', version: formV });
     const oldShape = await submit(keyOf('all'), good);
+    // a visitor who opens the form again fills in the form as it is now: its fields, under its version
+    const newShape = await submit(keyOf('all'), { f1: 'نام تازه', f9: true }, { formVersion: formV + 1 });
+    const newRead = (await viewer.get(`/api/storefront/messages/${Number(newShape.body.data?.reference)}`)).body.data as { formTitle?: string; answers?: Array<{ label: string }> } | undefined;
+    if (newShape.status !== 201 || newRead?.formTitle !== `فرم پیام تازه ${tag}` || newRead.answers?.[0]?.label !== 'نام شما' || newRead.answers.length !== 8) wrong.push(`a message of the changed form: ${newShape.status} ${JSON.stringify(newRead).slice(0, 200)}`);
     const stillOld = (await viewer.get(`/api/storefront/messages/${messageId}`)).body.data as { formTitle?: string; answers?: Array<{ label: string }> } | undefined;
     await erp.put(`/api/storefront/forms/${formId}/enabled`, { enabled: false, version: formV + 1 });
     const afterOff = await submit(keyOf('all'), { f1: 'نام', f9: true });
     await erp.put(`/api/storefront/forms/${formId}/enabled`, { enabled: true, version: formV + 2 });
+    formVersion = formV + 3;
     const siteOff = await erp.put('/api/storefront/settings', shop(false, on.body.data.version));
     const whileSiteOff = await submit(keyOf('all'), { f1: 'نام', f9: true });
     await erp.put('/api/storefront/settings', shop(true, siteOff.body.data?.version));

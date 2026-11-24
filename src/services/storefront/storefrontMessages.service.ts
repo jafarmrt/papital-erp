@@ -112,6 +112,10 @@ export async function submitFormAnswers(key: string, input: FormSubmitRequest): 
   const formGone = () => new NotFoundError('این فرم پیدا نشد.', undefined, 'STOREFRONT_FORM_NOT_FOUND');
   const [form] = await orm.select().from(storefrontForms).where(and(eq(storefrontForms.key, key), eq(storefrontForms.isDeleted, 0), eq(storefrontForms.enabled, 1)));
   if (!form) throw formGone();
+  // a field's name (f1, f2, …) says which field only of the form as the visitor saw it: answers written for another
+  // version are never read by this one's fields
+  const formChanged = () => new ValidationError('این فرم عوض شده است؛ صفحه را دوباره باز کنید و فرم را از نو پر کنید.', undefined, 'STOREFRONT_MESSAGE_FORM_CHANGED');
+  if (input.formVersion !== form.version) throw formChanged();
   const checked = checkedAnswers({ fields: Array.isArray(form.fields) ? form.fields : [] }, input.answers);
   if (checked.problem) throw new ValidationError(checked.problem.message, { field: checked.problem.fieldId }, checked.problem.code);
   const answers = checked.answers;
@@ -125,7 +129,7 @@ export async function submitFormAnswers(key: string, input: FormSubmitRequest): 
       const [live] = await tx.select({ id: storefrontForms.id, title: storefrontForms.title, makesLead: storefrontForms.makesLead, version: storefrontForms.version })
         .from(storefrontForms).where(and(eq(storefrontForms.id, form.id), eq(storefrontForms.isDeleted, 0), eq(storefrontForms.enabled, 1))).for('share');
       if (!live) throw formGone();
-      if (live.version !== form.version) throw new ValidationError('این فرم عوض شده است؛ صفحه را دوباره باز کنید و فرم را از نو پر کنید.', undefined, 'STOREFRONT_MESSAGE_FORM_CHANGED');
+      if (live.version !== form.version) throw formChanged();
       if (await sentThisHour(tx) >= MESSAGES_HOURLY_CAP) throw new MessagesBusyError();
       const leadId = live.makesLead === 1 ? await openSiteLead(tx, {
         title: `پیام سایت: ${live.title}`, contactName: firstAnswer(answers, 'shortText') || 'بازدیدکنندهٔ سایت', phone: firstAnswer(answers, 'mobile'), company: '',

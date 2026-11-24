@@ -456,7 +456,7 @@ const FORM_ANSWERS_CHARS_MAX = 40_000;
 const formSubmitSchema = z.object({
   params: z.object({ key: z.string().min(1).max(FORM_KEY_MAX).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/) }).passthrough(),
   body: z.object({
-    requestKey: z.string().max(80),
+    requestKey: z.string().max(80), formVersion: z.number().int().min(1).max(2_147_483_647),
     answers: z.record(z.string().max(12), z.union([z.string().max(8000), z.boolean(), z.array(z.string().max(200)).max(20)]))
       .refine(value => Object.keys(value).length <= FORM_FIELDS_MAX * 2 && JSON.stringify(value).length <= FORM_ANSWERS_CHARS_MAX, 'پاسخ‌های فرم بیش از اندازه بزرگ هستند.'),
   }).strict(),

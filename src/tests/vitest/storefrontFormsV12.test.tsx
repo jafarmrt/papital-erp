@@ -68,6 +68,13 @@ function open(at: string, detail: FormDetail = detailOf(), list: FormList = LIST
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[at]}><StorefrontFormsPage /></MemoryRouter></QueryClientProvider>);
+  return {
+    /** a colleague saves the form elsewhere, and this screen reads it again */
+    colleagueSaves: async (title: string) => {
+      current = { ...current, title, form: { ...current.form, title }, version: current.version + 1 };
+      await client.invalidateQueries();
+    },
+  };
 }
 const fieldsOnScreen = () => within(screen.getByRole('region', { name: 'فیلدهای فرم' })).getAllByRole('listitem').map(li => li.getAttribute('aria-label'));
 const saveButton = () => screen.getByRole('button', { name: 'ذخیرهٔ فرم' }) as HTMLButtonElement;
@@ -151,6 +158,39 @@ describe('the screen of the forms of the site', () => {
     fireEvent.click(siteSwitch());
     await waitFor(() => expect(sent('PUT')).toHaveLength(2));
     expect(sent('PUT')[1]).toEqual({ url: '/storefront/forms/3/enabled', body: { enabled: true, version: 5 } });
+  });
+
+  it('keeps unsaved edits beside a colleague\'s newer version, and reads that version once the edits are gone', async () => {
+    permissions.current = ['site_content.manage'];
+    const { colleagueSaves } = open('/site-forms?form=3');
+    const title = await screen.findByLabelText('عنوان فرم') as HTMLInputElement;
+    fireEvent.change(title, { target: { value: 'عنوان من' } });
+    await colleagueSaves('عنوان همکار');
+    const banner = await screen.findByText(/همکار دیگری این فرم را در همین فاصله عوض کرده است/);
+    // my words stay, and nothing of mine is sent over the colleague's version
+    expect(title.value).toBe('عنوان من');
+    expect(saveButton().disabled).toBe(true);
+    expect(banner).toBeTruthy();
+    // I take my edit back by hand: nothing is unsaved, so the screen reads the newer version and works again
+    fireEvent.change(title, { target: { value: 'تماس با ما' } });
+    await waitFor(() => expect((screen.getByLabelText('عنوان فرم') as HTMLInputElement).value).toBe('عنوان همکار'));
+    expect(screen.queryByText(/همکار دیگری این فرم را/)).toBeNull();
+    expect(siteSwitch().disabled).toBe(false);
+    fireEvent.click(siteSwitch());
+    await waitFor(() => expect(sent('PUT')).toEqual([{ url: '/storefront/forms/3/enabled', body: { enabled: true, version: 5 } }]));
+  });
+
+  it('sends a save once, however it is started twice', async () => {
+    permissions.current = ['site_content.manage'];
+    open('/site-forms?form=3');
+    const title = await screen.findByLabelText('عنوان فرم');
+    fireEvent.change(title, { target: { value: 'تماس تازه' } });
+    const form = title.closest('form') as HTMLFormElement;
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    await waitFor(() => expect(sent('PUT')).toHaveLength(1));
+    await waitFor(() => expect(saveButton().disabled).toBe(true));
+    expect(sent('PUT')).toHaveLength(1);
   });
 
   it('does not offer the site a form with nothing to fill in, and asks before a removal', async () => {

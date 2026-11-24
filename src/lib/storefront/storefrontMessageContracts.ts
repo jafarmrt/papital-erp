@@ -35,6 +35,8 @@ export interface MessageStatusInput { status: MessageStatus; version: number }
 /** `POST /api/storefront/v1/forms/:key/submit`: the answers by the form's field ids, under a key of the request's own */
 export interface FormSubmitRequest {
   requestKey: string;
+  /** the version of the form the visitor filled in: a form changed since then takes no answer written for the old one */
+  formVersion: number;
   answers: Record<string, unknown>;
 }
 export interface FormSubmitAnswer {
