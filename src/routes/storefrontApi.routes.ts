@@ -23,6 +23,7 @@ import { EMAIL_ADDRESS_MAX, EMAIL_PROOF_MAX } from '../lib/storefront/storefront
 import { storefrontEmailRoutes } from './storefrontApiEmail.routes.js';
 import { PAGE_PREVIEW_KEY_MAX, PAGE_SLUG_MAX } from '../lib/storefront/storefrontPageRules.js';
 import { contentImageFile, publicPage, publicPages } from '../services/storefront/storefrontPagePublic.js';
+import { publicHome } from '../services/storefront/storefrontHomePublic.js';
 import { newsImageFile, publicNewsIndex, publicNewsItem, publicNewsList } from '../services/storefront/storefrontNewsPublic.js';
 import { collectionImageFile, publicCollectionTexts } from '../services/storefront/storefrontCollections.service.js';
 import { pagePreviewImageFile, publicPagePreview } from '../services/storefront/storefrontPagePreview.service.js';
@@ -234,6 +235,13 @@ router.get('/news-index', asyncHandler(async (_req: Request, res: Response) => {
 
 router.get('/news/:slug', validate(pageSlugSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ data: await publicNewsItem(String(req.params.slug)) });
+}));
+
+// v12 phase 10e: «صفحهٔ اصلی» as the shop wrote and published it in the ERP, built for today (a part switched off, a slide
+// outside its days and a button whose target is not on the site now are left out); 404 until it is published, and the
+// site then keeps the home page in its own code
+router.get('/home', asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ data: await publicHome() });
 }));
 
 // v12 phase 10e: «کالکشن‌های سایت»: the words the shop wrote for each collection that has an item on the site now (its

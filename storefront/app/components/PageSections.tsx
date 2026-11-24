@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import { Clock, Gift, Handshake, Heart, Leaf, Mail, MapPin, Phone, ShieldCheck, Sparkles, Star, Truck, type LucideIcon } from 'lucide-react';
+import { Building2, Clock, Gift, Hand, Handshake, Heart, Leaf, Mail, MapPin, Phone, ShieldCheck, Sparkles, Star, Truck, type LucideIcon } from 'lucide-react';
 import type { PageIcon, SectionBackground } from '@erp/storefront/storefrontPageParts';
 import { collectionPath } from '../lib/brand';
 import { usePageMediaPath } from '../lib/pageMedia';
@@ -34,7 +34,7 @@ const isDeep = (background: SectionBackground) => background === 'brand' || back
 
 const ICONS: Readonly<Record<PageIcon, LucideIcon>> = {
   leaf: Leaf, handshake: Handshake, truck: Truck, gift: Gift, heart: Heart, sparkles: Sparkles, clock: Clock, map: MapPin, phone: Phone, mail: Mail,
-  shield: ShieldCheck, star: Star,
+  shield: ShieldCheck, star: Star, hand: Hand, building: Building2,
 };
 const CARD_COLUMNS: Readonly<Record<number, string>> = { 1: '', 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-2 lg:grid-cols-3', 4: 'sm:grid-cols-2 lg:grid-cols-4' };
 

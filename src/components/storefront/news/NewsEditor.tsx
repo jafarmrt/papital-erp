@@ -78,7 +78,7 @@ export function NewsEditor({ detail, canManage, onBack, onDeleted }: { detail: N
   const disabled = !canManage || busy;
   const onSite = base.status !== 'draft';
   // the menus that link to this item, as a phrase: the question before a removal says what it touches
-  const linkedFrom = (Array.isArray(detail.menuPlaces) ? detail.menuPlaces : []).map(place => `«${isMenuLocation(place) ? MENU_LOCATION_TITLES[place] : place}»`).join(' و ');
+  const linkedFrom = [...(Array.isArray(detail.menuPlaces) ? detail.menuPlaces : []).map(place => `«${isMenuLocation(place) ? MENU_LOCATION_TITLES[place] : place}»`), ...(detail.linkedFromHome ? ['«صفحهٔ اصلی»'] : [])].join(' و ');
 
   const assets: AssetTitles = {
     titleOf: assetId => (assetId === null ? '' : (pickedTitles[assetId] ?? detail.assets.find(a => a.assetId === assetId)?.title ?? '')),
@@ -272,7 +272,7 @@ export function NewsEditor({ detail, canManage, onBack, onDeleted }: { detail: N
                 {asking !== 'revert' && linkedFrom && (
                   <span data-menu-warning className="mt-1 block font-bold">
                     {asking === 'delete'
-                      ? `این خبر در ${linkedFrom} پیوند دارد. آن پیوند دیگر روی سایت نمی‌آید؛ پس از حذف، آن گزینه را در «فهرست‌های سایت» بردارید یا به خبر دیگری بدهید.`
+                      ? `این خبر در ${linkedFrom} پیوند دارد. آن پیوند دیگر روی سایت نمی‌آید؛ پس از حذف، آن پیوند را در همان‌جا بردارید یا به خبر دیگری بدهید.`
                       : `این خبر در ${linkedFrom} پیوند دارد. تا انتشار دوباره، آن پیوند روی سایت نمی‌آید.`}
                   </span>
                 )}

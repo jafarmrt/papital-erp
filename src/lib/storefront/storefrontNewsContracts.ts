@@ -27,6 +27,8 @@ export interface NewsDetail extends NewsListRow {
   assets: PageAssetInfo[];
   /** v12 phase 10d, part 3: the places of «فهرست‌های سایت» with a link to this item (also one switched off), so taking it off the site can say what it touches */
   menuPlaces: string[];
+  /** v12 phase 10e: a slide's button or a banner of «صفحهٔ اصلی» leads to this item */
+  linkedFromHome: boolean;
 }
 
 export interface NewsList {

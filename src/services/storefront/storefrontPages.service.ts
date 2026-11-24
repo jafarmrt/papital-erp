@@ -7,11 +7,12 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { OptimisticLockError, nextVersion } from '../../lib/occHelper.js';
 import {
-  BASE_PAGES, FIXED_PAGES, PAGES_MAX, PAGE_TEMPLATES, checkedPage, isPageKind, pageAssetIds, pageItemIds, type BasePageSlug, type PageValues,
+  BASE_PAGES, FIXED_PAGES, PAGES_MAX, PAGE_TEMPLATES, checkedPage, homeSectionLinks, isPageKind, pageAssetIds, pageItemIds, type BasePageSlug, type PageValues,
 } from '../../lib/storefront/storefrontPageRules.js';
 import type { PageCreateInput, PageDetail, PageListRow, PageSaveInput, PageStatus } from '../../lib/storefront/storefrontPageContracts.js';
-import { collectionsLinkingTo, menuPlacesOf } from './storefrontPageLinks.js';
+import { collectionsLinkingTo, homeLinksTo, menuPlacesOf } from './storefrontPageLinks.js';
 import { assetInfos, auditSections, canonical, checkContentReferences, refuseNewContentImages, writeContentAssetRows } from './storefrontContentShared.js';
+import { checkSiteLinkReferences } from './storefrontSiteLinkTargets.js';
 import { clearRedirectFrom, redirectMovedPage } from './storefrontRedirects.service.js';
 
 /**
@@ -56,13 +57,17 @@ const listRowOf = (row: PageRecord): PageListRow => ({
 });
 
 /** The checks and the image rows every content of the site shares (`storefrontContentShared.ts`), said for a page */
-const checkReferences = (tx: DbExecutor, page: PageValues, mayKeep: readonly number[]) => checkContentReferences(tx, { assetIds: pageAssetIds(page), itemIds: pageItemIds(page) }, mayKeep, 'صفحه');
+const checkReferences = async (tx: DbExecutor, page: PageValues, mayKeep: readonly number[]) => {
+  await checkContentReferences(tx, { assetIds: pageAssetIds(page), itemIds: pageItemIds(page) }, mayKeep, 'صفحه');
+  // v12 phase 10e: what a slide's button or a banner of the home page leads to is still there
+  await checkSiteLinkReferences(tx, homeSectionLinks(page.sections));
+};
 const refuseNewImagesWithoutMedia = (req: Request, page: PageValues, before: readonly number[]) => refuseNewContentImages(req, pageAssetIds(page), before, 'صفحه');
 const writeContentAssets = (tx: DbExecutor, contentId: number, assetIds: readonly number[]) => writeContentAssetRows(tx, CONTENT_KIND, contentId, assetIds);
 
 async function detailOf(executor: DbExecutor, row: PageRecord): Promise<PageDetail> {
   const draft = draftOf(row);
-  return { ...listRowOf(row), draft, assets: await assetInfos(executor, pageAssetIds(draft)), menuPlaces: await menuPlacesOf(executor, row.id), linkedCollections: await collectionsLinkingTo(executor, row.id) };
+  return { ...listRowOf(row), draft, assets: await assetInfos(executor, pageAssetIds(draft)), menuPlaces: await menuPlacesOf(executor, row.id), linkedCollections: await collectionsLinkingTo(executor, row.id), linkedFromHome: await homeLinksTo(executor, { pageId: row.id }) };
 }
 
 /** `GET /api/storefront/pages`: every page, the five base ones first, then the fixed ones */
@@ -70,7 +75,7 @@ export async function listPages(executor: DbExecutor): Promise<PageListRow[]> {
   const rows = await executor.select().from(storefrontPages).where(eq(storefrontPages.isDeleted, 0)).orderBy(asc(storefrontPages.id));
   // the base pages, then the fixed ones (each in its own order), then the pages the shop made
   const order = (row: PageRecord) => (
-    row.kind === 'base' ? BASE_PAGES.findIndex(page => page.slug === row.slug)
+    row.kind === 'home' ? -1 : row.kind === 'base' ? BASE_PAGES.findIndex(page => page.slug === row.slug)
       : row.kind === 'fixed' ? BASE_PAGES.length + FIXED_PAGES.findIndex(page => page.slug === row.slug)
         : BASE_PAGES.length + FIXED_PAGES.length
   );
@@ -139,7 +144,7 @@ export async function saveDraft(req: Request, id: number, input: PageSaveInput):
   const { version, ...raw } = input;
   await orm.transaction(async (tx) => {
     const row = await lockedRow(tx, id, version);
-    const checked = checkedPage(raw, { forPublish: false, baseSlug: baseSlugOf(row), fixedSlug: fixedSlugOf(row) });
+    const checked = checkedPage(raw, { forPublish: false, baseSlug: baseSlugOf(row), fixedSlug: fixedSlugOf(row), home: row.kind === 'home' });
     if (checked.problem) throw refused(checked.problem);
     const page = checked.page;
     const before = draftOf(row);
@@ -175,7 +180,7 @@ export async function publishPage(req: Request, id: number, version: number): Pr
   await orm.transaction(async (tx) => {
     const row = await lockedRow(tx, id, version);
     // the draft was checked when it was saved; it is checked whole again here, now as a page that must be finished
-    const checked = checkedPage(draftOf(row), { forPublish: true, baseSlug: baseSlugOf(row), fixedSlug: fixedSlugOf(row) });
+    const checked = checkedPage(draftOf(row), { forPublish: true, baseSlug: baseSlugOf(row), fixedSlug: fixedSlugOf(row), home: row.kind === 'home' });
     if (checked.problem) throw refused(checked.problem);
     const page = checked.page;
     await checkReferences(tx, page, []);
@@ -187,7 +192,8 @@ export async function publishPage(req: Request, id: number, version: number): Pr
     await tx.update(storefrontPages).set({
       published: copy, publishedAt: at, publishedBy: actor, version: nextVersion(row.version), updatedBy: actor, updatedAt: at,
     }).where(eq(storefrontPages.id, id));
-    await writeContentAssets(tx, id, pageAssetIds(page));
+    // the images of a part switched off are not on the site, so the site's image route does not serve them (10e review)
+    await writeContentAssets(tx, id, pageAssetIds({ shareImageAssetId: page.shareImageAssetId, sections: page.sections.filter(section => !section.hidden) }));
     await logActivity({
       req, tx, action: 'UPDATE', entity: AUDIT_ENTITY, entityId: `page-${id}`,
       description: `صفحهٔ «${page.title}» روی سایت منتشر شد`,
@@ -231,7 +237,7 @@ export async function unpublishPage(req: Request, id: number, version: number): 
     await writeContentAssets(tx, id, []);
     await logActivity({
       req, tx, action: 'UPDATE', entity: AUDIT_ENTITY, entityId: `page-${id}`,
-      description: `صفحهٔ «${row.title}» از روی سایت برداشته شد`, details: { before: { title: row.published.title, sections: auditSections(row.published.sections) }, after: null, linkedFromMenus: await menuPlacesOf(tx, id), linkedFromCollections: await collectionsLinkingTo(tx, id) },
+      description: `صفحهٔ «${row.title}» از روی سایت برداشته شد`, details: { before: { title: row.published.title, sections: auditSections(row.published.sections) }, after: null, linkedFromMenus: await menuPlacesOf(tx, id), linkedFromCollections: await collectionsLinkingTo(tx, id), linkedFromHome: await homeLinksTo(tx, { pageId: id }) },
     });
   });
   return pageDetail(orm, id);
@@ -241,6 +247,7 @@ export async function unpublishPage(req: Request, id: number, version: number): 
 export async function deletePage(req: Request, id: number, version: number): Promise<void> {
   await orm.transaction(async (tx) => {
     const row = await lockedRow(tx, id, version);
+    if (row.kind === 'home') throw invalid('صفحهٔ اصلی حذف نمی‌شود؛ می‌توانید آن را از روی سایت بردارید تا سایت صفحهٔ اصلی خودش را نشان دهد.', 'id', 'STOREFRONT_PAGE_BASE_KEPT');
     if (row.kind === 'base') throw invalid('صفحه‌های پایهٔ سایت حذف نمی‌شوند؛ می‌توانید آن را از روی سایت بردارید.', 'id', 'STOREFRONT_PAGE_BASE_KEPT');
     if (row.kind !== 'custom') throw invalid('صفحه‌های ثابت سایت حذف نمی‌شوند؛ می‌توانید متن آن را از روی سایت بردارید.', 'id', 'STOREFRONT_PAGE_BASE_KEPT');
     const actor = actorOf(req);
@@ -250,7 +257,7 @@ export async function deletePage(req: Request, id: number, version: number): Pro
     await writeContentAssets(tx, id, []);
     await logActivity({
       req, tx, action: 'DELETE', entity: AUDIT_ENTITY, entityId: `page-${id}`,
-      description: `صفحهٔ «${row.title}» حذف شد`, details: { before: auditOf(draftOf(row)), wasOnSite: row.published !== null, linkedFromMenus: await menuPlacesOf(tx, id), linkedFromCollections: await collectionsLinkingTo(tx, id) },
+      description: `صفحهٔ «${row.title}» حذف شد`, details: { before: auditOf(draftOf(row)), wasOnSite: row.published !== null, linkedFromMenus: await menuPlacesOf(tx, id), linkedFromCollections: await collectionsLinkingTo(tx, id), linkedFromHome: await homeLinksTo(tx, { pageId: id }) },
     });
   });
 }

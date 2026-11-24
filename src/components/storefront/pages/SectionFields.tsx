@@ -3,10 +3,11 @@ import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react';
 import type { MenuLinkOptions } from '../../../lib/storefront/storefrontMenuContracts';
 import {
   BUTTON_LABEL_MAX, CARD_TEXT_MAX, CARD_TITLE_MAX, GALLERY_MAX, ICON_CARDS_MAX, IMAGE_ALT_MAX, MAP_ADDRESS_MAX, PAGE_ICONS, PAGE_ICON_TITLES, PEOPLE_MAX,
-  PERSON_CONTACT_MAX, PERSON_NAME_MAX, PERSON_ROLE_MAX, PRODUCT_ROW_MAX, SECTION_TEXT_MAX, SECTION_TITLE_MAX, type PageIcon, type PageSection,
+  PERSON_CONTACT_MAX, PERSON_NAME_MAX, PERSON_ROLE_MAX, PRODUCT_ROW_MAX, SECTION_TEXT_MAX, SECTION_TITLE_MAX, isHomeSectionKind, type HomeSection, type PageIcon, type PageSection,
 } from '../../../lib/storefront/storefrontPageRules';
 import { formatPersianNumber } from '../../../utils/persianNumber';
 import { LibraryImageField } from './LibraryImageField';
+import { HomeSectionFields } from '../home/HomeSectionFields';
 
 /**
  * v12 phase 10b: the fields of one section of a page, by its kind. Every text is plain text; the section's long text is
@@ -269,6 +270,7 @@ export function SectionFields({ section, name, disabled, assets, options, onChan
         </div>
       );
     default:
-      return null;
+      // v12 phase 10e: a part only the home page takes
+      return isHomeSectionKind(section.kind) ? <HomeSectionFields section={section as HomeSection} name={name} assets={assets} options={options} onChange={onChange} /> : null;
   }
 }

@@ -34,6 +34,7 @@ export async function movePage(req: Request, id: number, slug: string, version: 
   }
   await orm.transaction(async (tx) => {
     const row = await lockedPageRow(tx, id, version);
+    if (row.kind === 'home') throw new ValidationError('صفحهٔ اصلی نشانی دیگری نمی‌گیرد.', { field: 'slug' }, 'STOREFRONT_PAGE_BASE_KEPT');
     if (row.kind === 'base') throw new ValidationError('نشانی صفحه‌های پایهٔ سایت عوض نمی‌شود.', { field: 'slug' }, 'STOREFRONT_PAGE_BASE_KEPT');
     if (row.kind !== 'custom') throw new ValidationError('نشانی صفحه‌های ثابت سایت عوض نمی‌شود.', { field: 'slug' }, 'STOREFRONT_PAGE_BASE_KEPT');
     if (wanted === row.slug) return;

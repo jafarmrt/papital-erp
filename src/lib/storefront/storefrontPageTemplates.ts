@@ -1,3 +1,4 @@
+import { emptyHomeSection, isHomeSectionKind } from './storefrontHomeParts.js';
 import { emptyDoc, type PageSection, type RichNode, type SectionBackground, type SectionKind } from './storefrontPageParts.js';
 
 /** A new, empty section of a kind, as the builder adds it */
@@ -14,7 +15,7 @@ export function emptySection(kind: SectionKind): PageSection {
     case 'products': return { kind, background, title: '', source: 'items', itemIds: [], collection: '' };
     case 'button': return { kind, background, label: '', href: '' };
     case 'shippingMethods': return { kind, background, title: 'روش‌های ارسال' };
-    default: return { kind: 'text', background, doc: emptyDoc() };
+    default: return isHomeSectionKind(kind) ? emptyHomeSection(kind) : { kind: 'text', background, doc: emptyDoc() };
   }
 }
 

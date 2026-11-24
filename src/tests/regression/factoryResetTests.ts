@@ -171,11 +171,11 @@ async function everyTableCase(): Promise<TestCaseResult> {
     const pagesLeft = await pool.query(`SELECT kind, slug, title, (published IS NULL) AS off_site, share_image_asset_id, sections::text AS sections, updated_by FROM storefront_pages ORDER BY id`);
     const expectedPages = 'about:درباره ما,contact:تماس با ما,shipping:ارسال و پرداخت,terms:قوانین خرید,privacy:حریم خصوصی'
       + ',fixed-products:همهٔ محصولات,fixed-categories:دسته‌ها,fixed-search:جست‌وجو,fixed-cart:سبد خرید,fixed-wholesale:درخواست خرید عمده'
-      + ',fixed-corporate-gift:هدیهٔ سازمانی,fixed-order-track:پیگیری سفارش,fixed-account:حساب من,fixed-not-found:این صفحه پیدا نشد,fixed-news:خبرها';
+      + ',fixed-corporate-gift:هدیهٔ سازمانی,fixed-order-track:پیگیری سفارش,fixed-account:حساب من,fixed-not-found:این صفحه پیدا نشد,fixed-news:خبرها,fixed-home:صفحهٔ اصلی';
     type PageLeft = { kind: string; slug: string; title: string; off_site: boolean; share_image_asset_id: number | null; sections: string; updated_by: string };
     const left = pagesLeft.rows as PageLeft[];
     if (left.map(r => `${r.slug}:${r.title}`).join(',') !== expectedPages
-      || left.some(r => r.kind !== (r.slug.startsWith('fixed-') ? 'fixed' : 'base') || !r.off_site || r.share_image_asset_id !== null || r.sections !== '[]' || r.updated_by !== '')) {
+      || left.some(r => r.kind !== (r.slug === 'fixed-home' ? 'home' : r.slug.startsWith('fixed-') ? 'fixed' : 'base') || !r.off_site || r.share_image_asset_id !== null || r.sections !== '[]' || r.updated_by !== '')) {
       wrong.push(`pages after the reset: ${JSON.stringify(left)}`);
     }
     if (Number((await one(`SELECT count(*)::int AS n FROM storefront_content_assets`)).n) !== 0) wrong.push('rows of published images were left');

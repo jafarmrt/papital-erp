@@ -61,7 +61,8 @@ export async function runStorefrontPagesV12Tests(shouldRun: (id: string, ...extr
     const list = await erp.get('/api/storefront/pages');
     const base = (list.body.data ?? []).filter((row: Body) => row.kind === 'base');
     if (list.status !== 200 || base.map((row: Body) => row.slug).join(',') !== 'about,contact,shipping,terms,privacy'
-      || (list.body.data ?? []).slice(0, 5).some((row: Body) => row.kind !== 'base')) {
+      // v12 phase 10e: the one home row comes before them
+      || (list.body.data ?? []).filter((row: Body) => row.kind !== 'home').slice(0, 5).some((row: Body) => row.kind !== 'base') || (list.body.data ?? [])[0]?.kind !== 'home') {
       wrong.push(`base pages: ${list.status} ${JSON.stringify(base.map((row: Body) => [row.slug, row.status]))}`);
     }
     const about = base.find((row: Body) => row.slug === 'about') as { id: number; version: number } | undefined;

@@ -41,6 +41,8 @@ export interface PageDetail extends PageListRow {
   menuPlaces: string[];
   /** v12 phase 10e: the collections of «کالکشن‌های سایت» whose «آشنایی بیشتر» leads to this page */
   linkedCollections: string[];
+  /** v12 phase 10e: a slide's button or a banner of «صفحهٔ اصلی» leads to this page */
+  linkedFromHome: boolean;
 }
 
 /** v12 phase 10c: what «پیش‌نمایش» answers: the link on the site (its key is in it and is kept nowhere else) and when it ends */

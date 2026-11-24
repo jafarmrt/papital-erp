@@ -8,7 +8,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { STOREFRONT_BASE_PAGE_ROWS, STOREFRONT_FIXED_PAGE_ROWS } from '../../db/schema/storefrontPages';
 import {
-  BASE_PAGES, FIXED_PAGES, FIXED_PAGE_PREFIX, PAGE_SECTIONS_MAX, PAGE_TEMPLATES, RICH_TEXT_CHARS_MAX, SECTION_KINDS, checkedPage, emptySection, isReservedPageSlug,
+  BASE_PAGES, FIXED_PAGES, FIXED_PAGE_PREFIX, PAGE_SECTIONS_MAX, PAGE_SECTION_KINDS, PAGE_TEMPLATES, RICH_TEXT_CHARS_MAX, checkedPage, emptySection, isReservedPageSlug,
   pageAssetIds, pageItemIds, pageLink, safeRichDoc, type PageSection,
 } from '../../lib/storefront/storefrontPageRules';
 
@@ -213,7 +213,8 @@ describe('a page', () => {
   });
 
   it('saves an unfinished draft, and refuses to publish it with the section and the reason', () => {
-    const unfinished: unknown[] = SECTION_KINDS.filter(kind => kind !== 'shippingMethods').map(kind => emptySection(kind));
+    // the kinds every page takes (v12 phase 10e: the home page's own are in `storefrontHomeRulesV12.test.ts`)
+    const unfinished: unknown[] = PAGE_SECTION_KINDS.filter(kind => kind !== 'shippingMethods').map(kind => emptySection(kind));
     // every new section of the builder is a draft that saves
     expect(refusal(page(unfinished))).toBeNull();
     for (const [index, section] of unfinished.entries()) {

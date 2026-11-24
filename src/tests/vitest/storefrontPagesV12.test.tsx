@@ -40,7 +40,7 @@ const LIST: PageListRow[] = [row({}), row({ id: 2, slug: 'contact', title: 'تم
 const detailOf = (over: Partial<PageDetail> = {}): PageDetail => ({
   ...row({ id: 9, kind: 'custom', slug: 'our-story', title: 'داستان ما', version: 4 }),
   draft: { title: 'داستان ما', slug: 'our-story', seoTitle: '', seoDescription: '', noindex: false, shareImageAssetId: null, sections: [{ kind: 'button', background: 'white', label: 'خرید', href: '/products' }] },
-  assets: [], menuPlaces: [], linkedCollections: [], ...over,
+  assets: [], menuPlaces: [], linkedCollections: [], linkedFromHome: false, ...over,
 });
 
 afterEach(() => {
@@ -229,8 +229,8 @@ describe('the site pages screen', () => {
 
   it('says which menus lose their link before a page is taken off the site or removed (v12 phase 10c)', async () => {
     permissions.current = ['site_content.view', 'site_content.manage'];
-    open('/site-pages?page=9', detailOf({ status: 'published', menuPlaces: ['header', 'bottom'], linkedCollections: ['کاشی'] }));
-    const places = '«منوی بالا» و «نوار پایین گوشی»';
+    open('/site-pages?page=9', detailOf({ status: 'published', menuPlaces: ['header', 'bottom'], linkedCollections: ['کاشی'], linkedFromHome: true }));
+    const places = '«منوی بالا» و «نوار پایین گوشی» و «صفحهٔ اصلی»';
     fireEvent.click(await screen.findByRole('button', { name: 'برداشتن از روی سایت' }));
     expect(screen.getByRole('group', { name: 'تأیید این کار' }).textContent).toContain(`این صفحه در ${places} پیوند دارد. تا انتشار دوباره، آن پیوند روی سایت نمی‌آید.`);
     fireEvent.click(within(screen.getByRole('group', { name: 'تأیید این کار' })).getByRole('button', { name: 'انصراف' }));

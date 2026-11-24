@@ -39,8 +39,8 @@ export type StorefrontPageSection =
 /** One line of `GET /api/storefront/v1/pages`: the pages on the site now, for the sitemap and the site's own links */
 export interface StorefrontPageSummary {
   slug: string;
-  /** a base page lives at its own address (`/about`), a custom page at `/pages/<slug>` */
-  kind: PageKind;
+  /** a base page lives at its own address (`/about`), a custom page at `/pages/<slug>`; the home page is never among them */
+  kind: Exclude<PageKind, 'home'>;
   title: string;
   noindex: boolean;
   /** when the copy on the site was published, an ISO time in UTC (`2026-11-21T18:13:41.727Z`): the page's last change for a search engine */

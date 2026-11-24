@@ -37,7 +37,8 @@ const goneLabel = (item: DraftItem, options: MenuLinkOptions | undefined, remove
   item.targetTitle || (options ? removed : 'نامش خوانده نشده است')
 );
 
-function TargetField({ item, options, onChange, id }: {
+/** The target of a link by its kind; a slide's button and a banner of the home page choose theirs with it too (10e) */
+export function TargetField({ item, options, onChange, id }: {
   item: DraftItem; options: MenuLinkOptions | undefined; onChange: (patch: Partial<DraftItem>) => void; id: string;
 }) {
   const pick = (list: string[] | undefined) => {
