@@ -133,6 +133,8 @@ export const PAGE_ACCESS = {
   '/site-collections': { gate: anyOf('site_content.view'), api: ['GET /api/storefront/collections/'] },
   // v12 phase 10f: «فرم‌های سایت»: the forms the shop builds for its site, under the same keys
   '/site-forms': { gate: anyOf('site_content.view'), api: ['GET /api/storefront/forms/', 'GET /api/storefront/forms/:id'] },
+  // v12 phase 10f: «پیام‌های سایت»: what visitors sent through the forms; their own keys (a message holds a person's name and number)
+  '/site-messages': { gate: anyOf('site_messages.view'), api: ['GET /api/storefront/messages/', 'GET /api/storefront/messages/:id'] },
   '/reserved-items': { gate: anyOf('products.view', 'reports.view', 'warehouse.view', 'documents.view'), api: ['GET /api/inventory/reserved-items'] },
   '/transactions': { gate: anyOf('warehouse.view', 'accounting.view'), api: ['GET /api/transactions'] },
   '/accounting': { gate: { anyOf: ACCOUNTING_KEYS }, api: [] },

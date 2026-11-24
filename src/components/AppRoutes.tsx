@@ -56,6 +56,7 @@ const StorefrontPagesPage = lazyWithRetry(() => import('../pages/StorefrontPages
 const StorefrontNewsPage = lazyWithRetry(() => import('../pages/StorefrontNewsPage'));
 const StorefrontCollectionsPage = lazyWithRetry(() => import('../pages/StorefrontCollectionsPage'));
 const StorefrontFormsPage = lazyWithRetry(() => import('../pages/StorefrontFormsPage'));
+const StorefrontMessagesPage = lazyWithRetry(() => import('../pages/StorefrontMessagesPage'));
 const ManagementReportsPage = lazyWithRetry(() => import('../pages/ManagementReportsPage'));
 const ProjectsPage = lazyWithRetry(() => import('../pages/ProjectsPage'));
 const ProjectDetailPage = lazyWithRetry(() => import('../pages/ProjectDetailPage'));
@@ -214,6 +215,7 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
         <Route path="/site-news" element={<ProtectedRoute page="/site-news" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}><StorefrontNewsPage /></ProtectedRoute>} />
         <Route path="/site-collections" element={<ProtectedRoute page="/site-collections" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}><StorefrontCollectionsPage /></ProtectedRoute>} />
         <Route path="/site-forms" element={<ProtectedRoute page="/site-forms" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}><StorefrontFormsPage /></ProtectedRoute>} />
+        <Route path="/site-messages" element={<ProtectedRoute page="/site-messages" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}><StorefrontMessagesPage /></ProtectedRoute>} />
         <Route path="/reserved-items" element={<ProtectedRoute page="/reserved-items" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}><ReservedItemsReportPage /></ProtectedRoute>} />
         <Route path="/transactions" element={
           <ProtectedRoute page="/transactions" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>

@@ -50,6 +50,16 @@ export function useFormEnabledMutation(id: number) {
   });
 }
 
+/** «پروندهٔ فروش هم بساز»: the switch is sent the state it should take, under the form's version */
+export function useFormMakesLeadMutation(id: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: FormSwitchInput) => ((await fetchJson(`/storefront/forms/${id}/makes-lead`, { method: 'PUT', body: JSON.stringify(input) })) as { data: FormDetail }).data,
+    onSuccess: (detail) => { queryClient.setQueryData([...FORMS_KEY, 'detail', id], detail); },
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: FORMS_KEY }); },
+  });
+}
+
 export function useDeleteFormMutation() {
   const queryClient = useQueryClient();
   return useMutation({

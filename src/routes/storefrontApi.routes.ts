@@ -40,6 +40,8 @@ import { RECEIPT_IMAGE_DATA_URL_MAX } from '../services/storefront/storefrontRec
 import { myAccount, myGroupPrices, registerAccount, setPasswordWithLink, signIn, signOut, smsSignIn } from '../services/storefront/storefrontBuyerAuth.service.js';
 import { applyForWholesale } from '../services/storefront/storefrontWholesaleApply.service.js';
 import { submitCorporateGift } from '../services/storefront/storefrontInquiry.service.js';
+import { submitFormAnswers } from '../services/storefront/storefrontMessages.service.js';
+import { FORM_FIELDS_MAX, FORM_KEY_MAX } from '../lib/storefront/storefrontFormRules.js';
 import { BUYER_TOKEN_MAX } from '../services/storefront/storefrontBuyerSecrets.js';
 import { PASSWORD_MAX } from '../lib/storefront/storefrontBuyerRules.js';
 import { PHONE_PROOF_MAX } from '../lib/storefront/storefrontSmsRules.js';
@@ -445,6 +447,23 @@ const giftSchema = z.object({
 
 router.post('/inquiries/corporate-gift', authLimiter, validate(giftSchema), asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json({ data: await submitCorporateGift(req.body) });
+}));
+
+// v12 phase 10f (start plan §7.2 «۱۰و»): a visitor's answers to a form of «فرم‌های سایت» become a message of «پیام‌های
+// سایت»; the same tight limit per visitor address, and the site as a whole sends a bounded number an hour. The schema
+// only bounds what a request may carry; the service checks each answer against its field (`checkedAnswers`).
+const FORM_ANSWERS_CHARS_MAX = 40_000;
+const formSubmitSchema = z.object({
+  params: z.object({ key: z.string().min(1).max(FORM_KEY_MAX).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/) }).passthrough(),
+  body: z.object({
+    requestKey: z.string().max(80),
+    answers: z.record(z.string().max(12), z.union([z.string().max(8000), z.boolean(), z.array(z.string().max(200)).max(20)]))
+      .refine(value => Object.keys(value).length <= FORM_FIELDS_MAX * 2 && JSON.stringify(value).length <= FORM_ANSWERS_CHARS_MAX, 'پاسخ‌های فرم بیش از اندازه بزرگ هستند.'),
+  }).strict(),
+});
+
+router.post('/forms/:key/submit', authLimiter, validate(formSubmitSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.status(201).json({ data: await submitFormAnswers(String(req.params.key), req.body) });
 }));
 
 router.get('/account', asyncHandler(async (req: Request, res: Response) => {

@@ -127,6 +127,8 @@ export const DATA_EXPORT_TABLES: ReadonlyArray<{ table: string; group: DataExpor
   { table: 'storefront_collections', group: 'settings' },
   // v12 phase 10f: the forms the shop builds for its site (their fields and words; no answer of anyone)
   { table: 'storefront_forms', group: 'settings' },
+  // v12 phase 10f: what visitors sent through the forms of the site (names and numbers of people)
+  { table: 'storefront_messages', group: 'customers' },
 ];
 
 /** Exported only on request, for a business-day range */

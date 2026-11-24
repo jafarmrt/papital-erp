@@ -9,6 +9,7 @@ import {
   Users,
   Settings,
   ClipboardList,
+  Inbox,
   Image,
   DollarSign,
   UsersRound,
@@ -117,6 +118,7 @@ export function getMenuGroups(
         { name: 'خبرهای سایت', path: '/site-news', icon: Newspaper, visible: open('/site-news') },
         { name: 'کالکشن‌های سایت', path: '/site-collections', icon: LayoutGrid, visible: open('/site-collections') },
         { name: 'فرم‌های سایت', path: '/site-forms', icon: ClipboardList, visible: open('/site-forms') },
+        { name: 'پیام‌های سایت', path: '/site-messages', icon: Inbox, visible: open('/site-messages') },
       ]
     },
     {

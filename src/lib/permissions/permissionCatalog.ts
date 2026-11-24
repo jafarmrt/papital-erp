@@ -245,6 +245,15 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     ]
   },
   {
+    // v12 phase 10f (V12_SITE_NEXT_START_PLAN.md §7.5, 9): apart from site_content.*, because a message holds the name
+    // and the number of a person; an editor of the site's pages does not read them
+    category: 'پیام‌های سایت',
+    permissions: [
+      { key: 'site_messages.view', title: 'مشاهده پیام‌های سایت', description: 'دیدن پیام‌هایی که بازدیدکنندگان با فرم‌های سایت فرستاده‌اند، با نام، شماره و متنی که نوشته‌اند' },
+      { key: 'site_messages.manage', title: 'رسیدگی به پیام‌های سایت', description: 'نشانه‌گذاری پیام به «دیده‌شده» و «پاسخ داده شد» و حذف پیام', requires: ['site_messages.view'] },
+    ]
+  },
+  {
     category: 'گزارش‌ها و سجل رویدادها',
     permissions: [
       { key: 'reports.view', title: 'مشاهده گزارش‌ها و آمار', description: 'دسترسی به نمودارها، گزارش تراکنش‌ها و پیشخوان' },
