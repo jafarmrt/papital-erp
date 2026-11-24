@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { ArrowLeft, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
-import type { SiteSlide } from '../../lib/home';
+import { isRowSwipe, type SiteSlide } from '../../lib/home';
 import type { SitePageImage } from '../../lib/pages';
 import { usePageMediaPath } from '../../lib/pageMedia';
 import { faNumber } from '../../lib/format';
@@ -19,7 +19,7 @@ export const SLIDE_SECONDS = 6;
  * tall for the box make the row taller (every slide with it), so the box never cuts them. The first slide's image is loaded early (it is the largest thing on
  * the page).
  *
- * It moves on by itself every six seconds, and stops while the pointer is over it or the focus is inside it, for good
+ * It moves on by itself every six seconds, and stops while the pointer is over it or a keyboard's focus is inside it, for good
  * once the visitor moves it by hand (an arrow, a dot, a swipe, the arrow keys) or presses «ایستادن», and never starts
  * for a visitor who asked for less motion.
  * Without the script the first slide is there and the row still scrolls; the controls are drawn only once they work.
@@ -58,7 +58,7 @@ export function HomeSlider({ slides, heading }: { slides: readonly SiteSlide[]; 
   // a visitor who asked for less motion: nothing moves by itself and nothing glides
   const [calm, setCalm] = useState(true);
   const [playing, setPlaying] = useState(false);
-  // two holds, each lifted by its own end: the pointer over the slider, and the focus inside it
+  // two holds, each lifted by its own end: the pointer over the slider, and a keyboard's focus inside it
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const touchFrom = useRef<{ x: number; y: number } | null>(null);
@@ -109,8 +109,9 @@ export function HomeSlider({ slides, heading }: { slides: readonly SiteSlide[]; 
     <section
       aria-roledescription="carousel" aria-label="اسلایدهای صفحهٔ اصلی" className="relative border-b border-border bg-muted" data-home-part="slider"
       onPointerEnter={event => { if (event.pointerType === 'mouse') setHovered(true); }} onPointerLeave={() => setHovered(false)}
-      // the focus a keyboard brings: a tap or a click on a slide (which focuses the row) holds nothing
-      onFocus={(event) => { if ((event.target as HTMLElement).matches(':focus-visible')) setFocused(true); }} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}
+      // the focus a keyboard brings: a tap or a click on a slide (which focuses the row) holds nothing, and lifts the
+      // hold of a keyboard focus that was inside (this fires on every move of the focus within the slider)
+      onFocus={event => setFocused((event.target as HTMLElement).matches(':focus-visible'))} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}
     >
       {/* first among the slider's controls, so a keyboard reaches it before the slides; pressing «پخش» starts it though the focus is on the button */}
       {many && ready && !calm ? (
@@ -124,13 +125,13 @@ export function HomeSlider({ slides, heading }: { slides: readonly SiteSlide[]; 
       <div
         ref={track} role="group" aria-label="اسلایدها" className="scrollbar-none flex snap-x snap-mandatory overflow-x-auto" tabIndex={many ? 0 : undefined}
         // moved by the visitor (a swipe along the row, the arrow keys on it): from here on it is theirs
-        onTouchStart={(event) => { const at = event.touches[0]; touchFrom.current = at ? { x: at.clientX, y: at.clientY } : null; }}
+        // one finger alone (a pinch is not a swipe), followed from where it came down
+        onTouchStart={(event) => { const at = event.touches.length === 1 ? event.touches[0] : null; touchFrom.current = at ? { x: at.clientX, y: at.clientY } : null; }}
         onTouchMove={(event) => {
           const [at, from] = [event.touches[0], touchFrom.current];
-          if (!at || !from) return;
+          if (event.touches.length !== 1 || !at || !from) return;
           // a finger moving along the row, not one scrolling the page past it or resting on it
-          const [dx, dy] = [Math.abs(at.clientX - from.x), Math.abs(at.clientY - from.y)];
-          if (dx > 10 && dx > dy) setPlaying(false);
+          if (isRowSwipe(from, { x: at.clientX, y: at.clientY })) setPlaying(false);
         }}
         onKeyDown={(event) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') setPlaying(false); }}
       >

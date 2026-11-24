@@ -5,7 +5,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createRequestHandler, type ServerBuild } from 'react-router';
-import { homeNeeds, siteHome, siteHomeSections, todayHome } from '../app/lib/home';
+import { SWIPE_MIN_PX, homeNeeds, isRowSwipe, siteHome, siteHomeSections, todayHome } from '../app/lib/home';
 
 const PORT = 3942;
 const KEY = 'test-key-not-a-secret';
@@ -189,6 +189,18 @@ describe('the answer of the Storefront API for the home page', () => {
     expect(slider.kind === 'slider' ? slider.slides.map(s => `${s.buttonLabel}:${s.href}:${s.external}`) : []).toEqual(['دکمه:/products:false', 'دکمه:https://example.com/x:true', '::false', '::false', '::false']);
     const [intro] = siteHomeSections([{ kind: 'collectionIntro', collection: 'c', intro: '', image: null, moreHref: 'https://evil.example/pages/x', products: [{ slug: 'p-1', name: 'n', retailPrice: '1', stock: { status: 'in_stock' } }] }]);
     expect(intro.kind === 'collectionIntro' ? intro.moreHref : 'x').toBe('');
+  });
+
+  it('takes a finger moving along the slider as the visitor moving it, and no other move', () => {
+    const from = { x: 200, y: 300 };
+    // along the row, either way (the site reads right to left, the rule does not care)
+    expect(isRowSwipe(from, { x: 200 - SWIPE_MIN_PX - 1, y: 300 })).toBe(true);
+    expect(isRowSwipe(from, { x: 260, y: 320 })).toBe(true);
+    // a finger at rest, a scroll of the page that starts on the slider, and a move more down than sideways
+    expect(isRowSwipe(from, { x: 200, y: 300 })).toBe(false);
+    expect(isRowSwipe(from, { x: 200 + SWIPE_MIN_PX, y: 300 })).toBe(false);
+    expect(isRowSwipe(from, { x: 204, y: 120 })).toBe(false);
+    expect(isRowSwipe(from, { x: 240, y: 360 })).toBe(false);
   });
 
   it('is the same seven parts, with the same words, when the shop has published none', () => {
