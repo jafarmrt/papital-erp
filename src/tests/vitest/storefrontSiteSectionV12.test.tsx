@@ -77,7 +77,7 @@ describe('the ERP site shop section (v12 phase 9a)', () => {
     const groups = getMenuGroups(user(), { permissions: [], isAdmin: true });
     const site = groups.find(g => g.id === 'site');
     expect(site?.title).toBe('فروشگاه سایت');
-    expect(site?.items.map(i => i.path)).toEqual(['/site-orders', '/site-buyers', '/site-settings', '/site-menus', '/site-pages', '/site-news', '/site-collections', '/site-forms']);
+    expect(site?.items.map(i => i.path)).toEqual(['/site-orders', '/site-buyers', '/site-settings', '/site-menus', '/site-pages', '/site-news', '/site-collections', '/site-forms', '/site-messages']);
     expect(groups.find(g => g.id === 'crm')?.items.map(i => i.path)).not.toContain('/site-orders');
 
     expect(visibleLinks(['storefront.view']).site).toEqual(['/site-settings']);
@@ -123,7 +123,7 @@ describe('the site manager role template (decision 15, proposal 2)', () => {
     expect(template).toBeDefined();
     expect(template?.name).toBe('مدیر سایت');
     expect([...(template?.permissions ?? [])].sort()).toEqual([
-      'media.view', 'site_buyers.manage', 'site_buyers.view', 'site_content.manage', 'site_content.view', 'site_orders.manage', 'site_orders.view',
+      'media.view', 'site_buyers.manage', 'site_buyers.view', 'site_content.manage', 'site_content.view', 'site_messages.manage', 'site_messages.view', 'site_orders.manage', 'site_orders.view',
       'storefront.manage', 'storefront.view',
     ]);
     expect(missingRequiredPermissions(template?.permissions ?? [])).toEqual([]);
@@ -131,7 +131,7 @@ describe('the site manager role template (decision 15, proposal 2)', () => {
 
   it('opens the site shop sidebar section and no settings or business page (decision 1)', () => {
     const shown = visibleLinks([...(template?.permissions ?? [])]);
-    expect(shown.site).toEqual(['/site-orders', '/site-buyers', '/site-settings', '/site-menus', '/site-pages', '/site-news', '/site-collections', '/site-forms']);
+    expect(shown.site).toEqual(['/site-orders', '/site-buyers', '/site-settings', '/site-menus', '/site-pages', '/site-news', '/site-collections', '/site-forms', '/site-messages']);
     expect(shown.system ?? []).not.toContain('/settings');
     expect([...(shown.crm ?? []), ...(shown.accounting ?? []), ...(shown.production ?? [])]).toEqual([]);
   });

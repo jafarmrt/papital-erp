@@ -56,6 +56,7 @@ import storefrontPageRoutes from './routes/storefrontPages.routes.js';
 import storefrontNewsRoutes from './routes/storefrontNews.routes.js';
 import storefrontCollectionsRoutes from './routes/storefrontCollections.routes.js';
 import storefrontFormsRoutes from './routes/storefrontForms.routes.js';
+import storefrontMessagesRoutes from './routes/storefrontMessages.routes.js';
 import accountingRoutes from './routes/accounting.routes.js';
 import historyImportRoutes from './routes/historyImport.routes.js';
 import workflowRoutes from './routes/workflow.routes.js';
@@ -383,6 +384,7 @@ export async function createApp(): Promise<express.Express> {
   app.use('/api/storefront/news', storefrontNewsRoutes);
   app.use('/api/storefront/collections', storefrontCollectionsRoutes);
   app.use('/api/storefront/forms', storefrontFormsRoutes);
+  app.use('/api/storefront/messages', storefrontMessagesRoutes);
   app.use('/api/storefront', storefrontRoutes);
   app.use('/api', authRoutes);
   app.use('/api', usersRoutes);

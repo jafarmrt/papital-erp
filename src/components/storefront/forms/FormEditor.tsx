@@ -10,6 +10,7 @@ import {
 import { formatPersianNumber } from '../../../utils/persianNumber';
 import { errorMessageOf } from '../../../utils';
 import { FormFieldCard } from './FormFieldCard';
+import { FormLeadSwitch } from './FormLeadSwitch';
 
 /**
  * v12 phase 10f (docs/roadmap/V12_SITE_NEXT_START_PLAN.md §7.2 «۱۰و»): the editor of one form of the site: its words, its
@@ -218,6 +219,7 @@ export function FormEditor({ detail, canManage, onBack, onDeleted }: { detail: F
                   : base.enabled ? 'سایت این فرم را می‌گیرد و پاسخ‌هایش را می‌پذیرد.' : 'تا این کلید خاموش است، سایت این فرم را نشان نمی‌دهد و پاسخی برای آن نمی‌پذیرد.'}
             </p>
           </section>
+          <FormLeadSwitch formId={detail.id} makesLead={detail.makesLead === true} version={base.version} disabled={busy || dirty || outdated} />
           {asking && (
             <div ref={confirmation} tabIndex={-1} role="group" aria-label="تأیید حذف فرم" className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
               <p className="min-w-0 flex-1">{`این فرم حذف می‌شود${base.enabled ? ' و از روی سایت هم برداشته می‌شود' : ''}.${dirty ? ' تغییرهای ذخیره‌نشدهٔ آن هم از میان می‌رود.' : ''}`}</p>

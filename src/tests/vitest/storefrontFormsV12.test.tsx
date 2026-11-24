@@ -27,7 +27,7 @@ const StorefrontFormsPage = (await import('../../pages/StorefrontFormsPage')).de
 
 const CONTACT: FormValues = { key: 'contact', title: 'تماس با ما', ...contactFormTemplate() };
 const detailOf = (over: Partial<FormDetail> = {}): FormDetail => ({
-  id: 3, key: CONTACT.key, title: CONTACT.title, enabled: false, fieldCount: CONTACT.fields.length, updatedAt: '2026-11-24T08:00:00.000Z', updatedBy: 'owner', version: 4, form: CONTACT, ...over,
+  id: 3, key: CONTACT.key, title: CONTACT.title, enabled: false, fieldCount: CONTACT.fields.length, updatedAt: '2026-11-24T08:00:00.000Z', updatedBy: 'owner', version: 4, form: CONTACT, makesLead: false, ...over,
 });
 const LIST: FormList = {
   data: [{ id: 3, key: 'contact', title: 'تماس با ما', enabled: true, fieldCount: 5, updatedAt: '', updatedBy: '', version: 4 }, { id: 4, key: 'survey', title: 'نظرسنجی', enabled: false, fieldCount: 0, updatedAt: '', updatedBy: '', version: 1 }],
@@ -57,6 +57,10 @@ function open(at: string, detail: FormDetail = detailOf(), list: FormList = LIST
     }
     if (url === `/storefront/forms/${detail.id}/enabled` && init?.method === 'PUT') {
       current = { ...current, enabled: body.enabled === true, version: Number(body.version) + 1 };
+      return { data: current };
+    }
+    if (url === `/storefront/forms/${detail.id}/makes-lead` && init?.method === 'PUT') {
+      current = { ...current, makesLead: body.enabled === true, version: Number(body.version) + 1 };
       return { data: current };
     }
     if (url.startsWith(`/storefront/forms/${detail.id}?version=`) && init?.method === 'DELETE') return { success: true };
@@ -138,6 +142,24 @@ describe('the screen of the forms of the site', () => {
     expect((screen.getByLabelText('نام لاتین') as HTMLInputElement).disabled).toBe(true);
   });
 
+  it('turns the sales lead of a saved form on under its version, and not while edits are unsaved', async () => {
+    permissions.current = ['site_content.manage'];
+    open('/site-forms?form=3');
+    const lead = await screen.findByRole('checkbox', { name: 'پروندهٔ فروش هم بساز' }) as HTMLInputElement;
+    expect(lead.checked).toBe(false);
+    fireEvent.change(screen.getByLabelText('عنوان فرم'), { target: { value: 'تماس تازه' } });
+    expect(lead.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('عنوان فرم'), { target: { value: 'تماس با ما' } });
+    expect(lead.disabled).toBe(false);
+    fireEvent.click(lead);
+    await waitFor(() => expect(sent('PUT')).toEqual([{ url: '/storefront/forms/3/makes-lead', body: { enabled: true, version: 4 } }]));
+    await waitFor(() => expect((screen.getByRole('checkbox', { name: 'پروندهٔ فروش هم بساز' }) as HTMLInputElement).checked).toBe(true));
+    // the editor goes on under the version the switch returned
+    fireEvent.click(siteSwitch());
+    await waitFor(() => expect(sent('PUT')).toHaveLength(2));
+    expect(sent('PUT')[1]).toEqual({ url: '/storefront/forms/3/enabled', body: { enabled: true, version: 5 } });
+  });
+
   it('keeps unsaved edits beside a colleague\'s newer version, and reads that version once the edits are gone', async () => {
     permissions.current = ['site_content.manage'];
     const { colleagueSaves } = open('/site-forms?form=3');
@@ -189,7 +211,7 @@ describe('the screen of the forms of the site', () => {
     await screen.findByRole('region', { name: 'فیلدهای فرم' });
     expect((screen.getByLabelText('عنوان فرم').closest('fieldset') as HTMLFieldSetElement).disabled).toBe(true);
     for (const name of ['ذخیرهٔ فرم', 'حذف فرم', 'افزودن فیلد']) expect(screen.queryByRole('button', { name })).toBeNull();
-    expect(screen.queryByRole('checkbox', { name: 'این فرم روی سایت باشد' })).toBeNull();
+    for (const name of ['این فرم روی سایت باشد', 'پروندهٔ فروش هم بساز']) expect(screen.queryByRole('checkbox', { name })).toBeNull();
     expect(screen.getAllByText('روی سایت').length).toBeGreaterThan(0);
   });
 });

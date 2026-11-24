@@ -134,7 +134,9 @@ export const CRITICAL_AUDIT_ENTITIES = [
   // v12 phase 10e: the words and image of a collection of the site written or changed are never purged from the log
   'کالکشن سایت',
   // v12 phase 10f: a form of the site made, saved, switched or removed is never purged from the log
-  'فرم سایت'
+  'فرم سایت',
+  // v12 phase 10f: a message of the site arrived, got a status or was removed (the row never holds what the visitor wrote)
+  'پیام سایت'
 ] as const;
 
 /**

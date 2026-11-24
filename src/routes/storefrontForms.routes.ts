@@ -8,7 +8,7 @@ import { orm } from '../db/drizzle.js';
 import {
   FORM_FIELDS_MAX, FORM_INTRO_MAX, FORM_KEY_MAX, FORM_SUBMIT_LABEL_MAX, FORM_SUCCESS_MAX, FORM_TEMPLATES, FORM_TITLE_MAX,
 } from '../lib/storefront/storefrontFormRules.js';
-import { createForm, deleteForm, formDetail, listForms, saveForm, setFormEnabled } from '../services/storefront/storefrontForms.service.js';
+import { createForm, deleteForm, formDetail, listForms, saveForm, setFormEnabled, setFormMakesLead } from '../services/storefront/storefrontForms.service.js';
 
 /**
  * v12 phase 10f (V12_SITE_NEXT_START_PLAN.md §7.2 «۱۰و»): «فرم‌های سایت» in the ERP (`/api/storefront/forms`), under the
@@ -71,6 +71,11 @@ router.put('/:id', requirePermission(MANAGE), validate(saveSchema), asyncHandler
 // «این فرم روی سایت باشد»: the switch is sent its target state
 router.put('/:id/enabled', requirePermission(MANAGE), validate(switchSchema), asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: await setFormEnabled(req, Number(req.params.id), req.body.enabled, req.body.version) });
+}));
+
+// «پروندهٔ فروش هم بساز»: the switch is sent its target state
+router.put('/:id/makes-lead', requirePermission(MANAGE), validate(switchSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await setFormMakesLead(req, Number(req.params.id), req.body.enabled, req.body.version) });
 }));
 
 router.delete('/:id', requirePermission(MANAGE), validate(deleteSchema), asyncHandler(async (req: Request, res: Response) => {

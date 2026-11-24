@@ -15,6 +15,8 @@ export interface FormListRow {
 
 export interface FormDetail extends FormListRow {
   form: FormValues;
+  /** «پروندهٔ فروش هم بساز»: each answer to this form also opens a sales lead of the CRM */
+  makesLead: boolean;
 }
 
 export interface FormList {

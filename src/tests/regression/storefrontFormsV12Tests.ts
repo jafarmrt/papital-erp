@@ -46,7 +46,7 @@ export async function runStorefrontFormsV12Tests(shouldRun: (id: string, ...extr
     const made = await erp.post('/api/storefront/forms', { title: `  فرم   آزمون ${tag} `, key: keyOf('probe'), template: null });
     const formId = Number(made.body.data?.id);
     const first = (made.body.data ?? {}) as Body & { form?: Body };
-    if (made.status !== 201 || keys(first) !== 'enabled,fieldCount,form,id,key,title,updatedAt,updatedBy,version' || keys(first.form) !== 'fields,intro,key,submitLabel,successMessage,title'
+    if (made.status !== 201 || keys(first) !== 'enabled,fieldCount,form,id,key,makesLead,title,updatedAt,updatedBy,version' || first.makesLead !== false || keys(first.form) !== 'fields,intro,key,submitLabel,successMessage,title'
       || first.title !== `فرم آزمون ${tag}` || first.enabled !== false || first.version !== 1 || first.fieldCount !== 0 || first.form?.submitLabel !== 'فرستادن') {
       wrong.push(`a new form: ${made.status} ${JSON.stringify(made.body).slice(0, 400)}`);
     }

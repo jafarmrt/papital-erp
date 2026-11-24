@@ -87,6 +87,15 @@ describe('the rules of a form of the site', () => {
     expect(problemOf(form({ successMessage: `پیام${String.fromCharCode(7)}` }))).toMatchObject({ field: 'successMessage' });
   });
 
+  it('tells names apart by what is seen of them: a hyphen counts, the case and the spacing do not', () => {
+    // two options that read differently stay two, though only a hyphen or a space is between them
+    for (const options of [['۱-۲ نفر', '۱۲ نفر'], ['10-20', '1020'], ['A-', 'A'], ['نام', 'نام؟']]) expect(problemOf(form({ fields: [field({ kind: 'choice', options })] })), options.join('|')).toBeNull();
+    for (const options of [['تلفن ۱', 'تلفن 1'], ['آدرس', 'ادرس'], ['می‌خواهم', 'می  خواهم'], ['Email', 'EMAIL']]) expect(problemOf(form({ fields: [field({ kind: 'choice', options })] })), options.join('|')).toMatchObject({ code: 'STOREFRONT_FORM_FIELD_INVALID' });
+    // a name of one mark that is seen is a name; one of fillers and joiners alone is none
+    for (const label of ['-', '؟', '*', '۷']) expect(problemOf(form({ fields: [field({ label })] })), label).toBeNull();
+    for (const code of [0x200b, 0x2060, 0x3164, 0xffa0, 0x2800, 0x061c, 0x064b]) expect(problemOf(form({ fields: [field({ label: String.fromCharCode(code) })] })), code.toString(16)).toMatchObject({ code: 'STOREFRONT_FORM_FIELD_INVALID' });
+  });
+
   it('lets a form without fields be saved, and not be on the site; nor one of ticks alone', () => {
     expect(problemOf(form({ fields: [] }))).toBeNull();
     expect(problemOf(form({ fields: [] }), true)).toMatchObject({ code: 'STOREFRONT_FORM_EMPTY' });

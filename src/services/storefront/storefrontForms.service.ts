@@ -31,7 +31,7 @@ const listRowOf = (row: FormRecord): FormListRow => ({
   id: row.id, key: row.key, title: row.title, enabled: row.enabled === 1, fieldCount: Array.isArray(row.fields) ? row.fields.length : 0,
   updatedAt: row.updatedAt, updatedBy: row.updatedBy, version: row.version,
 });
-const detailOf = (row: FormRecord): FormDetail => ({ ...listRowOf(row), form: valuesOf(row) });
+const detailOf = (row: FormRecord): FormDetail => ({ ...listRowOf(row), form: valuesOf(row), makesLead: row.makesLead === 1 });
 /** what an audit row keeps of a form: its words and the shape of its fields (a form holds no answer of anyone) */
 const auditOf = (form: FormValues) => ({
   key: form.key, title: form.title, intro: form.intro, submitLabel: form.submitLabel, successMessage: form.successMessage,
@@ -139,6 +139,21 @@ export async function setFormEnabled(req: Request, id: number, enabled: boolean,
       req, tx, action: 'UPDATE', entity: AUDIT_ENTITY, entityId: `form-${id}`,
       description: enabled ? `فرم «${row.title}» روی سایت آمد` : `فرم «${row.title}» از روی سایت برداشته شد`,
       details: { before: { enabled: row.enabled === 1 }, after: { enabled } },
+    });
+  });
+  return formDetail(orm, id);
+}
+
+/** `PUT /api/storefront/forms/:id/makes-lead`: «پروندهٔ فروش هم بساز», sent its target state; a repeat changes nothing */
+export async function setFormMakesLead(req: Request, id: number, enabled: boolean, version: number): Promise<FormDetail> {
+  await orm.transaction(async (tx) => {
+    const row = await lockedRow(tx, id, version);
+    if ((row.makesLead === 1) === enabled) return;
+    await tx.update(storefrontForms).set({ makesLead: enabled ? 1 : 0, version: nextVersion(row.version), updatedBy: actorOf(req), updatedAt: systemNowUtcIso() }).where(eq(storefrontForms.id, id));
+    await logActivity({
+      req, tx, action: 'UPDATE', entity: AUDIT_ENTITY, entityId: `form-${id}`,
+      description: enabled ? `پاسخ‌های فرم «${row.title}» از این پس پروندهٔ فروش هم می‌سازند` : `پاسخ‌های فرم «${row.title}» دیگر پروندهٔ فروش نمی‌سازند`,
+      details: { before: { makesLead: row.makesLead === 1 }, after: { makesLead: enabled } },
     });
   });
   return formDetail(orm, id);

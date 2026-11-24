@@ -64,18 +64,63 @@ export function cleanCorporateGift(input: CorporateGiftRequest): CleanGift {
   return { organization, contactName, phone, quantity, budget, neededBy, note };
 }
 
-async function notifyLead(tx: DbTransaction, leadId: number, organization: string): Promise<void> {
+export interface SiteLeadInput {
+  title: string;
+  contactName: string;
+  phone: string;
+  company: string;
+  /** rials, as a whole number in text ('0' = not said) */
+  estimatedValue: string;
+  /** `YYYY-MM-DD`, or '' */
+  expectedCloseDate: string;
+  notes: string;
+  /** what the audit row keeps of the request (never what a visitor wrote in free text) */
+  audit: Record<string, unknown>;
+}
+
+/**
+ * A sales lead opened by a form of the site, in the caller's transaction: the lead at its first stage with the source
+ * «وبسایت», its first stage row, its «ایجاد فرصت فروش» note and an audit row, as the CRM's own «پرونده فروش تازه» writes
+ * them. Used by «هدیهٔ سازمانی» and by a form of «فرم‌های سایت» whose «پروندهٔ فروش هم بساز» is on (v12 phase 10f).
+ */
+export async function openSiteLead(tx: DbTransaction, input: SiteLeadInput): Promise<number> {
+  const nowIso = systemNowUtcIso();
+  const [lead] = await tx.insert(crmLeads).values({
+    title: input.title, customerId: null, customerName: input.contactName, phone: input.phone,
+    company: input.company, contacts: [], source: SITE_LEAD_SOURCE, stage: 'lead', estimatedValue: money(input.estimatedValue), currency: 'IRR',
+    probability: 50, assignedTo: '', assignedPersonnelId: null, expectedCloseDate: input.expectedCloseDate, notes: input.notes, status: 'active',
+    createdAt: nowIso, updatedAt: nowIso, createdBy: STOREFRONT_BOT_USER, isDeleted: 0,
+  }).returning({ id: crmLeads.id });
+  await recordLeadStageChange(tx, { leadId: lead.id, fromStage: null, toStage: 'lead', assignedPersonnelId: null, lostReason: '', actor: { name: STOREFRONT_BOT_USER } });
+  await tx.insert(crmActivities).values({
+    leadId: lead.id, customerId: null, type: 'note', title: 'ایجاد فرصت فروش',
+    description: `پرونده فروش «${input.title}» از فرم سایت ساخته شد.`, loggedBy: STOREFRONT_BOT_USER,
+    ...(await crmTodayActivityDates()), createdAt: nowIso, isDeleted: 0,
+  });
+  await logActivity({
+    tx, username: STOREFRONT_BOT_USER, action: 'CREATE', entity: 'فرصت فروش CRM', entityId: String(lead.id),
+    description: `ایجاد فرصت فروش «${input.title}» از فرم سایت`,
+    details: { after: { ...input.audit, source: SITE_LEAD_SOURCE } },
+  });
+  return lead.id;
+}
+
+/**
+ * One bell to the holders of the sales files for a lead a form of the site opened. `title` is the caller's: a name of
+ * the shop's own, or what the lead is filed under; the sentence is fixed.
+ */
+export async function notifySiteLead(tx: DbTransaction, leadId: number, title: string): Promise<void> {
   try {
     await tx.transaction(async (sp) => {
       const recipients = await permissionHolderUserIdsWith(sp, CRM_MANAGE_PERMISSION);
       await createNotifications(sp, recipients.map(userId => ({
         userId, category: 'site_inquiry' as const, type: 'system', senderName: STOREFRONT_BOT_USER,
-        title: `درخواست هدیهٔ سازمانی از سایت: ${organization}`, message: 'پرونده فروش تازه‌ای از سایت ساخته شد؛ با رابط تماس بگیرید.',
+        title, message: 'پرونده فروش تازه‌ای از سایت ساخته شد؛ با رابط تماس بگیرید.',
         link: `/crm?leadId=${leadId}`,
       })));
     });
   } catch (err) {
-    logger.error({ message: 'Error notifying colleagues of a corporate gift lead', leadId, error: err });
+    logger.error({ message: 'Error notifying colleagues of a lead opened by the site', leadId, error: err });
   }
 }
 
@@ -91,26 +136,13 @@ export async function submitCorporateGift(input: CorporateGiftRequest): Promise<
     form.note ? `توضیح خریدار: ${form.note}` : '',
   ].filter(Boolean).join('\n');
   const leadId = await orm.transaction(async (tx) => {
-    const nowIso = systemNowUtcIso();
-    const [lead] = await tx.insert(crmLeads).values({
-      title: `هدیهٔ سازمانی: ${form.organization}`, customerId: null, customerName: form.contactName, phone: form.phone,
-      company: form.organization, contacts: [], source: SITE_LEAD_SOURCE, stage: 'lead', estimatedValue: money(form.budget), currency: 'IRR',
-      probability: 50, assignedTo: '', assignedPersonnelId: null, expectedCloseDate: form.neededBy, notes, status: 'active',
-      createdAt: nowIso, updatedAt: nowIso, createdBy: STOREFRONT_BOT_USER, isDeleted: 0,
-    }).returning({ id: crmLeads.id });
-    await recordLeadStageChange(tx, { leadId: lead.id, fromStage: null, toStage: 'lead', assignedPersonnelId: null, lostReason: '', actor: { name: STOREFRONT_BOT_USER } });
-    await tx.insert(crmActivities).values({
-      leadId: lead.id, customerId: null, type: 'note', title: 'ایجاد فرصت فروش',
-      description: `پرونده فروش «هدیهٔ سازمانی: ${form.organization}» از فرم سایت ساخته شد.`, loggedBy: STOREFRONT_BOT_USER,
-      ...(await crmTodayActivityDates()), createdAt: nowIso, isDeleted: 0,
+    const id = await openSiteLead(tx, {
+      title: `هدیهٔ سازمانی: ${form.organization}`, contactName: form.contactName, phone: form.phone, company: form.organization,
+      estimatedValue: form.budget, expectedCloseDate: form.neededBy, notes,
+      audit: { organization: form.organization, quantity: form.quantity, budget: form.budget, neededBy: form.neededBy },
     });
-    await logActivity({
-      tx, username: STOREFRONT_BOT_USER, action: 'CREATE', entity: 'فرصت فروش CRM', entityId: String(lead.id),
-      description: `ایجاد فرصت فروش «هدیهٔ سازمانی: ${form.organization}» از فرم سایت`,
-      details: { after: { organization: form.organization, quantity: form.quantity, budget: form.budget, neededBy: form.neededBy, source: SITE_LEAD_SOURCE } },
-    });
-    await notifyLead(tx, lead.id, form.organization);
-    return lead.id;
+    await notifySiteLead(tx, id, `درخواست هدیهٔ سازمانی از سایت: ${form.organization}`);
+    return id;
   });
   return { reference: String(leadId) };
 }

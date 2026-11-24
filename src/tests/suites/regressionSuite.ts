@@ -11294,5 +11294,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runStorefrontFormsV12Tests } = await import('../regression/storefrontFormsV12Tests.js');
   results.push(...await runStorefrontFormsV12Tests(shouldRun));
 
+  // v12 phase 10f, part 2 (migration 0038): «پیام‌های سایت» and the answers the site sends
+  const { runStorefrontMessagesV12Tests } = await import('../regression/storefrontMessagesV12Tests.js');
+  results.push(...await runStorefrontMessagesV12Tests(shouldRun));
+
   return results;
 }

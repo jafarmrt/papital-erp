@@ -20,6 +20,7 @@ export const NOTIFICATION_CATEGORIES = [
   'site_buyer',
   'site_inquiry',
   'site_sms',
+  'site_message',
 ] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
@@ -44,6 +45,8 @@ export const NOTIFICATION_CATEGORY_LABELS: Readonly<Record<NotificationCategory,
   site_inquiry: 'درخواست هدیهٔ سازمانی از سایت',
   // v12 phase 8b (site review 2.11): a budget of the site's texts is nearly spent, for the holders of storefront.manage
   site_sms: 'سقف پیامک‌های سایت',
+  // v12 phase 10f: a visitor sent a form of the site, for the holders of site_messages.view
+  site_message: 'پیام تازه از فرم‌های سایت',
 };
 
 /** One row of «در پیام‌رسان هم بفرست» in the profile (`GET /messenger/preferences/mine`) */
@@ -91,6 +94,7 @@ const GENERIC_SENTENCES: Readonly<Partial<Record<NotificationCategory, string>>>
   site_buyer: 'یک فروشگاه یا خریدار تازه از سایت می‌خواهد عمده بخرد.',
   site_inquiry: 'یک سازمان از سایت هدیهٔ سازمانی خواسته است؛ پرونده فروش تازه‌ای ساخته شد.',
   site_sms: 'پیامک‌های سایت در این ساعت به نزدیکی سقف خود رسیده‌اند؛ تنظیمات پیامک سایت را ببینید.',
+  site_message: 'پیام تازه‌ای از فرم‌های سایت رسیده است.',
 };
 const GENERIC_DEFAULT_SENTENCE = 'اعلان تازه‌ای در برنامه پاپیتال برای شما آمده است.';
 
@@ -99,7 +103,7 @@ const GENERIC_DEFAULT_SENTENCE = 'اعلان تازه‌ای در برنامه �
  * one opens a fixed page of its section (never a rule template's link, which may carry amounts or ids), else the app's
  * first page.
  */
-const GENERIC_LINK_SECTIONS: readonly string[] = ['/daily-logs', '/crm', '/approval-inbox', '/workshop', '/my-payslips', '/settings', '/site-orders', '/site-buyers', '/site-settings'];
+const GENERIC_LINK_SECTIONS: readonly string[] = ['/daily-logs', '/crm', '/approval-inbox', '/workshop', '/my-payslips', '/settings', '/site-orders', '/site-buyers', '/site-settings', '/site-messages'];
 
 export function messengerLinkPath(category: NotificationCategory, path: string | null | undefined): string {
   const target = String(path ?? '').trim();

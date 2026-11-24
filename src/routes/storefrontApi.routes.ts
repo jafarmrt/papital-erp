@@ -40,6 +40,10 @@ import { RECEIPT_IMAGE_DATA_URL_MAX } from '../services/storefront/storefrontRec
 import { myAccount, myGroupPrices, registerAccount, setPasswordWithLink, signIn, signOut, smsSignIn } from '../services/storefront/storefrontBuyerAuth.service.js';
 import { applyForWholesale } from '../services/storefront/storefrontWholesaleApply.service.js';
 import { submitCorporateGift } from '../services/storefront/storefrontInquiry.service.js';
+import { submitFormAnswers } from '../services/storefront/storefrontMessages.service.js';
+import { FORM_FIELDS_MAX, FORM_KEY_MAX } from '../lib/storefront/storefrontFormRules.js';
+import { MESSAGES_PER_VISITOR_HOUR, MESSAGE_TRIES_PER_MINUTE } from '../lib/storefront/storefrontMessageRules.js';
+import { FORM_STAMP } from '../services/storefront/storefrontFormStamp.js';
 import { BUYER_TOKEN_MAX } from '../services/storefront/storefrontBuyerSecrets.js';
 import { PASSWORD_MAX } from '../lib/storefront/storefrontBuyerRules.js';
 import { PHONE_PROOF_MAX } from '../lib/storefront/storefrontSmsRules.js';
@@ -445,6 +449,38 @@ const giftSchema = z.object({
 
 router.post('/inquiries/corporate-gift', authLimiter, validate(giftSchema), asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json({ data: await submitCorporateGift(req.body) });
+}));
+
+// v12 phase 10f (start plan §7.2 «۱۰و»): a visitor's answers to a form of «فرم‌های سایت» become a message of «پیام‌های
+// سایت». One visitor address tries a few sends a minute (a count of its own: a form refused field by field does not
+// use up sign-in's) and has a few messages taken an hour, well under what the site as a whole sends an hour, so one
+// address cannot close the forms to everyone (review of #505, M2). A request that does not name its visitor (the site
+// without STOREFRONT_TRUST_PROXY) is not counted per visitor, else every visitor would share one budget; the site's
+// own hourly cap stands. The schema only bounds what a request may carry; the service checks each answer against its
+// field (`checkedAnswers`).
+const namesNoVisitor = (req: Request) => !net.isIP(String(req.headers['x-storefront-client-ip'] ?? '').trim());
+const formTryLimiter = rateLimit({
+  windowMs: 60_000, max: MESSAGE_TRIES_PER_MINUTE, standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req) => `storefront-form-try:${ipKeyGenerator(buyerAddress(req))}`,
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+});
+const formVisitorLimiter = rateLimit({
+  windowMs: 3_600_000, max: MESSAGES_PER_VISITOR_HOUR, standardHeaders: true, legacyHeaders: false, skipFailedRequests: true, skip: namesNoVisitor,
+  keyGenerator: (req) => `storefront-form-sent:${ipKeyGenerator(buyerAddress(req))}`,
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+});
+const formSubmitSchema = z.object({
+  params: z.object({ key: z.string().min(1).max(FORM_KEY_MAX).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/) }).passthrough(),
+  body: z.object({
+    requestKey: z.string().max(80), formStamp: z.string().regex(FORM_STAMP),
+    // each value is bounded by itself, so the whole is (a count of the JSON's letters would refuse a long text of quotes or line breaks the rules take)
+    answers: z.record(z.string().max(12), z.union([z.string().max(8000), z.boolean(), z.array(z.string().max(200)).max(20)]))
+      .refine(value => Object.keys(value).length <= FORM_FIELDS_MAX * 2, 'پاسخ‌های فرم بیش از اندازه بزرگ هستند.'),
+  }).strict(),
+});
+
+router.post('/forms/:key/submit', formTryLimiter, formVisitorLimiter, validate(formSubmitSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.status(201).json({ data: await submitFormAnswers(String(req.params.key), req.body) });
 }));
 
 router.get('/account', asyncHandler(async (req: Request, res: Response) => {

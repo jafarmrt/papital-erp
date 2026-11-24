@@ -18,7 +18,7 @@ import {
   integrationDeliveryJobs, eventActionRuleRetirements, webhookEventPatternRepairs, itemPriceTitleCleanup,
   dailyLogVisibilityRepairs, statutoryRemittanceLines, settlementAllocations, payrollStatutoryRates, payrollEidiRates, itemCodeHistory,
   mediaAssets, mediaSections, storefrontProducts, storefrontShippingMethods, storefrontShippingRates, storefrontOrders, storefrontPaymentReceipts, storefrontRedirects, storefrontSmsCodes, storefrontEmailCodes, storefrontSmsMessages,
-  storefrontBuyerGroups, storefrontBuyerAccounts, storefrontBuyerAddresses, storefrontBuyerSessions, storefrontPasswordTokens, storefrontDiscountCodes, storefrontDiscountRedemptions, storefrontCampaigns, storefrontMenuItems, storefrontPages, storefrontNews, storefrontCollections, storefrontForms, storefrontContentAssets, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
+  storefrontBuyerGroups, storefrontBuyerAccounts, storefrontBuyerAddresses, storefrontBuyerSessions, storefrontPasswordTokens, storefrontDiscountCodes, storefrontDiscountRedemptions, storefrontCampaigns, storefrontMenuItems, storefrontPages, storefrontNews, storefrontCollections, storefrontForms, storefrontMessages, storefrontContentAssets, messengerLinkCodes, userMessengerLinks, userNotificationPreferences, messengerBots, userSessions,
 } from '../../db/schema.js';
 
 /**
@@ -134,6 +134,8 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   // 6. CRM and customer relations (before personnel and customers)
   { name: 'crm_activities', table: crmActivities },
   { name: 'crm_lead_stage_history', table: crmLeadStageHistory },
+  // v12 phase 10f: a message of the site points to the sales lead it opened and to its form, so it goes before both
+  { name: 'storefront_messages', table: storefrontMessages },
   { name: 'crm_leads', table: crmLeads },
   { name: 'customer_tag_links', table: customerTagLinks },
   { name: 'customer_tags', table: customerTags },
@@ -168,7 +170,7 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   // v12 phase 10b: the images published content names and the pages (their sharing image) point to media images too;
   // the five base pages, which only migration 0029 makes, are made again empty right after the wipe
   { name: 'storefront_content_assets', table: storefrontContentAssets },
-  // v12 phase 10f: the forms of the site point to nothing
+  // v12 phase 10f: the forms of the site (their messages, which point to a form and a sales lead, go before the leads)
   { name: 'storefront_forms', table: storefrontForms },
   // v12 phase 10e: the words of a collection point to a media image and to a page («آشنایی بیشتر»), so they go before both
   { name: 'storefront_collections', table: storefrontCollections },

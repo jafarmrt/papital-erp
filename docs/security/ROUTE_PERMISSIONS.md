@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 653
+تعداد مسیرها: 659
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -467,9 +467,14 @@
 | GET | `/api/storefront/forms/:id` | site_content.view |
 | PUT | `/api/storefront/forms/:id` | site_content.manage |
 | PUT | `/api/storefront/forms/:id/enabled` | site_content.manage |
+| PUT | `/api/storefront/forms/:id/makes-lead` | site_content.manage |
 | GET | `/api/storefront/menus/` | site_content.view |
 | PUT | `/api/storefront/menus/:location` | site_content.manage |
 | GET | `/api/storefront/menus/link-options` | site_content.view |
+| GET | `/api/storefront/messages/` | site_messages.view |
+| DELETE | `/api/storefront/messages/:id` | site_messages.manage |
+| GET | `/api/storefront/messages/:id` | site_messages.view |
+| PUT | `/api/storefront/messages/:id/status` | site_messages.manage |
 | GET | `/api/storefront/news/` | site_content.view |
 | POST | `/api/storefront/news/` | site_content.manage |
 | DELETE | `/api/storefront/news/:id` | site_content.manage |
@@ -548,6 +553,7 @@
 | GET | `/api/storefront/v1/collections` | public |
 | GET | `/api/storefront/v1/facets` | public |
 | GET | `/api/storefront/v1/feed` | public |
+| POST | `/api/storefront/v1/forms/:key/submit` | public |
 | GET | `/api/storefront/v1/home` | public |
 | POST | `/api/storefront/v1/inquiries/corporate-gift` | public |
 | GET | `/api/storefront/v1/media/:file` | public |
