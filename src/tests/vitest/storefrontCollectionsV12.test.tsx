@@ -85,6 +85,9 @@ describe('the screen of the collections of the site', () => {
     const form = await openRow('کاشی');
     const save = within(form).getByRole('button', { name: 'ذخیره' }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
+    // spaces alone are nothing to save
+    fireEvent.change(within(form).getByLabelText('متن معرفی (اختیاری)'), { target: { value: '   ' } });
+    expect(save.disabled).toBe(true);
     fireEvent.change(within(form).getByLabelText('متن معرفی (اختیاری)'), { target: { value: 'نقش کاشی هفت‌رنگ' } });
     fireEvent.change(within(form).getByLabelText('پیوند «آشنایی بیشتر» (اختیاری)'), { target: { value: '9' } });
     expect(within(form).getByRole('option', { name: 'راهنمای نگهداری (اکنون روی سایت نیست)' })).toBeTruthy();
@@ -227,7 +230,7 @@ describe('the question before a page leaves the site', () => {
       return screen.getByRole('group').querySelector('[data-collection-warning]')?.textContent ?? '';
     };
     expect(ask('unpublish', ['کاشی', 'فیروزه'])).toBe('پیوند «آشنایی بیشتر» کالکشن «کاشی» و کالکشن «فیروزه» به این صفحه می‌آید و تا انتشار دوباره روی سایت نشان داده نمی‌شود.');
-    expect(ask('delete', ['کاشی'])).toBe('پیوند «آشنایی بیشتر» کالکشن «کاشی» به این صفحه می‌آید و دیگر روی سایت نشان داده نمی‌شود.');
+    expect(ask('delete', ['کاشی'])).toBe('پیوند «آشنایی بیشتر» کالکشن «کاشی» به این صفحه می‌آید و دیگر روی سایت نشان داده نمی‌شود؛ پس از حذف، در «کالکشن‌های سایت» صفحهٔ دیگری برایش برگزینید.');
     expect(ask('revert', ['کاشی'])).toBe('');
     expect(ask('delete', [])).toBe('');
   });

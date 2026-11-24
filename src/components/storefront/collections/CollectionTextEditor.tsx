@@ -31,7 +31,8 @@ export function CollectionTextEditor({ row, pages, canManage, onDirty }: {
   /** the server's copy the edits started from, and its version */
   const [base, setBase] = useState({ values: valuesOf(row), version: row.version });
   const [pickedTitle, setPickedTitle] = useState('');
-  const dirty = useMemo(() => !same(draft, base.values), [draft, base.values]);
+  // what a save would keep is compared, not what was typed: a text of spaces alone is no change (10e review)
+  const dirty = useMemo(() => !same(checkedCollectionText(draft).values ?? draft, base.values), [draft, base.values]);
   // only a newer copy counts: a list read that started before this form's own save may still arrive after it
   const outdated = row.version > base.version;
   const tellDirty = useEffectEvent((now: boolean) => onDirty?.(now));

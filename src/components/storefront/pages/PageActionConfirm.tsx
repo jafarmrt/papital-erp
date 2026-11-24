@@ -37,7 +37,7 @@ export function PageActionConfirm({ ref, asking, kind, dirty, linkedFrom, linked
         )}
         {(asking === 'delete' || asking === 'unpublish') && linkedCollections.length > 0 && (
           <span data-collection-warning className="mt-1 block font-bold">
-            {`پیوند «آشنایی بیشتر» ${linkedCollections.map(name => `کالکشن «${name}»`).join(' و ')} به این صفحه می‌آید و ${asking === 'delete' ? 'دیگر' : 'تا انتشار دوباره'} روی سایت نشان داده نمی‌شود.`}
+            {`پیوند «آشنایی بیشتر» ${linkedCollections.map(name => `کالکشن «${name}»`).join(' و ')} به این صفحه می‌آید و ${asking === 'delete' ? 'دیگر روی سایت نشان داده نمی‌شود؛ پس از حذف، در «کالکشن‌های سایت» صفحهٔ دیگری برایش برگزینید' : 'تا انتشار دوباره روی سایت نشان داده نمی‌شود'}.`}
           </span>
         )}
       </p>

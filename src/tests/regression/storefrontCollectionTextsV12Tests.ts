@@ -274,6 +274,17 @@ export async function runStorefrontCollectionTextsV12Tests(shouldRun: (id: strin
       wrong.push(`taking the linked page off the site: ${taken.status}, audit ${String(JSON.stringify(pageAudit?.details)).slice(0, 200)}, link «${String((await mine()).find(r => r.name === onSite)?.moreHref)}»`);
     }
 
+    // the list puts a collection with an item on the site before one whose items have left it, whatever their names
+    await publish(made[2].id, false, made[2].slug);
+    const order = (await rowsOf()).map(r => `${String(r.name)}:${String(r.count)}`).join('|');
+    if (order !== `${onSite}:1|${second}:0`) wrong.push(`the order of the list: ${order}`);
+    // removing the page records the collections whose link is lost with it
+    const lastVersion = Number((await erp.get(`/api/storefront/pages/${pageId}`)).body.data?.version);
+    const removed = await request(app).delete(`/api/storefront/pages/${pageId}?version=${lastVersion}`).set('Cookie', admin.cookie).set('x-csrf-token', admin.csrfToken);
+    const [removal] = await orm.select().from(activityLogs).where(and(eq(activityLogs.entity, 'صفحهٔ سایت'), eq(activityLogs.entityId, `page-${pageId}`), eq(activityLogs.action, 'DELETE'))).orderBy(desc(activityLogs.id)).limit(1);
+    const lost = ((removal?.details ?? {}) as { linkedFromCollections?: string[] }).linkedFromCollections ?? [];
+    if (removed.status !== 200 || [...lost].sort().join('|') !== [onSite, second].sort().join('|')) wrong.push(`removing the linked page: ${removed.status} ${JSON.stringify(removed.body).slice(0, 200)}, recorded ${JSON.stringify(lost)}`);
+
     // 9) the rules of migration 0035 hold against a direct write
     const direct: Array<[string, () => Promise<unknown>]> = [
       ['a second row for one name', () => orm.insert(storefrontCollections).values({ name: onSite })],

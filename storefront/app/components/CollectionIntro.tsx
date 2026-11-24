@@ -28,7 +28,7 @@ export function CollectionIntro({ text }: { text: SiteCollectionText }) {
             <NewsCover image={text.image} sizes="(min-width: 1024px) 40vw, 100vw" eager className="h-auto w-full" />
           </div>
           {/* an image alone: the link has no text to sit under, so it sits under the image (10e review) */}
-          {hasWords ? null : <div className="mt-3 text-lg">{more}</div>}
+          {!hasWords && more ? <div className="mt-3 text-lg">{more}</div> : null}
         </div>
       ) : null}
     </div>
