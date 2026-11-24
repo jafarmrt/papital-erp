@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { useDeleteMessageMutation, useMessageStatusMutation } from '../../../hooks/queries/useStorefrontMessageQueries';
 import type { MessageDetail } from '../../../lib/storefront/storefrontMessageContracts';
 import { MESSAGE_STATUS_TITLES, type MessageAnswer, type MessageStatus } from '../../../lib/storefront/storefrontMessageRules';
+import { useHasPermission } from '../../../contexts/AuthContext';
 import { errorMessageOf, formatPersianDate } from '../../../utils';
 import { formatPersianDateTime } from '../../../utils/dateUtils';
 import { formatPersianCode } from '../../../utils/persianNumber';
@@ -29,6 +30,8 @@ function AnswerValue({ answer }: { answer: MessageAnswer }) {
 }
 
 export function MessageView({ detail, canManage, onBack, onDeleted }: { detail: MessageDetail; canManage: boolean; onBack: () => void; onDeleted: () => void }) {
+  // the way to the sales file is offered only to who can open it
+  const canSeeLeads = useHasPermission('crm.view');
   const turn = useMessageStatusMutation(detail.id);
   const remove = useDeleteMessageMutation();
   const [asking, setAsking] = useState(false);
@@ -94,8 +97,8 @@ export function MessageView({ detail, canManage, onBack, onDeleted }: { detail: 
 
       {detail.leadId !== null && (
         <p className="text-xs text-slate-600">
-          این پیام یک پروندهٔ فروش هم ساخته است:{' '}
-          <Link to={`/crm?leadId=${detail.leadId}`} className="font-bold text-violet-700 underline underline-offset-4">دیدن پروندهٔ فروش</Link>
+          این پیام یک پروندهٔ فروش هم ساخته است{canSeeLeads ? ':' : '.'}{' '}
+          {canSeeLeads && <Link to={`/crm?leadId=${detail.leadId}`} className="font-bold text-violet-700 underline underline-offset-4">دیدن پروندهٔ فروش</Link>}
         </p>
       )}
 

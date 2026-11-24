@@ -5,7 +5,8 @@ import { orm } from '../../db/drizzle.js';
 import { activityLogs, appSettings, crmActivities, crmLeadStageHistory, crmLeads, notifications, storefrontForms, storefrontMessages } from '../../db/schema.js';
 import { invalidateSettingsCache } from '../../lib/memoryCache.js';
 import { readPricingStrategies } from '../../lib/items/pricingStrategies.js';
-import { MESSAGES_HOURLY_CAP, messagesWarnAt } from '../../lib/storefront/storefrontMessageRules.js';
+import { MESSAGES_HOURLY_CAP, MESSAGES_PER_VISITOR_HOUR, MESSAGE_TRIES_PER_MINUTE, messagesWarnAt } from '../../lib/storefront/storefrontMessageRules.js';
+import { formStampOf } from '../../services/storefront/storefrontFormStamp.js';
 
 /**
  * v12 phase 10f, part 2 (migration 0038, docs/roadmap/V12_SITE_NEXT_START_PLAN.md §7.2 «۱۰و»): «پیام‌های سایت» on real
@@ -75,7 +76,7 @@ export async function runStorefrontMessagesV12Tests(shouldRun: (id: string, ...e
     // each request as another visitor (the route is limited per visitor address, a few a minute)
     let visitor = 0;
     const submit = (key: string, answers: unknown, over: Body = {}) => request(app).post(`/api/storefront/v1/forms/${key}/submit`).set('Authorization', `Bearer ${apiKey}`)
-      .set('X-Storefront-Client-IP', `10.77.${Math.floor(++visitor / 250)}.${(visitor % 250) + 1}`).send({ requestKey: requestKey(), formVersion, answers, ...over });
+      .set('X-Storefront-Client-IP', `10.77.${Math.floor(++visitor / 250)}.${(visitor % 250) + 1}`).send({ requestKey: requestKey(), formStamp, answers, ...over });
 
     // a form with one field of each kind, on the site
     const made = await erp.post('/api/storefront/forms', { title: `فرم پیام ${tag}`, key: keyOf('all'), template: null });
@@ -94,15 +95,17 @@ export async function runStorefrontMessagesV12Tests(shouldRun: (id: string, ...e
     const saved = await erp.put(`/api/storefront/forms/${formId}`, { key: keyOf('all'), title: `فرم پیام ${tag}`, intro: '', fields, submitLabel: '', successMessage: '', version: 1 });
     if (saved.status !== 200) throw new Error(`saving the form: ${saved.status} ${JSON.stringify(saved.body)}`);
 
-    // the version of the form a visitor filled in, as the site read it
-    let formVersion = 2;
+    // the stamp of the form a visitor filled in, as the site read it with the form
+    const stampOf = async (id: number) => formStampOf((await orm.select().from(storefrontForms).where(eq(storefrontForms.id, id)))[0]);
+    let formStamp = await stampOf(formId);
     // 1) a form that is off, removed or unknown takes no answer; nor a request without the site's key
     const offForm = await submit(keyOf('all'), { f1: 'نام', f9: true });
     const turnedOn = await erp.put(`/api/storefront/forms/${formId}/enabled`, { enabled: true, version: 2 });
-    formVersion = Number(turnedOn.body.data?.version);
+    // putting the form on the site changes no field: the stamp a visitor's page carries stays good
+    if (await stampOf(formId) !== formStamp || !/^[0-9a-f]{32}$/.test(formStamp)) wrong.push(`the stamp of a form turned on: ${formStamp} -> ${await stampOf(formId)}`);
     const closed = [
       `${offForm.status}:${String(offForm.body.code)}`, `${(await submit(keyOf('nobody'), { f1: 'x' })).status}`, `${(await submit('Bad Key', { f1: 'x' })).status}`,
-      `${(await request(app).post(`/api/storefront/v1/forms/${keyOf('all')}/submit`).send({ requestKey: requestKey(), formVersion, answers: { f1: 'x', f9: true } })).status}`,
+      `${(await request(app).post(`/api/storefront/v1/forms/${keyOf('all')}/submit`).send({ requestKey: requestKey(), formStamp, answers: { f1: 'x', f9: true } })).status}`,
     ].join(' ');
     if (turnedOn.status !== 200 || closed !== '404:STOREFRONT_FORM_NOT_FOUND 404 400 401') wrong.push(`a form that is off, unknown, misnamed, and a request without the key: ${turnedOn.status} ${closed}`);
 
@@ -110,6 +113,7 @@ export async function runStorefrontMessagesV12Tests(shouldRun: (id: string, ...e
     const good: Body = { f1: `  ${SECRET_NAME}  `, f2: '۰۹۱۲ ۳۴۵ ۶۷۸۹', f3: ' Buyer@Example.COM ', f4: '۱٬۲۵۰', f5: 'پشتیبانی', f6: ['ست', 'گردنبند'], f7: '۱۴۰۵/۰۹/۰۳', f8: `${SECRET_WORDS}\r\n\r\n\r\n<script>alert(1)</script>`, f9: true };
     const refusals: Array<[string, Body, string]> = [
       ['a required field left empty', { ...good, f1: '   ' }, 'STOREFRONT_MESSAGE_FIELD_REQUIRED'],
+      ['a required field with nothing that can be seen', { ...good, f1: String.fromCharCode(0x200b, 0x200c, 0xad, 0x2800, 0x3164) }, 'STOREFRONT_MESSAGE_FIELD_REQUIRED'],
       ['a required tick not ticked', { ...good, f9: false }, 'STOREFRONT_MESSAGE_FIELD_REQUIRED'],
       ['a field the form does not have', { ...good, f10: 'x' }, 'STOREFRONT_MESSAGE_FORM_CHANGED'],
       ['a mobile number that is none', { ...good, f2: '12345' }, 'STOREFRONT_MESSAGE_FIELD_INVALID'],
@@ -130,12 +134,13 @@ export async function runStorefrontMessagesV12Tests(shouldRun: (id: string, ...e
     }
     const shapes = [
       (await submit(keyOf('all'), 'text')).status, (await submit(keyOf('all'), { f1: { nested: 'x' } })).status, (await submit(keyOf('all'), good, { requestKey: 'short' })).status,
-      (await submit(keyOf('all'), good, { extra: 1 })).status, (await submit(keyOf('all'), { ...good, f8: 'پ'.repeat(9000) })).status, (await submit(keyOf('all'), good, { formVersion: undefined })).status,
+      (await submit(keyOf('all'), good, { extra: 1 })).status, (await submit(keyOf('all'), { ...good, f8: 'پ'.repeat(9000) })).status, (await submit(keyOf('all'), good, { formStamp: undefined })).status,
+      (await submit(keyOf('all'), good, { formStamp: 7 })).status, (await submit(keyOf('all'), good, { formStamp: 'not-a-stamp' })).status,
     ].join('/');
-    // answers written for another version of the form are never read by this one's fields
-    const otherVersion = await submit(keyOf('all'), good, { formVersion: formVersion - 1 });
+    // answers written for another form, or for this one with other fields, are never read by this one's fields
+    const otherVersion = await submit(keyOf('all'), good, { formStamp: '0'.repeat(32) });
     if (otherVersion.status !== 422 || otherVersion.body.code !== 'STOREFRONT_MESSAGE_FORM_CHANGED') wrong.push(`answers for another version of the form: ${otherVersion.status} ${String(otherVersion.body.code)}`);
-    if (shapes !== '400/400/422/400/400/400') wrong.push(`requests of another shape: ${shapes}`);
+    if (shapes !== '400/400/422/400/400/400/400/400') wrong.push(`requests of another shape: ${shapes}`);
     const [{ none }] = await orm.select({ none: sql<number>`count(*)::int` }).from(storefrontMessages).where(eq(storefrontMessages.formId, formId));
     if (none !== 0) wrong.push(`a refused request left ${none} message(s)`);
 
@@ -143,6 +148,7 @@ export async function runStorefrontMessagesV12Tests(shouldRun: (id: string, ...e
     const viewer = await userWith('site_messages.view');
     const handler = await userWith('site_messages.view', 'site_messages.manage');
     const editor = await userWith('site_content.view', 'site_content.manage', 'storefront.view', 'storefront.manage');
+    const salesHolder = await userWith('crm.view', 'crm.manage');
     const sameKey = requestKey();
     const sent = await submit(keyOf('all'), good, { requestKey: sameKey });
     const messageId = Number(sent.body.data?.reference);
@@ -152,6 +158,11 @@ export async function runStorefrontMessagesV12Tests(shouldRun: (id: string, ...e
       || reused.status !== 422 || reused.body.code !== 'STOREFRONT_REQUEST_KEY_REUSED') {
       wrong.push(`a message, its repeat and its key for another message: ${sent.status} ${JSON.stringify(sent.body)} / ${again.status} / ${reused.status} ${String(reused.body.code)}`);
     }
+    // the same request arriving several times at once makes one message, and each is answered with it
+    const racedKey = requestKey();
+    const raced = await Promise.all(Array.from({ length: 5 }, () => submit(keyOf('all'), { f1: 'هم‌زمان', f9: true }, { requestKey: racedKey })));
+    const [{ racedRows }] = await orm.select({ racedRows: sql<number>`count(*)::int` }).from(storefrontMessages).where(eq(storefrontMessages.requestKey, racedKey));
+    if (raced.some(res => res.status !== 201 || res.body.data?.reference !== raced[0].body.data?.reference) || racedRows !== 1) wrong.push(`one request arriving five times at once: ${raced.map(res => `${res.status}:${String(res.body.data?.reference)}`).join(',')}, rows ${racedRows}`);
     const read = await viewer.get(`/api/storefront/messages/${messageId}`);
     const message = (read.body.data ?? {}) as Body & { answers?: Array<{ label: string; kind: string; value: string }> };
     const values = (message.answers ?? []).map(a => `${a.label}=${a.value}`).join('|');
@@ -159,6 +170,9 @@ export async function runStorefrontMessagesV12Tests(shouldRun: (id: string, ...e
     if (read.status !== 200 || keys(message) !== 'answers,createdAt,formId,formTitle,id,leadId,status,statusAt,statusBy,version' || values !== expected || message.status !== 'new' || message.leadId !== null || message.version !== 1) {
       wrong.push(`the message as it is read: ${read.status} ${JSON.stringify(read.body).slice(0, 600)}`);
     }
+    // a long text of quotes and line breaks is as long as the rules count it, not as its JSON is (review of #505, L4)
+    const quotes = await submit(keyOf('all'), { f1: 'نقل', f8: '"\\\n'.repeat(660), f9: true });
+    if (quotes.status !== 201) wrong.push(`a long text of quotes and line breaks: ${quotes.status} ${String(quotes.body.code)}`);
     // only the answers that are optional may be left out
     const short = await submit(keyOf('all'), { f1: 'کوتاه', f9: 'on' });
     const shortRead = (await viewer.get(`/api/storefront/messages/${Number(short.body.data?.reference)}`)).body.data as { answers?: Array<{ value: string }> } | undefined;
@@ -205,16 +219,34 @@ export async function runStorefrontMessagesV12Tests(shouldRun: (id: string, ...e
     const formNow = Number((await erp.get(`/api/storefront/forms/${formId}`)).body.data?.version);
     const leadOn = await erp.put(`/api/storefront/forms/${formId}/makes-lead`, { enabled: true, version: formNow });
     const leadOnAgain = await erp.put(`/api/storefront/forms/${formId}/makes-lead`, { enabled: true, version: formNow + 1 });
-    formVersion = formNow + 1;
     const viewerSwitch = await viewer.put(`/api/storefront/forms/${formId}/makes-lead`, { enabled: false, version: formNow + 1 });
     const withLead = await submit(keyOf('all'), { f1: `خریدار ${tag}`, f2: '09121112233', f8: 'می‌خواهم سفارش بدهم', f9: true });
     const leadMessage = (await viewer.get(`/api/storefront/messages/${Number(withLead.body.data?.reference)}`)).body.data as { leadId?: number | null } | undefined;
     const leadId = Number(leadMessage?.leadId);
     if (leadId > 0) leadIds.push(leadId);
     const [lead] = leadId > 0 ? await orm.select().from(crmLeads).where(eq(crmLeads.id, leadId)) : [];
+    // the switch changed no field, so the page a visitor already had open still sends (review of #505, L2); the holders
+    // of the sales files hear of the lead by the form's name, never by the visitor's
+    const leadBells = leadId > 0 ? await orm.select().from(notifications).where(eq(notifications.link, `/crm?leadId=${leadId}`)) : [];
+    if (await stampOf(formId) !== formStamp || leadBells.length === 0 || leadBells.some(b => b.title !== `پروندهٔ فروش تازه از فرم سایت «فرم پیام ${tag}»`) || JSON.stringify(leadBells).includes(`خریدار ${tag}`)
+      || !leadBells.some(b => b.userId === salesHolder.id) || leadBells.some(b => b.userId === viewer.id)) {
+      wrong.push(`the bell of a lead a form opened: ${JSON.stringify(leadBells.map(b => [b.userId, b.title]))} (sales holder ${salesHolder.id}), stamp ${formStamp} -> ${await stampOf(formId)}`);
+    }
     if (leadOn.body.data?.makesLead !== true || leadOnAgain.body.data?.version !== formNow + 1 || viewerSwitch.status !== 403 || withLead.status !== 201 || !lead || lead.source !== 'وبسایت' || lead.customerName !== `خریدار ${tag}`
       || lead.phone !== '09121112233' || lead.title !== `پیام سایت: فرم پیام ${tag}` || !String(lead.notes).includes('پیام: می‌خواهم سفارش بدهم') || lead.stage !== 'lead') {
       wrong.push(`a message that opens a sales lead: switch ${leadOn.status} ${String(leadOn.body.data?.makesLead)}, again v${String(leadOnAgain.body.data?.version)}, viewer ${viewerSwitch.status}, message ${withLead.status}, lead ${JSON.stringify(lead ?? null).slice(0, 300)}`);
+    }
+
+    // a write the database refuses keeps nothing and answers without the query that failed, whose text holds what the
+    // visitor wrote (review of #505, L3): here the lead's own table refuses one name
+    const probe = `chk_probe_${tag}`;
+    await orm.execute(sql.raw(`ALTER TABLE crm_leads ADD CONSTRAINT ${probe} CHECK (customer_name <> 'probe-${tag}') NOT VALID`));
+    const refusedWrite = await submit(keyOf('all'), { f1: `probe-${tag}`, f2: '09125550011', f8: SECRET_WORDS, f9: true });
+    await orm.execute(sql.raw(`ALTER TABLE crm_leads DROP CONSTRAINT ${probe}`));
+    const [{ kept }] = await orm.select({ kept: sql<number>`count(*)::int` }).from(storefrontMessages).where(sql`${storefrontMessages.answers}::text like ${`%probe-${tag}%`}`);
+    const refusedBody = JSON.stringify(refusedWrite.body);
+    if (refusedWrite.status !== 500 || refusedWrite.body.code !== 'STOREFRONT_MESSAGE_WRITE_FAILED' || kept !== 0 || [`probe-${tag}`, '09125550011', SECRET_WORDS, 'insert into', 'params'].some(part => refusedBody.includes(part))) {
+      wrong.push(`a write the database refused: ${refusedWrite.status} ${refusedBody.slice(0, 300)}, rows kept ${kept}`);
     }
 
     // the switch off again: the messages below open no lead
@@ -224,25 +256,34 @@ export async function runStorefrontMessagesV12Tests(shouldRun: (id: string, ...e
     // 8) a form changed while a visitor wrote, and a form taken off the site, take no answer; the message already made stays as it was
     const formV = Number((await erp.get(`/api/storefront/forms/${formId}`)).body.data?.version);
     await erp.put(`/api/storefront/forms/${formId}`, { key: keyOf('all'), title: `فرم پیام تازه ${tag}`, intro: '', fields: fields.filter(f => f.id !== 'f8').map(f => (f.id === 'f1' ? { ...f, label: 'نام شما' } : f)), submitLabel: '', successMessage: '', version: formV });
-    const oldShape = await submit(keyOf('all'), good);
-    // a visitor who opens the form again fills in the form as it is now: its fields, under its version
-    const newShape = await submit(keyOf('all'), { f1: 'نام تازه', f9: true }, { formVersion: formV + 1 });
+    const firstStamp = formStamp;
+    formStamp = await stampOf(formId);
+    const oldShape = await submit(keyOf('all'), good, { formStamp: firstStamp });
+    // a repeat of a request that was taken answers its message, though the form has changed since (review of #505, M3)
+    const repeatAfterChange = await submit(keyOf('all'), good, { requestKey: sameKey, formStamp: firstStamp });
+    // a visitor who opens the form again fills in the form as it is now: its fields, under its stamp
+    const newShape = await submit(keyOf('all'), { f1: 'نام تازه', f9: true });
     const newRead = (await viewer.get(`/api/storefront/messages/${Number(newShape.body.data?.reference)}`)).body.data as { formTitle?: string; answers?: Array<{ label: string }> } | undefined;
     if (newShape.status !== 201 || newRead?.formTitle !== `فرم پیام تازه ${tag}` || newRead.answers?.[0]?.label !== 'نام شما' || newRead.answers.length !== 8) wrong.push(`a message of the changed form: ${newShape.status} ${JSON.stringify(newRead).slice(0, 200)}`);
     const stillOld = (await viewer.get(`/api/storefront/messages/${messageId}`)).body.data as { formTitle?: string; answers?: Array<{ label: string }> } | undefined;
     await erp.put(`/api/storefront/forms/${formId}/enabled`, { enabled: false, version: formV + 1 });
     const afterOff = await submit(keyOf('all'), { f1: 'نام', f9: true });
+    const repeatWhileOff = await submit(keyOf('all'), good, { requestKey: sameKey, formStamp: firstStamp });
     await erp.put(`/api/storefront/forms/${formId}/enabled`, { enabled: true, version: formV + 2 });
-    formVersion = formV + 3;
     const siteOff = await erp.put('/api/storefront/settings', shop(false, on.body.data.version));
     const whileSiteOff = await submit(keyOf('all'), { f1: 'نام', f9: true });
     await erp.put('/api/storefront/settings', shop(true, siteOff.body.data?.version));
+    if (firstStamp === formStamp || repeatAfterChange.status !== 201 || repeatAfterChange.body.data?.reference !== sent.body.data?.reference || repeatWhileOff.status !== 201 || repeatWhileOff.body.data?.reference !== sent.body.data?.reference) {
+      wrong.push(`a repeat of a taken request after the form changed and while it is off: stamp ${firstStamp} -> ${formStamp}, ${repeatAfterChange.status} ${JSON.stringify(repeatAfterChange.body).slice(0, 120)}, ${repeatWhileOff.status}`);
+    }
     if (oldShape.status !== 422 || oldShape.body.code !== 'STOREFRONT_MESSAGE_FORM_CHANGED' || stillOld?.formTitle !== `فرم پیام ${tag}` || stillOld.answers?.[0]?.label !== 'نام' || afterOff.status !== 404 || whileSiteOff.status !== 404) {
       wrong.push(`a form changed, a form off and the site off: ${oldShape.status} ${String(oldShape.body.code)}, the old message «${String(stillOld?.formTitle)}», off ${afterOff.status}, site off ${whileSiteOff.status}`);
     }
 
     // 9) removal: under the version, soft, read nowhere after; the lead it opened stays
     const leadMessageId = Number(withLead.body.data?.reference);
+    const countsOf = async () => { const body = (await viewer.get('/api/storefront/messages')).body as { total?: number; counts?: Record<string, number> }; return `${String(body.total)}:${String(body.counts?.new)}`; };
+    const [totalBefore, newBefore] = (await countsOf()).split(':').map(Number);
     const removal = [
       (await handler.del(`/api/storefront/messages/${leadMessageId}`)).status, (await handler.del(`/api/storefront/messages/${leadMessageId}?version=7`)).status,
       (await handler.del(`/api/storefront/messages/${leadMessageId}?version=1`)).status, (await viewer.get(`/api/storefront/messages/${leadMessageId}`)).status,
@@ -251,7 +292,50 @@ export async function runStorefrontMessagesV12Tests(shouldRun: (id: string, ...e
     const [removed] = await orm.select().from(storefrontMessages).where(eq(storefrontMessages.id, leadMessageId));
     const stillListed = (((await viewer.get('/api/storefront/messages')).body.data ?? []) as Body[]).some(row => row.id === leadMessageId);
     const [leadKept] = leadId > 0 ? await orm.select({ isDeleted: crmLeads.isDeleted }).from(crmLeads).where(eq(crmLeads.id, leadId)) : [];
+    // a removed message is counted nowhere
+    if (await countsOf() !== `${totalBefore - 1}:${newBefore - 1}`) wrong.push(`the counts after a removal: ${totalBefore}:${newBefore} -> ${await countsOf()}`);
     if (removal !== '400/409/200/404/404' || removed?.isDeleted !== 1 || stillListed || leadKept?.isDeleted !== 0) wrong.push(`removing a message: ${removal}, row ${String(removed?.isDeleted)}, still listed ${stillListed}, its lead ${String(leadKept?.isDeleted)}`);
+
+    // 9b) a form made again under a freed key is another form: answers written for the old one are not read by its
+    //     fields, whatever the two versions are (review of #505, M1)
+    const twinKey = keyOf('twin');
+    const formOf = async (label: string) => {
+      const created = await erp.post('/api/storefront/forms', { title: `فرم دوقلو ${tag}`, key: twinKey, template: null });
+      const id = Number(created.body.data?.id);
+      const kept = await erp.put(`/api/storefront/forms/${id}`, { key: twinKey, title: `فرم دوقلو ${tag}`, intro: '', fields: [{ id: 'f1', kind: 'shortText', label, required: true, help: '', options: [] }], submitLabel: '', successMessage: '', version: 1 });
+      const live = await erp.put(`/api/storefront/forms/${id}/enabled`, { enabled: true, version: Number(kept.body.data?.version) });
+      return { id, version: Number(live.body.data?.version), stamp: await stampOf(id) };
+    };
+    const oldTwin = await formOf('نام شما');
+    const removedTwin = await erp.del(`/api/storefront/forms/${oldTwin.id}?version=${oldTwin.version}`);
+    const newTwin = await formOf('کد تخفیف');
+    const forOld = await submit(twinKey, { f1: 'زهرا احمدی' }, { formStamp: oldTwin.stamp });
+    const forNew = await submit(twinKey, { f1: 'YALDA' }, { formStamp: newTwin.stamp });
+    const [{ twinRows }] = await orm.select({ twinRows: sql<number>`count(*)::int` }).from(storefrontMessages).where(eq(storefrontMessages.formId, newTwin.id));
+    if (removedTwin.status !== 200 || oldTwin.version !== newTwin.version || oldTwin.stamp === newTwin.stamp || forOld.status !== 422 || forOld.body.code !== 'STOREFRONT_MESSAGE_FORM_CHANGED' || forNew.status !== 201 || twinRows !== 1) {
+      wrong.push(`a form made again under the same key: removal ${removedTwin.status}, versions ${oldTwin.version}/${newTwin.version}, stamps ${oldTwin.stamp}/${newTwin.stamp}, an answer for the old form ${forOld.status} ${String(forOld.body.code)}, for the new ${forNew.status}, rows ${twinRows}`);
+    }
+
+    // 9c) one visitor address: refused sends do not count, a few messages an hour are taken, then «too many», while
+    //     another visitor still sends (review of #505, M2); the address has a count of its own, apart from sign-in's
+    const one = '10.99.0.7';
+    const from = (address: string, answers: unknown) => request(app).post(`/api/storefront/v1/forms/${keyOf('all')}/submit`).set('Authorization', `Bearer ${apiKey}`)
+      .set('X-Storefront-Client-IP', address).send({ requestKey: requestKey(), formStamp, answers });
+    const tries: number[] = [];
+    for (let i = 0; i < 3; i++) tries.push((await from(one, { f1: '', f9: true })).status);
+    for (let i = 0; i < MESSAGES_PER_VISITOR_HOUR; i++) tries.push((await from(one, { f1: `یک نشانی ${i}`, f9: true })).status);
+    const overHour = await from(one, { f1: 'یکی بیشتر', f9: true });
+    const otherVisitor = await from('10.99.0.8', { f1: 'بازدیدکنندهٔ دیگر', f9: true });
+    const signIn = await request(app).post('/api/storefront/v1/auth/login').set('Authorization', `Bearer ${apiKey}`).set('X-Storefront-Client-IP', one).send({ contact: '09120000000', password: 'x' });
+    if (tries.join(',') !== [...Array(3).fill(422), ...Array(MESSAGES_PER_VISITOR_HOUR).fill(201)].join(',') || overHour.status !== 429 || otherVisitor.status !== 201 || signIn.status === 429
+      || !(MESSAGES_PER_VISITOR_HOUR + 3 < MESSAGE_TRIES_PER_MINUTE) || !(MESSAGES_PER_VISITOR_HOUR * 2 <= MESSAGES_HOURLY_CAP)) {
+      wrong.push(`one visitor address in an hour: ${tries.join(',')}, one more ${overHour.status}, another visitor ${otherVisitor.status}, sign-in from the same address ${signIn.status}`);
+    }
+    // the sends one address tries in a minute, taken or not, are bounded too
+    const hasty = '10.99.0.9';
+    const hastyTries: number[] = [];
+    for (let i = 0; i <= MESSAGE_TRIES_PER_MINUTE; i++) hastyTries.push((await from(hasty, { f1: '', f9: true })).status);
+    if (hastyTries.slice(0, MESSAGE_TRIES_PER_MINUTE).some(status => status !== 422) || hastyTries[MESSAGE_TRIES_PER_MINUTE] !== 429) wrong.push(`the tries of one address in a minute: ${hastyTries.join(',')}`);
 
     // 10) the hour's cap for the whole site: one bell before it is full, then «try later», whatever the form
     const [{ soFar }] = await orm.select({ soFar: sql<number>`count(*)::int` }).from(storefrontMessages).where(sql`${storefrontMessages.createdAt} > now() - interval '1 hour'`);
@@ -267,7 +351,13 @@ export async function runStorefrontMessagesV12Tests(shouldRun: (id: string, ...e
     const pastWarn = await submit(keyOf('all'), { f1: 'پس از هشدار', f9: true });
     const bellsPastWarn = await busyBells();
     const [{ nowCount }] = await orm.select({ nowCount: sql<number>`count(*)::int` }).from(storefrontMessages).where(sql`${storefrontMessages.createdAt} > now() - interval '1 hour'`);
-    if (nowCount < MESSAGES_HOURLY_CAP) await fill(MESSAGES_HOURLY_CAP - nowCount);
+    // the last place of the hour is taken once, however many arrive together (review of #505, L1)
+    if (nowCount < MESSAGES_HOURLY_CAP - 1) await fill(MESSAGES_HOURLY_CAP - 1 - nowCount);
+    const together = await Promise.all(Array.from({ length: 6 }, (_, i) => submit(keyOf('all'), { f1: `هم‌زمان ${i}`, f9: true })));
+    const [{ atCap }] = await orm.select({ atCap: sql<number>`count(*)::int` }).from(storefrontMessages).where(sql`${storefrontMessages.createdAt} > now() - interval '1 hour'`);
+    if (together.filter(res => res.status === 201).length !== 1 || together.filter(res => res.status === 429 && res.body.code === 'STOREFRONT_MESSAGES_BUSY').length !== 5 || atCap !== MESSAGES_HOURLY_CAP) {
+      wrong.push(`six arrivals for the hour's last place: ${together.map(res => res.status).join(',')}, in the hour ${atCap} of ${MESSAGES_HOURLY_CAP}`);
+    }
     const full = await submit(keyOf('all'), { f1: 'بیش از سقف', f9: true });
     if (atWarn.status !== 201 || pastWarn.status !== 201 || bellsAtWarn !== bellsBefore + 1 || bellsPastWarn !== bellsAtWarn || full.status !== 429 || full.body.code !== 'STOREFRONT_MESSAGES_BUSY') {
       wrong.push(`the hour's cap: at the warning ${atWarn.status} (bells ${bellsBefore}→${bellsAtWarn}), after it ${pastWarn.status} (bells ${bellsPastWarn}), full ${full.status} ${String(full.body.code)}`);
@@ -301,6 +391,9 @@ export async function runStorefrontMessagesV12Tests(shouldRun: (id: string, ...e
     }));
   } finally {
     const mine = await orm.select({ id: storefrontForms.id }).from(storefrontForms).where(like(storefrontForms.key, `%-${tag}`)).catch(() => []);
+    // the bells this run rang, so a second run within the hour on the same database starts from none
+    await orm.delete(notifications).where(and(eq(notifications.senderName, 'فروشگاه سایت'), like(notifications.link, '/site-messages%'))).catch(() => undefined);
+    await orm.execute(sql.raw(`ALTER TABLE crm_leads DROP CONSTRAINT IF EXISTS chk_probe_${tag}`)).catch(() => undefined);
     if (mine.length > 0) await orm.delete(storefrontMessages).where(inArray(storefrontMessages.formId, mine.map(f => f.id))).catch(() => undefined);
     if (leadIds.length > 0) {
       await orm.delete(crmActivities).where(inArray(crmActivities.leadId, leadIds)).catch(() => undefined);

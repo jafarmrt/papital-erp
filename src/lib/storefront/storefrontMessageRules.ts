@@ -3,7 +3,7 @@ import { toStorageDate } from '../../utils/calendarDate.js';
 import { normalizeEmail } from './storefrontEmailRules.js';
 import { normalizeMobile } from './storefrontOrderRules.js';
 import { hasLoneSurrogate, isRecord } from './storefrontPageParts.js';
-import type { FormField, FormFieldKind, FormValues } from './storefrontFormRules.js';
+import { isWritten, type FormField, type FormFieldKind, type FormValues } from './storefrontFormRules.js';
 
 /**
  * v12 phase 10f (docs/roadmap/V12_SITE_NEXT_START_PLAN.md §7.2 «۱۰و»): the rules of «پیام‌های سایت», shared by the server
@@ -23,6 +23,13 @@ export const MESSAGES_PAGE_SIZE = 30;
 /** the messages the whole site may send in an hour; at `MESSAGES_WARN_PERCENT` of it the colleagues get a bell */
 export const MESSAGES_HOURLY_CAP = 60;
 export const MESSAGES_WARN_PERCENT = 80;
+/**
+ * The messages one visitor address may send in an hour (review of #505, M2): well under the site's cap, so one address
+ * cannot fill the hour for every visitor. A shared address (a mobile network) shares this number.
+ */
+export const MESSAGES_PER_VISITOR_HOUR = 10;
+/** the sends, taken or refused, one visitor address may try in a minute: a count of its own, apart from sign-in's */
+export const MESSAGE_TRIES_PER_MINUTE = 20;
 export const messagesWarnAt = (cap: number): number => Math.max(1, Math.ceil(cap * MESSAGES_WARN_PERCENT / 100));
 export const MESSAGE_REQUEST_KEY = /^[A-Za-z0-9_-]{16,80}$/;
 /** what a tick of acceptance is kept as */
@@ -64,7 +71,8 @@ function answerOf(field: FormField, raw: unknown): { value: string } | { message
   if (UNSAFE.test(text.replace(/[\r\t]/g, ' ')) || hasLoneSurrogate(text)) return { message: `پاسخ ${name} متن ساده است؛ نویسهٔ پنهان یا ناقص در آن نمی‌آید.` };
   switch (field.kind) {
     case 'longText': {
-      const value = lines(text);
+      // a text of nothing that can be seen (zero-width marks, a blank of another script) is an empty answer
+      const value = isWritten(lines(text)) ? lines(text) : '';
       return value.length > ANSWER_LONG_MAX ? { message: `پاسخ ${name} حداکثر ${fa(ANSWER_LONG_MAX)} نویسه است.` } : { value };
     }
     case 'mobile': {
@@ -95,7 +103,7 @@ function answerOf(field: FormField, raw: unknown): { value: string } | { message
       return field.options.includes(value) ? { value } : { message: `گزینهٔ ${name} شناخته نیست.` };
     }
     default: {
-      const value = oneLine(text);
+      const value = isWritten(oneLine(text)) ? oneLine(text) : '';
       return value.length > ANSWER_SHORT_MAX ? { message: `پاسخ ${name} حداکثر ${fa(ANSWER_SHORT_MAX)} نویسه است.` } : { value };
     }
   }

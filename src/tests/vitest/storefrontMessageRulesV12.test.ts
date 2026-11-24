@@ -3,6 +3,7 @@ import {
   ANSWER_LONG_MAX, ANSWER_SHORT_MAX, CONSENT_ACCEPTED, CONSENT_NOT_ACCEPTED, MESSAGES_HOURLY_CAP, checkedAnswers, firstAnswer, messagePreview, messagesWarnAt,
 } from '../../lib/storefront/storefrontMessageRules';
 import type { FormField } from '../../lib/storefront/storefrontFormRules';
+import { FORM_STAMP, formStampOf } from '../../services/storefront/storefrontFormStamp';
 
 /**
  * v12 phase 10f (docs/roadmap/V12_SITE_NEXT_START_PLAN.md §7.2 «۱۰و»): how a visitor's answers are checked against a
@@ -54,6 +55,20 @@ describe('the answers of a visitor to a form of the site', () => {
     expect(checkedAnswers({ fields: [field('f1', 'shortText'), field('f2', 'consent')] }, {}).problem).toMatchObject({ code: 'STOREFRONT_MESSAGE_EMPTY' });
   });
 
+  it('reads a text of nothing that can be seen as an empty answer (review of #505, L5)', () => {
+    // a zero-width space and joiner, a soft hyphen, a blank of Braille and a filler of Hangul: nothing a colleague could read
+    const blank = String.fromCharCode(0x200b, 0x200c, 0xad, 0x2800, 0x3164);
+    expect(problemOf({ f1: blank })).toMatchObject({ fieldId: 'f1', code: 'STOREFRONT_MESSAGE_FIELD_REQUIRED' });
+    expect(problemOf({ f1: ` ${blank} \n` })).toMatchObject({ fieldId: 'f1', code: 'STOREFRONT_MESSAGE_FIELD_REQUIRED' });
+    const optional = { fields: [field('f1', 'shortText'), field('f2', 'longText')] };
+    expect(checkedAnswers(optional, { f1: blank, f2: `${blank}\n${blank}` }).problem).toMatchObject({ code: 'STOREFRONT_MESSAGE_EMPTY' });
+    expect(checkedAnswers(optional, { f1: blank, f2: 'نوشته' }).answers?.map(answer => answer.value)).toEqual(['', 'نوشته']);
+    // a half-space inside a word, and a sign or a picture by itself, are written
+    expect(checkedAnswers(optional, { f1: `می${String.fromCharCode(0x200c)}خواهم` }).answers?.[0].value).toBe(`می${String.fromCharCode(0x200c)}خواهم`);
+    expect(checkedAnswers(optional, { f1: '؟' }).problem).toBeNull();
+    expect(checkedAnswers(optional, { f1: String.fromCodePoint(0x1f44d) }).problem).toBeNull();
+  });
+
   it('refuses an answer to a field the form does not have, and anything that is not a set of answers', () => {
     expect(problemOf({ f1: 'نام', f99: 'x' })).toMatchObject({ code: 'STOREFRONT_MESSAGE_FORM_CHANGED' });
     expect(problemOf(JSON.parse('{"f1":"نام","__proto__":"x"}'))).toMatchObject({ code: 'STOREFRONT_MESSAGE_FORM_CHANGED' });
@@ -75,5 +90,36 @@ describe('the answers of a visitor to a form of the site', () => {
   it('warns at four fifths of the hour\'s cap', () => {
     expect(messagesWarnAt(MESSAGES_HOURLY_CAP)).toBe(48);
     expect(messagesWarnAt(1)).toBe(1);
+  });
+});
+
+describe('the stamp of a form a visitor fills in (review of #505, M1 and L2)', () => {
+  const row = { createdAt: '2026-11-24 08:00:00.123456+00', key: 'contact', title: 'تماس با ما', fields: FORM.fields };
+  const stamp = formStampOf(row);
+
+  it('is a short fixed-length word that says nothing by itself', () => {
+    expect(stamp).toMatch(FORM_STAMP);
+    expect(formStampOf({ ...row })).toBe(stamp);
+    // the same moment written in another time zone is the same form
+    expect(formStampOf({ ...row, createdAt: '2026-11-24T11:30:00.123+03:30' })).toBe(stamp);
+  });
+
+  it('changes with the form itself and with whatever gives an answer its meaning', () => {
+    const changed = [
+      { ...row, createdAt: '2026-11-24 08:00:01.123456+00' }, { ...row, key: 'contact-2' }, { ...row, title: 'تماس' },
+      { ...row, fields: FORM.fields.slice(1) }, { ...row, fields: [...FORM.fields.slice(1), FORM.fields[0]] },
+      { ...row, fields: FORM.fields.map(f => (f.id === 'f1' ? { ...f, label: 'کد تخفیف' } : f)) }, { ...row, fields: FORM.fields.map(f => (f.id === 'f1' ? { ...f, kind: 'longText' as const } : f)) },
+      { ...row, fields: FORM.fields.map(f => (f.id === 'f1' ? { ...f, required: false } : f)) }, { ...row, fields: FORM.fields.map(f => (f.id === 'f5' ? { ...f, options: ['الف', 'ج'] } : f)) },
+    ].map(formStampOf);
+    expect(changed.filter(other => other === stamp)).toEqual([]);
+    expect(new Set(changed).size).toBe(changed.length);
+  });
+
+  it('stays through a change that touches no field: a hint, the order of a field\'s own keys, anything else on the row', () => {
+    expect(formStampOf({ ...row, fields: FORM.fields.map(f => ({ ...f, help: 'راهنمای تازه' })) })).toBe(stamp);
+    expect(formStampOf({ ...row, fields: FORM.fields.map(f => ({ options: f.options, help: f.help, required: f.required, label: f.label, kind: f.kind, id: f.id })) })).toBe(stamp);
+    expect(formStampOf({ ...row, intro: 'متن تازه', submitLabel: 'بفرست', enabled: 1, makesLead: 1, version: 9 } as typeof row)).toBe(stamp);
+    // a row whose fields are no list has the stamp of a form without fields, and does not fail
+    expect(formStampOf({ ...row, fields: null })).toMatch(FORM_STAMP);
   });
 });

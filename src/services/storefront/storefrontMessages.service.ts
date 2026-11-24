@@ -15,7 +15,8 @@ import { logger } from '../../middleware/logger.js';
 import { createNotifications } from '../notifications/notificationCreator.js';
 import { permissionHolderUserIdsWith } from '../notifications/notificationRecipients.js';
 import { STOREFRONT_BOT_USER } from './storefrontCustomer.js';
-import { openSiteLead } from './storefrontInquiry.service.js';
+import { formStampOf } from './storefrontFormStamp.js';
+import { notifySiteLead, openSiteLead } from './storefrontInquiry.service.js';
 import { requestHashOf } from './storefrontOrderKeys.js';
 import { storefrontSettingValues } from './storefrontSettings.service.js';
 
@@ -24,7 +25,8 @@ import { storefrontSettingValues } from './storefrontSettings.service.js';
  * is on the site are checked against the form as it is now and kept as a message (a copy of each answer with its
  * field's name); the holders of `site_messages.view` get a bell that says only that a message came (never a name or a
  * word of it), and a form whose «پروندهٔ فروش هم بساز» is on also opens a sales lead. The site as a whole sends at most
- * `MESSAGES_HOURLY_CAP` messages an hour. Reading the messages needs `site_messages.view`; setting a status and
+ * `MESSAGES_HOURLY_CAP` messages an hour: arrivals take one lock, so the count and the bell before it is full are
+ * exact however many arrive at once. Reading the messages needs `site_messages.view`; setting a status and
  * removing one need `site_messages.manage`, under the message's version, each with its audit row. The audit log never
  * holds what a visitor wrote.
  */
@@ -40,6 +42,16 @@ const notFound = () => new NotFoundError('این پیام پیدا نشد.', und
 class MessagesBusyError extends AppError {
   constructor() {
     super('اکنون پیام‌های زیادی رسیده است؛ لطفاً کمی بعد دوباره بفرستید یا با ما تماس بگیرید.', 429, 'STOREFRONT_MESSAGES_BUSY');
+  }
+}
+
+/** One arrival at a time: the hour's count, the cap and its warning are read and written under this lock */
+const lockArrivals = (tx: DbExecutor) => tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${'storefront_messages'}))`);
+
+/** A write the database refused: what failed, never the row (a failed query's own text carries what the visitor wrote) */
+class MessageWriteError extends AppError {
+  constructor() {
+    super('پیام ثبت نشد؛ کمی بعد دوباره بفرستید.', 500, 'STOREFRONT_MESSAGE_WRITE_FAILED');
   }
 }
 
@@ -73,8 +85,9 @@ async function warnIfNearlyFull(tx: DbTransaction): Promise<void> {
         .where(and(eq(notifications.senderName, STOREFRONT_BOT_USER), eq(notifications.title, BUSY_TITLE), gt(notifications.createdAt, sql`now() - interval '1 hour'`))).limit(1);
       if (rang) return;
       const recipients = await permissionHolderUserIdsWith(sp, MESSAGES_VIEW_PERMISSION);
+      // a bell alone: it is no message of a visitor, so it goes to no messenger under «پیام تازه»
       await createNotifications(sp, recipients.map(userId => ({
-        userId, category: 'site_message' as const, type: 'system', senderName: STOREFRONT_BOT_USER, title: BUSY_TITLE,
+        userId, category: 'site_message' as const, type: 'system', bellOnly: true, senderName: STOREFRONT_BOT_USER, title: BUSY_TITLE,
         message: `دست‌کم ${messagesWarnAt(MESSAGES_HOURLY_CAP).toLocaleString('fa-IR')} پیام از سقف ${MESSAGES_HOURLY_CAP.toLocaleString('fa-IR')} در این ساعت رسیده است. اگر پیام‌ها واقعی نیستند، فرم را از روی سایت بردارید.`,
         link: '/site-messages',
       })));
@@ -109,27 +122,28 @@ export async function submitFormAnswers(key: string, input: FormSubmitRequest): 
   if (!settings.enabled) throw new NotFoundError('پیدا نشد');
   const requestKey = String(input.requestKey ?? '').trim();
   if (!MESSAGE_REQUEST_KEY.test(requestKey)) throw new ValidationError('شناسهٔ درخواست نامعتبر است.', { field: 'requestKey' }, 'STOREFRONT_MESSAGE_FIELD_INVALID');
+  // a repeat of a request that was taken answers its message whatever became of the form since: a visitor whose first
+  // answer was lost on the way is not told to write again. The request is what was sent, as it was sent.
+  const requestHash = requestHashOf({ key, formStamp: input.formStamp, answers: input.answers });
+  const before = await replay(requestKey, requestHash);
+  if (before) return before;
   const formGone = () => new NotFoundError('این فرم پیدا نشد.', undefined, 'STOREFRONT_FORM_NOT_FOUND');
   const [form] = await orm.select().from(storefrontForms).where(and(eq(storefrontForms.key, key), eq(storefrontForms.isDeleted, 0), eq(storefrontForms.enabled, 1)));
   if (!form) throw formGone();
-  // a field's name (f1, f2, …) says which field only of the form as the visitor saw it: answers written for another
-  // version are never read by this one's fields
+  // a field's name (f1, f2, …) says which field only of the form as the visitor saw it: answers written for a form
+  // whose fields have changed, or for another form that now has this key, are never read by this one's fields
   const formChanged = () => new ValidationError('این فرم عوض شده است؛ صفحه را دوباره باز کنید و فرم را از نو پر کنید.', undefined, 'STOREFRONT_MESSAGE_FORM_CHANGED');
-  if (input.formVersion !== form.version) throw formChanged();
+  if (input.formStamp !== formStampOf(form)) throw formChanged();
   const checked = checkedAnswers({ fields: Array.isArray(form.fields) ? form.fields : [] }, input.answers);
   if (checked.problem) throw new ValidationError(checked.problem.message, { field: checked.problem.fieldId }, checked.problem.code);
   const answers = checked.answers;
-  // the form is part of the request: the same key for another form, or other answers, is another request
-  const requestHash = requestHashOf({ formId: form.id, answers });
-  const before = await replay(requestKey, requestHash);
-  if (before) return before;
   try {
     return await orm.transaction(async (tx) => {
-      // the form as it is at this moment: taken off the site or removed between the read and here, it takes no answer
-      const [live] = await tx.select({ id: storefrontForms.id, title: storefrontForms.title, makesLead: storefrontForms.makesLead, version: storefrontForms.version })
-        .from(storefrontForms).where(and(eq(storefrontForms.id, form.id), eq(storefrontForms.isDeleted, 0), eq(storefrontForms.enabled, 1))).for('share');
+      await lockArrivals(tx);
+      // the form as it is at this moment: taken off the site, removed or changed between the read and here, it takes no answer
+      const [live] = await tx.select().from(storefrontForms).where(and(eq(storefrontForms.id, form.id), eq(storefrontForms.isDeleted, 0), eq(storefrontForms.enabled, 1))).for('share');
       if (!live) throw formGone();
-      if (live.version !== form.version) throw formChanged();
+      if (formStampOf(live) !== input.formStamp) throw formChanged();
       if (await sentThisHour(tx) >= MESSAGES_HOURLY_CAP) throw new MessagesBusyError();
       const leadId = live.makesLead === 1 ? await openSiteLead(tx, {
         title: `پیام سایت: ${live.title}`, contactName: firstAnswer(answers, 'shortText') || 'بازدیدکنندهٔ سایت', phone: firstAnswer(answers, 'mobile'), company: '',
@@ -142,15 +156,23 @@ export async function submitFormAnswers(key: string, input: FormSubmitRequest): 
         description: `پیامی از فرم «${live.title}» سایت رسید`, details: { after: { formId: live.id, formTitle: live.title, answered: answers.filter(answer => answer.value !== '').length, leadId } },
       });
       await notifyMessage(tx, row.id);
+      // the holders of the sales files hear of the lead as they do of a «هدیهٔ سازمانی», by the form's name alone
+      if (leadId !== null) await notifySiteLead(tx, leadId, `پروندهٔ فروش تازه از فرم سایت «${live.title}»`);
       await warnIfNearlyFull(tx);
       return answerOf(row);
     });
   } catch (err) {
+    if (err instanceof AppError) throw err;
     // the same request racing itself: the first one committed, the second answers its message
-    if (!isRequestKeyViolation(err)) throw err;
-    const raced = await replay(requestKey, requestHash);
-    if (!raced) throw err;
-    return raced;
+    if (isRequestKeyViolation(err)) {
+      const raced = await replay(requestKey, requestHash);
+      if (raced) return raced;
+    }
+    // what the database said, without the query: its text and parameters hold the visitor's name, number and words
+    const pg = err as { code?: string; constraint?: string; cause?: { code?: string; constraint?: string } };
+    const failed = pg?.code ? pg : pg?.cause;
+    logger.error({ message: 'A site message could not be written', formKey: key, sqlState: String(failed?.code ?? ''), constraint: String(failed?.constraint ?? '') });
+    throw new MessageWriteError();
   }
 }
 

@@ -105,18 +105,22 @@ export async function openSiteLead(tx: DbTransaction, input: SiteLeadInput): Pro
   return lead.id;
 }
 
-async function notifyLead(tx: DbTransaction, leadId: number, organization: string): Promise<void> {
+/**
+ * One bell to the holders of the sales files for a lead a form of the site opened. `title` is the caller's: a name of
+ * the shop's own, or what the lead is filed under; the sentence is fixed.
+ */
+export async function notifySiteLead(tx: DbTransaction, leadId: number, title: string): Promise<void> {
   try {
     await tx.transaction(async (sp) => {
       const recipients = await permissionHolderUserIdsWith(sp, CRM_MANAGE_PERMISSION);
       await createNotifications(sp, recipients.map(userId => ({
         userId, category: 'site_inquiry' as const, type: 'system', senderName: STOREFRONT_BOT_USER,
-        title: `درخواست هدیهٔ سازمانی از سایت: ${organization}`, message: 'پرونده فروش تازه‌ای از سایت ساخته شد؛ با رابط تماس بگیرید.',
+        title, message: 'پرونده فروش تازه‌ای از سایت ساخته شد؛ با رابط تماس بگیرید.',
         link: `/crm?leadId=${leadId}`,
       })));
     });
   } catch (err) {
-    logger.error({ message: 'Error notifying colleagues of a corporate gift lead', leadId, error: err });
+    logger.error({ message: 'Error notifying colleagues of a lead opened by the site', leadId, error: err });
   }
 }
 
@@ -137,7 +141,7 @@ export async function submitCorporateGift(input: CorporateGiftRequest): Promise<
       estimatedValue: form.budget, expectedCloseDate: form.neededBy, notes,
       audit: { organization: form.organization, quantity: form.quantity, budget: form.budget, neededBy: form.neededBy },
     });
-    await notifyLead(tx, id, form.organization);
+    await notifySiteLead(tx, id, `درخواست هدیهٔ سازمانی از سایت: ${form.organization}`);
     return id;
   });
   return { reference: String(leadId) };

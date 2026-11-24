@@ -102,8 +102,19 @@ describe('the screen of the messages of the site', () => {
     await waitFor(() => expect((screen.getByRole('button', { name: 'پاسخ داده شد' }) as HTMLButtonElement).disabled).toBe(true));
   });
 
-  it('asks before a removal and sends it under the version', async () => {
+  it('offers the way to the sales file a message opened only to who can open it (review of #505)', async () => {
     permissions.current = ['site_messages.manage'];
+    open('/site-messages?message=12', detailOf({ leadId: 44, status: 'seen', statusBy: 'handler', statusAt: '2026-11-24T09:00:00.000Z' }));
+    await screen.findByText(/این پیام یک پروندهٔ فروش هم ساخته است/);
+    expect(screen.queryByRole('link', { name: 'دیدن پروندهٔ فروش' })).toBeNull();
+    cleanup();
+    permissions.current = ['site_messages.manage', 'crm.view'];
+    open('/site-messages?message=12', detailOf({ leadId: 44, status: 'seen', statusBy: 'handler', statusAt: '2026-11-24T09:00:00.000Z' }));
+    expect((await screen.findByRole('link', { name: 'دیدن پروندهٔ فروش' })).getAttribute('href')).toBe('/crm?leadId=44');
+  });
+
+  it('asks before a removal and sends it under the version', async () => {
+    permissions.current = ['site_messages.manage', 'crm.view'];
     open('/site-messages?message=12', detailOf({ status: 'seen', version: 4, statusBy: 'handler', statusAt: '2026-11-24T09:00:00.000Z', leadId: 31 }));
     await screen.findByLabelText('پاسخ‌های فرم');
     expect((screen.getByRole('link', { name: 'دیدن پروندهٔ فروش' }) as HTMLAnchorElement).getAttribute('href')).toBe('/crm?leadId=31');
