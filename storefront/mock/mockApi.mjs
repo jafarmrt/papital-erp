@@ -65,10 +65,12 @@ const collectionsMode = process.env.MOCK_COLLECTIONS ?? '';
 const collectionTexts = collectionsMode.startsWith('[') ? JSON.parse(collectionsMode) : [];
 // v12 phase 10e: «صفحهٔ اصلی». Not published (404) unless MOCK_HOME gives the answer as JSON (`{ seoTitle, seoDescription,
 // shareImage, updatedAt, sections }`, a «معرفی کالکشن» naming catalog slugs for its products); MOCK_HOME=fail answers 500.
-// `GET /__mock/home?mode=fail|ok|none` changes it while a test runs (the site must keep the copy it read last).
+// `GET /__mock/home?mode=fail|ok|none|empty|nothing|gone` changes it while a test runs (the site must keep the copy it read last).
 let homeMode = process.env.MOCK_HOME ?? '';
 const homeAnswer = homeMode.startsWith('{') ? JSON.parse(homeMode) : null;
 if (homeAnswer) homeMode = 'ok';
+/** how many times `/home` was asked for, for a test of how often the site asks */
+let homeReads = 0;
 const previews = process.env.MOCK_PREVIEWS ? JSON.parse(process.env.MOCK_PREVIEWS) : {};
 const previewMedia = (process.env.MOCK_PREVIEW_MEDIA ?? '').split(',').filter(Boolean);
 let previewReads = 0;
@@ -408,8 +410,8 @@ createServer(async (req, res) => {
   // how many requests came under a preview key, pages and images (the site must read each time, keep none, and send no key of another shape)
   if (url.pathname === '/__mock/news-reads') return send(res, 200, newsReads);
   if (url.pathname === '/__mock/home') {
-    homeMode = url.searchParams.get('mode') ?? '';
-    return send(res, 200, { mode: homeMode });
+    if (url.searchParams.has('mode')) homeMode = url.searchParams.get('mode') ?? '';
+    return send(res, 200, { mode: homeMode, reads: homeReads });
   }
   if (url.pathname === '/__mock/preview-reads') return send(res, 200, { reads: previewReads, keysInAddress: previewKeysInAddress });
   if (url.pathname === '/__mock/pages') {
@@ -541,7 +543,10 @@ createServer(async (req, res) => {
     if (bytes) return send(res, 200, bytes, { 'Content-Type': 'image/webp' });
   }
   if (route === '/home') {
+    homeReads += 1;
     if (homeMode === 'fail') return send(res, 500, { error: 'mock failure' });
+    // a 404 that is not the ERP's (a web server in front of it): a failed read too, not «not published»
+    if (homeMode === 'gone') return send(res, 404, Buffer.from('<html><body>404 Not Found</body></html>'), { 'Content-Type': 'text/html' });
     // a 200 that is no home page (an empty answer, one with nothing to draw) is a failed read for the site, not «not published»
     if (homeMode === 'empty') return send(res, 200, {});
     if (homeMode === 'nothing') return send(res, 200, { data: { ...homeAnswer, sections: [{ kind: 'unknown-part' }] } });

@@ -350,10 +350,13 @@ export async function runStorefrontHomeV12Tests(shouldRun: (id: string, ...extra
     const off = await erp.post(`/api/storefront/pages/${homeId}/unpublish`, { version });
     if (off.status !== 200 || (await site('/home')).status !== 404 || await mediaOf(wide.sha256) !== 404) wrong.push(`taking the home page off the site: ${off.status}, the site ${(await site('/home')).status}, its image ${await mediaOf(wide.sha256)}`);
 
+    const HIDDEN_WORDS = `نوشتهٔ بخش خاموش ${tag}`;
     // 7b) «پیش‌نمایش»: the draft as the home page it would be today, under the link's key alone, while the site still has none
     const draft = await erp.put(`/api/storefront/pages/${homeId}`, { ...form([
       slider(slide({ title: 'اسلاید پیش‌نویس', mobileImageAssetId: tall.id }), slide({ title: 'اسلاید فردا', startsOn: tomorrow })),
       { ...emptyHomeSection('homeCategories'), hidden: true }, emptyHomeSection('homeWholesale'),
+      // parts of every page that are switched off, and the image of one: none of it leaves under the key either
+      { ...text(HIDDEN_WORDS), hidden: true }, { kind: 'hero', background: 'white', title: HIDDEN_WORDS, text: '', imageAssetId: bannerImage.id, buttonLabel: '', buttonHref: '', hidden: true },
     ], { seoTitle: 'عنوان پیش‌نویس خانه' }), version: Number(off.body.data?.version) });
     const draftLink = await erp.post(`/api/storefront/pages/${homeId}/preview`);
     const previewKey = String(draftLink.body.data?.path ?? '').slice('/preview/'.length);
@@ -368,12 +371,12 @@ export async function runStorefrontHomeV12Tests(shouldRun: (id: string, ...extra
     }
     // nothing more goes out than publishing would send: no id, no day of a slide, no part switched off
     const draftText = JSON.stringify(draftRead.body);
-    for (const inside of ['AssetId', '"id"', 'startsOn', 'hidden', 'اسلاید فردا', 'itemId', 'version']) if (draftText.includes(inside)) wrong.push(`the preview of the home page's draft carries ${inside}`);
+    for (const inside of ['AssetId', '"id"', 'startsOn', 'hidden', 'اسلاید فردا', 'itemId', 'version', HIDDEN_WORDS]) if (draftText.includes(inside)) wrong.push(`the preview of the home page's draft carries ${inside}`);
     const draftImages = [
       (await underKey(`/page-preview/media/${wide.sha256}.webp`)).status, (await underKey(`/page-preview/media/${tall.sha256}.webp`)).status,
-      (await underKey(`/page-preview/media/${offImage.sha256}.webp`)).status, await mediaOf(wide.sha256), (await site('/home')).status, (await site(`/pages/${HOME_PAGE_SLUG}`)).status,
+      (await underKey(`/page-preview/media/${offImage.sha256}.webp`)).status, (await underKey(`/page-preview/media/${bannerImage.sha256}.webp`)).status, await mediaOf(wide.sha256), (await site('/home')).status, (await site(`/pages/${HOME_PAGE_SLUG}`)).status,
     ].join('/');
-    if (draftImages !== '200/200/404/404/404/404') wrong.push(`the draft's images under the key, an image it does not name, the same image and the home page on the site: ${draftImages}`);
+    if (draftImages !== '200/200/404/404/404/404/404') wrong.push(`the draft's images under the key, an image it does not name, the image of a part switched off, the same image and the home page on the site: ${draftImages}`);
 
     // 8) the rules of migration 0036 hold against a direct write
     const direct: Array<[string, () => Promise<unknown>]> = [

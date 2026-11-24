@@ -44,12 +44,16 @@ export function SectionTitle({ id, title, href, cta }: { id: string; title: stri
 
 export function HomeIntro({ part, product, heading }: { part: Part<'homeIntro'>; product: StorefrontProductCard | null; heading: boolean }) {
   const Title = heading ? 'h1' : 'h2';
+  // a title in two halves («…، …») breaks after its comma, as the site's own opening words always have
+  const comma = part.title.indexOf('، ');
   return (
     <section className="border-b border-border bg-brand-soft" data-home-part="homeIntro">
       <div className="mx-auto grid max-w-7xl items-center gap-8 px-4 py-7 lg:grid-cols-2 lg:gap-16 lg:px-8 lg:py-16">
         <div>
           {part.kicker ? <p className="text-sm font-medium text-brand lg:text-base">{part.kicker}</p> : null}
-          <Title className="mt-2 text-3xl font-extrabold leading-tight text-balance break-words sm:text-5xl lg:mt-3 lg:text-6xl">{part.title}</Title>
+          <Title className="mt-2 text-3xl font-extrabold leading-tight text-balance break-words sm:text-5xl lg:mt-3 lg:text-6xl">
+            {comma > 0 ? <>{part.title.slice(0, comma + 1)}<br />{part.title.slice(comma + 2)}</> : part.title}
+          </Title>
           {part.text ? <p className="mt-3 max-w-lg leading-8 text-muted-foreground break-words lg:mt-5 lg:text-lg lg:leading-9">{part.text}</p> : null}
           {part.buttonLabel ? (
             <div className="mt-5 flex gap-3 lg:mt-8">

@@ -59,7 +59,7 @@ export function meta({ data, matches }: Route.MetaArgs) {
   ];
 }
 
-export default function PagePreview({ loaderData }: Route.ComponentProps) {
+export default function PagePreview({ loaderData, matches }: Route.ComponentProps) {
   const { page, home, endsAt, token, shipping, siteUrl } = loaderData;
   const root = useRootData();
   return (
@@ -70,8 +70,8 @@ export default function PagePreview({ loaderData }: Route.ComponentProps) {
       <PageMediaProvider value={previewMediaPath(token)}>
         {home ? (
           home.sections.length > 0
-            ? <HomeSections sections={home.sections} shopName={page.title} data={{ lead: home.lead, featured: home.featured, newest: home.newest, categories: home.categories, collections: home.collections, freeShippingThreshold: root?.freeShippingThreshold ?? '', whatsapp: root?.whatsapp ?? '' }} />
-            : <p className="mx-auto max-w-3xl px-4 py-16 text-center text-muted-foreground">این پیش‌نویس صفحهٔ اصلی امروز چیزی برای نشان دادن ندارد (بخش‌هایش خاموش‌اند یا روز اسلایدهایش نرسیده است).</p>
+            ? <HomeSections sections={home.sections} shopName={brandOf(matches).fullName} data={{ lead: home.lead, featured: home.featured, newest: home.newest, categories: home.categories, collections: home.collections, freeShippingThreshold: root?.freeShippingThreshold ?? '', whatsapp: root?.whatsapp ?? '' }} />
+            : <><h1 className="sr-only">{page.title}</h1><p className="mx-auto max-w-3xl px-4 py-16 text-center text-muted-foreground">این پیش‌نویس صفحهٔ اصلی امروز چیزی برای نشان دادن ندارد (بخش‌هایش خاموش‌اند یا روز اسلایدهایش نرسیده است).</p></>
         ) : <SitePageView page={page} shipping={shipping} siteUrl={siteUrl} preview />}
       </PageMediaProvider>
     </>

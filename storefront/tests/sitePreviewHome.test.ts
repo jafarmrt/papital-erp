@@ -95,8 +95,10 @@ describe('the preview of the home page\'s draft', () => {
     const html = await res.text();
     expect(html).toContain('این پیش‌نویس صفحهٔ اصلی امروز چیزی برای نشان دادن ندارد');
     expect(html).not.toContain('data-home-part=');
+    expect([...html.matchAll(/<h1[^>]*>(.*?)<\/h1>/g)].map(match => match[1])).toEqual(['صفحهٔ اصلی']);
     const home = await (await ask('/')).text();
-    expect(home).toContain('این بار برای پوشیدن');
+    // the site's own opening words, in two lines as they have always been
+    expect(home).toMatch(/<h1[^>]*>کاشی‌های ایران،<br\/>این بار برای پوشیدن<\/h1>/);
     expect(home).not.toContain('تیتر پیش‌نویس خانه');
     expect(home).not.toContain('data-preview-note');
   });

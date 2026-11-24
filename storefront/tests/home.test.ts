@@ -108,8 +108,11 @@ describe('the home page the shop published', () => {
     expect(slider).toMatch(/<a href="https:\/\/example\.com\/papital" rel="noopener noreferrer"[^>]*>اینستاگرام/);
     for (const title of ['اسلاید سوم', 'اسلاید چهارم']) expect(slider).toContain(title);
     for (const label of ['دکمهٔ بد', 'دکمهٔ بیرونی پنهان']) expect(slider).not.toContain(label);
-    expect(slider).toContain('aria-label="اسلاید بعدی"');
     expect(slider).toContain('aria-label="۱ از ۴"');
+    // every slide has one box, upright on a phone and wide from 640 px, whatever the shape of its image
+    expect(slider.match(/class="relative aspect-\[4\/5\] max-h-\[78vh\] w-full shrink-0 snap-start overflow-hidden sm:aspect-\[8\/3\]"/g)?.length).toBe(4);
+    // the arrows, the dots and «ایستادن» are drawn in the browser, once the script that makes them work has loaded
+    for (const control of ['اسلاید بعدی', 'اسلاید قبلی', 'ایستادن اسلایدها']) expect(slider).not.toContain(`aria-label="${control}"`);
   });
 
   it('draws a banner with its link, and without one when the address is none', () => {

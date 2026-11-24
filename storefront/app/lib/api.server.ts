@@ -28,7 +28,8 @@ const SETTINGS_TTL_MS = 60_000;
 const CATALOG_TTL_MS = 20_000;
 
 export class StorefrontApiError extends Error {
-  constructor(readonly status: number, path: string) {
+  /** `code`: the ERP's own code of a 404 ('' when the answer is not the ERP's, such as a web server's page in front of it) */
+  constructor(readonly status: number, path: string, readonly code = '') {
     super(`storefront api ${status} for ${path}`);
   }
 }
@@ -71,7 +72,11 @@ async function fetchJson<T>(path: string, ttlMs: number, visitor = ''): Promise<
   } catch {
     throw new StorefrontApiError(503, path);
   }
-  if (res.status === 404) remember(path, { at: Date.now(), value: null, status: 404 });
+  if (res.status === 404) {
+    const code = await res.json().then((body: unknown) => (typeof (body as { code?: unknown } | null)?.code === 'string' ? (body as { code: string }).code : ''), () => '');
+    remember(path, { at: Date.now(), value: code, status: 404 });
+    throw new StorefrontApiError(404, path, code);
+  }
   if (!res.ok) throw new StorefrontApiError(res.status, path);
   let value: T;
   try {
@@ -86,7 +91,7 @@ async function fetchJson<T>(path: string, ttlMs: number, visitor = ''): Promise<
 
 async function get<T>(path: string, ttlMs: number, visitor = ''): Promise<T> {
   const hit = kept(path);
-  if (hit?.status === 404 && Date.now() - hit.at < NOT_FOUND_TTL_MS) throw new StorefrontApiError(404, path);
+  if (hit?.status === 404 && Date.now() - hit.at < NOT_FOUND_TTL_MS) throw new StorefrontApiError(404, path, typeof hit.value === 'string' ? hit.value : '');
   if (hit && hit.status === undefined && Date.now() - hit.at < ttlMs) return hit.value as T;
   let pending = inFlight.get(path) as Promise<T> | undefined;
   if (!pending) {
@@ -331,12 +336,15 @@ export async function collectionText(name: string): Promise<SiteCollectionText |
 /** The home page read last, to show while the ERP cannot be read, and when such a read last failed */
 let lastGoodHome: SiteHome | null = null;
 let homeFailedAt = -Infinity;
+/** the ERP's code for «no home page on the site» */
+const HOME_NOT_PUBLISHED = 'STOREFRONT_HOME_NOT_PUBLISHED';
 
 /**
- * v12 phase 10e: «صفحهٔ اصلی» as the shop wrote and published it in the ERP; null while there is none (the ERP answers
- * 404: not published, nothing of it shows today, or an ERP not yet updated), and the site then draws its own home page.
+ * v12 phase 10e: «صفحهٔ اصلی» as the shop wrote and published it in the ERP; null while there is none (the ERP says so
+ * with its own 404: not published, or nothing of it shows today), and the site then draws its own home page.
  * The home page must never be down: when the ERP cannot be read, or answers in another shape, the copy read last is
- * shown (an error must not put the site's own home page back in place of a published one), and only a site that has
+ * shown (an error must not put the site's own home page back in place of a published one; a 404 that is not the ERP's,
+ * such as a web server's page in front of it or an ERP not yet updated, is such an error), and only a site that has
  * never read it draws its own. After a failed read the ERP is not asked again for half a minute.
  */
 export async function home(): Promise<SiteHome | null> {
@@ -349,7 +357,8 @@ export async function home(): Promise<SiteHome | null> {
     return found;
   } catch (error) {
     if (!(error instanceof StorefrontApiError)) throw error;
-    if (error.status === 404) {
+    // only the ERP's own «not published» means there is none; a 404 of anything in front of it is a failed read
+    if (error.status === 404 && error.code === HOME_NOT_PUBLISHED) {
       lastGoodHome = null;
       return null;
     }

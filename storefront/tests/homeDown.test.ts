@@ -18,6 +18,8 @@ const HOME = {
     { kind: 'slider', slides: [{ image: { sha256: SHA('a'), width: 1600, height: 600, alt: 'کاشی', thumb: false }, mobileImage: null, title: 'اسلاید فروشگاه', text: '', buttonLabel: '', href: '', external: false }] },
     { kind: 'homeCategories', title: 'دسته‌های فروشگاه' },
     { kind: 'homeFeatured', title: 'برگزیده‌های فروشگاه', buttonLabel: '', buttonHref: '' },
+    // a second part that could give the page its heading, further down (the ERP keeps one slider; the site draws what it is sent)
+    { kind: 'slider', slides: [{ image: { sha256: SHA('b'), width: 1600, height: 600, alt: 'پایین', thumb: false }, mobileImage: null, title: 'اسلاید پایین صفحه', text: '', buttonLabel: '', href: '', external: false }] },
   ],
 };
 
@@ -54,6 +56,8 @@ const afterAMinute = async (mode: string, clock: { now: number }) => {
   vi.setSystemTime(clock.now);
 };
 const OWN = 'این بار برای پوشیدن';
+/** how many times the site has asked the mock for the home page */
+const reads = async () => (await (await fetch(`http://127.0.0.1:${PORT}/__mock/home`)).json() as { reads: number }).reads;
 /** the row of «برگزیده‌ها» as drawn */
 const featuredRow = (html: string) => {
   const from = html.indexOf('data-home-part="homeFeatured"');
@@ -73,19 +77,26 @@ describe('the home page while the ERP has none, fails, or a campaign asks for it
     // the campaign's banner stands where the slider was: the slider is not drawn, nor sent to the browser
     expect(first.html).toContain('id="campaign-banner"');
     expect(first.html).not.toContain('اسلاید فروشگاه');
-    expect(first.html).not.toContain('data-home-part="slider"');
+    expect(first.html.match(/data-home-part="slider"/g)?.length).toBe(1);
+    // the campaign's banner writes the page's one heading; a part further down that could have does not write a second
     expect(first.html.match(/<h1/g)?.length).toBe(1);
+    expect(first.html).toMatch(/<p[^>]*>اسلاید پایین صفحه<\/p>/);
     expect(first.html).not.toContain(OWN);
     // this page has no opening words with a product beside them, so its row of products starts from the shop's first
     expect(featuredRow(first.html)).toContain(FIRST_PRODUCT);
 
-    // an error, a 200 that is no home page and one with nothing to draw are failed reads: the copy read last stays
-    for (const mode of ['fail', 'empty', 'nothing']) {
+    // an error, a 404 that is not the ERP's own (a web server in front of it), a 200 that is no home page and one with
+    // nothing to draw are failed reads: the copy read last stays
+    for (const mode of ['fail', 'gone', 'empty', 'nothing']) {
       await afterAMinute(mode, clock);
       const during = await home();
       expect(during.status, mode).toBe(200);
       expect(during.html, mode).toContain('دسته‌های فروشگاه');
       expect(during.html, mode).not.toContain('خرید بر اساس دسته');
+      // after a failed read the ERP is not asked again at once: the next visitor gets the kept copy without a read
+      const asked = await reads();
+      expect((await home()).html, mode).toContain('دسته‌های فروشگاه');
+      expect(await reads(), mode).toBe(asked);
     }
 
     // the ERP says there is none (taken off the site, or nothing of it shows today): the site's own home page is back
