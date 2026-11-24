@@ -13,6 +13,8 @@ import type { StorefrontPageSummary } from '@erp/storefront/storefrontPagePublic
 import { isPageSlug, sitePage, sitePageList, type SitePage } from './pages';
 import { siteNewsIndex, siteNewsItem, siteNewsList, type SiteNewsIndexRow, type SiteNewsItem, type SiteNewsList } from './news';
 import { siteCollectionTexts, type SiteCollectionText } from './collections';
+import { siteHome, siteHomeSections, type SiteHome, type SiteHomeSection } from './home';
+import { HOME_PAGE_TITLE } from '@erp/storefront/storefrontHomeParts';
 import { PAGE_PREVIEW_TOKEN } from '@erp/storefront/storefrontPageParts';
 
 /**
@@ -39,7 +41,7 @@ const CACHE_MAX = 500;
  * crawler walking random addresses (each a remembered 404 there) never pushes out the feed or the settings (the security
  * review of 8.5b)
  */
-const PINNED_PATHS = new Set(['/facets', '/settings', '/brand', '/seo', '/redirects', '/feed', '/campaigns', '/menus', '/shop-info', '/pages', '/news', '/news-index', '/collections']);
+const PINNED_PATHS = new Set(['/facets', '/settings', '/brand', '/seo', '/redirects', '/feed', '/campaigns', '/menus', '/shop-info', '/pages', '/news', '/news-index', '/collections', '/home']);
 const pinned = new Map<string, Entry>();
 const kept = (path: string) => (PINNED_PATHS.has(path) ? pinned : cache).get(path);
 /** Many visitors asking for the same address at once make one call */
@@ -326,6 +328,36 @@ export async function collectionText(name: string): Promise<SiteCollectionText |
   }
 }
 
+/** The home page read last, to show while the ERP cannot be read, and when such a read last failed */
+let lastGoodHome: SiteHome | null = null;
+let homeFailedAt = -Infinity;
+
+/**
+ * v12 phase 10e: «صفحهٔ اصلی» as the shop wrote and published it in the ERP; null while there is none (the ERP answers
+ * 404: not published, nothing of it shows today, or an ERP not yet updated), and the site then draws its own home page.
+ * The home page must never be down: when the ERP cannot be read, or answers in another shape, the copy read last is
+ * shown (an error must not put the site's own home page back in place of a published one), and only a site that has
+ * never read it draws its own. After a failed read the ERP is not asked again for half a minute.
+ */
+export async function home(): Promise<SiteHome | null> {
+  if (Date.now() - homeFailedAt < FALLBACK_RETRY_MS) return lastGoodHome;
+  try {
+    const answer = await get<unknown>('/home', PAGE_TTL_MS);
+    const found = siteHome(typeof answer === 'object' && answer !== null ? (answer as { data?: unknown }).data : null);
+    if (!found) throw new StorefrontApiError(502, '/home');
+    lastGoodHome = found;
+    return found;
+  } catch (error) {
+    if (!(error instanceof StorefrontApiError)) throw error;
+    if (error.status === 404) {
+      lastGoodHome = null;
+      return null;
+    }
+    homeFailedAt = Date.now();
+    return lastGoodHome;
+  }
+}
+
 /** The last copy read of each base page and each fixed page's words (fifteen at most), to show while the ERP cannot be read */
 const lastGoodBasePage = new Map<string, SitePage>();
 /**
@@ -390,12 +422,15 @@ async function previewFetch(path: string, token: string, accept: string): Promis
   return res;
 }
 
+/** v12 phase 10e: what a preview of the home page's draft has for a page: a title for the browser's tab, and no parts of its own */
+const HOME_PREVIEW_PAGE: SitePage = { slug: 'home', kind: 'custom', title: HOME_PAGE_TITLE, noindex: true, updatedAt: '', seoTitle: '', seoDescription: '', shareImage: null, sections: [] };
+
 /**
  * v12 phase 10c: «پیش‌نمایش»: the saved draft of a page of the ERP, for the one-hour link a colleague made there; null
  * when the key opens nothing (unknown, ended, or the page removed). Read from the ERP each time, so a draft saved a
  * moment ago shows at once and an ended link stops at once.
  */
-export async function pagePreview(token: string): Promise<{ page: SitePage; expiresAt: string } | null> {
+export async function pagePreview(token: string): Promise<{ page: SitePage; home: SiteHomeSection[] | null; expiresAt: string } | null> {
   if (!isPreviewToken(token)) return null;
   const res = await previewFetch('/page-preview', token, 'application/json');
   if (!res) return null;
@@ -406,11 +441,16 @@ export async function pagePreview(token: string): Promise<{ page: SitePage; expi
     throw new StorefrontApiError(502, '/page-preview');
   }
   const data = typeof answer === 'object' && answer !== null ? (answer as { data?: unknown }).data : null;
-  const page = sitePage(data);
+  // v12 phase 10e: the draft of «صفحهٔ اصلی» comes as the home page it would be; its parts go through the home page's own checks
+  const draftHome = typeof data === 'object' && data !== null ? (data as { home?: { sections?: unknown } | null }).home : null;
+  const home = typeof draftHome === 'object' && draftHome !== null ? siteHomeSections(draftHome.sections) : null;
+  // the home page's row has a name of the ERP's own (no page of the site answers at it), so its summary is not checked
+  // as a page's: the preview needs only a title for the browser's tab
+  const page = home ? HOME_PREVIEW_PAGE : sitePage(data);
   if (!page) throw new StorefrontApiError(502, '/page-preview');
   const expiresAt = (data as { expiresAt?: unknown }).expiresAt;
   // whatever the answer says, a preview is never for a search engine
-  return { page: { ...page, noindex: true }, expiresAt: typeof expiresAt === 'string' ? expiresAt : '' };
+  return { page: { ...page, noindex: true }, home, expiresAt: typeof expiresAt === 'string' ? expiresAt : '' };
 }
 
 /** An image the previewed draft names, under the same key; never kept in this server's memory (it is not on the site) */

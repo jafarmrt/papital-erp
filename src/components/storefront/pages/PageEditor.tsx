@@ -322,7 +322,7 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
             </details>
           </div>
           {/* v12 phase 10c: a one-hour link on the site to the saved draft, to see it as a visitor would before «انتشار» */}
-          {!fixed && !home && <PagePreviewLink pageId={detail.id} blocked={dirty ? 'پیش‌نمایش پیش‌نویس ذخیره‌شده را نشان می‌دهد؛ نخست ذخیره کنید.' : outdated ? 'نسخهٔ تازهٔ این صفحه هنوز خوانده نشده است.' : ''} />}
+          {!fixed && <PagePreviewLink pageId={detail.id} blocked={dirty ? 'پیش‌نمایش پیش‌نویس ذخیره‌شده را نشان می‌دهد؛ نخست ذخیره کنید.' : outdated ? 'نسخهٔ تازهٔ این صفحه هنوز خوانده نشده است.' : ''} />}
           {dirty && <p className="text-xs text-slate-500">تغییرهای این صفحه هنوز ذخیره نشده‌اند؛ «انتشار»، «برگرداندن» و «برداشتن از روی سایت» پس از ذخیرهٔ پیش‌نویس روشن می‌شوند.</p>}
           {!dirty && base.status !== 'published' && notReady && (
             <p className="text-xs text-amber-800">{`برای انتشار: ${notReady.section >= 0 ? `بخش ${formatPersianNumber(notReady.section + 1)}، ` : ''}${notReady.message.replace(/^بخش [۰-۹]+: /, '')}`}</p>

@@ -6,6 +6,9 @@ import { brandOf } from '../lib/meta';
 import { PageMediaProvider, previewMediaPath } from '../lib/pageMedia';
 import { shippingViewFor } from '../lib/pageView.server';
 import { SitePageView } from '../components/SitePageView';
+import { HomeSections } from '../components/home/HomeSections';
+import { homeCatalog } from '../lib/homeData.server';
+import { useRootData } from '../root';
 
 /**
  * v12 phase 10c («پیش‌نمایش»): a page's saved draft as a visitor would see it, for the one-hour link a colleague made
@@ -20,7 +23,9 @@ export async function loader({ params }: Route.LoaderArgs) {
   const ends = new Date(found.expiresAt);
   // the hour the link ends, on a Tehran clock, as the colleague reads it
   const endsAt = Number.isNaN(ends.getTime()) ? '' : new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Tehran', hour: '2-digit', minute: '2-digit', hour12: false }).format(ends);
-  return { page: found.page, endsAt, token: params.token, shipping: await shippingViewFor(found.page.sections), siteUrl: siteEnv().siteUrl };
+  // v12 phase 10e: a draft of «صفحهٔ اصلی» is drawn as the home page, with what its parts read from the catalog
+  const home = found.home ? { sections: found.home, ...await homeCatalog(found.home) } : null;
+  return { page: found.page, home, endsAt, token: params.token, shipping: await shippingViewFor(found.page.sections), siteUrl: siteEnv().siteUrl };
 }
 
 /**
@@ -55,14 +60,19 @@ export function meta({ data, matches }: Route.MetaArgs) {
 }
 
 export default function PagePreview({ loaderData }: Route.ComponentProps) {
-  const { page, endsAt, token, shipping, siteUrl } = loaderData;
+  const { page, home, endsAt, token, shipping, siteUrl } = loaderData;
+  const root = useRootData();
   return (
     <>
       <p role="status" data-preview-note className="bg-primary px-4 py-3 text-center text-sm font-bold text-primary-foreground">
         {`پیش‌نمایش پیش‌نویس است و هنوز روی سایت نیست.${endsAt ? ` این نشانی تا ساعت ${faDigits(endsAt)} کار می‌کند.` : ''}`}
       </p>
       <PageMediaProvider value={previewMediaPath(token)}>
-        <SitePageView page={page} shipping={shipping} siteUrl={siteUrl} preview />
+        {home ? (
+          home.sections.length > 0
+            ? <HomeSections sections={home.sections} shopName={page.title} data={{ lead: home.lead, featured: home.featured, newest: home.newest, categories: home.categories, collections: home.collections, freeShippingThreshold: root?.freeShippingThreshold ?? '', whatsapp: root?.whatsapp ?? '' }} />
+            : <p className="mx-auto max-w-3xl px-4 py-16 text-center text-muted-foreground">این پیش‌نویس صفحهٔ اصلی امروز چیزی برای نشان دادن ندارد (بخش‌هایش خاموش‌اند یا روز اسلایدهایش نرسیده است).</p>
+        ) : <SitePageView page={page} shipping={shipping} siteUrl={siteUrl} preview />}
       </PageMediaProvider>
     </>
   );

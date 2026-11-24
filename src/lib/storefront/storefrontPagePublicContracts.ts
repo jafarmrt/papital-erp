@@ -1,5 +1,6 @@
 import type { StorefrontProductCard } from './storefrontContracts.js';
 import type { IconCard, PageKind, RichDoc, SectionBackground } from './storefrontPageParts.js';
+import type { StorefrontPublicHome } from './storefrontHomePublicContracts.js';
 
 /**
  * v12 phase 10c (start plan V12_SITE_NEXT_START_PLAN.md §7.2): what `GET /api/storefront/v1/pages[/:slug]` answers, the
@@ -51,6 +52,8 @@ export interface StorefrontPageSummary {
 export interface StorefrontPagePreview extends StorefrontPublicPage {
   /** ISO time in UTC */
   expiresAt: string;
+  /** v12 phase 10e: set when the previewed page is «صفحهٔ اصلی»: its draft as the home page it would be */
+  home?: StorefrontPublicHome;
 }
 
 export interface StorefrontPublicPage extends StorefrontPageSummary {
