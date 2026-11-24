@@ -150,5 +150,16 @@ export function homeNeeds(sections: readonly SiteHomeSection[]): HomeNeeds {
   return { featured: has('homeFeatured') || has('homeIntro'), newest: has('homeNewest'), categories: has('homeCategories'), collections: has('homeCollections') };
 }
 
+/** how far a finger must move along the slider's row before the move counts as the visitor's own */
+export const SWIPE_MIN_PX = 10;
+/**
+ * Whether one finger's move over the slider is a swipe along its row (the visitor moves the slider) and not a scroll
+ * of the page past it or a finger resting on it: further than a few pixels, and more sideways than up or down.
+ */
+export function isRowSwipe(from: { x: number; y: number }, at: { x: number; y: number }): boolean {
+  const [dx, dy] = [Math.abs(at.x - from.x), Math.abs(at.y - from.y)];
+  return dx > SWIPE_MIN_PX && dx > dy;
+}
+
 /** The part that holds the top of the page: a «صفحهٔ ویژه» that asks for the home page takes its place while it is on the site */
 export const isTopPart = (part: SiteHomeSection): boolean => part.kind === 'slider' || part.kind === 'homeIntro';

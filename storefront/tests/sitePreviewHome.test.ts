@@ -87,7 +87,7 @@ describe('the preview of the home page\'s draft', () => {
   it('reads the draft\'s own images under the key, and the collection\'s image from the site, where it already is', async () => {
     const html = await (await ask(`/preview/${TOKEN}`)).text();
     expect(html).toContain(`src="/preview/${TOKEN}/media/${A}.webp"`);
-    expect(html).toContain(`<source media="(max-width: 639px)" srcSet="/preview/${TOKEN}/media/${B}.webp"`);
+    expect(html).toContain(`<source media="(max-width: 639px) and (orientation: portrait)" srcSet="/preview/${TOKEN}/media/${B}.webp"`);
     expect(html).toContain(`src="/preview/${TOKEN}/media/${C}.webp"`);
     for (const file of [A, B, C]) expect(html, file).not.toContain(`"/media/${file}.webp"`);
     expect(html).toContain(`src="/media/${'d'.repeat(64)}.webp"`);

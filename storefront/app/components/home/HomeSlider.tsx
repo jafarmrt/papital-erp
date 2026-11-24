@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { ArrowLeft, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
-import type { SiteSlide } from '../../lib/home';
+import { isRowSwipe, type SiteSlide } from '../../lib/home';
 import type { SitePageImage } from '../../lib/pages';
 import { usePageMediaPath } from '../../lib/pageMedia';
 import { faNumber } from '../../lib/format';
@@ -12,13 +12,14 @@ export const SLIDE_SECONDS = 6;
 /**
  * v12 phase 10e: the home page's «اسلایدر» and «بنر». The slider is a row the browser itself scrolls and snaps, so it
  * works by a swipe before any script has loaded and needs no library; the arrows, the dots and its own movement only
- * ask the browser to scroll. Every slide has the same box (upright on a phone held upright, wide otherwise), whatever the shape
- * of its image, so nothing jumps; the image fills the box, and a phone gets the other crop when the shop chose one.
- * The words stand over the foot of the image and are part of the box's height: words too long for the box make the
- * row taller (every slide with it) and are never cut off. The first slide's image is loaded early (it is the largest thing on
+ * ask the browser to scroll. Every slide has the same box (4:5 on a phone held upright, 8:3 otherwise, and never
+ * more than 78% of the window's height), whatever the shape of its image, so nothing jumps; the image fills the box,
+ * and a phone held upright gets the other crop when the shop chose one. The words stand over the foot of the image
+ * and are part of the box's height: a long title or text is shortened to two or three lines, and words still too
+ * tall for the box make the row taller (every slide with it), so the box never cuts them. The first slide's image is loaded early (it is the largest thing on
  * the page).
  *
- * It moves on by itself every six seconds, and stops while the pointer is over it or the focus is inside it, for good
+ * It moves on by itself every six seconds, and stops while the pointer is over it or a keyboard's focus is inside it, for good
  * once the visitor moves it by hand (an arrow, a dot, a swipe, the arrow keys) or presses «ایستادن», and never starts
  * for a visitor who asked for less motion.
  * Without the script the first slide is there and the row still scrolls; the controls are drawn only once they work.
@@ -28,7 +29,8 @@ function WideImage({ image, mobile, eager, fill }: { image: SitePageImage; mobil
   const [width, height] = [image.width ?? 1600, image.height ?? 600];
   return (
     <picture className={fill ? 'absolute inset-0 block overflow-hidden' : undefined}>
-      {mobile ? <source media="(max-width: 639px)" srcSet={media(mobile.sha256)} width={mobile.width ?? 800} height={mobile.height ?? 1000} /> : null}
+      {/* a slide's box is upright only on a phone held upright, so only there is the upright crop the right one */}
+      {mobile ? <source media={fill ? '(max-width: 639px) and (orientation: portrait)' : '(max-width: 639px)'} srcSet={media(mobile.sha256)} width={mobile.width ?? 800} height={mobile.height ?? 1000} /> : null}
       <img
         src={media(image.sha256)} alt={image.alt} width={width} height={height} loading={eager ? 'eager' : 'lazy'} fetchPriority={eager ? 'high' : undefined} decoding="async"
         className={fill ? 'block h-full w-full bg-muted object-cover' : 'block h-auto max-h-[78vh] w-full bg-muted object-cover'}
@@ -56,10 +58,10 @@ export function HomeSlider({ slides, heading }: { slides: readonly SiteSlide[]; 
   // a visitor who asked for less motion: nothing moves by itself and nothing glides
   const [calm, setCalm] = useState(true);
   const [playing, setPlaying] = useState(false);
-  // two holds, each lifted by its own end: the pointer over the slider, and the focus inside it
+  // two holds, each lifted by its own end: the pointer over the slider, and a keyboard's focus inside it
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
-  const touching = useRef(false);
+  const touchFrom = useRef<{ x: number; y: number } | null>(null);
   useEffect(() => {
     if (!many) return;
     setReady(true);
@@ -107,7 +109,9 @@ export function HomeSlider({ slides, heading }: { slides: readonly SiteSlide[]; 
     <section
       aria-roledescription="carousel" aria-label="اسلایدهای صفحهٔ اصلی" className="relative border-b border-border bg-muted" data-home-part="slider"
       onPointerEnter={event => { if (event.pointerType === 'mouse') setHovered(true); }} onPointerLeave={() => setHovered(false)}
-      onFocus={() => setFocused(true)} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}
+      // the focus a keyboard brings: a tap or a click on a slide (which focuses the row) holds nothing, and lifts the
+      // hold of a keyboard focus that was inside (this fires on every move of the focus within the slider)
+      onFocus={event => setFocused((event.target as HTMLElement).matches(':focus-visible'))} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}
     >
       {/* first among the slider's controls, so a keyboard reaches it before the slides; pressing «پخش» starts it though the focus is on the button */}
       {many && ready && !calm ? (
@@ -121,8 +125,14 @@ export function HomeSlider({ slides, heading }: { slides: readonly SiteSlide[]; 
       <div
         ref={track} role="group" aria-label="اسلایدها" className="scrollbar-none flex snap-x snap-mandatory overflow-x-auto" tabIndex={many ? 0 : undefined}
         // moved by the visitor (a swipe along the row, the arrow keys on it): from here on it is theirs
-        onTouchStart={() => { touching.current = true; }} onTouchEnd={() => { touching.current = false; }} onTouchCancel={() => { touching.current = false; }}
-        onScroll={() => { if (touching.current) setPlaying(false); }}
+        // one finger alone (a pinch is not a swipe), followed from where it came down
+        onTouchStart={(event) => { const at = event.touches.length === 1 ? event.touches[0] : null; touchFrom.current = at ? { x: at.clientX, y: at.clientY } : null; }}
+        onTouchMove={(event) => {
+          const [at, from] = [event.touches[0], touchFrom.current];
+          if (event.touches.length !== 1 || !at || !from) return;
+          // a finger moving along the row, not one scrolling the page past it or resting on it
+          if (isRowSwipe(from, { x: at.clientX, y: at.clientY })) setPlaying(false);
+        }}
         onKeyDown={(event) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') setPlaying(false); }}
       >
         {slides.map((slide, index) => {
@@ -131,7 +141,7 @@ export function HomeSlider({ slides, heading }: { slides: readonly SiteSlide[]; 
             // one box for every slide; words too long for it make the box (and with it the whole row) taller, never cut
             <div
               key={index} data-slide={index} role="group" aria-roledescription="slide" aria-label={many ? `${faNumber(index + 1)} از ${faNumber(slides.length)}` : undefined}
-              className="relative flex aspect-[4/5] w-full shrink-0 snap-start items-end sm:aspect-[8/3] landscape:aspect-[8/3]"
+              className="relative flex min-h-[min(125vw,78vh)] w-full shrink-0 snap-start items-end sm:min-h-[min(37.5vw,78vh)] landscape:min-h-[min(37.5vw,78vh)]"
             >
               <WideImage image={slide.image} mobile={slide.mobileImage} eager={index === 0} fill />
               {slide.title || slide.text || slide.buttonLabel ? (
@@ -140,8 +150,8 @@ export function HomeSlider({ slides, heading }: { slides: readonly SiteSlide[]; 
                     {slide.title ? <Title className="line-clamp-3 max-w-2xl text-2xl font-extrabold leading-tight text-balance break-words sm:line-clamp-2 sm:text-4xl lg:text-5xl">{slide.title}</Title> : null}
                     {slide.text ? <p className="mt-2 line-clamp-3 max-w-xl leading-8 break-words sm:line-clamp-2 lg:mt-3 lg:text-lg">{slide.text}</p> : null}
                     {slide.buttonLabel ? (
-                      <SlideLink slide={slide} className="mt-4 inline-flex min-h-12 items-center gap-2 rounded-control bg-white px-6 text-lg font-bold text-neutral-900 hover:bg-white/90">
-                        {slide.buttonLabel}<ArrowLeft className="size-5" aria-hidden />
+                      <SlideLink slide={slide} className="mt-4 inline-flex min-h-12 max-w-full items-center gap-2 rounded-control bg-white px-6 py-2 text-lg font-bold text-neutral-900 hover:bg-white/90">
+                        <span className="min-w-0 [overflow-wrap:anywhere]">{slide.buttonLabel}</span><ArrowLeft className="size-5 shrink-0" aria-hidden />
                       </SlideLink>
                     ) : null}
                   </div>
@@ -156,7 +166,7 @@ export function HomeSlider({ slides, heading }: { slides: readonly SiteSlide[]; 
           <button type="button" className={`${arrow} right-3`} aria-label="اسلاید قبلی" onClick={() => byHand(aim.current - 1)}><ChevronRight className="size-6" aria-hidden /></button>
           <button type="button" className={`${arrow} left-3`} aria-label="اسلاید بعدی" onClick={() => byHand(aim.current + 1)}><ChevronLeft className="size-6" aria-hidden /></button>
           {/* a shade of their own, for a slide without words */}
-          <div className="absolute inset-x-0 bottom-0 z-10 flex justify-center bg-gradient-to-t from-black/40 to-transparent">
+          <div className="absolute inset-x-0 bottom-0 z-10 flex justify-center bg-gradient-to-t from-black/60 to-transparent">
             {slides.map((_, index) => (
               <button key={index} type="button" aria-label={`اسلاید ${faNumber(index + 1)}`} aria-current={index === current ? 'true' : undefined} onClick={() => byHand(index)} className={round}>
                 <span className={`block size-2.5 rounded-full ${index === current ? 'bg-white' : 'bg-white/50'}`} />
