@@ -1,11 +1,11 @@
-import { and, asc, eq, inArray, isNotNull, ne } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, ne, notInArray } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { mediaAssets, storefrontContentAssets, storefrontPages, type PublishedPage } from '../../db/schema.js';
 import { NotFoundError } from '../../errors/customErrors.js';
 import { mediaFilePath } from '../../lib/media/mediaPaths.js';
 import { serverTimestampToUtcIso } from '../../lib/serverTimestamp.js';
 import {
-  PAGES_MAX, PRODUCT_ROW_MAX, isPageKind, pageAssetIds, pageLink, safeRichDoc, type PageSection, type RichDoc, type RichNode,
+  PAGES_MAX, PRODUCT_ROW_MAX, pageAssetIds, pageLink, safeRichDoc, type PageSection, type RichDoc, type RichNode,
 } from '../../lib/storefront/storefrontPageRules.js';
 import type {
   StorefrontPageImage, StorefrontPageSection, StorefrontPageSummary, StorefrontPublicPage,
@@ -31,7 +31,7 @@ export function isoOf(stored: string): string {
 }
 
 const summaryOf = (row: PageRecord): StorefrontPageSummary => ({
-  slug: row.slug, kind: isPageKind(row.kind) ? row.kind : 'custom', title: row.published?.title ?? row.title,
+  slug: row.slug, kind: row.kind === 'base' || row.kind === 'fixed' ? row.kind : 'custom', title: row.published?.title ?? row.title,
   // a real ISO time with its zone (the column is read as UTC text without one): the site works out a day from it
   // a fixed row is words, not a page to visit by this name: it is always sent as not for a search engine, so a site
   // not yet updated (which knows no such kind and would draw it at `/pages/<name>`) at least does not have it listed
@@ -42,7 +42,8 @@ const summaryOf = (row: PageRecord): StorefrontPageSummary => ({
 export async function publicPages(): Promise<StorefrontPageSummary[]> {
   // the fixed pages are not in this list: they are not pages to visit by this name (the site's own code has them at
   // their addresses); the site asks for each one's words by its name
-  const rows = await orm.select().from(storefrontPages).where(and(onSite(), ne(storefrontPages.kind, 'fixed'))).orderBy(asc(storefrontPages.slug)).limit(PAGES_MAX);
+  // nor is the home page (v12 phase 10e): it is at «/», and the site reads it by `GET /home`
+  const rows = await orm.select().from(storefrontPages).where(and(onSite(), notInArray(storefrontPages.kind, ['fixed', 'home']))).orderBy(asc(storefrontPages.slug)).limit(PAGES_MAX);
   return rows.map(summaryOf);
 }
 
@@ -80,7 +81,8 @@ function publicDoc(doc: RichDoc, images: Images): RichDoc {
 /** A link as it goes out: checked again like a text, so a row changed by hand cannot send another kind of address */
 const linkOf = (value: unknown): string => pageLink(value) ?? '';
 
-async function publicSection(section: PageSection, images: Images): Promise<StorefrontPageSection> {
+/** A part every page takes, as the site gets it; null for a part of the home page alone (`storefrontHomePublic.ts` builds those) */
+export async function publicSection(section: PageSection, images: Images): Promise<StorefrontPageSection | null> {
   const { background } = section;
   switch (section.kind) {
     case 'hero':
@@ -119,6 +121,8 @@ async function publicSection(section: PageSection, images: Images): Promise<Stor
       return { kind: 'button', background, label: section.label, href: linkOf(section.href) };
     case 'shippingMethods':
       return { kind: 'shippingMethods', background, title: section.title };
+    default:
+      return null;
   }
 }
 
@@ -131,13 +135,17 @@ export async function pageForSite(copy: PublishedPage, summary: StorefrontPageSu
   const images = await imagesOf(pageAssetIds({ shareImageAssetId: copy.shareImageAssetId, sections }));
   const out: StorefrontPageSection[] = [];
   // one after another: a row of products reads the catalog, which is kept a few seconds
-  for (const section of sections) out.push(await publicSection(section, images));
+  for (const section of sections) {
+    const built = await publicSection(section, images);
+    if (built) out.push(built);
+  }
   return { ...summary, seoTitle: copy.seoTitle, seoDescription: copy.seoDescription, shareImage: imageOf(images, copy.shareImageAssetId, copy.title), sections: out };
 }
 
 /** `GET /api/storefront/v1/pages/:slug`: the copy on the site of one page, or the same 404 for any other address */
 export async function publicPage(slug: string): Promise<StorefrontPublicPage> {
-  const [row] = await orm.select().from(storefrontPages).where(and(onSite(), eq(storefrontPages.slug, slug))).limit(1);
+  // the home page has no address among the pages (v12 phase 10e)
+  const [row] = await orm.select().from(storefrontPages).where(and(onSite(), eq(storefrontPages.slug, slug), ne(storefrontPages.kind, 'home'))).limit(1);
   if (!row?.published) throw notFound();
   return pageForSite(row.published, summaryOf(row));
 }

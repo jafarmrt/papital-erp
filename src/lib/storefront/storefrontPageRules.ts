@@ -8,6 +8,8 @@ import {
  type SectionKind,
 } from './storefrontPageParts.js';
 import { docAssetIds, docIsEmpty, richDoc } from './storefrontPageRichText.js';
+import { HOME_PAGE_SLUG, HOME_SECTION_KIND_TITLES, isHomeSectionKind, type HomeSection } from './storefrontHomeParts.js';
+import { homeKindTwice, homeSectionAssetIds, homeSectionOf, homeUnfinished } from './storefrontHomeRules.js';
 
 /**
  * v12 phase 10b: the sections of a page and the page itself, as they are checked before every write. The constants, the
@@ -17,10 +19,21 @@ import { docAssetIds, docIsEmpty, richDoc } from './storefrontPageRichText.js';
 export * from './storefrontPageParts.js';
 export { safeRichDoc } from './storefrontPageRichText.js';
 export * from './storefrontPageTemplates.js';
+export * from './storefrontHomeParts.js';
+export { auditHomeSection, homeSectionLinks } from './storefrontHomeRules.js';
+export type { SiteLink } from './storefrontSiteLinks.js';
 
-const BASE_KEYS = ['kind', 'background'] as const;
+const BASE_KEYS = ['kind', 'background', 'hidden'] as const;
+const isHomeSection = (section: PageSection): section is HomeSection => isHomeSectionKind(section.kind);
 
 function sectionOf(raw: unknown): PageSection {
+  const kept = shownSectionOf(raw);
+  // a part switched off keeps the mark and nothing else of it changes
+  if (isRecord(raw) && raw.hidden !== undefined && typeof raw.hidden !== 'boolean') return refuse('«روی سایت نشان داده شود» روشن یا خاموش است.', 'STOREFRONT_PAGE_FIELD_INVALID');
+  return isRecord(raw) && raw.hidden === true ? { ...kept, hidden: true } : kept;
+}
+
+function shownSectionOf(raw: unknown): PageSection {
   if (!isRecord(raw)) return refuse('یکی از بخش‌های صفحه خوانا نیست.', 'STOREFRONT_PAGE_SECTION_INVALID');
   const kind = oneOf(raw.kind, SECTION_KINDS, 'نوع بخش');
   const background = oneOf(raw.background ?? 'white', SECTION_BACKGROUNDS, 'زمینهٔ بخش');
@@ -107,7 +120,7 @@ function sectionOf(raw: unknown): PageSection {
       keys('title');
       return { kind, background, title: text(raw.title ?? '', SECTION_TITLE_MAX, 'عنوان بخش') };
     default:
-      return refuse('نوع بخش شناخته نیست.', 'STOREFRONT_PAGE_SECTION_INVALID');
+      return isHomeSectionKind(kind) ? homeSectionOf(raw, kind, background, keys) : refuse('نوع بخش شناخته نیست.', 'STOREFRONT_PAGE_SECTION_INVALID');
   }
 }
 
@@ -143,7 +156,7 @@ function unfinished(section: PageSection): string | null {
     case 'button':
       return !section.label || !section.href ? 'دکمه هم نوشته می‌خواهد و هم پیوند.' : null;
     default:
-      return null;
+      return isHomeSection(section) ? homeUnfinished(section) : null;
   }
 }
 
@@ -154,7 +167,7 @@ export function sectionAssetIds(section: PageSection): number[] {
     case 'textImage': return [...(section.imageAssetId === null ? [] : [section.imageAssetId]), ...docAssetIds(section.doc)];
     case 'gallery': return section.images.map(image => image.assetId);
     case 'people': return section.people.flatMap(person => (person.imageAssetId === null ? [] : [person.imageAssetId]));
-    default: return [];
+    default: return isHomeSection(section) ? homeSectionAssetIds(section) : [];
   }
 }
 
@@ -181,10 +194,12 @@ export type CheckedPage = { page: PageValues; problem: null } | { page: null; pr
  * alone. `forPublish` also refuses a page that is safe but unfinished. `baseSlug`: the page is one of the five (its slug
  * is fixed, and only «ارسال و پرداخت» takes the shipping section). `fixedSlug` (10c): the row holds the words of a page
  * whose work is in the site's code: its slug is fixed too, it takes at most one section, a text, and neither «در موتور
- * جست‌وجو نیاید» nor a share image (the site's own code decides both for such a page).
+ * جست‌وجو نیاید» nor a share image (the site's own code decides both for such a page). `home` (10e): the row is «صفحهٔ
+ * اصلی»: its name is fixed, it is always in the search engines, and it alone takes the parts of the home page and a part
+ * switched off (which is not asked to be finished).
  */
 export function checkedPage(raw: unknown, options: {
-  forPublish: boolean; baseSlug: BasePageSlug | null; fixedSlug?: string | null;
+  forPublish: boolean; baseSlug: BasePageSlug | null; fixedSlug?: string | null; home?: boolean;
   /** v12 phase 10d: another content made of «بخش» checked by the same rules (a news item): what it is called and the kinds it takes */
   noun?: string; kinds?: readonly SectionKind[];
 }): CheckedPage {
@@ -195,15 +210,17 @@ export function checkedPage(raw: unknown, options: {
     const title = (() => { try { return text(raw.title ?? '', PAGE_TITLE_MAX, `عنوان ${noun}`); } catch (e) { return refuse((e as Error).message, 'STOREFRONT_PAGE_TITLE_INVALID', 'title'); } })();
     if (!title) return refuse(`${noun} عنوان می‌خواهد.`, 'STOREFRONT_PAGE_TITLE_INVALID', 'title');
     const slug = typeof raw.slug === 'string' ? raw.slug.trim() : '';
+    const home = options.home === true;
+    if (home && slug !== HOME_PAGE_SLUG) return refuse('نشانی صفحهٔ اصلی عوض نمی‌شود.', 'STOREFRONT_PAGE_SLUG_INVALID', 'slug');
     const fixedSlug = options.fixedSlug ?? null;
     if (fixedSlug !== null && slug !== fixedSlug) return refuse('نشانی این صفحهٔ ثابت عوض نمی‌شود.', 'STOREFRONT_PAGE_SLUG_INVALID', 'slug');
-    if (fixedSlug !== null ? false : options.baseSlug !== null ? slug !== options.baseSlug : (!slug || slug.length > PAGE_SLUG_MAX || !STOREFRONT_SLUG_PATTERN.test(slug))) {
+    if (fixedSlug !== null || home ? false : options.baseSlug !== null ? slug !== options.baseSlug : (!slug || slug.length > PAGE_SLUG_MAX || !STOREFRONT_SLUG_PATTERN.test(slug))) {
       return refuse(
         options.baseSlug !== null ? 'نشانی این صفحهٔ پایه عوض نمی‌شود.' : `نشانی لاتین ${noun} حداکثر ${fa(PAGE_SLUG_MAX)} نویسه است و فقط حرف کوچک انگلیسی، رقم و خط تیره میان کلمه‌ها دارد، مانند our-story.`,
         'STOREFRONT_PAGE_SLUG_INVALID', 'slug',
       );
     }
-    if (options.baseSlug === null && fixedSlug === null && isReservedPageSlug(slug)) return refuse(RESERVED_PAGE_SLUG_MESSAGE, 'STOREFRONT_PAGE_SLUG_INVALID', 'slug');
+    if (options.baseSlug === null && fixedSlug === null && !home && isReservedPageSlug(slug)) return refuse(RESERVED_PAGE_SLUG_MESSAGE, 'STOREFRONT_PAGE_SLUG_INVALID', 'slug');
     const field = (name: 'seoTitle' | 'seoDescription', max: number, label: string) => {
       try { return text(raw[name] ?? '', max, label); } catch (e) { return refuse((e as Error).message, 'STOREFRONT_PAGE_FIELD_INVALID', name); }
     };
@@ -212,6 +229,7 @@ export function checkedPage(raw: unknown, options: {
     if (raw.noindex !== undefined && typeof raw.noindex !== 'boolean') return refuse('«در موتور جست‌وجو نیاید» روشن یا خاموش است.', 'STOREFRONT_PAGE_FIELD_INVALID', 'noindex');
     const shareImageAssetId = (() => { try { return assetId(raw.shareImageAssetId, 'تصویر اشتراک‌گذاری'); } catch (e) { return refuse((e as Error).message, 'STOREFRONT_PAGE_IMAGE_INVALID', 'shareImageAssetId'); } })();
     if (fixedSlug !== null && raw.noindex === true) return refuse('دیده شدن صفحهٔ ثابت در موتور جست‌وجو را خود سایت تعیین می‌کند.', 'STOREFRONT_PAGE_FIELD_INVALID', 'noindex');
+    if (home && raw.noindex === true) return refuse('صفحهٔ اصلی همیشه در موتور جست‌وجو می‌آید.', 'STOREFRONT_PAGE_FIELD_INVALID', 'noindex');
     if (fixedSlug !== null && shareImageAssetId !== null) return refuse('صفحهٔ ثابت تصویر اشتراک‌گذاری نمی‌گیرد.', 'STOREFRONT_PAGE_IMAGE_INVALID', 'shareImageAssetId');
     const rawSections = list(raw.sections ?? [], PAGE_SECTIONS_MAX, `بخش‌های ${noun}`);
     if (fixedSlug !== null && rawSections.length > 1) return refuse(FIXED_PAGE_TEXT_ONLY, 'STOREFRONT_PAGE_SECTION_INVALID');
@@ -220,6 +238,8 @@ export function checkedPage(raw: unknown, options: {
       section = index;
       const kept = sectionOf(rawSection);
       if (fixedSlug !== null && kept.kind !== 'text') return refuse(FIXED_PAGE_TEXT_ONLY, 'STOREFRONT_PAGE_SECTION_INVALID');
+      if (!home && isHomeSectionKind(kept.kind)) return refuse(`بخش «${HOME_SECTION_KIND_TITLES[kept.kind]}» فقط در صفحهٔ اصلی می‌آید.`, 'STOREFRONT_PAGE_SECTION_INVALID');
+      if (!home && kept.hidden) return refuse('خاموش کردن بخش فقط در صفحهٔ اصلی است.', 'STOREFRONT_PAGE_SECTION_INVALID');
       if (options.kinds && !options.kinds.includes(kept.kind)) return refuse(`بخش «${SECTION_KIND_TITLES[kept.kind]}» در ${noun} نمی‌آید.`, 'STOREFRONT_PAGE_SECTION_INVALID');
       if (fixedSlug !== null && kept.kind === 'text' && docChars(kept.doc) > FIXED_PAGE_TEXT_MAX) {
         return refuse(`متن بالای صفحهٔ ثابت حداکثر ${fa(FIXED_PAGE_TEXT_MAX)} نویسه است.`, 'STOREFRONT_PAGE_SECTION_INVALID');
@@ -227,7 +247,8 @@ export function checkedPage(raw: unknown, options: {
       if (kept.kind === 'shippingMethods' && options.baseSlug !== SHIPPING_SECTION_PAGE) {
         return refuse('بخش «روش‌ها و هزینهٔ ارسال» فقط در صفحهٔ «ارسال و پرداخت» می‌آید.', 'STOREFRONT_PAGE_SECTION_INVALID');
       }
-      if (options.forPublish) {
+      // a part switched off is not on the site, so it may stay unfinished
+      if (options.forPublish && !kept.hidden) {
         const why = unfinished(kept);
         if (why) return refuse(`بخش ${fa(index + 1)}: ${why}`, 'STOREFRONT_PAGE_UNFINISHED');
       }
@@ -235,6 +256,9 @@ export function checkedPage(raw: unknown, options: {
     }
     section = -1;
     if (sections.filter(s => s.kind === 'shippingMethods').length > 1) return refuse('بخش «روش‌ها و هزینهٔ ارسال» یک بار می‌آید.', 'STOREFRONT_PAGE_SECTION_INVALID');
+    const twice = home ? homeKindTwice(sections) : null;
+    if (twice) return refuse(`بخش «${HOME_SECTION_KIND_TITLES[twice]}» یک بار می‌آید.`, 'STOREFRONT_PAGE_SECTION_INVALID');
+    if (options.forPublish && home && sections.length > 0 && sections.every(s => s.hidden)) return refuse('همهٔ بخش‌های صفحهٔ اصلی خاموش‌اند؛ دست‌کم یکی را روشن کنید.', 'STOREFRONT_PAGE_UNFINISHED');
     // a fixed page may go on the site with its title and search words alone
     if (options.forPublish && sections.length === 0 && fixedSlug === null) return refuse(`${noun} هنوز بخشی ندارد.`, 'STOREFRONT_PAGE_UNFINISHED');
     return { page: { title, slug, seoTitle, seoDescription, noindex: raw.noindex === true, shareImageAssetId, sections }, problem: null };

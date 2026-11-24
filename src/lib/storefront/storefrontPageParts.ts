@@ -1,5 +1,6 @@
 import { isSafeSitePath } from './storefrontSeoRules.js';
 import { httpsLink } from './storefrontShopInfoRules.js';
+import { HOME_SECTION_KINDS, HOME_SECTION_KIND_TITLES, type HomeSection } from './storefrontHomeParts.js';
 
 /**
  * v12 phase 10b (docs/roadmap/V12_SITE_NEXT_START_PLAN.md §7.2, owner's decisions 4, 23 and 24): the rules of «صفحه‌های
@@ -15,7 +16,8 @@ import { httpsLink } from './storefrontShopInfoRules.js';
  * is refused on every save, what only makes it unfinished is refused when it is published.
  */
 
-export const PAGE_KINDS = ['base', 'custom', 'fixed'] as const;
+// 'home' (v12 phase 10e): the one row of «صفحهٔ اصلی», made by migration 0036 (`storefrontHomeParts.ts`)
+export const PAGE_KINDS = ['base', 'custom', 'fixed', 'home'] as const;
 export type PageKind = typeof PAGE_KINDS[number];
 export const isPageKind = (value: unknown): value is PageKind => PAGE_KINDS.includes(value as PageKind);
 
@@ -82,9 +84,12 @@ export type SectionBackground = typeof SECTION_BACKGROUNDS[number];
  */
 export const SECTION_BACKGROUND_TITLES: Readonly<Record<SectionBackground, string>> = { white: 'سفید', cream: 'آبی روشن', brand: 'لاجوردی', dark: 'سرمه‌ای' };
 
-export const SECTION_KINDS = ['hero', 'text', 'textImage', 'iconCards', 'gallery', 'people', 'map', 'products', 'button', 'shippingMethods'] as const;
+/** the parts every page takes; the parts of the home page alone are `HOME_SECTION_KINDS` (v12 phase 10e) */
+export const PAGE_SECTION_KINDS = ['hero', 'text', 'textImage', 'iconCards', 'gallery', 'people', 'map', 'products', 'button', 'shippingMethods'] as const;
+export const SECTION_KINDS = [...PAGE_SECTION_KINDS, ...HOME_SECTION_KINDS] as const;
 export type SectionKind = typeof SECTION_KINDS[number];
 export const SECTION_KIND_TITLES: Readonly<Record<SectionKind, string>> = {
+  ...HOME_SECTION_KIND_TITLES,
   hero: 'سربرگ',
   text: 'متن',
   textImage: 'متن و تصویر',
@@ -99,11 +104,12 @@ export const SECTION_KIND_TITLES: Readonly<Record<SectionKind, string>> = {
 /** the kind that reads the live shipping settings belongs to the «ارسال و پرداخت» page alone */
 export const SHIPPING_SECTION_PAGE: BasePageSlug = 'shipping';
 
-export const PAGE_ICONS = ['leaf', 'handshake', 'truck', 'gift', 'heart', 'sparkles', 'clock', 'map', 'phone', 'mail', 'shield', 'star'] as const;
+// 'hand' and 'building' (v12 phase 10e) are the two icons of the site's own home page the list did not have
+export const PAGE_ICONS = ['leaf', 'handshake', 'truck', 'gift', 'heart', 'sparkles', 'clock', 'map', 'phone', 'mail', 'shield', 'star', 'hand', 'building'] as const;
 export type PageIcon = typeof PAGE_ICONS[number];
 export const PAGE_ICON_TITLES: Readonly<Record<PageIcon, string>> = {
   leaf: 'برگ', handshake: 'دست دادن', truck: 'ارسال', gift: 'هدیه', heart: 'قلب', sparkles: 'درخشش', clock: 'ساعت', map: 'نشانی', phone: 'تلفن',
-  mail: 'نامه', shield: 'سپر', star: 'ستاره',
+  mail: 'نامه', shield: 'سپر', star: 'ستاره', hand: 'دست', building: 'ساختمان',
 };
 
 /** The colours a word of a text may take: names, never a colour code, so the site keeps its own palette */
@@ -158,7 +164,8 @@ export interface RichDoc {
 /** A new, empty text; each call makes its own (a shared one would be shared by every new section) */
 export const emptyDoc = (): RichDoc => ({ type: 'doc', content: [] });
 
-interface SectionBase { background: SectionBackground }
+/** `hidden` (v12 phase 10e): a part of the home page switched off; it keeps its words and the site does not get it */
+interface SectionBase { background: SectionBackground; hidden?: boolean }
 export interface HeroSection extends SectionBase { kind: 'hero'; title: string; text: string; imageAssetId: number | null; buttonLabel: string; buttonHref: string }
 export interface TextSection extends SectionBase { kind: 'text'; doc: RichDoc }
 export interface TextImageSection extends SectionBase {
@@ -178,7 +185,7 @@ export interface ButtonSection extends SectionBase { kind: 'button'; label: stri
 export interface ShippingMethodsSection extends SectionBase { kind: 'shippingMethods'; title: string }
 export type PageSection =
   | HeroSection | TextSection | TextImageSection | IconCardsSection | GallerySection | PeopleSection | MapSection | ProductsSection | ButtonSection
-  | ShippingMethodsSection;
+  | ShippingMethodsSection | HomeSection;
 
 export interface PageValues {
   title: string;
@@ -274,4 +281,13 @@ export function list(value: unknown, max: number, title: string): unknown[] {
 export function onlyKeys(value: Record<string, unknown>, allowed: readonly string[], where: string): void {
   const extra = Object.keys(value).find(key => !allowed.includes(key));
   if (extra !== undefined) refuse(`${where} فیلد ناشناختهٔ «${extra.slice(0, 40)}» دارد.`, 'STOREFRONT_PAGE_FIELD_UNKNOWN');
+}
+
+/** A calendar day as it is kept: `YYYY-MM-DD` of a real day between 2000 and 2100 */
+export function isCalendarDay(value: string): boolean {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!parts) return false;
+  const [year, month, day] = [Number(parts[1]), Number(parts[2]), Number(parts[3])];
+  const at = new Date(Date.UTC(year, month - 1, day));
+  return year >= 2000 && year <= 2100 && at.getUTCFullYear() === year && at.getUTCMonth() === month - 1 && at.getUTCDate() === day;
 }

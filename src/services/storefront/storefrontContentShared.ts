@@ -5,7 +5,7 @@ import { items, mediaAssets, storefrontContentAssets } from '../../db/schema.js'
 import { ForbiddenError, ValidationError } from '../../errors/customErrors.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { can } from '../../middleware/authorize.js';
-import { SECTION_KIND_TITLES, sectionAssetIds, type PageSection, type RichDoc, type RichNode } from '../../lib/storefront/storefrontPageRules.js';
+import { SECTION_KIND_TITLES, auditHomeSection, sectionAssetIds, type PageSection, type RichDoc, type RichNode } from '../../lib/storefront/storefrontPageRules.js';
 import type { PageAssetInfo } from '../../lib/storefront/storefrontPageContracts.js';
 
 /**
@@ -104,7 +104,9 @@ function auditSection(section: PageSection): Record<string, unknown> {
     case 'map': return { ...base, title: section.title, address: section.address, links: [section.neshanUrl, section.baladUrl, section.googleUrl].filter(Boolean), ...withImages };
     case 'products': return { ...base, title: section.title, ...(section.source === 'items' ? { items: section.itemIds } : { collection: section.collection }) };
     case 'button': return { ...base, label: section.label, links: [section.href].filter(Boolean) };
-    default: return { ...base, title: section.title };
+    case 'shippingMethods': return { ...base, title: section.title };
+    // v12 phase 10e: a part of the home page
+    default: return { ...base, ...auditHomeSection(section) };
   }
 }
 export const auditSections = (sections: readonly PageSection[]): Array<Record<string, unknown>> => sections.map(auditSection);

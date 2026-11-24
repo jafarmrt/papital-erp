@@ -66,7 +66,8 @@ export async function runStorefrontFixedPagesV12Tests(shouldRun: (id: string, ..
       wrong.push(`the fixed rows: ${fixedRows.map(row => row.slug).join(',')}`);
     }
     const kindsInOrder = list.map(row => row.kind).join(',').replace(/(base,)+/, 'base,').replace(/(fixed,?)+/, 'fixed,').replace(/(custom,?)+$/, 'custom');
-    if (!/^base,fixed,(custom)?$/.test(kindsInOrder)) wrong.push(`the order of the list: ${kindsInOrder}`);
+    // v12 phase 10e: the one home row comes first
+    if (!/^home,base,fixed,(custom)?$/.test(kindsInOrder)) wrong.push(`the order of the list: ${kindsInOrder}`);
     const cart = fixedRows.find(row => row.slug === 'fixed-cart');
     if (!cart) throw new Error('no row for the cart page');
     // nothing is on the site by these names before anything is published

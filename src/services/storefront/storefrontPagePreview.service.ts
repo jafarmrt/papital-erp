@@ -8,7 +8,7 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { mediaFilePath } from '../../lib/media/mediaPaths.js';
 import { STOREFRONT_SITE_ORIGIN } from '../../lib/storefront/storefrontBuyerRules.js';
-import { PAGE_PREVIEW_MINUTES, PAGE_PREVIEW_TOKEN, isPageKind, pageAssetIds, type PageValues } from '../../lib/storefront/storefrontPageRules.js';
+import { PAGE_PREVIEW_MINUTES, PAGE_PREVIEW_TOKEN, pageAssetIds, type PageValues } from '../../lib/storefront/storefrontPageRules.js';
 import type { PagePreviewLink } from '../../lib/storefront/storefrontPageContracts.js';
 import type { StorefrontPagePreview } from '../../lib/storefront/storefrontPagePublicContracts.js';
 import { STOREFRONT_SEO_SETTING_KEYS } from '../../lib/storefront/storefrontSeoContracts.js';
@@ -47,6 +47,8 @@ export async function createPagePreview(req: Request, id: number): Promise<PageP
     // a fixed page is drawn by its own code on the site, around the words kept here: a preview of the words alone would
     // not be the page
     if (row.kind === 'fixed') throw new ValidationError('صفحهٔ ثابت پیش‌نمایش ندارد؛ متن آن پس از «انتشار» روی خود صفحه دیده می‌شود.', { field: 'id' }, 'STOREFRONT_PAGE_PREVIEW_FIXED');
+    // v12 phase 10e: the home page is drawn by the site's home route, not by the page a preview link opens
+    if (row.kind === 'home') throw new ValidationError('صفحهٔ اصلی پیش‌نمایش ندارد.', { field: 'id' }, 'STOREFRONT_PAGE_PREVIEW_HOME');
     // the page's version is left as it is: a link changes nothing a colleague edits, so an open editor does not go stale
     await tx.update(storefrontPages).set({ previewHash: hashOf(token), previewExpiresAt: expiresAt }).where(eq(storefrontPages.id, id));
     await logActivity({
@@ -83,7 +85,7 @@ const draftOf = (row: PageRecord): Omit<PageValues, 'slug'> => ({
 export async function publicPagePreview(token: string): Promise<StorefrontPagePreview> {
   const row = await pageOfToken(token);
   const page = await pageForSite(draftOf(row), {
-    slug: row.slug, kind: isPageKind(row.kind) ? row.kind : 'custom', title: row.title, noindex: true, updatedAt: isoOf(row.updatedAt),
+    slug: row.slug, kind: row.kind === 'base' || row.kind === 'fixed' ? row.kind : 'custom', title: row.title, noindex: true, updatedAt: isoOf(row.updatedAt),
   });
   return { ...page, expiresAt: isoOf(row.previewExpiresAt ?? '') };
 }

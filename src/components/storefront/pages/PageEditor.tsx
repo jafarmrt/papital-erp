@@ -6,7 +6,7 @@ import type { MenuLinkOptions } from '../../../lib/storefront/storefrontMenuCont
 import { PAGE_STATUS_TITLES, type PageDetail } from '../../../lib/storefront/storefrontPageContracts';
 import {
   BASE_PAGES, PAGE_SECTIONS_MAX, PAGE_SEO_DESCRIPTION_MAX, PAGE_SEO_TITLE_MAX, PAGE_SLUG_MAX, PAGE_TITLE_MAX, SECTION_BACKGROUNDS, SECTION_BACKGROUND_TITLES,
-  SECTION_KINDS, SECTION_KIND_TITLES, SHIPPING_SECTION_PAGE, checkedPage, emptySection, fixedPageOf, type BasePageSlug, type PageSection, type PageValues,
+  PAGE_SECTION_KINDS, SECTION_KIND_TITLES, SHIPPING_SECTION_PAGE, checkedPage, emptySection, fixedPageOf, type BasePageSlug, type PageSection, type PageValues,
   type SectionBackground, type SectionKind,
 } from '../../../lib/storefront/storefrontPageRules';
 import { MENU_LOCATION_TITLES, isMenuLocation } from '../../../lib/storefront/storefrontMenuRules';
@@ -17,6 +17,7 @@ import { formatPersianNumber } from '../../../utils/persianNumber';
 import { errorMessageOf } from '../../../utils';
 import { LibraryImageField } from './LibraryImageField';
 import { SectionFields, type AssetTitles } from './SectionFields';
+import { HomeStart, SectionSwitch, homeKinds, ownLook } from '../home/HomeEditorParts';
 
 /**
  * v12 phase 10b (docs/roadmap/V12_SITE_NEXT_START_PLAN.md §7.2): the builder of one page of the site. A page is a list
@@ -70,6 +71,8 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
   // v12 phase 10c: a page whose work is in the site's code; here only its title, one text above it and its search words
   const fixed = detail.kind === 'fixed';
   const fixedSlug = fixed ? detail.slug : null;
+  // v12 phase 10e: «صفحهٔ اصلی»: its own parts, each of which can be switched off; no address, title or «نیاید» to set
+  const home = detail.kind === 'home';
   const dirty = useMemo(() => canonical(draft) !== canonical(base.draft), [draft, base.draft]);
   const places = Array.isArray(detail.menuPlaces) ? detail.menuPlaces : [];
   const linkedFrom = places.map(place => `«${isMenuLocation(place) ? MENU_LOCATION_TITLES[place] : place}»`).join(' و ');
@@ -91,8 +94,8 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
   /** another colleague changed the page while this screen holds unsaved edits */
   const stale = outdated && dirty && !own;
 
-  const problem = useMemo(() => checkedPage(draft, { forPublish: false, baseSlug, fixedSlug }).problem, [draft, baseSlug, fixedSlug]);
-  const notReady = useMemo(() => checkedPage(base.draft, { forPublish: true, baseSlug, fixedSlug }).problem, [base.draft, baseSlug, fixedSlug]);
+  const problem = useMemo(() => checkedPage(draft, { forPublish: false, baseSlug, fixedSlug, home }).problem, [draft, baseSlug, fixedSlug, home]);
+  const notReady = useMemo(() => checkedPage(base.draft, { forPublish: true, baseSlug, fixedSlug, home }).problem, [base.draft, baseSlug, fixedSlug, home]);
   // a move on its way closes the editor like a save: what is typed meanwhile would be lost when its answer is taken (10c review)
   const busy = save.isPending || act.isPending || remove.isPending || mover.isPending;
   const disabled = !canManage || busy;
@@ -125,7 +128,7 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
     setKeys(k => [...k, newKey()]);
   };
   const kinds = fixed ? (['text'] as SectionKind[])
-    : SECTION_KINDS.filter(kind => kind !== 'shippingMethods' || (baseSlug === SHIPPING_SECTION_PAGE && !draft.sections.some(s => s.kind === 'shippingMethods')));
+    : home ? homeKinds(draft.sections) : PAGE_SECTION_KINDS.filter(kind => kind !== 'shippingMethods' || (baseSlug === SHIPPING_SECTION_PAGE && !draft.sections.some(s => s.kind === 'shippingMethods')));
   const sectionsMax = fixed ? 1 : PAGE_SECTIONS_MAX;
 
   // a request started from a button, the form's own submit or a second click runs once (AGENTS.md §6.4)
@@ -198,12 +201,13 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
               این صفحهٔ ثابت سایت است{fixedPageOf(detail.slug)?.path ? <> (<span dir="ltr">{fixedPageOf(detail.slug)?.path}</span>)</> : ''}: فرم و کار آن در خود سایت است و عوض نمی‌شود. این‌جا فقط عنوان، متن بالای صفحه و عنوان و توضیح جست‌وجوی آن نوشته می‌شود. تا «انتشار»، سایت متن کنونی خودش را نشان می‌دهد.
             </p>
           )}
+          {home && <p role="note" className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs leading-6 text-sky-900">این صفحهٔ اصلی سایت است. تا آن را منتشر نکنید، سایت همان صفحهٔ اصلی امروزش را نشان می‌دهد؛ با «برداشتن از روی سایت» هم به همان برمی‌گردد.</p>}
           <div className="grid gap-3 md:grid-cols-2">
-            <div>
+            <div hidden={home}>
               <label htmlFor={`${id}-title`} className={label}>عنوان صفحه</label>
               <input id={`${id}-title`} className={field} maxLength={PAGE_TITLE_MAX} value={draft.title} onChange={e => set('title', e.target.value)} />
             </div>
-            <div hidden={fixed}>
+            <div hidden={fixed || home}>
               <label htmlFor={`${id}-slug`} className={label}>نشانی لاتین</label>
               <input id={`${id}-slug`} dir="ltr" className={field} maxLength={PAGE_SLUG_MAX} value={draft.slug} disabled={detail.kind !== 'custom' || onSite} onChange={e => set('slug', e.target.value)} />
               {canManage && detail.kind === 'custom' && onSite && (
@@ -228,7 +232,7 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
               <input id={`${id}-seo-description`} className={field} maxLength={PAGE_SEO_DESCRIPTION_MAX} value={draft.seoDescription} onChange={e => set('seoDescription', e.target.value)} />
             </div>
           </div>
-          {!fixed && (
+          {!fixed && !home && (
             <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-700">
               <input type="checkbox" checked={draft.noindex} onChange={e => set('noindex', e.target.checked)} />
               این صفحه در موتور جست‌وجو نیاید
@@ -241,7 +245,8 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
 
         <section aria-label={fixed ? 'متن بالای صفحه' : 'بخش‌های صفحه'} className="space-y-3">
           <h3 className="text-sm font-black text-slate-800">{fixed ? 'متن بالای صفحه (اختیاری)' : 'بخش‌های صفحه'}</h3>
-          {draft.sections.length === 0 && <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-xs text-slate-500">{fixed ? 'این صفحه متنی بالای خود ندارد. اگر می‌خواهید، از پایین یک متن بیفزایید.' : 'این صفحه هنوز بخشی ندارد. نخستین بخش را از پایین بیفزایید.'}</p>}
+          {home && canManage && draft.sections.length === 0 && <HomeStart onStart={(sections) => { setDraft(d => ({ ...d, sections })); setKeys(sections.map(newKey)); }} />}
+          {draft.sections.length === 0 && !home && <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-xs text-slate-500">{fixed ? 'این صفحه متنی بالای خود ندارد. اگر می‌خواهید، از پایین یک متن بیفزایید.' : 'این صفحه هنوز بخشی ندارد. نخستین بخش را از پایین بیفزایید.'}</p>}
           <ol className="space-y-3">
             {draft.sections.map((section, index) => {
               const name = fixed ? 'متن بالای صفحه' : `بخش ${formatPersianNumber(index + 1)}، ${SECTION_KIND_TITLES[section.kind]}`;
@@ -249,8 +254,9 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
                 <li key={keys[index] ?? index} aria-label={name} className={`${card} ${problem?.section === index ? 'border-rose-400' : ''}`}>
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="min-w-0 flex-1 text-sm font-black text-slate-800">{name}</p>
-                    {!fixed && <label htmlFor={`${id}-background-${index}`} className="text-xs font-bold text-slate-700">زمینه</label>}
-                    <select hidden={fixed} id={`${id}-background-${index}`} className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs" value={section.background}
+                    {home && <SectionSwitch name={name} hidden={section.hidden === true} onChange={hidden => setSection(index, hidden ? { ...section, hidden: true } : (({ hidden: _off, ...shown }) => shown as PageSection)(section))} />}
+                    {!fixed && !ownLook(section) && <label htmlFor={`${id}-background-${index}`} className="text-xs font-bold text-slate-700">زمینه</label>}
+                    <select hidden={fixed || ownLook(section)} id={`${id}-background-${index}`} className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs" value={section.background}
                       onChange={e => setSection(index, { ...section, background: e.target.value as SectionBackground })}>
                       {SECTION_BACKGROUNDS.map(background => <option key={background} value={background}>{SECTION_BACKGROUND_TITLES[background]}</option>)}
                     </select>
@@ -316,7 +322,7 @@ export function PageEditor({ detail, canManage, options, onBack, onDeleted }: {
             </details>
           </div>
           {/* v12 phase 10c: a one-hour link on the site to the saved draft, to see it as a visitor would before «انتشار» */}
-          {!fixed && <PagePreviewLink pageId={detail.id} blocked={dirty ? 'پیش‌نمایش پیش‌نویس ذخیره‌شده را نشان می‌دهد؛ نخست ذخیره کنید.' : outdated ? 'نسخهٔ تازهٔ این صفحه هنوز خوانده نشده است.' : ''} />}
+          {!fixed && !home && <PagePreviewLink pageId={detail.id} blocked={dirty ? 'پیش‌نمایش پیش‌نویس ذخیره‌شده را نشان می‌دهد؛ نخست ذخیره کنید.' : outdated ? 'نسخهٔ تازهٔ این صفحه هنوز خوانده نشده است.' : ''} />}
           {dirty && <p className="text-xs text-slate-500">تغییرهای این صفحه هنوز ذخیره نشده‌اند؛ «انتشار»، «برگرداندن» و «برداشتن از روی سایت» پس از ذخیرهٔ پیش‌نویس روشن می‌شوند.</p>}
           {!dirty && base.status !== 'published' && notReady && (
             <p className="text-xs text-amber-800">{`برای انتشار: ${notReady.section >= 0 ? `بخش ${formatPersianNumber(notReady.section + 1)}، ` : ''}${notReady.message.replace(/^بخش [۰-۹]+: /, '')}`}</p>

@@ -43,6 +43,12 @@ export const STOREFRONT_FIXED_PAGE_ROWS: ReadonlyArray<{ kind: 'fixed'; slug: st
   { kind: 'fixed', slug: 'fixed-news', title: 'خبرها' },
 ];
 
+/**
+ * v12 phase 10e: the one row of kind 'home' as migration 0036 makes it («صفحهٔ اصلی»). The factory reset makes it again
+ * from this; `storefrontHomeRulesV12.test.ts` keeps it equal to `HOME_PAGE_SLUG`, `HOME_PAGE_TITLE` and the migration.
+ */
+export const STOREFRONT_HOME_PAGE_ROW: { kind: 'home'; slug: string; title: string } = { kind: 'home', slug: 'fixed-home', title: 'صفحهٔ اصلی' };
+
 export const storefrontPages = pgTable('storefront_pages', {
   id: serial('id').primaryKey(),
   kind: text('kind').notNull().default('custom'),
@@ -67,6 +73,8 @@ export const storefrontPages = pgTable('storefront_pages', {
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (table) => ({
   uq_storefront_pages_slug_live: uniqueIndex('uq_storefront_pages_slug_live').on(table.slug).where(sql`${table.isDeleted} = 0`),
+  // v12 phase 10e (migration 0036): one home page
+  uq_storefront_pages_home: uniqueIndex('uq_storefront_pages_home').on(table.kind).where(sql`${table.kind} = 'home'`),
   uq_storefront_pages_preview_hash: uniqueIndex('uq_storefront_pages_preview_hash').on(table.previewHash).where(sql`${table.previewHash} IS NOT NULL`),
   idx_storefront_pages_share_image_asset_id: index('idx_storefront_pages_share_image_asset_id').on(table.shareImageAssetId).where(sql`${table.shareImageAssetId} IS NOT NULL`),
 }));

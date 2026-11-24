@@ -253,6 +253,13 @@
       "when": 1798876800000,
       "tag": "0035_storefront_collections",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1798963200000,
+      "tag": "0036_storefront_home_page",
+      "breakpoints": true
     }
   ]
 }
