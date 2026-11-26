@@ -11182,6 +11182,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runHistoryImportPurchaseRefsV11Tests(shouldRun));
   const { runHistoryImportCloseV11Tests } = await import('../regression/historyImportCloseV11Tests.js');
   results.push(...await runHistoryImportCloseV11Tests(shouldRun));
+  // v12 work-log import: the colleagues' work of the sheet «کارکرد و پروژه» through the hand entry
+  const { runHistoryImportWorkLogV12Tests } = await import('../regression/historyImportWorkLogV12Tests.js');
+  results.push(...await runHistoryImportWorkLogV12Tests(shouldRun));
   // v11 tool 4: each colleague's running account (out-of-pocket expenses, petty cash in hand, paybacks)
   const { runColleagueAccountV11Tests } = await import('../regression/colleagueAccountV11Tests.js');
   results.push(...await runColleagueAccountV11Tests(shouldRun));

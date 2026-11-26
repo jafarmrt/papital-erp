@@ -64,14 +64,22 @@ export function rowFailureMessage(err: unknown): string {
  * `nextval` is not given back). `body` must be safe to run twice (it reads the books again each time).
  */
 export async function runImportRows(
-  options: { commit: boolean },
+  options: {
+    commit: boolean;
+    /**
+     * v12 work-log import: a tool that stays after «پایان ورود سابقه» (it imports each month's work, not only 1405) takes the
+     * import lock alone, so it still waits for a running import or close but is not refused by the close
+     */
+    closable?: boolean;
+  },
   body: (tx: DbExecutor, attempt: RowAttempt) => Promise<boolean>,
 ): Promise<void> {
   // the preview pass never completes the request's Idempotency-Key; the post pass completes it in its own commit
   const inTransaction = (commit: boolean, fn: (tx: DbExecutor) => Promise<void>) => (commit ? idempotentTransaction(fn) : orm.transaction(fn));
   const run = (commit: boolean) => inTransaction(commit, async (tx) => {
     // one import at a time: a second one (a resend, another month) waits and then reads what the first one posted
-    await lockHistoryImport(tx);
+    if (options.closable === false) await takeHistoryImportLock(tx);
+    else await lockHistoryImport(tx);
     const attempt: RowAttempt = async (fn) => {
       try {
         const value = await tx.transaction(sp => fn(sp));

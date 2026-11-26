@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { TREASURY_IMPORT_MAX_ROWS } from '../lib/historyImport/treasuryHistoryImport.js';
 import { STOCK_IMPORT_MAX_ROWS } from '../lib/historyImport/stockHistoryImport.js';
 import { OLD_OPENING_WITHDRAW_MAX_ITEMS } from '../lib/historyImport/oldOpening.js';
+import { WORK_LOG_IMPORT_MAX_ROWS } from '../lib/historyImport/workLogImport.js';
 
 const TEXT_MAX = 1000;
 const optionalId = z.coerce.number().int().positive().max(2147483647).nullable().optional();
@@ -91,4 +92,28 @@ export const oldOpeningWithdrawSchema = z.object({
 /** Tool 9: «پایان ورود سابقه» is sent only with the confirmation the window asks for. */
 export const historyImportCloseSchema = z.object({
   body: z.object({ confirm: z.literal(true) }).strict(),
+});
+
+// v12 work-log import: one resolved row of the sheet «کارکرد و پروژه»; the window has already turned each name into an id
+const workLogImportRowSchema = z.object({
+  rowNo: z.coerce.number().int().positive(),
+  month: z.string().trim().regex(/^\d{4}-\d{2}$/, 'ماه ردیف خوانده نشد'),
+  personnelId: z.coerce.number().int().positive('همکار ردیف مشخص نیست').max(2147483647),
+  taskId: z.coerce.number().int().positive('عنوان کاری ردیف مشخص نیست').max(2147483647),
+  projectId: z.coerce.number().int().positive().max(2147483647).nullable(),
+  // the quantity, rate and total are read again by the service, which names the row in its message
+  quantity: decimalText,
+  unitRate: decimalText,
+  excelTotal: decimalText.optional(),
+  notes: z.string().max(TEXT_MAX).optional(),
+  duplicateAccepted: z.boolean().optional(),
+}).strict();
+
+export const workLogHistoryImportSchema = z.object({
+  body: z.object({
+    commit: z.boolean(),
+    rows: z.array(workLogImportRowSchema)
+      .min(1, 'پرونده ردیفی برای ورود ندارد')
+      .max(WORK_LOG_IMPORT_MAX_ROWS, `هر بار حداکثر ${WORK_LOG_IMPORT_MAX_ROWS.toLocaleString('fa-IR')} ردیف وارد می‌شود؛ پرونده را ماه به ماه بدهید`),
+  }).strict(),
 });

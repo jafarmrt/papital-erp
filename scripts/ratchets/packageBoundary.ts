@@ -65,6 +65,8 @@ const COMPOSITION_ROOTS = new Set([
   'src/services/historyImport/treasuryHistoryImport.service.ts', 'src/services/historyImport/stockHistoryImport.service.ts',
   // its sales invoices close their CRM sales file (tool 3, «شماره پرونده»)
   'src/services/historyImport/historyImportSalesLinks.ts',
+  // v12 work-log import: replays the hand entry of work logs (piecework) through `PieceworkService.logWorkEntries`, the same way
+  'src/services/historyImport/workLogHistoryImport.service.ts',
 ]);
 
 export interface MapRule { pkg: string; re: RegExp }
