@@ -1,6 +1,6 @@
 import { eq, and } from 'drizzle-orm';
 import { orm, type DbExecutor, type DbTransaction } from '../db/drizzle.js';
-import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkLogs, pieceworkPayrolls, taskCategories } from '../db/schema.js';
+import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkLogs, pieceworkPayrolls, taskCategories, workshopTaskReports } from '../db/schema.js';
 import { NotFoundError, BadRequestError, ConflictError, ValidationError } from '../errors/customErrors.js';
 import { requireStorageDate } from '../lib/storageDate.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
@@ -8,7 +8,7 @@ import { PieceworkPayrollService } from './piecework/payroll.service.js';
 import { lockEditableWorkLog, workLogFreeOfLivePayroll } from './piecework/workLogPayrollLink.js';
 import { auditTaskCreated, auditTaskDeleted, auditTaskRestored, auditTasksCleared, auditTasksImported, auditTaskUpdated, auditWorkLogCreated, auditWorkLogDeleted, auditWorkLogUpdated, type AuditActor } from './piecework/pieceworkAudit.js';
 import { activePersonnelRate, savePersonnelRate, type PersonnelRateInput, type RateActor } from './piecework/personnelRate.js';
-import { assertLinkedRowQuantity, assertScheduleRowsFree, linkScheduleRows, lockProjectsOfLogMove, lockScheduleProjects, unlinkScheduleRow } from './piecework/scheduleRowLink.js';
+import { assertLinkedRowQuantity, assertScheduleRowsFree, isScheduleLinkedLog, linkScheduleRows, lockProjectsOfLogMove, lockScheduleProjects, unlinkScheduleRow } from './piecework/scheduleRowLink.js';
 import { syncScheduleProgress } from './piecework/scheduleProgressSync.js';
 import { revertWorkshopReportsOfLog } from './piecework/workshopReportRevert.js';
 import type { ScheduleRowRef } from '../lib/projects/scheduleWorkLog.js';
@@ -777,6 +777,8 @@ export class PieceworkService {
       unitRate?: number | string;
       notes?: string;
       projectId?: number | string | null;
+      /** v12: another task title; without a manual rate the log takes the program's rate of the new task */
+      taskId?: number | string;
     },
     executor?: DbTransaction,
     actor: AuditActor = {}
@@ -790,8 +792,25 @@ export class PieceworkService {
       if (isoDate !== existing.date) await assertWorkLogsWithinService(tx, [{ personnelId: existing.personnelId, isoDate }]);
       // v9.0.280 (TD-812): مقدار بزرگ‌تر از صفر، نرخ نامنفی و پروژه زنده، مانند ثبت کارکرد
       const newQty = data.quantity !== undefined ? workLogQuantity(data.quantity, '') : existing.quantity;
+      // v12 (start plan V12_WORKLOG_IMPORT_START_PLAN.md part B): the task title of a free log can be changed; the new task
+      // must be live (read `FOR SHARE` like on create), and a log of a workshop schedule row or of an approved workshop report
+      // keeps its task, since that row or report names the worker and the task
+      const newTaskId = data.taskId !== undefined ? workLogId(data.taskId, 'شناسه عنوان کار', '') as number : existing.taskId;
+      const taskChanged = newTaskId !== existing.taskId;
+      if (taskChanged) {
+        const [report] = await tx.select({ id: workshopTaskReports.id }).from(workshopTaskReports)
+          .where(and(eq(workshopTaskReports.pieceworkLogId, id), eq(workshopTaskReports.status, 'approved')));
+        if (report || await isScheduleLinkedLog(tx, existing.projectId, id)) {
+          throw new ConflictError('این کارکرد از برنامهٔ کارگاه پروژه یا گزارش پایان کار ثبت شده و عنوان کاری‌اش عوض نمی‌شود؛ کارکرد را حذف و از همان‌جا دوباره ثبت کنید.', undefined, 'PIECEWORK_LOG_TASK_LOCKED');
+        }
+        await assertWorkLogParentsLive(tx, [{ personnelId: existing.personnelId, taskId: newTaskId, projectId: null }]);
+      }
       const manualRate = data.unitRate !== undefined ? workLogManualRate(data.unitRate, '') : undefined;
-      const newRate: FinancialDecimal = manualRate !== undefined ? fin(manualRate) : existing.unitRate;
+      // a new task without a manual rate takes the program's rate for it (the personnel's custom rate, else the task's base
+      // rate), as a new log would; the old task's rate would no longer match the title
+      const newRate: FinancialDecimal = manualRate !== undefined
+        ? fin(manualRate)
+        : taskChanged ? fin(await PieceworkService.serverRate(tx, existing.personnelId, newTaskId)) : fin(existing.unitRate);
       const newTotal = fin(newQty).multiply(newRate);
       const newProjectId = data.projectId !== undefined ? workLogId(data.projectId, 'شناسه پروژه', '', true) : existing.projectId;
       const projectMoved = newProjectId !== existing.projectId;
@@ -808,6 +827,7 @@ export class PieceworkService {
         date: isoDate,
         dateIso: isoDate,
         quantity: newQty,
+        taskId: newTaskId,
         unitRate: money(newRate),
         totalAmount: money(newTotal),
         projectId: newProjectId,

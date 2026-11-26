@@ -25,6 +25,9 @@ export async function runWorkLogScheduleRowTests(shouldRun: ShouldRun): Promise<
     ['reg_work_log_mirror_batches_no_deadlock_td_1347',
       '10.2 package 12 review M4: a batch with a schedule row in project A and a manual log in B, run beside the mirror batch, saves both batches without a deadlock (TD-1347)',
       ['td1347', 'm4', 'projects', 'piecework', 'schedule', 'concurrency', 'package12'], mirrorBatchCase],
+    ['reg_work_log_edit_task_v12',
+      'v12 work-log edit: a free log takes another task title, at the program\'s rate of the new task when no rate is sent or at the rate sent, with its total and an audit row naming the task change; a deleted task is refused (422 PIECEWORK_LOG_TASK_INVALID) and a log of a workshop schedule row keeps its task (409 PIECEWORK_LOG_TASK_LOCKED), both unchanged',
+      ['v12', 'piecework', 'schedule', 'work_log_edit'], editTaskCase],
   ]);
 }
 
@@ -134,4 +137,43 @@ async function mirrorBatchCase(h: Harness, wrong: string[]): Promise<string> {
   const [count] = await h.q('SELECT COUNT(*)::int AS n FROM piecework_logs WHERE personnel_id = $1 AND is_deleted = 0', [worker]);
   if (Number(count?.n) !== 4) wrong.push(`${Number(count?.n)} work logs were saved, expected 4`);
   return 'two mirror batches with a schedule row each save without a deadlock';
+}
+
+/** v12 (start plan V12_WORKLOG_IMPORT_START_PLAN.md part B): the edit form could not change a log's task title */
+async function editTaskCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const worker = await newWorker('V12 task edit');
+  const first = await newTaskId(h);
+  const second = await newTaskId(h);
+  await h.q('UPDATE piecework_tasks SET default_rate = 2500 WHERE id = $1', [second]);
+  const created = await h.post('/api/piecework/logs', { items: [{ personnelId: worker, taskId: first, date: f.today, quantity: 4 }] });
+  const logId = Number((created.body as { insertedIds?: unknown[] })?.insertedIds?.[0]);
+  if (created.status !== 201 || !Number.isInteger(logId)) throw new Error(`setup: the log answered ${brief(created)}`);
+  const read = async () => {
+    const [row] = await h.q('SELECT task_id, unit_rate, total_amount FROM piecework_logs WHERE id = $1', [logId]);
+    return { taskId: Number(row?.task_id), rate: Number(row?.unit_rate), total: Number(row?.total_amount) };
+  };
+
+  const moved = await h.put(`/api/piecework/logs/${logId}`, { taskId: second, quantity: 4 });
+  const afterMove = await read();
+  if (moved.status !== 200 || afterMove.taskId !== second || afterMove.rate !== 2500 || afterMove.total !== 10000) wrong.push(`the task change answered ${brief(moved)} and stored ${JSON.stringify(afterMove)}, expected the new task at its rate 2500 and 10000`);
+  const [audit] = await h.q(`SELECT details FROM activity_logs WHERE entity_id = $1 AND action = 'UPDATE' ORDER BY id DESC LIMIT 1`, [String(logId)]);
+  if (!JSON.stringify(audit?.details ?? {}).includes('taskId')) wrong.push(`the task change wrote the audit details ${JSON.stringify(audit?.details)}, expected the taskId change`);
+  const typed = await h.put(`/api/piecework/logs/${logId}`, { taskId: first, unitRate: 1200 });
+  if (typed.status !== 200 || (await read()).rate !== 1200 || (await read()).taskId !== first) wrong.push(`a task change with a typed rate answered ${brief(typed)} and stored ${JSON.stringify(await read())}, expected the first task at 1200`);
+
+  await h.q('UPDATE piecework_tasks SET is_deleted = 1 WHERE id = $1', [second]);
+  const deleted = await h.put(`/api/piecework/logs/${logId}`, { taskId: second });
+  if (deleted.status !== 422 || codeOf(deleted) !== 'PIECEWORK_LOG_TASK_INVALID' || (await read()).taskId !== first) wrong.push(`a change to a deleted task answered ${brief(deleted)}, expected 422 PIECEWORK_LOG_TASK_INVALID and the log unchanged`);
+
+  const project = await scheduledProject(worker, first, 10);
+  const scheduled = await h.post('/api/piecework/logs', { items: [{ personnelId: worker, taskId: first, projectId: project, date: f.today, quantity: 5, scheduleRef: ROW_A }] });
+  const scheduledId = Number((scheduled.body as { insertedIds?: unknown[] })?.insertedIds?.[0]);
+  const other = await newTaskId(h);
+  const locked = await h.put(`/api/piecework/logs/${scheduledId}`, { taskId: other });
+  const [kept] = await h.q('SELECT task_id FROM piecework_logs WHERE id = $1', [scheduledId]);
+  if (locked.status !== 409 || codeOf(locked) !== 'PIECEWORK_LOG_TASK_LOCKED' || Number(kept?.task_id) !== first) wrong.push(`a task change of a schedule log answered ${brief(locked)} (task now ${kept?.task_id}), expected 409 PIECEWORK_LOG_TASK_LOCKED and the task kept`);
+  const quantityOnly = await h.put(`/api/piecework/logs/${scheduledId}`, { quantity: 6 });
+  if (quantityOnly.status !== 200) wrong.push(`a quantity edit of a schedule log answered ${brief(quantityOnly)}, expected 200`);
+  return 'a free log changes task at the new rate or the typed one; a deleted task and a schedule log are refused';
 }

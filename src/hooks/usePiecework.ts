@@ -39,6 +39,24 @@ import {
 } from '../components/piecework/pieceworkExcelUtils';
 import { searchMatches } from '../lib/search/searchText';
 
+/**
+ * v12 (start plan V12_WORKLOG_IMPORT_START_PLAN.md part B): the log on the edit form, with the task it opened with and whether
+ * the rate was typed; a new task title without a typed rate sends no rate, so the server takes the program's rate for it.
+ */
+export type EditingWorkLog = PieceworkLog & { originalTaskId?: number; rateEdited?: boolean };
+
+/** The body of `PUT /piecework/logs/:id` from the edit form */
+export function workLogEditPayload(log: EditingWorkLog, quantity: number) {
+  const taskChanged = log.originalTaskId !== undefined && log.taskId !== log.originalTaskId;
+  return {
+    date: log.date,
+    projectId: log.projectId || null,
+    quantity,
+    ...(taskChanged ? { taskId: log.taskId } : {}),
+    ...(taskChanged && !log.rateEdited ? {} : { unitRate: Number(log.unitRate) || 0 }),
+  };
+}
+
 export interface BatchLogRow extends KeyedRow {
   taskId: number | '';
   projectId: number | '';
@@ -113,7 +131,7 @@ export function usePiecework() {
   const [batchLogRows, setBatchLogRows] = useState<BatchLogRow[]>(() => withRowKeys<BatchLogRow>([
     { taskId: '', projectId: '', quantity: '1', unitRate: 0 }
   ]));
-  const [editingLog, setEditingLog] = useState<PieceworkLog | null>(null);
+  const [editingLog, setEditingLog] = useState<EditingWorkLog | null>(null);
   // v8.0.109 (TD-386): نرخ‌های اختصاصی پرسنلِ فرم ثبت کارکرد، برای پیشنهاد همان نرخی که سرور برمی‌گزیند
   const [logPersonnelRates, setLogPersonnelRates] = useState<Record<number, number>>({});
   const [isSavingLog, setIsSavingLog] = useState<boolean>(false);
@@ -283,7 +301,7 @@ export function usePiecework() {
   };
 
   const handleOpenEditLogModal = (log: PieceworkLog) => {
-    setEditingLog(log);
+    setEditingLog({ ...log, originalTaskId: log.taskId, rateEdited: false });
     setIsLogModalOpen(true);
   };
 
@@ -302,12 +320,7 @@ export function usePiecework() {
           return;
         }
 
-        const payload = {
-          date: editingLog.date,
-          projectId: editingLog.projectId || null,
-          quantity: parsedQty,
-          unitRate: Number(editingLog.unitRate) || 0
-        };
+        const payload = workLogEditPayload(editingLog, parsedQty);
 
         await fetchJson(`/piecework/logs/${editingLog.id}`, {
           method: 'PUT',
