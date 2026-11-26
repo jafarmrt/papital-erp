@@ -44,7 +44,9 @@ export const nameKey = headerKey;
 /**
  * A number cell as plain decimal text: a number keeps every digit Excel holds, only the float noise of its last places is
  * dropped (1.3333333333 hours stays as it is, so quantity × rate is the sheet's «جمع»; 0.30000000000000004 is 0.3), a text
- * keeps its digits without thousands separators; anything else stays as written so the server names the row.
+ * keeps its digits without thousands separators; anything else stays as written so the server names the row. Twelve
+ * significant digits cover any rate, quantity or row total of the sheet; a tiny number written with an exponent is refused
+ * by the server with the row's number.
  */
 export function numberText(value: unknown): string {
   if (typeof value === 'number') {

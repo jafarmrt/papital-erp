@@ -99,6 +99,12 @@ export async function runHistoryImportWorkLogV12Tests(shouldRun: ShouldRun): Pro
       if (rowOf(preview, 5)?.warnings?.some(w => w.includes('جمع اکسل'))) problems.push(`row 5 (80 minutes, the sheet's total) warns on its total: ${JSON.stringify(rowOf(preview, 5)?.warnings)}`);
       const minutesLog = logs.find(l => l.personnelId === other && l.taskId === hourly);
       if (!minutesLog || !fin(minutesLog.totalAmount).round(0).equals(800_000)) problems.push(`the 80-minute log reads ${JSON.stringify(minutesLog)}, expected 800,000 as in the sheet`);
+      // an edit of its notes or project keeps the amount (the stored quantity has four decimals: 1.3333 × 600,000 = 799,980)
+      if (minutesLog) {
+        const edited = await admin.put(`/api/piecework/logs/${minutesLog.id}`, { notes: 'یادداشت تازه', quantity: Number(minutesLog.quantity) });
+        const [after] = await orm.select({ total: pieceworkLogs.totalAmount }).from(pieceworkLogs).where(eq(pieceworkLogs.id, minutesLog.id));
+        if (edited.status !== 200 || !fin(after?.total ?? 0).round(0).equals(800_000)) problems.push(`a notes edit of the 80-minute log answered ${brief(edited)} and left ${after?.total}, expected 800,000 kept`);
+      }
       const hourLog = logs.find(l => l.taskId === hourly && l.personnelId === worker);
       if (!hourLog || !fin(hourLog.unitRate).equals(600_000) || !fin(hourLog.totalAmount).equals(1_500_000) || hourLog.projectId !== null) problems.push(`the hourly log reads ${JSON.stringify(hourLog)}, expected the sheet's rate 600,000, 1,500,000 and no project`);
       const pieceLog = logs.find(l => l.personnelId === worker && l.taskId === piece);
