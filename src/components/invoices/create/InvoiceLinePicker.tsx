@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useId, useRef } from 'react';
-import { isAddRowShortcut, windowOpenOverPage } from '../../../lib/addRowShortcut';
+import { ADD_ROW_SHORTCUT_TITLE, isAddRowShortcut, windowOpenOverPage } from '../../../lib/addRowShortcut';
 import { Plus } from 'lucide-react';
 import type { Item, ItemPrice } from '../../../types';
 import { formatCurrencyLabel, formatPersianCode, formatPersianNumber, formatPersianPrice } from '../../../utils';
@@ -16,7 +16,7 @@ import { isRialCurrency } from '../../../lib/rialDisplay';
 export const INVOICE_LINE_TEXT = {
   itemPlaceholder: 'کد یا نام کالا را بنویسید',
   add: 'افزودن به فهرست',
-  shortcut: 'کلید میان‌بر: Alt+N یا Insert',
+  shortcut: ADD_ROW_SHORTCUT_TITLE,
   manualPrice: 'ورود دستی قیمت',
 } as const;
 
@@ -67,15 +67,12 @@ export function InvoiceLinePicker(props: InvoiceLinePickerProps) {
   // v12 (start plan V12_WORKLOG_IMPORT_START_PLAN.md part B): Alt+N or Insert adds the line as the button does, as in the voucher
   // form, and puts the focus back on the item picker for the next line; not while a window is open over the page
   const scopeRef = useRef<HTMLDivElement>(null);
-  const addLine = (from: Element | null) => {
-    if (refuseInvalidDecimalInputs(from)) return;
-    onAdd();
-    document.getElementById(`${id}-item`)?.focus();
-  };
   const onShortcutKey = useEffectEvent((e: KeyboardEvent) => {
     if (!isAddRowShortcut(e) || windowOpenOverPage()) return;
     e.preventDefault();
-    addLine(scopeRef.current);
+    if (refuseInvalidDecimalInputs(scopeRef.current)) return;
+    onAdd();
+    document.getElementById(`${id}-item`)?.focus();
   });
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => onShortcutKey(e);
@@ -131,7 +128,7 @@ export function InvoiceLinePicker(props: InvoiceLinePickerProps) {
         <DecimalInput id="invoice-line-discount" aria-describedby={isRial ? 'invoice-line-discount-equivalent' : undefined} min="0" value={discount} onValueChange={v => onDiscountChange(amountOf(v))} className={INVOICE_NUMBER_FIELD} />
       </div>
       <div className="col-span-1 sm:col-span-6 lg:col-span-2">
-        <button type="button" title={INVOICE_LINE_TEXT.shortcut} onClick={(e) => addLine(e.currentTarget)}
+        <button type="button" title={INVOICE_LINE_TEXT.shortcut} onClick={(e) => { if (!refuseInvalidDecimalInputs(e.currentTarget)) onAdd(); }}
           className="w-full min-h-[44px] bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl flex items-center justify-center gap-1.5 text-sm font-bold transition-colors shadow-sm">
           <Plus size={16} aria-hidden="true" /> {INVOICE_LINE_TEXT.add}
         </button>

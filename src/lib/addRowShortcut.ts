@@ -11,3 +11,6 @@ export const isAddRowShortcut = (e: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | '
 
 /** a window open over the page (a dialog or an alert): a page-level shortcut leaves it alone */
 export const windowOpenOverPage = (): boolean => !!document.querySelector('[role="dialog"][aria-modal="true"], [role="alertdialog"]');
+
+/** the add-row button's title: the key names as printed on the keyboard */
+export const ADD_ROW_SHORTCUT_TITLE = 'کلید میان‌بر: Alt+N یا Insert';

@@ -8,12 +8,12 @@ import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { formatCurrencyLabel, formatPersianNumber, formatQuantityOrTime, parseQuantityOrTime } from '../../utils';
 import { PHONE_TAP_TARGET } from '../../lib/pwa/phoneLayout';
 import { rowKeyOf } from '../../lib/rowKey';
-import { isAddRowShortcut } from '../../lib/addRowShortcut';
+import { ADD_ROW_SHORTCUT_TITLE, isAddRowShortcut } from '../../lib/addRowShortcut';
 
 /** Texts the tests read */
 export const BATCH_LOG_TEXT = {
   addRow: 'افزودن ردیف کاری',
-  shortcut: 'کلید میان‌بر: Alt+N یا Insert',
+  shortcut: ADD_ROW_SHORTCUT_TITLE,
   total: 'جمع این کارکردها',
 } as const;
 
