@@ -814,7 +814,9 @@ export class PieceworkService {
         }
         // a workshop report approval locks the project `FOR UPDATE` and compares the manual logs of the row's worker and task
         // with what the reviewer saw; a log turning into that task waits for it, as a new log does (`FOR SHARE`)
-        if (existing.projectId !== null) {
+        // (a log that also moves project takes both projects `FOR UPDATE` below instead; a share lock first would deadlock two such edits)
+        const movesProject = data.projectId !== undefined && workLogId(data.projectId, 'شناسه پروژه', '', true) !== existing.projectId;
+        if (existing.projectId !== null && !movesProject) {
           await tx.select({ id: productionProjects.id }).from(productionProjects).where(eq(productionProjects.id, existing.projectId)).for('share');
         }
         // a rate typed by a rates manager is not dropped by someone without that key: changing the task gives the log the
@@ -822,7 +824,7 @@ export class PieceworkService {
         if (!data.canSetRate) {
           const programRate = fin(await PieceworkService.serverRate(tx, existing.personnelId, existing.taskId));
           if (!programRate.equals(fin(existing.unitRate))) {
-            throw new ForbiddenError('نرخ این کارکرد دستی گذاشته شده است و با عوض کردن عنوان کاری کنار می‌رود؛ این کار مجوز «مدیریت عناوین کاری و نرخ‌های پایه» را می‌خواهد.', undefined, 'PIECEWORK_LOG_TASK_RATE_LOCKED');
+            throw new ForbiddenError('نرخ این کارکرد با نرخ امروز برنامه برای عنوان کاری‌اش فرق دارد (دستی گذاشته شده یا نرخ پس از ثبت عوض شده) و با عوض کردن عنوان کنار می‌رود؛ این کار مجوز «مدیریت عناوین کاری و نرخ‌های پایه» را می‌خواهد.', undefined, 'PIECEWORK_LOG_TASK_RATE_LOCKED');
           }
         }
       }

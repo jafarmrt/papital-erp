@@ -26,7 +26,7 @@ export async function runWorkLogScheduleRowTests(shouldRun: ShouldRun): Promise<
       '10.2 package 12 review M4: a batch with a schedule row in project A and a manual log in B, run beside the mirror batch, saves both batches without a deadlock (TD-1347)',
       ['td1347', 'm4', 'projects', 'piecework', 'schedule', 'concurrency', 'package12'], mirrorBatchCase],
     ['reg_work_log_task_edit_beside_payslip_v12',
-      'v12 work-log edit (review of #507): a task change queued on a log behind a lock, run beside a payslip issue of the same worker queued after it, ends without a deadlock (the edit locks no personnel row, which a payslip issue locks before its logs)',
+      'v12 work-log edit (review of #507): a task change queued on a log behind a lock, run beside a payslip issue of the same worker queued after it, ends without a deadlock (the edit locks no personnel row, which a payslip issue locks before its logs), nor do two edits that change the task and move the log out of one project',
       ['v12', 'piecework', 'payroll', 'concurrency', 'work_log_edit'], taskEditBesidePayslipCase],
     ['reg_work_log_edit_task_v12',
       'v12 work-log edit: a free log takes another task title, at the program\'s rate of the new task when no rate is sent or at the rate sent, with its total and an audit row naming the task change; a deleted task is refused (422 PIECEWORK_LOG_TASK_INVALID) and a log of a workshop schedule row keeps its task (409 PIECEWORK_LOG_TASK_LOCKED), both unchanged',
@@ -213,5 +213,18 @@ async function taskEditBesidePayslipCase(h: Harness, wrong: string[]): Promise<s
   ], { staggered: true });
   // the edit may lose to the payslip (the log is then on it, 409): only a deadlock or another failure is wrong
   wrong.push(...outcomeProblems(['task change', 'payslip issue'], outcomes, (label, message) => label === 'task change' && message.includes('فیش')));
+
+  // review of #507 (delta): two edits that change the task and move the log out of the same project, queued behind a lock
+  // on the target project, end without a deadlock (a share lock on the old project before the move's FOR UPDATE did)
+  // the target has the lower id, so the move locks it first and then upgrades on the old project
+  const to = await scheduledProject(worker, second, 10);
+  const from = await scheduledProject(worker, second, 10);
+  const pair: number[] = [];
+  for (let i = 0; i < 2; i++) {
+    const made = await h.post('/api/piecework/logs', { items: [{ personnelId: worker, taskId: first, projectId: from, date: f.today, quantity: 1 }] });
+    pair.push(Number((made.body as { insertedIds?: unknown[] })?.insertedIds?.[0]));
+  }
+  const moves = await raceBehindRowLock<unknown>('production_projects', [to], pair.map(logId => () => PieceworkService.updateWorkLog(logId, { taskId: second, projectId: to, canSetRate: true })), { staggered: true });
+  wrong.push(...outcomeProblems(['first move with task change', 'second move with task change'], moves, () => false));
   return 'a task change and a payslip issue of the same worker end without a deadlock';
 }
