@@ -1,5 +1,6 @@
 import { useHasPermission } from '../contexts/AuthContext';
 import {
+  PIECEWORK_LOG_IMPORT_PERMISSION,
   PIECEWORK_LOG_PERMISSION,
   PIECEWORK_PAY_PERMISSION,
   PIECEWORK_PAYROLL_APPROVE_PERMISSION,
@@ -12,11 +13,15 @@ import {
  * فقط برای نمایش است؛ سرور همان کلید را خودش می‌سنجد. پیش‌تر هیچ دکمه‌ای مجوز نمی‌پرسید و کاربر به ۴۰۳ می‌خورد.
  */
 export function usePieceworkPermissions() {
+  const canLog = useHasPermission(PIECEWORK_LOG_PERMISSION);
+  const holdsLogImport = useHasPermission(PIECEWORK_LOG_IMPORT_PERMISSION);
   return {
     /** عنوان و دسته کاری، اکسل عناوین، نرخ پایه و اختصاصی، نرخ دستی کارکرد */
     canManageTasks: useHasPermission(PIECEWORK_TASKS_PERMISSION),
     /** ثبت، ویرایش و حذف کارکرد آزاد */
-    canLog: useHasPermission(PIECEWORK_LOG_PERMISSION),
+    canLog,
+    /** v12: ورود کارکرد از اکسل (همراه کلید ثبت کارکرد، مثل سرور) */
+    canImportLogs: holdsLogImport && canLog,
     /** صدور فیش پیش‌نویس، ثبت سند و ابطال فیش */
     canIssuePayroll: useHasPermission(PIECEWORK_PAYROLL_PERMISSION),
     /** v10.0.193 (TD-1083): تأیید فیش و بازگرداندن فیش تأییدشده بی پرداخت به پیش‌نویس */

@@ -13,10 +13,12 @@ import { ConflictError } from '../errors/customErrors.js';
 import { importTreasuryHistory } from '../services/historyImport/treasuryHistoryImport.service.js';
 import { STOCK_IMPORT_KIND_PERMISSIONS, importStockHistory, oldOpeningsBeforeReplay, withdrawOpeningsBeforeReplay } from '../services/historyImport/stockHistoryImport.service.js';
 import { closeHistoryImport, historyImportStatus } from '../services/historyImport/historyImportClose.service.js';
+import { importWorkLogHistory } from '../services/historyImport/workLogHistoryImport.service.js';
+import { PIECEWORK_LOG_IMPORT_PERMISSION, PIECEWORK_LOG_PERMISSION, PIECEWORK_TASKS_PERMISSION } from '../lib/permissions/pieceworkPermissions.js';
 import { OPENING_STOCK_PERMISSION } from '../lib/permissions/stockActionPermissions.js';
 import type { StockImportKind } from '../lib/historyImport/stockHistoryImport.js';
 import type { AuthUserPayload } from '../types/auth.types.js';
-import { historyImportCloseSchema, oldOpeningWithdrawSchema, stockHistoryImportSchema, treasuryHistoryImportSchema } from './historyImport.schemas.js';
+import { historyImportCloseSchema, oldOpeningWithdrawSchema, stockHistoryImportSchema, treasuryHistoryImportSchema, workLogHistoryImportSchema } from './historyImport.schemas.js';
 
 const router = Router();
 
@@ -69,6 +71,21 @@ router.post('/inventory/history-import', authorizePermission('warehouse.history_
   });
   sendImportResult(res, result, req.body.commit === true);
 }));
+
+// v12 work-log import: the colleagues' work of the sheet «کارکرد و پروژه» as free work logs; `commit: false` is the preview.
+// It needs the hand entry's key as well, and a rate other than the program's needs the rates key, as the work-log form does.
+// «پایان ورود سابقه» does not close it: it imports each month's work, not only 1405 (start plan, decision 3)
+router.post('/piecework/logs/history-import', authorizePermission(PIECEWORK_LOG_IMPORT_PERMISSION), authorizePermission(PIECEWORK_LOG_PERMISSION), importIdempotency,
+  validate(workLogHistoryImportSchema), asyncHandler(async (req, res) => {
+    const result = await importWorkLogHistory(req.body.rows, {
+      commit: req.body.commit === true,
+      userId: req.user?.id,
+      username: req.user?.username || 'سیستم',
+      req,
+      canSetRate: await can(req.user, PIECEWORK_TASKS_PERMISSION),
+    });
+    sendImportResult(res, result, req.body.commit === true);
+  }));
 
 // tool 8: the openings entered before the replay (the item form's opening, with a draft voucher), taken back first; taking
 // back needs the opening stock permission, as entering it does
