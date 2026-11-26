@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, lte } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { personnel, pieceworkLogs, pieceworkPayrolls } from '../../db/schema.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
@@ -45,7 +45,7 @@ interface PreparedRow {
 }
 
 const faDate = (iso: string) => toPersianDigits(isoToJalaliDate(iso));
-const faAmount = (v: DecimalValue) => formatPersianNumber(fin(v).round(0).toNumber());
+const faAmount = (v: DecimalValue) => `${formatPersianNumber(fin(v).round(0).toNumber())} ریال`;
 const quantityKey = (q: DecimalValue) => fin(q).round(4).toString();
 const rateKey = (r: DecimalValue) => fin(r).round(4).toString();
 
@@ -110,6 +110,30 @@ async function bookedKeys(tx: DbExecutor, ids: number[], days: string[]): Promis
   return keys;
 }
 
+/** Each colleague's live work logs per Jalali month already in the books, on any day of the month (count and amount). */
+async function bookedMonthTotals(tx: DbExecutor, prepared: readonly PreparedRow[]): Promise<Map<string, { rows: number; amount: FinancialDecimal }>> {
+  const totals = new Map<string, { rows: number; amount: FinancialDecimal }>();
+  const months = new Map<string, { firstDay: string; lastDay: string; ids: Set<number> }>();
+  for (const p of prepared) {
+    if (!p.bounds) continue;
+    const m = months.get(p.row.month) ?? { ...p.bounds, ids: new Set<number>() };
+    m.ids.add(p.row.personnelId);
+    months.set(p.row.month, m);
+  }
+  for (const [month, m] of months) {
+    const rows = await tx.select({ personnelId: pieceworkLogs.personnelId, totalAmount: pieceworkLogs.totalAmount }).from(pieceworkLogs)
+      .where(and(inArray(pieceworkLogs.personnelId, [...m.ids]), gte(pieceworkLogs.date, m.firstDay), lte(pieceworkLogs.date, m.lastDay), eq(pieceworkLogs.isDeleted, 0)));
+    for (const r of rows) {
+      const key = `${r.personnelId}|${month}`;
+      const t = totals.get(key) ?? { rows: 0, amount: fin(0) };
+      t.rows += 1;
+      t.amount = t.amount.add(r.totalAmount);
+      totals.set(key, t);
+    }
+  }
+  return totals;
+}
+
 export async function importWorkLogHistory(rows: WorkLogImportRow[], options: WorkLogImportOptions): Promise<WorkLogImportResult> {
   const prepared = prepare(rows);
   const readable = prepared.filter(p => p.outcome.status === 'ok');
@@ -126,6 +150,8 @@ export async function importWorkLogHistory(rows: WorkLogImportRow[], options: Wo
       p.outcome.date = workLogImportDate(p.row.month, colleagues.get(p.row.personnelId)?.serviceEnd ?? null) ?? undefined;
     }
     const booked = await bookedKeys(tx, ids, [...new Set(readable.map(p => p.outcome.date).filter((d): d is string => !!d))]);
+    // read before any row of this pass is written, so the month's hand-entered work is told apart from the import's own
+    const bookedMonths = await bookedMonthTotals(tx, readable);
     const serverRates = new Map<string, FinancialDecimal>();
     const inFile = new Map<string, number>();
     const sums = new Map<string, WorkLogImportTotal & { sum: FinancialDecimal }>();
@@ -140,7 +166,7 @@ export async function importWorkLogHistory(rows: WorkLogImportRow[], options: Wo
       const slip = bounds ? payslips.find(s => s.personnelId === row.personnelId && s.start && s.end && s.start <= bounds.lastDay && s.end >= bounds.firstDay) : undefined;
       if (slip) {
         outcome.status = 'error';
-        outcome.message = `این همکار برای این ماه فیش حقوق ${slip.payrollNumber} دارد (${faDate(slip.start)} تا ${faDate(slip.end)})؛ کارکرد ماهی که فیشش صادر شده با این ابزار وارد نمی‌شود، چون هیچ فیشی آن را نمی‌گیرد. اگر کارکرد آن ماه کم است، فیش را باطل کنید، کارکرد را وارد کنید و فیش را دوباره صادر کنید.`;
+        outcome.message = `این همکار فیش حقوق ${slip.payrollNumber} (${faDate(slip.start)} تا ${faDate(slip.end)}) دارد که دوره‌اش با این ماه هم‌پوشانی دارد؛ ردیف‌های این ماه با این ابزار وارد نمی‌شوند، چون فیش صادرشده کارکرد تازهٔ دوره‌اش را نمی‌گیرد. اگر کارکرد آن ماه کم است، فیش را باطل کنید، کارکرد را وارد کنید و فیش را دوباره صادر کنید.`;
         continue;
       }
 
@@ -182,8 +208,9 @@ export async function importWorkLogHistory(rows: WorkLogImportRow[], options: Wo
         projectId: row.projectId,
         date,
         quantity: p.quantity,
-        // a hand entry without the rates key takes the program's rate; here that is the same number
-        unitRate: options.canSetRate ? p.rate : undefined,
+        // always the sheet's rate: without the rates key it is the program's rate read above (another one was refused), so a
+        // rate changed meanwhile cannot slip in under the preview's figures
+        unitRate: p.rate,
         notes: (row.notes ?? '').trim(),
         createdById: options.userId,
         createdByUsername: options.username,
@@ -195,7 +222,11 @@ export async function importWorkLogHistory(rows: WorkLogImportRow[], options: Wo
       }
       if (warnings.length > 0) outcome.warnings = warnings;
       const totalKey = `${row.personnelId}|${row.month}`;
-      const t = sums.get(totalKey) ?? { personnelId: row.personnelId, month: row.month, rows: 0, amount: '0', sum: fin(0) };
+      const before = bookedMonths.get(totalKey);
+      const t = sums.get(totalKey) ?? {
+        personnelId: row.personnelId, month: row.month, rows: 0, amount: '0', sum: fin(0),
+        bookedRows: before?.rows ?? 0, bookedAmount: (before?.amount ?? fin(0)).round(4).toString(),
+      };
       t.rows += 1;
       t.sum = t.sum.add(amount);
       sums.set(totalKey, t);

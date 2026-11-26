@@ -16,7 +16,7 @@ const PREVIEW: WorkLogImportResult = {
     { rowNo: 3, status: 'ok', date: '2026-05-21', amount: '1500000', warnings: ['فی اکسل (۶۰۰٬۰۰۰) با نرخ کنونی برنامه (۵۰۰٬۰۰۰) فرق دارد؛ فی اکسل ثبت می‌شود.'] },
     { rowNo: 4, status: 'duplicate', date: '2026-05-21', amount: '300000', message: 'کارکردی با همین همکار پیش‌تر در برنامه ثبت شده است.' },
   ],
-  totals: [{ personnelId: 7, month: '1405-02', rows: 2, amount: '11800000' }],
+  totals: [{ personnelId: 7, month: '1405-02', rows: 2, amount: '11800000', bookedRows: 1, bookedAmount: '500000' }],
 };
 const fetchJson = vi.fn(async (url: string, _init?: RequestInit): Promise<unknown> => {
   if (url.startsWith('/personnel')) return [{ id: 7, fullName: 'علی آقایی' }];
@@ -59,7 +59,7 @@ const renderLogs = () => renderWithQuery(
 );
 afterEach(() => { cleanup(); fetchJson.mockClear(); });
 
-describe('v12 «ورود کارکرد از اکسل»', () => {
+describe('v12 work-log Excel import window', () => {
   it('shows only with the import key and the hand entry\'s key', () => {
     Object.assign(keys, { canLog: true, canImportLogs: false });
     renderLogs();
@@ -93,6 +93,9 @@ describe('v12 «ورود کارکرد از اکسل»', () => {
       { rowNo: 4, month: '1405-02', personnelId: 7, taskId: 1, projectId: null, quantity: '3', unitRate: '100000', notes: '(ورود از اکسل)' },
     ]);
     expect(screen.getByText(/نرخ کنونی برنامه/)).toBeTruthy();
+    // a colleague with hand-entered work in the month is pointed out (the import's rows on the last day are not held)
+    expect(screen.getByText(/۱ ردیف، ۵۰۰٬۰۰۰/)).toBeTruthy();
+    expect(screen.getByText(/پیش از ثبت ببینید/)).toBeTruthy();
     expect(screen.getByText('تکراری نیست، ثبت شود')).toBeTruthy();
     // a held row keeps the post closed until the preview passes
     expect(screen.queryByText(/ثبت نهایی/)).toBeNull();

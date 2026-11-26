@@ -24,11 +24,11 @@ const lookups: WorkLogLookups = {
   projects: [{ id: 11, title: 'پروژه آلمان 1405-1', projectCode: 'P-11' }, { id: 12, title: 'پروژه ایتالیا امرجنسی 1405- 1' }],
 };
 
-describe('v12 work-log import: the sheet «کارکرد و پروژه»', () => {
-  it('reads the rows by their headers, rounds Excel hours to four decimals and drops empty rows', () => {
+describe('v12 work-log import: the work and project sheet', () => {
+  it('reads the rows by their headers, keeps the digits of Excel hours without float noise and drops empty rows', () => {
     expect(rows.map(r => r.rowNo)).toEqual([2, 3, 4, 5, 7]);
     expect(rows[0]).toMatchObject({ sourceRow: '41', monthText: '2', personName: 'علی آقایی', activity: 'برش', count: '103', rate: '100000', total: '10300000', projectName: 'پروژه آلمان 1405-1' });
-    expect(rows[1].hours).toBe('1.3333');
+    expect(rows[1].hours).toBe('1.3333333333');
     expect(rows[4]).toMatchObject({ rate: '50000', total: '100000' });
     expect(numberText(0.1 + 0.2)).toBe('0.3');
     expect(parseWorkLogSheet([['تاریخ', 'مبلغ'], ['1405-01-01', 1]])).toEqual([]);
@@ -47,7 +47,7 @@ describe('v12 work-log import: the sheet «کارکرد و پروژه»', () => 
     expect(monthOfRow('13', 1405)).toBe('');
   });
 
-  it('offers the names the app knows: same name (Arabic forms too), a title starting with the activity and a bracket, a project, «بدون پروژه» as none', () => {
+  it('offers the names the app knows: same name (Arabic forms too), a title starting with the activity and a bracket, a project, the no-project name as none', () => {
     const m = suggestWorkLogMapping(rows, emptyWorkLogMapping(), lookups);
     expect(m.personnel).toEqual({ 'علی آقایی': 7, 'علي آقايي': 7, 'آسیه کیانی': 8 });
     expect(m.tasks).toEqual({ 'برش': 1, 'آموزش': 2 });
@@ -59,13 +59,13 @@ describe('v12 work-log import: the sheet «کارکرد و پروژه»', () => 
     expect(kept.tasks['برش']).toBe(3);
   });
 
-  it('resolves a row: the hours of an hourly task, the count of another, no project for «بدون پروژه», the notes with the payroll row', () => {
+  it('resolves a row: the hours of an hourly task, the count of another, no project for the no-project name, the notes with the payroll row', () => {
     const m = suggestWorkLogMapping(rows, emptyWorkLogMapping(), lookups);
     const piece = resolveWorkLogRow(rows[0], m, { year: 1405, lookups });
     expect(piece).toMatchObject({ status: 'ready', row: { month: '1405-02', personnelId: 7, taskId: 1, projectId: 11, quantity: '103', unitRate: '100000', excelTotal: '10300000' } });
     if (piece.status === 'ready') expect(piece.row.notes).toBe('سفارش الف (ورود از اکسل، ردیف حقوق 41)');
     const hourly = resolveWorkLogRow(rows[1], m, { year: 1405, lookups, accepted: new Set(['row#3']) });
-    expect(hourly).toMatchObject({ status: 'ready', row: { taskId: 2, projectId: null, quantity: '1.3333', duplicateAccepted: true } });
+    expect(hourly).toMatchObject({ status: 'ready', row: { taskId: 2, projectId: null, quantity: '1.3333333333', duplicateAccepted: true } });
     expect(resolveWorkLogRow(rows[2], m, { year: 1405, lookups }).status).toBe('skipped');
     const unknown = resolveWorkLogRow(rows[4], m, { year: 1405, lookups });
     expect(unknown.status).toBe('unresolved');

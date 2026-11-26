@@ -53,6 +53,12 @@ export interface WorkLogImportTotal {
   month: string;
   rows: number;
   amount: string;
+  /**
+   * the colleague's live work logs already in the books in that month, on any day (a month partly entered by hand would
+   * otherwise be counted twice: the import dates its rows on the last day, so they are not held as duplicates)
+   */
+  bookedRows: number;
+  bookedAmount: string;
 }
 
 export interface WorkLogImportResult {

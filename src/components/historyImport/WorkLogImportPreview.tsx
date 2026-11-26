@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { WorkLogImportResult } from '../../lib/historyImport/workLogImport';
 import { workLogRowKey, type ResolvedWorkLogRow } from '../../lib/historyImport/workLogSheet';
-import { formatPersianDate, formatPersianNumber, jalaliMonthLabel } from '../../utils';
+import { formatPersianDate, formatPersianNumber, jalaliMonthLabel, toPersianDigits } from '../../utils';
 
 /** «اردیبهشت ۱۴۰۵» for `1405-02` */
 export const jalaliMonthLabelOf = (month: string): string => jalaliMonthLabel(month.replace('-', '/'));
@@ -20,6 +20,9 @@ interface Props {
   amountText: (amount: string | number) => string;
   onAccept: (key: string, on: boolean) => void;
 }
+
+/** A colleague already has work in the books in the month: the import dates its rows on the last day, so they are not held */
+export const BOOKED_MONTH_NOTE = 'برای همکارانی که در همین ماه کارکردی در برنامه دارند، پیش از ثبت ببینید آن کارکرد در اکسل هم نیامده باشد؛ ردیف‌های اکسل در روز آخر ماه ثبت می‌شوند و با کارکرد روزهای دیگر تکراری شمرده نمی‌شوند.';
 
 export function WorkLogImportPreview({ resolved, result, accepted, personName, taskTitle, projectTitle, amountText, onAccept }: Props) {
   const [onlyProblems, setOnlyProblems] = useState(false);
@@ -57,7 +60,7 @@ export function WorkLogImportPreview({ resolved, result, accepted, personName, t
           <p className="text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">جمع کارکرد هر همکار در هر ماه (ردیف‌های درست)</p>
           <table className="w-full text-xs text-right">
             <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500">
-              <tr><th className="p-2">ماه</th><th className="p-2">همکار</th><th className="p-2">شمار ردیف</th><th className="p-2">جمع</th></tr>
+              <tr><th className="p-2">ماه</th><th className="p-2">همکار</th><th className="p-2">شمار ردیف</th><th className="p-2">جمع</th><th className="p-2">پیش‌تر در برنامه در همین ماه</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
               {result.totals.map(t => (
@@ -66,10 +69,16 @@ export function WorkLogImportPreview({ resolved, result, accepted, personName, t
                   <td className="p-2">{personName(t.personnelId)}</td>
                   <td className="p-2">{formatPersianNumber(t.rows)}</td>
                   <td className="p-2 font-bold whitespace-nowrap">{amountText(t.amount)}</td>
+                  <td className={`p-2 whitespace-nowrap ${t.bookedRows > 0 ? 'font-bold text-amber-700 dark:text-amber-400' : 'text-slate-400'}`}>
+                    {t.bookedRows > 0 ? `${formatPersianNumber(t.bookedRows)} ردیف، ${amountText(t.bookedAmount)}` : '—'}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {result.totals.some(t => t.bookedRows > 0) && (
+            <p className="text-[11px] font-bold text-amber-700 dark:text-amber-400 mt-1">{BOOKED_MONTH_NOTE}</p>
+          )}
         </div>
       )}
       <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
@@ -102,7 +111,7 @@ export function WorkLogImportPreview({ resolved, result, accepted, personName, t
                   <td className="p-2">{personName(r.row.personnelId)}</td>
                   <td className="p-2">{taskTitle(r.row.taskId)}</td>
                   <td className="p-2">{projectTitle(r.row.projectId)}</td>
-                  <td className="p-2 whitespace-nowrap">{formatPersianNumber(Number(r.row.quantity), 4)}</td>
+                  <td className="p-2 whitespace-nowrap">{toPersianDigits(r.row.quantity)}</td>
                   <td className="p-2 whitespace-nowrap">{amountText(r.row.unitRate)}</td>
                   <td className="p-2 font-bold whitespace-nowrap">{o?.amount ? amountText(o.amount) : ''}</td>
                   <td className="p-2 min-w-[14rem]">{statusCell(r)}</td>

@@ -42,14 +42,14 @@ const cellText = (value: unknown): string => (value === null || value === undefi
 export const nameKey = headerKey;
 
 /**
- * A number cell as plain decimal text: a number is rounded to four decimals (Excel hours like 1.3333333 or float noise), a
- * text keeps its digits without thousands separators; anything else stays as written so the server names the row.
+ * A number cell as plain decimal text: a number keeps every digit Excel holds, only the float noise of its last places is
+ * dropped (1.3333333333 hours stays as it is, so quantity × rate is the sheet's «جمع»; 0.30000000000000004 is 0.3), a text
+ * keeps its digits without thousands separators; anything else stays as written so the server names the row.
  */
 export function numberText(value: unknown): string {
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) return '';
-    const rounded = Math.round(value * 10_000) / 10_000;
-    return rounded.toFixed(4).replace(/\.?0+$/, '');
+    return String(Number(value.toPrecision(12)));
   }
   return amountText(value);
 }
