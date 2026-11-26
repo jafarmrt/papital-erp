@@ -1,5 +1,5 @@
-import { useId } from 'react';
-import { Search, Plus, Edit2, Trash2, CheckCircle2, Clock, FolderKanban } from 'lucide-react';
+import { useId, useState } from 'react';
+import { Search, Plus, Edit2, Trash2, CheckCircle2, Clock, FolderKanban, FileSpreadsheet } from 'lucide-react';
 import { PieceworkLog } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
 import { formatQuantityOrTime, formatPersianDate, formatPersianCode, isoToJalaliDate } from '../../utils';
@@ -7,6 +7,7 @@ import { JalaliDateInput } from '../common/JalaliDateInput';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { PieceworkLogsPagination, type PieceworkLogsPaginationState } from './PieceworkLogsPagination';
+import { WorkLogImportModal } from '../historyImport/WorkLogImportModal';
 
 interface PieceworkLogsTabProps {
   logsList: PieceworkLog[];
@@ -58,7 +59,9 @@ export function PieceworkLogsTab({
   const rial = useRialDisplay();
   const curLbl = rial.label;
   // v9.0.320 (TD-805): ثبت، ویرایش و حذف کارکرد با «ثبت و ویرایش کارکرد پرسنل»
-  const { canLog } = usePieceworkPermissions();
+  const { canLog, canImportLogs } = usePieceworkPermissions();
+  // v12: «ورود کارکرد از اکسل»
+  const [importOpen, setImportOpen] = useState(false);
   return (
     <div className="space-y-4">
       {/* Filter Bar */}
@@ -75,6 +78,16 @@ export function PieceworkLogsTab({
             />
           </div>
 
+          {canImportLogs && (
+            <button
+              type="button"
+              onClick={() => setImportOpen(true)}
+              className="px-4 py-2 bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+            >
+              <FileSpreadsheet size={16} />
+              <span>ورود کارکرد از اکسل</span>
+            </button>
+          )}
           {canLog && (
             <button
               onClick={onOpenAddModal}
@@ -268,6 +281,7 @@ export function PieceworkLogsTab({
         </div>
         {pagination && <PieceworkLogsPagination state={pagination} loading={loading} />}
       </div>
+      {canImportLogs && <WorkLogImportModal isOpen={importOpen} onClose={() => setImportOpen(false)} />}
     </div>
   );
 }

@@ -834,7 +834,10 @@ export class PieceworkService {
       const newRate: FinancialDecimal = manualRate !== undefined
         ? fin(manualRate)
         : taskChanged ? fin(await PieceworkService.serverRate(tx, existing.personnelId, newTaskId)) : fin(existing.unitRate);
-      const newTotal = fin(newQty).multiply(newRate);
+      // v12 (review of #506): the total is worked out again only when the quantity or the rate changes. The stored quantity
+      // has four decimals, so 80 minutes (1.3333…) × 600,000 = 800,000 would become 799,980 on an edit of the notes or project
+      const sameAmount = Number(newQty) === Number(existing.quantity) && fin(newRate).equals(fin(existing.unitRate));
+      const newTotal = sameAmount ? fin(existing.totalAmount) : fin(newQty).multiply(newRate);
       const newProjectId = data.projectId !== undefined ? workLogId(data.projectId, 'شناسه پروژه', '', true) : existing.projectId;
       const projectMoved = newProjectId !== existing.projectId;
       // v9.0.282 (TD-736): کارکرد ردیف برنامه که به پروژه دیگر می‌رود پیوند ردیف پروژه پیشین را برمی‌دارد
