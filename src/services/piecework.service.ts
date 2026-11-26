@@ -1,14 +1,14 @@
 import { eq, and } from 'drizzle-orm';
 import { orm, type DbExecutor, type DbTransaction } from '../db/drizzle.js';
-import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkLogs, pieceworkPayrolls, taskCategories } from '../db/schema.js';
-import { NotFoundError, BadRequestError, ConflictError, ValidationError } from '../errors/customErrors.js';
+import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkLogs, pieceworkPayrolls, productionProjects, taskCategories, workshopTaskReports } from '../db/schema.js';
+import { NotFoundError, BadRequestError, ConflictError, ForbiddenError, ValidationError } from '../errors/customErrors.js';
 import { requireStorageDate } from '../lib/storageDate.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { PieceworkPayrollService } from './piecework/payroll.service.js';
 import { lockEditableWorkLog, workLogFreeOfLivePayroll } from './piecework/workLogPayrollLink.js';
 import { auditTaskCreated, auditTaskDeleted, auditTaskRestored, auditTasksCleared, auditTasksImported, auditTaskUpdated, auditWorkLogCreated, auditWorkLogDeleted, auditWorkLogUpdated, type AuditActor } from './piecework/pieceworkAudit.js';
 import { activePersonnelRate, savePersonnelRate, type PersonnelRateInput, type RateActor } from './piecework/personnelRate.js';
-import { assertLinkedRowQuantity, assertScheduleRowsFree, linkScheduleRows, lockProjectsOfLogMove, lockScheduleProjects, unlinkScheduleRow } from './piecework/scheduleRowLink.js';
+import { assertLinkedRowQuantity, assertScheduleRowsFree, isScheduleLinkedLog, linkScheduleRows, lockProjectsOfLogMove, lockScheduleProjects, unlinkScheduleRow } from './piecework/scheduleRowLink.js';
 import { syncScheduleProgress } from './piecework/scheduleProgressSync.js';
 import { revertWorkshopReportsOfLog } from './piecework/workshopReportRevert.js';
 import type { ScheduleRowRef } from '../lib/projects/scheduleWorkLog.js';
@@ -777,6 +777,10 @@ export class PieceworkService {
       unitRate?: number | string;
       notes?: string;
       projectId?: number | string | null;
+      /** v12: another task title; without a manual rate the log takes the program's rate of the new task */
+      taskId?: number | string;
+      /** the user holds the rates key (`piecework.manage_tasks`); without it a log with a manual rate keeps its task */
+      canSetRate?: boolean;
     },
     executor?: DbTransaction,
     actor: AuditActor = {}
@@ -790,8 +794,46 @@ export class PieceworkService {
       if (isoDate !== existing.date) await assertWorkLogsWithinService(tx, [{ personnelId: existing.personnelId, isoDate }]);
       // v9.0.280 (TD-812): مقدار بزرگ‌تر از صفر، نرخ نامنفی و پروژه زنده، مانند ثبت کارکرد
       const newQty = data.quantity !== undefined ? workLogQuantity(data.quantity, '') : existing.quantity;
+      // v12 (start plan V12_WORKLOG_IMPORT_START_PLAN.md part B): the task title of a free log can be changed; the new task
+      // must be live (read `FOR SHARE` like on create), and a log of a workshop schedule row or of an approved workshop report
+      // keeps its task, since that row or report names the worker and the task
+      const newTaskId = data.taskId !== undefined ? workLogId(data.taskId, 'شناسه عنوان کار', '') as number : existing.taskId;
+      const taskChanged = newTaskId !== existing.taskId;
+      if (taskChanged) {
+        const [report] = await tx.select({ id: workshopTaskReports.id }).from(workshopTaskReports)
+          .where(and(eq(workshopTaskReports.pieceworkLogId, id), eq(workshopTaskReports.status, 'approved')));
+        if (report || await isScheduleLinkedLog(tx, existing.projectId, id)) {
+          throw new ConflictError('این کارکرد از برنامهٔ کارگاه پروژه یا گزارش پایان کار ثبت شده و عنوان کاری‌اش عوض نمی‌شود؛ کارکرد را حذف و از همان‌جا دوباره ثبت کنید.', undefined, 'PIECEWORK_LOG_TASK_LOCKED');
+        }
+        // review of #507: only the task is checked live; the personnel is the log's own and is not locked here, since a payslip
+        // issue locks the personnel and then its logs (the other order would deadlock against it)
+        const [task] = await tx.select({ id: pieceworkTasks.id }).from(pieceworkTasks)
+          .where(and(eq(pieceworkTasks.id, newTaskId), eq(pieceworkTasks.isDeleted, 0))).for('share');
+        if (!task) {
+          throw new ValidationError(`عنوان کاری با شناسه ${newTaskId.toLocaleString('fa-IR')} وجود ندارد یا حذف شده است؛ کارکرد ویرایش نشد.`, { taskIds: [newTaskId] }, 'PIECEWORK_LOG_TASK_INVALID');
+        }
+        // a workshop report approval locks the project `FOR UPDATE` and compares the manual logs of the row's worker and task
+        // with what the reviewer saw; a log turning into that task waits for it, as a new log does (`FOR SHARE`)
+        // (a log that also moves project takes both projects `FOR UPDATE` below instead; a share lock first would deadlock two such edits)
+        const movesProject = data.projectId !== undefined && workLogId(data.projectId, 'شناسه پروژه', '', true) !== existing.projectId;
+        if (existing.projectId !== null && !movesProject) {
+          await tx.select({ id: productionProjects.id }).from(productionProjects).where(eq(productionProjects.id, existing.projectId)).for('share');
+        }
+        // a rate typed by a rates manager is not dropped by someone without that key: changing the task gives the log the
+        // program's rate, so it needs the key when the stored rate is not the program's rate of the current task
+        if (!data.canSetRate) {
+          const programRate = fin(await PieceworkService.serverRate(tx, existing.personnelId, existing.taskId));
+          if (!programRate.equals(fin(existing.unitRate))) {
+            throw new ForbiddenError('نرخ این کارکرد با نرخ امروز برنامه برای عنوان کاری‌اش فرق دارد (دستی گذاشته شده یا نرخ پس از ثبت عوض شده) و با عوض کردن عنوان کنار می‌رود؛ این کار مجوز «مدیریت عناوین کاری و نرخ‌های پایه» را می‌خواهد.', undefined, 'PIECEWORK_LOG_TASK_RATE_LOCKED');
+          }
+        }
+      }
       const manualRate = data.unitRate !== undefined ? workLogManualRate(data.unitRate, '') : undefined;
-      const newRate: FinancialDecimal = manualRate !== undefined ? fin(manualRate) : existing.unitRate;
+      // a new task without a manual rate takes the program's rate for it (the personnel's custom rate, else the task's base
+      // rate), as a new log would; the old task's rate would no longer match the title
+      const newRate: FinancialDecimal = manualRate !== undefined
+        ? fin(manualRate)
+        : taskChanged ? fin(await PieceworkService.serverRate(tx, existing.personnelId, newTaskId)) : fin(existing.unitRate);
       // v12 (review of #506): the total is worked out again only when the quantity or the rate changes. The stored quantity
       // has four decimals, so 80 minutes (1.3333…) × 600,000 = 800,000 would become 799,980 on an edit of the notes or project
       const sameAmount = Number(newQty) === Number(existing.quantity) && fin(newRate).equals(fin(existing.unitRate));
@@ -801,7 +843,7 @@ export class PieceworkService {
       // v9.0.282 (TD-736): کارکرد ردیف برنامه که به پروژه دیگر می‌رود پیوند ردیف پروژه پیشین را برمی‌دارد
       if (projectMoved) await lockProjectsOfLogMove(tx, existing.projectId, newProjectId);
       if (newProjectId !== null && projectMoved) {
-        await assertWorkLogParentsLive(tx, [{ personnelId: existing.personnelId, taskId: existing.taskId, projectId: newProjectId }]);
+        await assertWorkLogParentsLive(tx, [{ personnelId: existing.personnelId, taskId: newTaskId, projectId: newProjectId }]);
       }
       // 10.2 package 12 (TD-1346): a new quantity of a schedule-linked log stays within its row, as on create (TD-955)
       const quantityChanged = Number(newQty) !== Number(existing.quantity);
@@ -811,6 +853,7 @@ export class PieceworkService {
         date: isoDate,
         dateIso: isoDate,
         quantity: newQty,
+        taskId: newTaskId,
         unitRate: money(newRate),
         totalAmount: money(newTotal),
         projectId: newProjectId,
