@@ -7,6 +7,8 @@
 export const PIECEWORK_TASKS_PERMISSION = 'piecework.manage_tasks';
 /** ثبت، ویرایش و حذف کارکرد آزاد */
 export const PIECEWORK_LOG_PERMISSION = 'piecework.log';
+/** v12: ورود یک‌جای کارکرد پرسنل از اکسل (همراه `piecework.log`؛ فی دیگر از نرخ برنامه `piecework.manage_tasks` می‌خواهد) */
+export const PIECEWORK_LOG_IMPORT_PERMISSION = 'piecework.log_import';
 /** صدور فیش پیش‌نویس، ثبت سند و ابطال فیش */
 export const PIECEWORK_PAYROLL_PERMISSION = 'piecework.payroll';
 /** v10.0.193 (TD-1083): تأیید فیش پیش‌نویس و بازگرداندن فیش تأییدشده بی پرداخت به پیش‌نویس */
