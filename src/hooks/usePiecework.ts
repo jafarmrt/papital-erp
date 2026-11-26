@@ -43,7 +43,7 @@ import { searchMatches } from '../lib/search/searchText';
  * v12 (start plan V12_WORKLOG_IMPORT_START_PLAN.md part B): the log on the edit form, with the task it opened with and whether
  * the rate was typed; a new task title without a typed rate sends no rate, so the server takes the program's rate for it.
  */
-export type EditingWorkLog = PieceworkLog & { originalTaskId?: number; rateEdited?: boolean };
+export type EditingWorkLog = PieceworkLog & { originalTaskId?: number; originalUnitRate?: number; rateEdited?: boolean };
 
 /** The body of `PUT /piecework/logs/:id` from the edit form */
 export function workLogEditPayload(log: EditingWorkLog, quantity: number) {
@@ -254,7 +254,8 @@ export function usePiecework() {
   }, [projectsList]);
 
   // v8.0.109 (TD-386): نرخ‌های اختصاصی پرسنل انتخاب‌شده در فرم ثبت کارکرد؛ نرخ ردیف‌های دستی‌نشده با آن‌ها تازه می‌شود
-  const logRatesPersonnel = isLogModalOpen && !editingLog && selectedPersonnelForLog ? Number(selectedPersonnelForLog) : null;
+  // v12 (part B): the edit form reads the colleague's custom rates too, to show the rate a new task title would take
+  const logRatesPersonnel = !isLogModalOpen ? null : editingLog ? Number(editingLog.personnelId) || null : selectedPersonnelForLog ? Number(selectedPersonnelForLog) : null;
   const logRatesQuery = usePieceworkPersonnelRatesQuery(logRatesPersonnel);
   const logRatesData = logRatesPersonnel !== null ? logRatesQuery.data : undefined;
   useEffect(() => {
@@ -280,6 +281,9 @@ export function usePiecework() {
     setBatchLogRows(newRows);
   };
 
+  /** the rate the server gives a log of this task for the colleague on the form (custom rate, else base rate) */
+  const suggestedLogRate = (taskId: number | '') => suggestedRate(taskId, tasksList, logPersonnelRates);
+
   const handleAddLogRow = () => {
     setBatchLogRows(prev => [
       ...prev,
@@ -301,7 +305,7 @@ export function usePiecework() {
   };
 
   const handleOpenEditLogModal = (log: PieceworkLog) => {
-    setEditingLog({ ...log, originalTaskId: log.taskId, rateEdited: false });
+    setEditingLog({ ...log, originalTaskId: log.taskId, originalUnitRate: Number(log.unitRate) || 0, rateEdited: false });
     setIsLogModalOpen(true);
   };
 
@@ -816,6 +820,7 @@ export function usePiecework() {
     personnelSelectOptions,
     projectSelectOptions,
     handleTaskChangeInRow,
+    suggestedLogRate,
     handleAddLogRow,
     handleRemoveLogRow,
     handleOpenAddLogModal,

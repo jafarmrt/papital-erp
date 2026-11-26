@@ -40,12 +40,17 @@ function BatchForm({ initial, onAdd }: { initial: BatchLogRow[]; onAdd: () => vo
 }
 
 describe('v12 batch work-log form', () => {
-  it('reads Alt+N, its key on a Persian layout and Insert as a new row, not Ctrl+Alt+N', () => {
-    expect(isAddRowShortcut({ altKey: true, ctrlKey: false, metaKey: false, key: 'n' })).toBe(true);
-    expect(isAddRowShortcut({ altKey: true, ctrlKey: false, metaKey: false, key: 'د' })).toBe(true);
-    expect(isAddRowShortcut({ altKey: false, ctrlKey: false, metaKey: false, key: 'Insert' })).toBe(true);
-    expect(isAddRowShortcut({ altKey: true, ctrlKey: true, metaKey: false, key: 'n' })).toBe(false);
-    expect(isAddRowShortcut({ altKey: false, ctrlKey: false, metaKey: false, key: 'n' })).toBe(false);
+  it('reads Alt+N, its key on a Persian layout and Insert as a new row; not Ctrl+Alt+N, Shift+Insert (paste) or a held key', () => {
+    const key = (k: string, extra: Partial<{ altKey: boolean; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; repeat: boolean }> = {}) =>
+      isAddRowShortcut({ altKey: false, ctrlKey: false, metaKey: false, shiftKey: false, key: k, ...extra });
+    expect(key('n', { altKey: true })).toBe(true);
+    expect(key('د', { altKey: true })).toBe(true);
+    expect(key('Insert')).toBe(true);
+    expect(key('n', { altKey: true, ctrlKey: true })).toBe(false);
+    expect(key('n')).toBe(false);
+    expect(key('Insert', { shiftKey: true })).toBe(false);
+    expect(key('Insert', { ctrlKey: true })).toBe(false);
+    expect(key('n', { altKey: true, repeat: true })).toBe(false);
   });
 
   it('adds a row on Alt+N with the focus on its task, and is a wide window', () => {
@@ -56,6 +61,8 @@ describe('v12 batch work-log form', () => {
     expect(document.activeElement?.id).toMatch(/-task-id-1$/);
     expect(screen.getByTitle(BATCH_LOG_TEXT.shortcut)).toBeTruthy();
     expect(screen.getByRole('dialog').getAttribute('class')).toContain('sm:max-w-6xl');
+    act(() => { fireEvent.keyDown(window, { key: 'Insert', shiftKey: true }); });
+    expect(onAdd).toHaveBeenCalledTimes(1);
   });
 
   it('shows the total of the rows that will be sent: amount, and each unit\'s quantity (hours as hours)', () => {
@@ -70,10 +77,10 @@ describe('v12 batch work-log form', () => {
 });
 
 describe('v12 work-log edit: the task title', () => {
-  const log = { id: 9, personnelName: 'رضا', date: '2026-10-09', taskId: 1, unit: 'عدد', quantity: 4, unitRate: 1000, projectId: null, originalTaskId: 1, rateEdited: false } as unknown as EditingWorkLog;
+  const log = { id: 9, personnelName: 'رضا', date: '2026-10-09', taskId: 1, unit: 'عدد', quantity: 4, unitRate: 3000, projectId: null, originalTaskId: 1, originalUnitRate: 3000, rateEdited: false } as unknown as EditingWorkLog;
 
   it('sends the new task without a rate unless one was typed, and no task when it did not change', () => {
-    expect(workLogEditPayload(log, 4)).toEqual({ date: '2026-10-09', projectId: null, quantity: 4, unitRate: 1000 });
+    expect(workLogEditPayload(log, 4)).toEqual({ date: '2026-10-09', projectId: null, quantity: 4, unitRate: 3000 });
     expect(workLogEditPayload({ ...log, taskId: 2, unitRate: 600000 }, 4)).toEqual({ date: '2026-10-09', projectId: null, quantity: 4, taskId: 2 });
     expect(workLogEditPayload({ ...log, taskId: 2, unitRate: 700000, rateEdited: true }, 4)).toEqual({ date: '2026-10-09', projectId: null, quantity: 4, taskId: 2, unitRate: 700000 });
   });
@@ -86,7 +93,8 @@ describe('v12 work-log edit: the task title', () => {
           <PieceworkLogModal isOpen onClose={() => undefined} onSubmit={(e) => e.preventDefault()} editingLog={editing} setEditingLog={setEditing}
             selectedPersonnelForLog="" setSelectedPersonnelForLog={vi.fn()} defaultBatchProjectId="" setDefaultBatchProjectId={vi.fn()} logDate="" setLogDate={vi.fn()}
             batchLogRows={[]} setBatchLogRows={vi.fn()} tasksList={TASKS} personnelSelectOptions={[]} projectSelectOptions={[]}
-            taskSelectOptions={TASKS.map(t => ({ value: String(t.id), label: t.title }))} onTaskChangeInRow={vi.fn()} onAddLogRow={vi.fn()} onRemoveLogRow={vi.fn()} />
+            taskSelectOptions={TASKS.map(t => ({ value: String(t.id), label: t.title }))} onTaskChangeInRow={vi.fn()} onAddLogRow={vi.fn()} onRemoveLogRow={vi.fn()}
+            suggestedLogRate={(taskId) => (taskId === 2 ? 650000 : 1000)} />
         </QueryClientProvider>
       );
     }
@@ -98,6 +106,13 @@ describe('v12 work-log edit: the task title', () => {
     fireEvent.click(screen.getByRole('option', { name: 'آموزش (هرجلسه)' }));
     expect(screen.getByText(EDIT_TASK_RATE_NOTE)).toBeTruthy();
     expect(screen.getByLabelText(/تعداد \/ کارکرد \(ساعت\)/)).toBeTruthy();
+    // the colleague's custom rate of the new task is shown, as the server will take it
+    expect((screen.getByLabelText(/نرخ واحد/) as HTMLInputElement).value).toContain('۶۵۰');
+    // a wrong pick taken back restores the log's own (manual) rate
+    fireEvent.click(screen.getByRole('button', { name: /عنوان کاری/ }));
+    fireEvent.click(screen.getByRole('option', { name: 'برش' }));
+    expect((screen.getByLabelText(/نرخ واحد/) as HTMLInputElement).value).toContain('۳٬۰۰۰');
+    expect(screen.queryByText(EDIT_TASK_RATE_NOTE)).toBeNull();
   });
 });
 

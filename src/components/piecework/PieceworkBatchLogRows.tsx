@@ -83,7 +83,8 @@ export function PieceworkBatchLogRows({ fieldId, rows, setRows, tasksList, proje
 
   const setRow = (idx: number, patch: Partial<BatchLogRow>) => setRows(prev => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
   const totals = batchLogTotals(rows, tasksList);
-  const ROW_GRID = 'flex flex-col gap-2 sm:grid sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1.3fr)_8rem_9rem_8rem_2.5rem] sm:items-end';
+  // one line per row from a laptop width up; a phone or a tablet keeps the fields one under another
+  const ROW_GRID = 'flex flex-col gap-2 lg:grid lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.3fr)_8rem_9rem_8rem_2.5rem] lg:items-end';
 
   return (
     <div className="border border-slate-200 rounded-2xl overflow-hidden">
@@ -132,7 +133,7 @@ export function PieceworkBatchLogRows({ fieldId, rows, setRows, tasksList, proje
                   onChange={(val) => setRow(idx, { unitRate: val, rateEdited: true })} readOnly={!canSetRate} currency="IRR" variant="table" placeholder="۰"
                   className="w-full" containerClassName="w-full bg-white border border-slate-200 rounded-lg" inputClassName="px-2.5 py-1.5 text-xs font-bold text-slate-800 text-center font-mono" />
               </div>
-              <div className="text-left font-mono font-bold text-xs text-blue-700 whitespace-nowrap sm:pb-2">
+              <div className="text-left font-mono font-bold text-xs text-blue-700 whitespace-nowrap lg:pb-2">
                 {rowTotal > 0 ? rial.amount(rowTotal) : ''}
               </div>
               <div className="flex justify-end">

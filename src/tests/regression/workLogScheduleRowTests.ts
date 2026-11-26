@@ -4,7 +4,7 @@ import { PieceworkService } from '../../services/piecework.service.js';
 import type { TestCaseResult } from '../types.js';
 import type { Harness, ShouldRun } from '../security/workflowTestHarness.js';
 import { outcomeProblems, raceBehindRowLock } from '../invariants/concurrencyHarness.js';
-import { newWorker } from '../invariants/payrollScenarios.js';
+import { issueApproved, newWorker } from '../invariants/payrollScenarios.js';
 import { brief, fixture } from './documentEntryTests.js';
 import { runReservationCases } from './stockReservationTests.js';
 
@@ -25,6 +25,9 @@ export async function runWorkLogScheduleRowTests(shouldRun: ShouldRun): Promise<
     ['reg_work_log_mirror_batches_no_deadlock_td_1347',
       '10.2 package 12 review M4: a batch with a schedule row in project A and a manual log in B, run beside the mirror batch, saves both batches without a deadlock (TD-1347)',
       ['td1347', 'm4', 'projects', 'piecework', 'schedule', 'concurrency', 'package12'], mirrorBatchCase],
+    ['reg_work_log_task_edit_beside_payslip_v12',
+      'v12 work-log edit (review of #507): a task change queued on a log behind a lock, run beside a payslip issue of the same worker queued after it, ends without a deadlock (the edit locks no personnel row, which a payslip issue locks before its logs)',
+      ['v12', 'piecework', 'payroll', 'concurrency', 'work_log_edit'], taskEditBesidePayslipCase],
     ['reg_work_log_edit_task_v12',
       'v12 work-log edit: a free log takes another task title, at the program\'s rate of the new task when no rate is sent or at the rate sent, with its total and an audit row naming the task change; a deleted task is refused (422 PIECEWORK_LOG_TASK_INVALID) and a log of a workshop schedule row keeps its task (409 PIECEWORK_LOG_TASK_LOCKED), both unchanged',
       ['v12', 'piecework', 'schedule', 'work_log_edit'], editTaskCase],
@@ -175,5 +178,40 @@ async function editTaskCase(h: Harness, wrong: string[]): Promise<string> {
   if (locked.status !== 409 || codeOf(locked) !== 'PIECEWORK_LOG_TASK_LOCKED' || Number(kept?.task_id) !== first) wrong.push(`a task change of a schedule log answered ${brief(locked)} (task now ${kept?.task_id}), expected 409 PIECEWORK_LOG_TASK_LOCKED and the task kept`);
   const quantityOnly = await h.put(`/api/piecework/logs/${scheduledId}`, { quantity: 6 });
   if (quantityOnly.status !== 200) wrong.push(`a quantity edit of a schedule log answered ${brief(quantityOnly)}, expected 200`);
+
+  // without the rates key (as the route calls it): a log at its program rate changes task at the new task's rate; a log
+  // whose rate a manager typed keeps its task (403 PIECEWORK_LOG_TASK_RATE_LOCKED), so the manager's rate is not dropped
+  const plain = await h.post('/api/piecework/logs', { items: [{ personnelId: worker, taskId: other, date: f.today, quantity: 2 }] });
+  const plainId = Number((plain.body as { insertedIds?: unknown[] })?.insertedIds?.[0]);
+  await PieceworkService.updateWorkLog(plainId, { taskId: first, canSetRate: false });
+  const [plainRow] = await h.q('SELECT task_id, unit_rate FROM piecework_logs WHERE id = $1', [plainId]);
+  if (Number(plainRow?.task_id) !== first || Number(plainRow?.unit_rate) !== 1000) wrong.push(`a non-manager's task change of a log at its program rate stored ${JSON.stringify(plainRow)}, expected the first task at 1000`);
+  await h.put(`/api/piecework/logs/${plainId}`, { unitRate: 700 });
+  let lockedCode = '';
+  try { await PieceworkService.updateWorkLog(plainId, { taskId: other, canSetRate: false }); } catch (err) { lockedCode = String((err as { code?: unknown }).code ?? ''); }
+  const [manualRow] = await h.q('SELECT task_id, unit_rate FROM piecework_logs WHERE id = $1', [plainId]);
+  if (lockedCode !== 'PIECEWORK_LOG_TASK_RATE_LOCKED' || Number(manualRow?.task_id) !== first || Number(manualRow?.unit_rate) !== 700) wrong.push(`a non-manager's task change of a log with a typed rate gave «${lockedCode}» and left ${JSON.stringify(manualRow)}, expected PIECEWORK_LOG_TASK_RATE_LOCKED and 700 kept`);
   return 'a free log changes task at the new rate or the typed one; a deleted task and a schedule log are refused';
+}
+
+/** review of #507: the edit locked the log, then the personnel (`FOR SHARE`); a payslip issue locks the personnel, then the logs */
+async function taskEditBesidePayslipCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const worker = await newWorker('V12 task edit race');
+  const first = await newTaskId(h);
+  const second = await newTaskId(h);
+  const created = await h.post('/api/piecework/logs', { items: [{ personnelId: worker, taskId: first, date: f.today, quantity: 3 }] });
+  const logId = Number((created.body as { insertedIds?: unknown[] })?.insertedIds?.[0]);
+  if (created.status !== 201 || !Number.isInteger(logId)) throw new Error(`setup: the log answered ${brief(created)}`);
+  const outcomes = await raceBehindRowLock<unknown>('piecework_logs', [logId], [
+    () => PieceworkService.updateWorkLog(logId, { taskId: second, canSetRate: true }),
+    async () => {
+      const issued = await issueApproved({ personnelId: worker, startDate: f.today, endDate: f.today, username: 'inv' });
+      if (!issued.payroll) throw new Error(`the payslip was refused: ${issued.refusal?.message}`);
+      return issued;
+    },
+  ], { staggered: true });
+  // the edit may lose to the payslip (the log is then on it, 409): only a deadlock or another failure is wrong
+  wrong.push(...outcomeProblems(['task change', 'payslip issue'], outcomes, (label, message) => label === 'task change' && message.includes('فیش')));
+  return 'a task change and a payslip issue of the same worker end without a deadlock';
 }

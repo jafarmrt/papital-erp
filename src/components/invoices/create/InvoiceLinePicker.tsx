@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useId, useRef } from 'react';
-import { isAddRowShortcut } from '../../../lib/addRowShortcut';
+import { isAddRowShortcut, windowOpenOverPage } from '../../../lib/addRowShortcut';
 import { Plus } from 'lucide-react';
 import type { Item, ItemPrice } from '../../../types';
 import { formatCurrencyLabel, formatPersianCode, formatPersianNumber, formatPersianPrice } from '../../../utils';
@@ -73,7 +73,7 @@ export function InvoiceLinePicker(props: InvoiceLinePickerProps) {
     document.getElementById(`${id}-item`)?.focus();
   };
   const onShortcutKey = useEffectEvent((e: KeyboardEvent) => {
-    if (!isAddRowShortcut(e) || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+    if (!isAddRowShortcut(e) || windowOpenOverPage()) return;
     e.preventDefault();
     addLine(scopeRef.current);
   });

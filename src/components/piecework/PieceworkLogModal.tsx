@@ -36,6 +36,8 @@ interface PieceworkLogModalProps {
   isSaving?: boolean;
   /** حوزه H (TD-300): بی مجوز مدیر پرسنل/تعرفه، نرخ از سرور است و فیلد فقط نمایش */
   canSetRate?: boolean;
+  /** v12 (part B): the rate the server gives a log of a task for the colleague on the form */
+  suggestedLogRate?: (taskId: number | '') => number;
 }
 
 /** v12 (part B): what the edit form says when the task title changed and the rate was not typed */
@@ -63,7 +65,8 @@ export function PieceworkLogModal({
   onAddLogRow,
   onRemoveLogRow,
   isSaving = false,
-  canSetRate = true
+  canSetRate = true,
+  suggestedLogRate
 }: PieceworkLogModalProps) {
   const fieldId = useId();
   // ورودی نرخ همیشه به ریال است (مبلغ ذخیره‌شده)
@@ -76,7 +79,7 @@ export function PieceworkLogModal({
   return (
     <div className={PHONE_SHEET_OVERLAY}>
       {/* v10.0.20 (D-11): روی گوشی تمام‌صفحه؛ سرصفحه و دکمه‌ها ثابت و میانه پنجره پیمایش می‌شود */}
-      <div role="dialog" aria-modal="true" aria-label={title} className={`${PHONE_SHEET_PANEL} bg-white sm:border border-slate-200 shadow-2xl sm:max-w-6xl overflow-hidden animate-in fade-in zoom-in duration-200`}>
+      <div role="dialog" aria-modal="true" aria-label={title} className={`${PHONE_SHEET_PANEL} bg-white sm:border border-slate-200 shadow-2xl ${editingLog ? 'sm:max-w-3xl' : 'sm:max-w-6xl'} overflow-hidden animate-in fade-in zoom-in duration-200`}>
         <DialogLayer onClose={onClose} disabled={isSaving} />
         {/* Header */}
         <div className="shrink-0 p-4 sm:p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
@@ -140,7 +143,13 @@ export function PieceworkLogModal({
                       // v12 (part B): another task title; its rate is the program's for it (the server decides) unless typed
                       const task = tasksList.find(t => t.id === Number(val));
                       if (!task) return;
-                      setEditingLog(prev => prev ? { ...prev, taskId: task.id, taskTitle: task.title, unit: task.unit, unitRate: Number(task.defaultRate) || 0, rateEdited: false } : null);
+                      // back on the log's own task, its stored rate comes back (a manual rate is not lost by a wrong pick)
+                      setEditingLog(prev => {
+                        if (!prev) return null;
+                        const back = task.id === prev.originalTaskId;
+                        const unitRate = back ? (prev.originalUnitRate ?? prev.unitRate) : (suggestedLogRate ? suggestedLogRate(task.id) : Number(task.defaultRate) || 0);
+                        return { ...prev, taskId: task.id, taskTitle: task.title, unit: task.unit, unitRate, rateEdited: false };
+                      });
                     }}
                     placeholder="جست‌وجو و انتخاب عنوان کاری..."
                     maxResults={100}
@@ -177,6 +186,7 @@ export function PieceworkLogModal({
                       id={`${fieldId}-unit-rate`}
                       value={editingLog.unitRate}
                       onChange={(val) => setEditingLog(prev => prev ? { ...prev, unitRate: val, rateEdited: true } : null)}
+                      readOnly={!canSetRate}
                       currency="IRR"
                       variant="compact"
                       showWordsBadge={false}

@@ -1,7 +1,7 @@
 import { eq, and } from 'drizzle-orm';
 import { orm, type DbExecutor, type DbTransaction } from '../db/drizzle.js';
-import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkLogs, pieceworkPayrolls, taskCategories, workshopTaskReports } from '../db/schema.js';
-import { NotFoundError, BadRequestError, ConflictError, ValidationError } from '../errors/customErrors.js';
+import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkLogs, pieceworkPayrolls, productionProjects, taskCategories, workshopTaskReports } from '../db/schema.js';
+import { NotFoundError, BadRequestError, ConflictError, ForbiddenError, ValidationError } from '../errors/customErrors.js';
 import { requireStorageDate } from '../lib/storageDate.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { PieceworkPayrollService } from './piecework/payroll.service.js';
@@ -779,6 +779,8 @@ export class PieceworkService {
       projectId?: number | string | null;
       /** v12: another task title; without a manual rate the log takes the program's rate of the new task */
       taskId?: number | string;
+      /** the user holds the rates key (`piecework.manage_tasks`); without it a log with a manual rate keeps its task */
+      canSetRate?: boolean;
     },
     executor?: DbTransaction,
     actor: AuditActor = {}
@@ -803,7 +805,26 @@ export class PieceworkService {
         if (report || await isScheduleLinkedLog(tx, existing.projectId, id)) {
           throw new ConflictError('این کارکرد از برنامهٔ کارگاه پروژه یا گزارش پایان کار ثبت شده و عنوان کاری‌اش عوض نمی‌شود؛ کارکرد را حذف و از همان‌جا دوباره ثبت کنید.', undefined, 'PIECEWORK_LOG_TASK_LOCKED');
         }
-        await assertWorkLogParentsLive(tx, [{ personnelId: existing.personnelId, taskId: newTaskId, projectId: null }]);
+        // review of #507: only the task is checked live; the personnel is the log's own and is not locked here, since a payslip
+        // issue locks the personnel and then its logs (the other order would deadlock against it)
+        const [task] = await tx.select({ id: pieceworkTasks.id }).from(pieceworkTasks)
+          .where(and(eq(pieceworkTasks.id, newTaskId), eq(pieceworkTasks.isDeleted, 0))).for('share');
+        if (!task) {
+          throw new ValidationError(`عنوان کاری با شناسه ${newTaskId.toLocaleString('fa-IR')} وجود ندارد یا حذف شده است؛ کارکرد ویرایش نشد.`, { taskIds: [newTaskId] }, 'PIECEWORK_LOG_TASK_INVALID');
+        }
+        // a workshop report approval locks the project `FOR UPDATE` and compares the manual logs of the row's worker and task
+        // with what the reviewer saw; a log turning into that task waits for it, as a new log does (`FOR SHARE`)
+        if (existing.projectId !== null) {
+          await tx.select({ id: productionProjects.id }).from(productionProjects).where(eq(productionProjects.id, existing.projectId)).for('share');
+        }
+        // a rate typed by a rates manager is not dropped by someone without that key: changing the task gives the log the
+        // program's rate, so it needs the key when the stored rate is not the program's rate of the current task
+        if (!data.canSetRate) {
+          const programRate = fin(await PieceworkService.serverRate(tx, existing.personnelId, existing.taskId));
+          if (!programRate.equals(fin(existing.unitRate))) {
+            throw new ForbiddenError('نرخ این کارکرد دستی گذاشته شده است و با عوض کردن عنوان کاری کنار می‌رود؛ این کار مجوز «مدیریت عناوین کاری و نرخ‌های پایه» را می‌خواهد.', undefined, 'PIECEWORK_LOG_TASK_RATE_LOCKED');
+          }
+        }
       }
       const manualRate = data.unitRate !== undefined ? workLogManualRate(data.unitRate, '') : undefined;
       // a new task without a manual rate takes the program's rate for it (the personnel's custom rate, else the task's base
@@ -817,7 +838,7 @@ export class PieceworkService {
       // v9.0.282 (TD-736): کارکرد ردیف برنامه که به پروژه دیگر می‌رود پیوند ردیف پروژه پیشین را برمی‌دارد
       if (projectMoved) await lockProjectsOfLogMove(tx, existing.projectId, newProjectId);
       if (newProjectId !== null && projectMoved) {
-        await assertWorkLogParentsLive(tx, [{ personnelId: existing.personnelId, taskId: existing.taskId, projectId: newProjectId }]);
+        await assertWorkLogParentsLive(tx, [{ personnelId: existing.personnelId, taskId: newTaskId, projectId: newProjectId }]);
       }
       // 10.2 package 12 (TD-1346): a new quantity of a schedule-linked log stays within its row, as on create (TD-955)
       const quantityChanged = Number(newQty) !== Number(existing.quantity);

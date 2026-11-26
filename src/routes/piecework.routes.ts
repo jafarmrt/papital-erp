@@ -609,7 +609,7 @@ router.put('/piecework/logs/:id', requirePermission(PIECEWORK_LOG_PERMISSION), i
     // نرخ کارکرد همان که بود می‌ماند (پیش‌تر ویرایش فقط برای «مدیریت کامل پرسنل» بود که نرخ را آزادانه عوض می‌کرد)
     const canSetRate = await can(req.user, PIECEWORK_TASKS_PERMISSION);
 
-    await PieceworkService.updateWorkLog(id, { date, quantity, unitRate: canSetRate ? unitRate : undefined, notes, projectId, taskId }, undefined, { req });
+    await PieceworkService.updateWorkLog(id, { date, quantity, unitRate: canSetRate ? unitRate : undefined, notes, projectId, taskId, canSetRate }, undefined, { req });
 
     res.json({ status: 'ok', message: 'کارکرد ویرایش شد' });
   } catch (err) {
