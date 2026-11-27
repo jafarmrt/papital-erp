@@ -22,6 +22,10 @@ export const customers = pgTable('customers', {
   website: text('website').default(''),
   email: text('email').default(''),
   instagram: text('instagram').default(''),
+  // v12 colleague sales (migration 0038): the colleague or partner this party stands for and the running account its sales
+  // go to ('colleague' 3208, 'partner' 4101; '' an ordinary party); rule in src/lib/accounting/runningAccount.ts
+  personnelId: integer('personnel_id').references(baseRelations.personnelId),
+  runningAccount: text('running_account').notNull().default(''),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').default(0)
@@ -32,6 +36,7 @@ export const customers = pgTable('customers', {
   // v9.0.8 (TD-420): ایندکس یکتای جزئی uq_customers_name_active روی lower(btrim(name)) برای طرف حساب‌های فعال را مهاجرت 0052
   // فقط روی داده بدون نام تکراری می‌سازد (src/services/customers/customerIdentity.ts)؛ v9.0.448 (TD-613): اعلام‌شده تا اسکیما با پایگاه‌داده بخواند
   uq_customers_name_active: uniqueIndex('uq_customers_name_active').on(sql`lower(btrim(${table.name}))`).where(sql`${table.isDeleted} = 0`),
+  uq_customers_personnel_live: uniqueIndex('uq_customers_personnel_live').on(table.personnelId).where(sql`${table.isDeleted} = 0 AND ${table.personnelId} IS NOT NULL`),
 }));
 registerColumnRef('customers.id', () => customers.id);
 

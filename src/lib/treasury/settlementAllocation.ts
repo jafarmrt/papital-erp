@@ -39,9 +39,10 @@ export interface SettlementAllocationView {
   documentId: number;
   refNumber: string;
   amount: number;
-  source: 'treasury' | 'cheque';
+  /** v12 colleague sales: 'running_account' is the «تسویه از حساب جاری» of an invoice (`sourceId` the colleague's personnel id) */
+  source: 'treasury' | 'cheque' | 'running_account';
   sourceId: number;
-  /** the treasury row's number, or the cheque's number */
+  /** the treasury row's number, or the cheque's number ('' for the running account) */
   sourceNumber: string;
   /** ISO day of the treasury row, or the cheque's issue day */
   date: string;
@@ -167,4 +168,11 @@ export function canAllocateCheque(cheque: { type?: string | null; partyType?: st
   if ((LAPSED_CHEQUE_STATUSES as readonly string[]).includes(String(cheque.status ?? ''))) return false;
   const partyType = cheque.partyType || (cheque.type === 'paid' ? 'supplier' : 'customer');
   return (cheque.type === 'received' && partyType === 'customer') || (cheque.type === 'paid' && partyType === 'supplier');
+}
+
+/** v12 colleague sales: what a part of a document's settlement is called on screen */
+export function settlementSourceLabel(source: SettlementAllocationView['source']): string {
+  if (source === 'cheque') return 'چک';
+  if (source === 'running_account') return 'تسویه از حساب جاری';
+  return 'دریافت یا پرداخت';
 }

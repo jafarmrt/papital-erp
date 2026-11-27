@@ -35,7 +35,7 @@ import { PAYMENT_METHOD_LABELS, treasuryMethodLabel } from '../../lib/treasury/t
 import { useBankAccountOptionsQuery } from '../../hooks/accounting/useTreasuryQueries';
 import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
 import type { BankAccountOption } from '../../types';
-import type { SettlementAllocationView } from '../../lib/treasury/settlementAllocation';
+import { settlementSourceLabel, type SettlementAllocationView } from '../../lib/treasury/settlementAllocation';
 
 const NO_ACCOUNTS: BankAccountOption[] = [];
 
@@ -530,7 +530,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
                     <div className="flex items-center gap-2 text-slate-600">
                       <span className="font-mono font-medium">{part.date ? formatPersianDate(part.date) : '—'}</span>
                       <span>•</span>
-                      <span className="text-slate-500">{part.source === 'cheque' ? 'چک' : 'دریافت یا پرداخت'}</span>
+                      <span className="text-slate-500">{settlementSourceLabel(part.source)}</span>
                       <span className="text-slate-400 font-mono text-[10px]">({formatPersianCode(part.sourceNumber)})</span>
                     </div>
                     <span className="font-bold text-emerald-700">

@@ -1,5 +1,6 @@
 import { eq, and, asc, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
+import { resolvePartyRunningAccount, type PartyRunningAccountLink } from './customers/customerRunningAccount.js';
 import { customers } from '../db/schema.js';
 import { systemNowUtcIso } from '../lib/businessClock.js';
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../lib/occHelper.js';
@@ -46,6 +47,9 @@ export interface CreateCustomerInput {
   website?: string;
   email?: string;
   instagram?: string;
+  /** v12 colleague sales: the colleague or partner this party stands for, and the running account its invoices go to */
+  personnelId?: number | null;
+  runningAccount?: string | null;
 }
 
 /**
@@ -170,6 +174,8 @@ export class CustomerService {
 
     // v9.0.7 (TD-419): تلفن با کلید تطبیق (همان شماره با نگارش دیگر تکراری است)
     await assertCustomerPhoneAvailable(phone, executor);
+    // v12 colleague sales: the link to a colleague or partner and their running account
+    const link = await resolvePartyRunningAccount(executor, data, null, { partyType });
 
     const createdAt = systemNowUtcIso();
     const [created] = await guardCustomerName(() => executor
@@ -188,6 +194,8 @@ export class CustomerService {
         bankInfo,
         contacts: activeContacts,
         ...resolved.channels,
+        personnelId: link.personnelId,
+        runningAccount: link.runningAccount,
         createdAt,
         isDeleted: 0,
         version: 1
@@ -257,7 +265,14 @@ export class CustomerService {
     // v9.0.7 (TD-419): فقط شماره تازه سنجیده می‌شود؛ نگه داشتن شماره قبلی (با هر نگارشی) ویرایش را رد نمی‌کند
     if (phoneMatchKey(phone) !== phoneMatchKey(prevCust.phone)) await assertCustomerPhoneAvailable(phone, executor, customerId);
 
+    // v12 colleague sales: invoices finalized after this follow the new link; issued ones keep their stamp
+    const link = await resolvePartyRunningAccount(executor, data,
+      { personnelId: prevCust.personnelId, runningAccount: (prevCust.runningAccount || '') as PartyRunningAccountLink['runningAccount'] },
+      { partyType: partyType || 'customer', customerId });
+
     const updatedData: Partial<typeof customers.$inferInsert> = {
+      personnelId: link.personnelId,
+      runningAccount: link.runningAccount,
       name,
       contactName,
       country,

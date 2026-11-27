@@ -9,6 +9,9 @@ export interface ContactPerson {
 }
 
 export interface Customer {
+  /** v12 colleague sales: the colleague or partner this party stands for, and the running account its invoices go to */
+  personnelId?: number | null;
+  runningAccount?: '' | 'colleague' | 'partner';
   id: number;
   name: string;
   code?: string;

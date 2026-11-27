@@ -111,6 +111,9 @@ const customerSchema = z.object({
   bankInfo: bankInfoSchema,
   bank_info: bankInfoSchema,
   contacts: z.array(contactPersonSchema).optional().default([]),
+  // v12 colleague sales: the colleague or partner this party stands for, and the running account its invoices go to
+  personnelId: z.coerce.number().int().positive('همکار معتبر نیست').max(2147483647).nullable().optional(),
+  runningAccount: z.enum(['', 'colleague', 'partner']).nullable().optional(),
   ...contactChannelFields,
 });
 
@@ -156,6 +159,9 @@ const customerPatchSchema = z.object({
   bankInfo: bankInfoPatchSchema,
   bank_info: bankInfoPatchSchema,
   contacts: z.array(contactPersonPatchSchema).optional(),
+  // v12 colleague sales: the colleague or partner this party stands for, and the running account its invoices go to
+  personnelId: z.coerce.number().int().positive('همکار معتبر نیست').max(2147483647).nullable().optional(),
+  runningAccount: z.enum(['', 'colleague', 'partner']).nullable().optional(),
   ...contactChannelFields,
 });
 
@@ -377,6 +383,8 @@ router.post('/customers', authorizePermission('customers.manage'), validate(crea
       website: req.body.website,
       email: req.body.email,
       instagram: req.body.instagram,
+      personnelId: req.body.personnelId,
+      runningAccount: req.body.runningAccount,
     }, tx);
     const tagNames = tagIds === undefined ? [] : (await setCustomerTags(tx, row.id, tagIds, req.user?.id ?? null)).after;
 
@@ -426,6 +434,8 @@ router.put('/customers/:id', authorizePermission('customers.manage'), validate(u
       website: req.body.website,
       email: req.body.email,
       instagram: req.body.instagram,
+      personnelId: req.body.personnelId,
+      runningAccount: req.body.runningAccount,
       version: req.body.version,
       expectedVersion: req.body.expectedVersion
     }, tx);

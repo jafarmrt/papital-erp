@@ -3,6 +3,8 @@ import { Users, Building2, Truck, UserPlus, UserCheck, Trash2, Plus, CreditCard,
 import { IranianPhoneInput, BankCardInput, ShebaInput } from '../common';
 import { getIranianBankFromCard, getIranianBankFromSheba, formatPersianNumber } from '../../utils';
 import { emailError } from '../../lib/customers/contactChannels';
+import { CustomerRunningAccountField } from './CustomerRunningAccountField';
+import type { PartyRunningAccount } from '../../lib/accounting/runningAccount';
 import { CustomerChannelFields } from './CustomerChannelFields';
 import { DialogLayer } from '../common/DialogLayer';
 import { CustomerTagPicker } from './CustomerTags';
@@ -63,6 +65,9 @@ export interface CustomerPartyForm {
   instagram: string;
   /** v10.1.23 (N-02 بخش ۳) */
   tagIds: number[];
+  /** v12 colleague sales: the colleague or partner this party stands for and their running account */
+  personnelId: number | '';
+  runningAccount: PartyRunningAccount;
 }
 
 interface CustomerFormModalProps {
@@ -236,6 +241,14 @@ export function CustomerFormModal({
                 )}
               </div>
             </div>
+
+            {form.partyType !== 'supplier' && (
+              <CustomerRunningAccountField
+                personnelId={form.personnelId}
+                runningAccount={form.runningAccount}
+                onChange={link => setForm(prev => ({ ...prev, ...link }))}
+              />
+            )}
 
             <CustomerChannelFields
               value={{ website: form.website, email: form.email, instagram: form.instagram }}

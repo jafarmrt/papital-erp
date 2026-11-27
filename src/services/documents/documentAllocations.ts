@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, notInArray, or, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { cheques, documents, settlementAllocations, treasuryTransactions } from '../../db/schema.js';
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
@@ -23,6 +23,8 @@ export const liveAllocationCondition = and(
       // a cheque without a status (imported rows) is live, as the window of its parts treats it (review of M11)
       or(isNull(cheques.status), notInArray(cheques.status, [...LAPSED_CHEQUE_STATUSES])),
     ),
+    // v12 colleague sales: the «تسویه از حساب جاری» of a stamped invoice is live while it is not replaced
+    isNotNull(settlementAllocations.runningAccountPersonnelId),
   ),
 );
 
@@ -42,6 +44,8 @@ export async function fetchLiveAllocations(executor: DbExecutor, docIds: number[
     chequeNumber: cheques.chequeNumber,
     issueDate: cheques.issueDate,
     chequeStatus: cheques.status,
+    runningAccountPersonnelId: settlementAllocations.runningAccountPersonnelId,
+    createdAt: settlementAllocations.createdAt,
   })
     .from(settlementAllocations)
     .innerJoin(documents, eq(documents.id, settlementAllocations.documentId))
@@ -49,7 +53,13 @@ export async function fetchLiveAllocations(executor: DbExecutor, docIds: number[
     .leftJoin(cheques, eq(cheques.id, settlementAllocations.chequeId))
     .where(and(inArray(settlementAllocations.documentId, docIds), liveAllocationCondition))
     .orderBy(asc(settlementAllocations.id));
-  return rows.map(r => r.treasuryId !== null
+  return rows.map(r => r.runningAccountPersonnelId !== null
+    ? {
+      id: r.id, documentId: r.documentId, refNumber: String(r.refNumber ?? r.documentId), amount: fin(r.amount).toNumber(),
+      source: 'running_account' as const, sourceId: r.runningAccountPersonnelId, sourceNumber: '',
+      date: String(r.createdAt ?? '').slice(0, 10), status: '',
+    }
+    : r.treasuryId !== null
     ? {
       id: r.id, documentId: r.documentId, refNumber: String(r.refNumber ?? r.documentId), amount: fin(r.amount).toNumber(),
       source: 'treasury' as const, sourceId: r.treasuryId, sourceNumber: r.transactionNumber ?? '',

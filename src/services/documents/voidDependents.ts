@@ -98,7 +98,8 @@ export function treasuryRowsListText(rows: ReadonlyArray<Pick<VoidDependentTreas
  */
 export async function assertVoidHasNoTreasuryRows(tx: DbExecutor, doc: { id: number; refNumber: string | null }): Promise<void> {
   const rows = await liveTreasuryRowsOf(tx, doc.id);
-  const parts = await fetchLiveAllocations(tx, [doc.id]);
+  // v12 colleague sales: the «تسویه از حساب جاری» of an invoice goes with its void (`syncRunningAccountSettlement`)
+  const parts = (await fetchLiveAllocations(tx, [doc.id])).filter(p => p.source !== 'running_account');
   if (rows.length === 0 && parts.length === 0) return;
   const listed = [
     ...(rows.length > 0 ? [treasuryRowsListText(rows)] : []),

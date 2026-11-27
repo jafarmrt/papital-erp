@@ -8,6 +8,7 @@ import { toast } from 'react-hot-toast';
 import { useSearch } from '../SearchContext';
 import { CrmInteractionModalHost, CrmCustomerDossierHost, CrmLeadModalHost } from '../components/crm/crmSharedHosts';
 import CustomerFormModal, { FormContactPerson } from '../components/customers/CustomerFormModal';
+import type { PartyRunningAccount } from '../lib/accounting/runningAccount';
 import { CustomerExcelModal } from '../components/customers/CustomerExcelModal';
 import { useCRMData } from '../hooks/useCRMData';
 import { useCustomersQuery, useSaveCustomerMutation, useDeleteCustomerMutation } from '../hooks/queries';
@@ -116,6 +117,8 @@ export default function CustomersPage({ user }: { user: User }) {
     notes: '',
     partyType: 'customer' as 'customer' | 'supplier' | 'both',
     supplierCategory: '',
+    personnelId: '' as number | '',
+    runningAccount: '' as PartyRunningAccount,
     bankInfo: {
       bankName: '',
       accountNumber: '',
@@ -204,6 +207,9 @@ export default function CustomersPage({ user }: { user: User }) {
       notes: form.notes,
       partyType: form.partyType,
       supplierCategory: form.partyType !== 'customer' ? form.supplierCategory : '',
+      // v12 colleague sales: a supplier takes no link
+      personnelId: form.partyType !== 'supplier' && form.runningAccount && form.personnelId ? form.personnelId : null,
+      runningAccount: form.partyType !== 'supplier' ? form.runningAccount : '',
       bankInfo: form.bankInfo,
       contacts: activeContacts,
       website: form.website,
@@ -232,6 +238,8 @@ export default function CustomersPage({ user }: { user: User }) {
       notes: '',
       partyType: activeTab === 'supplier' ? 'supplier' : 'customer',
       supplierCategory: '',
+      personnelId: '',
+      runningAccount: '',
       bankInfo: {
         bankName: '',
         accountNumber: '',
@@ -259,6 +267,8 @@ export default function CustomersPage({ user }: { user: User }) {
       notes: c.notes || '',
       partyType: rawPartyType,
       supplierCategory: c.supplierCategory || c.supplier_category || '',
+      personnelId: c.personnelId ?? '',
+      runningAccount: (c.runningAccount ?? '') as PartyRunningAccount,
       bankInfo: {
         bankName: rawBank.bankName || '',
         accountNumber: rawBank.accountNumber || '',

@@ -2,6 +2,7 @@ import { CreditCard } from 'lucide-react';
 import { useShownRial } from '../../../contexts/RialDisplayContext';
 import { formatPersianCode, formatPersianDate } from '../../../utils';
 import { detailsRemainingOf, detailsSettlementViewOf, type InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
+import { settlementSourceLabel } from '../../../lib/treasury/settlementAllocation';
 
 interface InvoiceDetailsSettlementCardProps {
   selectedDocDetails: InvoiceListDocument;
@@ -37,7 +38,7 @@ export function InvoiceDetailsSettlementCard({ selectedDocDetails, setSettlement
             <ul className="mt-1.5 space-y-0.5">
               {selectedDocDetails.allocations.map(part => (
                 <li key={part.id} className="text-[10px] text-slate-500">
-                  {part.source === 'cheque' ? 'چک' : 'دریافت یا پرداخت'} {formatPersianCode(part.sourceNumber)}
+                  {settlementSourceLabel(part.source)} {formatPersianCode(part.sourceNumber)}
                   {part.date ? ` (${formatPersianDate(part.date)})` : ''}:{' '}
                   <strong className="text-emerald-700 font-mono">{rial.money(part.amount, selectedDocDetails.currency)}</strong>
                 </li>
