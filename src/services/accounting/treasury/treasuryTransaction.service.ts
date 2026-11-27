@@ -397,9 +397,10 @@ export class TreasuryTransactionService {
         : { accountId, detailedType: data.partyType || 'other', detailedId: partyId, detailedName: partyName });
 
       // v12 colleague sales part B2: a partner's move is in euros, at the average rate of their open balance, with the exchange row
-      // review of #511: a foreign row on the partners' account goes only through «حساب جاری شریک», which works out its euros
-      // and its exchange row; a «سایر» or «متفرقه» one would join the partner's euro balance at the bank's rate unseen
-      if (!partnerMove && contraAccountId !== null && txCurrency.toUpperCase() !== 'IRR') {
+      // review of #511: a foreign row on a personnel's detail of the partners' account goes only through «حساب جاری شریک», which
+      // works out its euros and its exchange row; a «سایر» one would join the partner's euro balance at the bank's rate unseen.
+      // A «متفرقه» row (an owner's foreign deposit on 4101) has no personnel detail, so it stays out of any partner's balance.
+      if (!partnerMove && partyType === 'personnel' && contraAccountId !== null && txCurrency.toUpperCase() !== 'IRR') {
         const partnersAccount = await AccountMappingService.getPartnersCurrentAccount(txEngine);
         if (partnersAccount && partnersAccount.id === contraAccountId) {
           throw new ValidationError('ردیف ارزی روی «حساب جاری شرکا» فقط با کاربرد «حساب جاری شریک» ثبت می‌شود تا یوروی شریک و تسعیر آن درست حساب شود.', undefined, 'TREASURY_PARTNER_ACCOUNT_FOREIGN_OTHER');
