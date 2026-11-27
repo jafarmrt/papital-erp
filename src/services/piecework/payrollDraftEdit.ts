@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm';
+import { assertRunningDeductionWithinDebt } from './payrollRunningAccount.js';
 import { journalVouchers, personnel, pieceworkPayrolls } from '../../db/schema.js';
 import { ConflictError, NotFoundError, PrivateRefusalError, ValidationError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
@@ -22,6 +23,8 @@ export interface EditDraftPayrollInput {
   /** شرح «سایر کسورات»؛ با کسورات بالای صفر الزامی (TD-861) */
   deductionsDescription?: string;
   advanceDeduction?: AmountInput;
+  /** v12 colleague sales part B: «کسر از حساب جاری همکار» */
+  runningAccountDeduction?: AmountInput;
   /** v10.0.210 (TD-1087): کسورات قانونی؛ نفرستاده = مبلغ ذخیره‌شده اگر پیش‌تر با شرح تغییر کرده، وگرنه پیشنهاد سرور */
   employeeInsurance?: AmountInput;
   employerInsurance?: AmountInput;
@@ -59,7 +62,9 @@ export async function editDraftPayroll(id: number, input: EditDraftPayrollInput)
     const bonuses = fin(input.bonuses ?? before.totalBonuses ?? 0);
     const deductions = fin(input.deductions ?? before.totalDeductions ?? 0);
     const advance = fin(input.advanceDeduction ?? before.advanceDeduction ?? 0);
-    const negative = [bonuses.isNegative() && 'پاداش', deductions.isNegative() && 'کسورات', advance.isNegative() && 'کسر مساعده'].filter(Boolean);
+    const running = fin(input.runningAccountDeduction ?? before.runningAccountDeduction ?? 0);
+    const negative = [bonuses.isNegative() && 'پاداش', deductions.isNegative() && 'کسورات', advance.isNegative() && 'کسر مساعده',
+      running.isNegative() && 'کسر از حساب جاری همکار'].filter(Boolean);
     if (negative.length > 0) {
       throw new ValidationError(`${negative.join('، ')} فیش نمی‌تواند منفی باشد؛ کاهش حقوق را در «کسورات» و افزایش را در «پاداش» وارد کنید.`, undefined, 'PAYROLL_NEGATIVE_COMPONENT');
     }
@@ -75,6 +80,11 @@ export async function editDraftPayroll(id: number, input: EditDraftPayrollInput)
         throw new PrivateRefusalError(`کسر مساعده (${payrollAmountText(advance)}) از مانده مساعده تسویه‌نشده ${person?.fullName ?? ''} (${payrollAmountText(ceiling)}) بیشتر است.`, 422, 'PAYROLL_ADVANCE_EXCEEDS_BALANCE');
       }
     }
+    // v12 colleague sales part B: the same ceiling for the running account (its draft voucher already credited this payslip's
+    // deduction, so the ceiling is the debt plus that)
+    await assertRunningDeductionWithinDebt(tx, {
+      personnelId: before.personnelId, fullName: person?.fullName ?? '', deduction: running, alreadyDeducted: before.runningAccountDeduction ?? 0, statusCode: 422,
+    });
     // v10.0.210 (TD-1087): کسورات قانونی با ناخالص تازه؛ مبلغی که پیش‌تر با شرح تغییر کرده می‌ماند مگر دوباره فرستاده شود
     const gross = fin(before.totalPieceworkAmount ?? 0).add(before.totalFixedAmount ?? 0).add(bonuses);
     const keptOverride = (before.statutoryOverrideReason ?? '').trim() !== '';
@@ -91,9 +101,9 @@ export async function editDraftPayroll(id: number, input: EditDraftPayrollInput)
       overrideReason: input.statutoryOverrideReason ?? before.statutoryOverrideReason ?? '',
     });
     const net = gross.subtract(statutory.amounts.employeeInsurance).subtract(statutory.amounts.incomeTax)
-      .subtract(deductions).subtract(advance).round(4);
+      .subtract(deductions).subtract(advance).subtract(running).round(4);
     if (net.isNegative()) {
-      throw new ValidationError('جمع بیمه، مالیات، کسورات و کسر مساعده از اجزای فیش بیشتر است؛ مقادیر را اصلاح کنید.', undefined, 'PAYROLL_NET_NEGATIVE');
+      throw new ValidationError('جمع بیمه، مالیات، کسورات، کسر مساعده و کسر از حساب جاری همکار از اجزای فیش بیشتر است؛ مقادیر را اصلاح کنید.', undefined, 'PAYROLL_NET_NEGATIVE');
     }
 
     // سند فیش پیش‌نویس با همان تراکنش کنار می‌رود و از روی فیش ویرایش‌شده دوباره ساخته می‌شود
@@ -111,6 +121,7 @@ export async function editDraftPayroll(id: number, input: EditDraftPayrollInput)
       totalDeductions: money(deductions.round(4)),
       deductionsDescription: description,
       advanceDeduction: money(advance.round(4)),
+      runningAccountDeduction: money(running.round(4)),
       ...statutoryPayrollColumns(statutory),
       netPayable: money(net),
     }).where(eq(pieceworkPayrolls.id, id)).returning();

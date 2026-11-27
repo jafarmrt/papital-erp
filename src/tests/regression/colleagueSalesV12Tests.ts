@@ -8,7 +8,8 @@ import { fin } from '../../lib/financialDecimal.js';
 import { VoucherSyncService } from '../../services/accounting/voucherSync.service.js';
 import { createTestCustomer } from '../fixtures/factories.js';
 import { checkPartyBalances } from '../invariants/partyBalanceInvariant.js';
-import { newWorker } from '../invariants/payrollScenarios.js';
+import { addLog, newTask, newWorker, personNet } from '../invariants/payrollScenarios.js';
+import { checkPayrollInvariants } from '../invariants/payrollInvariants.js';
 import { TestCaseResult } from '../types.js';
 import { type ShouldRun, inFiscalSandbox, runCase, sandboxAdminClient } from './fiscalClosingTests.js';
 import { brief, codeOf, ok, world } from './receiptsOnInvoicesV11Tests.js';
@@ -207,11 +208,73 @@ export async function runColleagueSalesV12Tests(shouldRun: ShouldRun): Promise<T
       // nor through the Excel import of parties (delta review)
       const imported = await admin.post('/api/customers/bulk-import', { updateIfExists: true, rows: [{ name: `${party.name} ویرایش`, partyType: 'تأمین‌کننده' }] });
       const [after] = await orm.select({ partyType: customers.partyType, personnelId: customers.personnelId }).from(customers).where(eq(customers.id, party.id));
-      if (imported.status !== 200 || (imported.body?.errors ?? []).length !== 1 || after?.partyType === 'supplier' || after?.personnelId !== colleague) {
+      if (imported.status !== 200 || (imported.body?.errors ?? []).length !== 1
+        || !String(imported.body?.errors?.[0]?.message ?? '').includes('تأمین‌کننده نمی‌شود') || after?.partyType === 'supplier' || after?.personnelId !== colleague) {
         problems.push(`importing a linked party as a supplier answered ${brief(imported)} and left ${JSON.stringify(after)}, expected one row error and the party unchanged`);
       }
       if (problems.length > 0) throw new Error(problems.join(' | '));
       return 'open proformas reach the running account; free returns are refused; I8 and the party edits follow the link';
+    }));
+  }
+
+  const payslip = 'reg_colleague_sales_payslip_deduction_v12';
+  if (shouldRun(payslip, 'v12', 'colleague_sales', 'payroll', 'accounting')) {
+    await runCase(results, payslip, 'v12 colleague sales part B: a payslip deducts from the colleague\'s running account at most what they owe on 3208 (above it 400 PAYROLL_RUNNING_ACCOUNT_DEDUCTION_EXCEEDS_DEBT, no payslip), its voucher credits 3208 on the colleague\'s detail and the net comes down; the form reads the debt; a draft edit keeps the same ceiling; I10 holds; voiding the payslip gives the debt back', () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const w = await world(admin);
+      for (let i = 0; i < 2; i++) await w.doc('receipt', w.supplier, 900_000);
+      const colleague = await newWorker('ERP-TEST-MARKER payslip colleague');
+      const party = await createTestCustomer();
+      const linked = await linkParty(admin, party.id, colleague, 'colleague');
+      if (!ok(linked)) throw new Error(`setup: linking answered ${brief(linked)}`);
+      await w.doc('invoice', party, 400_000);
+      const owed = await personNet('3208', colleague);
+      if (fin(owed).toNumber() !== 400_000) throw new Error(`setup: the colleague owes ${owed} on 3208, expected 400000`);
+      const [watermark] = (await orm.execute(sql`SELECT COALESCE(MAX(id), 0)::int AS id FROM piecework_payrolls`)).rows as Array<{ id: number }>;
+
+      const day = new Date(`${w.today}T00:00:00Z`); day.setUTCDate(day.getUTCDate() - 1);
+      const yesterday = day.toISOString().slice(0, 10);
+      await addLog(colleague, await newTask(), yesterday, 1_000_000);
+      const balance = await admin.get(`/api/piecework/personnel/${colleague}/advance-balance`);
+      if (Number(balance.body?.runningAccountDebt) !== 400_000) problems.push(`the payslip form read the debt ${JSON.stringify(balance.body)}, expected runningAccountDebt 400000`);
+
+      const issue = (runningAccountDeduction: number) => admin.post('/api/piecework/payrolls', { personnelId: colleague, startDate: yesterday, endDate: yesterday, runningAccountDeduction });
+      const over = await issue(400_001);
+      const [count] = (await orm.execute(sql`SELECT COUNT(*)::int AS n FROM piecework_payrolls WHERE personnel_id = ${colleague} AND is_deleted = 0`)).rows as Array<{ n: number }>;
+      if (over.status !== 400 || codeOf(over) !== 'PAYROLL_RUNNING_ACCOUNT_DEDUCTION_EXCEEDS_DEBT' || count?.n !== 0) problems.push(`a deduction above the debt answered ${brief(over)} with ${count?.n} payslips, expected 400 PAYROLL_RUNNING_ACCOUNT_DEDUCTION_EXCEEDS_DEBT and none`);
+      const issued = await issue(400_000);
+      const payrollId = Number(issued.body?.id);
+      if (issued.status !== 201 || Number(issued.body?.netPayable) !== 600_000 || Number(issued.body?.runningAccountDeduction) !== 400_000) {
+        throw new Error(`a deduction of the whole debt answered ${brief(issued)}, expected 201 with net 600000`);
+      }
+      const after = await personNet('3208', colleague);
+      if (!fin(after).isZero()) problems.push(`the colleague's 3208 after the payslip reads ${after}, expected 0`);
+      const i10 = await checkPayrollInvariants(watermark?.id ?? 0);
+      if (i10.length !== 0) problems.push(`I10 reads ${JSON.stringify(i10)}`);
+
+      // a draft edit: the ceiling is the debt plus this payslip's own deduction
+      const lower = await admin.put(`/api/piecework/payrolls/${payrollId}`, { runningAccountDeduction: 300_000 });
+      if (!ok(lower) || Number(lower.body?.netPayable) !== 700_000 || fin(await personNet('3208', colleague)).toNumber() !== 100_000) {
+        problems.push(`lowering the deduction to 300000 answered ${brief(lower)} with 3208 at ${await personNet('3208', colleague)}, expected net 700000 and 100000 owed`);
+      }
+      const above = await admin.put(`/api/piecework/payrolls/${payrollId}`, { runningAccountDeduction: 400_001 });
+      if (above.status !== 422 || codeOf(above) !== 'PAYROLL_RUNNING_ACCOUNT_DEDUCTION_EXCEEDS_DEBT') problems.push(`raising the deduction above the debt answered ${brief(above)}, expected 422`);
+
+      // voiding the payslip gives the debt back
+      const voided = await admin.del(`/api/piecework/payrolls/${payrollId}`);
+      if (!ok(voided) || fin(await personNet('3208', colleague)).toNumber() !== 400_000) problems.push(`voiding the payslip answered ${brief(voided)} with 3208 at ${await personNet('3208', colleague)}, expected 400000 owed again`);
+
+      // the ceiling holds when the payslip is issued; an invoice voided afterwards leaves 3208 in credit (the company owes the
+      // colleague), the documented outcome of any later move that lowers the debt
+      const later = await w.doc('invoice', party, 200_000);
+      const reissued = await issue(600_000);
+      const voidedLater = await admin.del(`/api/documents/${later}`);
+      if (reissued.status !== 201 || !ok(voidedLater) || fin(await personNet('3208', colleague)).toNumber() !== -200_000) {
+        problems.push(`a deduction of 600000 then the void of a 200000 invoice answered ${brief(reissued)} / ${brief(voidedLater)} with 3208 at ${await personNet('3208', colleague)}, expected 200000 in credit`);
+      }
+      if (problems.length > 0) throw new Error(problems.join(' | '));
+      return 'the payslip deducts the running-account debt up to its balance, credits 3208 and gives it back when voided';
     }));
   }
 

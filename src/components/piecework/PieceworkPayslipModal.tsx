@@ -1,4 +1,5 @@
 import { useState, type ComponentProps } from 'react';
+import { PayslipRunningAccountRow } from './PayrollRunningAccountField';
 import { X, FileText, Printer } from 'lucide-react';
 import { PieceworkPayroll } from '../../types';
 import { formatQuantityOrTime, formatPersianDate, formatPersianNumber, formatPersianCode } from '../../utils';
@@ -277,6 +278,7 @@ export function PieceworkPayslipModal({
                   <span className="font-mono">-{rial.amount(viewingPayroll.advanceDeduction)}</span>
                 </div>
               )}
+              <PayslipRunningAccountRow amount={viewingPayroll.runningAccountDeduction} />
               <div className="pt-2 border-t border-slate-300 flex justify-between font-black text-sm text-slate-900">
                 <span>مبلغ خالص کل فیش:</span>
                 <span className="font-mono text-blue-800">{rial.amount(viewingPayroll.netPayable)}</span>

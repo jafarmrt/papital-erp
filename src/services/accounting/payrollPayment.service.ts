@@ -16,7 +16,8 @@ import { payrollVouchersWhere, pickPayrollVoucher } from './payrollVoucherLink.j
 import { isPayablePayrollStatus } from '../../lib/payroll/payrollPayable.js';
 import { LockHierarchyLevel, validateLockOrder } from '../../lib/lockOrder.js';
 import { payrollTreasuryEventPayload, recordPayrollEvent } from '../piecework/payrollEvents.js';
-import { fin, type DecimalValue } from '../../lib/financialDecimal.js';
+import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
+import { colleagueAccountBalance } from './treasury/colleagueAccountBalance.js';
 import { isPayrollBankCurrency, PAYROLL_CURRENCY, payrollAmountText } from '../../lib/payroll/payrollCurrency.js';
 import { money } from '../../lib/money.js';
 import { isoToJalaliDate, toPersianDigits } from '../../utils.js';
@@ -66,6 +67,8 @@ export class PayrollPaymentService {
     totalAdvances: number;
     totalDeducted: number;
     outstandingAdvance: number;
+    /** v12 colleague sales part B: what the colleague owes on their running account (3208) */
+    runningAccountDebt: number;
   }> {
     const executor = tx || orm;
     const advanceAcc = await AccountMappingService.getEmployeeAdvanceAccount(executor);
@@ -99,8 +102,21 @@ export class PayrollPaymentService {
       personnelId,
       totalAdvances: ledgerDebits.toNumber(),
       totalDeducted: ledgerCredits.toNumber(),
-      outstandingAdvance: outstanding.isNegative() ? 0 : outstanding.toNumber()
+      outstandingAdvance: outstanding.isNegative() ? 0 : outstanding.toNumber(),
+      runningAccountDebt: (await PayrollPaymentService.getPersonnelRunningAccountDebt(personnelId, executor)).toNumber(),
     };
+  }
+
+  /**
+   * v12 colleague sales, part B (start plan §4.3, owner's decision 3.3): what the colleague owes on «حساب جاری همکار»
+   * (mapped 3208, their personnel detail, every live voucher row): the debit balance there, else 0. A payslip deducts at
+   * most this («کسر از حساب جاری همکار»). Without a readable mapping the colleague owes nothing that can be deducted.
+   */
+  static async getPersonnelRunningAccountDebt(personnelId: number, tx: DbExecutor): Promise<FinancialDecimal> {
+    const account = await AccountMappingService.getColleagueCurrentAccount(tx);
+    if (!account) return fin(0);
+    const balance = await colleagueAccountBalance(tx, account.id, personnelId);
+    return balance.isNegative() ? balance.negate() : fin(0);
   }
 
   /**

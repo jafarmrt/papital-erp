@@ -168,7 +168,9 @@ export async function confirmPayment(req: Request, id: number, input: { receiptI
     // v12 phase 8c review: the receipt names the order's ERP customer as the ERP keeps it (an existing customer found by
     // the phone keeps its own name, whatever name the buyer typed), as the invoice's voucher row does
     // the link is read under a share lock (delta review of #508): a party edit that drops or changes it waits for this
-    // confirm, so the receipt's form and the invoice's stamp read the same link (items, then the customer, then the bank)
+    // confirm, so the receipt's form and the invoice's stamp read the same link (items, then the customer, then the bank;
+    // the party edit itself locks a newly linked personnel row and then writes the customer row, and confirm locks no
+    // personnel row, so the two never wait on each other in a cycle)
     const [party] = await tx.select({ name: customers.name, personnelId: customers.personnelId, runningAccount: customers.runningAccount })
       .from(customers).where(eq(customers.id, order.customerId)).for('share');
     // v12 colleague sales: a buyer linked to a colleague has the invoice settled from their running account at its finalize,
