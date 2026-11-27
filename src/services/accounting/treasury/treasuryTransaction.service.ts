@@ -1,5 +1,5 @@
 import { orm, type DbExecutor } from '../../../db/drizzle.js';
-import { bankAccounts, treasuryTransactions, accounts } from '../../../db/schema.js';
+import { bankAccounts, treasuryTransactions, accounts, customers } from '../../../db/schema.js';
 import { eq, and, sql, inArray, asc } from 'drizzle-orm';
 import { AccountMappingService } from '../accountMapping.service.js';
 import { VoucherService } from '../voucher.service.js';
@@ -201,6 +201,11 @@ export class TreasuryTransactionService {
     if (amount <= 0) {
       warnings.push('مبلغ باید بزرگ‌تر از صفر باشد');
     }
+    // v12 colleague sales part B2 (review of #511): the euro rows and the exchange row are worked out on save, from the
+    // partner's open balance of that day, so this preview shows the plain two rows only
+    if (isPartnerAccountMove(data.partyType, data.purpose)) {
+      warnings.push('سند «حساب جاری شریک» هنگام ثبت به یورو و با نرخ میانگین ماندهٔ شریک ساخته می‌شود و اگر نرخ‌ها فرق داشته باشند، ردیف سود یا زیان تسعیر هم دارد؛ این پیش‌نمایش آن ردیف‌ها را نشان نمی‌دهد.');
+    }
 
     let treasuryAccount: Account | null = null;
     const treasuryDetailedName = bank.title;
@@ -254,7 +259,7 @@ export class TreasuryTransactionService {
     method: 'cash' | 'bank_transfer' | 'pos' | 'cheque';
     amount: number;
     currency?: string;
-    exchangeRate?: number;
+    exchangeRate?: number | string;
     bankAccountId: number;
     partyType?: 'customer' | 'personnel' | 'supplier' | 'other';
     partyId?: number | null;
@@ -392,9 +397,19 @@ export class TreasuryTransactionService {
         : { accountId, detailedType: data.partyType || 'other', detailedId: partyId, detailedName: partyName });
 
       // v12 colleague sales part B2: a partner's move is in euros, at the average rate of their open balance, with the exchange row
+      // review of #511: the partner is locked after the bank (as an advance void locks the colleague), so two moves of one
+      // partner from two banks read the open balance one after the other; and only a partner takes this use
+      if (partnerMove) {
+        await lockAdvancePersonnel(txEngine, Number(partyId));
+        const [linked] = await txEngine.select({ id: customers.id }).from(customers)
+          .where(and(eq(customers.personnelId, Number(partyId)), eq(customers.runningAccount, 'partner'), eq(customers.isDeleted, 0)));
+        if (!linked) {
+          throw new ValidationError('«حساب جاری شریک» فقط برای پرسنلی است که طرف حسابش در کارت طرف حساب به «حساب جاری شرکا» وصل است.', { partyId }, 'TREASURY_PARTNER_ACCOUNT_NOT_PARTNER');
+        }
+      }
       const partnerRows = partnerMove && contraAccountId !== null
         ? (await partnerMoveRows(txEngine, {
-          type: data.type, personnelId: Number(partyId), partnerName: (partyCurrentName ?? partyName).trim(), amount: fin(amount), currency: txCurrency,
+          type: data.type, date: resolvedDate.slice(0, 10), personnelId: Number(partyId), partnerName: (partyCurrentName ?? partyName).trim(), amount: fin(amount), currency: txCurrency,
           rate: fin(txExchangeRate), euroRate: data.partnerEuroRate !== undefined && data.partnerEuroRate !== null && data.partnerEuroRate !== '' ? fin(data.partnerEuroRate) : null,
           bankRow: treasuryRow(Number(bank.accountId)), description: descText,
         }, {

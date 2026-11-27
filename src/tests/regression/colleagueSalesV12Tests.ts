@@ -235,8 +235,29 @@ export async function runColleagueSalesV12Tests(shouldRun: ShouldRun): Promise<T
       const party = await createTestCustomer();
       const linked = await linkParty(admin, party.id, partner, 'partner');
       if (!ok(linked)) throw new Error(`setup: linking answered ${brief(linked)}`);
-      await w.doc('invoice', party, 500, 'final', { currency: 'EUR', exchangeRate: 2_000_000 });
+      // review of #511: a rial row on 4101 (a «سایر» receipt with 4101 as its counter account) is no part of the euro debt
+      const [partnersAccount] = await orm.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.code, '4101'), eq(accounts.isDeleted, 0)));
+      const rialRow = await admin.post('/api/accounting/treasury', {
+        type: 'receipt', method: 'bank_transfer', amount: 100_000_000, date: w.today, bankAccountId: w.bank,
+        partyType: 'personnel', partyId: partner, partyName: 'partner', purpose: 'other', contraAccountId: partnersAccount?.id,
+      });
+      if (!ok(rialRow)) problems.push(`setup: a rial row on 4101 answered ${brief(rialRow)}`);
+      const invoice = await w.doc('invoice', party, 500, 'final', { currency: 'EUR', exchangeRate: 2_000_000 });
       await w.doc('invoice', party, 300, 'final', { currency: 'EUR', exchangeRate: 2_200_000 });
+      // a return of the partner's invoice at another rate is refused (the return rule of every foreign invoice), so the
+      // euros it takes back leave 4101 at the rate they came on
+      const returnAtOtherRate = await admin.post('/api/documents', {
+        docType: 'return', status: 'final', refNumber: 'auto', date: w.today, location: w.main, buyer_name: party.name, partyId: party.id,
+        inOut: 'in', returnOfDocumentId: invoice, currency: 'EUR', exchangeRate: 2_300_000, items: [{ itemId: w.item.id, quantity: 1, unit_price: 100 }],
+      });
+      if (returnAtOtherRate.status !== 422 || codeOf(returnAtOtherRate) !== 'RETURN_EXCHANGE_RATE_MISMATCH') problems.push(`a partner return at another rate answered ${brief(returnAtOtherRate)}, expected 422 RETURN_EXCHANGE_RATE_MISMATCH`);
+      // only a partner takes the use (review of #511)
+      const colleague = await newWorker('ERP-TEST-MARKER not a partner');
+      const notPartner = await admin.post('/api/accounting/treasury', {
+        type: 'receipt', method: 'bank_transfer', amount: 1_000_000, date: w.today, bankAccountId: w.bank, partnerEuroRate: 2_000_000,
+        partyType: 'personnel', partyId: colleague, partyName: 'colleague', purpose: 'partner_account',
+      });
+      if (notPartner.status !== 422 || codeOf(notPartner) !== 'TREASURY_PARTNER_ACCOUNT_NOT_PARTNER') problems.push(`a non-partner's move answered ${brief(notPartner)}, expected 422 TREASURY_PARTNER_ACCOUNT_NOT_PARTNER`);
       const [parent] = await orm.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.code, '1003'), eq(accounts.isDeleted, 0)));
       const [ledger] = await orm.insert(accounts).values({
         code: `1003${String(Date.now()).slice(-5)}`, name: 'ERP-TEST-MARKER euro bank', level: 'subsidiary', parentId: parent?.id ?? null,
@@ -245,10 +266,11 @@ export async function runColleagueSalesV12Tests(shouldRun: ShouldRun): Promise<T
       const euroBank = await BankAccountService.createBankAccount({ title: 'ERP-TEST-MARKER euro bank', type: 'bank', accountId: ledger.id, initialBalance: 0, currency: 'EUR', openingDate: '2026-03-21' });
 
       const balance = async () => {
-        const [row] = (await orm.execute(sql`SELECT COALESCE(SUM(CASE WHEN i.currency = 'EUR' THEN i.debit - i.credit ELSE 0 END), 0)::text AS euro,
+        const [row] = (await orm.execute(sql`SELECT COALESCE(SUM(i.debit - i.credit), 0)::text AS euro,
             COALESCE(SUM(ROUND((i.debit - i.credit) * i.exchange_rate, 0)), 0)::text AS rial
           FROM journal_voucher_items i JOIN journal_vouchers v ON v.id = i.voucher_id JOIN accounts a ON a.id = i.account_id
-          WHERE v.is_deleted = 0 AND i.is_deleted = 0 AND a.code = '4101' AND i.detailed_type = 'personnel' AND i.detailed_id = ${partner}`)).rows as Array<{ euro: string; rial: string }>;
+          WHERE v.is_deleted = 0 AND i.is_deleted = 0 AND a.code = '4101' AND i.detailed_type = 'personnel' AND i.detailed_id = ${partner}
+            AND i.currency = 'EUR'`)).rows as Array<{ euro: string; rial: string }>;
         return { euro: fin(row?.euro ?? 0).toNumber(), rial: fin(row?.rial ?? 0).toNumber() };
       };
       const fx = async () => ({ gain: -fin(await personNet('5201', partner)).toNumber(), loss: fin(await personNet('7008', partner)).toNumber() });

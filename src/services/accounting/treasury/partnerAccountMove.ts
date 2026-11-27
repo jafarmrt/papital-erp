@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, lte } from 'drizzle-orm';
 import type { DbExecutor } from '../../../db/drizzle.js';
 import { journalVoucherItems, journalVouchers } from '../../../db/schema.js';
 import { ValidationError } from '../../../errors/customErrors.js';
@@ -34,8 +34,12 @@ export interface PartnerOpenBalance {
   rial: FinancialDecimal;
 }
 
-/** The partner's open balance on 4101 (every live voucher row of their detail, draft or approved) */
-export async function partnerOpenBalance(tx: DbExecutor, accountId: number, personnelId: number): Promise<PartnerOpenBalance> {
+/**
+ * The partner's open euro balance on 4101: the euro rows of their detail on live vouchers (draft or approved) dated up to the
+ * move's day. A rial row on 4101 (a hand voucher, a «سایر» move with 4101 as its counter account) is no part of the euro
+ * debt, so it stays out of the average (review of #511: it distorted the rate and doubled itself as a false exchange loss).
+ */
+export async function partnerOpenBalance(tx: DbExecutor, accountId: number, personnelId: number, asOf: string): Promise<PartnerOpenBalance> {
   const rows = await tx.select({
     debit: journalVoucherItems.debit, credit: journalVoucherItems.credit,
     currency: journalVoucherItems.currency, exchangeRate: journalVoucherItems.exchangeRate,
@@ -47,18 +51,15 @@ export async function partnerOpenBalance(tx: DbExecutor, accountId: number, pers
       eq(journalVoucherItems.detailedId, personnelId),
       eq(journalVouchers.isDeleted, 0),
       eq(journalVoucherItems.isDeleted, 0),
+      eq(journalVoucherItems.currency, PARTNER_ACCOUNT_CURRENCY),
+      lte(journalVouchers.date, asOf),
     ));
   let euro = fin(0);
   let rial = fin(0);
   for (const r of rows) {
     const net = fin(r.debit).subtract(fin(r.credit));
-    const currency = String(r.currency || 'IRR').trim().toUpperCase();
-    if (currency === PARTNER_ACCOUNT_CURRENCY) {
-      euro = euro.add(net);
-      rial = rial.add(net.multiply(fin(r.exchangeRate ?? 1)).round(0));
-    } else {
-      rial = rial.add(currency === 'IRR' ? net : net.multiply(fin(r.exchangeRate ?? 1)).round(0));
-    }
+    euro = euro.add(net);
+    rial = rial.add(net.multiply(fin(r.exchangeRate ?? 1)).round(0));
   }
   return { euro, rial };
 }
@@ -77,6 +78,8 @@ export interface PartnerMoveRow {
 
 export interface PartnerMoveInput {
   type: 'receipt' | 'payment';
+  /** the move's business day (`YYYY-MM-DD`): the balance it settles is the one of that day */
+  date: string;
   personnelId: number;
   partnerName: string;
   /** the row's amount, in its own currency */
@@ -125,10 +128,13 @@ export async function partnerMoveRows(tx: DbExecutor, input: PartnerMoveInput, a
   if (!euros.isPositive()) throw new ValidationError('مبلغ یورویی این دریافت یا پرداخت صفر می‌شود؛ مبلغ یا نرخ را درست کنید.', undefined, 'TREASURY_PARTNER_EURO_ZERO');
   const bankRial = (code === 'IRR' ? input.amount : input.amount.multiply(input.rate)).round(0);
 
-  const open = await partnerOpenBalance(tx, account.id, input.personnelId);
+  const open = await partnerOpenBalance(tx, account.id, input.personnelId, input.date);
   // a receipt settles what the partner owes; a payment settles what the company owes them
   const settleable = input.type === 'receipt' ? (open.euro.isPositive() ? open.euro : fin(0)) : (open.euro.isNegative() ? open.euro.negate() : fin(0));
-  const averageRate = settleable.isPositive() ? open.rial.abs().divide(open.euro.abs()) : euroRate;
+  // the balance's own rate (rials over euros, the same sign); a balance whose rials do not follow its euros has no average
+  // to settle at, so its euros go at the move's rate
+  const ownRate = open.euro.isZero() ? fin(0) : open.rial.divide(open.euro);
+  const averageRate = settleable.isPositive() && ownRate.isPositive() ? ownRate : euroRate;
   const settled = euros.greaterThan(settleable) ? settleable : euros;
   const rest = euros.subtract(settled);
   const partnerRialWanted = settled.multiply(averageRate).add(rest.multiply(euroRate)).round(0);
