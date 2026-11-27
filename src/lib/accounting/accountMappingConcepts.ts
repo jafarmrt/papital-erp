@@ -37,6 +37,10 @@ export const ACCOUNT_MAPPING_CONCEPTS = [
   { key: 'colleagueCurrentAccountCode', label: 'حساب جاری همکاران', description: 'هزینه‌ای که همکار از جیب داده (بستانکار) و تنخواه یا بازپرداختی که به او داده می‌شود (بدهکار)، با تفصیلی همان همکار', defaultCode: '3208', accountTypes: LIABILITY },
   // v12 colleague sales: a partner's purchases (and later their receipts and payments), with the partner's personnel detail
   { key: 'partnersCurrentAccountCode', label: 'حساب جاری شرکا', description: 'فاکتور فروش به شریکی که طرف حسابش به پرسنل وصل است (بدهکار)، با تفصیلی همان شریک', defaultCode: '4101', accountTypes: EQUITY },
+  // v12 colleague sales part B2 (owner's decision of 7 Azar 1405): the rial difference of a partner's euro receipt or payment
+  // against the average rate of their open euro balance on 4101
+  { key: 'fxGainAccountCode', label: 'سود تسعیر ارز', description: 'فرق ریالی دریافت یا پرداخت یورویی شریک با نرخ میانگین ماندهٔ یورویی او در حساب جاری شرکا، وقتی به سود شرکت است', defaultCode: '5201', accountTypes: REVENUE },
+  { key: 'fxLossAccountCode', label: 'زیان تسعیر ارز', description: 'همان فرق، وقتی به زیان شرکت است', defaultCode: '7008', accountTypes: EXPENSE },
   { key: 'eidiExpenseAccountCode', label: 'هزینه عیدی و پاداش', description: 'سهم عیدی هر فیش حقوق و عیدی سالانه‌ای که انباشته نشده است', defaultCode: '7014', accountTypes: EXPENSE },
   { key: 'chequeReceivableAccountCode', label: 'اسناد دریافتنی نزد صندوق', description: 'ثبت چک دریافتی و بازگشت آن از جریان وصول', defaultCode: '1101', accountTypes: ASSET },
   { key: 'chequeInCollectionAccountCode', label: 'اسناد در جریان وصول', description: 'فرستادن چک به بانک برای وصول، تا پاس یا برگشت', defaultCode: '1102', accountTypes: ASSET },

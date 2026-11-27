@@ -365,6 +365,15 @@ export class AccountMappingService {
     return this.resolveAccount('partnersCurrentAccountCode', tx);
   }
 
+  /** v12 colleague sales part B2: the exchange gain and loss of a partner's euro moves (5201 and 7008 by default) */
+  static async getFxGainAccount(tx?: DbExecutor): Promise<Account | null> {
+    return this.resolveAccount('fxGainAccountCode', tx);
+  }
+
+  static async getFxLossAccount(tx?: DbExecutor): Promise<Account | null> {
+    return this.resolveAccount('fxLossAccountCode', tx);
+  }
+
   static async getEidiExpenseAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('eidiExpenseAccountCode', tx);
   }

@@ -288,6 +288,13 @@
       "when": 1799232400000,
       "tag": "0040_payroll_running_account_deduction",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1799308800000,
+      "tag": "0041_partner_account_purpose",
+      "breakpoints": true
     }
   ]
 }

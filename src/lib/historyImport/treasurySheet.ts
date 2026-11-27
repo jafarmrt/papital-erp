@@ -28,6 +28,8 @@ export interface ParsedTreasuryRow {
   costCenter: string;
   description: string;
   contraCode: string;
+  /** v12 colleague sales part B2: the optional «نرخ تسعیر» column (rials per unit of a foreign account, or per euro of a partner's rial row) */
+  rate: string;
 }
 
 const HEADERS = {
@@ -41,6 +43,7 @@ const HEADERS = {
   costCenter: 'مرکز هزینه',
   description: 'شرح سند',
   contraCode: 'کد حساب مقابل',
+  rate: 'نرخ تسعیر',
 } as const;
 
 /** Header text compared without spaces, ZWNJ or the Arabic forms of «ی» and «ک». */
@@ -95,6 +98,7 @@ export function parseTreasurySheet(sheet: string, rows: readonly (readonly unkno
       costCenter: cellText(at(row, HEADERS.costCenter)),
       description: cellText(at(row, HEADERS.description)),
       contraCode: toEnglishDigits(cellText(at(row, HEADERS.contraCode))),
+      rate: amountText(at(row, HEADERS.rate)),
     };
     if (out.date || out.bankName || out.partyName || out.amount) parsed.push(out);
   });
@@ -147,7 +151,7 @@ function projectOfRow(parsed: ParsedTreasuryRow, mapping: TreasuryImportMapping)
  * What a colleague's row is: wages paid through their payslips, an advance, their running account (petty cash given, their
  * out-of-pocket expenses paid back, money handed back; tool 4), or another payment with a counter account.
  */
-export type PersonnelUse = 'payslip' | 'advance' | 'colleague_account' | 'other';
+export type PersonnelUse = 'payslip' | 'advance' | 'colleague_account' | 'partner_account' | 'other';
 
 /** The default use of a colleague's row, read from its description; the user can change it row by row. */
 export function guessPersonnelUse(row: Pick<ParsedTreasuryRow, 'description' | 'partyName' | 'typeText'>): PersonnelUse {
@@ -155,6 +159,8 @@ export function guessPersonnelUse(row: Pick<ParsedTreasuryRow, 'description' | '
   // phrases compared without spaces and ZWNJ, so «تن خواه», «خرج‌کرد» and «هزینه کرد» read as written together
   const text = spaced.replace(/[\s‌]+/g, '');
   if (text.includes('مساعده')) return 'advance';
+  // v12 colleague sales part B2: a partner's euro account
+  if (text.includes('حسابجاریشریک') || text.includes('حسابجاریشرکا')) return 'partner_account';
   if (row.typeText === 'پرداخت' && /حقوق|دستمزد/.test(text)) return 'payslip';
   // a loan repaid («بازپرداخت وام») is not the running account; such a row waits for the user's choice. «وام» and «قسط»
   // are read as words of the spaced text, so «خسرو امیری» or «تنخواه و امور» do not read as «وام»
@@ -291,6 +297,13 @@ export function resolveTreasuryRow(
       if (use === 'payslip' && kind === 'payment') return ready({ kind: 'payslip', personnelId: party.personnelId }, true);
       if (use === 'advance') return ready({ kind, partyType: 'personnel', partyId: party.personnelId, partyName: party.name, purpose: 'advance' }, true);
       if (use === 'colleague_account') return ready({ kind, partyType: 'personnel', partyId: party.personnelId, partyName: party.name, purpose: 'colleague_account' }, true);
+      // v12 colleague sales part B2: the partner's euro account; the row's «نرخ تسعیر» is the euro rate (rials per euro)
+      if (use === 'partner_account') {
+        if (!parsed.rate) {
+          return { status: 'unresolved', parsed, personnel: true, reason: 'ردیف «حساب جاری شریک» نرخ یورو می‌خواهد: ستون «نرخ تسعیر» همین ردیف را (ریال برای هر یورو) در اکسل بنویسید.' };
+        }
+        return ready({ kind, partyType: 'personnel', partyId: party.personnelId, partyName: party.name, purpose: 'partner_account', rate: parsed.rate }, true);
+      }
       // «پرداخت دیگر» to a colleague (a loan, a repayment) takes the account its own row names, never a shared fallback
       if (!rowContra) {
         return { status: 'unresolved', parsed, personnel: true, reason: '«پرداخت دیگر» به همکار حساب مقابل خودش را می‌خواهد: «کد حساب مقابل» همین ردیف را در اکسل بنویسید، یا کاربرد ردیف را از فهرست کنارش عوض کنید (حقوق، مساعده یا حساب جاری همکار).' };

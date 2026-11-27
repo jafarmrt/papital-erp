@@ -3,7 +3,7 @@
  * سرور و فرم خزانه همین را می‌خوانند. v10.0.257 (TD-952، ت۵ الف): «واریز کسورات حقوق» سایر کسورات فیش (۳۲۰۵) را با
  * تفصیلی همان پرسنل بدهکار می‌کند تا پس از واریز، مانده او صفر شود.
  */
-export const PERSONNEL_PURPOSES = ['settlement', 'advance', 'deductions', 'colleague_account', 'other'] as const;
+export const PERSONNEL_PURPOSES = ['settlement', 'advance', 'deductions', 'colleague_account', 'partner_account', 'other'] as const;
 export type PersonnelPurpose = typeof PERSONNEL_PURPOSES[number];
 
 export const PERSONNEL_PURPOSE_LABELS: Record<PersonnelPurpose, string> = {
@@ -11,6 +11,7 @@ export const PERSONNEL_PURPOSE_LABELS: Record<PersonnelPurpose, string> = {
   advance: 'مساعده و وام',
   deductions: 'واریز کسورات حقوق',
   colleague_account: 'حساب جاری همکار',
+  partner_account: 'حساب جاری شریک',
   other: 'سایر',
 };
 
@@ -44,4 +45,15 @@ export const SALARY_SETTLEMENT_VIA_PAYSLIP_MESSAGE =
  */
 export function isColleagueAccountMove(partyType: string | null | undefined, purpose: string | null | undefined): boolean {
   return partyType === 'personnel' && purpose === 'colleague_account';
+}
+
+/**
+ * v12 colleague sales part B2 (docs/roadmap/V12_COLLEAGUE_SALES_START_PLAN.md, owner's decisions of 7 Azar 1405): a
+ * partner's running account («حساب جاری شرکا», mapped 4101, the partner's personnel detail) holds their debt in euros. A
+ * receipt from the partner (or a payment to them) of this purpose moves it in euros: a euro row at the bank's rate, or a
+ * rial row turned into euros at the rate typed with it. The euros that settle the open balance leave it at the balance's
+ * average rate, and the rial difference goes to «سود تسعیر ارز» or «زیان تسعیر ارز».
+ */
+export function isPartnerAccountMove(partyType: string | null | undefined, purpose: string | null | undefined): boolean {
+  return partyType === 'personnel' && purpose === 'partner_account';
 }

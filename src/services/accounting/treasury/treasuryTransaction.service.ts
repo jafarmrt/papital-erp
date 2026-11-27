@@ -1,12 +1,13 @@
 import { orm, type DbExecutor } from '../../../db/drizzle.js';
-import { bankAccounts, treasuryTransactions, accounts } from '../../../db/schema.js';
+import { bankAccounts, treasuryTransactions, accounts, customers } from '../../../db/schema.js';
 import { eq, and, sql, inArray, asc } from 'drizzle-orm';
 import { AccountMappingService } from '../accountMapping.service.js';
 import { VoucherService } from '../voucher.service.js';
 import { resolveTreasuryExchangeRate } from './treasuryExchangeRate.js';
 import { assertNoVoucherAllowed } from './noVoucherTreasury.js';
 import { needsChosenContraAccount, normalizePartyPurpose, requireChoosableContraAccount } from './partyContraAccount.js';
-import { isColleagueAccountMove, isSalarySettlementPayment, SALARY_SETTLEMENT_VIA_PAYSLIP_MESSAGE } from '../../../lib/treasury/partyPurpose.js';
+import { isColleagueAccountMove, isPartnerAccountMove, isSalarySettlementPayment, SALARY_SETTLEMENT_VIA_PAYSLIP_MESSAGE } from '../../../lib/treasury/partyPurpose.js';
+import { partnerMoveRows } from './partnerAccountMove.js';
 import { assertWithinDocumentRemaining, lockSettlementDocument } from './documentRemaining.js';
 import { assertAdvanceVoidKeepsBalance, isAdvancePayment, lockAdvancePersonnel } from './advanceVoidGuard.js';
 import { assertPersonnelPartyId, assertTreasuryDocumentLink, documentPartyOfTreasuryLink, resolveTreasuryPartyName } from './treasuryLinks.js';
@@ -123,6 +124,10 @@ export class TreasuryTransactionService {
         // v11 (the 1405 replay, tool 4): the colleague's running account, on their detail
         account = await AccountMappingService.getColleagueCurrentAccount(tx);
         conceptLabel = 'حساب جاری همکاران';
+      } else if (purpose === 'partner_account') {
+        // v12 colleague sales part B2: the partner's running account in euros, on their detail (rows from partnerMoveRows)
+        account = await AccountMappingService.getPartnersCurrentAccount(tx);
+        conceptLabel = 'حساب جاری شرکا';
       } else if (purpose === 'deductions') {
         // v10.0.257 (TD-952، ت۵ الف): واریز کسورات فیش با تفصیلی پرسنل، همان حسابی که فیش بستانکار می‌کند
         account = await AccountMappingService.getEmployeeDeductionsPayableAccount(tx);
@@ -196,6 +201,11 @@ export class TreasuryTransactionService {
     if (amount <= 0) {
       warnings.push('مبلغ باید بزرگ‌تر از صفر باشد');
     }
+    // v12 colleague sales part B2 (review of #511): the euro rows and the exchange row are worked out on save, from the
+    // partner's open balance of that day, so this preview shows the plain two rows only
+    if (isPartnerAccountMove(data.partyType, data.purpose)) {
+      warnings.push('سند «حساب جاری شریک» هنگام ثبت به یورو و با نرخ میانگین ماندهٔ شریک ساخته می‌شود و اگر نرخ‌ها فرق داشته باشند، ردیف سود یا زیان تسعیر هم دارد؛ این پیش‌نمایش آن ردیف‌ها را نشان نمی‌دهد.');
+    }
 
     let treasuryAccount: Account | null = null;
     const treasuryDetailedName = bank.title;
@@ -249,7 +259,7 @@ export class TreasuryTransactionService {
     method: 'cash' | 'bank_transfer' | 'pos' | 'cheque';
     amount: number;
     currency?: string;
-    exchangeRate?: number;
+    exchangeRate?: number | string;
     bankAccountId: number;
     partyType?: 'customer' | 'personnel' | 'supplier' | 'other';
     partyId?: number | null;
@@ -273,6 +283,8 @@ export class TreasuryTransactionService {
     allocations?: SettlementAllocationInput[];
     /** v11 tool 5: a miscellaneous («متفرقه») receipt or payment spent on a production project; its counter line's detail */
     projectId?: number | null;
+    /** v12 colleague sales part B2: rials per euro of a rial «حساب جاری شریک» row (its euros = amount / rate) */
+    partnerEuroRate?: number | string | null;
   }, executor?: DbExecutor): Promise<TreasuryTransaction> {
     const amount = exactTreasuryAmount(data.amount, 'مبلغ تراکنش');
     if (amount <= 0) throw new ValidationError('مبلغ تراکنش باید بزرگتر از صفر باشد');
@@ -293,6 +305,15 @@ export class TreasuryTransactionService {
     const party = normalizePartyPurpose(partyType, data.purpose, data.contraAccountId);
     if (data.projectId && (partyType !== 'other' || data.createVoucher === false)) {
       throw new ValidationError('پروژه فقط روی دریافت و پرداخت «متفرقه» با سند حسابداری می‌نشیند (ردیف حساب مقابل).', undefined, 'TREASURY_PROJECT_NOT_ALLOWED');
+    }
+    // v12 colleague sales part B2: a partner's euro account is settled by the partner's invoices themselves; a move of it
+    // sits on no document
+    const partnerMove = isPartnerAccountMove(partyType, party.purpose);
+    if (partnerMove && (data.documentId || parts.length > 0)) {
+      throw new ValidationError('دریافت یا پرداخت «حساب جاری شریک» به فاکتور وصل نمی‌شود؛ فاکتورهای شریک خودشان از حساب جاری او تسویه می‌شوند.', undefined, 'TREASURY_PARTNER_ACCOUNT_NO_DOCUMENT');
+    }
+    if (partnerMove && data.createVoucher === false) {
+      throw new ValidationError('دریافت یا پرداخت «حساب جاری شریک» بی سند حسابداری ثبت نمی‌شود، چون یوروی شریک و تسعیر آن در همان سند است.', undefined, 'TREASURY_PARTNER_ACCOUNT_VOUCHER_REQUIRED');
     }
     // v10.0.57 (TD-925، ت۸ الف): تسویه حقوق فقط از «پرداخت فیش»؛ پرداخت خزانه «تسویه حقوق» همان فیش را دو بار می‌پرداخت
     if (isSalarySettlementPayment(data.type, partyType, party.purpose)) {
@@ -375,6 +396,28 @@ export class TreasuryTransactionService {
         ? { accountId, ...expenseLineDetail(project) }
         : { accountId, detailedType: data.partyType || 'other', detailedId: partyId, detailedName: partyName });
 
+      // v12 colleague sales part B2: a partner's move is in euros, at the average rate of their open balance, with the exchange row
+      // review of #511: the partner is locked after the bank (as an advance void locks the colleague), so two moves of one
+      // partner from two banks read the open balance one after the other; and only a partner takes this use
+      if (partnerMove) {
+        await lockAdvancePersonnel(txEngine, Number(partyId));
+        const [linked] = await txEngine.select({ id: customers.id }).from(customers)
+          .where(and(eq(customers.personnelId, Number(partyId)), eq(customers.runningAccount, 'partner'), eq(customers.isDeleted, 0)));
+        if (!linked) {
+          throw new ValidationError('«حساب جاری شریک» فقط برای پرسنلی است که طرف حسابش در کارت طرف حساب به «حساب جاری شرکا» وصل است.', { partyId }, 'TREASURY_PARTNER_ACCOUNT_NOT_PARTNER');
+        }
+      }
+      const partnerRows = partnerMove && contraAccountId !== null
+        ? (await partnerMoveRows(txEngine, {
+          type: data.type, date: resolvedDate.slice(0, 10), personnelId: Number(partyId), partnerName: (partyCurrentName ?? partyName).trim(), amount: fin(amount), currency: txCurrency,
+          rate: fin(txExchangeRate), euroRate: data.partnerEuroRate !== undefined && data.partnerEuroRate !== null && data.partnerEuroRate !== '' ? fin(data.partnerEuroRate) : null,
+          bankRow: treasuryRow(Number(bank.accountId)), description: descText,
+        }, {
+          partner: await AccountMappingService.getPartnersCurrentAccount(txEngine),
+          gain: await AccountMappingService.getFxGainAccount(txEngine),
+          loss: await AccountMappingService.getFxLossAccount(txEngine),
+        })).rows
+        : null;
       // OBS-R2-52: مانده، شماره، سند، ردیف و رویداد از راه یگانه خزانه
       const { row: tx } = await postTreasuryRow(txEngine, bank, {
         type: data.type,
@@ -401,7 +444,7 @@ export class TreasuryTransactionService {
           currency: txCurrency,
           userId: data.userId,
           username: data.username,
-          items: [
+          items: partnerRows ?? [
             {
               ...(data.type === 'receipt' ? treasuryRow(Number(bank.accountId)) : partyRow(contraAccountId)),
               debit: amount,
