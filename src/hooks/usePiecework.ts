@@ -384,6 +384,8 @@ export function usePiecework() {
       reloadAll();
     } catch (err) {
       hotToast.error(errorMessageOf(err) || 'خطا در ثبت کارکرد');
+      // review of #509: a colleague's edit since the form opened (409 OCC_CONFLICT) reloads the list with the new version
+      if ((err as { code?: unknown })?.code === 'OCC_CONFLICT') reloadAll();
     } finally {
       setIsSavingLog(false);
     }

@@ -33,7 +33,7 @@ export async function runWorkLogScheduleRowTests(shouldRun: ShouldRun): Promise<
       'v12 work-log edit: a free log takes another task title, at the program\'s rate of the new task when no rate is sent or at the rate sent, with its total and an audit row naming the task change; a deleted task is refused (422 PIECEWORK_LOG_TASK_INVALID) and a log of a workshop schedule row keeps its task (409 PIECEWORK_LOG_TASK_LOCKED), both unchanged',
       ['v12', 'piecework', 'schedule', 'work_log_edit'], editTaskCase],
     ['reg_work_log_edit_backlog_v12',
-      'v12 work-log edit backlog: an edit sends the version it read and a stale one is refused (409 OCC_CONFLICT, the log unchanged; 422 without one) while each edit raises it; the audit row of a task change names both task titles; a log of a legacy schedule row (logged with no log id) keeps its task (409 PIECEWORK_LOG_TASK_LOCKED)',
+      'v12 work-log edit backlog: an edit sends the version it read and a stale one is refused (409 OCC_CONFLICT, the log unchanged; refused without one) while each edit raises it; the audit row of a task change names both task titles; a manual log beside a legacy schedule row of the same worker and task (logged with no log id) still changes task, since the row\'s progress and state come from its own flag',
       ['v12', 'piecework', 'schedule', 'work_log_edit', 'occ'], editBacklogCase],
   ]);
 }
@@ -265,15 +265,14 @@ async function editBacklogCase(h: Harness, wrong: string[]): Promise<string> {
     && JSON.stringify(audit?.details ?? {}).includes(String(titles?.b));
   if (moved.status !== 200 || !named) wrong.push(`the task change answered ${brief(moved)} and wrote «${String(audit?.description)}», expected both task titles`);
 
-  // a legacy schedule row (logged before rows named their log): the worker's log of that task keeps its task
+  // a legacy schedule row (logged before rows named their log) names no log: a manual log of its worker and task in the
+  // project changes task freely, and the row stays logged by its own flag
   const project = await scheduledProject(worker, first, 10);
-  const legacy = await h.post('/api/piecework/logs', { items: [{ personnelId: worker, taskId: first, projectId: project, date: f.today, quantity: 3 }] });
-  const legacyId = Number((legacy.body as { insertedIds?: unknown[] })?.insertedIds?.[0]);
   await h.q(`UPDATE production_projects SET stage_schedules = jsonb_set(stage_schedules, '{1,prod-main,tasks,0,isLoggedToPiecework}', 'true') WHERE id = $1`, [project]);
-  const locked = await h.put(`/api/piecework/logs/${legacyId}`, { version: await workLogVersion(legacyId), taskId: second });
-  const [kept] = await h.q('SELECT task_id FROM piecework_logs WHERE id = $1', [legacyId]);
-  if (locked.status !== 409 || codeOf(locked) !== 'PIECEWORK_LOG_TASK_LOCKED' || Number(kept?.task_id) !== first) wrong.push(`a task change of a legacy schedule row's log answered ${brief(locked)} (task now ${kept?.task_id}), expected 409 PIECEWORK_LOG_TASK_LOCKED`);
-  const freeEdit = await h.put(`/api/piecework/logs/${legacyId}`, { version: await workLogVersion(legacyId), notes: 'legacy row note' });
-  if (freeEdit.status !== 200) wrong.push(`a notes edit of a legacy schedule row's log answered ${brief(freeEdit)}, expected 200`);
-  return 'edits carry the version; the audit row names the tasks; a legacy schedule row keeps its log\'s task';
+  const manual = await h.post('/api/piecework/logs', { items: [{ personnelId: worker, taskId: first, projectId: project, date: f.today, quantity: 3 }] });
+  const manualId = Number((manual.body as { insertedIds?: unknown[] })?.insertedIds?.[0]);
+  const changed = await h.put(`/api/piecework/logs/${manualId}`, { version: await workLogVersion(manualId), taskId: second });
+  const [row] = await h.q(`SELECT stage_schedules #> '{1,prod-main,tasks,0,isLoggedToPiecework}' AS flag FROM production_projects WHERE id = $1`, [project]);
+  if (changed.status !== 200 || String(row?.flag) !== 'true') wrong.push(`a manual log beside a legacy schedule row answered ${brief(changed)} (row flag ${String(row?.flag)}), expected 200 and the row still logged`);
+  return 'edits carry the version; the audit row names the tasks; a legacy schedule row locks no manual log';
 }
