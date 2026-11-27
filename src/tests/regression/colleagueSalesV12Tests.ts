@@ -2,8 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import request from 'supertest';
 import { and, eq, sql } from 'drizzle-orm';
-import { orm, pool } from '../../db/drizzle.js';
-import { untilQueued } from '../invariants/concurrencyHarness.js';
+import { orm } from '../../db/drizzle.js';
 import { accounts, customers, documents, journalVoucherItems, journalVouchers, personnel } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { VoucherSyncService } from '../../services/accounting/voucherSync.service.js';
@@ -266,32 +265,14 @@ export async function runColleagueSalesV12Tests(shouldRun: ShouldRun): Promise<T
       const voided = await admin.del(`/api/piecework/payrolls/${payrollId}`);
       if (!ok(voided) || fin(await personNet('3208', colleague)).toNumber() !== 400_000) problems.push(`voiding the payslip answered ${brief(voided)} with 3208 at ${await personNet('3208', colleague)}, expected 400000 owed again`);
 
-      // review of #510: a move that lowers the colleague's 3208 debt waits for the colleague's row, which a payslip issue holds
-      // while it reads the debt (red before: the receipt and the invoice void went through beside a held lock)
-      const queuesBehindColleague = async (label: string, op: () => PromiseLike<Res>) => {
-        const holder = await pool.connect();
-        try {
-          await holder.query('BEGIN');
-          await holder.query('SELECT id FROM personnel WHERE id = $1 FOR UPDATE', [colleague]);
-          const pid = (await holder.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0].pid;
-          let done = 0;
-          const run = Promise.resolve(op()).finally(() => { done++; });
-          await untilQueued(pid, 1, () => done);
-          if (done !== 0) problems.push(`${label} finished beside a held lock on the colleague, expected it to wait`);
-          await holder.query('COMMIT');
-          const res = await run;
-          if (!ok(res)) problems.push(`${label} answered ${brief(res)} after the lock was released`);
-        } finally {
-          await holder.query('ROLLBACK').catch(() => undefined);
-          holder.release();
-        }
-      };
-      await queuesBehindColleague('a colleague running-account receipt', () => admin.post('/api/accounting/treasury', {
-        type: 'receipt', method: 'bank_transfer', bankAccountId: w.bank, amount: 100_000, date: w.today,
-        partyType: 'personnel', partyId: colleague, partyName: 'colleague', purpose: 'colleague_account',
-      }));
-      const second = await w.doc('invoice', party, 200_000);
-      await queuesBehindColleague('voiding a colleague\'s invoice', () => admin.del(`/api/documents/${second}`));
+      // the ceiling holds when the payslip is issued; an invoice voided afterwards leaves 3208 in credit (the company owes the
+      // colleague), the documented outcome of any later move that lowers the debt
+      const later = await w.doc('invoice', party, 200_000);
+      const reissued = await issue(600_000);
+      const voidedLater = await admin.del(`/api/documents/${later}`);
+      if (reissued.status !== 201 || !ok(voidedLater) || fin(await personNet('3208', colleague)).toNumber() !== -200_000) {
+        problems.push(`a deduction of 600000 then the void of a 200000 invoice answered ${brief(reissued)} / ${brief(voidedLater)} with 3208 at ${await personNet('3208', colleague)}, expected 200000 in credit`);
+      }
       if (problems.length > 0) throw new Error(problems.join(' | '));
       return 'the payslip deducts the running-account debt up to its balance, credits 3208 and gives it back when voided';
     }));

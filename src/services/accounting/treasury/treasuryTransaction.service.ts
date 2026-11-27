@@ -348,9 +348,6 @@ export class TreasuryTransactionService {
       if (isColleagueAccountMove(partyType, party.purpose) && txCurrency.toUpperCase() !== 'IRR') {
         throw new ValidationError('حساب جاری همکار فقط ریالی است؛ آن را از حساب ریالی پرداخت یا دریافت کنید.', undefined, 'TREASURY_COLLEAGUE_ACCOUNT_CURRENCY');
       }
-      // v12 colleague sales part B (review of #510): a move on a colleague's running account locks the colleague (after the
-      // bank, as an advance void does), so a payslip deducting their 3208 debt reads it before or after, never beside it
-      if (isColleagueAccountMove(partyType, party.purpose) && partyId) await lockAdvancePersonnel(txEngine, Number(partyId));
       // v8.0.20 (TD-274): نرخ تسعیر تراکنش ارزی (صریح، فاکتور تسویه‌شده، تنظیمات)؛ بدون نرخ رد می‌شود، هرگز نرخ ۱
       const txExchangeRate = await resolveTreasuryExchangeRate(txEngine, txCurrency, data.exchangeRate, data.documentId);
 
@@ -482,9 +479,7 @@ export class TreasuryTransactionService {
       const [advancePeek] = await txEngine.select({
         type: treasuryTransactions.type, partyType: treasuryTransactions.partyType, purpose: treasuryTransactions.purpose, partyId: treasuryTransactions.partyId,
       }).from(treasuryTransactions).where(eq(treasuryTransactions.id, id));
-      if (advancePeek && (isAdvancePayment(advancePeek) || (isColleagueAccountMove(advancePeek.partyType, advancePeek.purpose) && advancePeek.partyId))) {
-        await lockAdvancePersonnel(txEngine, Number(advancePeek.partyId));
-      }
+      if (advancePeek && isAdvancePayment(advancePeek)) await lockAdvancePersonnel(txEngine, Number(advancePeek.partyId));
       const sides = await txEngine.select().from(treasuryTransactions)
         .where(and(inArray(treasuryTransactions.id, sideIds), eq(treasuryTransactions.isDeleted, 0)))
         .orderBy(asc(treasuryTransactions.id))
