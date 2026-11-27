@@ -8,6 +8,7 @@ import { TestCaseResult } from '../types.js';
 import { type ShouldRun, inFiscalSandbox, runCase, sandboxAdminClient, sandboxClientWith } from './fiscalClosingTests.js';
 import { brief, ok } from './receiptsOnInvoicesV11Tests.js';
 import { emptyBank } from './historyImportTreasuryV11Tests.js';
+import { newWorker } from '../invariants/payrollScenarios.js';
 
 /**
  * v11 history import, tool 3 (the 1405 replay from Excel): past sales invoices from the sheet «اقلام فاکتور», posted with
@@ -222,6 +223,46 @@ export async function runHistoryImportSalesV11Tests(shouldRun: ShouldRun): Promi
 
       if (problems.length > 0) throw new Error(problems.join(' | '));
       return 'the invoice closed its file; the wrong links, the clerk and the euro price were refused; the lost file stayed lost';
+    }));
+  }
+
+  // v12 colleague sales part B3: a partner's past invoice is in euros (their debt is fixed in euros)
+  const euro = 'reg_history_import_partner_euro_invoice_v12';
+  if (shouldRun(euro, 'v12', 'history_import', 'sales', 'colleague_sales', 'currency')) {
+    await runCase(results, euro, 'v12 colleague sales part B3: Excel lines with a foreign price and a rate become one euro invoice at that rate; for a party linked to a partner it goes to 4101 in euros and is settled from the running account; lines of one invoice with two rates are refused; the same lines in rials are refused for the partner', () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const a = await fresh();
+      const partyId = (await createTestCustomer({ partyType: 'customer' })).id;
+      const partner = { id: await newWorker('ERP-TEST-MARKER import partner') };
+      const [cust] = (await orm.execute(sql`SELECT version FROM customers WHERE id = ${partyId}`)).rows as Array<{ version: number }>;
+      const linked = await admin.put(`/api/customers/${partyId}`, { version: cust.version, personnelId: partner.id, runningAccount: 'partner' });
+      if (!ok(linked)) throw new Error(`setup: linking answered ${brief(linked)}`);
+      const opening: StockImportRow = { rowNo: 2, sheet: IN, date: '1405-01-01', kind: 'opening', itemCode: a.code, quantity: '20', unitCost: '50000' };
+      const line = (rowNo: number, ref: string, extra: Partial<StockImportRow>): StockImportRow => ({
+        rowNo, sheet: SALES, date: '1405-04-18', kind: 'sale', itemCode: a.code, quantity: '1', invoiceRef: ref, customerId: partyId, ...extra,
+      });
+      const result = await stockPost(admin, [
+        opening,
+        line(2, '55', { unitPrice: '250.5', currency: 'EUR', exchangeRate: '2000000' }),
+        line(3, '55', { quantity: '2', unitPrice: '129.7', currency: 'EUR', exchangeRate: '2000000' }),
+        line(4, '82', { unitPrice: '100', currency: 'EUR', exchangeRate: '2000000' }),
+        line(5, '82', { quantity: '2', unitPrice: '100', currency: 'EUR', exchangeRate: '2100000' }),
+        line(6, '83', { quantity: '3', unitPrice: '2000000' }),
+      ], true);
+      if (rowOf(result, 2)?.status !== 'ok' || rowOf(result, 3)?.status !== 'ok') problems.push(`the euro invoice 55 read ${JSON.stringify([rowOf(result, 2), rowOf(result, 3)])}`);
+      if (rowOf(result, 4)?.status !== 'error') problems.push(`invoice 82 with two rates read ${JSON.stringify(rowOf(result, 4))}, expected refused`);
+      if (rowOf(result, 6)?.status !== 'error') problems.push(`a rial invoice of the partner read ${JSON.stringify(rowOf(result, 6))}, expected refused`);
+      const [doc] = (await orm.execute(sql`SELECT d.id, d.currency, d.exchange_rate::text AS rate, d.running_account AS stamp FROM documents d
+        JOIN history_import_refs r ON r.document_id = d.id WHERE r.excel_ref = '55' AND d.is_deleted = 0`)).rows as Array<{ id: number; currency: string; rate: string; stamp: string }>;
+      const [row4101] = (await orm.execute(sql`SELECT i.debit::text AS debit, i.currency, i.exchange_rate::text AS rate FROM journal_voucher_items i
+        JOIN journal_vouchers v ON v.id = i.voucher_id JOIN accounts acc ON acc.id = i.account_id
+        WHERE v.source_document_id = ${doc?.id ?? 0} AND v.is_deleted = 0 AND i.is_deleted = 0 AND acc.code = '4101'`)).rows as Array<{ debit: string; currency: string; rate: string }>;
+      if (doc?.currency !== 'EUR' || Number(doc?.rate) !== 2_000_000 || doc?.stamp !== 'partner' || Number(row4101?.debit) !== 509.9 || row4101?.currency !== 'EUR') {
+        problems.push(`invoice 55 is ${JSON.stringify(doc)} with the 4101 row ${JSON.stringify(row4101)}, expected EUR at 2000000, stamped partner, 509.9 euros on 4101`);
+      }
+      if (problems.length > 0) throw new Error(problems.join(' | '));
+      return 'euro lines become a euro invoice on the partner\'s 4101';
     }));
   }
 

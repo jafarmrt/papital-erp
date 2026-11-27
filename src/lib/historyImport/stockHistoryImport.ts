@@ -43,8 +43,14 @@ export interface StockImportRow {
   invoiceRef?: string;
   /** sale only: the customer (a party of type customer or both) */
   customerId?: number | null;
-  /** sale only: the unit price in rials, as decimal text */
+  /** sale only: the unit price in rials, as decimal text (in euros on a euro invoice) */
   unitPrice?: string | null;
+  /**
+   * v12 colleague sales part B3: a euro invoice (a partner's, whose debt is fixed in euros): its lines carry «قیمت ارزی»
+   * as `unitPrice` and «نرخ تسعیر» (rials per euro) as `exchangeRate`; every line of one invoice shares them
+   */
+  currency?: 'EUR' | null;
+  exchangeRate?: string | null;
   /** sale only: the sales file («پرونده» of «ارتباط با مشتری») this invoice closed, from the «شماره پرونده» column */
   leadId?: number | null;
   /** the Excel slip or invoice number (شماره فاکتور / شماره قبض), kept in the notes; rows of one slip share a document */
@@ -152,7 +158,10 @@ export const SALE_PRICE_TOO_LOW_MESSAGE = (price: string) =>
   `قیمت واحد ${price} ریال برای فروش یک کالا بسیار کم است و احتمالاً به یورو یا هزار تومان نوشته شده؛ قیمت ریالی واحد را در ستون «قیمت» بنویسید.`;
 
 export const SALE_EURO_POLICY_MESSAGE =
-  'سیاست قیمتی این ردیف «قیمت یورویی» است و ورود سابقه فقط ریال ثبت می‌کند؛ قیمت ریالی واحد را در ستون «قیمت» بنویسید و «سیاست قیمتی» را به ریالی تغییر دهید یا خالی بگذارید.';
+  'سیاست قیمتی این ردیف «قیمت یورویی» است؛ برای فاکتور یورویی ستون‌های «قیمت ارزی» (یورو برای هر واحد) و «نرخ تسعیر» (ریال برای هر یورو) را پر کنید، یا قیمت ریالی را در «قیمت» بنویسید و «سیاست قیمتی» را به ریالی تغییر دهید یا خالی بگذارید.';
+
+export const SALE_EURO_COLUMNS_MESSAGE =
+  'برای فاکتور یورویی هر دو ستون «قیمت ارزی» (یورو برای هر واحد) و «نرخ تسعیر» (ریال برای هر یورو) را پر کنید.';
 
 /** «قیمت یورویی» (or any policy naming the euro) */
 export const isEuroPricePolicy = (policy: string): boolean => /یورو|euro|eur\b/i.test(policy);

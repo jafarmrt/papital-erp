@@ -1,6 +1,6 @@
 import { toEnglishDigits } from '../../utils/persianNumber.js';
 import {
-  SALE_EURO_POLICY_MESSAGE, SALE_MIN_UNIT_PRICE_RIAL, SALE_PRICE_TOO_LOW_MESSAGE, excelInvoiceNumber, isEuroPricePolicy,
+  SALE_EURO_COLUMNS_MESSAGE, SALE_EURO_POLICY_MESSAGE, SALE_MIN_UNIT_PRICE_RIAL, SALE_PRICE_TOO_LOW_MESSAGE, excelInvoiceNumber, isEuroPricePolicy,
   type StockImportKind, type StockImportRow,
 } from './stockHistoryImport.js';
 import { amountText, headerKey } from './treasurySheet.js';
@@ -47,6 +47,9 @@ export interface ParsedStockRow {
   pricePolicy: string;
   /** sales sheet: «شماره پرونده», the sales file this invoice closed (empty for single and event sales) */
   leadRef: string;
+  /** v12 colleague sales part B3: a euro line's «قیمت ارزی» (euros per unit) and «نرخ تسعیر» (rials per euro) */
+  foreignPrice: string;
+  rate: string;
 }
 
 const HEADERS = {
@@ -69,6 +72,8 @@ const HEADERS = {
   status: ['وضعیت'],
   pricePolicy: ['سیاست قیمتی'],
   leadRef: ['شماره پرونده'],
+  foreignPrice: ['قیمت ارزی'],
+  rate: ['نرخ تسعیر'],
 } as const;
 
 export function detectStockSheet(header: readonly unknown[]): StockSheetShape | null {
@@ -123,6 +128,8 @@ export function parseStockSheet(sheet: string, rows: readonly (readonly unknown[
       statusText: shape === 'sales' ? cellText(at(row, HEADERS.status)) : '',
       pricePolicy: shape === 'sales' ? cellText(at(row, HEADERS.pricePolicy)) : '',
       leadRef: shape === 'sales' ? toEnglishDigits(cellText(at(row, HEADERS.leadRef))) : '',
+      foreignPrice: shape === 'sales' ? amountText(at(row, HEADERS.foreignPrice)) : '',
+      rate: shape === 'sales' ? amountText(at(row, HEADERS.rate)) : '',
     };
     if (out.date || out.code || out.quantity) parsed.push(out);
   });
@@ -267,14 +274,17 @@ function resolveSalesRow(parsed: ParsedStockRow, mapping: StockImportMapping, ac
   if (itemTarget?.kind === 'skip') return skipped(`کد «${parsed.code}» کنار گذاشته شد.`);
   if (!parsed.date) return unresolved('تاریخ فاکتور خالی است.');
   if (!parsed.quantity) return unresolved('تعداد خالی است.');
-  if (!parsed.unitPrice) return unresolved('قیمت این ردیف خالی است.');
-  if (isEuroPricePolicy(parsed.pricePolicy)) return unresolved(SALE_EURO_POLICY_MESSAGE);
-  if (Number(parsed.unitPrice) < SALE_MIN_UNIT_PRICE_RIAL) return unresolved(SALE_PRICE_TOO_LOW_MESSAGE(parsed.unitPrice));
+  // v12 colleague sales part B3: a euro line (a partner's invoice) carries its euro price and rate; the rial «قیمت» is not used
+  const euro = !!(parsed.foreignPrice || parsed.rate);
+  if (euro && !(Number(parsed.foreignPrice) > 0 && Number(parsed.rate) > 0)) return unresolved(SALE_EURO_COLUMNS_MESSAGE);
+  if (!euro && !parsed.unitPrice) return unresolved('قیمت این ردیف خالی است.');
+  if (!euro && isEuroPricePolicy(parsed.pricePolicy)) return unresolved(SALE_EURO_POLICY_MESSAGE);
+  if (!euro && Number(parsed.unitPrice) < SALE_MIN_UNIT_PRICE_RIAL) return unresolved(SALE_PRICE_TOO_LOW_MESSAGE(parsed.unitPrice));
   const leadId = parsed.leadRef ? Number(parsed.leadRef) : null;
   if (parsed.leadRef && !(/^\d+$/.test(parsed.leadRef.trim()) && (leadId as number) > 0 && (leadId as number) <= 2147483647)) {
     return unresolved(`«شماره پرونده» (${parsed.leadRef}) یک عدد درست نیست؛ شمارهٔ پرونده‌ای که این فاکتور آن را بسته بنویسید یا خالی بگذارید.`);
   }
-  if (parsed.lineTotal && Math.abs(decimalTimes(parsed.quantity, parsed.unitPrice) - Number(parsed.lineTotal)) > 1) {
+  if (!euro && parsed.lineTotal && Math.abs(decimalTimes(parsed.quantity, parsed.unitPrice) - Number(parsed.lineTotal)) > 1) {
     return unresolved(`جمع کل (${parsed.lineTotal}) با تعداد × قیمت نمی‌خواند؛ یکی را درست کنید.`);
   }
   if (!parsed.customerName) return unresolved('مشتری فاکتور خالی است.');
@@ -288,7 +298,8 @@ function resolveSalesRow(parsed: ParsedStockRow, mapping: StockImportMapping, ac
     kind: 'sale',
     itemCode: itemTarget?.kind === 'code' ? itemTarget.code : parsed.code,
     quantity: parsed.quantity,
-    unitPrice: parsed.unitPrice,
+    unitPrice: euro ? parsed.foreignPrice : parsed.unitPrice,
+    ...(euro ? { currency: 'EUR' as const, exchangeRate: parsed.rate } : {}),
     invoiceRef: parsed.invoiceRef,
     customerId: ct.partyId,
     ...(leadId ? { leadId } : {}),

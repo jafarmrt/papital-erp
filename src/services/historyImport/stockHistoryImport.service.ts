@@ -136,7 +136,10 @@ function prepare(rows: StockImportRow[]): PreparedRow[] {
       else if ((row.kind === 'sale' || row.kind === 'return') && !invoiceRef) fail('شمارهٔ فاکتور اکسل این ردیف خالی است.');
       else if (row.kind === 'sale' && !row.customerId) fail('مشتری این فاکتور مشخص نیست.');
       else if (row.kind === 'sale' && !unitPrice) fail('قیمت این ردیف فاکتور خالی یا نادرست است؛ یک عدد بزرگ‌تر از صفر (ریال) بنویسید.');
-      else if (row.kind === 'sale' && Number(unitPrice) < SALE_MIN_UNIT_PRICE_RIAL) fail(SALE_PRICE_TOO_LOW_MESSAGE(toPersianDigits(String(unitPrice))));
+      // v12 colleague sales part B3: a euro line needs its rate; its price is in euros, so the rial floor is not read
+      else if (row.kind === 'sale' && row.currency === 'EUR' && !(Number(historyImportAmount(row.exchangeRate)) > 0)) fail('نرخ تسعیر این ردیف فاکتور یورویی خالی یا نادرست است؛ ریال برای هر یورو را بنویسید.');
+      else if (row.kind === 'sale' && row.currency !== 'EUR' && Number(unitPrice) < SALE_MIN_UNIT_PRICE_RIAL) fail(SALE_PRICE_TOO_LOW_MESSAGE(toPersianDigits(String(unitPrice))));
+      else if (row.kind !== 'sale' && row.currency) fail('ارز فقط برای فاکتور فروش است.');
       else if (row.kind !== 'sale' && row.leadId) fail('«شماره پرونده» فقط برای فاکتور فروش است.');
       else if (row.kind === 'opening' && isoDate !== OPENING_DAY_ISO) fail(`موجودی اولیه فقط با تاریخ ${faDate(OPENING_DAY_ISO)} ثبت می‌شود.`);
     }
@@ -223,6 +226,8 @@ function assertOneInvoice(group: PreparedRow[]): void {
   const days = new Set(group.map(p => p.isoDate));
   const customers = new Set(group.map(p => p.row.customerId ?? 0));
   const leads = new Set(group.map(p => p.row.leadId ?? 0));
+  const money = new Set(group.map(p => `${p.row.currency ?? 'IRR'}|${p.row.currency ? historyImportAmount(p.row.exchangeRate) : ''}`));
+  if (money.size > 1) throw new ValidationError(`ردیف‌های فاکتور ${toPersianDigits(String(group[0].row.invoiceRef))} اکسل ارز یا نرخ تسعیر یکسان ندارند؛ همهٔ ردیف‌های یک فاکتور یک ارز و یک نرخ دارند.`);
   if (days.size > 1) throw new ValidationError(`ردیف‌های فاکتور ${toPersianDigits(String(group[0].row.invoiceRef))} اکسل تاریخ‌های مختلف دارند (${[...days].map(faDate).join('، ')})؛ یک فاکتور یک تاریخ دارد.`);
   if (customers.size > 1) throw new ValidationError(`ردیف‌های فاکتور ${toPersianDigits(String(group[0].row.invoiceRef))} اکسل مشتری‌های مختلف دارند؛ یک فاکتور یک مشتری دارد.`);
   if (leads.size > 1) throw new ValidationError(`ردیف‌های فاکتور ${toPersianDigits(String(group[0].row.invoiceRef))} اکسل «شماره پرونده»های مختلف دارند؛ یک فاکتور حداکثر یک پرونده فروش را می‌بندد.`);
@@ -247,6 +252,10 @@ async function postDocument(tx: DbExecutor, group: PreparedRow[], options: Stock
   if (kind === 'return') {
     const invoice = await documentOfExcelRef(tx, excelRef);
     if (!invoice) throw new ValidationError(`فاکتور ${toPersianDigits(excelRef)} اکسل در برنامه نیست؛ برگشت پس از ثبت فاکتورش وارد می‌شود.`, undefined, 'HISTORY_IMPORT_INVOICE_MISSING');
+    const [original] = await tx.select({ currency: documents.currency }).from(documents).where(eq(documents.id, invoice.id));
+    if ((original?.currency || 'IRR').toUpperCase() !== 'IRR') {
+      throw new ValidationError(`فاکتور ${toPersianDigits(excelRef)} اکسل یورویی است و برگشت آن از ورود سابقه (که ریالی است) ثبت نمی‌شود؛ برگشت را در برنامه از روی همان فاکتور ثبت کنید.`, undefined, 'HISTORY_IMPORT_RETURN_FOREIGN_INVOICE');
+    }
     returnOfDocumentId = invoice.id;
   }
   const notes = stockImportNotes(kind === 'sale' || kind === 'return' ? `فاکتور ${excelRef}` : first.row.slipRef, group.map(p => p.row.description));
@@ -254,7 +263,9 @@ async function postDocument(tx: DbExecutor, group: PreparedRow[], options: Stock
     docType,
     status: 'final',
     date: first.isoDate,
-    currency: 'IRR',
+    // v12 colleague sales part B3: a euro invoice at its own rate; a return of it is refused below
+    currency: kind === 'sale' && first.row.currency === 'EUR' ? 'EUR' : 'IRR',
+    ...(kind === 'sale' && first.row.currency === 'EUR' ? { exchangeRate: historyImportAmount(first.row.exchangeRate) ?? undefined } : {}),
     notes,
     location: warehouse || undefined,
     partyId: kind === 'purchase' ? first.row.supplierId ?? null : kind === 'sale' ? first.row.customerId ?? null : undefined,

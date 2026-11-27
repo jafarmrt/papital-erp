@@ -67,6 +67,9 @@ const stockImportRowSchema = z.object({
   invoiceRef: z.string().max(100).optional(),
   customerId: optionalId,
   unitPrice: decimalText.nullable().optional(),
+  // v12 colleague sales part B3: a euro invoice line (read again by the service)
+  currency: z.enum(['EUR']).nullable().optional(),
+  exchangeRate: decimalText.nullable().optional(),
   leadId: optionalId,
   slipRef: z.string().max(TEXT_MAX).optional(),
   description: z.string().max(TEXT_MAX).optional(),
