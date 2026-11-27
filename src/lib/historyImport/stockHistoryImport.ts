@@ -1,3 +1,4 @@
+import { historyImportAmount } from './historyImportAmount.js';
 /**
  * v11 history import (tools 2 and 3 of the 1405 replay): the contract between the warehouse Excel import window and the
  * server. The window reads the cleaned sheets «ورود به انبار», «خروج دستی» and «اقلام فاکتور», the user maps each item
@@ -161,7 +162,20 @@ export const SALE_EURO_POLICY_MESSAGE =
   'سیاست قیمتی این ردیف «قیمت یورویی» است؛ برای فاکتور یورویی ستون‌های «قیمت ارزی» (یورو برای هر واحد) و «نرخ تسعیر» (ریال برای هر یورو) را پر کنید، یا قیمت ریالی را در «قیمت» بنویسید و «سیاست قیمتی» را به ریالی تغییر دهید یا خالی بگذارید.';
 
 export const SALE_EURO_COLUMNS_MESSAGE =
-  'برای فاکتور یورویی هر دو ستون «قیمت ارزی» (یورو برای هر واحد) و «نرخ تسعیر» (ریال برای هر یورو) را پر کنید.';
+  'برای فاکتور یورویی هر دو ستون «قیمت ارزی» (یورو برای هر واحد، حداکثر چهار رقم اعشار) و «نرخ تسعیر» (ریال برای هر یورو) را پر کنید.';
+
+/**
+ * v12 colleague sales part B3 (review of #512): why a euro line's price and rate cannot be taken, or null. Both are exact
+ * decimals of at most four places (as the server reads them), and the line is worth at least the rial floor of a sale, so a
+ * rial or toman amount typed as the euro price, or a near-zero one, never posts.
+ */
+export function euroSaleRefusal(foreignPrice: unknown, rate: unknown): string | null {
+  const price = historyImportAmount(foreignPrice);
+  const perEuro = historyImportAmount(rate);
+  if (!price || !perEuro) return SALE_EURO_COLUMNS_MESSAGE;
+  if (Number(price) * Number(perEuro) < SALE_MIN_UNIT_PRICE_RIAL) return SALE_PRICE_TOO_LOW_MESSAGE(String(Math.round(Number(price) * Number(perEuro))));
+  return null;
+}
 
 /** «قیمت یورویی» (or any policy naming the euro) */
 export const isEuroPricePolicy = (policy: string): boolean => /یورو|euro|eur\b/i.test(policy);

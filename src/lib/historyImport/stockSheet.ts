@@ -1,6 +1,6 @@
 import { toEnglishDigits } from '../../utils/persianNumber.js';
 import {
-  SALE_EURO_COLUMNS_MESSAGE, SALE_EURO_POLICY_MESSAGE, SALE_MIN_UNIT_PRICE_RIAL, SALE_PRICE_TOO_LOW_MESSAGE, excelInvoiceNumber, isEuroPricePolicy,
+  SALE_EURO_POLICY_MESSAGE, SALE_MIN_UNIT_PRICE_RIAL, euroSaleRefusal, SALE_PRICE_TOO_LOW_MESSAGE, excelInvoiceNumber, isEuroPricePolicy,
   type StockImportKind, type StockImportRow,
 } from './stockHistoryImport.js';
 import { amountText, headerKey } from './treasurySheet.js';
@@ -276,7 +276,8 @@ function resolveSalesRow(parsed: ParsedStockRow, mapping: StockImportMapping, ac
   if (!parsed.quantity) return unresolved('تعداد خالی است.');
   // v12 colleague sales part B3: a euro line (a partner's invoice) carries its euro price and rate; the rial «قیمت» is not used
   const euro = !!(parsed.foreignPrice || parsed.rate);
-  if (euro && !(Number(parsed.foreignPrice) > 0 && Number(parsed.rate) > 0)) return unresolved(SALE_EURO_COLUMNS_MESSAGE);
+  const euroRefusal = euro ? euroSaleRefusal(parsed.foreignPrice, parsed.rate) : null;
+  if (euroRefusal) return unresolved(euroRefusal);
   if (!euro && !parsed.unitPrice) return unresolved('قیمت این ردیف خالی است.');
   if (!euro && isEuroPricePolicy(parsed.pricePolicy)) return unresolved(SALE_EURO_POLICY_MESSAGE);
   if (!euro && Number(parsed.unitPrice) < SALE_MIN_UNIT_PRICE_RIAL) return unresolved(SALE_PRICE_TOO_LOW_MESSAGE(parsed.unitPrice));

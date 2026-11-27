@@ -116,6 +116,14 @@ describe('sales sheet (tool 3)', () => {
     ]);
     expect(resolveStockRow(lines[0], salesMapping(), lookups)).toMatchObject({ status: 'ready', row: { kind: 'sale', unitPrice: '250.5', currency: 'EUR', exchangeRate: '2000000' } });
     expect(resolveStockRow(lines[1], salesMapping(), lookups)).toMatchObject({ status: 'unresolved', reason: SALE_EURO_COLUMNS_MESSAGE });
+    // review of #512: a price the server cannot read (more than four places) or worth less than the rial floor waits
+    const odd = parseStockSheet('اقلام فاکتور', [
+      [...SALES_HEADER, 'قیمت ارزی', 'نرخ تسعیر'],
+      ['58', '1405-04-18', 'گالری الف', 'P-001', 'دستبند', 1, '', '', '', 'ثبت نهایی', '', '0.33333', '2,000,000'],
+      ['59', '1405-04-18', 'گالری الف', 'P-001', 'دستبند', 1, '', '', '', 'ثبت نهایی', '', '0.0001', '2,000,000'],
+    ]);
+    expect(resolveStockRow(odd[0], salesMapping(), lookups)).toMatchObject({ status: 'unresolved', reason: SALE_EURO_COLUMNS_MESSAGE });
+    expect(resolveStockRow(odd[1], salesMapping(), lookups).status).toBe('unresolved');
     // without the euro columns a euro price policy still waits, as before
     expect(resolveStockRow(lines[2], salesMapping(), lookups)).toMatchObject({ status: 'unresolved', reason: SALE_EURO_POLICY_MESSAGE });
   });

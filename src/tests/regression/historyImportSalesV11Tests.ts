@@ -234,6 +234,7 @@ export async function runHistoryImportSalesV11Tests(shouldRun: ShouldRun): Promi
       const admin = await sandboxAdminClient();
       const a = await fresh();
       const partyId = (await createTestCustomer({ partyType: 'customer' })).id;
+      const plain = (await createTestCustomer({ partyType: 'customer' })).id;
       const partner = { id: await newWorker('ERP-TEST-MARKER import partner') };
       const [cust] = (await orm.execute(sql`SELECT version FROM customers WHERE id = ${partyId}`)).rows as Array<{ version: number }>;
       const linked = await admin.put(`/api/customers/${partyId}`, { version: cust.version, personnelId: partner.id, runningAccount: 'partner' });
@@ -253,7 +254,12 @@ export async function runHistoryImportSalesV11Tests(shouldRun: ShouldRun): Promi
         line(4, '82', { unitPrice: '100', currency: 'EUR', exchangeRate: '2000000' }),
         line(5, '82', { quantity: '2', unitPrice: '100', currency: 'EUR', exchangeRate: '2100000' }),
         line(6, '83', { quantity: '3', unitPrice: '2000000' }),
+        // review of #512: an ordinary customer's euro invoice (no owner decision) and a near-zero euro price are refused
+        { ...line(7, '84', { quantity: '4', unitPrice: '100', currency: 'EUR', exchangeRate: '2000000' }), customerId: plain },
+        line(8, '85', { quantity: '5', unitPrice: '0.0001', currency: 'EUR', exchangeRate: '2000000' }),
       ], false);
+      if (rowOf(preview, 7)?.status !== 'error') problems.push(`an ordinary customer's euro invoice read ${JSON.stringify(rowOf(preview, 7))}, expected refused`);
+      if (rowOf(preview, 8)?.status !== 'error') problems.push(`a near-zero euro price read ${JSON.stringify(rowOf(preview, 8))}, expected refused`);
       if (rowOf(preview, 4)?.status !== 'error') problems.push(`invoice 82 with two rates read ${JSON.stringify(rowOf(preview, 4))}, expected refused`);
       if (rowOf(preview, 6)?.status !== 'error') problems.push(`a rial invoice of the partner read ${JSON.stringify(rowOf(preview, 6))}, expected refused`);
       const result = await stockPost(admin, good, true);
@@ -266,6 +272,9 @@ export async function runHistoryImportSalesV11Tests(shouldRun: ShouldRun): Promi
       if (doc?.currency !== 'EUR' || Number(doc?.rate) !== 2_000_000 || doc?.stamp !== 'partner' || Number(row4101?.debit) !== 509.9 || row4101?.currency !== 'EUR') {
         problems.push(`invoice 55 is ${JSON.stringify(doc)} with the 4101 row ${JSON.stringify(row4101)}, expected EUR at 2000000, stamped partner, 509.9 euros on 4101`);
       }
+      const parts = (await orm.execute(sql`SELECT amount::text AS amount FROM settlement_allocations
+        WHERE document_id = ${doc?.id ?? 0} AND is_deleted = 0 AND running_account_personnel_id = ${partner.id}`)).rows as Array<{ amount: string }>;
+      if (parts.length !== 1 || Number(parts[0].amount) !== 509.9) problems.push(`invoice 55's running-account settlement is ${JSON.stringify(parts)}, expected one part of 509.9 euros`);
       if (problems.length > 0) throw new Error(problems.join(' | '));
       return 'euro lines become a euro invoice on the partner\'s 4101';
     }));

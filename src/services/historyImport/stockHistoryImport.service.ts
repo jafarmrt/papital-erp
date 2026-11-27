@@ -1,5 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
-import { assertOneInvoiceMoney, invoiceMoneyOf, rialInvoiceForReturn, saleLineRefusal } from './stockImportEuro.js';
+import { assertInvoiceMoney, invoiceMoneyOf, rialInvoiceForReturn, saleLineRefusal } from './stockImportEuro.js';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { documents, historyImportPurchaseRefs } from '../../db/schema.js';
 import { ForbiddenError, ValidationError } from '../../errors/customErrors.js';
@@ -10,7 +10,7 @@ import { historyImportAmount } from '../../lib/historyImport/historyImportAmount
 import { purchaseRefKeys } from '../../lib/historyImport/purchaseRef.js';
 import { STOCK_OPENING_DAY } from '../../lib/historyImport/stockSheet.js';
 import {
-  STOCK_IMPORT_INCOMING_KINDS, excelInvoiceNumber, stockImportDocumentKey,
+  SALE_EURO_COLUMNS_MESSAGE, STOCK_IMPORT_INCOMING_KINDS, excelInvoiceNumber, stockImportDocumentKey,
   stockImportDuplicateKey, stockImportNotes, stockImportOrder,
   type StockImportKind, type StockImportResult, type StockImportRow, type StockImportRowOutcome,
 } from '../../lib/historyImport/stockHistoryImport.js';
@@ -136,9 +136,9 @@ function prepare(rows: StockImportRow[]): PreparedRow[] {
       else if (row.kind === 'transfer' && !(row.toWarehouse ?? '').trim()) fail('انبار مقصد این انتقال مشخص نیست.');
       else if ((row.kind === 'sale' || row.kind === 'return') && !invoiceRef) fail('شمارهٔ فاکتور اکسل این ردیف خالی است.');
       else if (row.kind === 'sale' && !row.customerId) fail('مشتری این فاکتور مشخص نیست.');
-      else if (row.kind === 'sale' && !unitPrice) fail('قیمت این ردیف فاکتور خالی یا نادرست است؛ یک عدد بزرگ‌تر از صفر (ریال) بنویسید.');
-      // v12 colleague sales part B3: a euro line needs its rate; its price is in euros, so the rial floor is not read
-      else if (saleLineRefusal(row, unitPrice)) fail(saleLineRefusal(row, unitPrice) as string);
+      else if (row.kind === 'sale' && !unitPrice) fail(row.currency ? SALE_EURO_COLUMNS_MESSAGE : 'قیمت این ردیف فاکتور خالی یا نادرست است؛ یک عدد بزرگ‌تر از صفر (ریال) بنویسید.');
+      // v12 colleague sales part B3: a euro line needs its rate and is worth the rial floor at it
+      else if (saleLineRefusal(row, unitPrice)) fail(String(saleLineRefusal(row, unitPrice)));
       else if (row.kind !== 'sale' && row.leadId) fail('«شماره پرونده» فقط برای فاکتور فروش است.');
       else if (row.kind === 'opening' && isoDate !== OPENING_DAY_ISO) fail(`موجودی اولیه فقط با تاریخ ${faDate(OPENING_DAY_ISO)} ثبت می‌شود.`);
     }
@@ -225,7 +225,6 @@ function assertOneInvoice(group: PreparedRow[]): void {
   const days = new Set(group.map(p => p.isoDate));
   const customers = new Set(group.map(p => p.row.customerId ?? 0));
   const leads = new Set(group.map(p => p.row.leadId ?? 0));
-  assertOneInvoiceMoney(group.map(p => p.row));
   if (days.size > 1) throw new ValidationError(`ردیف‌های فاکتور ${toPersianDigits(String(group[0].row.invoiceRef))} اکسل تاریخ‌های مختلف دارند (${[...days].map(faDate).join('، ')})؛ یک فاکتور یک تاریخ دارد.`);
   if (customers.size > 1) throw new ValidationError(`ردیف‌های فاکتور ${toPersianDigits(String(group[0].row.invoiceRef))} اکسل مشتری‌های مختلف دارند؛ یک فاکتور یک مشتری دارد.`);
   if (leads.size > 1) throw new ValidationError(`ردیف‌های فاکتور ${toPersianDigits(String(group[0].row.invoiceRef))} اکسل «شماره پرونده»های مختلف دارند؛ یک فاکتور حداکثر یک پرونده فروش را می‌بندد.`);
@@ -241,6 +240,7 @@ async function postDocument(tx: DbExecutor, group: PreparedRow[], options: Stock
   let returnOfDocumentId: number | undefined;
   if (kind === 'sale') {
     assertOneInvoice(group);
+    await assertInvoiceMoney(tx, group.map(p => p.row));
     const recorded = await documentOfExcelRef(tx, excelRef);
     if (recorded) throw new ValidationError(`فاکتور ${toPersianDigits(excelRef)} اکسل پیش‌تر با شمارهٔ ${toPersianDigits(recorded.refNumber)} در برنامه ثبت شده است.`, undefined, 'HISTORY_IMPORT_INVOICE_RECORDED');
   }
