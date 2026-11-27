@@ -37,7 +37,9 @@ export interface TreasuryImportRow {
   partyId?: number | null;
   partyName?: string;
   /** a colleague's receipt or payment: `advance` (مساعده), `colleague_account` (their running account) or `other` (with a counter account) */
-  purpose?: 'advance' | 'colleague_account' | 'other' | null;
+  purpose?: 'advance' | 'colleague_account' | 'partner_account' | 'other' | null;
+  /** v12 colleague sales part B2: a partner row's euro rate (rials per euro), from the «نرخ تسعیر» column */
+  rate?: string | null;
   /** party «other», a colleague's `other`, and the expense account of a `colleague_expense` */
   contraAccountId?: number | null;
   /** payslip: the colleague whose payslips are paid; colleague_expense: the colleague who paid */

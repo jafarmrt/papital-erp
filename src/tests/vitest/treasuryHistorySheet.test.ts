@@ -89,6 +89,17 @@ describe('treasury history import sheets', () => {
     expect(e(2)).toMatchObject({ status: 'skipped' });
   });
 
+  it('v12 colleague sales part B2: a partner row takes its euro rate from the rate column, and waits without one', () => {
+    const [withRate, without] = parseTreasurySheet('دریافت و پرداخت', [
+      [...MOVES_HEADER, 'نرخ تسعیر'],
+      ['1405-04-18', 1405, 4, 18, '', 'دریافت', 'بانک الف', 'همکار یک', '1,050,000,000', '', '', 'حساب جاری شریک', '', '2,100,000'],
+      ['1405-04-19', 1405, 4, 19, '', 'دریافت', 'بانک الف', 'همکار یک', '1,050,000,000', '', '', 'حساب جاری شریک'],
+    ]);
+    expect(guessPersonnelUse(withRate)).toBe('partner_account');
+    expect(resolveTreasuryRow(withRate, mapping)).toMatchObject({ status: 'ready', row: { kind: 'receipt', partyType: 'personnel', partyId: 7, purpose: 'partner_account', rate: '2100000' } });
+    expect(resolveTreasuryRow(without, mapping)).toMatchObject({ status: 'unresolved', personnel: true });
+  });
+
   it('holds a row back until its names are mapped, and lists those names once', () => {
     const empty = emptyTreasuryMapping();
     expect(resolveTreasuryRow(moves[0], empty).status).toBe('unresolved');

@@ -358,6 +358,8 @@ export const createTreasuryTxSchema = z.object({
     allocations: settlementParts.optional(),
     // v11 tool 5: a miscellaneous receipt or payment spent on a production project
     projectId: z.coerce.number().int().positive().max(2147483647).nullable().optional(),
+    // v12 colleague sales part B2: rials per euro of a rial «حساب جاری شریک» row
+    partnerEuroRate: optionalPositiveRate,
   })
 });
 

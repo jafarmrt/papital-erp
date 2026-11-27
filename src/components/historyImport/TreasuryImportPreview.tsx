@@ -19,7 +19,7 @@ interface Props {
 }
 
 const KIND_LABEL: Record<string, string> = { receipt: 'دریافت', payment: 'پرداخت', transfer: 'انتقال', payslip: 'پرداخت فیش حقوق', colleague_expense: 'هزینهٔ پرداختی همکار' };
-export const USE_LABEL: Record<PersonnelUse, string> = { payslip: 'حقوق (از فیش)', advance: 'مساعده', colleague_account: 'حساب جاری همکار (تنخواه یا بازپرداخت)', other: 'پرداخت دیگر' };
+export const USE_LABEL: Record<PersonnelUse, string> = { payslip: 'حقوق (از فیش)', advance: 'مساعده', colleague_account: 'حساب جاری همکار (تنخواه یا بازپرداخت)', partner_account: 'حساب جاری شریک (به یورو، با نرخ تسعیر)', other: 'پرداخت دیگر' };
 
 export function TreasuryImportPreview({ resolved, result, uses, accepted, bankTitle, amountText, onUse, onAccept }: Props) {
   const [onlyProblems, setOnlyProblems] = useState(false);
