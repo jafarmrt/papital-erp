@@ -1,4 +1,5 @@
 import { eq, and } from 'drizzle-orm';
+import { checkOccVersion, nextVersion } from '../lib/occHelper.js';
 import { orm, type DbExecutor, type DbTransaction } from '../db/drizzle.js';
 import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkLogs, pieceworkPayrolls, productionProjects, taskCategories, workshopTaskReports } from '../db/schema.js';
 import { NotFoundError, BadRequestError, ConflictError, ForbiddenError, ValidationError } from '../errors/customErrors.js';
@@ -781,6 +782,8 @@ export class PieceworkService {
       taskId?: number | string;
       /** the user holds the rates key (`piecework.manage_tasks`); without it a log with a manual rate keeps its task */
       canSetRate?: boolean;
+      /** v12 (migration 0039, AGENTS.md §2.7): the version the edit was made from; the route always sends it */
+      version?: number;
     },
     executor?: DbTransaction,
     actor: AuditActor = {}
@@ -788,6 +791,8 @@ export class PieceworkService {
     return inWriteTransaction(executor, async (tx) => {
       // v8.0.76 (TD-328): قفل ردیف و گارد «در فیش است» در همان تراکنش (کارکرد فیش حذف‌شده آزاد است، مانند صدور فیش)
       const existing = await lockEditableWorkLog(tx, id, 'کارکردی که در فیش حقوقی درج شده قابل تغییر نیست');
+      // v12: an edit made from an older copy of the log is refused (409 OCC_CONFLICT), not written over a colleague's edit
+      if (data.version !== undefined) checkOccVersion(existing, { entityType: 'PieceworkLog', entityId: id, expectedVersion: data.version });
 
       const isoDate = data.date !== undefined ? requireStorageDate(data.date, 'تاریخ کارکرد') || existing.date : existing.date;
       // v10.0.186 (TD-956): a log is not moved past the personnel's service end
@@ -802,7 +807,7 @@ export class PieceworkService {
       if (taskChanged) {
         const [report] = await tx.select({ id: workshopTaskReports.id }).from(workshopTaskReports)
           .where(and(eq(workshopTaskReports.pieceworkLogId, id), eq(workshopTaskReports.status, 'approved')));
-        if (report || await isScheduleLinkedLog(tx, existing.projectId, id)) {
+        if (report || await isScheduleLinkedLog(tx, existing)) {
           throw new ConflictError('این کارکرد از برنامهٔ کارگاه پروژه یا گزارش پایان کار ثبت شده و عنوان کاری‌اش عوض نمی‌شود؛ کارکرد را حذف و از همان‌جا دوباره ثبت کنید.', undefined, 'PIECEWORK_LOG_TASK_LOCKED');
         }
         // review of #507: only the task is checked live; the personnel is the log's own and is not locked here, since a payslip
@@ -857,7 +862,8 @@ export class PieceworkService {
         unitRate: money(newRate),
         totalAmount: money(newTotal),
         projectId: newProjectId,
-        notes: data.notes !== undefined ? String(data.notes).trim() : existing.notes
+        notes: data.notes !== undefined ? String(data.notes).trim() : existing.notes,
+        version: nextVersion(existing.version),
       }).where(and(eq(pieceworkLogs.id, id), eq(pieceworkLogs.isDeleted, 0), workLogFreeOfLivePayroll())).returning();
       if (!updated) {
         throw new ConflictError('کارکرد هم‌زمان در فیش حقوقی درج یا حذف شد؛ فهرست را دوباره بارگذاری کنید');

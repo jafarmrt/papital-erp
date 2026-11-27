@@ -3,6 +3,7 @@ import type { Harness, ShouldRun } from '../security/workflowTestHarness.js';
 import { newWorker } from '../invariants/payrollScenarios.js';
 import { brief, fixture } from './documentEntryTests.js';
 import { runReservationCases } from './stockReservationTests.js';
+import { workLogVersion } from '../fixtures/workLogVersion.js';
 
 /**
  * 10.2 package 12, item 3 (D6, TD-1340, owner decision ت۴۲ الف): a project's progress counts the done work of its workshop
@@ -138,7 +139,7 @@ async function logProgressCase(h: Harness, wrong: string[]): Promise<string> {
   }
 
   // the whole row done: 99%, never 100% or completed without the tick, in the matrix and the workshop panel alike
-  const full = await h.put(`/api/piecework/logs/${logId}`, { quantity: 100 });
+  const full = await h.put(`/api/piecework/logs/${logId}`, { version: await workLogVersion(logId), quantity: 100 });
   if (full.status !== 200) wrong.push(`raising the log to 100 answered ${brief(full)}`);
   if (stageText(await stageRows(h, projectId)) !== '1:99:in_progress 2:0:pending') wrong.push(`after the edit the stages are ${stageText(await stageRows(h, projectId))}, expected 1:99:in_progress 2:0:pending`);
   if ((await progressView(h, projectId)).products[0]?.progress_percent !== 50) wrong.push('after the edit the product does not read 50%');
@@ -164,7 +165,7 @@ async function logProgressCase(h: Harness, wrong: string[]): Promise<string> {
   // moving the log to another project takes its work out of this project's cell; the tick stays
   const [other] = await h.q(`INSERT INTO production_projects (project_code, title) VALUES ($1, $2) RETURNING id`, [unique('D6O'), unique('D6 other')]);
   const againId = Number((again.body as { insertedIds?: number[] }).insertedIds?.[0]);
-  const moved = await h.put(`/api/piecework/logs/${againId}`, { projectId: Number(other.id) });
+  const moved = await h.put(`/api/piecework/logs/${againId}`, { version: await workLogVersion(againId), projectId: Number(other.id) });
   if (moved.status !== 200) wrong.push(`moving the log to another project answered ${brief(moved)}`);
   const afterMove = await progressView(h, projectId);
   if (cellOf(afterMove, 1)?.work?.done_quantity !== 0) wrong.push(`after the move the cell counts ${JSON.stringify(cellOf(afterMove, 1)?.work ?? null)}, expected 0`);
@@ -312,7 +313,7 @@ async function closedProjectCase(h: Harness, wrong: string[]): Promise<string> {
   const created = await logRow(done.projectId, done.stageIds[0], 'row-a', 10);
   if (created.status !== 201) wrong.push(`logging a row of a completed project answered ${brief(created)}`);
   if (await projectState(h, done.projectId) !== doneBefore) wrong.push(`a new log changed the completed project: ${await projectState(h, done.projectId)}, expected ${doneBefore}`);
-  const edited = await h.put(`/api/piecework/logs/${idOf(created)}`, { quantity: 9 });
+  const edited = await h.put(`/api/piecework/logs/${idOf(created)}`, { version: await workLogVersion(idOf(created)), quantity: 9 });
   if (edited.status !== 200) wrong.push(`editing the log answered ${brief(edited)}`);
   if (await projectState(h, done.projectId) !== doneBefore) wrong.push(`a log edit reopened the completed project: ${await projectState(h, done.projectId)}, expected ${doneBefore}`);
   const deleted = await h.del(`/api/piecework/logs/${idOf(created)}`);
@@ -328,7 +329,7 @@ async function closedProjectCase(h: Harness, wrong: string[]): Promise<string> {
   const first = await logRow(running.projectId, running.stageIds[0], 'row-a', 5);
   const second = await logRow(running.projectId, running.stageIds[1], 'row-b', 5);
   if (first.status !== 201 || second.status !== 201) wrong.push(`logging the running project answered ${brief(first)} / ${brief(second)}`);
-  const edit = await h.put(`/api/piecework/logs/${idOf(first)}`, { quantity: 4 });
+  const edit = await h.put(`/api/piecework/logs/${idOf(first)}`, { version: await workLogVersion(idOf(first)), quantity: 4 });
   if (edit.status !== 200) wrong.push(`editing the running project's log answered ${brief(edit)}`);
   const expected = `in_progress 1:100:completed:${DONE_AT} 2:50:blocked:-`;
   if (await projectState(h, running.projectId) !== expected) wrong.push(`the running project reads ${await projectState(h, running.projectId)}, expected ${expected}`);

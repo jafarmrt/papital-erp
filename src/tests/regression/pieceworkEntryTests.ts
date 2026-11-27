@@ -7,6 +7,7 @@ import { PieceworkService } from '../../services/piecework.service.js';
 import { newTask, newWorker } from '../invariants/payrollScenarios.js';
 import { TestCaseResult } from '../types.js';
 import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient } from './fiscalClosingTests.js';
+import { workLogVersion } from '../fixtures/workLogVersion.js';
 
 /**
  * Package 12 payroll, PR «ب»: work logs, piecework rates and their audit on real Express routes and PostgreSQL. Each
@@ -159,7 +160,7 @@ export async function runPieceworkEntryTests(shouldRun: ShouldRun): Promise<Test
       const direct = await refusal(() => PieceworkService.logWorkEntries([{ ...base, quantity: -5 }]));
       if (direct !== '422 PIECEWORK_LOG_INVALID') problems.push(`the service answered a quantity of -5 with ${direct}, expected 422 PIECEWORK_LOG_INVALID`);
       if (timeRow) {
-        const edit = await admin.put(`/api/piecework/logs/${timeRow.id}`, { quantity: '-5' });
+        const edit = await admin.put(`/api/piecework/logs/${timeRow.id}`, { version: await workLogVersion(timeRow.id), quantity: '-5' });
         if (edit.status !== 400) problems.push(`editing a log to quantity -5 answered ${edit.status}, expected 400`);
         const editDirect = await refusal(() => PieceworkService.updateWorkLog(timeRow.id, { quantity: 0 }));
         if (editDirect !== '422 PIECEWORK_LOG_INVALID') problems.push(`the service edited a log to quantity 0 with ${editDirect}, expected 422 PIECEWORK_LOG_INVALID`);
@@ -398,7 +399,7 @@ export async function runPieceworkEntryTests(shouldRun: ShouldRun): Promise<Test
 
       // 2) editing 4 x 100,000 to 40 x 500,000 = 20,000,000 leaves a row with only the changed fields
       if (logA) {
-        const edit = await admin.put(`/api/piecework/logs/${logA}`, { quantity: 40, unitRate: 500_000 });
+        const edit = await admin.put(`/api/piecework/logs/${logA}`, { version: await workLogVersion(logA), quantity: 40, unitRate: 500_000 });
         if (edit.status !== 200) problems.push(`editing log A answered ${edit.status} ${brief(edit.body)}`);
         const upd = (await auditsOf('logs', logA)).find(r => r.action === 'UPDATE');
         const changes = Object.keys((upd?.details?.changes as Record<string, unknown> | undefined) ?? {}).sort().join(',');

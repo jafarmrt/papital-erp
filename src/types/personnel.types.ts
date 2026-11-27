@@ -108,6 +108,8 @@ export interface PieceworkLog {
   createdById?: number;
   createdByUsername?: string;
   createdAt?: string;
+  /** v12 (migration 0039): the record version an edit sends back */
+  version?: number;
 }
 
 export interface PieceworkPayroll {
@@ -132,7 +134,7 @@ export interface PieceworkPayroll {
   // V1.9.0: کسر از مساعده/وام پرسنلی (بستانکار حساب مساعده در سند تسویه)
   advanceDeduction?: number;
   advance_deduction?: number;
-  /** v12 colleague sales part B (migration 0039): «کسر از حساب جاری همکار» */
+  /** v12 colleague sales part B (migration 0040): «کسر از حساب جاری همکار» */
   runningAccountDeduction?: number;
   totalBonuses: number;
   totalDeductions: number;

@@ -8,6 +8,7 @@ import type { Harness, ShouldRun } from '../security/workflowTestHarness.js';
 import { newWorker } from '../invariants/payrollScenarios.js';
 import { brief, fixture } from './documentEntryTests.js';
 import { runReservationCases } from './stockReservationTests.js';
+import { workLogVersion } from '../fixtures/workLogVersion.js';
 
 /**
  * Series 10 phase 3, lane L3 (package 11), product-owner decision t10 of phase 5: no new remittance or work log on a
@@ -108,7 +109,7 @@ async function serviceEndCase(h: Harness, wrong: string[]): Promise<string> {
   const logId = Number((onEnd.body as { insertedIds?: unknown[] })?.insertedIds?.[0]);
   if (onEnd.status !== 201 || !Number.isInteger(logId)) wrong.push(`a log on the service end day answered ${brief(onEnd)}, expected 201`);
   else {
-    const moved = await h.put(`/api/piecework/logs/${logId}`, { date: '2026-04-01' });
+    const moved = await h.put(`/api/piecework/logs/${logId}`, { version: await workLogVersion(logId), date: '2026-04-01' });
     if (moved.status !== 422 || codeOf(moved) !== 'PIECEWORK_LOG_AFTER_SERVICE_END') wrong.push(`moving the log past the service end answered ${brief(moved)}, expected 422 PIECEWORK_LOG_AFTER_SERVICE_END`);
   }
   if (await logCount(h, ended) !== 1) wrong.push(`the ended personnel has ${await logCount(h, ended)} logs, expected 1`);
