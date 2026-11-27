@@ -301,6 +301,12 @@ export async function runColleagueSalesV12Tests(shouldRun: ShouldRun): Promise<T
       const voided = await admin.post(`/api/accounting/treasury/${Number(back.body?.id)}/void`, { reason: 'test' });
       b = await balance();
       if (!ok(voided) || b.euro !== -100 || (await fx()).loss !== 15_000_000) problems.push(`voiding the payment answered ${brief(voided)} and left ${JSON.stringify(b)} with ${JSON.stringify(await fx())}, expected -100 euros and the 15000000 loss`);
+      // a «سایر» euro row with 4101 as its counter account is refused: it would join the euro balance without its exchange row
+      const otherEuro = await admin.post('/api/accounting/treasury', {
+        type: 'receipt', method: 'bank_transfer', amount: 10, date: w.today, bankAccountId: euroBank.id, currency: 'EUR', exchangeRate: 2_000_000,
+        partyType: 'personnel', partyId: partner, partyName: 'partner', purpose: 'other', contraAccountId: partnersAccount?.id,
+      });
+      if (otherEuro.status !== 422 || codeOf(otherEuro) !== 'TREASURY_PARTNER_ACCOUNT_FOREIGN_OTHER') problems.push(`a euro other row on 4101 answered ${brief(otherEuro)}, expected 422 TREASURY_PARTNER_ACCOUNT_FOREIGN_OTHER`);
       // a move on an invoice is refused
       const linkedMove = await move('receipt', 10, { bankAccountId: euroBank.id, currency: 'EUR', exchangeRate: 2_000_000, documentId: 1 });
       if (linkedMove.status !== 422 || codeOf(linkedMove) !== 'TREASURY_PARTNER_ACCOUNT_NO_DOCUMENT') problems.push(`a partner move on an invoice answered ${brief(linkedMove)}, expected 422`);

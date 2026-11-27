@@ -242,17 +242,22 @@ export async function runHistoryImportSalesV11Tests(shouldRun: ShouldRun): Promi
       const line = (rowNo: number, ref: string, extra: Partial<StockImportRow>): StockImportRow => ({
         rowNo, sheet: SALES, date: '1405-04-18', kind: 'sale', itemCode: a.code, quantity: '1', invoiceRef: ref, customerId: partyId, ...extra,
       });
-      const result = await stockPost(admin, [
+      const good = [
         opening,
         line(2, '55', { unitPrice: '250.5', currency: 'EUR', exchangeRate: '2000000' }),
         line(3, '55', { quantity: '2', unitPrice: '129.7', currency: 'EUR', exchangeRate: '2000000' }),
+      ];
+      // the import is all or nothing: the refused lines are read in a preview, the good ones posted on their own
+      const preview = await stockPost(admin, [
+        ...good,
         line(4, '82', { unitPrice: '100', currency: 'EUR', exchangeRate: '2000000' }),
         line(5, '82', { quantity: '2', unitPrice: '100', currency: 'EUR', exchangeRate: '2100000' }),
         line(6, '83', { quantity: '3', unitPrice: '2000000' }),
-      ], true);
+      ], false);
+      if (rowOf(preview, 4)?.status !== 'error') problems.push(`invoice 82 with two rates read ${JSON.stringify(rowOf(preview, 4))}, expected refused`);
+      if (rowOf(preview, 6)?.status !== 'error') problems.push(`a rial invoice of the partner read ${JSON.stringify(rowOf(preview, 6))}, expected refused`);
+      const result = await stockPost(admin, good, true);
       if (rowOf(result, 2)?.status !== 'ok' || rowOf(result, 3)?.status !== 'ok') problems.push(`the euro invoice 55 read ${JSON.stringify([rowOf(result, 2), rowOf(result, 3)])}`);
-      if (rowOf(result, 4)?.status !== 'error') problems.push(`invoice 82 with two rates read ${JSON.stringify(rowOf(result, 4))}, expected refused`);
-      if (rowOf(result, 6)?.status !== 'error') problems.push(`a rial invoice of the partner read ${JSON.stringify(rowOf(result, 6))}, expected refused`);
       const [doc] = (await orm.execute(sql`SELECT d.id, d.currency, d.exchange_rate::text AS rate, d.running_account AS stamp FROM documents d
         JOIN history_import_refs r ON r.document_id = d.id WHERE r.excel_ref = '55' AND d.is_deleted = 0`)).rows as Array<{ id: number; currency: string; rate: string; stamp: string }>;
       const [row4101] = (await orm.execute(sql`SELECT i.debit::text AS debit, i.currency, i.exchange_rate::text AS rate FROM journal_voucher_items i
