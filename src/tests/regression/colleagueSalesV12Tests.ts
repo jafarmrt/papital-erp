@@ -1,10 +1,13 @@
+import fs from 'fs';
+import path from 'path';
 import request from 'supertest';
 import { and, eq, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { accounts, customers, documents, journalVoucherItems, journalVouchers } from '../../db/schema.js';
+import { accounts, customers, documents, journalVoucherItems, journalVouchers, personnel } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { VoucherSyncService } from '../../services/accounting/voucherSync.service.js';
 import { createTestCustomer } from '../fixtures/factories.js';
+import { checkPartyBalances } from '../invariants/partyBalanceInvariant.js';
 import { newWorker } from '../invariants/payrollScenarios.js';
 import { TestCaseResult } from '../types.js';
 import { type ShouldRun, inFiscalSandbox, runCase, sandboxAdminClient } from './fiscalClosingTests.js';
@@ -153,6 +156,56 @@ export async function runColleagueSalesV12Tests(shouldRun: ShouldRun): Promise<T
       }
       if (problems.length > 0) throw new Error(problems.join(' | '));
       return 'links are one per colleague and never on a supplier; issued invoices keep 1201; foreign invoices and proformas with receipts are refused';
+    }));
+  }
+
+  const review = 'reg_colleague_sales_review_v12';
+  if (shouldRun(review, 'v12', 'colleague_sales', 'documents', 'customers', 'migration')) {
+    await runCase(results, review, 'v12 colleague sales, review of #508: the migration stamps only final documents, so a proforma open at deploy time is stamped with the running account when it is finalized; a return with no invoice for a linked party is refused (422); the party balance invariant I8 leaves the running account out; a kept link is not checked again (the colleague left) and a linked party cannot become a supplier (422)', () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const w = await world(admin);
+      for (let i = 0; i < 4; i++) await w.doc('receipt', w.supplier, 900_000);
+      const colleague = await newWorker('ERP-TEST-MARKER review colleague');
+      const party = await createTestCustomer();
+
+      // a proforma open before the deploy: migration 0038's own backfill statement runs over it, then the party is linked
+      const open = await w.doc('invoice', party, 400_000, 'proforma');
+      const migration = fs.readFileSync(path.resolve(process.cwd(), 'drizzle/0038_colleague_sales.sql'), 'utf8');
+      const backfill = migration.split('--> statement-breakpoint').map(x => x.replace(/^\s*--.*$/gm, '').trim()).find(x => x.startsWith('UPDATE documents'));
+      if (!backfill) throw new Error('setup: migration 0038 has no backfill of documents');
+      await orm.update(documents).set({ runningAccount: null, runningAccountPersonnelId: null }).where(eq(documents.id, open));
+      await orm.execute(sql.raw(backfill));
+      const linked = await linkParty(admin, party.id, colleague, 'colleague');
+      if (!ok(linked)) throw new Error(`setup: linking answered ${brief(linked)}`);
+      const finalized = await admin.put(`/api/documents/${open}/finalize`, {});
+      const [stamp] = await orm.select({ runningAccount: documents.runningAccount }).from(documents).where(eq(documents.id, open));
+      const debit = (await voucherRows(open)).find(r => fin(r.debit).isPositive() && ['3208', '1201'].includes(String(r.code)));
+      if (!ok(finalized) || stamp?.runningAccount !== 'colleague' || debit?.code !== '3208' || (await w.state(open)).remaining !== 0) {
+        problems.push(`a proforma open at deploy time, finalized after the link: ${brief(finalized)}, stamp ${JSON.stringify(stamp?.runningAccount)}, debit ${debit?.code}, expected colleague and 3208 settled`);
+      }
+
+      // the party balance invariant over the linked party
+      const i8 = await checkPartyBalances([party.id]);
+      if (i8.length !== 0) problems.push(`I8 over a linked party reads ${JSON.stringify(i8)}`);
+
+      // a return with no invoice
+      const free = await admin.post('/api/documents', {
+        docType: 'return', status: 'final', refNumber: 'auto', date: w.today, location: w.main, buyer_name: party.name, partyId: party.id,
+        inOut: 'in', items: [{ itemId: w.item.id, quantity: 1, unit_price: 100_000 }],
+      });
+      if (free.status !== 422 || codeOf(free) !== 'RUNNING_ACCOUNT_RETURN_NEEDS_INVOICE') problems.push(`a linked party's return with no invoice answered ${brief(free)}, expected 422 RUNNING_ACCOUNT_RETURN_NEEDS_INVOICE`);
+
+      // the colleague leaves: the party stays editable with its link; it cannot become a supplier while linked
+      await orm.update(personnel).set({ isDeleted: 1 }).where(eq(personnel.id, colleague));
+      const [row] = await orm.select({ version: customers.version }).from(customers).where(eq(customers.id, party.id));
+      const renamed = await admin.put(`/api/customers/${party.id}`, { version: row?.version, name: `${party.name} ویرایش`, personnelId: colleague, runningAccount: 'colleague' });
+      if (!ok(renamed)) problems.push(`editing a party whose colleague left answered ${brief(renamed)}, expected 200`);
+      const [row2] = await orm.select({ version: customers.version }).from(customers).where(eq(customers.id, party.id));
+      const supplier = await admin.put(`/api/customers/${party.id}`, { version: row2?.version, partyType: 'supplier' });
+      if (supplier.status !== 422 || codeOf(supplier) !== 'PARTY_RUNNING_ACCOUNT_SUPPLIER') problems.push(`making a linked party a supplier answered ${brief(supplier)}, expected 422 PARTY_RUNNING_ACCOUNT_SUPPLIER`);
+      if (problems.length > 0) throw new Error(problems.join(' | '));
+      return 'open proformas reach the running account; free returns are refused; I8 and the party edits follow the link';
     }));
   }
 

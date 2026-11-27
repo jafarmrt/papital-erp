@@ -21,20 +21,23 @@ export async function resolvePartyRunningAccount(
   previous: PartyRunningAccountLink | null,
   context: { partyType: string; customerId?: number },
 ): Promise<PartyRunningAccountLink> {
-  if (input.personnelId === undefined && input.runningAccount === undefined) {
-    return previous ?? { personnelId: null, runningAccount: '' };
-  }
   const personnelId = input.personnelId === undefined ? previous?.personnelId ?? null : input.personnelId;
   const kind = input.runningAccount === undefined ? previous?.runningAccount ?? '' : (input.runningAccount ?? '');
   if (!personnelId && !kind) return { personnelId: null, runningAccount: '' };
   if (!personnelId || !isRunningAccountKind(kind)) {
     throw new ValidationError('برای وصل کردن طرف حساب به همکار یا شریک، هم همکار را انتخاب کنید و هم حساب جاری او را (همکار یا شرکا).', undefined, 'PARTY_RUNNING_ACCOUNT_INCOMPLETE');
   }
+  // checked on every save, also when the link is kept: a party that becomes a supplier must drop its link first
   if (context.partyType === 'supplier') {
     throw new ValidationError('تأمین‌کننده فقط به کارگاه می‌فروشد و به حساب جاری همکار وصل نمی‌شود؛ نوع طرف حساب را «مشتری» یا «هر دو» بگذارید.', undefined, 'PARTY_RUNNING_ACCOUNT_SUPPLIER');
   }
+  // a kept link is not checked again (review of #508): a colleague who left keeps the party editable, and their
+  // invoices already finalized keep their stamp; a new link is checked in full
+  if (previous && previous.personnelId === personnelId && previous.runningAccount === kind) return { personnelId, runningAccount: kind };
+  // `FOR NO KEY UPDATE` serializes two parties linked to the same colleague at once, so the second reads the first and
+  // answers 409 (the unique index stays the last guard)
   const [person] = await executor.select({ id: personnel.id, fullName: personnel.fullName }).from(personnel)
-    .where(and(eq(personnel.id, personnelId), eq(personnel.isDeleted, 0))).for('share');
+    .where(and(eq(personnel.id, personnelId), eq(personnel.isDeleted, 0))).for('no key update');
   if (!person) throw new ValidationError('همکار انتخاب‌شده در پرسنل پیدا نشد یا حذف شده است.', { personnelId }, 'PARTY_RUNNING_ACCOUNT_PERSONNEL');
   const [other] = await executor.select({ id: customers.id, name: customers.name }).from(customers)
     .where(and(eq(customers.personnelId, personnelId), eq(customers.isDeleted, 0), ...(context.customerId ? [ne(customers.id, context.customerId)] : [])));

@@ -14,8 +14,8 @@ import { readDocumentPayableAndSettled } from './documentRemainingAmount.js';
  * - **The stamp.** A sales invoice (or proforma) is stamped once, when it is first finalized, with the running account of
  *   its party at that moment (`documents.running_account`, `running_account_personnel_id`): every final invoice of a party
  *   linked to a colleague goes to «حساب جاری همکار» (3208), of a partner to «حساب جاری شرکا» (4101), on that person's
- *   personnel detail (decision 3.2). A later change of the party's link never moves an issued invoice; every document of
- *   the books before migration 0038 is stamped '' (trade receivables).
+ *   personnel detail (decision 3.2). A later change of the party's link never moves an issued invoice; every final document
+ *   of the books before migration 0038 is stamped '' (trade receivables).
  * - **The settlement.** A stamped invoice is settled from the running account at once (decision 3.1): one part with no
  *   treasury row or cheque, for what it owes after its final returns, written in the transaction of the finalize, the
  *   return or the void that changed it. A receipt or cheque already on the invoice refuses the finalize: the colleague's
@@ -111,10 +111,25 @@ export async function syncRunningAccountSettlement(
  * follows. A return locks its invoice (`FOR NO KEY UPDATE`, as a settlement does) before it reads it.
  */
 export async function syncRunningAccountAfterFinalize(tx: DbExecutor, documentId: number, actor: { userId?: number | null; username: string }): Promise<void> {
-  const [doc] = await tx.select({ type: documents.type, returnOfDocumentId: documents.returnOfDocumentId }).from(documents).where(eq(documents.id, documentId));
+  const [doc] = await tx.select({
+    type: documents.type, returnOfDocumentId: documents.returnOfDocumentId, partyId: documents.partyId,
+    status: documents.status, isDeleted: documents.isDeleted, refNumber: documents.refNumber,
+  }).from(documents).where(eq(documents.id, documentId));
   if (!doc) return;
   if (SALES_TYPES.includes(String(doc.type))) {
     await syncRunningAccountSettlement(tx, documentId, actor);
+    return;
+  }
+  if (doc.type === 'return' && !doc.returnOfDocumentId && doc.isDeleted === 0 && doc.status === 'final' && doc.partyId) {
+    // a return with no invoice would credit trade receivables while the party's sales sit on the running account
+    const [party] = await tx.select({ personnelId: customers.personnelId, runningAccount: customers.runningAccount })
+      .from(customers).where(and(eq(customers.id, doc.partyId), eq(customers.isDeleted, 0)));
+    if (party?.personnelId && isRunningAccountKind(party.runningAccount)) {
+      throw new ValidationError(
+        `طرف حساب برگشت از فروش «${formatPersianCode(doc.refNumber ?? '')}» به یک همکار یا شریک وصل است و فروشش در ${RUNNING_ACCOUNT_LABELS[party.runningAccount]} است؛ برگشت را از روی فاکتور فروش همان کالا ثبت کنید.`,
+        { documentId }, 'RUNNING_ACCOUNT_RETURN_NEEDS_INVOICE',
+      );
+    }
     return;
   }
   if (doc.type === 'return' && doc.returnOfDocumentId) {

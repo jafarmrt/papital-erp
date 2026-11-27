@@ -6,7 +6,8 @@
 -- documents: a sales invoice is stamped once, when it is first finalized, with the running account of its party at that
 -- time (`running_account`, `running_account_personnel_id`): its voucher debits that account on the colleague's detail
 -- instead of trade receivables, and the stamp never follows a later change of the party's link. NULL is «not yet
--- stamped»; every document already in the books is stamped '' here, so no issued invoice moves off 1201.
+-- stamped»; every final document already in the books is stamped '' here, so no issued invoice moves off 1201,
+-- while an open draft or proforma is stamped when it is finalized (owner's decision 3.2: every final invoice of a linked party).
 -- settlement_allocations: a third kind of part, the «تسویه از حساب جاری» of a stamped invoice (`running_account_personnel_id`,
 -- no treasury row and no cheque): the invoice's payable less its final returns, so it leaves the receivables list.
 -- No other row changes. Runs inside the Drizzle migrator transaction.
@@ -26,7 +27,7 @@ ALTER TABLE documents ADD COLUMN IF NOT EXISTS running_account text;
 --> statement-breakpoint
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS running_account_personnel_id integer;
 --> statement-breakpoint
-UPDATE documents SET running_account = '' WHERE running_account IS NULL;
+UPDATE documents SET running_account = '' WHERE running_account IS NULL AND status = 'final';
 --> statement-breakpoint
 ALTER TABLE documents ADD CONSTRAINT fk_documents_running_account_personnel FOREIGN KEY (running_account_personnel_id) REFERENCES personnel(id);
 --> statement-breakpoint

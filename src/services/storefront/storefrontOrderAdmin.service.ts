@@ -167,11 +167,24 @@ export async function confirmPayment(req: Request, id: number, input: { receiptI
     await assertLiveProforma(tx, order);
     // v12 phase 8c review: the receipt names the order's ERP customer as the ERP keeps it (an existing customer found by
     // the phone keeps its own name, whatever name the buyer typed), as the invoice's voucher row does
-    const [party] = await tx.select({ name: customers.name }).from(customers).where(eq(customers.id, order.customerId));
+    const [party] = await tx.select({ name: customers.name, personnelId: customers.personnelId, runningAccount: customers.runningAccount })
+      .from(customers).where(eq(customers.id, order.customerId));
+    // v12 colleague sales: a buyer linked to a colleague has the invoice settled from their running account at its finalize,
+    // so the money they paid goes to that same running account («حساب جاری همکار», 3208, on their detail), not on the invoice
+    const colleagueBuyer = party?.runningAccount === 'colleague' && !!party.personnelId;
+    if (party?.runningAccount === 'partner') {
+      throw new ConflictError(
+        'خریدار این سفارش به یک شریک وصل است و فاکتورش به «حساب جاری شرکا» می‌رود؛ دریافت پول شریک در خزانه هنوز کاربرد ندارد. سفارش را تا آن روز در انتظار بگذارید.',
+        undefined, 'STOREFRONT_ORDER_PARTNER_BUYER',
+      );
+    }
     const posted = await TreasuryTransactionService.createTreasuryTransaction({
       type: 'receipt', method: 'bank_transfer', amount: Number(payable), currency: 'IRR', bankAccountId: settings.treasuryAccountId,
-      partyType: 'customer', partyId: order.customerId, partyName: party?.name || order.buyerName || order.recipientName, trackingNumber: receipt.reference,
-      documentId: order.documentId, description: `دریافت کارت‌به‌کارت سفارش سایت ${order.orderNumber}`,
+      ...(colleagueBuyer
+        ? { partyType: 'personnel', partyId: party.personnelId!, purpose: 'colleague_account', partyName: party.name || order.buyerName || order.recipientName }
+        : { partyType: 'customer', partyId: order.customerId, partyName: party?.name || order.buyerName || order.recipientName, documentId: order.documentId }),
+      trackingNumber: receipt.reference,
+      description: `دریافت کارت‌به‌کارت سفارش سایت ${order.orderNumber}`,
       userId: actor.userId, username: actor.username, audit: { req, userFullName: actor.userFullName },
     }, tx);
     // v12 phase 7: the order leaves the open statuses before its proforma is finalized, so the documents package's guard

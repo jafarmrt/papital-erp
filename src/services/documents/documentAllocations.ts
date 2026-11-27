@@ -45,7 +45,7 @@ export async function fetchLiveAllocations(executor: DbExecutor, docIds: number[
     issueDate: cheques.issueDate,
     chequeStatus: cheques.status,
     runningAccountPersonnelId: settlementAllocations.runningAccountPersonnelId,
-    createdAt: settlementAllocations.createdAt,
+    documentDate: documents.date,
   })
     .from(settlementAllocations)
     .innerJoin(documents, eq(documents.id, settlementAllocations.documentId))
@@ -57,7 +57,8 @@ export async function fetchLiveAllocations(executor: DbExecutor, docIds: number[
     ? {
       id: r.id, documentId: r.documentId, refNumber: String(r.refNumber ?? r.documentId), amount: fin(r.amount).toNumber(),
       source: 'running_account' as const, sourceId: r.runningAccountPersonnelId, sourceNumber: '',
-      date: String(r.createdAt ?? '').slice(0, 10), status: '',
+      // the invoice's own business date (Tehran wall clock): the part is made with it, at its finalize
+      date: String(r.documentDate ?? '').slice(0, 10), status: '',
     }
     : r.treasuryId !== null
     ? {
