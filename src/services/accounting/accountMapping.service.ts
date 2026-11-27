@@ -360,6 +360,11 @@ export class AccountMappingService {
     return this.resolveAccount('colleagueCurrentAccountCode', tx);
   }
 
+  /** v12 colleague sales: the partners' running account (a partner's purchases on their personnel detail); default 4101 */
+  static async getPartnersCurrentAccount(tx?: DbExecutor): Promise<Account | null> {
+    return this.resolveAccount('partnersCurrentAccountCode', tx);
+  }
+
   static async getEidiExpenseAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('eidiExpenseAccountCode', tx);
   }

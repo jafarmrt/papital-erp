@@ -28,6 +28,10 @@ export const documents = pgTable('documents', {
   partyId: integer('party_id').references(baseRelations.customersId),
   // v10.1.37 (N-01، TD-1283، تصمیم ت۴ الف طرح کارتابل کارگاه): پرسنلی که حواله به دست او داده می‌شود (مهاجرت 0119)
   recipientPersonnelId: integer('recipient_personnel_id').references(baseRelations.personnelId),
+  // v12 colleague sales (migration 0038): stamped when a sales invoice is first finalized, from its party's link; NULL not
+  // yet stamped, '' trade receivables, 'colleague' / 'partner' the colleague's running account (src/lib/accounting/runningAccount.ts)
+  runningAccount: text('running_account'),
+  runningAccountPersonnelId: integer('running_account_personnel_id').references(baseRelations.personnelId),
   buyerName: text('buyer_name').default(''),
   buyerCity: text('buyer_city').default(''),
   buyerPhone: text('buyer_phone').default(''),
@@ -60,6 +64,7 @@ export const documents = pgTable('documents', {
   uq_documents_type_fy_ref_active: uniqueIndex('uq_documents_type_fy_ref_active').on(table.type, table.refFiscalYear, table.refNumber)
     .where(sql`${table.isDeleted} = 0 AND length(${table.refNumber}) > 0`),
   idx_documents_party_id: index('idx_documents_party_id').on(table.partyId).where(sql`${table.partyId} IS NOT NULL`),
+  idx_documents_running_account_personnel_id: index('idx_documents_running_account_personnel_id').on(table.runningAccountPersonnelId).where(sql`${table.runningAccountPersonnelId} IS NOT NULL`),
   // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_documents_crm_lead_id: index('idx_documents_crm_lead_id').on(table.crmLeadId).where(sql`${table.crmLeadId} IS NOT NULL`),
   idx_documents_recipient_personnel_id: index('idx_documents_recipient_personnel_id').on(table.recipientPersonnelId).where(sql`${table.recipientPersonnelId} IS NOT NULL`),

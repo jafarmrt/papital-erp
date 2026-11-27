@@ -39,6 +39,7 @@ import { AttachmentStorageService } from '../attachments/attachmentStorage.servi
 import { money } from '../../lib/money.js';
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { assertPayableCoversSettlement, assertSettledDocumentIdentity, documentIsSettled } from './settledDocumentEdit.js';
+import { stampDocumentRunningAccount, syncRunningAccountAfterFinalize } from './documentRunningAccount.js';
 import { assertDocumentStatus, assertRecordableDocument, stockDirectionOf } from './documentRecordRule.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
 import { consumesProjectReservation } from '../../lib/transactions/projectIssueTypes.js';
@@ -746,6 +747,8 @@ export class DocumentCreationService {
       if (docStatus === 'final' && !body.skipVoucherSync) {
         const isStrict = body.strict !== false;
         if (docType === 'invoice' || docType === 'proforma') {
+          // v12 colleague sales: the invoice of a party linked to a colleague or partner is stamped with that running account
+          await stampDocumentRunningAccount(tx, docId);
           // مبلغ مالیات از ستون ذخیره‌شده vat_amount همین سند خوانده می‌شود (TD-197)
           await VoucherSyncService.syncSalesInvoiceVoucher(docId, {
             username: user,
@@ -766,6 +769,8 @@ export class DocumentCreationService {
             username: user,
           }, tx);
         }
+        // v12 colleague sales: a stamped invoice (or the invoice of a return) is settled from the running account
+        await syncRunningAccountAfterFinalize(tx, docId, { userId: actor.userId, username: user || 'سیستم' });
       }
 
       if (actor.createdAudit) await logDocumentCreated(tx, actor.createdAudit.actor, docId, actor.createdAudit);

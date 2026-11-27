@@ -10,6 +10,8 @@ import { irrAmountSql, rows } from './ledgerRows.js';
  * in rials (TD-260) equals what the business records say the customer owes:
  *   final sales invoices (payable = net of lines + VAT + service charge, at the document's rate)
  *   − their final sales returns
+ *   (v12 colleague sales: an invoice stamped with a colleague's or partner's running account, and its returns, are left
+ *   out: their voucher posts to that running account, not 1201)
  *   − completed treasury receipts from the customer + treasury payments to the customer (original rows with a voucher;
  *     a voided row and its reversal cancel out)
  *   − received cheques of the customer + those returned to the customer after a bounce (TD-273)
@@ -38,7 +40,10 @@ export async function checkPartyBalances(partyIds: number[] | undefined): Promis
                                        ELSE COALESCE(NULLIF(d.exchange_rate, 0), 1) END, 0))
                         FROM documents d
                        WHERE d.party_id = c.id AND d.is_deleted = 0 AND d.status = 'final'
-                         AND d.type IN ('invoice', 'proforma', 'return')), 0)::text AS documents,
+                         AND d.type IN ('invoice', 'proforma', 'return')
+                         -- v12 colleague sales: a stamped invoice (and its return) sits on the colleague's running account
+                         AND COALESCE((SELECT o.running_account FROM documents o
+                                        WHERE o.id = CASE WHEN d.type = 'return' THEN d.return_of_document_id ELSE d.id END), '') = ''), 0)::text AS documents,
             COALESCE((SELECT SUM(
                         (CASE WHEN t.type = 'receipt' THEN -1 ELSE 1 END)
                         * ROUND(t.amount * CASE WHEN UPPER(COALESCE(NULLIF(t.currency, ''), 'IRR')) = 'IRR' THEN 1

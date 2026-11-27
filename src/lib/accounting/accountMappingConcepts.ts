@@ -35,6 +35,8 @@ export const ACCOUNT_MAPPING_CONCEPTS = [
   { key: 'eidiPayableAccountCode', label: 'عیدی پرداختنی', description: 'سهم عیدی انباشته فیش‌های حقوق، تا پرداخت با «فیش عیدی»', defaultCode: '3207', accountTypes: LIABILITY },
   // v11 (the 1405 replay, tool 4): each colleague's running account, either side: their out-of-pocket expenses, petty cash in hand, paybacks
   { key: 'colleagueCurrentAccountCode', label: 'حساب جاری همکاران', description: 'هزینه‌ای که همکار از جیب داده (بستانکار) و تنخواه یا بازپرداختی که به او داده می‌شود (بدهکار)، با تفصیلی همان همکار', defaultCode: '3208', accountTypes: LIABILITY },
+  // v12 colleague sales: a partner's purchases (and later their receipts and payments), with the partner's personnel detail
+  { key: 'partnersCurrentAccountCode', label: 'حساب جاری شرکا', description: 'فاکتور فروش به شریکی که طرف حسابش به پرسنل وصل است (بدهکار)، با تفصیلی همان شریک', defaultCode: '4101', accountTypes: EQUITY },
   { key: 'eidiExpenseAccountCode', label: 'هزینه عیدی و پاداش', description: 'سهم عیدی هر فیش حقوق و عیدی سالانه‌ای که انباشته نشده است', defaultCode: '7014', accountTypes: EXPENSE },
   { key: 'chequeReceivableAccountCode', label: 'اسناد دریافتنی نزد صندوق', description: 'ثبت چک دریافتی و بازگشت آن از جریان وصول', defaultCode: '1101', accountTypes: ASSET },
   { key: 'chequeInCollectionAccountCode', label: 'اسناد در جریان وصول', description: 'فرستادن چک به بانک برای وصول، تا پاس یا برگشت', defaultCode: '1102', accountTypes: ASSET },

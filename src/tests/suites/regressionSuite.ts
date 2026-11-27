@@ -11165,6 +11165,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v11 phase 6.1t: receipts, payments and cheques settle invoices in parts (M11 / U2)
   const { runReceiptsOnInvoicesV11Tests } = await import('../regression/receiptsOnInvoicesV11Tests.js');
   results.push(...await runReceiptsOnInvoicesV11Tests(shouldRun));
+  // v12 colleague and partner sales: invoices on the colleague's running account, settled from it
+  const { runColleagueSalesV12Tests } = await import('../regression/colleagueSalesV12Tests.js');
+  results.push(...await runColleagueSalesV12Tests(shouldRun));
   const { runReceiptsOnInvoicesReviewV11Tests } = await import('../regression/receiptsOnInvoicesReviewV11Tests.js');
   results.push(...await runReceiptsOnInvoicesReviewV11Tests(shouldRun));
   // v11 history import (1405 replay from Excel), tool 1: treasury rows

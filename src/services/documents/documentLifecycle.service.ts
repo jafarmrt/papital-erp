@@ -27,6 +27,7 @@ import { releaseReservationsForDocument, restoreReservationsForDocument } from '
 import { assertVoidKeepsStockHistory } from '../inventory/voidStockHistory.js';
 import { assertVoidHasNoReturns, assertVoidHasNoTreasuryRows, recordVoidEvents } from './voidDependents.js';
 import { assertPayableCoversSettlement, documentIsSettled } from './settledDocumentEdit.js';
+import { stampDocumentRunningAccount, syncRunningAccountAfterFinalize } from './documentRunningAccount.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { assertTransferVoidKeepsReservations } from '../inventory/transferReservations.js';
 import { finalizeDayTarget, proformaInvoiceTarget } from './proformaInvoice.js';
@@ -282,6 +283,8 @@ export class DocumentLifecycleService {
 
           // Step 4: Auto-generate double-entry accounting voucher (Rule DB-008, Strict Mode)
           if (isSales) {
+            // v12 colleague sales: stamped once, at the first finalize, from the party's link
+            await stampDocumentRunningAccount(tx, id);
             await VoucherSyncService.syncSalesInvoiceVoucher(id, {
               username: safeUser,
               strict: isStrict,
@@ -298,6 +301,8 @@ export class DocumentLifecycleService {
               strict: isStrict,
             }, tx);
           }
+          // v12 colleague sales: a stamped invoice (or the invoice of a return) is settled from the running account
+          await syncRunningAccountAfterFinalize(tx, id, { username: safeUser });
         }
       );
       return auditBefore ? { before: auditBefore, after: await documentAuditSnapshot(tx, id) } : null;
@@ -371,6 +376,8 @@ export class DocumentLifecycleService {
       // instant (`now()`); the business wall clock written before was read as UTC and stored 3.5 hours ahead (migration 0007
       // repairs the old rows)
       await tx.update(documents).set({ isDeleted: 1, deletedAt: sql`now()`, deletedBy: deletedByUser }).where(eq(documents.id, id));
+      // v12 colleague sales: a voided stamped invoice drops its «تسویه از حساب جاری»; a voided return gives it back to its invoice
+      if (doc.status === 'final') await syncRunningAccountAfterFinalize(tx, id, { username: deletedByUser });
 
       // v9.0.40 (TD-447، ت۵): فرایند تأیید در جریان سند در همان تراکنش ابطال بسته می‌شود (سند پیش از نمونه قفل شده است)
       await terminateOpenWorkflows(tx, { entityType: 'document', entityId: id, actionKey: 'terminate', actionTitle: 'بستن فرایند با ابطال سند', comment: 'ابطال سند', userName: deletedByUser });

@@ -4,13 +4,14 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import {
   accounts, activityLogs, appSettings, bankAccounts, customers, documents, itemPrices, items, storefrontBuyerAccounts, storefrontBuyerAddresses,
-  storefrontBuyerSessions, storefrontOrders, storefrontPaymentReceipts, storefrontProducts, storefrontShippingMethods, treasuryTransactions, warehouses,
+  storefrontBuyerSessions, storefrontOrders, storefrontPaymentReceipts, storefrontProducts, storefrontShippingMethods, settlementAllocations, treasuryTransactions, warehouses,
 } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 import { invalidateSettingsCache } from '../../lib/memoryCache.js';
 import { readPricingStrategies } from '../../lib/items/pricingStrategies.js';
 import { phoneMatchKey } from '../../lib/search/phoneMatchKey.js';
 import { BUYER_ADDRESSES_MAX, GIFT_MESSAGE_MAX } from '../../lib/storefront/storefrontOrderRules.js';
+import { newWorker } from '../invariants/payrollScenarios.js';
 
 /**
  * v12 phase 8c (docs/roadmap/V12_SITE_NEXT_START_PLAN.md §5, site review 2.5, owner's decision 13): the buyer apart from
@@ -72,7 +73,7 @@ export async function runStorefrontBuyerRecipientV12Tests(shouldRun: (id: string
     invalidateSettingsCache();
     const [warehouse] = await orm.select({ code: warehouses.code }).from(warehouses).where(eq(warehouses.isActive, 1)).orderBy(asc(warehouses.id)).limit(1);
     const two = await createTestItem({ name: `انگشتر گیرنده ${tag}`, code: `SFB-A-${tag}`, stocks: { '': 2 } });
-    const ten = await createTestItem({ name: `دستبند گیرنده ${tag}`, code: `SFB-B-${tag}`, stocks: { '': 10 } });
+    const ten = await createTestItem({ name: `دستبند گیرنده ${tag}`, code: `SFB-B-${tag}`, stocks: { '': 12 } }); // two for the colleague and partner orders (1b)
     itemIds.push(two.id, ten.id);
     await orm.insert(itemPrices).values([
       { itemId: two.id, title: retailList, price: money(PRICE), currency: 'IRR' },
@@ -172,6 +173,56 @@ export async function runStorefrontBuyerRecipientV12Tests(shouldRun: (id: string
       .where(eq(treasuryTransactions.id, Number(acceptedReceipt?.treasuryId)));
     if (posted?.partyName !== keptName || posted?.partyId !== giftRow.customerId) wrong.push(`the receipt's party: ${JSON.stringify(posted)}, not ${keptName}`);
 
+    // 1b) v12 colleague sales (review of #508): a buyer whose ERP customer is linked to a colleague pays into the
+    // colleague's running account (a personnel receipt «حساب جاری همکار», not on the invoice), and the invoice is settled
+    // from that account at its finalize; before, the receipt on the proforma refused the finalize (409) and the order stuck.
+    // A partner's order is refused before any money is posted, until the treasury has the partner's use.
+    for (const kind of ['colleague', 'partner'] as const) {
+      const phone = `${kind === 'colleague' ? '0915' : '0916'}${tag}`;
+      phoneKeys.push(phoneMatchKey(phone));
+      const placed = await site().post('/api/storefront/v1/orders', order(phone, `rk-${kind}-${tag}-running-account`, { recipientName: `خریدار ${kind === 'colleague' ? 'همکار' : 'شریک'} ${tag}` }));
+      if (placed.status !== 201) throw new Error(`${kind} order: ${placed.status} ${JSON.stringify(placed.body)}`);
+      const number = String(placed.body.data.order.number);
+      const [row] = await orm.select().from(storefrontOrders).where(eq(storefrontOrders.orderNumber, number));
+      const worker = await newWorker(`ERP-TEST-MARKER ${kind} buyer ${tag}`);
+      await orm.update(customers).set({ personnelId: worker, runningAccount: kind }).where(eq(customers.id, row.customerId));
+      const sent = await site().post(`/api/storefront/v1/orders/${number}/receipts`, {
+        reference: `R${kind.slice(0, 1)}${tag}`, paidAt: new Date().toISOString(), cardLast4: '1234', amount: String(placed.body.data.order.payableAmount),
+      }).set('X-Order-Key', String(placed.body.data.accessKey));
+      if (sent.status !== 201) throw new Error(`${kind} receipt: ${sent.status} ${JSON.stringify(sent.body)}`);
+      const view = (await erp.get(`/api/storefront/orders/${row.id}`)).body.data;
+      const waiting = (view?.receipts ?? []).find((r: Body) => r.status === 'pending');
+      const confirmed = await erp.post(`/api/storefront/orders/${row.id}/confirm`, { receiptId: waiting?.id, version: view?.version });
+      const [doc] = await orm.select({ status: documents.status, runningAccount: documents.runningAccount }).from(documents).where(eq(documents.id, row.documentId));
+      if (kind === 'partner') {
+        const posted = await orm.select({ id: treasuryTransactions.id }).from(treasuryTransactions).where(eq(treasuryTransactions.trackingNumber, `Rp${tag}`));
+        if (confirmed.status !== 409 || confirmed.body.code !== 'STOREFRONT_ORDER_PARTNER_BUYER' || posted.length !== 0 || doc?.status !== 'proforma') {
+          wrong.push(`the partner's order: ${confirmed.status} ${confirmed.body.code}, receipts ${posted.length}, document ${doc?.status}`);
+        }
+        continue;
+      }
+      if (confirmed.status !== 200) { wrong.push(`the colleague's order: ${confirmed.status} ${JSON.stringify(confirmed.body)}`); continue; }
+      const [accepted] = await orm.select({ treasuryId: storefrontPaymentReceipts.treasuryTransactionId }).from(storefrontPaymentReceipts)
+        .where(eq(storefrontPaymentReceipts.id, Number(waiting?.id)));
+      const [money_] = await orm.select({ partyType: treasuryTransactions.partyType, partyId: treasuryTransactions.partyId, purpose: treasuryTransactions.purpose, documentId: treasuryTransactions.documentId, partyName: treasuryTransactions.partyName })
+        .from(treasuryTransactions).where(eq(treasuryTransactions.id, Number(accepted?.treasuryId)));
+      const parts = await orm.select({ amount: settlementAllocations.amount, personnelId: settlementAllocations.runningAccountPersonnelId }).from(settlementAllocations)
+        .where(and(eq(settlementAllocations.documentId, row.documentId), eq(settlementAllocations.isDeleted, 0)));
+      if (money_?.partyType !== 'personnel' || money_?.partyId !== worker || money_?.purpose !== 'colleague_account' || money_?.documentId !== null
+        || !String(money_?.partyName ?? '').startsWith(`ERP-TEST-MARKER colleague buyer ${tag}`)) {
+        wrong.push(`the colleague's receipt: ${JSON.stringify(money_)}`);
+      }
+      // the colleague's running account nets to zero: the invoice's debit and the receipt's credit, on their personnel detail
+      const [net] = (await orm.execute(sql`SELECT COALESCE(SUM(i.debit - i.credit), 0)::text AS net, COUNT(*)::int AS n
+        FROM journal_voucher_items i JOIN journal_vouchers v ON v.id = i.voucher_id JOIN accounts a ON a.id = i.account_id
+        WHERE v.is_deleted = 0 AND i.is_deleted = 0 AND a.code = '3208' AND i.detailed_type = 'personnel' AND i.detailed_id = ${worker}`)).rows as Array<{ net: string; n: number }>;
+      if (Number(net?.net) !== 0 || net?.n !== 2) wrong.push(`the colleague's 3208 after the site order: ${JSON.stringify(net)}, expected two rows netting to zero`);
+      if (doc?.status !== 'final' || doc?.runningAccount !== 'colleague' || parts.length !== 1 || parts[0].personnelId !== worker
+        || Number(parts[0].amount) !== Number(placed.body.data.order.payableAmount)) {
+        wrong.push(`the colleague's invoice: ${JSON.stringify({ doc, parts })}`);
+      }
+    }
+
     // 2) wrong fields; a card without a gift is dropped; an order without the new fields is the recipient's own
     const badPhone = await site().post('/api/storefront/v1/orders', order(phoneBuyer, `rk-bad-${tag}-recipient-phone`, { recipientPhone: '123' }));
     if (badPhone.status !== 422 || badPhone.body.details?.field !== 'recipientPhone') wrong.push(`a wrong recipient phone: ${badPhone.status} ${JSON.stringify(badPhone.body.details)}`);
@@ -237,7 +288,7 @@ export async function runStorefrontBuyerRecipientV12Tests(shouldRun: (id: string
       accountId: accountA.id, recipientName: `پر ${i}`, province: 'تهران', city: 'تهران', address: `پلاک ${i}`, postalCode: '1234567890',
     })));
     const full = await placeKept(tokenA, { recipientName: `گیرندهٔ تازه ${tag}` });
-    if (full.status !== 201) wrong.push(`an order with a full book: ${full.status}`);
+    if (full.status !== 201) wrong.push(`an order with a full book: ${full.status} ${JSON.stringify(full.body)}`);
     if ((await bookOf(tokenA)).data.length !== BUYER_ADDRESSES_MAX) wrong.push('a full book grew');
 
     if (wrong.length > 0) throw new Error(wrong.join('; '));

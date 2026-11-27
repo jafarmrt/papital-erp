@@ -207,6 +207,11 @@ export async function cleanupAllTestFixtures(): Promise<void> {
     await orm.execute(sql`DELETE FROM piecework_logs WHERE payroll_id IN (SELECT id FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR payroll_number ILIKE 'PAYROLL-E2E-%' OR title ILIKE ${MARKER_PAT} OR title ILIKE '%E2E%') OR created_by_id IN (SELECT id FROM users WHERE username ILIKE 'testuser_%' OR username ILIKE 'test_%' OR username ILIKE 'e2e_%') OR personnel_id IN (SELECT id FROM personnel WHERE full_name ILIKE ${MARKER_PAT}) OR notes ILIKE ${MARKER_PAT}`);
     await orm.execute(sql`DELETE FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR payroll_number ILIKE 'PAYROLL-E2E-%' OR title ILIKE ${MARKER_PAT} OR title ILIKE '%E2E%'`);
     // Personnel: only marker-carried or synthetic-structured names (real workshop staff names like طلاساز/استادکار/جعفر/ناهید are NEVER matched)
+    // v12 colleague sales: parties, invoices and their running-account parts may point to a synthetic colleague
+    const markerPersonnel = sql`SELECT id FROM personnel WHERE full_name ILIKE ${MARKER_PAT}`;
+    await orm.execute(sql`DELETE FROM settlement_allocations WHERE running_account_personnel_id IN (${markerPersonnel})`);
+    await orm.execute(sql`UPDATE documents SET running_account = '', running_account_personnel_id = NULL WHERE running_account_personnel_id IN (${markerPersonnel})`);
+    await orm.execute(sql`UPDATE customers SET running_account = '', personnel_id = NULL WHERE personnel_id IN (${markerPersonnel})`);
     await orm.execute(sql`DELETE FROM personnel WHERE full_name ILIKE ${MARKER_PAT}`);
   } catch (err: any) {
     logger.warn(`[TestDbHelper] Error cleaning piecework fixtures: ${err.message}`);

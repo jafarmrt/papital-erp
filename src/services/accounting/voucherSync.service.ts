@@ -23,6 +23,7 @@ import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
 import { salesReturnKardexUnitCosts } from '../documents/salesReturnCost.js';
 import { documentVoucherPartyId } from '../documents/documentParty.js';
+import { runningAccountVoucherSide } from './runningAccountVoucher.js';
 import { kardexInCostByItem } from './productionReceiptCost.js';
 import { projectProductionCreditRows } from './productionWipCredit.js';
 import { documentOutflowCost } from './outflowVoucherCost.js';
@@ -217,8 +218,20 @@ export class VoucherSyncService {
       description?: string;
     }[] = [];
 
-    // ۱) بدهکار: حساب‌های دریافتنی تجاری (مشتری)
-    if (finalPayable.isPositive()) voucherItems.push({
+    // ۱) بدهکار: حساب‌های دریافتنی تجاری (مشتری)؛ v12 colleague sales: an invoice stamped with a running account debits
+    // «حساب جاری همکار» (3208) or «حساب جاری شرکا» (4101) on the colleague's personnel detail instead
+    const runningSide = await runningAccountVoucherSide(executor, doc);
+    if (finalPayable.isPositive()) voucherItems.push(runningSide ? {
+      accountId: runningSide.account.id,
+      detailedType: 'personnel',
+      detailedId: runningSide.personnelId,
+      detailedName: runningSide.personnelName,
+      debit: finalPayable,
+      credit: 0,
+      currency: doc.currency || 'IRR',
+      exchangeRate: exchangeRate,
+      description: `${runningSide.label} ${runningSide.personnelName} بابت فاکتور فروش شماره ${doc.refNumber}`,
+    } : {
       accountId: customerAcc.id,
       detailedType: 'customer',
       detailedId: matchedCustomerId || undefined,
@@ -1056,7 +1069,25 @@ export class VoucherSyncService {
         });
       }
 
-      if (customerReturnCredit.isPositive()) {
+      // v12 colleague sales: the return of an invoice stamped with a running account credits that account, as its invoice debited it
+      const [returnedInvoice] = doc.returnOfDocumentId
+        ? await executor.select({ runningAccount: documents.runningAccount, runningAccountPersonnelId: documents.runningAccountPersonnelId, refNumber: documents.refNumber })
+          .from(documents).where(eq(documents.id, doc.returnOfDocumentId))
+        : [];
+      const returnRunningSide = returnedInvoice ? await runningAccountVoucherSide(executor, returnedInvoice) : null;
+      if (customerReturnCredit.isPositive() && returnRunningSide) {
+        voucherItems.push({
+          accountId: returnRunningSide.account.id,
+          detailedType: 'personnel',
+          detailedId: returnRunningSide.personnelId,
+          detailedName: returnRunningSide.personnelName,
+          debit: 0,
+          credit: customerReturnCredit,
+          currency: doc.currency || 'IRR',
+          exchangeRate: docExchangeRate.isPositive() ? docExchangeRate : undefined,
+          description: `${returnRunningSide.label} ${returnRunningSide.personnelName} بابت مرجوعی کالا در سند شماره ${doc.refNumber}`,
+        });
+      } else if (customerReturnCredit.isPositive()) {
         // ۲) بستانکار: حساب‌های دریافتنی تجاری / مشتری (۱۲۰۱)، خالص به‌علاوه مالیات
         voucherItems.push({
           accountId: customerAcc.id,

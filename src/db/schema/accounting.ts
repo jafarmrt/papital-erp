@@ -397,6 +397,8 @@ export const settlementAllocations = pgTable('settlement_allocations', {
   documentId: integer('document_id').notNull().references(baseRelations.documentsId),
   treasuryTransactionId: integer('treasury_transaction_id').references(() => treasuryTransactions.id),
   chequeId: integer('cheque_id').references(() => cheques.id),
+  // v12 colleague sales (migration 0038): the «تسویه از حساب جاری» of a sales invoice stamped with a running account
+  runningAccountPersonnelId: integer('running_account_personnel_id').references(baseRelations.personnelId),
   amount: moneyNumeric('amount').notNull(),
   createdById: integer('created_by_id').references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
@@ -410,6 +412,10 @@ export const settlementAllocations = pgTable('settlement_allocations', {
     .where(sql`${table.isDeleted} = 0 AND ${table.treasuryTransactionId} IS NOT NULL`),
   uq_settlement_allocations_cheque_document: uniqueIndex('uq_settlement_allocations_cheque_document').on(table.chequeId, table.documentId)
     .where(sql`${table.isDeleted} = 0 AND ${table.chequeId} IS NOT NULL`),
+  uq_settlement_allocations_running_account_document: uniqueIndex('uq_settlement_allocations_running_account_document').on(table.documentId)
+    .where(sql`${table.isDeleted} = 0 AND ${table.runningAccountPersonnelId} IS NOT NULL`),
+  idx_settlement_allocations_running_account_personnel_id: index('idx_settlement_allocations_running_account_personnel_id').on(table.runningAccountPersonnelId)
+    .where(sql`${table.runningAccountPersonnelId} IS NOT NULL`),
 }));
 
 export const accountingSettings = pgTable('accounting_settings', {

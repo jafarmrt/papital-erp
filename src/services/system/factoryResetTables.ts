@@ -145,7 +145,6 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   { name: 'piecework_task_rate_history', table: pieceworkTaskRateHistory },
   { name: 'piecework_tasks', table: pieceworkTasks },
   { name: 'task_categories', table: taskCategories },
-  { name: 'personnel', table: personnel },
   { name: 'payroll_statutory_rates', table: payrollStatutoryRates },
   { name: 'payroll_eidi_rates', table: payrollEidiRates },
 
@@ -183,6 +182,8 @@ export const FACTORY_RESET_WIPE_ORDER: readonly FactoryResetWipe[] = [
   { name: 'media_sections', table: mediaSections },
   { name: 'items', table: items },
   { name: 'customers', table: customers },
+  // v12 colleague sales: a party may point to its colleague's personnel row (customers.personnel_id), so personnel goes after the customers
+  { name: 'personnel', table: personnel },
 
   // 9. Categories, warehouses and settings
   { name: 'categories', table: categories },

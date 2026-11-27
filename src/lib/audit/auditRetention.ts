@@ -63,6 +63,8 @@ export const CRITICAL_AUDIT_ENTITIES = [
   'treasury_transfer',
   'treasury_reconciliation',
   'colleague_expense',
+  // v12 colleague sales: a colleague's or partner's invoice settled from their running account
+  'تسویه از حساب جاری',
   'حسابداری:کدینگ_پیش‌فرض',
   'حسابداری:نگاشت_مفهومی_سرفصل‌ها',
   'سال مالی',
