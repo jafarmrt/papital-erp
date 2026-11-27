@@ -77,12 +77,12 @@ describe('v12 batch work-log form', () => {
 });
 
 describe('v12 work-log edit: the task title', () => {
-  const log = { id: 9, personnelName: 'رضا', date: '2026-10-09', taskId: 1, unit: 'عدد', quantity: 4, unitRate: 3000, projectId: null, originalTaskId: 1, originalUnitRate: 3000, rateEdited: false } as unknown as EditingWorkLog;
+  const log = { id: 9, personnelName: 'رضا', date: '2026-10-09', taskId: 1, unit: 'عدد', quantity: 4, unitRate: 3000, projectId: null, originalTaskId: 1, originalUnitRate: 3000, rateEdited: false, version: 3 } as unknown as EditingWorkLog;
 
   it('sends the new task without a rate unless one was typed, and no task when it did not change', () => {
-    expect(workLogEditPayload(log, 4)).toEqual({ date: '2026-10-09', projectId: null, quantity: 4, unitRate: 3000 });
-    expect(workLogEditPayload({ ...log, taskId: 2, unitRate: 600000 }, 4)).toEqual({ date: '2026-10-09', projectId: null, quantity: 4, taskId: 2 });
-    expect(workLogEditPayload({ ...log, taskId: 2, unitRate: 700000, rateEdited: true }, 4)).toEqual({ date: '2026-10-09', projectId: null, quantity: 4, taskId: 2, unitRate: 700000 });
+    expect(workLogEditPayload(log, 4)).toEqual({ date: '2026-10-09', projectId: null, quantity: 4, version: 3, unitRate: 3000 });
+    expect(workLogEditPayload({ ...log, taskId: 2, unitRate: 600000 }, 4)).toEqual({ date: '2026-10-09', projectId: null, quantity: 4, version: 3, taskId: 2 });
+    expect(workLogEditPayload({ ...log, taskId: 2, unitRate: 700000, rateEdited: true }, 4)).toEqual({ date: '2026-10-09', projectId: null, quantity: 4, version: 3, taskId: 2, unitRate: 700000 });
   });
 
   it('offers the task titles on the edit form and says where the new rate comes from', () => {

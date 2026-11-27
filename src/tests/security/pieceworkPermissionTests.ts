@@ -6,6 +6,7 @@ import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { fundedBank, newTask, newWorker } from '../invariants/payrollScenarios.js';
 import { runCase, type Harness, type ShouldRun } from './workflowTestHarness.js';
+import { workLogVersion } from '../fixtures/workLogVersion.js';
 
 /**
  * Package 12 payroll, PR «ج» (TD-805, B12P-02, product-owner decision t2 «الف»): every payroll action asks the key of its
@@ -75,7 +76,7 @@ export async function runPieceworkPermissionTests(shouldRun: ShouldRun): Promise
           .from(pieceworkLogs).where(eq(pieceworkLogs.id, logId)))[0];
         let row = await rateOf();
         if (!row || !fin(row.unitRate).equals(3000)) wrong.push(`work log of piecework.log saved rate ${row?.unitRate}, not the custom rate 3000`);
-        await only('edit work log', 'put', `/api/piecework/logs/${logId}`, { quantity: 12, unitRate: '900000' }, 'log', ['personnel', 'tasks', 'payroll']);
+        await only('edit work log', 'put', `/api/piecework/logs/${logId}`, { version: await workLogVersion(logId), quantity: 12, unitRate: '900000' }, 'log', ['personnel', 'tasks', 'payroll']);
         row = await rateOf();
         if (!row || !fin(row.unitRate).equals(3000) || !fin(row.quantity).equals(12)) wrong.push(`edited work log has rate ${row?.unitRate} and quantity ${row?.quantity}, not 3000 and 12`);
         const spare = await h.post('/api/piecework/logs', { items: [{ ...item, quantity: 1 }] }, sessions.log);

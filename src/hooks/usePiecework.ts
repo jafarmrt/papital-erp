@@ -52,6 +52,8 @@ export function workLogEditPayload(log: EditingWorkLog, quantity: number) {
     date: log.date,
     projectId: log.projectId || null,
     quantity,
+    // v12 (migration 0039): the version the form opened with; a colleague's edit since then is a 409 (AGENTS.md §2.7)
+    version: log.version,
     ...(taskChanged ? { taskId: log.taskId } : {}),
     ...(taskChanged && !log.rateEdited ? {} : { unitRate: Number(log.unitRate) || 0 }),
   };

@@ -145,6 +145,8 @@ const updatePieceworkLogSchema = z.object({
     projectId: optionalProjectId,
     // v12: another task title for a free log
     taskId: z.coerce.number().int().positive('عنوان کاری معتبر نیست').max(2147483647).optional(),
+    // v12 (migration 0039, AGENTS.md §2.7): the version of the log the edit was made from
+    version: z.coerce.number({ message: 'نسخهٔ کارکرد فرستاده نشده است؛ فهرست را دوباره بارگذاری کنید.' }).int().min(1, 'نسخهٔ کارکرد فرستاده نشده است؛ فهرست را دوباره بارگذاری کنید.').max(2147483647),
   }),
   params: z.object({
     id: numericIdString
@@ -604,12 +606,12 @@ router.post('/piecework/logs', requirePermission(PIECEWORK_LOG_PERMISSION), idem
 router.put('/piecework/logs/:id', requirePermission(PIECEWORK_LOG_PERMISSION), idempotency({ scope: 'piecework' }), validate(updatePieceworkLogSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { date, quantity, unitRate, notes, projectId, taskId } = req.body;
+    const { date, quantity, unitRate, notes, projectId, taskId, version } = req.body;
     // v9.0.320 (TD-805): ویرایش کارکرد با «ثبت و ویرایش کارکرد» است، ولی نرخ دستی همان قاعده ثبت را دارد: بی مدیریت تعرفه‌ها
     // نرخ کارکرد همان که بود می‌ماند (پیش‌تر ویرایش فقط برای «مدیریت کامل پرسنل» بود که نرخ را آزادانه عوض می‌کرد)
     const canSetRate = await can(req.user, PIECEWORK_TASKS_PERMISSION);
 
-    await PieceworkService.updateWorkLog(id, { date, quantity, unitRate: canSetRate ? unitRate : undefined, notes, projectId, taskId, canSetRate }, undefined, { req });
+    await PieceworkService.updateWorkLog(id, { date, quantity, unitRate: canSetRate ? unitRate : undefined, notes, projectId, taskId, canSetRate, version }, undefined, { req });
 
     res.json({ status: 'ok', message: 'کارکرد ویرایش شد' });
   } catch (err) {

@@ -3,6 +3,7 @@ import type { Harness, ShouldRun } from '../security/workflowTestHarness.js';
 import { newWorker } from '../invariants/payrollScenarios.js';
 import { brief, fixture } from './documentEntryTests.js';
 import { runReservationCases } from './stockReservationTests.js';
+import { workLogVersion } from '../fixtures/workLogVersion.js';
 
 /**
  * v10.1.39 (N-01 part 2, TD-1284, mobile workshop plan §4.3): the workshop cartable's server.
@@ -334,7 +335,7 @@ async function reviewGuardsCase(h: Harness, wrong: string[]): Promise<string> {
     const movedLogId = Number((approvedAgain.body as { pieceworkLogId?: number }).pieceworkLogId);
     if (approvedAgain.status !== 200 || !movedLogId) wrong.push(`approving the new report answered ${brief(approvedAgain)}, expected 200 with a work log`);
     const { projectId: otherProjectId } = await scheduledProject(h, []);
-    const move = await h.put(`/api/piecework/logs/${movedLogId}`, { projectId: otherProjectId }, logKeeper);
+    const move = await h.put(`/api/piecework/logs/${movedLogId}`, { version: await workLogVersion(movedLogId), projectId: otherProjectId }, logKeeper);
     if (move.status !== 200) wrong.push(`moving the approved work log to another project answered ${brief(move)}, expected 200`);
     const [movedReport] = await h.q(`SELECT status, review_note FROM workshop_task_reports WHERE id = $1`, [againReport.id]);
     if (movedReport?.status !== 'rejected' || !String(movedReport?.review_note).includes('حذف شد')) wrong.push(`after its log moved the report is ${JSON.stringify(movedReport ?? null)}, expected rejected with a note`);

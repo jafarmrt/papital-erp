@@ -108,6 +108,8 @@ export interface PieceworkLog {
   createdById?: number;
   createdByUsername?: string;
   createdAt?: string;
+  /** v12 (migration 0039): the record version an edit sends back */
+  version?: number;
 }
 
 export interface PieceworkPayroll {

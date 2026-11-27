@@ -1,5 +1,6 @@
+import { inArray } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import type { pieceworkLogs, pieceworkPayrolls, pieceworkTasks } from '../../db/schema.js';
+import { pieceworkTasks, type pieceworkLogs, type pieceworkPayrolls } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { payrollStatusLabel, workLogStatusLabel } from '../../lib/payroll/payrollStatusLabels.js';
 import { isoToJalaliDate } from '../../utils.js';
@@ -185,14 +186,22 @@ export async function auditWorkLogCreated(tx: DbExecutor, row: WorkLogRow, names
 export async function auditWorkLogUpdated(tx: DbExecutor, before: WorkLogRow, after: WorkLogRow, actor: AuditActor): Promise<void> {
   const diff = changedFields(workLogSnapshot(before), workLogSnapshot(after));
   if (Object.keys(diff.changes).length === 0) return;
+  // v12 (backlog of the task edit): a changed task title is named in the row, not only its id
+  let taskTitles: { before: string; after: string } | null = null;
+  if (before.taskId !== after.taskId) {
+    const rows = await tx.select({ id: pieceworkTasks.id, title: pieceworkTasks.title }).from(pieceworkTasks)
+      .where(inArray(pieceworkTasks.id, [before.taskId, after.taskId]));
+    const titleOf = (id: number) => rows.find(r => r.id === id)?.title ?? toPersianDigits(id);
+    taskTitles = { before: titleOf(before.taskId), after: titleOf(after.taskId) };
+  }
   await logActivity({
     tx,
     ...actorFields(actor),
     action: 'UPDATE',
     entity: WORK_LOG_AUDIT_ENTITY,
     entityId: after.id,
-    description: `ویرایش کارکرد شماره ${toPersianDigits(after.id)}: مبلغ ${amount(before.totalAmount)} → ${amount(after.totalAmount)}`,
-    details: { personnelId: after.personnelId, ...diff },
+    description: `ویرایش کارکرد شماره ${toPersianDigits(after.id)}: ${taskTitles ? `عنوان کار «${taskTitles.before}» → «${taskTitles.after}»، ` : ''}مبلغ ${amount(before.totalAmount)} → ${amount(after.totalAmount)}`,
+    details: { personnelId: after.personnelId, ...diff, ...(taskTitles ? { taskTitles } : {}) },
   });
 }
 

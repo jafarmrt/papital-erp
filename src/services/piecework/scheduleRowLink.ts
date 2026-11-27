@@ -159,9 +159,16 @@ export async function assertLinkedRowQuantity(tx: DbExecutor, projectId: number 
  * v12 (work-log edit, start plan V12_WORKLOG_IMPORT_START_PLAN.md part B): whether a log is the work of a workshop schedule row.
  * Such a log keeps its task: the row names the worker and the task, and the link is written only when the log is created
  * (a project save never sets one, `keepScheduleLogLinks`), so a plain read is enough.
+ *
+ * A legacy row (logged before rows named their log: `isLoggedToPiecework` and no log id) cannot say which log it made, so a
+ * log of the same worker and task in that project counts as its work too (backlog of the task edit): its task stays.
  */
-export async function isScheduleLinkedLog(tx: DbExecutor, projectId: number | null, logId: number): Promise<boolean> {
-  if (projectId === null) return false;
-  const [project] = await tx.select({ stageSchedules: productionProjects.stageSchedules }).from(productionProjects).where(eq(productionProjects.id, projectId));
-  return !!project && workshopScheduleRows(project.stageSchedules).some(r => r.pieceworkLogId === logId);
+export async function isScheduleLinkedLog(
+  tx: DbExecutor,
+  log: { id: number; projectId: number | null; personnelId: number; taskId: number },
+): Promise<boolean> {
+  if (log.projectId === null) return false;
+  const [project] = await tx.select({ stageSchedules: productionProjects.stageSchedules }).from(productionProjects).where(eq(productionProjects.id, log.projectId));
+  return !!project && workshopScheduleRows(project.stageSchedules).some(r => r.pieceworkLogId === log.id
+    || (r.pieceworkLogId === null && r.legacyLogged && r.personnelId === log.personnelId && r.taskId === log.taskId));
 }

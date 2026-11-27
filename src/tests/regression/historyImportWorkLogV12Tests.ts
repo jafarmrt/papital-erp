@@ -9,6 +9,7 @@ import { WORK_LOG_AUDIT_ENTITY } from '../../services/piecework/pieceworkAudit.j
 import { addLog, issueApproved, newTask, newWorker } from '../invariants/payrollScenarios.js';
 import { TestCaseResult } from '../types.js';
 import { type ShouldRun, inFiscalSandbox, runCase, sandboxAdminClient, sandboxClientWith } from './fiscalClosingTests.js';
+import { workLogVersion } from '../fixtures/workLogVersion.js';
 
 /**
  * v12 work-log import (start plan V12_WORKLOG_IMPORT_START_PLAN.md): the colleagues' work of the sheet «کارکرد و پروژه»
@@ -101,7 +102,7 @@ export async function runHistoryImportWorkLogV12Tests(shouldRun: ShouldRun): Pro
       if (!minutesLog || !fin(minutesLog.totalAmount).round(0).equals(800_000)) problems.push(`the 80-minute log reads ${JSON.stringify(minutesLog)}, expected 800,000 as in the sheet`);
       // an edit of its notes or project keeps the amount (the stored quantity has four decimals: 1.3333 × 600,000 = 799,980)
       if (minutesLog) {
-        const edited = await admin.put(`/api/piecework/logs/${minutesLog.id}`, { notes: 'یادداشت تازه', quantity: Number(minutesLog.quantity) });
+        const edited = await admin.put(`/api/piecework/logs/${minutesLog.id}`, { version: await workLogVersion(minutesLog.id), notes: 'یادداشت تازه', quantity: Number(minutesLog.quantity) });
         const [after] = await orm.select({ total: pieceworkLogs.totalAmount }).from(pieceworkLogs).where(eq(pieceworkLogs.id, minutesLog.id));
         if (edited.status !== 200 || !fin(after?.total ?? 0).round(0).equals(800_000)) problems.push(`a notes edit of the 80-minute log answered ${brief(edited)} and left ${after?.total}, expected 800,000 kept`);
       }
