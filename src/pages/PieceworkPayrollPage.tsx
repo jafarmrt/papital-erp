@@ -111,6 +111,7 @@ export function PieceworkPayrollPage() {
     personnelSelectOptions,
     projectSelectOptions,
     handleTaskChangeInRow,
+    suggestedLogRate,
     handleAddLogRow,
     handleRemoveLogRow,
     handleOpenAddLogModal,
@@ -287,6 +288,7 @@ export function PieceworkPayrollPage() {
         projectSelectOptions={projectSelectOptions}
         taskSelectOptions={taskSelectOptions}
         onTaskChangeInRow={handleTaskChangeInRow}
+        suggestedLogRate={suggestedLogRate}
         onAddLogRow={handleAddLogRow}
         onRemoveLogRow={handleRemoveLogRow}
         isSaving={isSavingLog}

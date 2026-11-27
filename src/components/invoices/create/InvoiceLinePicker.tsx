@@ -1,4 +1,5 @@
-import { useId } from 'react';
+import { useEffect, useEffectEvent, useId, useRef } from 'react';
+import { ADD_ROW_SHORTCUT_TITLE, isAddRowShortcut, windowOpenOverPage } from '../../../lib/addRowShortcut';
 import { Plus } from 'lucide-react';
 import type { Item, ItemPrice } from '../../../types';
 import { formatCurrencyLabel, formatPersianCode, formatPersianNumber, formatPersianPrice } from '../../../utils';
@@ -15,6 +16,7 @@ import { isRialCurrency } from '../../../lib/rialDisplay';
 export const INVOICE_LINE_TEXT = {
   itemPlaceholder: 'کد یا نام کالا را بنویسید',
   add: 'افزودن به فهرست',
+  shortcut: ADD_ROW_SHORTCUT_TITLE,
   manualPrice: 'ورود دستی قیمت',
 } as const;
 
@@ -62,8 +64,23 @@ export function InvoiceLinePicker(props: InvoiceLinePickerProps) {
   const currencyLabel = formatCurrencyLabel(currency);
   // v11 phase 6.3 (U3): a rial price is typed in rial; its toman equivalent sits beside the label (the row aligns at the bottom)
   const isRial = isRialCurrency(currency);
+  // v12 (start plan V12_WORKLOG_IMPORT_START_PLAN.md part B): Alt+N or Insert adds the line as the button does, as in the voucher
+  // form, and puts the focus back on the item picker for the next line; not while a window is open over the page
+  const scopeRef = useRef<HTMLDivElement>(null);
+  const onShortcutKey = useEffectEvent((e: KeyboardEvent) => {
+    if (!isAddRowShortcut(e) || windowOpenOverPage()) return;
+    e.preventDefault();
+    if (refuseInvalidDecimalInputs(scopeRef.current)) return;
+    onAdd();
+    document.getElementById(`${id}-item`)?.focus();
+  });
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => onShortcutKey(e);
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
   return (
-    <div data-decimal-scope="" className="grid grid-cols-2 sm:grid-cols-6 lg:grid-cols-12 gap-3 items-end bg-slate-50 p-3 sm:p-4 rounded-xl border border-slate-200">
+    <div ref={scopeRef} data-decimal-scope="" className="grid grid-cols-2 sm:grid-cols-6 lg:grid-cols-12 gap-3 items-end bg-slate-50 p-3 sm:p-4 rounded-xl border border-slate-200">
       <div className="col-span-2 sm:col-span-6 lg:col-span-12">
         <label htmlFor={`${id}-item`} className={INVOICE_LABEL}>کالا</label>
         <SearchableSelect
@@ -111,7 +128,7 @@ export function InvoiceLinePicker(props: InvoiceLinePickerProps) {
         <DecimalInput id="invoice-line-discount" aria-describedby={isRial ? 'invoice-line-discount-equivalent' : undefined} min="0" value={discount} onValueChange={v => onDiscountChange(amountOf(v))} className={INVOICE_NUMBER_FIELD} />
       </div>
       <div className="col-span-1 sm:col-span-6 lg:col-span-2">
-        <button type="button" onClick={(e) => { if (!refuseInvalidDecimalInputs(e.currentTarget)) onAdd(); }}
+        <button type="button" title={INVOICE_LINE_TEXT.shortcut} onClick={(e) => { if (!refuseInvalidDecimalInputs(e.currentTarget)) onAdd(); }}
           className="w-full min-h-[44px] bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl flex items-center justify-center gap-1.5 text-sm font-bold transition-colors shadow-sm">
           <Plus size={16} aria-hidden="true" /> {INVOICE_LINE_TEXT.add}
         </button>

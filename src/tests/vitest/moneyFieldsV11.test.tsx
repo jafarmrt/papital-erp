@@ -118,7 +118,9 @@ const PLAIN_DECIMAL_INPUTS: Record<string, number> = {
   'components/common/DecimalInput.tsx': 1,
   'components/common/FinancialAmountInput.tsx': 1,
   'components/inventory/AuditSheetCards.tsx': 1,
-  'components/piecework/PieceworkLogModal.tsx': 2,
+  // v12 (part B): the batch rows' quantity box moved to their own file; the count is the same
+  'components/piecework/PieceworkBatchLogRows.tsx': 1,
+  'components/piecework/PieceworkLogModal.tsx': 1,
   'components/procurement/RequisitionDecimalInput.tsx': 1,
   'components/procurement/SplitOrderModal.tsx': 1,
   'components/workflow/WorkflowDesignerCanvas.tsx': 3,
