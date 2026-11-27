@@ -132,6 +132,8 @@ export interface PieceworkPayroll {
   // V1.9.0: کسر از مساعده/وام پرسنلی (بستانکار حساب مساعده در سند تسویه)
   advanceDeduction?: number;
   advance_deduction?: number;
+  /** v12 colleague sales part B (migration 0039): «کسر از حساب جاری همکار» */
+  runningAccountDeduction?: number;
   totalBonuses: number;
   totalDeductions: number;
   // v9.0.329 (TD-861): شرح «سایر کسورات»

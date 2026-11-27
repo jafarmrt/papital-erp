@@ -1311,6 +1311,7 @@ export class VoucherSyncService {
       return null;
     };
     if (bonuses.isNegative() || fin(pay.totalDeductions).isNegative() || fin(pay.advanceDeduction).isNegative()
+      || fin(pay.runningAccountDeduction ?? 0).isNegative()
       || fin(pay.employeeInsurance).isNegative() || fin(pay.employerInsurance).isNegative() || fin(pay.incomeTax).isNegative()) {
       return refuse(`فیش ${pay.payrollNumber} پاداش، کسورات یا کسر مساعده منفی دارد و سند آن با خالص فیش نمی‌خواند؛ این فیش را باطل و دوباره صادر کنید.`, 'PAYROLL_NEGATIVE_COMPONENT');
     }
@@ -1425,6 +1426,18 @@ export class VoucherSyncService {
       } else if (isStrict) {
         throw new ValidationError(`حساب معین مساعده پرسنلی (1301) جهت کسر مساعده فیش ${pay.payrollNumber} یافت نشد.`);
       }
+    }
+
+    // v12 colleague sales part B (start plan §4.3): «کسر از حساب جاری همکار» credits the colleague current account (3208) on
+    // the colleague's detail; an unreadable mapping refuses the voucher (AGENTS.md §3.4)
+    const runningDeduction = nonNegative(pay.runningAccountDeduction ?? 0);
+    if (runningDeduction.isPositive()) {
+      const runningAcc = await AccountMappingService.getColleagueCurrentAccount(tx);
+      if (!runningAcc) {
+        return refuse(`حساب «حساب جاری همکاران» (نگاشت حساب‌ها، پیش‌فرض ۳۲۰۸) برای کسر از حساب جاری همکار در فیش ${pay.payrollNumber} یافت نشد.`, 'ACCOUNT_MAPPING_UNREADABLE');
+      }
+      personRow(runningAcc.id, 0, runningDeduction, `کسر از حساب جاری همکار ${pers?.fullName || ''} در فیش ${pay.payrollNumber}`);
+      allocatedCredits = allocatedCredits.add(runningDeduction);
     }
 
     if (otherDeductions.isPositive()) {

@@ -173,6 +173,8 @@ export function usePiecework() {
   const [payrollDeductionsDescription, setPayrollDeductionsDescription] = useState<string>('');
   // V1.9.0: کسر از مساعده/وام پرسنلی — بستانکار حساب مساعده در سند تسویه
   const [payrollAdvanceDeduction, setPayrollAdvanceDeduction] = useState<number>(0);
+  // v12 colleague sales part B: «کسر از حساب جاری همکار»
+  const [payrollRunningDeduction, setPayrollRunningDeduction] = useState<number>(0);
   const [payrollNotes, setPayrollNotes] = useState<string>('');
   // v10.0.199 (TD-1085): فیش پیش‌پرداخت دوره آینده، فقط حقوق ثابت، با دلیل الزامی
   const [payrollIsPrepayment, setPayrollIsPrepayment] = useState<boolean>(false);
@@ -557,6 +559,7 @@ export function usePiecework() {
     setPayrollDeductionsDescription('');
     // OBS-R2-51: the previous payslip's advance deduction never carries over to the next one
     setPayrollAdvanceDeduction(0);
+    setPayrollRunningDeduction(0);
     setPayrollNotes('');
     setPayrollIsPrepayment(false);
     setPayrollPrepaymentReason('');
@@ -641,6 +644,7 @@ export function usePiecework() {
         totalDeductions: payrollDeductions || 0,
         deductionsDescription: payrollDeductions > 0 ? payrollDeductionsDescription.trim() : undefined,
         advanceDeduction: payrollAdvanceDeduction || 0,
+        runningAccountDeduction: payrollRunningDeduction || 0,
         notes: payrollNotes || undefined,
         isPrepayment: payrollIsPrepayment || undefined,
         prepaymentReason: payrollIsPrepayment ? payrollPrepaymentReason.trim() : undefined,
@@ -811,6 +815,8 @@ export function usePiecework() {
     payrollFixedRemainingHint,
     payrollAdvanceDeduction,
     setPayrollAdvanceDeduction,
+    payrollRunningDeduction,
+    setPayrollRunningDeduction,
     viewingPayroll,
     viewingPayrollFreshness,
     closePayslip,

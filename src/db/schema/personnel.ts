@@ -154,6 +154,8 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   totalFixedAmount: moneyNumeric('total_fixed_amount').default(sql`0`),
   // V1.9.0: کسر از مساعده/وام پرسنل — در سند تسویه از حساب مساعده (1301) بستانکار می‌شود
   advanceDeduction: moneyNumeric('advance_deduction').default(sql`0`),
+  // v12 colleague sales part B (migration 0039): «کسر از حساب جاری همکار», credited to 3208 on the colleague's detail
+  runningAccountDeduction: moneyNumeric('running_account_deduction').notNull().default(sql`0`),
   // V4.0.33: مبلغ پرداخت‌شده تاکنون جهت پشتیبانی از پرداخت‌های چندمرحله‌ای (قسطی / جزئی)
   paidAmount: moneyNumeric('paid_amount').default(sql`0`),
   status: text('status').default('draft'),

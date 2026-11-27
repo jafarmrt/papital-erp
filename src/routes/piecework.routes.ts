@@ -190,6 +190,8 @@ const generatePieceworkPayrollSchema = z.object({
     // v9.0.329 (TD-861): شرح «سایر کسورات»؛ با کسورات بالای صفر الزامی است (سرویس، ۴۲۲)
     deductionsDescription: z.string().max(500, 'شرح سایر کسورات حداکثر ۵۰۰ نویسه است').optional(),
     advanceDeduction: nonNegativeAmount('کسر مساعده').optional(),
+    // v12 colleague sales part B: «کسر از حساب جاری همکار» (at most the colleague's debt on 3208, service 400)
+    runningAccountDeduction: nonNegativeAmount('کسر از حساب جاری همکار').optional(),
     notes: z.string().optional(),
     // v10.0.199 (TD-1085): فیش پیش‌پرداخت دوره آینده با دلیل الزامی (سرویس، ۴۲۲)
     isPrepayment: z.boolean().optional(),
@@ -698,7 +700,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
   try {
     const currentUserId = req.user?.id;
     const currentUsername = req.user?.username || 'سیستم';
-    const { personnelId, startDate, endDate, title, bonuses, totalBonuses, deductions, totalDeductions, deductionsDescription, advanceDeduction: reqAdvanceDeduction, notes, isPrepayment, prepaymentReason,
+    const { personnelId, startDate, endDate, title, bonuses, totalBonuses, deductions, totalDeductions, deductionsDescription, advanceDeduction: reqAdvanceDeduction, runningAccountDeduction, notes, isPrepayment, prepaymentReason,
       employeeInsurance, employerInsurance, incomeTax, statutoryOverrideReason } = req.body;
 
     const result = await PieceworkPayrollService.generatePayroll({
@@ -712,6 +714,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
       totalDeductions,
       deductionsDescription,
       advanceDeduction: reqAdvanceDeduction,
+      runningAccountDeduction,
       notes,
       isPrepayment,
       prepaymentReason,
@@ -792,6 +795,7 @@ const editDraftPayrollSchema = z.object({
     deductions: nonNegativeAmount('کسورات').optional(),
     deductionsDescription: z.string().max(500, 'شرح سایر کسورات حداکثر ۵۰۰ نویسه است').optional(),
     advanceDeduction: nonNegativeAmount('کسر مساعده').optional(),
+    runningAccountDeduction: nonNegativeAmount('کسر از حساب جاری همکار').optional(),
     // v10.0.210 (TD-1087): کسورات قانونی فیش پیش‌نویس با همان قاعده صدور
     ...statutoryFields,
   }).strict(),
@@ -881,6 +885,7 @@ router.get('/piecework/payrolls/:id/payments', authorizePermission(...READ_PERMI
 router.get('/piecework/personnel/:id/advance-balance', authorizePermission(...READ_PERMISSIONS.payrolls), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
+    // v12 colleague sales part B: with `runningAccountDebt`, for «کسر از حساب جاری همکار»
     const balance = await PayrollPaymentService.getPersonnelAdvanceBalance(id);
     res.json(balance);
   } catch (err) {

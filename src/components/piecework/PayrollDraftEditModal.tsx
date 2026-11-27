@@ -10,6 +10,9 @@ import { EMPTY_STATUTORY_ENTRY, statutoryPayloadOf, type PayrollStatutoryEntry }
 import { DecimalInput } from '../common/DecimalInput';
 import { RialEquivalent } from '../common/RialEquivalent';
 import { DialogLayer } from '../common/DialogLayer';
+import { useAdvanceBalanceQuery } from '../../hooks/queries/usePayrollWindowQueries';
+import { useOpeningRead } from '../../hooks/queries/readOnEveryOpening';
+import { PayrollRunningAccountField, runningDeductionExceedsDebt } from './PayrollRunningAccountField';
 
 /** v10.0.210 (TD-1087): فیشی که بیمه یا مالیاتش با شرح تغییر کرده، همان مبلغ‌ها و شرح را در فرم نشان می‌دهد */
 const storedStatutoryEntry = (p: PieceworkPayroll): PayrollStatutoryEntry => (p.statutoryOverrideReason
@@ -28,8 +31,11 @@ export function PayrollDraftEditModal({ payroll, onClose, onSaved }: { payroll: 
   const [deductions, setDeductions] = useState(0);
   const [description, setDescription] = useState('');
   const [advance, setAdvance] = useState(0);
+  const [running, setRunning] = useState(0);
   const [statutory, setStatutory] = useState<PayrollStatutoryEntry>(EMPTY_STATUTORY_ENTRY);
   const [isSaving, setIsSaving] = useState(false);
+  // v12 colleague sales part B: what the colleague owes on their running account, read on every opening
+  const balance = useOpeningRead(useAdvanceBalanceQuery(payroll ? payroll.personnelId : null), !!payroll);
 
   useEffect(() => {
     if (!payroll) return;
@@ -38,6 +44,7 @@ export function PayrollDraftEditModal({ payroll, onClose, onSaved }: { payroll: 
     setDeductions(Number(payroll.totalDeductions || 0));
     setDescription(payroll.deductionsDescription || '');
     setAdvance(Number(payroll.advanceDeduction || 0));
+    setRunning(Number(payroll.runningAccountDeduction || 0));
     setStatutory(storedStatutoryEntry(payroll));
   }, [payroll]);
 
@@ -52,7 +59,7 @@ export function PayrollDraftEditModal({ payroll, onClose, onSaved }: { payroll: 
       const res = await fetchJson(`/piecework/payrolls/${payroll.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, bonuses, deductions, deductionsDescription: deductions > 0 ? description.trim() : '', advanceDeduction: advance, ...statutoryPayloadOf(statutory) }),
+        body: JSON.stringify({ title, bonuses, deductions, deductionsDescription: deductions > 0 ? description.trim() : '', advanceDeduction: advance, runningAccountDeduction: running, ...statutoryPayloadOf(statutory) }),
       }) as { statutoryWarning?: string | null };
       toast.success(`فیش ${formatPersianCode(payroll.payrollNumber)} ویرایش شد و سند پیش‌نویس آن دوباره ساخته شد.`);
       if (res?.statutoryWarning) toast(res.statutoryWarning, { icon: '⚠️' });
@@ -95,11 +102,14 @@ export function PayrollDraftEditModal({ payroll, onClose, onSaved }: { payroll: 
               <DecimalInput id="draft-payroll-advance" min="0" value={advance} onValueChange={(v) => setAdvance(nonNegative(v))} className={fieldClass} />
               <RialEquivalent value={advance} />
             </div>
+            <PayrollRunningAccountField value={running} onChange={setRunning} debt={balance.current?.runningAccountDebt ?? null}
+              alreadyDeducted={Number(payroll.runningAccountDeduction || 0)} />
             <p className="text-[10px] text-slate-500 font-bold leading-5">کارکرد و حقوق ثابت فیش همان صدور می‌ماند؛ خالص و سند پیش‌نویس فیش دوباره ساخته می‌شود.</p>
           </div>
           <div className="flex items-center justify-end gap-2 p-4 border-t border-slate-200 shrink-0">
             <button type="button" onClick={onClose} disabled={isSaving} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs hover:bg-slate-200 cursor-pointer disabled:opacity-50">انصراف</button>
-            <button type="submit" disabled={isSaving || deductionsNeedDescription(deductions, description)} className="px-5 py-2 bg-emerald-600 text-white rounded-xl font-bold text-xs hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
+            <button type="submit" disabled={isSaving || deductionsNeedDescription(deductions, description)
+              || runningDeductionExceedsDebt(running, balance.current?.runningAccountDebt ?? null, Number(payroll.runningAccountDeduction || 0))} className="px-5 py-2 bg-emerald-600 text-white rounded-xl font-bold text-xs hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
               {isSaving ? 'در حال ذخیره...' : 'ذخیره فیش پیش‌نویس'}
             </button>
           </div>

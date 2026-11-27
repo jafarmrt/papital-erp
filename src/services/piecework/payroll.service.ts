@@ -1,4 +1,5 @@
 import { eq, and, sql, inArray, asc } from 'drizzle-orm';
+import { assertAdvanceDeductionWithinBalance, assertRunningDeductionWithinDebt } from './payrollRunningAccount.js';
 import { type DbExecutor } from '../../db/drizzle.js';
 import { pieceworkLogs, pieceworkPayrolls, personnel, journalVouchers } from '../../db/schema.js';
 import { AppError, NotFoundError, BadRequestError, ConflictError, ValidationError, PrivateRefusalError } from '../../errors/customErrors.js';
@@ -6,7 +7,6 @@ import { isoToJalaliDate, toStorageDate } from '../../utils.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
 import { VoucherService } from '../accounting/voucher.service.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
-import { PayrollPaymentService } from '../accounting/payrollPayment.service.js';
 import { computeFixedSalaryShares, describeFixedSalaryShares, priorFixedGrantsOf, type FixedSalaryMonthShare } from '../../lib/payroll/fixedSalaryProration.js';
 import { fixedSalaryPeriodEnd, fixedSalaryPeriodStart, payrollPrepaymentError, serviceEndOf, serviceStartOf } from '../../lib/payroll/payrollPeriod.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
@@ -14,7 +14,6 @@ import { toPersianDigits } from '../../utils/persianNumber.js';
 import { isLegacyPayrollVoucher, payrollVouchersWhere } from '../accounting/payrollVoucherLink.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
-import { payrollAmountText } from '../../lib/payroll/payrollCurrency.js';
 import { workLogFreeOfLivePayroll } from './workLogPayrollLink.js';
 import { auditPayrollDeleted, auditPayrollIssued, auditPayrollUpdated } from './pieceworkAudit.js';
 import { payrollStatusLabel } from '../../lib/payroll/payrollStatusLabels.js';
@@ -60,6 +59,8 @@ export interface GeneratePayrollInput extends StatutoryEntryInput {
   /** شرح «سایر کسورات»؛ با کسورات بالای صفر الزامی (TD-861) */
   deductionsDescription?: string;
   advanceDeduction?: AmountInput;
+  /** v12 colleague sales part B: «کسر از حساب جاری همکار», at most what the colleague owes on 3208 */
+  runningAccountDeduction?: AmountInput;
   notes?: string;
   /** فیش پیش‌پرداخت: دوره‌ای که پایانش پس از امروز است، فقط حقوق ثابت، با دلیل الزامی (TD-1085) */
   isPrepayment?: boolean;
@@ -106,6 +107,7 @@ export class PieceworkPayrollService {
     const totDeductionsFin = fin(deductions !== undefined ? deductions : (totalDeductions !== undefined ? totalDeductions : 0));
     // v8.0.108 (TD-385): با fin (ارقام فارسی نرمال می‌شوند)؛ پیش‌تر Number('۵۰۰') NaN و کسر مساعده نادیده گرفته می‌شد
     const advanceDeductionFin = fin(reqAdvanceDeduction ?? 0);
+    const runningDeductionFin = fin(input.runningAccountDeduction ?? 0);
     // v9.0.266 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده نامنفی‌اند؛ کاهش حقوق فقط از «کسورات» و افزایش فقط از
     // «پاداش». پیش‌تر کسورات منفی خالص فیش را بالا می‌برد ولی سند آن را صفر می‌گرفت (پرداخت بیش از بستانکار ۳۲۰۱)، با ناخالص
     // صفر فیش بی سند صادر می‌شد و کسر مساعده منفی بی‌صدا صفر می‌شد.
@@ -113,6 +115,7 @@ export class PieceworkPayrollService {
       totBonusesFin.isNegative() && 'پاداش',
       totDeductionsFin.isNegative() && 'کسورات',
       advanceDeductionFin.isNegative() && 'کسر مساعده',
+      runningDeductionFin.isNegative() && 'کسر از حساب جاری همکار',
     ].filter(Boolean);
     if (negativeParts.length > 0) {
       throw new ValidationError(
@@ -229,25 +232,20 @@ export class PieceworkPayrollService {
 
       // v8.0.29 (TD-282، تصمیم مالک محصول — گزینه الف): کسر مساعده بیش از مانده مساعده تسویه‌نشده پرسنل (از دفتر کل) رد
       // می‌شود. پیش‌تر پذیرفته می‌شد؛ حساب مساعده پرسنل بستانکار (منفی) و خالص پرداختنی او بی‌دلیل کم می‌شد.
-      if (advanceDeductionFin.isPositive()) {
-        const { outstandingAdvance } = await PayrollPaymentService.getPersonnelAdvanceBalance(pId, tx);
-        if (advanceDeductionFin.greaterThan(outstandingAdvance)) {
-          throw payrollRefusal(
-            `کسر مساعده (${payrollAmountText(advanceDeductionFin)}) از مانده مساعده تسویه‌نشده ${pInfo.fullName} (${payrollAmountText(outstandingAdvance)}) بیشتر است؛ حداکثر همان مانده کسر می‌شود.`,
-            'PAYROLL_ADVANCE_DEDUCTION_EXCEEDS_BALANCE',
-          );
-        }
-      }
+      await assertAdvanceDeductionWithinBalance(tx, { personnelId: pId, fullName: pInfo.fullName, deduction: advanceDeductionFin });
+
+      // v12 colleague sales part B (start plan §4.3): at most what the colleague owes on 3208 (personnel row locked above)
+      await assertRunningDeductionWithinDebt(tx, { personnelId: pId, fullName: pInfo.fullName, deduction: runningDeductionFin, statusCode: 400 });
 
       // v10.0.210 (TD-1087، طرح حقوق §۳.۳): بیمه سهم کارگر و مالیات حقوق از خالص کم می‌شوند؛ سهم کارفرما هزینه کارفرماست
       const statutory = await resolvePayrollStatutory(tx, { person: pInfo, startIso: sDate, endIso: eDate, gross: pieceworkTotalFin.add(fixedPortionFin).add(totBonusesFin),
         entered: { employeeInsurance: input.employeeInsurance, employerInsurance: input.employerInsurance, incomeTax: input.incomeTax }, overrideReason: input.statutoryOverrideReason });
 
       const netFin = pieceworkTotalFin.add(fixedPortionFin).add(totBonusesFin).subtract(statutory.amounts.employeeInsurance)
-        .subtract(statutory.amounts.incomeTax).subtract(totDeductionsFin).subtract(advanceDeductionFin).round(4);
+        .subtract(statutory.amounts.incomeTax).subtract(totDeductionsFin).subtract(advanceDeductionFin).subtract(runningDeductionFin).round(4);
 
       if (netFin.isNegative()) {
-        throw new AppError('جمع بیمه، مالیات، کسورات و کسر مساعده از اجزای فیش بیشتر است — مقادیر را اصلاح کنید.', 400, 'PAYROLL_NET_NEGATIVE');
+        throw new AppError('جمع بیمه، مالیات، کسورات، کسر مساعده و کسر از حساب جاری همکار از اجزای فیش بیشتر است — مقادیر را اصلاح کنید.', 400, 'PAYROLL_NET_NEGATIVE');
       }
 
       // v10.0.222 (TD-1089، طرح حقوق §۳.۸، ت۱۴ الف): سهم عیدی از کارکرد و حقوق ثابت، بی پاداش و کسورات؛ از خالص کم نمی‌شود
@@ -281,6 +279,7 @@ export class PieceworkPayrollService {
         totalDeductions: totDeductions,
         deductionsDescription: deductionsNote,
         advanceDeduction,
+        runningAccountDeduction: money(runningDeductionFin.round(4)),
         netPayable: net,
         fixedSalaryMonths,
         // v10.0.193 (TD-1083، OBS-R2-48، طرح حقوق ت۱ الف): فیش پیش‌نویس صادر می‌شود و دارنده «تأیید فیش حقوق» جدا تأییدش

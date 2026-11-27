@@ -34,6 +34,7 @@ const payrollAmountColumns = {
   // v8.0.30 (TD-284): تفکیک ماهانه حقوق ثابت (راهنمای فرم صدور فیش بعدی همان ماه از آن می‌خواند)
   fixedSalaryMonths: pieceworkPayrolls.fixedSalaryMonths,
   advanceDeduction: pieceworkPayrolls.advanceDeduction,
+  runningAccountDeduction: pieceworkPayrolls.runningAccountDeduction,
   totalBonuses: pieceworkPayrolls.totalBonuses,
   totalDeductions: pieceworkPayrolls.totalDeductions,
   // v9.0.329 (TD-861): شرح «سایر کسورات» برای فیش چاپی
