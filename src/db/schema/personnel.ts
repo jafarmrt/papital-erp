@@ -254,6 +254,8 @@ export const pieceworkLogs = pgTable('piecework_logs', {
   createdByUsername: text('created_by_username').default(''),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
+  // v12 (migration 0039): an edit sends the version it read (AGENTS.md §2.7)
+  version: integer('version').notNull().default(1),
 }, (table) => ({
   idx_plog_personnel: index('idx_plog_personnel').on(table.personnelId),
   idx_plog_task: index('idx_plog_task').on(table.taskId),

@@ -7,6 +7,7 @@ import { outcomeProblems, raceBehindRowLock } from '../invariants/concurrencyHar
 import { issueApproved, newWorker } from '../invariants/payrollScenarios.js';
 import { brief, fixture } from './documentEntryTests.js';
 import { runReservationCases } from './stockReservationTests.js';
+import { workLogVersion } from '../fixtures/workLogVersion.js';
 
 /**
  * 10.2 package 12, the #329 review notes M3 and M4 (TD-1346, TD-1347): an edit of a schedule-linked work log keeps the
@@ -31,6 +32,9 @@ export async function runWorkLogScheduleRowTests(shouldRun: ShouldRun): Promise<
     ['reg_work_log_edit_task_v12',
       'v12 work-log edit: a free log takes another task title, at the program\'s rate of the new task when no rate is sent or at the rate sent, with its total and an audit row naming the task change; a deleted task is refused (422 PIECEWORK_LOG_TASK_INVALID) and a log of a workshop schedule row keeps its task (409 PIECEWORK_LOG_TASK_LOCKED), both unchanged',
       ['v12', 'piecework', 'schedule', 'work_log_edit'], editTaskCase],
+    ['reg_work_log_edit_backlog_v12',
+      'v12 work-log edit backlog: an edit sends the version it read and a stale one is refused (409 OCC_CONFLICT, the log unchanged; refused without one) while each edit raises it; the audit row of a task change names both task titles; a manual log beside a legacy schedule row of the same worker and task (logged with no log id) still changes task, since the row\'s progress and state come from its own flag',
+      ['v12', 'piecework', 'schedule', 'work_log_edit', 'occ'], editBacklogCase],
   ]);
 }
 
@@ -70,21 +74,21 @@ async function editCapCase(h: Harness, wrong: string[]): Promise<string> {
   const logId = Number((created.body as { insertedIds?: unknown[] })?.insertedIds?.[0]);
   if (created.status !== 201 || !Number.isInteger(logId)) throw new Error(`setup: the schedule log answered ${brief(created)}`);
 
-  const over = await h.put(`/api/piecework/logs/${logId}`, { quantity: 500 });
+  const over = await h.put(`/api/piecework/logs/${logId}`, { version: await workLogVersion(logId), quantity: 500 });
   if (over.status !== 422 || codeOf(over) !== 'PIECEWORK_SCHEDULE_ROW_QUANTITY_EXCEEDED') wrong.push(`editing the log to 500 on a row of 10 answered ${brief(over)}, expected 422 PIECEWORK_SCHEDULE_ROW_QUANTITY_EXCEEDED`);
   const afterOver = await storedLog(h, logId);
   if (afterOver.quantity !== 5 || afterOver.total !== 5000) wrong.push(`the refused edit left quantity ${afterOver.quantity} and total ${afterOver.total}, expected 5 and 5000`);
-  const exact = await h.put(`/api/piecework/logs/${logId}`, { quantity: 10 });
+  const exact = await h.put(`/api/piecework/logs/${logId}`, { version: await workLogVersion(logId), quantity: 10 });
   if (exact.status !== 200) wrong.push(`editing the log to the row quantity 10 answered ${brief(exact)}, expected 200`);
   if ((await storedLog(h, logId)).quantity !== 10) wrong.push(`the edit to 10 stored ${(await storedLog(h, logId)).quantity}`);
 
   // a log saved above its row before the cap (or through this hole) is never rewritten; it still takes other edits
   await h.q('UPDATE piecework_logs SET quantity = 50, total_amount = 50000 WHERE id = $1', [logId]);
-  const notes = await h.put(`/api/piecework/logs/${logId}`, { notes: 'M3 note' });
+  const notes = await h.put(`/api/piecework/logs/${logId}`, { version: await workLogVersion(logId), notes: 'M3 note' });
   if (notes.status !== 200) wrong.push(`a notes edit of a stored log above its row answered ${brief(notes)}, expected 200`);
-  const resent = await h.put(`/api/piecework/logs/${logId}`, { quantity: 50, notes: 'M3 note 2' });
+  const resent = await h.put(`/api/piecework/logs/${logId}`, { version: await workLogVersion(logId), quantity: 50, notes: 'M3 note 2' });
   if (resent.status !== 200) wrong.push(`an edit that resends the stored quantity 50 answered ${brief(resent)}, expected 200`);
-  const raised = await h.put(`/api/piecework/logs/${logId}`, { quantity: 60 });
+  const raised = await h.put(`/api/piecework/logs/${logId}`, { version: await workLogVersion(logId), quantity: 60 });
   if (raised.status !== 422 || codeOf(raised) !== 'PIECEWORK_SCHEDULE_ROW_QUANTITY_EXCEEDED') wrong.push(`editing the stored 50 to 60 on a row of 10 answered ${brief(raised)}, expected 422 PIECEWORK_SCHEDULE_ROW_QUANTITY_EXCEEDED`);
   const legacy = await storedLog(h, logId);
   if (legacy.quantity !== 50 || legacy.total !== 50000 || legacy.notes !== 'M3 note 2') wrong.push(`the stored log above its row reads quantity ${legacy.quantity}, total ${legacy.total}, notes «${legacy.notes}»; expected 50, 50000 and «M3 note 2»`);
@@ -92,7 +96,7 @@ async function editCapCase(h: Harness, wrong: string[]): Promise<string> {
   const manual = await h.post('/api/piecework/logs', { personnelId: worker, taskId: task, projectId: project, date: f.today, quantity: 5 });
   const manualId = Number((manual.body as { insertedIds?: unknown[] })?.insertedIds?.[0]);
   if (manual.status !== 201 || !Number.isInteger(manualId)) throw new Error(`setup: the manual log answered ${brief(manual)}`);
-  const manualEdit = await h.put(`/api/piecework/logs/${manualId}`, { quantity: 500 });
+  const manualEdit = await h.put(`/api/piecework/logs/${manualId}`, { version: await workLogVersion(manualId), quantity: 500 });
   if (manualEdit.status !== 200 || (await storedLog(h, manualId)).quantity !== 500) wrong.push(`editing a manual log of the same project to 500 answered ${brief(manualEdit)}, expected 200 and 500 stored`);
   return 'an edit above the row is refused and changes nothing; a stored log above its row keeps its quantity; a manual log has no cap';
 }
@@ -111,13 +115,13 @@ async function lowerAboveRowCase(h: Harness, wrong: string[]): Promise<string> {
   if (created.status !== 201 || !Number.isInteger(logId)) throw new Error(`setup: the schedule log answered ${brief(created)}`);
   await h.q('UPDATE piecework_logs SET quantity = 50, total_amount = 50000 WHERE id = $1', [logId]);
 
-  const lower = await h.put(`/api/piecework/logs/${logId}`, { quantity: 40 });
+  const lower = await h.put(`/api/piecework/logs/${logId}`, { version: await workLogVersion(logId), quantity: 40 });
   if (lower.status !== 200) wrong.push(`editing the stored 50 to 40 on a row of 10 answered ${brief(lower)}, expected 200`);
   const lowered = await storedLog(h, logId);
   if (lowered.quantity !== 40 || lowered.total !== 40000) wrong.push(`the lowered log reads quantity ${lowered.quantity} and total ${lowered.total}, expected 40 and 40000`);
-  const raise = await h.put(`/api/piecework/logs/${logId}`, { quantity: 45 });
+  const raise = await h.put(`/api/piecework/logs/${logId}`, { version: await workLogVersion(logId), quantity: 45 });
   if (raise.status !== 422 || codeOf(raise) !== 'PIECEWORK_SCHEDULE_ROW_QUANTITY_EXCEEDED') wrong.push(`raising the lowered 40 to 45 on a row of 10 answered ${brief(raise)}, expected 422 PIECEWORK_SCHEDULE_ROW_QUANTITY_EXCEEDED`);
-  const toRow = await h.put(`/api/piecework/logs/${logId}`, { quantity: 10 });
+  const toRow = await h.put(`/api/piecework/logs/${logId}`, { version: await workLogVersion(logId), quantity: 10 });
   if (toRow.status !== 200) wrong.push(`editing the lowered 40 to the row quantity 10 answered ${brief(toRow)}, expected 200`);
   const final = await storedLog(h, logId);
   if (final.quantity !== 10 || final.total !== 10000) wrong.push(`the log edited to its row reads quantity ${final.quantity} and total ${final.total}, expected 10 and 10000`);
@@ -157,26 +161,26 @@ async function editTaskCase(h: Harness, wrong: string[]): Promise<string> {
     return { taskId: Number(row?.task_id), rate: Number(row?.unit_rate), total: Number(row?.total_amount) };
   };
 
-  const moved = await h.put(`/api/piecework/logs/${logId}`, { taskId: second, quantity: 4 });
+  const moved = await h.put(`/api/piecework/logs/${logId}`, { version: await workLogVersion(logId), taskId: second, quantity: 4 });
   const afterMove = await read();
   if (moved.status !== 200 || afterMove.taskId !== second || afterMove.rate !== 2500 || afterMove.total !== 10000) wrong.push(`the task change answered ${brief(moved)} and stored ${JSON.stringify(afterMove)}, expected the new task at its rate 2500 and 10000`);
   const [audit] = await h.q(`SELECT details FROM activity_logs WHERE entity_id = $1 AND action = 'UPDATE' ORDER BY id DESC LIMIT 1`, [String(logId)]);
   if (!JSON.stringify(audit?.details ?? {}).includes('taskId')) wrong.push(`the task change wrote the audit details ${JSON.stringify(audit?.details)}, expected the taskId change`);
-  const typed = await h.put(`/api/piecework/logs/${logId}`, { taskId: first, unitRate: 1200 });
+  const typed = await h.put(`/api/piecework/logs/${logId}`, { version: await workLogVersion(logId), taskId: first, unitRate: 1200 });
   if (typed.status !== 200 || (await read()).rate !== 1200 || (await read()).taskId !== first) wrong.push(`a task change with a typed rate answered ${brief(typed)} and stored ${JSON.stringify(await read())}, expected the first task at 1200`);
 
   await h.q('UPDATE piecework_tasks SET is_deleted = 1 WHERE id = $1', [second]);
-  const deleted = await h.put(`/api/piecework/logs/${logId}`, { taskId: second });
+  const deleted = await h.put(`/api/piecework/logs/${logId}`, { version: await workLogVersion(logId), taskId: second });
   if (deleted.status !== 422 || codeOf(deleted) !== 'PIECEWORK_LOG_TASK_INVALID' || (await read()).taskId !== first) wrong.push(`a change to a deleted task answered ${brief(deleted)}, expected 422 PIECEWORK_LOG_TASK_INVALID and the log unchanged`);
 
   const project = await scheduledProject(worker, first, 10);
   const scheduled = await h.post('/api/piecework/logs', { items: [{ personnelId: worker, taskId: first, projectId: project, date: f.today, quantity: 5, scheduleRef: ROW_A }] });
   const scheduledId = Number((scheduled.body as { insertedIds?: unknown[] })?.insertedIds?.[0]);
   const other = await newTaskId(h);
-  const locked = await h.put(`/api/piecework/logs/${scheduledId}`, { taskId: other });
+  const locked = await h.put(`/api/piecework/logs/${scheduledId}`, { version: await workLogVersion(scheduledId), taskId: other });
   const [kept] = await h.q('SELECT task_id FROM piecework_logs WHERE id = $1', [scheduledId]);
   if (locked.status !== 409 || codeOf(locked) !== 'PIECEWORK_LOG_TASK_LOCKED' || Number(kept?.task_id) !== first) wrong.push(`a task change of a schedule log answered ${brief(locked)} (task now ${kept?.task_id}), expected 409 PIECEWORK_LOG_TASK_LOCKED and the task kept`);
-  const quantityOnly = await h.put(`/api/piecework/logs/${scheduledId}`, { quantity: 6 });
+  const quantityOnly = await h.put(`/api/piecework/logs/${scheduledId}`, { version: await workLogVersion(scheduledId), quantity: 6 });
   if (quantityOnly.status !== 200) wrong.push(`a quantity edit of a schedule log answered ${brief(quantityOnly)}, expected 200`);
 
   // without the rates key (as the route calls it): a log at its program rate changes task at the new task's rate; a log
@@ -186,7 +190,7 @@ async function editTaskCase(h: Harness, wrong: string[]): Promise<string> {
   await PieceworkService.updateWorkLog(plainId, { taskId: first, canSetRate: false });
   const [plainRow] = await h.q('SELECT task_id, unit_rate FROM piecework_logs WHERE id = $1', [plainId]);
   if (Number(plainRow?.task_id) !== first || Number(plainRow?.unit_rate) !== 1000) wrong.push(`a non-manager's task change of a log at its program rate stored ${JSON.stringify(plainRow)}, expected the first task at 1000`);
-  await h.put(`/api/piecework/logs/${plainId}`, { unitRate: 700 });
+  await h.put(`/api/piecework/logs/${plainId}`, { version: await workLogVersion(plainId), unitRate: 700 });
   let lockedCode = '';
   try { await PieceworkService.updateWorkLog(plainId, { taskId: other, canSetRate: false }); } catch (err) { lockedCode = String((err as { code?: unknown }).code ?? ''); }
   const [manualRow] = await h.q('SELECT task_id, unit_rate FROM piecework_logs WHERE id = $1', [plainId]);
@@ -227,4 +231,48 @@ async function taskEditBesidePayslipCase(h: Harness, wrong: string[]): Promise<s
   const moves = await raceBehindRowLock<unknown>('production_projects', [to], pair.map(logId => () => PieceworkService.updateWorkLog(logId, { taskId: second, projectId: to, canSetRate: true })), { staggered: true });
   wrong.push(...outcomeProblems(['first move with task change', 'second move with task change'], moves, () => false));
   return 'a task change and a payslip issue of the same worker end without a deadlock';
+}
+
+/** v12 backlog of the work-log edit (review of #507): no version, no task names in the audit row, legacy schedule rows */
+async function editBacklogCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const worker = await newWorker('V12 edit backlog');
+  const first = await newTaskId(h);
+  const second = await newTaskId(h);
+  const [titles] = await h.q('SELECT (SELECT title FROM piecework_tasks WHERE id = $1) AS a, (SELECT title FROM piecework_tasks WHERE id = $2) AS b', [first, second]);
+  const created = await h.post('/api/piecework/logs', { items: [{ personnelId: worker, taskId: first, date: f.today, quantity: 4 }] });
+  const logId = Number((created.body as { insertedIds?: unknown[] })?.insertedIds?.[0]);
+  if (created.status !== 201 || !Number.isInteger(logId)) throw new Error(`setup: the log answered ${brief(created)}`);
+  const quantityOf = async () => Number((await h.q('SELECT quantity FROM piecework_logs WHERE id = $1', [logId]))[0]?.quantity);
+
+  // the version: a list read gives it, an edit raises it, a stale or missing one is refused
+  const listed = await h.get(`/api/piecework/logs?personnelId=${worker}`);
+  const rows = ((listed.body as { data?: unknown[] })?.data ?? listed.body) as Array<{ id: number; version?: number }>;
+  const seen = Array.isArray(rows) ? rows.find(r => r.id === logId)?.version : undefined;
+  if (seen !== 1) wrong.push(`the log list gave version ${String(seen)} for a new log, expected 1`);
+  const first_ = await h.put(`/api/piecework/logs/${logId}`, { version: 1, quantity: 5 });
+  if (first_.status !== 200 || await workLogVersion(logId) !== 2) wrong.push(`an edit at version 1 answered ${brief(first_)} and left version ${await workLogVersion(logId)}, expected 200 and 2`);
+  const stale = await h.put(`/api/piecework/logs/${logId}`, { version: 1, quantity: 9 });
+  if (stale.status !== 409 || codeOf(stale) !== 'OCC_CONFLICT' || await quantityOf() !== 5) wrong.push(`a stale edit answered ${brief(stale)} with quantity ${await quantityOf()}, expected 409 OCC_CONFLICT and 5 kept`);
+  const missing = await h.put(`/api/piecework/logs/${logId}`, { quantity: 9 });
+  if (missing.status !== 422 && missing.status !== 400) wrong.push(`an edit without a version answered ${brief(missing)}, expected a refusal`);
+  else if (await quantityOf() !== 5) wrong.push('an edit without a version changed the log');
+
+  // the audit row of a task change names both titles
+  const moved = await h.put(`/api/piecework/logs/${logId}`, { version: await workLogVersion(logId), taskId: second });
+  const [audit] = await h.q(`SELECT description, details FROM activity_logs WHERE entity_id = $1 AND action = 'UPDATE' ORDER BY id DESC LIMIT 1`, [String(logId)]);
+  const named = String(audit?.description ?? '').includes(`«${String(titles?.a)}» → «${String(titles?.b)}»`)
+    && JSON.stringify(audit?.details ?? {}).includes(String(titles?.b));
+  if (moved.status !== 200 || !named) wrong.push(`the task change answered ${brief(moved)} and wrote «${String(audit?.description)}», expected both task titles`);
+
+  // a legacy schedule row (logged before rows named their log) names no log: a manual log of its worker and task in the
+  // project changes task freely, and the row stays logged by its own flag
+  const project = await scheduledProject(worker, first, 10);
+  await h.q(`UPDATE production_projects SET stage_schedules = jsonb_set(stage_schedules, '{1,prod-main,tasks,0,isLoggedToPiecework}', 'true') WHERE id = $1`, [project]);
+  const manual = await h.post('/api/piecework/logs', { items: [{ personnelId: worker, taskId: first, projectId: project, date: f.today, quantity: 3 }] });
+  const manualId = Number((manual.body as { insertedIds?: unknown[] })?.insertedIds?.[0]);
+  const changed = await h.put(`/api/piecework/logs/${manualId}`, { version: await workLogVersion(manualId), taskId: second });
+  const [row] = await h.q(`SELECT stage_schedules #> '{1,prod-main,tasks,0,isLoggedToPiecework}' AS flag FROM production_projects WHERE id = $1`, [project]);
+  if (changed.status !== 200 || String(row?.flag) !== 'true') wrong.push(`a manual log beside a legacy schedule row answered ${brief(changed)} (row flag ${String(row?.flag)}), expected 200 and the row still logged`);
+  return 'edits carry the version; the audit row names the tasks; a legacy schedule row locks no manual log';
 }

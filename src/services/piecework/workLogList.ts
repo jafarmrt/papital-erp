@@ -57,7 +57,9 @@ function selectWorkLogs() {
     status: pieceworkLogs.status,
     createdById: pieceworkLogs.createdById,
     createdByUsername: pieceworkLogs.createdByUsername,
-    createdAt: pieceworkLogs.createdAt
+    createdAt: pieceworkLogs.createdAt,
+    // v12 (migration 0039): the edit form sends it back
+    version: pieceworkLogs.version,
   })
   .from(pieceworkLogs)
   .innerJoin(personnel, eq(pieceworkLogs.personnelId, personnel.id))
