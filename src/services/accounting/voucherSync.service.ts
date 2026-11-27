@@ -1313,7 +1313,7 @@ export class VoucherSyncService {
     if (bonuses.isNegative() || fin(pay.totalDeductions).isNegative() || fin(pay.advanceDeduction).isNegative()
       || fin(pay.runningAccountDeduction ?? 0).isNegative()
       || fin(pay.employeeInsurance).isNegative() || fin(pay.employerInsurance).isNegative() || fin(pay.incomeTax).isNegative()) {
-      return refuse(`فیش ${pay.payrollNumber} پاداش، کسورات یا کسر مساعده منفی دارد و سند آن با خالص فیش نمی‌خواند؛ این فیش را باطل و دوباره صادر کنید.`, 'PAYROLL_NEGATIVE_COMPONENT');
+      return refuse(`فیش ${pay.payrollNumber} پاداش، کسورات، کسر مساعده یا کسر از حساب جاری همکار منفی دارد و سند آن با خالص فیش نمی‌خواند؛ این فیش را باطل و دوباره صادر کنید.`, 'PAYROLL_NEGATIVE_COMPONENT');
     }
     if (!grossAmount.isPositive()) {
       if (netPayable.isPositive()) {

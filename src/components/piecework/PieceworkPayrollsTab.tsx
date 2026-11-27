@@ -130,7 +130,7 @@ export function PieceworkPayrollsTab({
                 <th className="p-3 text-center">{`پاداش / مزایا (${curLbl})`}</th>
                 <th className="p-3 text-center">{`کسورات (${curLbl})`}</th>
                 {/* v9.0.328 (TD-815): بی این ستون «کارکرد + پاداش − کسورات» با «خالص» نمی‌خواند */}
-                <th className="p-3 text-center">{`کسر مساعده (${curLbl})`}</th>
+                <th className="p-3 text-center">{`کسر مساعده و حساب جاری (${curLbl})`}</th>
                 <th className="p-3 text-center">{`خالص پرداختی (${curLbl})`}</th>
                 <th className="p-3 text-center">وضعیت پرداخت</th>
                 <th className="p-3 text-center">سند حسابداری</th>
@@ -175,7 +175,7 @@ export function PieceworkPayrollsTab({
                       <td className="p-3 text-center font-mono text-rose-600">
                         -{rial.number(payroll.totalDeductions || 0)}
                       </td>
-                      <td className="p-3 text-center font-mono text-indigo-600">-{rial.number(payroll.advanceDeduction || 0)}</td>
+                      <td className="p-3 text-center font-mono text-indigo-600">-{rial.number((Number(payroll.advanceDeduction) || 0) + (Number(payroll.runningAccountDeduction) || 0))}</td>
                       <td className="p-3 text-center font-mono text-blue-700 font-black text-sm">
                         {rial.number(payroll.netPayable)}
                       </td>

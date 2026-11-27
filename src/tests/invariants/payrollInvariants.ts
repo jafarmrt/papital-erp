@@ -71,8 +71,8 @@ export async function checkPayrollInvariants(payrollIdAfter: number | undefined)
     if (fin(p.bonuses).isNegative() || fin(p.deductions).isNegative() || fin(p.advance).isNegative()
       || fin(p.employee_insurance).isNegative() || fin(p.employer_insurance).isNegative() || fin(p.income_tax).isNegative()
       || fin(p.running).isNegative()) {
-      violations.push({ invariant: 'I10_payroll_net_equals_payable', key, message: message('negative bonuses, deductions or advance deduction'),
-        expected: '>= 0', actual: `${p.bonuses} / ${p.deductions} / ${p.advance}` });
+      violations.push({ invariant: 'I10_payroll_net_equals_payable', key, message: message('negative bonuses, deductions, advance or running-account deduction'),
+        expected: '>= 0', actual: `${p.bonuses} / ${p.deductions} / ${p.advance} / ${p.running}` });
       continue;
     }
     const expectedNet = fin(p.gross).subtract(p.employee_insurance).subtract(p.income_tax).subtract(p.deductions).subtract(p.advance).subtract(p.running).toString();

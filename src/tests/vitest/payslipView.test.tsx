@@ -67,8 +67,13 @@ describe('payslip view and my payslips (TD-815)', () => {
   it('the payslip list has an advance deduction column', () => {
     renderWithQuery(<PieceworkPayrollsTab payrollsList={[payslip({ advanceDeduction: 250000, netPayable: 750000 })]} onOpenPayrollModal={noop}
       onViewPayslip={noop} onUpdateStatus={noop} onDeletePayroll={noop} />);
-    expect(screen.getByText('کسر مساعده (ریال)')).toBeTruthy();
+    expect(screen.getByText('کسر مساعده و حساب جاری (ریال)')).toBeTruthy();
     expect(screen.getByText('-۲۵۰٬۰۰۰')).toBeTruthy();
+    // v12 colleague sales part B (review of #510): the running-account deduction is in the same column, so the row adds up
+    cleanup();
+    renderWithQuery(<PieceworkPayrollsTab payrollsList={[payslip({ advanceDeduction: 250000, runningAccountDeduction: 100000, netPayable: 650000 })]} onOpenPayrollModal={noop}
+      onViewPayslip={noop} onUpdateStatus={noop} onDeletePayroll={noop} />);
+    expect(screen.getByText('-۳۵۰٬۰۰۰')).toBeTruthy();
   });
 
   it('my payslips labels a partly paid payslip, counts it as waiting and shows the currency once', async () => {

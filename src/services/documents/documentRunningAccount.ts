@@ -83,6 +83,9 @@ export async function syncRunningAccountSettlement(
   const account = await documentRunningAccountOf(tx, invoiceId);
   const refNumber = String(doc.refNumber ?? invoiceId);
   const live = doc.isDeleted === 0 && doc.status === 'final' && SALES_TYPES.includes(String(doc.type));
+  // review of #510: the colleague is locked (after the stock items and the document) as a payslip issue locks them, so a
+  // payslip deducting their 3208 debt reads it wholly before or wholly after a finalize, return or void that changes it
+  if (account?.kind === 'colleague') await tx.select({ id: personnel.id }).from(personnel).where(eq(personnel.id, account.personnelId)).for('update');
   if (!account || !live) {
     const [part] = await tx.select({ personnelId: settlementAllocations.runningAccountPersonnelId }).from(settlementAllocations)
       .where(and(eq(settlementAllocations.documentId, invoiceId), isNotNull(settlementAllocations.runningAccountPersonnelId), eq(settlementAllocations.isDeleted, 0)));
