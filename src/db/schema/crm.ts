@@ -36,6 +36,7 @@ export const customers = pgTable('customers', {
   // v9.0.8 (TD-420): ایندکس یکتای جزئی uq_customers_name_active روی lower(btrim(name)) برای طرف حساب‌های فعال را مهاجرت 0052
   // فقط روی داده بدون نام تکراری می‌سازد (src/services/customers/customerIdentity.ts)؛ v9.0.448 (TD-613): اعلام‌شده تا اسکیما با پایگاه‌داده بخواند
   uq_customers_name_active: uniqueIndex('uq_customers_name_active').on(sql`lower(btrim(${table.name}))`).where(sql`${table.isDeleted} = 0`),
+  idx_customers_personnel_id: index('idx_customers_personnel_id').on(table.personnelId).where(sql`${table.personnelId} IS NOT NULL`),
   uq_customers_personnel_live: uniqueIndex('uq_customers_personnel_live').on(table.personnelId).where(sql`${table.isDeleted} = 0 AND ${table.personnelId} IS NOT NULL`),
 }));
 registerColumnRef('customers.id', () => customers.id);

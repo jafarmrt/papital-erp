@@ -23,6 +23,9 @@ ALTER TABLE customers ADD CONSTRAINT chk_customers_running_account CHECK (
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS uq_customers_personnel_live ON customers (personnel_id) WHERE is_deleted = 0 AND personnel_id IS NOT NULL;
 --> statement-breakpoint
+-- the foreign key's own index (TD-614): the live-unique one above leaves out soft-deleted parties
+CREATE INDEX IF NOT EXISTS idx_customers_personnel_id ON customers (personnel_id) WHERE personnel_id IS NOT NULL;
+--> statement-breakpoint
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS running_account text;
 --> statement-breakpoint
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS running_account_personnel_id integer;
