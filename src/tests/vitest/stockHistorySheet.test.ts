@@ -4,7 +4,7 @@ import {
   STOCK_OPENING_DAY, detectStockSheet, emptyStockMapping, parseStockSheet, remapItemCode, resolveStockRow, salesInvoiceKey, unissuedSalesInvoices, unmappedStockNames, wholeSalesInvoices,
   type StockImportMapping, type StockImportLookups,
 } from '../../lib/historyImport/stockSheet';
-import { excelInvoiceNumber, stockImportDocumentKey, stockImportNotes, stockImportOrder, type StockImportRow } from '../../lib/historyImport/stockHistoryImport';
+import { excelInvoiceNumber, SALE_EURO_COLUMNS_MESSAGE, SALE_EURO_POLICY_MESSAGE, stockImportDocumentKey, stockImportNotes, stockImportOrder, type StockImportRow } from '../../lib/historyImport/stockHistoryImport';
 
 // v11 history import, tool 2: reading the cleaned warehouse sheets and resolving their rows through the mapping
 const IN_HEADER = ['تاریخ', 'کد کالا', 'نام محصول', 'نوع ورود', 'تعداد', 'قیمت واحد (ریال)', 'تأمین‌کننده', 'شماره فاکتور مرجع', 'انبار', 'توضیحات'];
@@ -107,6 +107,27 @@ describe('sales sheet (tool 3)', () => {
     const wrongTotal = resolveStockRow(sales[3], salesMapping(), lookups);
     expect(wrongTotal.status).toBe('unresolved');
   });
+  it('v12 colleague sales part B3: a line with a euro price and a rate is a euro line; one of the two alone waits', () => {
+    const lines = parseStockSheet('اقلام فاکتور', [
+      [...SALES_HEADER, 'قیمت ارزی', 'نرخ تسعیر'],
+      ['55', '1405-04-18', 'گالری الف', 'P-001', 'دستبند', 1, 'قیمت یورویی', '501,000,000', '501,000,000', 'ثبت نهایی', '', '250.5', '2,000,000'],
+      ['56', '1405-04-18', 'گالری الف', 'P-001', 'دستبند', 1, 'قیمت یورویی', '501,000,000', '501,000,000', 'ثبت نهایی', '', '250.5', ''],
+      ['57', '1405-04-18', 'گالری الف', 'P-001', 'دستبند', 1, 'قیمت یورویی', '501,000,000', '501,000,000', 'ثبت نهایی', '', '', ''],
+    ]);
+    expect(resolveStockRow(lines[0], salesMapping(), lookups)).toMatchObject({ status: 'ready', row: { kind: 'sale', unitPrice: '250.5', currency: 'EUR', exchangeRate: '2000000' } });
+    expect(resolveStockRow(lines[1], salesMapping(), lookups)).toMatchObject({ status: 'unresolved', reason: SALE_EURO_COLUMNS_MESSAGE });
+    // review of #512: a price the server cannot read (more than four places) or worth less than the rial floor waits
+    const odd = parseStockSheet('اقلام فاکتور', [
+      [...SALES_HEADER, 'قیمت ارزی', 'نرخ تسعیر'],
+      ['58', '1405-04-18', 'گالری الف', 'P-001', 'دستبند', 1, '', '', '', 'ثبت نهایی', '', '0.33333', '2,000,000'],
+      ['59', '1405-04-18', 'گالری الف', 'P-001', 'دستبند', 1, '', '', '', 'ثبت نهایی', '', '0.0001', '2,000,000'],
+    ]);
+    expect(resolveStockRow(odd[0], salesMapping(), lookups)).toMatchObject({ status: 'unresolved', reason: SALE_EURO_COLUMNS_MESSAGE });
+    expect(resolveStockRow(odd[1], salesMapping(), lookups).status).toBe('unresolved');
+    // without the euro columns a euro price policy still waits, as before
+    expect(resolveStockRow(lines[2], salesMapping(), lookups)).toMatchObject({ status: 'unresolved', reason: SALE_EURO_POLICY_MESSAGE });
+  });
+
   it('reads an Excel invoice number written in any form', () => {
     expect(excelInvoiceNumber('فاکتور ۶۱ اکسل')).toBe('61');
     expect(excelInvoiceNumber(' 061 ')).toBe('61');
