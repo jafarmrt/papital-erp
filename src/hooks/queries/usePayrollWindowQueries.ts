@@ -68,6 +68,8 @@ export interface AdvanceBalance {
   outstandingAdvance: number;
   totalAdvances: number;
   totalDeducted: number;
+  /** v12 colleague sales part B: what the colleague owes on their running account (3208) */
+  runningAccountDebt: number;
 }
 
 /** what a personnel still owes from advances (`GET /piecework/personnel/:id/advance-balance`) */
@@ -81,6 +83,7 @@ export function useAdvanceBalanceQuery(personnelId: number | null) {
         outstandingAdvance: Number(data.outstandingAdvance || 0),
         totalAdvances: Number(data.totalAdvances || 0),
         totalDeducted: Number(data.totalDeducted || 0),
+        runningAccountDebt: Number(data.runningAccountDebt || 0),
       };
     },
     ...PAYROLL_WINDOW_READ,

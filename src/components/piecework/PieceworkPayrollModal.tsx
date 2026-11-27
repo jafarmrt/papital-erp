@@ -12,6 +12,7 @@ import { PayrollPrepaymentField, prepaymentNeedsReason, type PayrollPrepaymentSt
 import { DecimalInput } from '../common/DecimalInput';
 import { RialEquivalent } from '../common/RialEquivalent';
 import { DialogLayer } from '../common/DialogLayer';
+import { PayrollRunningAccountField, runningDeductionExceedsDebt } from './PayrollRunningAccountField';
 
 interface PieceworkPayrollModalProps {
   isOpen: boolean;
@@ -38,6 +39,9 @@ interface PieceworkPayrollModalProps {
   // V1.9.0: کسر از مساعده/وام پرسنلی
   advanceDeduction?: number;
   setAdvanceDeduction?: (val: number) => void;
+  /** v12 colleague sales part B: «کسر از حساب جاری همکار» */
+  runningAccountDeduction?: number;
+  setRunningAccountDeduction?: (val: number) => void;
   // V1.3.2: هشدار سهم باقی‌مانده حقوق ثابت ماه انتخابی
   fixedRemainingHint?: string | null;
   isSaving?: boolean;
@@ -74,6 +78,8 @@ export function PieceworkPayrollModal({
   fixedRemainingHint = null,
   advanceDeduction = 0,
   setAdvanceDeduction,
+  runningAccountDeduction = 0,
+  setRunningAccountDeduction = () => undefined,
   isSaving = false,
   prepayment,
   statutoryFields
@@ -91,6 +97,7 @@ export function PieceworkPayrollModal({
   const advanceBalance = isOpen && payrollPersonnelId ? (advanceRead.current ?? null) : null;
   // v8.0.29 (TD-282، تصمیم مالک محصول): کسر مساعده بیش از مانده مساعده پذیرفته نمی‌شود (سرور هم رد می‌کند)
   const advanceExceedsBalance = advanceBalance !== null && (advanceDeduction || 0) > advanceBalance.outstandingAdvance;
+  const runningExceedsDebt = runningDeductionExceedsDebt(runningAccountDeduction || 0, advanceBalance?.runningAccountDebt ?? null);
 
   if (!isOpen) return null;
 
@@ -232,6 +239,8 @@ export function PieceworkPayrollModal({
             )}
           </div>
 
+          <PayrollRunningAccountField value={runningAccountDeduction || 0} onChange={setRunningAccountDeduction} debt={advanceBalance?.runningAccountDebt ?? null} />
+
           {statutoryFields}
           {prepayment && <PayrollPrepaymentField prepayment={prepayment} hasFixedSalary={allowNoLogs} />}
 
@@ -259,7 +268,7 @@ export function PieceworkPayrollModal({
             <button
               type="submit"
               // V10-4.4: برای پرسنل حقوق ثابت/ترکیبی، خالی بودن لیست کارکرد مانع صدور نیست
-              disabled={(payrollPreviewLogs.length === 0 && !allowNoLogs) || advanceExceedsBalance
+              disabled={(payrollPreviewLogs.length === 0 && !allowNoLogs) || advanceExceedsBalance || runningExceedsDebt
                 || prepaymentNeedsReason(prepayment) || (!!prepayment?.isPrepayment && !allowNoLogs)
                 || deductionsNeedDescription(payrollDeductions, payrollDeductionsDescription) || isSaving}
               className="px-5 py-2 bg-emerald-600 text-white rounded-xl font-bold text-xs hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md shadow-emerald-600/20 flex items-center gap-1.5"

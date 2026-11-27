@@ -60,6 +60,7 @@ export function payrollSnapshot(row: PayrollRow): Snapshot {
     totalDeductions: text(row.totalDeductions),
     deductionsDescription: row.deductionsDescription ?? '',
     advanceDeduction: text(row.advanceDeduction),
+    runningAccountDeduction: text(row.runningAccountDeduction),
     netPayable: text(row.netPayable),
     paidAmount: text(row.paidAmount),
     notes: row.notes ?? '',

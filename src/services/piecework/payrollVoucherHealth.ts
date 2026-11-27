@@ -35,7 +35,8 @@ export async function findPayrollVoucherMismatches(): Promise<PayrollVoucherMism
   const res = await orm.execute(sql`
     SELECT p.id, p.payroll_number, COALESCE(p.title, '') AS title, COALESCE(pe.full_name, '') AS personnel_name, p.end_date,
            COALESCE(p.net_payable, 0)::text AS net_payable,
-           (COALESCE(p.total_bonuses, 0) < 0 OR COALESCE(p.total_deductions, 0) < 0 OR COALESCE(p.advance_deduction, 0) < 0) AS negative,
+           (COALESCE(p.total_bonuses, 0) < 0 OR COALESCE(p.total_deductions, 0) < 0 OR COALESCE(p.advance_deduction, 0) < 0
+            OR COALESCE(p.running_account_deduction, 0) < 0) AS negative,
            v.id AS voucher_id, v.voucher_number,
            (SELECT COALESCE(SUM(i.credit - i.debit), 0) FROM journal_voucher_items i
              WHERE i.voucher_id = v.id AND i.is_deleted = 0 AND i.account_id = ${payableId}

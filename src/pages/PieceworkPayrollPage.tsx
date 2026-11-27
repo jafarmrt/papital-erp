@@ -103,6 +103,8 @@ export function PieceworkPayrollPage() {
     payrollFixedRemainingHint,
     payrollAdvanceDeduction,
     setPayrollAdvanceDeduction,
+    payrollRunningDeduction,
+    setPayrollRunningDeduction,
     viewingPayroll,
     viewingPayrollFreshness,
     closePayslip,
@@ -331,6 +333,8 @@ export function PieceworkPayrollPage() {
         fixedRemainingHint={payrollFixedRemainingHint}
         advanceDeduction={payrollAdvanceDeduction}
         setAdvanceDeduction={setPayrollAdvanceDeduction}
+        runningAccountDeduction={payrollRunningDeduction}
+        setRunningAccountDeduction={setPayrollRunningDeduction}
         prepayment={{ isPrepayment: payrollIsPrepayment, setIsPrepayment: setPayrollIsPrepayment, reason: payrollPrepaymentReason, setReason: setPayrollPrepaymentReason }}
         isSaving={isSavingPayroll}
         statutoryFields={<PayrollStatutoryFields personnelId={payrollPersonnelId} startDate={toStorageDate(payrollStartDate) || ''} endDate={toStorageDate(payrollEndDate) || ''}
