@@ -24,5 +24,12 @@ export const RUNNING_ACCOUNT_MAPPING_KEYS = {
 export const isRunningAccountKind = (value: unknown): value is RunningAccountKind =>
   typeof value === 'string' && (RUNNING_ACCOUNT_KINDS as readonly string[]).includes(value);
 
+/**
+ * v12 colleague sales part B2 (owner's decision of 7 Azar 1405): a partner's debt is fixed in euros, so every invoice of a
+ * party linked to a partner is in this currency and the partner's 4101 stays one currency; a colleague's 3208 is in rials.
+ */
+export const PARTNER_ACCOUNT_CURRENCY = 'EUR';
+export const RUNNING_ACCOUNT_CURRENCY: Record<RunningAccountKind, string> = { colleague: 'IRR', partner: PARTNER_ACCOUNT_CURRENCY };
+
 /** The line the settlement of an invoice shows among its receipts and cheques */
 export const RUNNING_ACCOUNT_SETTLEMENT_LABEL = 'تسویه از حساب جاری';

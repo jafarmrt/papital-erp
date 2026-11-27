@@ -3,7 +3,7 @@ import type { DbExecutor } from '../../db/drizzle.js';
 import { customers, documents, personnel, settlementAllocations } from '../../db/schema.js';
 import { ConflictError, ValidationError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
-import { isRunningAccountKind, RUNNING_ACCOUNT_LABELS, type RunningAccountKind } from '../../lib/accounting/runningAccount.js';
+import { isRunningAccountKind, RUNNING_ACCOUNT_CURRENCY, RUNNING_ACCOUNT_LABELS, type RunningAccountKind } from '../../lib/accounting/runningAccount.js';
 import { formatPersianCode, formatPersianNumber } from '../../utils/persianNumber.js';
 import { writeRunningAccountSettlement } from '../accounting/treasury/runningAccountSettlement.js';
 import { readDocumentPayableAndSettled } from './documentRemainingAmount.js';
@@ -48,10 +48,14 @@ export async function stampDocumentRunningAccount(tx: DbExecutor, documentId: nu
     await tx.update(documents).set({ runningAccount: '' }).where(eq(documents.id, documentId));
     return null;
   }
-  if ((doc.currency || 'IRR').trim().toUpperCase() !== 'IRR') {
+  // a colleague's running account is in rials; a partner's debt is fixed in euros (part B2, owner's decision of 7 Azar 1405)
+  const required = RUNNING_ACCOUNT_CURRENCY[kind];
+  if ((doc.currency || 'IRR').trim().toUpperCase() !== required) {
     throw new ValidationError(
-      `طرف حساب فاکتور «${formatPersianCode(doc.refNumber ?? '')}» به یک همکار یا شریک وصل است و فاکتورش به ${RUNNING_ACCOUNT_LABELS[kind]} می‌رود که ریالی است؛ فاکتور را ریالی صادر کنید.`,
-      { documentId }, 'RUNNING_ACCOUNT_INVOICE_CURRENCY',
+      kind === 'partner'
+        ? `طرف حساب فاکتور «${formatPersianCode(doc.refNumber ?? '')}» به یک شریک وصل است و بدهی شریک به یورو ثابت است؛ فاکتور را یورویی (با نرخ تسعیر روز) صادر کنید.`
+        : `طرف حساب فاکتور «${formatPersianCode(doc.refNumber ?? '')}» به یک همکار وصل است و فاکتورش به ${RUNNING_ACCOUNT_LABELS[kind]} می‌رود که ریالی است؛ فاکتور را ریالی صادر کنید.`,
+      { documentId, currency: required }, 'RUNNING_ACCOUNT_INVOICE_CURRENCY',
     );
   }
   await tx.update(documents).set({ runningAccount: kind, runningAccountPersonnelId: party.personnelId }).where(eq(documents.id, documentId));

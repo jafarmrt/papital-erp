@@ -71,6 +71,8 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
     amount: 0,
     // v8.0.20 (TD-274): نرخ تسعیر تراکنش حساب ارزی (ریال برای هر واحد)
     exchangeRate: 0,
+    // v12 colleague sales part B2: rials per euro of a rial «حساب جاری شریک» row
+    partnerEuroRate: 0,
     trackingNumber: '',
     description: '',
     createVoucher: true,
@@ -203,6 +205,8 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
         projectId: formData.partyType === 'other' && formData.createVoucher && formData.projectId ? formData.projectId : undefined,
         currency: bankCurrency,
         exchangeRate: bankCurrency !== 'IRR' && formData.exchangeRate > 0 ? formData.exchangeRate : undefined,
+        partnerEuroRate: formData.partyType === 'personnel' && formData.purpose === 'partner_account' && bankCurrency === 'IRR' && formData.partnerEuroRate > 0
+          ? formData.partnerEuroRate : undefined,
         createVoucher: canSkipVoucher ? formData.createVoucher : true,
         allocations: settlementQuery ? settlement.parts : undefined,
       });
@@ -454,6 +458,10 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
               isReceipt={isReceipt}
               settlementViaPayslipOnly
               onChange={patch => setFormData(prev => ({ ...prev, ...patch }))}
+              partnerAccount={{
+                bankCurrency: (selectedBank?.currency || 'IRR').toUpperCase(), euroRate: formData.partnerEuroRate,
+                onEuroRateChange: rate => setFormData(prev => ({ ...prev, partnerEuroRate: rate })),
+              }}
             />
             {formData.partyType === 'other' && formData.createVoucher && projects.length > 0 && (
               <div>

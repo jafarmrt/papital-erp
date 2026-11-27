@@ -316,6 +316,11 @@ async function payPayslips(tx: DbExecutor, p: PreparedRow, options: TreasuryImpo
 const methodCache = new WeakMap<object, Map<number, 'cash' | 'bank_transfer'>>();
 
 /** A cash box or petty cash pays in cash, a bank by transfer (the Excel sheets do not say). */
+async function bankCurrencyOf(tx: DbExecutor, bankAccountId: number): Promise<string> {
+  const [bank] = await tx.select({ currency: bankAccounts.currency }).from(bankAccounts).where(eq(bankAccounts.id, bankAccountId));
+  return String(bank?.currency || 'IRR').trim().toUpperCase();
+}
+
 async function methodOf(tx: DbExecutor, bankAccountId: number): Promise<'cash' | 'bank_transfer'> {
   let cache = methodCache.get(tx as object);
   if (!cache) { cache = new Map(); methodCache.set(tx as object, cache); }
@@ -376,6 +381,10 @@ async function postRow(tx: DbExecutor, p: PreparedRow, options: TreasuryImportOp
     partyName: (row.partyName ?? '').trim(),
     purpose: row.purpose ?? undefined,
     contraAccountId: row.contraAccountId ?? null,
+    // v12 colleague sales part B2: a partner row's rate is the bank's for a euro account, else the euro rate of its rials
+    ...(row.purpose === 'partner_account' && row.rate
+      ? (await bankCurrencyOf(tx, row.bankAccountId)) === 'IRR' ? { partnerEuroRate: row.rate } : { exchangeRate: Number(row.rate) }
+      : {}),
     // tool 5: a cost centre mapped to a project only applies to an expense line; a loan, an advance or an owner's
     // movement under the same cost centre takes no project
     projectId: row.projectId && row.contraAccountId && await isExpenseAccount(tx, row.contraAccountId) ? row.projectId : null,

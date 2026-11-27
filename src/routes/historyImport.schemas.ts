@@ -21,7 +21,9 @@ const treasuryImportRowSchema = z.object({
   partyType: z.enum(['customer', 'supplier', 'personnel', 'other']).optional(),
   partyId: optionalId,
   partyName: z.string().max(TEXT_MAX).optional(),
-  purpose: z.enum(['advance', 'colleague_account', 'other']).nullable().optional(),
+  purpose: z.enum(['advance', 'colleague_account', 'partner_account', 'other']).nullable().optional(),
+  // v12 colleague sales part B2: the euro rate of a partner row (read again by the service)
+  rate: z.union([z.string().max(40), z.number()]).transform(v => String(v)).nullable().optional(),
   contraAccountId: optionalId,
   personnelId: optionalId,
   invoiceRef: z.string().max(TEXT_MAX).optional(),

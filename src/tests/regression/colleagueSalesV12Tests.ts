@@ -8,7 +8,8 @@ import { fin } from '../../lib/financialDecimal.js';
 import { VoucherSyncService } from '../../services/accounting/voucherSync.service.js';
 import { createTestCustomer } from '../fixtures/factories.js';
 import { checkPartyBalances } from '../invariants/partyBalanceInvariant.js';
-import { newWorker } from '../invariants/payrollScenarios.js';
+import { newWorker, personNet } from '../invariants/payrollScenarios.js';
+import { BankAccountService } from '../../services/accounting/treasury/bankAccount.service.js';
 import { TestCaseResult } from '../types.js';
 import { type ShouldRun, inFiscalSandbox, runCase, sandboxAdminClient } from './fiscalClosingTests.js';
 import { brief, codeOf, ok, world } from './receiptsOnInvoicesV11Tests.js';
@@ -96,7 +97,13 @@ export async function runColleagueSalesV12Tests(shouldRun: ShouldRun): Promise<T
         if (back.length !== 1 || !fin(back[0].amount).equals(payable)) problems.push(`after voiding the return the settlement reads ${JSON.stringify(back)}, expected ${payable} again`);
       }
 
-      const partnerInvoice = await w.doc('invoice', partnerParty, 700_000);
+      // a partner's debt is fixed in euros (part B2): a rial invoice is refused, a euro one goes to 4101
+      const rialPartner = await admin.post('/api/documents', {
+        docType: 'invoice', status: 'final', refNumber: 'auto', date: w.today, location: w.main, buyer_name: partnerParty.name, partyId: partnerParty.id,
+        inOut: 'out', items: [{ itemId: w.item.id, quantity: 1, unit_price: 700_000 }],
+      });
+      if (rialPartner.status !== 422 || codeOf(rialPartner) !== 'RUNNING_ACCOUNT_INVOICE_CURRENCY') problems.push(`a partner's rial invoice answered ${brief(rialPartner)}, expected 422 RUNNING_ACCOUNT_INVOICE_CURRENCY`);
+      const partnerInvoice = await w.doc('invoice', partnerParty, 350, 'final', { currency: 'EUR', exchangeRate: 2_000_000 });
       const partnerDebit = (await voucherRows(partnerInvoice)).find(r => fin(r.debit).isPositive() && ['4101', '3208', '1201'].includes(String(r.code)));
       if (partnerDebit?.code !== '4101' || partnerDebit.detailedId !== partner) problems.push(`the partner's invoice debits ${JSON.stringify(partnerDebit)}, expected 4101 on personnel ${partner}`);
 
@@ -212,6 +219,69 @@ export async function runColleagueSalesV12Tests(shouldRun: ShouldRun): Promise<T
       }
       if (problems.length > 0) throw new Error(problems.join(' | '));
       return 'open proformas reach the running account; free returns are refused; I8 and the party edits follow the link';
+    }));
+  }
+
+  const euro = 'reg_colleague_sales_partner_euro_v12';
+  if (shouldRun(euro, 'v12', 'colleague_sales', 'treasury', 'accounting', 'currency')) {
+    await runCase(results, euro, 'v12 colleague sales part B2: a partner\'s debt on 4101 is in euros; a partner running-account receipt or payment (euro, or rials at a typed euro rate) leaves the open balance at its average rate and posts the rial difference to exchange gain (5201) or loss (7008); euros beyond the balance go at the move\'s own rate; a void reverses the exchange row; a rial move without a euro rate and a move on an invoice are refused', () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const w = await world(admin);
+      for (let i = 0; i < 4; i++) await w.doc('receipt', w.supplier, 900_000);
+      const partner = await newWorker('ERP-TEST-MARKER euro partner');
+      const party = await createTestCustomer();
+      const linked = await linkParty(admin, party.id, partner, 'partner');
+      if (!ok(linked)) throw new Error(`setup: linking answered ${brief(linked)}`);
+      await w.doc('invoice', party, 500, 'final', { currency: 'EUR', exchangeRate: 2_000_000 });
+      await w.doc('invoice', party, 300, 'final', { currency: 'EUR', exchangeRate: 2_200_000 });
+      const [parent] = await orm.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.code, '1003'), eq(accounts.isDeleted, 0)));
+      const [ledger] = await orm.insert(accounts).values({
+        code: `1003${String(Date.now()).slice(-5)}`, name: 'ERP-TEST-MARKER euro bank', level: 'subsidiary', parentId: parent?.id ?? null,
+        accountType: 'asset', nature: 'debit', isSystem: 0, isActive: 1, isDeleted: 0,
+      }).returning({ id: accounts.id });
+      const euroBank = await BankAccountService.createBankAccount({ title: 'ERP-TEST-MARKER euro bank', type: 'bank', accountId: ledger.id, initialBalance: 0, currency: 'EUR', openingDate: '2026-03-21' });
+
+      const balance = async () => {
+        const [row] = (await orm.execute(sql`SELECT COALESCE(SUM(CASE WHEN i.currency = 'EUR' THEN i.debit - i.credit ELSE 0 END), 0)::text AS euro,
+            COALESCE(SUM(ROUND((i.debit - i.credit) * i.exchange_rate, 0)), 0)::text AS rial
+          FROM journal_voucher_items i JOIN journal_vouchers v ON v.id = i.voucher_id JOIN accounts a ON a.id = i.account_id
+          WHERE v.is_deleted = 0 AND i.is_deleted = 0 AND a.code = '4101' AND i.detailed_type = 'personnel' AND i.detailed_id = ${partner}`)).rows as Array<{ euro: string; rial: string }>;
+        return { euro: fin(row?.euro ?? 0).toNumber(), rial: fin(row?.rial ?? 0).toNumber() };
+      };
+      const fx = async () => ({ gain: -fin(await personNet('5201', partner)).toNumber(), loss: fin(await personNet('7008', partner)).toNumber() });
+      const move = (type: 'receipt' | 'payment', amount: number, extra: Record<string, unknown>) => admin.post('/api/accounting/treasury', {
+        type, method: 'bank_transfer', amount, date: w.today, partyType: 'personnel', partyId: partner, partyName: 'partner', purpose: 'partner_account', ...extra,
+      });
+      const opening = await balance();
+      if (opening.euro !== 800 || opening.rial !== 1_660_000_000) problems.push(`two euro invoices put ${JSON.stringify(opening)} on 4101, expected 800 euros and 1660000000 rials`);
+
+      // 400 euros at 2,100,000 against an average of 2,075,000: 10,000,000 gain
+      const first = await move('receipt', 400, { bankAccountId: euroBank.id, currency: 'EUR', exchangeRate: 2_100_000 });
+      let b = await balance();
+      if (!ok(first) || b.euro !== 400 || b.rial !== 830_000_000 || (await fx()).gain !== 10_000_000) problems.push(`a 400-euro receipt answered ${brief(first)} and left ${JSON.stringify(b)} with ${JSON.stringify(await fx())}, expected 400 euros, 830000000 rials and a 10000000 gain`);
+      // 420,000,000 rials at a euro rate of 2,100,000 are 200 euros: 5,000,000 gain
+      const noRate = await move('receipt', 420_000_000, { bankAccountId: w.bank });
+      if (noRate.status !== 422 || codeOf(noRate) !== 'TREASURY_PARTNER_EURO_RATE_REQUIRED') problems.push(`a rial receipt without a euro rate answered ${brief(noRate)}, expected 422 TREASURY_PARTNER_EURO_RATE_REQUIRED`);
+      const rial = await move('receipt', 420_000_000, { bankAccountId: w.bank, partnerEuroRate: 2_100_000 });
+      b = await balance();
+      if (!ok(rial) || b.euro !== 200 || b.rial !== 415_000_000 || (await fx()).gain !== 15_000_000) problems.push(`a rial receipt answered ${brief(rial)} and left ${JSON.stringify(b)} with ${JSON.stringify(await fx())}, expected 200 euros, 415000000 rials and 15000000 of gain`);
+      // 300 euros at 2,000,000 against 200 open: 200 at the average, 100 at its own rate; 15,000,000 loss
+      const over = await move('receipt', 300, { bankAccountId: euroBank.id, currency: 'EUR', exchangeRate: 2_000_000 });
+      b = await balance();
+      if (!ok(over) || b.euro !== -100 || b.rial !== -200_000_000 || (await fx()).loss !== 15_000_000) problems.push(`an overpaying receipt answered ${brief(over)} and left ${JSON.stringify(b)} with ${JSON.stringify(await fx())}, expected -100 euros, -200000000 rials and a 15000000 loss`);
+      // paying the 100 euros back at 2,100,000 against their 2,000,000: another 10,000,000 loss; its void takes it back
+      const back = await move('payment', 100, { bankAccountId: euroBank.id, currency: 'EUR', exchangeRate: 2_100_000 });
+      b = await balance();
+      if (!ok(back) || b.euro !== 0 || b.rial !== 0 || (await fx()).loss !== 25_000_000) problems.push(`paying the partner back answered ${brief(back)} and left ${JSON.stringify(b)} with ${JSON.stringify(await fx())}, expected 0 and a 25000000 loss`);
+      const voided = await admin.post(`/api/accounting/treasury/${Number(back.body?.id)}/void`, { reason: 'test' });
+      b = await balance();
+      if (!ok(voided) || b.euro !== -100 || (await fx()).loss !== 15_000_000) problems.push(`voiding the payment answered ${brief(voided)} and left ${JSON.stringify(b)} with ${JSON.stringify(await fx())}, expected -100 euros and the 15000000 loss`);
+      // a move on an invoice is refused
+      const linkedMove = await move('receipt', 10, { bankAccountId: euroBank.id, currency: 'EUR', exchangeRate: 2_000_000, documentId: 1 });
+      if (linkedMove.status !== 422 || codeOf(linkedMove) !== 'TREASURY_PARTNER_ACCOUNT_NO_DOCUMENT') problems.push(`a partner move on an invoice answered ${brief(linkedMove)}, expected 422`);
+      if (problems.length > 0) throw new Error(problems.join(' | '));
+      return 'a partner\'s euro account settles at its average rate, with exchange gain and loss rows';
     }));
   }
 

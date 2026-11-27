@@ -281,6 +281,13 @@
       "when": 1799222400000,
       "tag": "0039_piecework_log_version",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1799308800000,
+      "tag": "0040_partner_account_purpose",
+      "breakpoints": true
     }
   ]
 }

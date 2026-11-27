@@ -180,7 +180,7 @@ export async function confirmPayment(req: Request, id: number, input: { receiptI
     const colleagueName = colleague?.fullName ?? '';
     if (party?.runningAccount === 'partner') {
       throw new ConflictError(
-        'خریدار این سفارش به یک شریک وصل است و فاکتورش به «حساب جاری شرکا» می‌رود؛ دریافت پول شریک در خزانه هنوز کاربرد ندارد. سفارش را تا آن روز در انتظار بگذارید.',
+        'خریدار این سفارش به یک شریک وصل است و بدهی شریک به یورو است، ولی سفارش سایت ریالی است و فاکتورش قطعی نمی‌شود. سفارش را لغو کنید و فروش به شریک را در ERP با فاکتور یورویی ثبت کنید؛ پولش را در خزانه با کاربرد «حساب جاری شریک» بگیرید.',
         undefined, 'STOREFRONT_ORDER_PARTNER_BUYER',
       );
     }
