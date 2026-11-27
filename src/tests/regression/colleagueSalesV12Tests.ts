@@ -204,6 +204,12 @@ export async function runColleagueSalesV12Tests(shouldRun: ShouldRun): Promise<T
       const [row2] = await orm.select({ version: customers.version }).from(customers).where(eq(customers.id, party.id));
       const supplier = await admin.put(`/api/customers/${party.id}`, { version: row2?.version, partyType: 'supplier' });
       if (supplier.status !== 422 || codeOf(supplier) !== 'PARTY_RUNNING_ACCOUNT_SUPPLIER') problems.push(`making a linked party a supplier answered ${brief(supplier)}, expected 422 PARTY_RUNNING_ACCOUNT_SUPPLIER`);
+      // nor through the Excel import of parties (delta review)
+      const imported = await admin.post('/api/customers/bulk-import', { updateIfExists: true, rows: [{ name: `${party.name} ویرایش`, partyType: 'تأمین‌کننده' }] });
+      const [after] = await orm.select({ partyType: customers.partyType, personnelId: customers.personnelId }).from(customers).where(eq(customers.id, party.id));
+      if (imported.status !== 200 || (imported.body?.errors ?? []).length !== 1 || after?.partyType === 'supplier' || after?.personnelId !== colleague) {
+        problems.push(`importing a linked party as a supplier answered ${brief(imported)} and left ${JSON.stringify(after)}, expected one row error and the party unchanged`);
+      }
       if (problems.length > 0) throw new Error(problems.join(' | '));
       return 'open proformas reach the running account; free returns are refused; I8 and the party edits follow the link';
     }));

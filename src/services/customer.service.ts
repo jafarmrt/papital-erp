@@ -432,6 +432,12 @@ export class CustomerService {
             errors.push({ row: rowIndex, name, message: `طرف حساب "${matchedCust.name}" پس از گرفتن این فایل ویرایش شده است (نسخه فایل ${String(item.version)}، نسخه کنونی ${matchedCust.version})؛ از فهرست خروجی تازه بگیرید.` });
             continue;
           }
+          // v12 colleague sales (delta review of #508): a party linked to a colleague or partner cannot become a supplier here
+          // either, as on the party form (PARTY_RUNNING_ACCOUNT_SUPPLIER)
+          if (updateIfExists && cellType === 'supplier' && matchedCust.personnelId) {
+            errors.push({ row: rowIndex, name, message: `طرف حساب "${matchedCust.name}" به یک همکار یا شریک وصل است و تأمین‌کننده نمی‌شود؛ نخست پیوندش را در کارت طرف حساب بردارید.` });
+            continue;
+          }
           if (updateIfExists) {
             const updatedData: Partial<typeof customers.$inferInsert> = {
               name,

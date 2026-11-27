@@ -204,13 +204,19 @@ export async function runStorefrontBuyerRecipientV12Tests(shouldRun: (id: string
       if (confirmed.status !== 200) { wrong.push(`the colleague's order: ${confirmed.status} ${JSON.stringify(confirmed.body)}`); continue; }
       const [accepted] = await orm.select({ treasuryId: storefrontPaymentReceipts.treasuryTransactionId }).from(storefrontPaymentReceipts)
         .where(eq(storefrontPaymentReceipts.id, Number(waiting?.id)));
-      const [money_] = await orm.select({ partyType: treasuryTransactions.partyType, partyId: treasuryTransactions.partyId, purpose: treasuryTransactions.purpose, documentId: treasuryTransactions.documentId })
+      const [money_] = await orm.select({ partyType: treasuryTransactions.partyType, partyId: treasuryTransactions.partyId, purpose: treasuryTransactions.purpose, documentId: treasuryTransactions.documentId, partyName: treasuryTransactions.partyName })
         .from(treasuryTransactions).where(eq(treasuryTransactions.id, Number(accepted?.treasuryId)));
       const parts = await orm.select({ amount: settlementAllocations.amount, personnelId: settlementAllocations.runningAccountPersonnelId }).from(settlementAllocations)
         .where(and(eq(settlementAllocations.documentId, row.documentId), eq(settlementAllocations.isDeleted, 0)));
-      if (money_?.partyType !== 'personnel' || money_?.partyId !== worker || money_?.purpose !== 'colleague_account' || money_?.documentId !== null) {
+      if (money_?.partyType !== 'personnel' || money_?.partyId !== worker || money_?.purpose !== 'colleague_account' || money_?.documentId !== null
+        || !String(money_?.partyName ?? '').startsWith(`ERP-TEST-MARKER colleague buyer ${tag}`)) {
         wrong.push(`the colleague's receipt: ${JSON.stringify(money_)}`);
       }
+      // the colleague's running account nets to zero: the invoice's debit and the receipt's credit, on their personnel detail
+      const [net] = (await orm.execute(sql`SELECT COALESCE(SUM(i.debit - i.credit), 0)::text AS net, COUNT(*)::int AS n
+        FROM journal_voucher_items i JOIN journal_vouchers v ON v.id = i.voucher_id JOIN accounts a ON a.id = i.account_id
+        WHERE v.is_deleted = 0 AND i.is_deleted = 0 AND a.code = '3208' AND i.detailed_type = 'personnel' AND i.detailed_id = ${worker}`)).rows as Array<{ net: string; n: number }>;
+      if (Number(net?.net) !== 0 || net?.n !== 2) wrong.push(`the colleague's 3208 after the site order: ${JSON.stringify(net)}, expected two rows netting to zero`);
       if (doc?.status !== 'final' || doc?.runningAccount !== 'colleague' || parts.length !== 1 || parts[0].personnelId !== worker
         || Number(parts[0].amount) !== Number(placed.body.data.order.payableAmount)) {
         wrong.push(`the colleague's invoice: ${JSON.stringify({ doc, parts })}`);
